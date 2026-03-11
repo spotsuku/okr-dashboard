@@ -26,6 +26,22 @@ function calcObjProgress(krs) {
   return Math.round(krs.reduce((s, kr) => s + calcKRProgress(kr), 0) / krs.length)
 }
 
+// 絶対レイヤー深度（経営=0, 事業部=1, チーム=2）
+function getAbsoluteDepth(levelId, levels) {
+  let depth = 0
+  let cur = levels.find(l => l.id === levelId)
+  while (cur && cur.parent_id) {
+    depth++
+    cur = levels.find(l => l.id === cur.parent_id)
+  }
+  return depth
+}
+
+const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
+const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
+const getLayerColor = absDepth => LAYER_COLORS[absDepth] || '#a0a8be'
+const getLayerLabel = absDepth => LAYER_LABELS[absDepth] || ''
+
 // ─── Small UI components ───────────────────────────────────────────────────────
 function Stars({ score, size = 10 }) {
   return (
@@ -46,17 +62,21 @@ function Bar({ value, color, max = 150 }) {
   )
 }
 
-function Circle({ value, size = 46, stroke = 3.5, color }) {
-  const r = (size - stroke * 2) / 2
-  const circ = 2 * Math.PI * r
-  const offset = circ - (Math.min(value, 100) / 100) * circ
+function Ring({ value, color, size = 46 }) {
+  const s = 3.5, r = (size - s * 2) / 2, c = 2 * Math.PI * r
+  const offset = c - (Math.min(value, 100) / 100) * c
   return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-        style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
-    </svg>
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={s} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={s}
+          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 9, fontWeight: 800, color }}>{value}%</span>
+      </div>
+    </div>
   )
 }
 
@@ -131,12 +151,12 @@ function Btn({ children, onClick, color = '#4d9fff', variant = 'filled', small, 
   )
 }
 
-// ─── Objective Form (Add / Edit) ───────────────────────────────────────────────
+// ─── Objective Form ────────────────────────────────────────────────────────────
 function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod }) {
-  const [title, setTitle]   = useState(initial?.title || '')
-  const [owner, setOwner]   = useState(initial?.owner || '')
+  const [title, setTitle]     = useState(initial?.title || '')
+  const [owner, setOwner]     = useState(initial?.owner || '')
   const [levelId, setLevelId] = useState(String(activeLevelId))
-  const [period, setPeriod] = useState(activePeriod)
+  const [period, setPeriod]   = useState(activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
       ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current) }))
@@ -144,7 +164,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   )
   const [saving, setSaving] = useState(false)
 
-  const addKR = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }])
+  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
   const updateKR = (key, field, val) => setKRs(p => p.map(k => (k.id || k._tmpId) === key ? { ...k, [field]: val } : k))
 
@@ -212,46 +232,39 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
   const rating = getRating(prog)
 
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 6 }}>
       <div style={{
-        background: '#111828', border: `1px solid ${open ? levelColor + '50' : 'rgba(255,255,255,0.07)'}`,
-        borderRadius: 12, overflow: 'hidden',
-        boxShadow: open ? `0 0 24px ${levelColor}15` : 'none',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
+        background: '#0e1420', border: `1px solid ${open ? levelColor + '50' : 'rgba(255,255,255,0.07)'}`,
+        borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.2s',
       }}>
-        <div style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+        <div style={{ padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
           onClick={() => setOpen(p => !p)}>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <Circle value={Math.min(prog, 100)} color={rating.color} />
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 9, fontFamily: "'DM Mono',monospace", fontWeight: 700, color: rating.color }}>{prog}%</span>
-            </div>
-          </div>
+          <Ring value={Math.min(prog, 100)} color={rating.color} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color }}>{rating.label}</span>
-              <Stars score={rating.score} />
-              <span style={{ fontSize: 11, color: '#505878' }}>{obj.owner}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: `${rating.color}18`, color: rating.color }}>{rating.label}</span>
+              <Stars score={rating.score} size={9} />
+              <span style={{ fontSize: 10, color: '#505878' }}>{obj.owner}</span>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#dde0ec', lineHeight: 1.4 }}>{obj.title}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#dde0ec', lineHeight: 1.4 }}>{obj.title}</div>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
             <button onClick={e => { e.stopPropagation(); onEdit(obj) }} style={{
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#606880',
-              width: 26, height: 26, borderRadius: 6, cursor: 'pointer', fontSize: 13,
+              width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>✎</button>
             <button onClick={e => { e.stopPropagation(); onDelete(obj.id) }} style={{
               background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b',
-              width: 26, height: 26, borderRadius: 6, cursor: 'pointer', fontSize: 13,
+              width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>✕</button>
-            <span style={{ color: '#404660', fontSize: 14, display: 'flex', alignItems: 'center', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', marginLeft: 2 }}>▾</span>
+            <span style={{ color: '#404660', fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
           </div>
         </div>
 
         {open && (
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.18)' }}>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)' }}>
             {(!obj.key_results || obj.key_results.length === 0) && (
               <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: '#404660' }}>KR がありません</div>
             )}
@@ -260,26 +273,23 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
               const kr_rating = getRating(kprog)
               return (
                 <div key={kr.id} style={{
-                  padding: '12px 16px 12px 26px',
+                  padding: '10px 14px 10px 20px',
                   borderBottom: i < obj.key_results.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                  display: 'flex', alignItems: 'center', gap: 12,
+                  display: 'flex', alignItems: 'center', gap: 10,
                 }}>
-                  <div style={{ flexShrink: 0, width: 44, textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, fontFamily: "'DM Mono',monospace", fontWeight: 700, color: kr_rating.color, background: `${kr_rating.color}15`, padding: '2px 5px', borderRadius: 5, marginBottom: 3 }}>{kprog}%</div>
-                    <Stars score={kr_rating.score} size={9} />
+                  <div style={{ flexShrink: 0, width: 40, textAlign: 'center' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: kr_rating.color, background: `${kr_rating.color}15`, padding: '2px 4px', borderRadius: 4, marginBottom: 2 }}>{kprog}%</div>
+                    <Stars score={kr_rating.score} size={8} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5, gap: 8 }}>
-                      <span style={{ fontSize: 12, color: '#c0c4d8', lineHeight: 1.35 }}>{kr.title}</span>
-                      <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: '#505878', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
+                      <span style={{ fontSize: 11, color: '#c0c4d8', lineHeight: 1.35 }}>{kr.title}</span>
+                      <span style={{ fontSize: 9, color: '#505878', flexShrink: 0 }}>
                         {kr.current}{kr.unit} / {kr.target}{kr.unit}
                         {kr.lower_is_better && <span style={{ color: '#404660', marginLeft: 4 }}>↓良</span>}
                       </span>
                     </div>
                     <Bar value={kprog} color={kr_rating.color} />
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 3 }}>
-                      <span style={{ fontSize: 9, color: '#353c55', fontFamily: "'DM Mono',monospace" }}>60%=★1 · 80%=★2 · 100%=★3 · 120%=★4 · 150%=★5</span>
-                    </div>
                   </div>
                 </div>
               )
@@ -291,17 +301,99 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
   )
 }
 
+// ─── Node Block (Hierarchy Tree) ───────────────────────────────────────────────
+function NodeBlock({ levelId, levels, nodeObjectives, parentColor = null, isLast = false, onEdit, onDelete }) {
+  const [childrenOpen, setChildrenOpen] = useState(true)
+  const level = levels.find(l => l.id === levelId)
+  const children = levels.filter(l => Number(l.parent_id) === levelId)
+  const objs = nodeObjectives[levelId] || []
+  const absDepth = getAbsoluteDepth(levelId, levels)
+  const layerColor = getLayerColor(absDepth)
+  const layerLabel = getLayerLabel(absDepth)
+  const allProgs = objs.map(o => calcObjProgress(o.key_results))
+  const avg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : null
+  const avgR = avg !== null ? getRating(avg) : null
+  if (!level) return null
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* 縦線 */}
+      {parentColor && (
+        <div style={{ position: 'absolute', left: -14, top: 0, bottom: isLast ? 24 : 0, width: 2, background: `linear-gradient(to bottom,${parentColor}80,${parentColor}10)`, borderRadius: 2 }} />
+      )}
+      {/* 横線 */}
+      {parentColor && (
+        <div style={{ position: 'absolute', left: -14, top: 24, width: 14, height: 2, background: `${parentColor}70`, borderRadius: 2 }} />
+      )}
+
+      <div style={{ marginBottom: 8 }}>
+        {/* レベルヘッダー */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderRadius: 8, background: `${layerColor}10`, border: `1px solid ${layerColor}25`, borderLeft: `3px solid ${layerColor}`, marginBottom: 6 }}>
+          <span style={{ fontSize: 14 }}>{level.icon}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#dde0ec' }}>{level.name}</span>
+          <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 99, background: `${layerColor}22`, color: layerColor, fontWeight: 700, textTransform: 'uppercase' }}>{layerLabel}</span>
+          {avg !== null && (
+            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 800, color: avgR.color }}>{avg}%</span>
+          )}
+          {/* 折りたたみ時の子達成率サマリー */}
+          {!childrenOpen && children.length > 0 && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              {children.map(c => {
+                const cobjs = nodeObjectives[c.id] || []
+                const cprogs = cobjs.map(o => calcObjProgress(o.key_results))
+                const cavg = cprogs.length ? Math.round(cprogs.reduce((s, p) => s + p, 0) / cprogs.length) : null
+                const cr = cavg !== null ? getRating(cavg) : null
+                return cavg !== null ? (
+                  <span key={c.id} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 99, background: `${cr.color}15`, color: cr.color, fontWeight: 700 }}>
+                    {c.icon}{cavg}%
+                  </span>
+                ) : null
+              })}
+            </div>
+          )}
+          {/* 展開ボタン */}
+          {children.length > 0 && (
+            <button onClick={() => setChildrenOpen(p => !p)} style={{
+              background: `${layerColor}15`, border: `1px solid ${layerColor}40`, color: layerColor,
+              borderRadius: 6, width: 26, height: 26, cursor: 'pointer', fontSize: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'transform 0.2s', transform: childrenOpen ? 'rotate(0deg)' : 'rotate(-90deg)', flexShrink: 0,
+            }}>▾</button>
+          )}
+        </div>
+
+        {/* OKRカード */}
+        {objs.length === 0
+          ? <div style={{ marginLeft: 8, marginBottom: 4, fontSize: 11, color: '#303450', fontStyle: 'italic' }}>目標なし</div>
+          : <div style={{ marginLeft: 8 }}>{objs.map(obj => <ObjCard key={obj.id} obj={obj} levelColor={layerColor} onEdit={onEdit} onDelete={onDelete} />)}</div>
+        }
+      </div>
+
+      {/* 子ノード */}
+      {childrenOpen && children.length > 0 && (
+        <div style={{ marginLeft: 28, position: 'relative' }}>
+          {children.map((child, i) => (
+            <NodeBlock key={child.id} levelId={child.id} levels={levels} nodeObjectives={nodeObjectives}
+              parentColor={layerColor} isLast={i === children.length - 1}
+              onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ user, onSignOut }) {
-  const [levels, setLevels]   = useState([])
-  const [objectives, setObjectives] = useState([])
-  const [activeLevelId, setActiveLevelId] = useState(null)
-  const [activePeriod, setActivePeriod]   = useState('q1')
-  const [modal, setModal]     = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [showAI, setShowAI] = useState(false)
-  const [showSidebar, setShowSidebar] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+  const [levels, setLevels]               = useState([])
+  const [nodeObjectives, setNodeObjectives] = useState({})
+  const [activeLevelId, setActiveLevelId]   = useState(null)
+  const [activePeriod, setActivePeriod]     = useState('q1')
+  const [modal, setModal]                   = useState(null)
+  const [loading, setLoading]               = useState(true)
+  const [showAI, setShowAI]                 = useState(false)
+  const [showSidebar, setShowSidebar]       = useState(false)
+  const [isMobile, setIsMobile]             = useState(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640)
@@ -310,7 +402,7 @@ export default function Dashboard({ user, onSignOut }) {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Load levels once
+  // Load levels
   useEffect(() => {
     const load = async () => {
       const { data, error } = await supabase.from('levels').select('*').order('id')
@@ -321,34 +413,45 @@ export default function Dashboard({ user, onSignOut }) {
     load()
   }, [])
 
-  // Fetch objectives + key_results in two separate queries
-  const loadObjectives = async (levelId, period) => {
-    if (!levelId) return
-    const { data: objs, error: e1 } = await supabase
-      .from('objectives')
-      .select('id, level_id, period, title, owner')
-      .eq('level_id', levelId)
-      .eq('period', period)
-      .order('id')
-    if (e1) { console.error('objectives error:', e1); return }
-    if (!objs || objs.length === 0) { setObjectives([]); return }
+  // Fetch objectives + KRs for a single level
+  const fetchForLevel = async (levelId, period) => {
+    const { data: objs } = await supabase
+      .from('objectives').select('id,level_id,period,title,owner')
+      .eq('level_id', levelId).eq('period', period).order('id')
+    if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
-    const { data: krs, error: e2 } = await supabase
-      .from('key_results')
-      .select('id, objective_id, title, target, current, unit, lower_is_better')
+    const { data: krs } = await supabase
+      .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better')
       .in('objective_id', ids)
-    if (e2) console.error('key_results error:', e2)
     const krMap = {}
     ;(krs || []).forEach(kr => {
       if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
       krMap[kr.objective_id].push(kr)
     })
-    setObjectives(objs.map(o => ({ ...o, key_results: krMap[o.id] || [] })))
+    return objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
   }
 
+  // Get subtree of level ids
+  const getSubtree = useCallback((id, lvls) => {
+    const ids = [id]
+    lvls.filter(l => Number(l.parent_id) === id).forEach(c => ids.push(...getSubtree(c.id, lvls)))
+    return ids
+  }, [])
+
+  // Load all objectives in the subtree
+  const loadSubtree = useCallback(async (rootId, period, lvls) => {
+    if (!rootId || !lvls.length) return
+    const subtree = getSubtree(rootId, lvls)
+    const map = {}
+    for (const lid of subtree) {
+      map[lid] = await fetchForLevel(lid, period)
+    }
+    setNodeObjectives(map)
+  }, [getSubtree]) // eslint-disable-line
+
   useEffect(() => {
-    if (activeLevelId) loadObjectives(activeLevelId, activePeriod)
-  }, [activeLevelId, activePeriod]) // eslint-disable-line
+    if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels)
+  }, [activeLevelId, activePeriod, levels]) // eslint-disable-line
 
   // Save objective + KRs
   const handleSave = async ({ obj, krs }) => {
@@ -360,8 +463,7 @@ export default function Dashboard({ user, onSignOut }) {
       const { data, error } = await supabase
         .from('objectives')
         .insert([{ title: obj.title, owner: obj.owner, level_id: obj.level_id, period: obj.period }])
-        .select()
-        .single()
+        .select().single()
       if (error) { console.error('insert error:', error); return }
       objectiveId = data.id
     }
@@ -370,50 +472,47 @@ export default function Dashboard({ user, onSignOut }) {
         krs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: k.lower_is_better, objective_id: objectiveId }))
       )
     }
-    const targetLevelId = obj.level_id
-    const targetPeriod = obj.period
-    setActiveLevelId(targetLevelId)
-    setActivePeriod(targetPeriod)
-    await loadObjectives(targetLevelId, targetPeriod)
+    setActiveLevelId(obj.level_id)
+    setActivePeriod(obj.period)
+    await loadSubtree(obj.level_id, obj.period, levels)
   }
 
   const handleDelete = async (objId) => {
     if (!window.confirm('この目標を削除しますか？')) return
     await supabase.from('key_results').delete().eq('objective_id', objId)
     await supabase.from('objectives').delete().eq('id', objId)
-    await loadObjectives(activeLevelId, activePeriod)
+    await loadSubtree(activeLevelId, activePeriod, levels)
   }
-
-  const getPath = useCallback((levelId) => {
-    const path = []
-    let cur = levels.find(l => l.id === levelId)
-    while (cur) { path.unshift(cur.name); cur = cur.parent_id ? levels.find(l => l.id === cur.parent_id) : null }
-    return path.join(' › ')
-  }, [levels])
 
   const periods = [
     { key: 'annual', label: '通期' },
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
     { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
   ]
-  const activeLevel = levels.find(l => l.id === activeLevelId)
-  const allProgs = objectives.map(o => calcObjProgress(o.key_results))
-  const overallAvg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : 0
-  const overallRating = getRating(overallAvg)
+
   const roots = levels.filter(l => !l.parent_id)
   const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
+  const activeLevel = levels.find(l => l.id === activeLevelId)
+
+  // 全社平均（表示中サブツリー全体）
+  const subtreeObjs = Object.values(nodeObjectives).flat()
+  const allProgs = subtreeObjs.map(o => calcObjProgress(o.key_results))
+  const globalAvg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : 0
+  const globalR = getRating(globalAvg)
 
   function LevelItem({ level, depth = 0 }) {
     const active = activeLevelId === level.id
     const children = getChildren(level.id)
+    const absD = getAbsoluteDepth(level.id, levels)
+    const col = getLayerColor(absD)
     return (
       <>
-        <div onClick={() => setActiveLevelId(level.id)} style={{
+        <div onClick={() => { setActiveLevelId(level.id); setShowSidebar(false) }} style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: `7px 10px 7px ${10 + depth * 14}px`,
           borderRadius: 7, marginBottom: 2, cursor: 'pointer',
-          background: active ? `${level.color}18` : 'transparent',
-          border: active ? `1px solid ${level.color}35` : '1px solid transparent',
+          background: active ? `${col}18` : 'transparent',
+          border: active ? `1px solid ${col}35` : '1px solid transparent',
           transition: 'all 0.15s',
         }}>
           <span style={{ fontSize: 14 }}>{level.icon}</span>
@@ -425,52 +524,30 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#090d18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
+    <div style={{ minHeight: '100vh', background: '#090d18', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4d9fff', fontSize: 14 }}>
+      読み込み中...
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: '#090d18', color: '#e8eaf0', fontFamily: "'Noto Sans JP','Hiragino Sans',sans-serif", display: 'flex', flexDirection: 'column' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500;600&display=swap');
-        * { box-sizing: border-box; margin: 0; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #222840; border-radius: 4px; }
-        input::placeholder { color: #404860; }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-        .fu { animation: fadeUp 0.28s ease forwards; }
-        @media (max-width: 640px) {
-          .desktop-only { display: none !important; }
-          .mobile-header { flex-wrap: nowrap !important; padding: 10px 14px !important; }
-          .sidebar-panel { position: fixed !important; left: 0 !important; top: 0 !important; bottom: 0 !important; z-index: 300 !important; width: 240px !important; background: #0e1420 !important; box-shadow: 4px 0 24px rgba(0,0,0,0.6) !important; }
-          .sidebar-overlay { display: block !important; }
-          .main-content { padding: 14px 14px !important; }
-        }
-        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 299; }
-        .sidebar-close { display: none; }
-        @media (max-width: 640px) { .sidebar-close { display: block !important; } }
-      `}</style>
-
-      {/* Top bar */}
+    <div style={{ minHeight: '100vh', background: '#090d18', color: '#e8eaf0', fontFamily: 'system-ui,sans-serif', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
       <div style={{
-        padding: isMobile ? '10px 12px' : '13px 22px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'rgba(9,13,24,0.95)', backdropFilter: 'blur(12px)',
-        position: 'sticky', top: 0, zIndex: 100, gap: 8, flexWrap: 'nowrap',
+        padding: isMobile ? '10px 12px' : '12px 20px',
+        borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#090d18',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        position: 'sticky', top: 0, zIndex: 50,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
-          <button onClick={() => setShowSidebar(true)} style={{
-            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#a0a8be', width: 32, height: 32, borderRadius: 8,
-            cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => setShowSidebar(p => !p)} style={{
+            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
+            color: '#a0a8be', width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
+            fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>☰</button>
           {!isMobile && (
             <div>
               <div style={{ fontSize: 9, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
-              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>OKR ダッシュボード</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>OKR ダッシュボード</div>
             </div>
           )}
         </div>
@@ -480,7 +557,7 @@ export default function Dashboard({ user, onSignOut }) {
               padding: isMobile ? '5px 7px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
               background: activePeriod === p.key ? '#4d9fff' : 'transparent',
               color: activePeriod === p.key ? '#fff' : '#606880',
-              fontSize: 11, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
+              fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
             }}>{p.label}</button>
           ))}
         </div>
@@ -489,8 +566,7 @@ export default function Dashboard({ user, onSignOut }) {
           {!isMobile && (
             <button onClick={onSignOut} style={{
               background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-              color: '#a0a8be', borderRadius: 8, padding: '5px 10px', fontSize: 11,
-              cursor: 'pointer', fontFamily: 'inherit',
+              color: '#a0a8be', borderRadius: 8, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
             }}>ログアウト</button>
           )}
           <button onClick={() => setModal({ type: 'add' })} style={{
@@ -500,24 +576,21 @@ export default function Dashboard({ user, onSignOut }) {
           }}>＋ 追加</button>
           <button onClick={() => setShowAI(p => !p)} style={{
             background: '#a855f7', border: 'none', color: '#fff',
-            borderRadius: 8, padding: '7px 10px', fontSize: 14,
-            cursor: 'pointer', fontFamily: 'inherit',
+            borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
           }}>🤖</button>
         </div>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {/* Sidebar overlay for mobile */}
         {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299,
-          }} />
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
+
         {/* Sidebar */}
         <div style={{
-          width: 210, flexShrink: isMobile ? 0 : 0,
+          width: 210, flexShrink: 0,
           borderRight: '1px solid rgba(255,255,255,0.06)',
-          padding: '18px 10px', background: isMobile ? '#0e1420' : 'rgba(255,255,255,0.01)', overflowY: 'auto',
+          padding: '16px 10px', background: isMobile ? '#0e1420' : 'rgba(255,255,255,0.01)', overflowY: 'auto',
           ...(isMobile ? {
             position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
             transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
@@ -525,26 +598,24 @@ export default function Dashboard({ user, onSignOut }) {
             boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
           } : {}),
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 10 }}>
-            <div style={{ fontSize: 10, color: '#404660', letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</div>
-            <button onClick={() => setShowSidebar(false)} style={{
-              background: 'none', border: 'none', color: '#606880', cursor: 'pointer', fontSize: 16, padding: 2,
-            }} className="sidebar-close">✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
+            <span style={{ fontSize: 10, color: '#404660', letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
+            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: '#606880', cursor: 'pointer', fontSize: 16 }}>✕</button>}
           </div>
           {roots.map(l => <LevelItem key={l.id} level={l} />)}
-          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 10, color: '#404660', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10, paddingLeft: 2 }}>評価基準</div>
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: 10, color: '#404660', textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
             {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
-              <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 6px', borderRadius: 6, marginBottom: 2 }}>
+              <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
                 <Stars score={r.score} size={9} />
                 <span style={{ fontSize: 10, color: r.color, flex: 1 }}>{r.label}</span>
-                <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: '#404660' }}>{r.min}%+</span>
+                <span style={{ fontSize: 9, color: '#404660' }}>{r.min}%+</span>
               </div>
             ))}
           </div>
           {/* Mobile logout */}
-          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 10, color: '#505878', marginBottom: 8, paddingLeft: 2 }}>{user.email}</div>
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: 10, color: '#505878', marginBottom: 8 }}>{user.email}</div>
             <button onClick={onSignOut} style={{
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
               color: '#a0a8be', borderRadius: 8, padding: '8px 14px', fontSize: 12,
@@ -554,55 +625,53 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
 
         {/* Main */}
-        <div style={{ flex: 1, padding: isMobile ? '14px' : '22px 26px', overflowY: 'auto', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#404660', marginBottom: 3 }}>{getPath(activeLevelId)}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 21, fontWeight: 700 }}>{activeLevel?.name}</span>
-                <span style={{ fontSize: 18 }}>{activeLevel?.icon}</span>
-                <span style={{ fontSize: 12, color: '#606880' }}>{periods.find(p => p.key === activePeriod)?.label}</span>
-              </div>
+        <div style={{ flex: 1, padding: isMobile ? '14px' : '20px 24px', overflowY: 'auto', minWidth: 0 }}>
+          {/* ヘッダー */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18, fontWeight: 700 }}>{activeLevel?.name}</span>
+              <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
+              <span style={{ fontSize: 11, color: '#606880' }}>{periods.find(p => p.key === activePeriod)?.label}</span>
             </div>
-            {objectives.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {[
-                  { label: '平均達成率', value: `${overallAvg}%`, sub: <Stars score={overallRating.score} />, color: overallRating.color, bg: `${overallRating.color}12`, border: `${overallRating.color}28` },
-                  { label: '目標数', value: objectives.length, sub: 'Objectives', color: '#e8eaf0', bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.07)' },
-                  { label: 'KR 総数', value: objectives.reduce((s, o) => s + (o.key_results?.length || 0), 0), sub: 'Key Results', color: '#e8eaf0', bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.07)' },
-                ].map(s => (
-                  <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: '10px 16px', textAlign: 'center', minWidth: 80 }}>
-                    <div style={{ fontSize: 10, color: '#606880', marginBottom: 4 }}>{s.label}</div>
-                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 19, fontWeight: 700, color: s.color }}>{s.value}</div>
-                    <div style={{ marginTop: 4, display: 'flex', justifyContent: 'center', fontSize: 10, color: '#505878' }}>{s.sub}</div>
-                  </div>
-                ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
+              <div>
+                <div style={{ fontSize: 9, color: '#606880', marginBottom: 1 }}>全社平均達成率</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: globalR.color, lineHeight: 1 }}>{globalAvg}%</div>
               </div>
-            )}
+              <Stars score={globalR.score} size={11} />
+            </div>
           </div>
 
-          <div className="fu">
-            {objectives.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#404660', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-                <div style={{ fontSize: 14, marginBottom: 6 }}>この期間に目標がありません</div>
-                <div style={{ fontSize: 12 }}>「＋ 目標を追加」から新しい目標を設定しましょう</div>
+          {/* 凡例 */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[{ label: '経営', color: '#ff6b6b' }, { label: '事業部', color: '#4d9fff' }, { label: 'チーム', color: '#00d68f' }].map(l => (
+              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 3, height: 14, borderRadius: 2, background: l.color }} />
+                <span style={{ fontSize: 10, color: '#8090b0' }}>{l.label}</span>
               </div>
-            ) : (
-              objectives.map(obj => (
-                <ObjCard key={obj.id} obj={obj} levelColor={activeLevel?.color || '#4d9fff'}
-                  onEdit={o => setModal({ type: 'edit', obj: o })}
-                  onDelete={handleDelete} />
-              ))
-            )}
+            ))}
+            <span style={{ fontSize: 10, color: '#404660' }}>▾ で子階層を展開・折りたたみ</span>
           </div>
+
+          {/* 階層ツリー */}
+          {activeLevelId && (
+            <NodeBlock
+              levelId={activeLevelId}
+              levels={levels}
+              nodeObjectives={nodeObjectives}
+              parentColor={null}
+              isLast={true}
+              onEdit={o => setModal({ type: 'edit', obj: o })}
+              onDelete={handleDelete}
+            />
+          )}
         </div>
       </div>
 
       {showAI && (
         <AIPanel
           onClose={() => setShowAI(false)}
-          okrContext={{ levels, objectives, activePeriod }}
+          okrContext={{ levels, objectives: subtreeObjs, activePeriod }}
         />
       )}
       {modal && (
