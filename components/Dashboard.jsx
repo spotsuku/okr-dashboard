@@ -301,6 +301,14 @@ export default function Dashboard({ user, onSignOut }) {
   const [loading, setLoading] = useState(true)
   const [showAI, setShowAI] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Load levels once
   useEffect(() => {
@@ -445,28 +453,31 @@ export default function Dashboard({ user, onSignOut }) {
       `}</style>
 
       {/* Top bar */}
-      <div className="mobile-header" style={{
-        padding: '13px 22px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+      <div style={{
+        padding: isMobile ? '10px 12px' : '13px 22px',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: 'rgba(9,13,24,0.95)', backdropFilter: 'blur(12px)',
-        position: 'sticky', top: 0, zIndex: 100, gap: 8,
+        position: 'sticky', top: 0, zIndex: 100, gap: 8, flexWrap: 'nowrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
           <button onClick={() => setShowSidebar(true)} style={{
             background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
             color: '#a0a8be', width: 32, height: 32, borderRadius: 8,
             cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
           }}>☰</button>
-          <div>
-            <div style={{ fontSize: 9, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
-            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.02em' }}>OKR ダッシュボード</div>
-          </div>
+          {!isMobile && (
+            <div>
+              <div style={{ fontSize: 9, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
+              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>OKR ダッシュボード</div>
+            </div>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: 3, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
           {periods.map(p => (
             <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
-              padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+              padding: isMobile ? '5px 7px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
               background: activePeriod === p.key ? '#4d9fff' : 'transparent',
               color: activePeriod === p.key ? '#fff' : '#606880',
               fontSize: 11, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
@@ -474,12 +485,14 @@ export default function Dashboard({ user, onSignOut }) {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-          <span className="desktop-only" style={{ fontSize: 11, color: '#505878' }}>{user.email}</span>
-          <button onClick={onSignOut} className="desktop-only" style={{
-            background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#a0a8be', borderRadius: 8, padding: '5px 10px', fontSize: 11,
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}>ログアウト</button>
+          {!isMobile && <span style={{ fontSize: 11, color: '#505878' }}>{user.email}</span>}
+          {!isMobile && (
+            <button onClick={onSignOut} style={{
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+              color: '#a0a8be', borderRadius: 8, padding: '5px 10px', fontSize: 11,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>ログアウト</button>
+          )}
           <button onClick={() => setModal({ type: 'add' })} style={{
             background: '#4d9fff', border: 'none', color: '#fff',
             borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600,
@@ -493,13 +506,24 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {/* Sidebar overlay for mobile */}
-        {showSidebar && <div className="sidebar-overlay" onClick={() => setShowSidebar(false)} />}
+        {isMobile && showSidebar && (
+          <div onClick={() => setShowSidebar(false)} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299,
+          }} />
+        )}
         {/* Sidebar */}
-        <div className={showSidebar ? 'sidebar-panel' : ''} style={{
-          width: 210, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)',
-          padding: '18px 10px', background: 'rgba(255,255,255,0.01)', overflowY: 'auto',
+        <div style={{
+          width: 210, flexShrink: isMobile ? 0 : 0,
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          padding: '18px 10px', background: isMobile ? '#0e1420' : 'rgba(255,255,255,0.01)', overflowY: 'auto',
+          ...(isMobile ? {
+            position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
+            transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.25s ease',
+            boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
+          } : {}),
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 10 }}>
             <div style={{ fontSize: 10, color: '#404660', letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</div>
@@ -530,7 +554,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
 
         {/* Main */}
-        <div className="main-content" style={{ flex: 1, padding: '22px 26px', overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: isMobile ? '14px' : '22px 26px', overflowY: 'auto', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
             <div>
               <div style={{ fontSize: 11, color: '#404660', marginBottom: 3 }}>{getPath(activeLevelId)}</div>
