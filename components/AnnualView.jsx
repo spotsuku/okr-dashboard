@@ -37,7 +37,7 @@ const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 
 // ─── AnnualView ─────────────────────────────────────────────────────────────
-export default function AnnualView({ levels, onAddObjective, refreshKey }) {
+export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey }) {
   const [annualObjs, setAnnualObjs]   = useState([])
   const [quarterMap, setQuarterMap]   = useState({})
   const [expanded, setExpanded]       = useState({})
@@ -219,11 +219,27 @@ export default function AnnualView({ levels, onAddObjective, refreshKey }) {
                 <div style={{ fontSize: 28, fontWeight: 800, color: r?.color || '#404660' }}>
                   {ann.key_results.length ? `${prog}%` : '−'}
                 </div>
-                <div style={{
-                  fontSize: 16, color: isOpen ? '#4d9fff' : '#404660',
-                  transition: 'transform 0.2s',
-                  transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                }}>▾</div>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  {onEdit && (
+                    <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{
+                      background: 'rgba(77,159,255,0.12)', border: '1px solid rgba(77,159,255,0.25)',
+                      color: '#4d9fff', borderRadius: 6, padding: '3px 8px', fontSize: 11,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}>編集</button>
+                  )}
+                  {onDelete && (
+                    <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{
+                      background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)',
+                      color: '#ff6b6b', borderRadius: 6, padding: '3px 8px', fontSize: 11,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}>削除</button>
+                  )}
+                  <div style={{
+                    fontSize: 16, color: isOpen ? '#4d9fff' : '#404660',
+                    transition: 'transform 0.2s',
+                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}>▾</div>
+                </div>
               </div>
             </div>
 
@@ -273,7 +289,25 @@ export default function AnnualView({ levels, onAddObjective, refreshKey }) {
                                   <div style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec', lineHeight: 1.4 }}>{qObj.title}</div>
                                   {qObj.owner && <div style={{ fontSize: 11, color: '#505878', marginTop: 4 }}>担当：{qObj.owner}</div>}
                                 </div>
-                                <div style={{ fontSize: 24, fontWeight: 800, color: qr.color, marginLeft: 12 }}>{qProg}%</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                                  <div style={{ fontSize: 24, fontWeight: 800, color: qr.color }}>{qProg}%</div>
+                                  <div style={{ display: 'flex', gap: 4 }}>
+                                    {onEdit && (
+                                      <button onClick={() => onEdit(qObj)} style={{
+                                        background: 'rgba(77,159,255,0.12)', border: '1px solid rgba(77,159,255,0.25)',
+                                        color: '#4d9fff', borderRadius: 6, padding: '3px 8px', fontSize: 11,
+                                        cursor: 'pointer', fontFamily: 'inherit',
+                                      }}>編集</button>
+                                    )}
+                                    {onDelete && (
+                                      <button onClick={() => onDelete(qObj.id)} style={{
+                                        background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)',
+                                        color: '#ff6b6b', borderRadius: 6, padding: '3px 8px', fontSize: 11,
+                                        cursor: 'pointer', fontFamily: 'inherit',
+                                      }}>削除</button>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                               <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
                                 <div style={{ height: '100%', width: `${Math.min(qProg, 100)}%`, background: qr.color, borderRadius: 99, boxShadow: `0 0 6px ${qr.color}60` }} />
