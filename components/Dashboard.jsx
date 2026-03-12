@@ -864,7 +864,7 @@ export default function Dashboard({ user, onSignOut }) {
                 }}>{v.label}</button>
               ))}
             </div>
-          </div>
+          )}
           {/* 期間切替（組織ビューのみ） */}
           {activePage === 'okr' && viewMode === 'org' && (
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
