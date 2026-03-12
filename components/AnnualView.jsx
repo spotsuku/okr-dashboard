@@ -37,14 +37,14 @@ const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 
 // ─── AnnualView ─────────────────────────────────────────────────────────────
-export default function AnnualView({ levels, onAddObjective }) {
-  const [annualObjs, setAnnualObjs]   = useState([])   // 通期OKR（KR付き）
-  const [quarterMap, setQuarterMap]   = useState({})   // { annualObjId: { q1: [...objs], q2: [...], ... } }
-  const [expanded, setExpanded]       = useState({})   // { annualObjId: bool }
-  const [activeQ, setActiveQ]         = useState({})   // { annualObjId: qKey }
+export default function AnnualView({ levels, onAddObjective, refreshKey }) {
+  const [annualObjs, setAnnualObjs]   = useState([])
+  const [quarterMap, setQuarterMap]   = useState({})
+  const [expanded, setExpanded]       = useState({})
+  const [activeQ, setActiveQ]         = useState({})
   const [loading, setLoading]         = useState(true)
 
-  useEffect(() => { loadAll() }, []) // eslint-disable-line
+  useEffect(() => { loadAll() }, [refreshKey]) // eslint-disable-line
 
   const loadAll = async () => {
     setLoading(true)
@@ -274,31 +274,36 @@ export default function AnnualView({ levels, onAddObjective }) {
                               <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
                                 <div style={{ height: '100%', width: `${Math.min(qProg, 100)}%`, background: qr.color, borderRadius: 99, boxShadow: `0 0 6px ${qr.color}60` }} />
                               </div>
-                              {/* KR一覧 */}
-                              {qObj.key_results.map((kr, i) => {
-                                const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
-                                const kr_r = getRating(kp)
-                                return (
-                                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                                    <span style={{ fontSize: 11, color: '#505878', flex: 1, minWidth: 0 }}>{kr.title}</span>
-                                    <div style={{ width: 80, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                                      <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
-                                    </div>
-                                    <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                      {kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}
-                                    </span>
-                                  </div>
-                                )
-                              })}
+                              {/* 四半期KR一覧 */}
+                              {qObj.key_results.length > 0 && (
+                                <div style={{ marginTop: 8 }}>
+                                  <div style={{ fontSize: 10, color: '#404660', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>この四半期のKR</div>
+                                  {qObj.key_results.map((kr, i) => {
+                                    const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
+                                    const kr_r = getRating(kp)
+                                    return (
+                                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 7, padding: '7px 10px' }}>
+                                        <span style={{ fontSize: 11, color: '#c0c4d8', flex: 1, minWidth: 0 }}>{kr.title}</span>
+                                        <div style={{ width: 80, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                                          <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                                        </div>
+                                        <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                          {kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )
                       })}
 
-                      {/* 通期KR対応セクション */}
+                      {/* 通期KR進捗セクション */}
                       {ann.key_results.length > 0 && (
                         <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ fontSize: 11, color: '#404660', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>通期KRの進捗</div>
+                          <div style={{ fontSize: 11, color: '#404660', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>通期KRへの貢献（累計）</div>
                           {ann.key_results.map((kr, i) => {
                             const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
                             const kr_r = getRating(kp)
