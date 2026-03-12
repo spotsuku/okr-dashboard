@@ -943,7 +943,44 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflowY: 'auto' }}><MyOKRPage user={user} levels={levels} members={members} subtreeObjs={subtreeObjs} activePeriod={activePeriod} /></div>}
-      {activePage === 'okr' && viewMode === 'annual' && (
+      <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {isMobile && showSidebar && (
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
+        )}
+        {/* Sidebar (annual) */}
+        <div style={{
+          width: 210, flexShrink: 0,
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          padding: '16px 10px', background: isMobile ? '#0e1420' : 'rgba(255,255,255,0.01)', overflowY: 'auto',
+          ...(isMobile ? {
+            position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
+            transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.25s ease',
+            boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
+          } : {}),
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
+            <span style={{ fontSize: 12, color: '#404660', letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
+            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: '#606880', cursor: 'pointer', fontSize: 16 }}>✕</button>}
+          </div>
+          {roots.map(l => <LevelItem key={l.id} level={l} />)}
+          <button onClick={() => setShowOrgModal(true)} style={{
+            width:'100%', marginTop:10, background:'rgba(77,159,255,0.08)', border:'1px dashed rgba(77,159,255,0.3)',
+            color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
+            cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+          }}>🏗️ 組織を管理</button>
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: 10, color: '#404660', textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
+            {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
+              <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
+                <Stars score={r.score} size={9} />
+                <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
+                <span style={{ fontSize: 11, color: '#404660' }}>{r.min}%+</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Annual main content */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <AnnualView
             levels={levels}
@@ -951,9 +988,11 @@ export default function Dashboard({ user, onSignOut }) {
             onAddObjective={({ parentObjectiveId, period, level_id }) => {
               setModal({ type: 'add', obj: { parent_objective_id: parentObjectiveId, period, level_id } })
             }}
+            onEdit={obj => setModal({ type: 'edit', obj })}
+            onDelete={handleDelete}
           />
         </div>
-      )}
+      </div>
 
       <div style={{ display: activePage === 'okr' && viewMode === 'org' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
