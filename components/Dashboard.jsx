@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import AIPanel from './AIPanel'
 import MemberPage from './MemberPage'
 import CsvPage from './CsvPage'
+import AnnualView from './AnnualView'
 
 // ─── Rating helpers ────────────────────────────────────────────────────────────
 const RATINGS = [
@@ -649,6 +650,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
   const [activePage, setActivePage]         = useState('okr') // 'okr' | 'myokr' | 'csv' | 'members'
+  const [viewMode, setViewMode]             = useState('org')  // 'org' | 'annual'
   const [members, setMembers]               = useState([])
 
   useEffect(() => {
@@ -722,7 +724,7 @@ export default function Dashboard({ user, onSignOut }) {
     } else {
       const { data, error } = await supabase
         .from('objectives')
-        .insert([{ title: obj.title, owner: obj.owner, level_id: obj.level_id, period: obj.period }])
+        .insert([{ title: obj.title, owner: obj.owner, level_id: obj.level_id, period: obj.period, parent_objective_id: obj.parent_objective_id || null }])
         .select().single()
       if (error) { console.error('insert error:', error); return }
       objectiveId = data.id
@@ -850,8 +852,21 @@ export default function Dashboard({ user, onSignOut }) {
               }}>{pg.label}</button>
             ))}
           </div>
-          {/* 期間切替（OKRページのみ） */}
+          {/* ビュー切替（OKRページのみ） */}
           {activePage === 'okr' && (
+            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
+              {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'}].map(v => (
+                <button key={v.key} onClick={() => setViewMode(v.key)} style={{
+                  padding: isMobile ? '5px 7px' : '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: viewMode === v.key ? '#a855f7' : 'transparent',
+                  color: viewMode === v.key ? '#fff' : '#606880',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
+                }}>{v.label}</button>
+              ))}
+            </div>
+          </div>
+          {/* 期間切替（組織ビューのみ） */}
+          {activePage === 'okr' && viewMode === 'org' && (
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
               {periods.map(p => (
                 <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
@@ -888,8 +903,18 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflowY: 'auto' }}><MyOKRPage user={user} levels={levels} members={members} subtreeObjs={subtreeObjs} activePeriod={activePeriod} /></div>}
+      {activePage === 'okr' && viewMode === 'annual' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <AnnualView
+            levels={levels}
+            onAddObjective={({ parentObjectiveId, period, level_id }) => {
+              setModal({ type: 'add', obj: { parent_objective_id: parentObjectiveId, period, level_id } })
+            }}
+          />
+        </div>
+      )}
 
-      <div style={{ display: activePage === 'okr' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && viewMode === 'org' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
