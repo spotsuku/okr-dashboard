@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import AIPanel from './AIPanel'
+import MemberPage from './MemberPage'
+import CsvPage from './CsvPage'
 
 // ─── Rating helpers ────────────────────────────────────────────────────────────
 const RATINGS = [
@@ -521,6 +523,119 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
   )
 }
 
+
+// ─── My OKR Page ───────────────────────────────────────────────────────────────
+function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
+  const [myObjs, setMyObjs] = useState([])
+  const [allObjs, setAllObjs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // メールからメンバー情報を取得
+  const myMember = members.find(m => m.email === user.email)
+  const myName = myMember?.name || user.email
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      // 全期間の自分の目標を取得
+      const { data: objs } = await supabase
+        .from('objectives').select('id,level_id,period,title,owner').eq('owner', myName).order('id')
+      if (!objs || !objs.length) { setMyObjs([]); setAllObjs([]); setLoading(false); return }
+      const ids = objs.map(o => o.id)
+      const { data: krs } = await supabase
+        .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better').in('objective_id', ids)
+      const krMap = {}
+      ;(krs || []).forEach(kr => { if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []; krMap[kr.objective_id].push(kr) })
+      const full = objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
+      setMyObjs(full)
+      setAllObjs(full)
+      setLoading(false)
+    }
+    load()
+  }, [myName]) // eslint-disable-line
+
+  const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
+  const getLevelColor = (levelId) => {
+    let d = 0, cur = levels.find(l => l.id === levelId)
+    while (cur && cur.parent_id) { d++; cur = levels.find(l => l.id === cur.parent_id) }
+    return LAYER_COLORS[d] || '#a0a8be'
+  }
+  const getLevelName = (levelId) => levels.find(l => l.id === levelId)?.name || ''
+
+  const periods = [
+    { key: 'annual', label: '通期' }, { key: 'q1', label: 'Q1' },
+    { key: 'q2', label: 'Q2' }, { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
+  ]
+
+  if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
+
+  return (
+    <div style={{ padding: '24px 28px', maxWidth: 1100, margin: '0 auto' }}>
+      {/* ヘッダー */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
+        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(77,159,255,0.15)', border: '2px solid rgba(77,159,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#4d9fff' }}>
+          {myName.charAt(0)}
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: '#606880', marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{myName} のOKR</div>
+        </div>
+        {!myMember && (
+          <div style={{ marginLeft: 'auto', fontSize: 11, color: '#ffd166', background: 'rgba(255,209,102,0.1)', border: '1px solid rgba(255,209,102,0.2)', borderRadius: 8, padding: '6px 12px' }}>
+            ⚠️ 組織図にメンバー登録するとより詳しい情報が表示されます
+          </div>
+        )}
+      </div>
+
+      {myObjs.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#404660', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 15, marginBottom: 6 }}>担当OKRがありません</div>
+          <div style={{ fontSize: 13 }}>目標の担当者名を <strong style={{ color: '#4d9fff' }}>{myName}</strong> に設定するとここに表示されます</div>
+        </div>
+      ) : (
+        <>
+          {/* 期間ごとにグループ表示 */}
+          {periods.map(p => {
+            const objs = myObjs.filter(o => o.period === p.key)
+            if (!objs.length) return null
+            return (
+              <div key={p.key} style={{ marginBottom: 32 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec' }}>{p.label}</span>
+                  <span style={{ fontSize: 11, color: '#404660' }}>{objs.length}件</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
+                  {objs.map(obj => {
+                    const prog = calcObjProgress(obj.key_results)
+                    const rating = getRating(prog)
+                    const lColor = getLevelColor(obj.level_id)
+                    return (
+                      <div key={obj.id} style={{ background: '#111828', border: `1px solid ${rating.color}25`, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${lColor}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color, fontWeight: 700 }}>{rating.label}</span>
+                          <span style={{ fontSize: 24, fontWeight: 800, color: rating.color }}>{prog}%</span>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#dde0ec', lineHeight: 1.5, marginBottom: 12 }}>{obj.title}</div>
+                        <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
+                          <div style={{ height: '100%', width: `${Math.min(prog, 100)}%`, background: rating.color, borderRadius: 99, boxShadow: `0 0 6px ${rating.color}80` }} />
+                        </div>
+                        <div style={{ fontSize: 11, color: '#505878' }}>
+                          {getLevelName(obj.level_id)} · {obj.key_results.length}KR
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ user, onSignOut }) {
   const [levels, setLevels]               = useState([])
@@ -533,6 +648,8 @@ export default function Dashboard({ user, onSignOut }) {
   const [showOrgModal, setShowOrgModal]     = useState(false)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
+  const [activePage, setActivePage]         = useState('okr') // 'okr' | 'myokr' | 'csv' | 'members'
+  const [members, setMembers]               = useState([])
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640)
@@ -541,12 +658,16 @@ export default function Dashboard({ user, onSignOut }) {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Load levels
+  // Load levels + members
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase.from('levels').select('*').order('id')
+      const [{ data: lvls, error }, { data: mems }] = await Promise.all([
+        supabase.from('levels').select('*').order('id'),
+        supabase.from('members').select('*').order('id'),
+      ])
       if (error) console.error('levels error:', error)
-      if (data?.length) { setLevels(data); setActiveLevelId(data[0].id) }
+      if (lvls?.length) { setLevels(lvls); setActiveLevelId(lvls[0].id) }
+      if (mems) setMembers(mems)
       setLoading(false)
     }
     load()
@@ -717,15 +838,31 @@ export default function Dashboard({ user, onSignOut }) {
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-          {periods.map(p => (
-            <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
-              padding: isMobile ? '5px 7px' : '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: activePeriod === p.key ? '#4d9fff' : 'transparent',
-              color: activePeriod === p.key ? '#fff' : '#606880',
-              fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-            }}>{p.label}</button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {/* ページナビ */}
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
+            {[{key:'okr',label:'OKR'},{key:'myokr',label:'マイOKR'},{key:'csv',label:'CSV登録'},{key:'members',label:'組織図'}].map(pg => (
+              <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
+                padding: isMobile ? '5px 7px' : '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                background: activePage === pg.key ? '#4d9fff' : 'transparent',
+                color: activePage === pg.key ? '#fff' : '#606880',
+                fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
+              }}>{pg.label}</button>
+            ))}
+          </div>
+          {/* 期間切替（OKRページのみ） */}
+          {activePage === 'okr' && (
+            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
+              {periods.map(p => (
+                <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
+                  padding: isMobile ? '5px 7px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: activePeriod === p.key ? '#a855f7' : 'transparent',
+                  color: activePeriod === p.key ? '#fff' : '#606880',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                }}>{p.label}</button>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
           {!isMobile && <span style={{ fontSize: 13, color: '#505878' }}>{user.email}</span>}
@@ -747,7 +884,12 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {/* ─── ページ切替 ─── */}
+      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
+      {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
+      {activePage === 'myokr' && <div style={{ flex: 1, overflowY: 'auto' }}><MyOKRPage user={user} levels={levels} members={members} subtreeObjs={subtreeObjs} activePeriod={activePeriod} /></div>}
+
+      <div style={{ display: activePage === 'okr' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
