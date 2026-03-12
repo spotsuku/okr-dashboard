@@ -132,6 +132,10 @@ export default function AnnualView({ levels, onAddObjective, refreshKey }) {
     <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
   )
 
+  if (!levels?.length) return (
+    <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
+  )
+
   if (!annualObjs.length) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: '#404660', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14, maxWidth: 600, margin: '40px auto' }}>
       <div style={{ fontSize: 36, marginBottom: 12 }}>📅</div>
