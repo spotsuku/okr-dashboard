@@ -27,8 +27,8 @@ function calcObjProgress(krs) {
 
 function getAbsoluteDepth(levelId, levels) {
   let depth = 0
-  let cur = levels.find(l => l.id === levelId)
-  while (cur && cur.parent_id) { depth++; cur = levels.find(l => l.id === cur.parent_id) }
+  let cur = levels.find(l => Number(l.id) === Number(levelId))
+  while (cur && cur.parent_id) { depth++; cur = levels.find(l => Number(l.id) === Number(cur.parent_id)) }
   return depth
 }
 
@@ -159,8 +159,8 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         const depth = getAbsoluteDepth(ann.level_id, levels)
         const lColor = LAYER_COLORS[depth] || '#a0a8be'
         const lLabel = { 0: '経営', 1: '事業部', 2: 'チーム' }[depth] || ''
-        const levelName = levels.find(l => l.id === ann.level_id)?.name || ''
-        const levelIcon = levels.find(l => l.id === ann.level_id)?.icon || ''
+        const levelName = levels.find(l => Number(l.id) === Number(ann.level_id))?.name || ''
+        const levelIcon = levels.find(l => Number(l.id) === Number(ann.level_id))?.icon || ''
         const isOpen = expanded[ann.id]
         const curQ = activeQ[ann.id] || 'q1'
         const qData = quarterMap[ann.id] || { q1: [], q2: [], q3: [], q4: [] }
