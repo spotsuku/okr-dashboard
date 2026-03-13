@@ -1,10 +1,52 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import AIPanel from './AIPanel'
 import MemberPage from './MemberPage'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
+const THEMES = {
+  dark: {
+    bg:          '#090d18',
+    bgCard:      '#0e1420',
+    bgCard2:     '#111828',
+    bgSidebar:   '#0e1420',
+    border:      'rgba(255,255,255,0.07)',
+    borderLight: 'rgba(255,255,255,0.04)',
+    borderMid:   'rgba(255,255,255,0.1)',
+    text:        '#e8eaf0',
+    textSub:     '#a0a8be',
+    textMuted:   '#606880',
+    textFaint:   '#404660',
+    textFaintest:'#303450',
+    headerBg:    '#090d18',
+    connector:   'rgba(255,255,255,0.12)',
+    connectorArrow: 'rgba(255,255,255,0.2)',
+  },
+  light: {
+    bg:          '#f0f2f7',
+    bgCard:      '#ffffff',
+    bgCard2:     '#f7f8fc',
+    bgSidebar:   '#ffffff',
+    border:      'rgba(0,0,0,0.08)',
+    borderLight: 'rgba(0,0,0,0.05)',
+    borderMid:   'rgba(0,0,0,0.12)',
+    text:        '#1a1f36',
+    textSub:     '#4a5270',
+    textMuted:   '#7080a0',
+    textFaint:   '#90a0bc',
+    textFaintest:'#b0bcd0',
+    headerBg:    '#ffffff',
+    connector:   'rgba(0,0,0,0.15)',
+    connectorArrow: 'rgba(0,0,0,0.2)',
+  },
+}
+
+// グローバルテーマ参照（コンポーネント間で共有）
+let _T = THEMES.dark
+const getT = () => _T
 
 // ─── Rating helpers ────────────────────────────────────────────────────────────
 const RATINGS = [
@@ -112,7 +154,7 @@ function Modal({ title, onClose, children }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} style={{
-            background: 'rgba(255,255,255,0.06)', border: 'none', color: '#a0a8be',
+            background: T.border, border: 'none', color: getT().textSub,
             width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>✕</button>
@@ -126,7 +168,7 @@ function Modal({ title, onClose, children }) {
 function FInput({ label, value, onChange, placeholder, type = 'text' }) {
   return (
     <div style={{ marginBottom: 13 }}>
-      {label && <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>{label}</div>}
+      {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         style={{
           width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -140,7 +182,7 @@ function FInput({ label, value, onChange, placeholder, type = 'text' }) {
 function FSelect({ label, value, onChange, options }) {
   return (
     <div style={{ marginBottom: 13 }}>
-      {label && <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>{label}</div>}
+      {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
       <select value={value} onChange={e => onChange(e.target.value)} style={{
         width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none',
@@ -209,7 +251,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       <FSelect label="期間" value={period} onChange={setPeriod} options={periodOpts} />
       <FInput label="目標タイトル" value={title} onChange={setTitle} placeholder="例: 市場シェアを拡大する" />
       <div style={{ marginBottom: 13 }}>
-        <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>オーナー</div>
+        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>オーナー</div>
         <select value={owner} onChange={e => setOwner(e.target.value)} style={{
           width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: 8, padding: '9px 12px', color: owner ? '#e8eaf0' : '#505878', fontSize: 13,
@@ -220,13 +262,13 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         </select>
       </div>
 
-      <div style={{ fontSize: 11, color: '#606880', marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Results</div>
+      <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Results</div>
       {krs.map((kr, i) => {
         const key = kr.id || kr._tmpId
         return (
-          <div key={key} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
+          <div key={key} style={{ background: getT().bgCard, border: `1px solid ${getT().border}`, borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: '#606880' }}>KR {i + 1}</span>
+              <span style={{ fontSize: 11, color: getT().textMuted }}>KR {i + 1}</span>
               {krs.length > 1 && <Btn small danger variant="ghost" onClick={() => removeKR(key)}>削除</Btn>}
             </div>
             <FInput value={kr.title} onChange={v => updateKR(key, 'title', v)} placeholder="KR のタイトル" />
@@ -235,7 +277,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
               <div style={{ flex: 1 }}><FInput value={String(kr.current)} onChange={v => updateKR(key, 'current', v)} placeholder="現在値" type="number" /></div>
               <div style={{ flex: 1 }}><FInput value={kr.unit} onChange={v => updateKR(key, 'unit', v)} placeholder="単位" /></div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#a0a8be' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: getT().textSub }}>
               <input type="checkbox" checked={!!kr.lower_is_better} onChange={e => updateKR(key, 'lower_is_better', e.target.checked)} />
               低い方が良い指標（チャーン率・バグ数など）
             </label>
@@ -244,7 +286,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       })}
       <Btn small variant="ghost" onClick={addKR}>＋ KR を追加</Btn>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22, borderTop: `1px solid ${getT().border}`, paddingTop: 18 }}>
         <Btn variant="ghost" onClick={onClose}>キャンセル</Btn>
         <Btn onClick={save} disabled={saving}>{saving ? '保存中...' : '保存する'}</Btn>
       </div>
@@ -261,7 +303,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
   return (
     <div style={{ marginBottom: 6 }}>
       <div style={{
-        background: '#0e1420', border: `1px solid ${open ? levelColor + '50' : 'rgba(255,255,255,0.07)'}`,
+        background: getT().bgCard, border: `1px solid ${open ? levelColor + '50' : T.border}`,
         borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.2s',
       }}>
         <div style={{ padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
@@ -272,17 +314,17 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color }}>{rating.label}</span>
               <Stars score={rating.score} size={9} />
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#dde0ec', lineHeight: 1.4, marginBottom: 6 }}>{obj.title}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: getT().text, lineHeight: 1.4, marginBottom: 6 }}>{obj.title}</div>
             {obj.owner && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Avatar name={obj.owner} color={levelColor} size={22} />
-                <span style={{ fontSize: 12, color: '#8090b0' }}>{obj.owner}</span>
+                <span style={{ fontSize: 12, color: getT().textSub }}>{obj.owner}</span>
               </div>
             )}
           </div>
           <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
             <button onClick={e => { e.stopPropagation(); onEdit(obj) }} style={{
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#606880',
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: getT().textMuted,
               width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>✎</button>
@@ -291,14 +333,14 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
               width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>✕</button>
-            <span style={{ color: '#404660', fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+            <span style={{ color: getT().textFaint, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
           </div>
         </div>
 
         {open && (
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ borderTop: `1px solid ${getT().borderLight}`, background: getT().bgCard2 }}>
             {(!obj.key_results || obj.key_results.length === 0) && (
-              <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: '#404660' }}>KR がありません</div>
+              <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: getT().textFaint }}>KR がありません</div>
             )}
             {obj.key_results?.map((kr, i) => {
               const kprog = calcKRProgress(kr)
@@ -306,7 +348,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
               return (
                 <div key={kr.id} style={{
                   padding: '10px 14px 10px 20px',
-                  borderBottom: i < obj.key_results.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  borderBottom: i < obj.key_results.length - 1 ? `1px solid ${getT().borderLight}` : 'none',
                   display: 'flex', alignItems: 'center', gap: 10,
                 }}>
                   <div style={{ flexShrink: 0, width: 40, textAlign: 'center' }}>
@@ -315,10 +357,10 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
-                      <span style={{ fontSize: 13, color: '#c0c4d8', lineHeight: 1.35 }}>{kr.title}</span>
-                      <span style={{ fontSize: 11, color: '#505878', flexShrink: 0 }}>
+                      <span style={{ fontSize: 13, color: getT().textSub, lineHeight: 1.35 }}>{kr.title}</span>
+                      <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>
                         {kr.current}{kr.unit} / {kr.target}{kr.unit}
-                        {kr.lower_is_better && <span style={{ color: '#404660', marginLeft: 4 }}>↓良</span>}
+                        {kr.lower_is_better && <span style={{ color: getT().textFaint, marginLeft: 4 }}>↓良</span>}
                       </span>
                     </div>
                     <Bar value={kprog} color={kr_rating.color} />
@@ -343,12 +385,24 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
   const allProgs = objs.map(o => calcObjProgress(o.key_results))
   const avg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : null
   const avgR = avg !== null ? getRating(avg) : null
+  const [colWidth, setColWidth] = useState(280)
+  const dragRef = useRef(null)
   if (!level) return null
+
+  const onMouseDownResize = (e) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = colWidth
+    const onMove = (me) => setColWidth(Math.max(180, Math.min(520, startW + me.clientX - startX)))
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
       {/* カラム本体 */}
-      <div style={{ minWidth: 260, maxWidth: 320, flex: '0 0 280px' }}>
+      <div style={{ width: colWidth, flexShrink: 0, position: 'relative' }}>
         {/* レベルヘッダー */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
@@ -357,7 +411,7 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
         }}>
           <span style={{ fontSize: 17 }}>{level.icon}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#dde0ec' }}>{level.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: getT().text }}>{level.name}</div>
             <div style={{ fontSize: 10, color: layerColor, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>{layerLabel}</div>
           </div>
           {avg !== null && (
@@ -370,17 +424,36 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
 
         {/* OKRカード */}
         {objs.length === 0
-          ? <div style={{ fontSize: 12, color: '#303450', fontStyle: 'italic', padding: '8px 4px' }}>目標なし</div>
+          ? <div style={{ fontSize: 12, color: getT().textFaintest, fontStyle: 'italic', padding: '8px 4px' }}>目標なし</div>
           : objs.map(obj => <ObjCard key={obj.id} obj={obj} levelColor={layerColor} onEdit={onEdit} onDelete={onDelete} />)
         }
+
+        {/* リサイズハンドル */}
+        <div
+          onMouseDown={onMouseDownResize}
+          style={{
+            position: 'absolute', top: 0, right: -4, width: 8, height: '100%',
+            cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div style={{
+            width: 3, height: 40, borderRadius: 2,
+            background: `${layerColor}60`,
+            opacity: 0.4,
+            transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
+          />
+        </div>
       </div>
 
       {/* 矢印コネクター */}
       {!isLast && (
         <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 20, flexShrink: 0, width: 36 }}>
-          <div style={{ width: 14, height: 2, background: 'rgba(255,255,255,0.12)', marginTop: 10 }} />
+          <div style={{ width: 14, height: 2, background: getT().connector, marginTop: 10 }} />
           <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)', lineHeight: 1, marginTop: 2 }}>›</div>
-          <div style={{ width: 8, height: 2, background: 'rgba(255,255,255,0.12)', marginTop: 10 }} />
+          <div style={{ width: 8, height: 2, background: getT().connector, marginTop: 10 }} />
         </div>
       )}
     </div>
@@ -410,8 +483,8 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
       {hasChildren && (
         <>
           <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 22, flexShrink: 0, width: 36 }}>
-            <div style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.1)' }} />
-            <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.2)', lineHeight: 1, marginTop: 1 }}>›</div>
+            <div style={{ flex: 1, height: 2, background: getT().connector }} />
+            <div style={{ fontSize: 18, color: getT().connectorArrow, lineHeight: 1, marginTop: 1 }}>›</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {children.map(child => (
@@ -483,9 +556,9 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
     const isRoot = absD === 0
     return (
       <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:'rgba(255,255,255,0.03)', border:`1px solid ${T.border}` }}>
           <span style={{ fontSize:13 }}>{level.icon}</span>
-          <span style={{ flex:1, fontSize:12, fontWeight:500, color:'#dde0ec' }}>{level.name}</span>
+          <span style={{ flex:1, fontSize:12, fontWeight:500, color:T.text }}>{level.name}</span>
           <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
           {!isRoot && (
             <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
@@ -513,7 +586,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
       }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-          <button onClick={onClose} style={{ background:'rgba(255,255,255,0.06)', border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+          <button onClick={onClose} style={{ background:T.border, border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
         </div>
 
         {/* 現在の組織一覧 */}
@@ -636,8 +709,8 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
           {myName.charAt(0)}
         </div>
         <div>
-          <div style={{ fontSize: 11, color: '#606880', marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}</div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{myName} のOKR</div>
+          <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{myName} のOKR</div>
         </div>
         {!myMember && (
           <div style={{ marginLeft: 'auto', fontSize: 11, color: '#ffd166', background: 'rgba(255,209,102,0.1)', border: '1px solid rgba(255,209,102,0.2)', borderRadius: 8, padding: '6px 12px' }}>
@@ -647,7 +720,7 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
       </div>
 
       {myObjs.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#404660', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: getT().textFaint, border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
           <div style={{ fontSize: 15, marginBottom: 6 }}>担当OKRがありません</div>
           <div style={{ fontSize: 13 }}>目標の担当者名を <strong style={{ color: '#4d9fff' }}>{myName}</strong> に設定するとここに表示されます</div>
@@ -661,8 +734,8 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
             return (
               <div key={p.key} style={{ marginBottom: 32 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec' }}>{p.label}</span>
-                  <span style={{ fontSize: 11, color: '#404660' }}>{objs.length}件</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{p.label}</span>
+                  <span style={{ fontSize: 11, color: getT().textFaint }}>{objs.length}件</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
                   {objs.map(obj => {
@@ -670,16 +743,16 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
                     const rating = getRating(prog)
                     const lColor = getLevelColor(obj.level_id)
                     return (
-                      <div key={obj.id} style={{ background: '#111828', border: `1px solid ${rating.color}25`, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${lColor}` }}>
+                      <div key={obj.id} style={{ background: getT().bgCard2, border: `1px solid ${rating.color}25`, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${lColor}` }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                           <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color, fontWeight: 700 }}>{rating.label}</span>
                           <span style={{ fontSize: 24, fontWeight: 800, color: rating.color }}>{prog}%</span>
                         </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#dde0ec', lineHeight: 1.5, marginBottom: 12 }}>{obj.title}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.5, marginBottom: 12 }}>{obj.title}</div>
                         <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
                           <div style={{ height: '100%', width: `${Math.min(prog, 100)}%`, background: rating.color, borderRadius: 99, boxShadow: `0 0 6px ${rating.color}80` }} />
                         </div>
-                        <div style={{ fontSize: 11, color: '#505878' }}>
+                        <div style={{ fontSize: 11, color: getT().textMuted }}>
                           {getLevelName(obj.level_id)} · {obj.key_results.length}KR
                         </div>
                       </div>
@@ -710,6 +783,9 @@ export default function Dashboard({ user, onSignOut }) {
   const [activePage, setActivePage]         = useState('okr') // 'okr' | 'myokr' | 'csv' | 'members'
   const [viewMode, setViewMode]             = useState('org')  // 'org' | 'annual'
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
+  const [themeKey, setThemeKey]                 = useState('dark')
+  const T = THEMES[themeKey]
+  _T = T  // グローバル参照を更新
   const [members, setMembers]               = useState([])
 
   useEffect(() => {
@@ -877,7 +953,7 @@ export default function Dashboard({ user, onSignOut }) {
           transition: 'all 0.15s',
         }}>
           <span style={{ fontSize: 17 }}>{level.icon}</span>
-          <span style={{ flex: 1, fontSize: 14, fontWeight: active ? 600 : 400, color: active ? '#e8eaf0' : '#8090b0' }}>{level.name}</span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: active ? 600 : 400, color: active ? '#e8eaf0' : T.textSub }}>{level.name}</span>
         </div>
         {children.map(c => <LevelItem key={c.id} level={c} depth={depth + 1} />)}
       </>
@@ -885,24 +961,24 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   if (loading || !levels.length) return (
-    <div style={{ minHeight: '100vh', background: '#090d18', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4d9fff', fontSize: 14 }}>
+    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4d9fff', fontSize: 14 }}>
       読み込み中...
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: '#090d18', color: '#e8eaf0', fontFamily: 'system-ui,sans-serif', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{
         padding: isMobile ? '10px 12px' : '12px 20px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#090d18',
+        borderBottom: `1px solid ${T.border}`, background: T.headerBg,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
         position: 'sticky', top: 0, zIndex: 50,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setShowSidebar(p => !p)} style={{
             background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#a0a8be', width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
+            color: getT().textSub, width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
             fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>☰</button>
           {!isMobile && (
@@ -914,7 +990,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {/* ページナビ */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
             {[{key:'okr',label:'OKR'},{key:'myokr',label:'マイOKR'},{key:'csv',label:'CSV登録'},{key:'members',label:'組織図'}].map(pg => (
               <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
                 padding: isMobile ? '5px 7px' : '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
@@ -926,7 +1002,7 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
           {/* ビュー切替（OKRページのみ） */}
           {activePage === 'okr' && (
-            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'}].map(v => (
                 <button key={v.key} onClick={() => setViewMode(v.key)} style={{
                   padding: isMobile ? '5px 7px' : '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
@@ -939,7 +1015,7 @@ export default function Dashboard({ user, onSignOut }) {
           )}
           {/* 期間切替（組織ビューのみ） */}
           {activePage === 'okr' && viewMode === 'org' && (
-            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {periods.map(p => (
                 <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
                   padding: isMobile ? '5px 7px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
@@ -952,7 +1028,7 @@ export default function Dashboard({ user, onSignOut }) {
           )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-          {!isMobile && <span style={{ fontSize: 13, color: '#505878' }}>{user.email}</span>}
+          {!isMobile && <span style={{ fontSize: 13, color: getT().textMuted }}>{user.email}</span>}
           {!isMobile && !hasGoogle && (
             <button onClick={handleLinkGoogle} style={{
               background: 'rgba(255,255,255,0.9)', border: 'none', color: '#333',
@@ -970,7 +1046,7 @@ export default function Dashboard({ user, onSignOut }) {
           {!isMobile && (
             <button onClick={onSignOut} style={{
               background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-              color: '#a0a8be', borderRadius: 8, padding: '5px 10px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              color: getT().textSub, borderRadius: 8, padding: '5px 10px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
             }}>ログアウト</button>
           )}
           <button onClick={() => setModal({ type: 'add' })} style={{
@@ -978,6 +1054,10 @@ export default function Dashboard({ user, onSignOut }) {
             borderRadius: 8, padding: '7px 12px', fontSize: 14, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
           }}>＋ 追加</button>
+          <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{
+            background: T.bgCard, border: `1px solid ${T.borderMid}`,
+            color: T.textSub, borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+          }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
           <button onClick={() => setShowAI(p => !p)} style={{
             background: '#a855f7', border: 'none', color: '#fff',
             borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
@@ -991,13 +1071,13 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'myokr' && <div style={{ flex: 1, overflowY: 'auto' }}><MyOKRPage user={user} levels={levels} members={members} subtreeObjs={subtreeObjs} activePeriod={activePeriod} /></div>}
       <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
         {/* Sidebar (annual) */}
         <div style={{
           width: 210, flexShrink: 0,
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          padding: '16px 10px', background: isMobile ? '#0e1420' : 'rgba(255,255,255,0.01)', overflowY: 'auto',
+          borderRight: `1px solid ${T.border}`,
+          padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto',
           ...(isMobile ? {
             position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
             transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
@@ -1006,8 +1086,8 @@ export default function Dashboard({ user, onSignOut }) {
           } : {}),
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
-            <span style={{ fontSize: 12, color: '#404660', letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: '#606880', cursor: 'pointer', fontSize: 16 }}>✕</button>}
+            <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
+            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
           </div>
           {roots.map(l => <LevelItem key={l.id} level={l} />)}
           <button onClick={() => setShowOrgModal(true)} style={{
@@ -1015,13 +1095,13 @@ export default function Dashboard({ user, onSignOut }) {
             color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
             cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
           }}>🏗️ 組織を管理</button>
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 10, color: '#404660', textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
             {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
               <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
                 <Stars score={r.score} size={9} />
                 <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
-                <span style={{ fontSize: 11, color: '#404660' }}>{r.min}%+</span>
+                <span style={{ fontSize: 11, color: getT().textFaint }}>{r.min}%+</span>
               </div>
             ))}
           </div>
@@ -1042,14 +1122,14 @@ export default function Dashboard({ user, onSignOut }) {
 
       <div style={{ display: activePage === 'okr' && viewMode === 'org' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
 
         {/* Sidebar */}
         <div style={{
           width: 210, flexShrink: 0,
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          padding: '16px 10px', background: isMobile ? '#0e1420' : 'rgba(255,255,255,0.01)', overflowY: 'auto',
+          borderRight: `1px solid ${T.border}`,
+          padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto',
           ...(isMobile ? {
             position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
             transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
@@ -1058,8 +1138,8 @@ export default function Dashboard({ user, onSignOut }) {
           } : {}),
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
-            <span style={{ fontSize: 12, color: '#404660', letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: '#606880', cursor: 'pointer', fontSize: 16 }}>✕</button>}
+            <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
+            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
           </div>
           {roots.map(l => <LevelItem key={l.id} level={l} />)}
           <button onClick={() => setShowOrgModal(true)} style={{
@@ -1067,19 +1147,19 @@ export default function Dashboard({ user, onSignOut }) {
             color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
             cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
           }}>🏗️ 組織を管理</button>
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 10, color: '#404660', textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
             {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
               <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
                 <Stars score={r.score} size={9} />
                 <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
-                <span style={{ fontSize: 11, color: '#404660' }}>{r.min}%+</span>
+                <span style={{ fontSize: 11, color: getT().textFaint }}>{r.min}%+</span>
               </div>
             ))}
           </div>
           {/* Mobile logout */}
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 12, color: '#505878', marginBottom: 8 }}>{user.email}</div>
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 12, color: getT().textMuted, marginBottom: 8 }}>{user.email}</div>
             {!hasGoogle && (
               <button onClick={handleLinkGoogle} style={{
                 background: 'rgba(255,255,255,0.9)', border: 'none',
@@ -1098,7 +1178,7 @@ export default function Dashboard({ user, onSignOut }) {
             )}
             <button onClick={onSignOut} style={{
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              color: '#a0a8be', borderRadius: 8, padding: '8px 14px', fontSize: 12,
+              color: getT().textSub, borderRadius: 8, padding: '8px 14px', fontSize: 12,
               cursor: 'pointer', fontFamily: 'inherit', width: '100%',
             }}>ログアウト</button>
           </div>
@@ -1109,13 +1189,13 @@ export default function Dashboard({ user, onSignOut }) {
           {/* ヘッダー */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 22, fontWeight: 700 }}>{activeLevel?.name}</span>
+              <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
               <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
-              <span style={{ fontSize: 13, color: '#606880' }}>{periods.find(p => p.key === activePeriod)?.label}</span>
+              <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
               <div>
-                <div style={{ fontSize: 11, color: '#606880', marginBottom: 1 }}>全社平均達成率</div>
+                <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 1 }}>全社平均達成率</div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: globalR.color, lineHeight: 1 }}>{globalAvg}%</div>
               </div>
               <Stars score={globalR.score} size={11} />
@@ -1127,7 +1207,7 @@ export default function Dashboard({ user, onSignOut }) {
             {[{ label: '経営', color: '#ff6b6b' }, { label: '事業部', color: '#4d9fff' }, { label: 'チーム', color: '#00d68f' }].map(l => (
               <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }} />
-                <span style={{ fontSize: 12, color: '#8090b0' }}>{l.label}</span>
+                <span style={{ fontSize: 12, color: getT().textSub }}>{l.label}</span>
               </div>
             ))}
           </div>
