@@ -45,6 +45,20 @@ const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
 const getLayerColor = absDepth => LAYER_COLORS[absDepth] || '#a0a8be'
 const getLayerLabel = absDepth => LAYER_LABELS[absDepth] || ''
 
+// アバター：名前から頭文字2文字を生成
+function Avatar({ name, color, size = 28 }) {
+  if (!name) return null
+  const initials = name.replace(/\s+/g, '').slice(0, 2)
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: `${color}30`, border: `1.5px solid ${color}60`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.38, fontWeight: 700, color: color, letterSpacing: '-0.03em',
+    }}>{initials}</div>
+  )
+}
+
 // ─── Small UI components ───────────────────────────────────────────────────────
 function Stars({ score, size = 13 }) {
   return (
@@ -155,10 +169,10 @@ function Btn({ children, onClick, color = '#4d9fff', variant = 'filled', small, 
 }
 
 // ─── Objective Form ────────────────────────────────────────────────────────────
-function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod }) {
+function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod, members }) {
   const [title, setTitle]     = useState(initial?.title || '')
   const [owner, setOwner]     = useState(initial?.owner || '')
-  const [levelId, setLevelId] = useState(String(activeLevelId))
+  const [levelId, setLevelId] = useState(String(activeLevelId || levels[0]?.id))
   const [period, setPeriod]   = useState(activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
@@ -194,7 +208,17 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         options={levels.map(l => ({ value: String(l.id), label: `${l.icon} ${l.name}` }))} />
       <FSelect label="期間" value={period} onChange={setPeriod} options={periodOpts} />
       <FInput label="目標タイトル" value={title} onChange={setTitle} placeholder="例: 市場シェアを拡大する" />
-      <FInput label="オーナー" value={owner} onChange={setOwner} placeholder="例: 田中 CEO" />
+      <div style={{ marginBottom: 13 }}>
+        <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>オーナー</div>
+        <select value={owner} onChange={e => setOwner(e.target.value)} style={{
+          width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 8, padding: '9px 12px', color: owner ? '#e8eaf0' : '#505878', fontSize: 13,
+          outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
+        }}>
+          <option value="">-- 未設定 --</option>
+          {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>)}
+        </select>
+      </div>
 
       <div style={{ fontSize: 11, color: '#606880', marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Results</div>
       {krs.map((kr, i) => {
@@ -244,12 +268,17 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
           onClick={() => setOpen(p => !p)}>
           <Ring value={Math.min(prog, 100)} color={rating.color} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color }}>{rating.label}</span>
               <Stars score={rating.score} size={9} />
-              <span style={{ fontSize: 12, color: '#505878' }}>{obj.owner}</span>
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#dde0ec', lineHeight: 1.4 }}>{obj.title}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#dde0ec', lineHeight: 1.4, marginBottom: 6 }}>{obj.title}</div>
+            {obj.owner && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Avatar name={obj.owner} color={levelColor} size={22} />
+                <span style={{ fontSize: 12, color: '#8090b0' }}>{obj.owner}</span>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
             <button onClick={e => { e.stopPropagation(); onEdit(obj) }} style={{
@@ -304,11 +333,9 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
   )
 }
 
-// ─── Node Block (Hierarchy Tree) ───────────────────────────────────────────────
-function NodeBlock({ levelId, levels, nodeObjectives, parentColor = null, isLast = false, onEdit, onDelete }) {
-  const [childrenOpen, setChildrenOpen] = useState(true)
+// ─── Level Column（横並びの1列） ──────────────────────────────────────────────
+function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast }) {
   const level = levels.find(l => l.id === levelId)
-  const children = levels.filter(l => Number(l.parent_id) === levelId)
   const objs = nodeObjectives[levelId] || []
   const absDepth = getAbsoluteDepth(levelId, levels)
   const layerColor = getLayerColor(absDepth)
@@ -319,69 +346,97 @@ function NodeBlock({ levelId, levels, nodeObjectives, parentColor = null, isLast
   if (!level) return null
 
   return (
-    <div style={{ position: 'relative' }}>
-      {/* 縦線 */}
-      {parentColor && (
-        <div style={{ position: 'absolute', left: -14, top: 0, bottom: isLast ? 24 : 0, width: 2, background: `linear-gradient(to bottom,${parentColor}80,${parentColor}10)`, borderRadius: 2 }} />
-      )}
-      {/* 横線 */}
-      {parentColor && (
-        <div style={{ position: 'absolute', left: -14, top: 24, width: 14, height: 2, background: `${parentColor}70`, borderRadius: 2 }} />
-      )}
-
-      <div style={{ marginBottom: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
+      {/* カラム本体 */}
+      <div style={{ minWidth: 260, maxWidth: 320, flex: '0 0 280px' }}>
         {/* レベルヘッダー */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderRadius: 8, background: `${layerColor}10`, border: `1px solid ${layerColor}25`, borderLeft: `3px solid ${layerColor}`, marginBottom: 6 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          borderRadius: 8, background: `${layerColor}12`, border: `1px solid ${layerColor}30`,
+          borderLeft: `3px solid ${layerColor}`, marginBottom: 10,
+        }}>
           <span style={{ fontSize: 17 }}>{level.icon}</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#dde0ec' }}>{level.name}</span>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: `${layerColor}22`, color: layerColor, fontWeight: 700, textTransform: 'uppercase' }}>{layerLabel}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#dde0ec' }}>{level.name}</div>
+            <div style={{ fontSize: 10, color: layerColor, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>{layerLabel}</div>
+          </div>
           {avg !== null && (
-            <span style={{ marginLeft: 'auto', fontSize: 16, fontWeight: 800, color: avgR.color }}>{avg}%</span>
-          )}
-          {/* 折りたたみ時の子達成率サマリー */}
-          {!childrenOpen && children.length > 0 && (
-            <div style={{ display: 'flex', gap: 4 }}>
-              {children.map(c => {
-                const cobjs = nodeObjectives[c.id] || []
-                const cprogs = cobjs.map(o => calcObjProgress(o.key_results))
-                const cavg = cprogs.length ? Math.round(cprogs.reduce((s, p) => s + p, 0) / cprogs.length) : null
-                const cr = cavg !== null ? getRating(cavg) : null
-                return cavg !== null ? (
-                  <span key={c.id} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: `${cr.color}15`, color: cr.color, fontWeight: 700 }}>
-                    {c.icon}{cavg}%
-                  </span>
-                ) : null
-              })}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: avgR.color, lineHeight: 1 }}>{avg}%</div>
+              <Stars score={avgR.score} size={8} />
             </div>
-          )}
-          {/* 展開ボタン */}
-          {children.length > 0 && (
-            <button onClick={() => setChildrenOpen(p => !p)} style={{
-              background: `${layerColor}15`, border: `1px solid ${layerColor}40`, color: layerColor,
-              borderRadius: 6, width: 26, height: 26, cursor: 'pointer', fontSize: 12,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'transform 0.2s', transform: childrenOpen ? 'rotate(0deg)' : 'rotate(-90deg)', flexShrink: 0,
-            }}>▾</button>
           )}
         </div>
 
         {/* OKRカード */}
         {objs.length === 0
-          ? <div style={{ marginLeft: 8, marginBottom: 4, fontSize: 13, color: '#303450', fontStyle: 'italic' }}>目標なし</div>
-          : <div style={{ marginLeft: 8 }}>{objs.map(obj => <ObjCard key={obj.id} obj={obj} levelColor={layerColor} onEdit={onEdit} onDelete={onDelete} />)}</div>
+          ? <div style={{ fontSize: 12, color: '#303450', fontStyle: 'italic', padding: '8px 4px' }}>目標なし</div>
+          : objs.map(obj => <ObjCard key={obj.id} obj={obj} levelColor={layerColor} onEdit={onEdit} onDelete={onDelete} />)
         }
       </div>
 
-      {/* 子ノード */}
-      {childrenOpen && children.length > 0 && (
-        <div style={{ marginLeft: 28, position: 'relative' }}>
-          {children.map((child, i) => (
-            <NodeBlock key={child.id} levelId={child.id} levels={levels} nodeObjectives={nodeObjectives}
-              parentColor={layerColor} isLast={i === children.length - 1}
-              onEdit={onEdit} onDelete={onDelete} />
-          ))}
+      {/* 矢印コネクター */}
+      {!isLast && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 20, flexShrink: 0, width: 36 }}>
+          <div style={{ width: 14, height: 2, background: 'rgba(255,255,255,0.12)', marginTop: 10 }} />
+          <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)', lineHeight: 1, marginTop: 2 }}>›</div>
+          <div style={{ width: 8, height: 2, background: 'rgba(255,255,255,0.12)', marginTop: 10 }} />
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Node Block (横並び全列レンダリング) ───────────────────────────────────────
+function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete }) {
+  // サイドバーで選択された起点レベルのサブツリーを収集して横に並べる
+  function collectColumns(id, acc = []) {
+    acc.push(id)
+    levels.filter(l => Number(l.parent_id) === id).forEach(c => collectColumns(c.id, acc))
+    return acc
+  }
+
+  // 深さ順にグループ化（同じdepthは縦に並べる）
+  const subtree = collectColumns(levelId)
+  const depthGroups = {}
+  subtree.forEach(id => {
+    const d = getAbsoluteDepth(id, levels)
+    if (!depthGroups[d]) depthGroups[d] = []
+    depthGroups[d].push(id)
+  })
+  const depths = Object.keys(depthGroups).sort((a, b) => a - b)
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', paddingBottom: 8 }}>
+      {depths.map((depth, di) => {
+        const ids = depthGroups[depth]
+        const isLastDepth = di === depths.length - 1
+        return (
+          <div key={depth} style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
+            {/* 同じ深さの複数列は縦に積む */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {ids.map((id, ii) => (
+                <LevelColumn
+                  key={id}
+                  levelId={id}
+                  levels={levels}
+                  nodeObjectives={nodeObjectives}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  isLast={isLastDepth}
+                />
+              ))}
+            </div>
+            {/* 深さ間の矢印（最後の深さ以外） */}
+            {!isLastDepth && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 22, flexShrink: 0, width: 40 }}>
+                <div style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.1)' }} />
+                <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.25)', lineHeight: 1, marginTop: 1 }}>›</div>
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1059,7 +1114,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
 
         {/* Main */}
-        <div style={{ flex: 1, padding: isMobile ? '14px' : '20px 24px', overflowY: 'auto', minWidth: 0 }}>
+        <div style={{ flex: 1, padding: isMobile ? '14px' : '20px 24px', overflowY: 'auto', overflowX: 'auto', minWidth: 0 }}>
           {/* ヘッダー */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1080,11 +1135,10 @@ export default function Dashboard({ user, onSignOut }) {
           <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
             {[{ label: '経営', color: '#ff6b6b' }, { label: '事業部', color: '#4d9fff' }, { label: 'チーム', color: '#00d68f' }].map(l => (
               <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 3, height: 14, borderRadius: 2, background: l.color }} />
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }} />
                 <span style={{ fontSize: 12, color: '#8090b0' }}>{l.label}</span>
               </div>
             ))}
-            <span style={{ fontSize: 12, color: '#404660' }}>▾ で子階層を展開・折りたたみ</span>
           </div>
 
           {/* 階層ツリー */}
@@ -1093,8 +1147,6 @@ export default function Dashboard({ user, onSignOut }) {
               levelId={activeLevelId}
               levels={levels}
               nodeObjectives={nodeObjectives}
-              parentColor={null}
-              isLast={true}
               onEdit={o => setModal({ type: 'edit', obj: o })}
               onDelete={handleDelete}
             />
@@ -1123,8 +1175,9 @@ export default function Dashboard({ user, onSignOut }) {
             onSave={handleSave}
             onClose={() => setModal(null)}
             levels={levels}
-            activeLevelId={activeLevelId}
-            activePeriod={activePeriod}
+            activeLevelId={modal.obj?.level_id || activeLevelId}
+            activePeriod={modal.obj?.period || activePeriod}
+            members={members}
           />
         </Modal>
       )}
