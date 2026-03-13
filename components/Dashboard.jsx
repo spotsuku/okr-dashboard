@@ -154,7 +154,7 @@ function Modal({ title, onClose, children }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} style={{
-            background: T.border, border: 'none', color: getT().textSub,
+            background: getT().border, border: 'none', color: getT().textSub,
             width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>✕</button>
@@ -303,7 +303,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
   return (
     <div style={{ marginBottom: 6 }}>
       <div style={{
-        background: getT().bgCard, border: `1px solid ${open ? levelColor + '50' : T.border}`,
+        background: getT().bgCard, border: `1px solid ${open ? levelColor + '50' : getT().border}`,
         borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.2s',
       }}>
         <div style={{ padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
@@ -556,9 +556,9 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
     const isRoot = absD === 0
     return (
       <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:'rgba(255,255,255,0.03)', border:`1px solid ${T.border}` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:'rgba(255,255,255,0.03)', border:`1px solid ${getT().border}` }}>
           <span style={{ fontSize:13 }}>{level.icon}</span>
-          <span style={{ flex:1, fontSize:12, fontWeight:500, color:T.text }}>{level.name}</span>
+          <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
           <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
           {!isRoot && (
             <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
@@ -586,7 +586,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
       }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-          <button onClick={onClose} style={{ background:T.border, border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+          <button onClick={onClose} style={{ background:getT().border, border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
         </div>
 
         {/* 現在の組織一覧 */}
@@ -710,7 +710,7 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
         </div>
         <div>
           <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{myName} のOKR</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: getT().text }}>{myName} のOKR</div>
         </div>
         {!myMember && (
           <div style={{ marginLeft: 'auto', fontSize: 11, color: '#ffd166', background: 'rgba(255,209,102,0.1)', border: '1px solid rgba(255,209,102,0.2)', borderRadius: 8, padding: '6px 12px' }}>
@@ -734,7 +734,7 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
             return (
               <div key={p.key} style={{ marginBottom: 32 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{p.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: getT().text }}>{p.label}</span>
                   <span style={{ fontSize: 11, color: getT().textFaint }}>{objs.length}件</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
@@ -748,7 +748,7 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
                           <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color, fontWeight: 700 }}>{rating.label}</span>
                           <span style={{ fontSize: 24, fontWeight: 800, color: rating.color }}>{prog}%</span>
                         </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.5, marginBottom: 12 }}>{obj.title}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: getT().text, lineHeight: 1.5, marginBottom: 12 }}>{obj.title}</div>
                         <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
                           <div style={{ height: '100%', width: `${Math.min(prog, 100)}%`, background: rating.color, borderRadius: 99, boxShadow: `0 0 6px ${rating.color}80` }} />
                         </div>
