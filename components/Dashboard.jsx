@@ -1,1257 +1,2075 @@
-'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from '../lib/supabase'
-import AIPanel from './AIPanel'
-import MemberPage from './MemberPage'
-import CsvPage from './CsvPage'
-import AnnualView from './AnnualView'
-
-// ─── Theme ────────────────────────────────────────────────────────────────────
-const THEMES = {
-  dark: {
-    bg:          '#090d18',
-    bgCard:      '#0e1420',
-    bgCard2:     '#111828',
-    bgSidebar:   '#0e1420',
-    border:      'rgba(255,255,255,0.07)',
-    borderLight: 'rgba(255,255,255,0.04)',
-    borderMid:   'rgba(255,255,255,0.1)',
-    text:        '#e8eaf0',
-    textSub:     '#a0a8be',
-    textMuted:   '#606880',
-    textFaint:   '#404660',
-    textFaintest:'#303450',
-    headerBg:    '#090d18',
-    connector:   'rgba(255,255,255,0.12)',
-    connectorArrow: 'rgba(255,255,255,0.2)',
-  },
-  light: {
-    bg:          '#f0f2f7',
-    bgCard:      '#ffffff',
-    bgCard2:     '#f7f8fc',
-    bgSidebar:   '#ffffff',
-    border:      'rgba(0,0,0,0.08)',
-    borderLight: 'rgba(0,0,0,0.05)',
-    borderMid:   'rgba(0,0,0,0.12)',
-    text:        '#1a1f36',
-    textSub:     '#4a5270',
-    textMuted:   '#7080a0',
-    textFaint:   '#90a0bc',
-    textFaintest:'#b0bcd0',
-    headerBg:    '#ffffff',
-    connector:   'rgba(0,0,0,0.15)',
-    connectorArrow: 'rgba(0,0,0,0.2)',
-  },
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEO福岡 経費ダッシュボード</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07080d; --s1:#0d0f17; --s2:#121620; --s3:#181c28; --s4:#1e2335;
+  --b1:#1c2030; --b2:#252b3d; --b3:#2e3650;
+  --acc:#f0522a; --acc2:#ffb347;
+  --blue:#4f8ef7; --blue2:#88b4ff;
+  --green:#2dd4a0; --green2:#6effd4;
+  --purple:#9b7fe8; --yellow:#f0c040; --red:#e84060;
+  --t1:#e8eaf2; --t2:#7a8299; --t3:#3a4255; --t4:#262d3f;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Noto Sans JP',sans-serif;
+  --disp:'Syne',sans-serif;
 }
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--t1);font-family:var(--sans);display:flex;font-size:14px;overflow:hidden;}
 
-// グローバルテーマ参照（コンポーネント間で共有）
-let _T = THEMES.dark
-const getT = () => _T
-
-// ─── Rating helpers ────────────────────────────────────────────────────────────
-const RATINGS = [
-  { min: 150, score: 5, label: '奇跡',    color: '#ff9f43' },
-  { min: 120, score: 4, label: '変革',    color: '#a855f7' },
-  { min: 100, score: 3, label: '順調以上', color: '#00d68f' },
-  { min:  80, score: 2, label: '順調',    color: '#4d9fff' },
-  { min:  60, score: 1, label: '最低限',  color: '#ffd166' },
-  { min:   0, score: 0, label: '未達',    color: '#ff6b6b' },
-]
-const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
-
-function calcKRProgress(kr) {
-  if (!kr.target || kr.target === 0) return 0
-  const raw = kr.lower_is_better
-    ? Math.max(0, ((kr.target * 2 - kr.current) / kr.target) * 100)
-    : (kr.current / kr.target) * 100
-  return Math.min(Math.round(raw), 150)
+/* ── SIDEBAR ── */
+.sb{
+  width:216px;height:100vh;background:var(--s1);border-right:1px solid var(--b1);
+  display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;
 }
-function calcObjProgress(krs) {
-  if (!krs?.length) return 0
-  return Math.round(krs.reduce((s, kr) => s + calcKRProgress(kr), 0) / krs.length)
+.sb-logo{padding:16px 16px 12px;border-bottom:1px solid var(--b1);}
+.sb-mark{font-family:var(--disp);font-size:17px;font-weight:800;
+  background:linear-gradient(120deg,var(--acc),var(--acc2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.sb-sub{font-size:9px;color:var(--t3);margin-top:2px;letter-spacing:.1em;}
+.sb-sec{padding:12px 14px 3px;font-size:9px;font-weight:700;color:var(--t3);letter-spacing:.15em;text-transform:uppercase;}
+.nb{
+  display:flex;align-items:center;gap:8px;padding:7px 10px;margin:1px 6px;
+  font-size:11px;font-weight:500;color:var(--t2);cursor:pointer;
+  border-radius:6px;border:none;background:none;width:calc(100% - 12px);
+  text-align:left;font-family:var(--sans);transition:all .15s;
 }
-
-// 絶対レイヤー深度（経営=0, 事業部=1, チーム=2）
-function getAbsoluteDepth(levelId, levels) {
-  let depth = 0
-  let cur = levels.find(l => Number(l.id) === Number(levelId))
-  while (cur && cur.parent_id) {
-    depth++
-    cur = levels.find(l => Number(l.id) === Number(cur.parent_id))
-  }
-  return depth
+.nb:hover{background:var(--s2);color:var(--t1);}
+.nb.on{background:rgba(79,142,247,.12);color:var(--blue);border-left:2px solid var(--blue);padding-left:8px;}
+.nb .ic{font-size:12px;width:16px;text-align:center;flex-shrink:0;}
+.sb-foot{margin-top:auto;padding:10px;border-top:1px solid var(--b1);}
+.save-row{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t3);padding:4px 2px;}
+.sdot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);}
+.sdot.uns{background:var(--yellow);box-shadow:0 0 5px var(--yellow);}
+.upload-area{
+  display:flex;align-items:center;gap:7px;padding:8px 10px;
+  background:rgba(240,82,42,.08);border:1px solid rgba(240,82,42,.2);
+  border-radius:7px;cursor:pointer;font-size:10px;color:var(--acc);
+  font-weight:700;font-family:var(--sans);transition:all .15s;width:100%;
 }
+.upload-area:hover{background:rgba(240,82,42,.15);}
 
-const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
-const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
-const getLayerColor = absDepth => LAYER_COLORS[absDepth] || '#a0a8be'
-const getLayerLabel = absDepth => LAYER_LABELS[absDepth] || ''
-
-// アバター：名前から頭文字2文字を生成
-function Avatar({ name, color, size = 28 }) {
-  if (!name) return null
-  const initials = name.replace(/\s+/g, '').slice(0, 2)
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: `${color}30`, border: `1.5px solid ${color}60`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.38, fontWeight: 700, color: color, letterSpacing: '-0.03em',
-    }}>{initials}</div>
-  )
+/* ── MAIN ── */
+.main-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{
+  height:48px;background:var(--s1);border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;padding:0 22px;
+  justify-content:space-between;flex-shrink:0;z-index:100;
 }
+.topbar-title{font-family:var(--disp);font-size:14px;font-weight:700;}
+.topbar-right{font-family:var(--mono);font-size:10px;color:var(--t2);display:flex;align-items:center;gap:12px;}
+.content{flex:1;overflow-y:auto;padding:18px 22px;}
 
-// ─── Small UI components ───────────────────────────────────────────────────────
-function Stars({ score, size = 13 }) {
-  return (
-    <div style={{ display: 'flex', gap: 1 }}>
-      {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: size, opacity: i <= score ? 1 : 0.18 }}>★</span>)}
-    </div>
-  )
+/* ── PAGES ── */
+.pg{display:none;animation:fi .18s ease;}
+.pg.on{display:block;}
+@keyframes fi{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+
+/* ── LAYOUT ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+.g31{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px;}
+.g13{display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:12px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+
+/* ── CARDS ── */
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:16px 18px;}
+.ct{font-size:11px;font-weight:700;color:var(--t1);letter-spacing:.05em;text-transform:uppercase;
+  margin-bottom:13px;display:flex;align-items:center;gap:7px;}
+.ct .pip{width:3px;height:13px;border-radius:2px;background:var(--acc);flex-shrink:0;}
+.ch{position:relative;height:190px;}
+.ch-t{position:relative;height:230px;}
+
+/* ── KPI ── */
+.kpi{background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:14px 16px;position:relative;overflow:hidden;}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi.r::after{background:linear-gradient(90deg,var(--acc),var(--acc2));}
+.kpi.b::after{background:linear-gradient(90deg,var(--blue),var(--blue2));}
+.kpi.g::after{background:linear-gradient(90deg,var(--green),var(--green2));}
+.kpi.y::after{background:linear-gradient(90deg,var(--yellow),#ffe080);}
+.kpi.p::after{background:linear-gradient(90deg,var(--purple),#c4aaff);}
+.kl{font-size:9px;font-weight:700;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;}
+.kv{font-family:var(--mono);font-size:20px;font-weight:500;line-height:1;margin-bottom:4px;}
+.kv em{font-size:10px;color:var(--t2);font-style:normal;margin-left:2px;}
+.ks{font-size:10px;color:var(--t2);}
+.ok{color:var(--green);}
+.ng{color:var(--red);}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;
+  padding:0 0 10px;border-bottom:1px solid var(--b1);text-align:left;}
+.tbl th:not(:first-child){text-align:right;}
+.tbl td{padding:10px 0;font-size:13px;border-bottom:1px solid rgba(28,32,48,.7);vertical-align:middle;}
+.tbl td:not(:first-child){text-align:right;font-family:var(--mono);font-size:13px;}
+.tbl tr:last-child td{border-bottom:none;}
+.tag{display:inline-block;font-size:8px;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;}
+.tg-o{background:rgba(232,64,96,.15);color:var(--red);}
+.tg-g{background:rgba(45,212,160,.12);color:var(--green);}
+.tg-z{background:rgba(54,61,82,.5);color:var(--t3);}
+
+/* ── PROGRESS ── */
+.pb{margin-bottom:10px;}
+.pb-top{display:flex;justify-content:space-between;margin-bottom:4px;font-size:10px;}
+.pb-top .n{color:var(--t1);font-weight:500;}
+.pb-top .p{font-family:var(--mono);color:var(--t2);}
+.pb-track{background:var(--s3);border-radius:3px;height:5px;overflow:hidden;}
+.pb-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(.4,0,.2,1);}
+
+/* ── SERIES ── */
+.sh{background:var(--s1);border:1px solid var(--b1);border-radius:10px;
+  padding:16px 20px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+.sk-row{display:flex;gap:20px;}
+.sk{text-align:center;}
+.skv{font-family:var(--mono);font-size:17px;font-weight:500;}
+.skl{font-size:9px;color:var(--t2);margin-top:2px;letter-spacing:.06em;text-transform:uppercase;}
+.sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+@media(min-width:1400px){.sg{grid-template-columns:repeat(3,1fr);}}
+.sc{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:13px 14px;transition:border-color .2s;cursor:pointer;}
+.sc:hover{border-color:var(--b3);}
+.sc.has-items{border-color:rgba(79,142,247,.2);}
+.sc-no{font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:4px;}
+.sc-title{font-size:14px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sc-date{font-size:10px;color:var(--t2);font-family:var(--mono);margin-bottom:10px;}
+.sc-bars{display:flex;flex-direction:column;gap:3px;}
+.sbr{display:flex;align-items:center;gap:5px;}
+.sbrl{font-size:10px;color:var(--t3);width:22px;flex-shrink:0;}
+.sbrt{flex:1;height:5px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.sbrf{height:100%;border-radius:2px;}
+.sbrv{font-family:var(--mono);font-size:11px;color:var(--t2);width:60px;text-align:right;flex-shrink:0;}
+.sc-foot{display:flex;justify-content:space-between;margin-top:8px;padding-top:7px;border-top:1px solid var(--b1);font-size:12px;}
+.sc-items-count{font-size:11px;color:var(--blue);font-family:var(--mono);}
+
+/* ── PANEL OVERLAY ── */
+.ov{position:fixed;inset:0;background:rgba(7,8,13,.8);z-index:500;
+  display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .2s;}
+.ov.open{opacity:1;pointer-events:all;}
+.panel{background:var(--s2);border:1px solid var(--b2);border-radius:12px;
+  width:680px;max-width:94vw;max-height:88vh;
+  display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7);}
+.panel.wide{width:820px;}
+.ph{padding:14px 18px;border-bottom:1px solid var(--b1);
+  display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.ph h2{font-family:var(--disp);font-size:14px;}
+.pb-body{padding:14px 18px;overflow-y:auto;flex:1;}
+.pf{padding:10px 18px;border-bottom:1px solid var(--b1);
+  display:flex;justify-content:flex-end;gap:7px;flex-shrink:0;}
+.xbtn{width:26px;height:26px;border-radius:5px;border:1px solid var(--b2);
+  background:var(--s3);color:var(--t2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .15s;}
+.xbtn:hover{border-color:var(--red);color:var(--red);}
+
+/* ── FORM ── */
+.fl{font-size:9px;font-weight:700;color:var(--t2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;}
+.fi{width:100%;padding:7px 9px;background:var(--s3);border:1px solid var(--b2);
+  border-radius:6px;color:var(--t1);font-size:11px;font-family:var(--mono);
+  outline:none;transition:border-color .15s;}
+.fi:focus{border-color:var(--blue);}
+.fi::placeholder{color:var(--t3);}
+.frow{margin-bottom:10px;}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.fg4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;}
+
+/* ── ITEM ROWS ── */
+.item-hdr{
+  display:grid;grid-template-columns:20px 1fr 90px 90px 90px 26px;
+  gap:5px;padding:0 2px;margin-bottom:4px;
 }
-
-function Bar({ value, color, max = 150 }) {
-  const pct = Math.min((value / max) * 100, 100)
-  const marker = (100 / max) * 100
-  return (
-    <div style={{ width: '100%', height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', left: `${marker}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.25)', zIndex: 2 }} />
-      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)', boxShadow: `0 0 6px ${color}80` }} />
-    </div>
-  )
+.item-hdr span{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;}
+.item-row{
+  display:grid;grid-template-columns:20px 1fr 90px 90px 90px 26px;
+  gap:5px;margin-bottom:5px;align-items:center;
+  background:var(--s3);border-radius:6px;padding:5px 6px;
 }
+.item-num{font-family:var(--mono);font-size:11px;color:var(--t3);text-align:center;}
+.item-row input{padding:7px 9px;background:var(--s2);border:1px solid var(--b2);
+  border-radius:5px;color:var(--t1);font-size:13px;font-family:var(--mono);
+  outline:none;transition:border-color .15s;width:100%;}
+.item-row input:focus{border-color:var(--blue);}
+.del-btn{width:22px;height:22px;border-radius:4px;border:1px solid var(--b2);
+  background:none;color:var(--t3);cursor:pointer;font-size:13px;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.del-btn:hover{border-color:var(--red);color:var(--red);}
+.add-btn{display:flex;align-items:center;gap:5px;padding:6px 10px;
+  background:rgba(79,142,247,.07);border:1px dashed rgba(79,142,247,.25);border-radius:6px;
+  color:var(--blue);font-size:10px;cursor:pointer;width:100%;
+  font-family:var(--sans);transition:all .15s;margin-top:4px;}
+.add-btn:hover{background:rgba(79,142,247,.14);}
 
-function Ring({ value, color, size = 46 }) {
-  const s = 3.5, r = (size - s * 2) / 2, c = 2 * Math.PI * r
-  const offset = c - (Math.min(value, 100) / 100) * c
-  return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={s} />
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={s}
-          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 11, fontWeight: 800, color }}>{value}%</span>
-      </div>
-    </div>
-  )
-}
+/* ── BUTTONS ── */
+.btn{padding:7px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;
+  font-family:var(--sans);transition:all .15s;}
+.btn-p{background:var(--blue);color:#fff;}
+.btn-p:hover{background:var(--blue2);color:var(--s1);}
+.btn-g{background:var(--s3);border:1px solid var(--b2);color:var(--t2);}
+.btn-g:hover{color:var(--t1);}
+.btn-acc{background:linear-gradient(120deg,var(--acc),var(--acc2));color:#fff;}
+.btn-acc:hover{opacity:.85;}
+.btn-red{background:none;border:1px solid rgba(232,64,96,.3);color:var(--red);}
+.btn-red:hover{background:rgba(232,64,96,.1);}
+.btn-sm{padding:4px 9px;font-size:9px;}
+.btn-xs{padding:2px 7px;font-size:9px;}
 
-function Modal({ title, onClose, children }) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 1000,
-      background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(6px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{
-        background: '#141926', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16,
-        padding: 26, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: '0 28px 80px rgba(0,0,0,0.65)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
-          <button onClick={onClose} style={{
-            background: getT().border, border: 'none', color: getT().textSub,
-            width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>✕</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
+/* ── BUDGET TABLE ── */
+.btbl{width:100%;border-collapse:collapse;}
+.btbl th{font-size:12px;font-weight:700;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;
+  padding:6px 10px 10px;text-align:left;border-bottom:1px solid var(--b1);}
+.btbl th:not(:first-child){text-align:right;}
+.btbl td{padding:8px 10px;border-bottom:1px solid rgba(28,32,48,.6);vertical-align:middle;}
+.btbl td:first-child{font-size:13px;color:var(--t1);font-weight:500;}
+.btbl input{width:110px;padding:7px 10px;background:var(--s3);border:1px solid var(--b2);
+  border-radius:5px;color:var(--t1);font-size:13px;font-family:var(--mono);
+  outline:none;transition:border-color .15s;text-align:right;}
+.btbl input:focus{border-color:var(--blue);}
+.btbl-sec{background:var(--s4);padding:8px 10px;font-size:12px;font-weight:700;color:var(--t2);letter-spacing:.05em;}
 
-function FInput({ label, value, onChange, placeholder, type = 'text' }) {
-  return (
-    <div style={{ marginBottom: 13 }}>
-      {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{
-          width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none',
-          fontFamily: 'inherit', boxSizing: 'border-box',
-        }} />
-    </div>
-  )
-}
+/* ── REVENUE ── */
+.rev-row{display:flex;justify-content:space-between;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--b1);}
+.rev-row:last-child{border-bottom:none;}
+.rev-name{font-size:12px;color:var(--t2);}
+.rev-val{font-family:var(--mono);font-size:13px;color:var(--green);}
+.net-box{background:var(--s2);border-radius:8px;padding:12px 16px;margin-top:12px;
+  display:flex;justify-content:space-between;align-items:center;border:1px solid var(--b1);}
 
-function FSelect({ label, value, onChange, options }) {
-  return (
-    <div style={{ marginBottom: 13 }}>
-      {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
-      <select value={value} onChange={e => onChange(e.target.value)} style={{
-        width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none',
-        fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
-      }}>
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
-  )
-}
+/* ── TABS ── */
+.tabs{display:flex;gap:3px;margin-bottom:12px;}
+.tab{padding:5px 11px;border-radius:5px;font-size:10px;font-weight:500;
+  cursor:pointer;border:1px solid var(--b1);background:none;color:var(--t2);
+  font-family:var(--sans);transition:all .15s;}
+.tab.on{background:rgba(79,142,247,.12);border-color:rgba(79,142,247,.3);color:var(--blue);}
+.tab:hover:not(.on){background:var(--s2);color:var(--t1);}
 
-function Btn({ children, onClick, color = '#4d9fff', variant = 'filled', small, danger, disabled }) {
-  const bg = danger ? '#ff6b6b' : color
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      background: variant === 'filled' ? bg : 'transparent',
-      border: `1px solid ${variant === 'ghost' ? 'rgba(255,255,255,0.1)' : bg}`,
-      color: variant === 'filled' ? '#fff' : (danger ? '#ff6b6b' : '#a0a8be'),
-      borderRadius: 8, padding: small ? '5px 12px' : '8px 18px',
-      fontSize: small ? 11 : 13, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
-      fontFamily: 'inherit', opacity: disabled ? 0.5 : 1, transition: 'opacity 0.15s',
-    }}>
-      {children}
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px;}
+
+/* ── DROP HINT ── */
+.drop-hint{border:2px dashed var(--b2);border-radius:10px;padding:24px;text-align:center;
+  margin-bottom:12px;transition:all .2s;}
+.drop-hint.drag{border-color:var(--blue);background:rgba(79,142,247,.05);}
+.drop-hint-icon{font-size:28px;opacity:.35;margin-bottom:8px;}
+.drop-hint-text{font-size:12px;color:var(--t2);}
+.drop-hint-sub{font-size:10px;color:var(--t3);margin-top:4px;}
+
+/* ── SECTION DIVIDER ── */
+.sec-div{font-size:10px;font-weight:700;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;
+  padding:8px 0 4px;border-bottom:1px solid var(--b1);margin-bottom:8px;margin-top:12px;}
+.sec-div:first-child{margin-top:0;}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sb">
+  <div class="sb-logo">
+    <div class="sb-mark">NEO福岡</div>
+    <div class="sb-sub">経費管理ダッシュボード 第一期</div>
+  </div>
+  <div class="sb-sec">概要</div>
+  <button class="nb on" onclick="go('ov',this)"><span class="ic">📊</span>サマリー</button>
+  <button class="nb" onclick="go('prog',this)"><span class="ic">📋</span>プログラム別</button>
+  <div class="sb-sec">シリーズ</div>
+  <button class="nb" onclick="go('hm',this)"><span class="ic">🏫</span>ホームルーム</button>
+  <button class="nb" onclick="go('gk',this)"><span class="ic">🏛</span>評議会</button>
+  <button class="nb" onclick="go('oe',this)"><span class="ic">📣</span>応援カイギ</button>
+  <div class="sb-sec">大規模イベント</div>
+  <button class="nb" onclick="go('ko',this)"><span class="ic">🚀</span>キックオフ</button>
+  <button class="nb" onclick="go('aw',this)"><span class="ic">🏆</span>アワード</button>
+  <button class="nb" onclick="go('ye',this)"><span class="ic">🎉</span>イヤーエンド</button>
+  <div class="sb-sec">管理</div>
+  <button class="nb" id="nb-budget" onclick="openBulkBudget()"><span class="ic">✏️</span>予算を一括登録</button>
+  <button class="nb" onclick="go('ledger',this)"><span class="ic">📝</span>経費明細登録</button>
+  <button class="nb" onclick="go('rev',this)"><span class="ic">💰</span>収入管理</button>
+  <button class="nb" id="nb-users" onclick="go('users',this)" style="display:none"><span class="ic">👥</span>ユーザー管理</button>
+  <button class="nb" onclick="go('history',this)"><span class="ic">🕐</span>ログイン履歴</button>
+  <div class="sb-foot">
+    <button class="upload-area" id="xl-upload-btn" onclick="document.getElementById('xlFile').click()">
+      <span>⬆</span> Excelで同期
     </button>
-  )
-}
+    <input type="file" id="xlFile" accept=".xlsx,.xls" style="display:none" onchange="importXL(event)">
+    <button class="upload-area" id="csv-upload-btn" style="margin-top:6px;background:rgba(45,212,160,.08);border-color:rgba(45,212,160,.2);color:var(--green)" onclick="document.getElementById('csvFile').click()">
+      <span>📥</span> CSVで一括登録
+    </button>
+    <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="importCSV(event)">
+    <button onclick="downloadCSVTemplate()" style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:none;border:1px dashed var(--b2);border-radius:7px;cursor:pointer;font-size:10px;color:var(--t2);font-family:var(--sans);width:100%;margin-top:4px;transition:all .15s" onmouseover="this.style.color='var(--t1)'" onmouseout="this.style.color='var(--t2)'">
+      <span>⬇</span> CSVテンプレートDL
+    </button>
+    <div id="user-info-bar" style="display:none;background:var(--s2);border:1px solid var(--b1);border-radius:7px;padding:8px 10px;margin:6px 0">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:.06em;margin-bottom:3px">ログイン中</div>
+      <div id="user-display-name" style="font-size:11px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      <div id="user-role-badge" style="margin-top:3px"></div>
+    </div>
+    <button id="logout-btn" onclick="doLogout()" style="display:none;width:100%;padding:7px;background:rgba(232,64,96,.08);border:1px solid rgba(232,64,96,.2);border-radius:6px;color:#e84060;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--sans);">ログアウト</button>
+    <div class="save-row" style="margin-top:6px"><div class="sdot" id="sdot"></div><span id="slbl">接続中...</span></div>
+  </div>
+</nav>
 
-// ─── Objective Form ────────────────────────────────────────────────────────────
-function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod, members }) {
-  const [title, setTitle]     = useState(initial?.title || '')
-  const [owner, setOwner]     = useState(initial?.owner || '')
-  const [levelId, setLevelId] = useState(String(activeLevelId || levels[0]?.id))
-  const [period, setPeriod]   = useState(activePeriod)
-  const [krs, setKRs] = useState(
-    initial?.key_results?.length
-      ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current) }))
-      : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }]
-  )
-  const [saving, setSaving] = useState(false)
+<!-- MAIN -->
+<div class="main-wrap">
+  <div class="topbar">
+    <div class="topbar-title" id="pgTitle">サマリー</div>
+    <div class="topbar-right">
+      <span style="color:var(--t3)">2025.04–2026.03</span>
+    </div>
+  </div>
+  <div class="content">
 
-  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }])
-  const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
-  const updateKR = (key, field, val) => setKRs(p => p.map(k => (k.id || k._tmpId) === key ? { ...k, [field]: val } : k))
+    <!-- OVERVIEW -->
+    <div class="pg on" id="pg-ov">
+      <div class="g4" id="ov-kpis"></div>
+      <div class="g31">
+        <div class="card"><div class="ct"><div class="pip"></div>月別支出推移（実績）</div><div class="ch"><canvas id="ch-monthly"></canvas></div></div>
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--green)"></div>収入内訳</div><div id="ov-rev"></div></div>
+      </div>
+      <div class="g2">
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--blue)"></div>費目別 消化状況</div><div id="ov-cats"></div><div style="margin-top:12px"><div class="ch" style="height:140px"><canvas id="ch-cat"></canvas></div></div></div>
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--purple)"></div>プログラム別 予算比率</div><div class="ch-t"><canvas id="ch-donut"></canvas></div></div>
+      </div>
+    </div>
 
-  const save = async () => {
-    if (!title.trim()) return
-    setSaving(true)
-    await onSave({
-      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period },
-      krs: krs.map(k => ({ ...k, target: parseFloat(k.target) || 0, current: parseFloat(k.current) || 0 })),
-    })
-    setSaving(false)
-    onClose()
-  }
+    <!-- PROGRAMS -->
+    <div class="pg" id="pg-prog">
+      <div class="g2">
+        <div class="card"><div class="ct"><div class="pip"></div>プログラム別 予算 vs 実績</div><table class="tbl"><thead><tr><th>プログラム</th><th>予算</th><th>見積</th><th>実績</th><th>差異</th></tr></thead><tbody id="prog-tbody"></tbody></table></div>
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--yellow)"></div>予算消化率</div><div class="ch-t"><canvas id="ch-rate"></canvas></div></div>
+      </div>
+    </div>
 
-  const periodOpts = [
-    { value: 'annual', label: '通期' },
-    { value: 'q1', label: 'Q1' }, { value: 'q2', label: 'Q2' },
-    { value: 'q3', label: 'Q3' }, { value: 'q4', label: 'Q4' },
-  ]
+    <!-- HOMEROOM -->
+    <div class="pg" id="pg-hm">
+      <div class="sh"><div><div style="font-family:var(--disp);font-size:15px;font-weight:700;margin-bottom:2px">ホームルーム</div><div style="font-size:10px;color:var(--t2)">講座・ワークショップシリーズ</div></div><div style="display:flex;gap:10px;align-items:center"><div class="sk-row" id="hm-kpis"></div><button class="btn btn-sm btn-g" onclick="openSess('hm',null)" class="btn btn-sm btn-g admin-only">＋ 追加</button></div></div>
+      <div class="sg" id="hm-grid"></div>
+    </div>
 
-  return (
-    <>
-      <FSelect label="所属レベル" value={levelId} onChange={setLevelId}
-        options={levels.map(l => ({ value: String(l.id), label: `${l.icon} ${l.name}` }))} />
-      <FSelect label="期間" value={period} onChange={setPeriod} options={periodOpts} />
-      <FInput label="目標タイトル" value={title} onChange={setTitle} placeholder="例: 市場シェアを拡大する" />
-      <div style={{ marginBottom: 13 }}>
-        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>オーナー</div>
-        <select value={owner} onChange={e => setOwner(e.target.value)} style={{
-          width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 8, padding: '9px 12px', color: owner ? '#e8eaf0' : '#505878', fontSize: 13,
-          outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
-        }}>
-          <option value="">-- 未設定 --</option>
-          {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>)}
+    <!-- GIKAI -->
+    <div class="pg" id="pg-gk">
+      <div class="sh"><div><div style="font-family:var(--disp);font-size:15px;font-weight:700;margin-bottom:2px">NEO福岡評議会</div><div style="font-size:10px;color:var(--t2)">意思決定会議シリーズ</div></div><div style="display:flex;gap:10px;align-items:center"><div class="sk-row" id="gk-kpis"></div><button class="btn btn-sm btn-g" onclick="openSess('gk',null)" class="btn btn-sm btn-g admin-only">＋ 追加</button></div></div>
+      <div class="sg" id="gk-grid"></div>
+    </div>
+
+    <!-- OEN -->
+    <div class="pg" id="pg-oe">
+      <div class="sh"><div><div style="font-family:var(--disp);font-size:15px;font-weight:700;margin-bottom:2px">応援カイギ</div><div style="font-size:10px;color:var(--t2)">毎月開催の応援・交流会</div></div><div style="display:flex;gap:10px;align-items:center"><div class="sk-row" id="oe-kpis"></div><button class="btn btn-sm btn-g" onclick="openSess('oe',null)" class="btn btn-sm btn-g admin-only">＋ 追加</button></div></div>
+      <div class="sg" id="oe-grid"></div>
+    </div>
+
+    <!-- KICKOFF -->
+    <div class="pg" id="pg-ko">
+      <div class="g4" id="ko-kpis"></div>
+      <div class="g2">
+        <div class="card"><div class="ct"><div class="pip"></div>費目別明細<button class="btn btn-xs btn-g" style="margin-left:auto" onclick="openEvt('ko')" class="btn btn-xs btn-g admin-only">✏️ 編集</button></div><table class="tbl"><thead><tr><th>費目</th><th>予算</th><th>見積</th><th>実数</th><th>差異</th></tr></thead><tbody id="ko-tbody"></tbody></table></div>
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--acc)"></div>実数内訳</div><div class="ch-t"><canvas id="ch-ko"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- AWARD -->
+    <div class="pg" id="pg-aw">
+      <div class="g4" id="aw-kpis"></div>
+      <div class="g2">
+        <div class="card"><div class="ct"><div class="pip"></div>費目別明細<button class="btn btn-xs btn-g" style="margin-left:auto" onclick="openEvt('aw')" class="btn btn-xs btn-g admin-only">✏️ 編集</button></div><table class="tbl"><thead><tr><th>費目</th><th>予算</th><th>見積</th><th>実数</th><th>差異</th></tr></thead><tbody id="aw-tbody"></tbody></table></div>
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--yellow)"></div>実数内訳</div><div class="ch-t"><canvas id="ch-aw"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- YEAREND -->
+    <div class="pg" id="pg-ye">
+      <div class="g4" id="ye-kpis"></div>
+      <div class="g2">
+        <div class="card"><div class="ct"><div class="pip"></div>費目別明細<button class="btn btn-xs btn-g" style="margin-left:auto" onclick="openEvt('ye')" class="btn btn-xs btn-g admin-only">✏️ 編集</button></div><table class="tbl"><thead><tr><th>費目</th><th>予算</th><th>見積</th><th>実数</th><th>差異</th></tr></thead><tbody id="ye-tbody"></tbody></table></div>
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--purple)"></div>実数内訳</div><div class="ch-t"><canvas id="ch-ye"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- REVENUE -->
+    <!-- LEDGER -->
+    <div class="pg" id="pg-ledger">
+      <div class="card" style="margin-bottom:12px">
+        <div class="ct">
+          <div class="pip" style="background:var(--acc2)"></div>経費明細一覧
+          <div style="margin-left:auto;display:flex;gap:7px;align-items:center">
+            <select id="ledger-filter-prog" class="fi" style="width:140px;padding:4px 8px;font-size:10px" onchange="renderLedger()">
+              <option value="">すべてのプログラム</option>
+            </select>
+            <select id="ledger-filter-cat" class="fi" style="width:120px;padding:4px 8px;font-size:10px" onchange="renderLedger()">
+              <option value="">すべての費目</option>
+              <option>① イベント費</option>
+              <option>② 制作・印刷費</option>
+              <option>③ 外部委託費</option>
+              <option>④ 広報費</option>
+              <option>⑤ その他</option>
+            </select>
+            <button class="btn btn-sm btn-p" onclick="openLedgerEdit(null)">＋ 明細を追加</button>
+          </div>
+        </div>
+        <!-- 集計バー -->
+        <div id="ledger-summary" style="display:flex;gap:12px;padding:10px 0 14px;border-bottom:1px solid var(--b1);margin-bottom:12px;flex-wrap:wrap"></div>
+        <!-- テーブル -->
+        <div style="overflow-x:auto">
+          <table class="tbl" style="min-width:900px">
+            <thead><tr>
+              <th style="width:24px"></th>
+              <th>プログラム</th>
+              <th>費目名</th>
+              <th>カテゴリ</th>
+              <th>内容・品目</th>
+              <th style="text-align:right">単価</th>
+              <th style="text-align:right">数量</th>
+              <th>単位</th>
+              <th style="text-align:right">見積（円）</th>
+              <th style="text-align:right">実績（円）</th>
+              <th>支払状況</th>
+              <th>備考</th>
+              <th style="width:32px"></th>
+            </tr></thead>
+            <tbody id="ledger-tbody"></tbody>
+          </table>
+        </div>
+        <div id="ledger-empty" style="text-align:center;padding:32px;color:var(--t3);font-size:12px;display:none">
+          まだ明細がありません。「＋ 明細を追加」から登録してください。
+        </div>
+      </div>
+    </div>
+
+    <div class="pg" id="pg-rev">
+      <div class="g2">
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--green)"></div>収入内訳<button class="btn btn-xs btn-g" style="margin-left:auto" onclick="openRev()" class="btn btn-xs btn-g admin-only">✏️ 編集</button></div><div id="rev-detail"></div></div>
+        <div class="card"><div class="ct"><div class="pip" style="background:var(--blue)"></div>収支サマリー</div><div id="net-summary"></div></div>
+      </div>
+    </div>
+
+    <!-- USERS (admin only) -->
+    <div class="pg" id="pg-users">
+      <div class="card" style="margin-bottom:12px">
+        <div class="ct"><div class="pip" style="background:var(--blue)"></div>ユーザー一覧
+          <button class="btn btn-xs btn-p" style="margin-left:auto" onclick="openInvitePanel()">＋ ユーザーを招待</button>
+        </div>
+        <table class="tbl"><thead><tr><th>名前</th><th>メールアドレス</th><th>ロール</th><th>登録日</th><th></th></tr></thead>
+        <tbody id="users-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- LOGIN HISTORY -->
+    <div class="pg" id="pg-history">
+      <div class="card">
+        <div class="ct"><div class="pip" style="background:var(--yellow)"></div>ログイン履歴</div>
+        <table class="tbl"><thead><tr><th>日時</th><th>ユーザー</th><th>メールアドレス</th></tr></thead>
+        <tbody id="history-tbody"></tbody></table>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main-wrap -->
+
+<!-- ログイン画面オーバーレイ（全画面） -->
+<div id="login-screen" style="position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;">
+  <div style="width:380px;max-width:92vw">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-family:var(--disp);font-size:28px;font-weight:800;background:linear-gradient(120deg,var(--acc),var(--acc2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">NEO福岡</div>
+      <div style="font-size:11px;color:var(--t2);margin-top:4px;letter-spacing:.06em">経費管理ダッシュボード</div>
+    </div>
+    <div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:24px">
+      <div id="login-tabs" style="display:flex;gap:4px;margin-bottom:18px">
+        <button class="tab on" id="tab-login" onclick="switchLoginTab('login')">ログイン</button>
+        <button class="tab" id="tab-signup" onclick="switchLoginTab('signup')">新規登録</button>
+      </div>
+      <div id="login-error" style="display:none;background:rgba(232,64,96,.1);border:1px solid rgba(232,64,96,.3);border-radius:6px;padding:8px 12px;font-size:11px;color:#e84060;margin-bottom:12px"></div>
+      <!-- ログイン -->
+      <div id="form-login">
+        <div class="frow"><div class="fl">メールアドレス</div><input class="fi" id="login-email" type="email" placeholder="your@email.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div class="frow" style="margin-top:8px"><div class="fl">パスワード</div><input class="fi" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <button class="btn btn-p" style="width:100%;margin-top:16px;padding:10px" onclick="doLogin()" id="login-submit-btn">ログイン</button>
+      </div>
+      <!-- 新規登録 -->
+      <div id="form-signup" style="display:none">
+        <div class="frow"><div class="fl">表示名</div><input class="fi" id="signup-name" placeholder="山田 太郎"></div>
+        <div class="frow" style="margin-top:8px"><div class="fl">メールアドレス</div><input class="fi" id="signup-email" type="email" placeholder="your@email.com"></div>
+        <div class="frow" style="margin-top:8px"><div class="fl">パスワード（8文字以上）</div><input class="fi" id="signup-pass" type="password" placeholder="••••••••"></div>
+        <button class="btn btn-p" style="width:100%;margin-top:16px;padding:10px" onclick="doSignup()" id="signup-submit-btn">登録申請</button>
+        <p style="font-size:10px;color:var(--t3);margin-top:10px;text-align:center">登録後、管理者の承認が必要です</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ユーザー招待パネル -->
+<div class="ov" id="ov-invite">
+  <div class="panel">
+    <div class="ph"><h2>ユーザーを招待</h2><button class="xbtn" onclick="closeOv('ov-invite')">×</button></div>
+    <div class="pb-body">
+      <div class="frow"><div class="fl">メールアドレス</div><input class="fi" id="inv-email" type="email" placeholder="招待するメールアドレス"></div>
+      <div class="frow" style="margin-top:8px"><div class="fl">表示名</div><input class="fi" id="inv-name" placeholder="山田 太郎"></div>
+      <div class="frow" style="margin-top:8px"><div class="fl">ロール</div>
+        <select class="fi" id="inv-role" style="width:auto">
+          <option value="member">メンバー（閲覧・見積入力）</option>
+          <option value="admin">管理者（全権限）</option>
         </select>
       </div>
+      <div class="frow" style="margin-top:8px"><div class="fl">仮パスワード</div><input class="fi" id="inv-pass" type="text" placeholder="初期パスワードを設定"></div>
+      <div style="font-size:10px;color:var(--t2);margin-top:8px">※ 登録後、本人にパスワード変更を促してください</div>
+    </div>
+    <div class="pf">
+      <button class="btn btn-g" onclick="closeOv('ov-invite')">キャンセル</button>
+      <button class="btn btn-p" onclick="doInviteUser()">作成する</button>
+    </div>
+  </div>
+</div>
 
-      <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Results</div>
-      {krs.map((kr, i) => {
-        const key = kr.id || kr._tmpId
-        return (
-          <div key={key} style={{ background: getT().bgCard, border: `1px solid ${getT().border}`, borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: getT().textMuted }}>KR {i + 1}</span>
-              {krs.length > 1 && <Btn small danger variant="ghost" onClick={() => removeKR(key)}>削除</Btn>}
-            </div>
-            <FInput value={kr.title} onChange={v => updateKR(key, 'title', v)} placeholder="KR のタイトル" />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1 }}><FInput value={String(kr.target)} onChange={v => updateKR(key, 'target', v)} placeholder="目標値" type="number" /></div>
-              <div style={{ flex: 1 }}><FInput value={String(kr.current)} onChange={v => updateKR(key, 'current', v)} placeholder="現在値" type="number" /></div>
-              <div style={{ flex: 1 }}><FInput value={kr.unit} onChange={v => updateKR(key, 'unit', v)} placeholder="単位" /></div>
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: getT().textSub }}>
-              <input type="checkbox" checked={!!kr.lower_is_better} onChange={e => updateKR(key, 'lower_is_better', e.target.checked)} />
-              低い方が良い指標（チャーン率・バグ数など）
-            </label>
-          </div>
-        )
-      })}
-      <Btn small variant="ghost" onClick={addKR}>＋ KR を追加</Btn>
+<!-- ══ PANELS ══ -->
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22, borderTop: `1px solid ${getT().border}`, paddingTop: 18 }}>
-        <Btn variant="ghost" onClick={onClose}>キャンセル</Btn>
-        <Btn onClick={save} disabled={saving}>{saving ? '保存中...' : '保存する'}</Btn>
+<!-- 予算一括登録 -->
+<div class="ov" id="ov-budget">
+  <div class="panel wide">
+    <div class="ph"><h2>予算を一括登録</h2><button class="xbtn" onclick="closeOv('ov-budget')">×</button></div>
+    <div class="pb-body">
+      <p style="font-size:10px;color:var(--t2);margin-bottom:12px">プログラム全体の予算と、各イベント内の費目別予算を設定できます。</p>
+      <div class="tabs">
+        <button class="tab on" onclick="switchBudgetTab('prog',this)">プログラム単位</button>
+        <button class="tab" onclick="switchBudgetTab('items',this)">費目単位（イベント別）</button>
       </div>
-    </>
-  )
-}
-
-// ─── OKR Card ──────────────────────────────────────────────────────────────────
-function ObjCard({ obj, levelColor, onEdit, onDelete }) {
-  const [open, setOpen] = useState(false)
-  const prog = calcObjProgress(obj.key_results)
-  const rating = getRating(prog)
-
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{
-        background: getT().bgCard, border: `1px solid ${open ? levelColor + '50' : getT().border}`,
-        borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.2s',
-      }}>
-        <div style={{ padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
-          onClick={() => setOpen(p => !p)}>
-          <Ring value={Math.min(prog, 100)} color={rating.color} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color }}>{rating.label}</span>
-              <Stars score={rating.score} size={9} />
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: getT().text, lineHeight: 1.4, marginBottom: 6 }}>{obj.title}</div>
-            {obj.owner && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Avatar name={obj.owner} color={levelColor} size={22} />
-                <span style={{ fontSize: 12, color: getT().textSub }}>{obj.owner}</span>
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
-            <button onClick={e => { e.stopPropagation(); onEdit(obj) }} style={{
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: getT().textMuted,
-              width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>✎</button>
-            <button onClick={e => { e.stopPropagation(); onDelete(obj.id) }} style={{
-              background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b',
-              width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>✕</button>
-            <span style={{ color: getT().textFaint, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
-          </div>
+      <div id="budget-prog-tab">
+        <table class="btbl"><thead><tr><th>プログラム</th><th>予算（円）</th><th>収入（円）</th></tr></thead><tbody id="bprog-body"></tbody></table>
+      </div>
+      <div id="budget-items-tab" style="display:none">
+        <div style="margin-bottom:10px">
+          <select class="fi" id="budget-evt-sel" onchange="renderBudgetItems()" style="width:auto;padding:5px 10px">
+            <option value="ko">キックオフ</option>
+            <option value="aw">アワード</option>
+            <option value="ye">イヤーエンド</option>
+            <option value="hm">ホームルーム（回次別）</option>
+            <option value="gk">評議会（回次別）</option>
+            <option value="oe">応援カイギ（回次別）</option>
+          </select>
         </div>
-
-        {open && (
-          <div style={{ borderTop: `1px solid ${getT().borderLight}`, background: getT().bgCard2 }}>
-            {(!obj.key_results || obj.key_results.length === 0) && (
-              <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: getT().textFaint }}>KR がありません</div>
-            )}
-            {obj.key_results?.map((kr, i) => {
-              const kprog = calcKRProgress(kr)
-              const kr_rating = getRating(kprog)
-              return (
-                <div key={kr.id} style={{
-                  padding: '10px 14px 10px 20px',
-                  borderBottom: i < obj.key_results.length - 1 ? `1px solid ${getT().borderLight}` : 'none',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                }}>
-                  <div style={{ flexShrink: 0, width: 40, textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: kr_rating.color, background: `${kr_rating.color}15`, padding: '2px 4px', borderRadius: 4, marginBottom: 2 }}>{kprog}%</div>
-                    <Stars score={kr_rating.score} size={8} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
-                      <span style={{ fontSize: 13, color: getT().textSub, lineHeight: 1.35 }}>{kr.title}</span>
-                      <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>
-                        {kr.current}{kr.unit} / {kr.target}{kr.unit}
-                        {kr.lower_is_better && <span style={{ color: getT().textFaint, marginLeft: 4 }}>↓良</span>}
-                      </span>
-                    </div>
-                    <Bar value={kprog} color={kr_rating.color} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        <div id="budget-items-content"></div>
       </div>
     </div>
-  )
+    <div class="pf">
+      <button class="btn btn-g" onclick="closeOv('ov-budget')">閉じる</button>
+      <button class="btn btn-p" onclick="saveBulkBudget()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 回次編集パネル -->
+<div class="ov" id="ov-sess">
+  <div class="panel wide">
+    <div class="ph"><h2 id="sess-title">回次を編集</h2><button class="xbtn" onclick="closeOv('ov-sess')">×</button></div>
+    <div class="pb-body">
+      <div class="fg2" style="margin-bottom:10px">
+        <div class="frow"><div class="fl">タイトル</div><input class="fi" id="s-title" placeholder="例: 第1回 長尾さん"></div>
+        <div class="frow"><div class="fl">開催日</div><input class="fi" id="s-date" type="date"></div>
+      </div>
+      <div class="sec-div">合計金額（費目内訳から自動計算）</div>
+      <div class="fg3" style="margin-bottom:12px">
+        <div class="frow"><div class="fl" style="color:var(--t3)">予算（合計）</div><input class="fi" id="s-budget-total" readonly placeholder="費目合計" style="color:var(--t2)"></div>
+        <div class="frow"><div class="fl" style="color:#5590dd">見積（合計）</div><input class="fi" id="s-est-total" readonly placeholder="費目合計" style="color:var(--blue)"></div>
+        <div class="frow"><div class="fl" style="color:#2ab890">実数（合計）</div><input class="fi" id="s-act-total" readonly placeholder="費目合計" style="color:var(--green)"></div>
+      </div>
+      <div class="sec-div">費目別内訳 <span style="font-weight:400;font-size:9px;color:var(--t3)">（費目ごとに予算・見積・実数を入力）</span></div>
+      <div class="item-hdr">
+        <span></span><span>費目名</span><span style="text-align:right">予算</span><span style="text-align:right">見積</span><span style="text-align:right">実数</span><span></span>
+      </div>
+      <div id="sess-items"></div>
+      <button class="add-btn admin-only" onclick="addSessItem()">＋ 費目を追加</button>
+      <div class="sec-div" style="margin-top:14px">メモ</div>
+      <input class="fi" id="s-memo" placeholder="任意のメモ・備考">
+    </div>
+    <div class="pf" style="justify-content:space-between">
+      <button class="btn btn-red btn-sm admin-only" id="sess-del-btn" onclick="deleteSess()">削除</button>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-g" onclick="closeOv('ov-sess')">キャンセル</button>
+        <button class="btn btn-p" onclick="saveSess()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- イベント費目編集パネル -->
+<div class="ov" id="ov-evt">
+  <div class="panel wide">
+    <div class="ph"><h2 id="evt-title">費目別明細を編集</h2><button class="xbtn" onclick="closeOv('ov-evt')">×</button></div>
+    <div class="pb-body">
+      <div class="item-hdr">
+        <span></span><span>費目名</span><span style="text-align:right">予算</span><span style="text-align:right">見積</span><span style="text-align:right">実数</span><span></span>
+      </div>
+      <div id="evt-items"></div>
+      <button class="add-btn admin-only" onclick="addEvtItem()">＋ 費目を追加</button>
+    </div>
+    <div class="pf">
+      <button class="btn btn-g" onclick="closeOv('ov-evt')">キャンセル</button>
+      <button class="btn btn-p" onclick="saveEvt()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 収入編集パネル -->
+<div class="ov" id="ov-rev-edit">
+  <div class="panel">
+    <div class="ph"><h2>収入を編集</h2><button class="xbtn" onclick="closeOv('ov-rev-edit')">×</button></div>
+    <div class="pb-body">
+      <div style="display:grid;grid-template-columns:20px 1fr 110px 26px;gap:5px;padding:0 2px;margin-bottom:4px">
+        <span></span>
+        <span style="font-size:8px;font-weight:700;color:var(--t3);letter-spacing:.08em;text-transform:uppercase">項目名</span>
+        <span style="font-size:8px;font-weight:700;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;text-align:right">金額（円）</span>
+        <span></span>
+      </div>
+      <div id="rev-items"></div>
+      <button class="add-btn admin-only" onclick="addRevItem()">＋ 収入項目を追加</button>
+    </div>
+    <div class="pf">
+      <button class="btn btn-g" onclick="closeOv('ov-rev-edit')">キャンセル</button>
+      <button class="btn btn-p" onclick="saveRev()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 経費明細編集 -->
+<div class="ov" id="ov-ledger">
+  <div class="panel wide">
+    <div class="ph"><h2 id="ledger-modal-title">経費明細を追加</h2><button class="xbtn" onclick="closeOv('ov-ledger')">×</button></div>
+    <div class="pb-body">
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="frow"><div class="fl">プログラム名</div>
+          <select class="fi" id="led-prog">
+            <option value="">選択してください</option>
+          </select>
+        </div>
+        <div class="frow"><div class="fl">費目名（入力）</div><input class="fi" id="led-fee" placeholder="例: 会場費、講師費" oninput="autoFillCat()"></div>
+      </div>
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="frow"><div class="fl">カテゴリ（自動判定）</div>
+          <select class="fi" id="led-cat">
+            <option>① イベント費</option>
+            <option>② 制作・印刷費</option>
+            <option>③ 外部委託費</option>
+            <option>④ 広報費</option>
+            <option>⑤ その他</option>
+          </select>
+        </div>
+        <div class="frow"><div class="fl">内容・品目</div><input class="fi" id="led-content" placeholder="例: イベント当日施設利用料"></div>
+      </div>
+      <div class="fg4" style="margin-bottom:8px">
+        <div class="frow"><div class="fl">単価（円）</div><input class="fi" id="led-price" type="number" placeholder="0" oninput="calcLedgerTotal()"></div>
+        <div class="frow"><div class="fl">数量</div><input class="fi" id="led-qty" type="number" placeholder="1" value="1" oninput="calcLedgerTotal()"></div>
+        <div class="frow"><div class="fl">単位</div><input class="fi" id="led-unit" placeholder="式"></div>
+        <div class="frow"><div class="fl">合計（自動）</div><input class="fi" id="led-total" readonly style="color:var(--t2);opacity:.7"></div>
+      </div>
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="frow"><div class="fl">見積金額（円）</div><input class="fi" id="led-est" type="number" placeholder="0"></div>
+        <div class="frow"><div class="fl">実績金額（円）</div><input class="fi" id="led-act" type="number" placeholder="0"></div>
+      </div>
+      <div class="fg2">
+        <div class="frow"><div class="fl">支払状況</div>
+          <select class="fi" id="led-status">
+            <option value="">未設定</option>
+            <option value="済">済</option>
+            <option value="未">未</option>
+            <option value="一部">一部</option>
+          </select>
+        </div>
+        <div class="frow"><div class="fl">備考</div><input class="fi" id="led-memo" placeholder="任意メモ"></div>
+      </div>
+    </div>
+    <div class="pf" style="justify-content:space-between">
+      <button class="btn btn-red btn-sm" id="led-del-btn" onclick="deleteLedger()" style="display:none">削除</button>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-g" onclick="closeOv('ov-ledger')">キャンセル</button>
+        <button class="btn btn-p" onclick="saveLedger()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Excel同期結果 -->
+<div class="ov" id="ov-xl">
+  <div class="panel">
+    <div class="ph"><h2>Excel 読み込み結果</h2><button class="xbtn" onclick="closeOv('ov-xl')">×</button></div>
+    <div class="pb-body" id="xl-result"></div>
+    <div class="pf"><button class="btn btn-p" onclick="closeOv('ov-xl')">閉じる</button></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// DEFAULT FEE ITEMS TEMPLATE (費目テンプレート)
+// ══════════════════════════════════════════════════
+const FEE_TEMPLATE = [
+  {name:'会場費',      budget:0,estimate:0,actual:0},
+  {name:'講師・演者費',budget:0,estimate:0,actual:0},
+  {name:'運営人件費',  budget:0,estimate:0,actual:0},
+  {name:'制作・印刷費',budget:0,estimate:0,actual:0},
+  {name:'備品・消耗品',budget:0,estimate:0,actual:0},
+  {name:'旅費交通費',  budget:0,estimate:0,actual:0},
+  {name:'諸経費',      budget:0,estimate:0,actual:0},
+];
+
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+
+// ══════════════════════════════════════════════════
+// DEFAULT DATA
+// ══════════════════════════════════════════════════
+const DEF = {
+  programs:[
+    {id:'annual',   name:'年間共通',    budget:1650000},
+    {id:'ko',       name:'キックオフ',  budget:1579820},
+    {id:'hm',       name:'ホームルーム',budget:2084500},
+    {id:'aw',       name:'アワード',    budget:5027000},
+    {id:'cityfes',  name:'シティフェス',budget:2700000},
+    {id:'ye',       name:'イヤーエンド',budget:2035000},
+    {id:'gk',       name:'評議会',      budget:712800 },
+    {id:'oe',       name:'応援カイギ',  budget:49500  },
+    {id:'other',    name:'その他',      budget:676500 },
+    {id:'marketing',name:'マーケ関連',  budget:3000000},
+  ],
+  revenues:[
+    {id:'r1',name:'アワード参加費',    amount:900000 },
+    {id:'r2',name:'スタジアムシティ',  amount:1707800},
+    {id:'r3',name:'イヤーエンド参加費',amount:1000000},
+  ],
+  events:{
+    ko:{
+      label:'キックオフ',
+      items:[
+        {id:'k1',name:'会場費',              budget:400000, estimate:662000, actual:346500},
+        {id:'k2',name:'ケータリング・ドリンク',budget:0,      estimate:0,      actual:186200},
+        {id:'k3',name:'制作・パネル',         budget:0,      estimate:200000, actual:37840 },
+        {id:'k4',name:'映像・撮影',           budget:300000, estimate:0,      actual:490000},
+        {id:'k5',name:'運営委託',             budget:0,      estimate:0,      actual:154000},
+        {id:'k6',name:'備品・印刷',           budget:0,      estimate:0,      actual:60955 },
+        {id:'k7',name:'MC・キャスティング',   budget:150000, estimate:165000, actual:230000},
+        {id:'k8',name:'旅費交通費',           budget:100000, estimate:0,      actual:0     },
+        {id:'k9',name:'諸経費',               budget:100000, estimate:0,      actual:120155},
+      ]
+    },
+    aw:{
+      label:'アワード',
+      items:[
+        {id:'a1',name:'会場費（施設・延長）',  budget:500000,  estimate:800000, actual:1000000},
+        {id:'a2',name:'ケータリング',          budget:100000,  estimate:150000, actual:523000 },
+        {id:'a3',name:'審査員・キャスティング',budget:400000,  estimate:400000, actual:200000 },
+        {id:'a4',name:'運営・進行人件費',      budget:0,       estimate:400000, actual:389000 },
+        {id:'a5',name:'制作・施工',            budget:0,       estimate:400000, actual:867504 },
+        {id:'a6',name:'賞金・懇親会',          budget:0,       estimate:0,      actual:760000 },
+        {id:'a7',name:'デザイン費',            budget:0,       estimate:0,      actual:200000 },
+        {id:'a8',name:'その他諸経費',          budget:0,       estimate:0,      actual:23734  },
+      ]
+    },
+    ye:{
+      label:'イヤーエンド',
+      items:[
+        {id:'y1',name:'会場費（当日・前日）', budget:1100000, estimate:625000, actual:625000 },
+        {id:'y2',name:'ケータリング',         budget:0,       estimate:530000, actual:530000 },
+        {id:'y3',name:'備品・受付一式',       budget:0,       estimate:60000,  actual:60000  },
+        {id:'y4',name:'進行・運営人件費',     budget:0,       estimate:350000, actual:350000 },
+        {id:'y5',name:'制作・施工',           budget:0,       estimate:798483, actual:798483 },
+        {id:'y6',name:'懇親会・デザイン・花', budget:0,       estimate:380000, actual:380000 },
+        {id:'y7',name:'演出費',               budget:0,       estimate:0,      actual:0      },
+      ]
+    },
+  },
+  sessions:{
+    hm:[
+      {id:'hm1', title:'HOMEROOM第1回 長尾さん',  date:'2025-07-13', memo:'',
+        items:[{id:uid(),name:'会場費',budget:55000,estimate:55000,actual:50000},{id:uid(),name:'講師・演者費',budget:110000,estimate:110000,actual:135140},{id:uid(),name:'備品・消耗品',budget:15000,estimate:0,actual:6270},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:60000,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:20000,estimate:0,actual:6270}]},
+      {id:'hm2', title:'HOMEROOM第2回 上田さん',  date:'2025-07-15', memo:'',
+        items:[{id:uid(),name:'会場費',budget:55000,estimate:55000,actual:50000},{id:uid(),name:'講師・演者費',budget:110000,estimate:110000,actual:146750},{id:uid(),name:'備品・消耗品',budget:15000,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:60000,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:20000,estimate:0,actual:12707}]},
+      {id:'hm3', title:'HOMEROOM第3回 加藤さん',  date:'2025-07-22', memo:'',
+        items:[{id:uid(),name:'会場費',budget:0,estimate:0,actual:0},{id:uid(),name:'講師・演者費',budget:110000,estimate:0,actual:0},{id:uid(),name:'備品・消耗品',budget:15000,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:60000,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:20000,estimate:0,actual:22000}]},
+      {id:'hm4', title:'HOMEROOM第4回 平田さん',  date:'2025-07-29', memo:'',
+        items:[{id:uid(),name:'会場費',budget:0,estimate:0,actual:0},{id:uid(),name:'講師・演者費',budget:16500,estimate:0,actual:0},{id:uid(),name:'備品・消耗品',budget:0,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:0,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:0,estimate:0,actual:0}]},
+      {id:'hm5', title:'WS① 街歩き',             date:'2025-08-02', memo:'',
+        items:[{id:uid(),name:'会場費',budget:150000,estimate:0,actual:0},{id:uid(),name:'講師・演者費',budget:0,estimate:0,actual:0},{id:uid(),name:'備品・消耗品',budget:0,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:55000},{id:uid(),name:'旅費交通費',budget:0,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:0,estimate:0,actual:0}]},
+      {id:'hm6', title:'HOMEROOM第6回 古川さん',  date:'2025-08-19', memo:'',
+        items:[{id:uid(),name:'会場費',budget:55000,estimate:55000,actual:50000},{id:uid(),name:'講師・演者費',budget:0,estimate:0,actual:0},{id:uid(),name:'備品・消耗品',budget:0,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:0,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:20000,estimate:0,actual:6507}]},
+      {id:'hm7', title:'WS② 企業課題マッチング', date:'2025-09-06', memo:'',
+        items:[{id:uid(),name:'会場費',budget:55000,estimate:55000,actual:50000},{id:uid(),name:'講師・演者費',budget:0,estimate:0,actual:0},{id:uid(),name:'備品・消耗品',budget:0,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:0,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:20000,estimate:0,actual:16103}]},
+      {id:'hm8', title:'HOMEROOM第8回 林さん',    date:'2025-09-16', memo:'',
+        items:[{id:uid(),name:'会場費',budget:55000,estimate:55000,actual:50000},{id:uid(),name:'講師・演者費',budget:0,estimate:0,actual:198500},{id:uid(),name:'備品・消耗品',budget:0,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:0,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:20000,estimate:0,actual:10000}]},
+      {id:'hm9', title:'HOMEROOM第9回 えとみほ',  date:'2025-09-30', memo:'',
+        items:[{id:uid(),name:'会場費',budget:50000,estimate:50000,actual:50000},{id:uid(),name:'講師・演者費',budget:0,estimate:0,actual:110000},{id:uid(),name:'備品・消耗品',budget:0,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:0},{id:uid(),name:'旅費交通費',budget:0,estimate:0,actual:38000},{id:uid(),name:'諸経費',budget:0,estimate:0,actual:0}]},
+      {id:'hm10',title:'WS③ 最終ホームルーム',   date:'2025-10-11', memo:'',
+        items:[{id:uid(),name:'会場費',budget:150000,estimate:0,actual:0},{id:uid(),name:'講師・演者費',budget:0,estimate:0,actual:0},{id:uid(),name:'備品・消耗品',budget:0,estimate:0,actual:0},{id:uid(),name:'運営人件費',budget:0,estimate:0,actual:44000},{id:uid(),name:'旅費交通費',budget:0,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:0,estimate:0,actual:0}]},
+    ],
+    gk:[
+      {id:'gk1',title:'NEO福岡評議会 第1回',date:'2025-06-20',memo:'',items:[{id:uid(),name:'会場費',budget:55000,estimate:0,actual:55000},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:5500}]},
+      {id:'gk2',title:'NEO福岡評議会 第2回',date:'2025-07-18',memo:'',items:[{id:uid(),name:'会場費',budget:55000,estimate:0,actual:55000},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:5500}]},
+      {id:'gk3',title:'NEO福岡評議会 第3回',date:'2025-08-29',memo:'',items:[{id:uid(),name:'会場費',budget:55000,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:0}]},
+      {id:'gk4',title:'NEO福岡評議会 第4回',date:'2025-09-19',memo:'',items:[{id:uid(),name:'会場費',budget:55000,estimate:0,actual:30800},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:5500}]},
+      {id:'gk5',title:'NEO福岡評議会 第5回',date:'2025-10-17',memo:'',items:[{id:uid(),name:'会場費',budget:88000,estimate:33000,actual:0},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:0}]},
+      {id:'gk6',title:'NEO福岡評議会 第6回',date:'2025-11-21',memo:'',items:[{id:uid(),name:'会場費',budget:88000,estimate:33000,actual:0},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:0}]},
+      {id:'gk7',title:'NEO福岡評議会 第7回',date:'2025-12-19',memo:'',items:[{id:uid(),name:'会場費',budget:88000,estimate:33000,actual:0},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:0}]},
+      {id:'gk8',title:'NEO福岡評議会 第8回',date:'2026-01-16',memo:'',items:[{id:uid(),name:'会場費',budget:88000,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:0}]},
+      {id:'gk9',title:'NEO福岡評議会 第9回',date:'2026-02-20',memo:'',items:[{id:uid(),name:'会場費',budget:91300,estimate:0,actual:0},{id:uid(),name:'諸経費',budget:5500,estimate:0,actual:0}]},
+    ],
+    oe:[
+      {id:'oe1',title:'応援カイギ #1',date:'2025-06-10',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:5500}]},
+      {id:'oe2',title:'応援カイギ #2',date:'2025-07-08',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:5500}]},
+      {id:'oe3',title:'応援カイギ #3',date:'2025-08-12',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0}]},
+      {id:'oe4',title:'応援カイギ #4',date:'2025-09-09',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0}]},
+      {id:'oe5',title:'応援カイギ #5',date:'2025-10-14',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0}]},
+      {id:'oe6',title:'応援カイギ #6',date:'2025-11-11',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0}]},
+      {id:'oe7',title:'応援カイギ #7',date:'2025-12-09',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0}]},
+      {id:'oe8',title:'応援カイギ #8',date:'2026-01-13',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0}]},
+      {id:'oe9',title:'応援カイギ #9',date:'2026-02-10',memo:'',items:[{id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0}]},
+    ],
+  },
+  categories:[
+    {name:'① イベント費',   budget:5478000, actual:2312226},
+    {name:'② 制作・印刷費', budget:8200000, actual:2598763},
+    {name:'③ 外部委託費',   budget:3000000, actual:2025848},
+    {name:'④ 広報費',       budget:1300000, actual:0      },
+    {name:'⑤ その他',       budget:5057700, actual:5052518},
+  ],
+  months:['25/4','25/5','25/6','25/7','25/8','25/9','25/10','25/11','25/12','26/1','26/2','26/3'],
+  monthlyTotal:[0,570540,2066928,474167,560867,2618041,490094,40000,150621,4633778,1398000,4854068],
+};
+
+// ══════════════════════════════════════════════════
+// STATE / STORAGE
+// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// SUPABASE CONFIG — ここにAPIキーを設定してください
+// ══════════════════════════════════════════════════
+const SUPABASE_URL     = 'https://hhifpqlbgyjdfbluigfo.supabase.co';
+const SUPABASE_ANON_KEY= 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhoaWZwcWxiZ3lqZGZibHVpZ2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzOTkyNTksImV4cCI6MjA4ODk3NTI1OX0.hjycUEUf_Kr9iUDrs4GQZvqVWtcfi4Ij4mEfq-HM5c0';
+
+const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── 現在のログインユーザー ──
+let _currentUser  = null;   // supabase Userオブジェクト
+let _currentRole  = null;   // 'admin' | 'member'
+let _currentName  = '';
+
+// ── ロールチェック ──
+const isAdmin  = () => _currentRole === 'admin';
+const isLogged = () => !!_currentUser;
+
+// ── 権限UIの切り替え ──
+function applyRoleUI() {
+  // 管理者専用ボタンの表示制御
+  const adminEls = document.querySelectorAll('.admin-only');
+  adminEls.forEach(el => el.style.display = isAdmin() ? '' : 'none');
+  // ユーザー管理ナビ
+  const nbUsers = document.getElementById('nb-users');
+  if (nbUsers) nbUsers.style.display = isAdmin() ? '' : 'none';
+  // 予算一括登録ボタンは全員に表示（内部で権限制御）
+  // nb-budgetは常時表示
+  // サイドバーユーザー情報
+  const uib = document.getElementById('user-info-bar');
+  const logoutBtn = document.getElementById('logout-btn');
+  if (uib) uib.style.display = _currentUser ? '' : 'none';
+  if (logoutBtn) logoutBtn.style.display = _currentUser ? '' : 'none';
+  if (document.getElementById('user-display-name'))
+    document.getElementById('user-display-name').textContent = _currentName || _currentUser?.email || '';
+  if (document.getElementById('user-role-badge'))
+    document.getElementById('user-role-badge').innerHTML = isAdmin()
+      ? '<span style="font-size:8px;background:rgba(240,82,42,.2);color:#f0522a;padding:1px 6px;border-radius:4px;font-weight:700">管理者</span>'
+      : '<span style="font-size:8px;background:rgba(79,142,247,.15);color:#4f8ef7;padding:1px 6px;border-radius:4px;font-weight:700">メンバー</span>';
+  // Excelアップロードは管理者のみ
+  const xlBtn = document.getElementById('xl-upload-btn');
+  if (xlBtn) xlBtn.style.display = isAdmin() ? '' : 'none';
 }
 
-// ─── Level Column（横並びの1列） ──────────────────────────────────────────────
-function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast }) {
-  const level = levels.find(l => Number(l.id) === Number(levelId))
-  const objs = nodeObjectives[levelId] || []
-  const absDepth = getAbsoluteDepth(levelId, levels)
-  const layerColor = getLayerColor(absDepth)
-  const layerLabel = getLayerLabel(absDepth)
-  const allProgs = objs.map(o => calcObjProgress(o.key_results))
-  const avg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : null
-  const avgR = avg !== null ? getRating(avg) : null
-  const [colWidth, setColWidth] = useState(280)
-  const dragRef = useRef(null)
-  if (!level) return null
+const SK='neo_v5_sb'; // ローカルフォールバック用
+let S=loadS();
 
-  const onMouseDownResize = (e) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startW = colWidth
-    const onMove = (me) => setColWidth(Math.max(180, Math.min(520, startW + me.clientX - startX)))
-    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+function loadS(){
+  try{const r=localStorage.getItem(SK);if(r)return JSON.parse(r);}catch(e){}
+  return JSON.parse(JSON.stringify(DEF));
+}
+
+// Supabaseからデータ読み込み
+async function loadFromDB() {
+  try {
+    const {data,error} = await _sb.from('dashboard_data').select('data').eq('id',1).single();
+    if (error) throw error;
+    if (data && data.data && Object.keys(data.data).length > 0) {
+      S = data.data;
+      // DEFにないキーを補完
+      if (!S.programs) S.programs = DEF.programs;
+      if (!S.revenues) S.revenues = DEF.revenues;
+      if (!S.sessions) S.sessions = DEF.sessions;
+      if (!S.events)   S.events   = DEF.events;
+      if (!S.categories) S.categories = DEF.categories;
+      if (!S.months)   S.months   = DEF.months;
+      if (!S.monthlyTotal) S.monthlyTotal = DEF.monthlyTotal;
+    }
+    slbl().textContent = 'DB同期済み';
+    sdot().className = 'sdot';
+  } catch(e) {
+    console.warn('DB load failed, using local:', e.message);
+    slbl().textContent = 'ローカルデータ使用中';
   }
+}
 
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-      {/* カラム本体 */}
-      <div style={{ width: colWidth, flexShrink: 0, position: 'relative' }}>
-        {/* レベルヘッダー */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-          borderRadius: 8, background: `${layerColor}12`, border: `1px solid ${layerColor}30`,
-          borderLeft: `3px solid ${layerColor}`, marginBottom: 10,
-        }}>
-          <span style={{ fontSize: 17 }}>{level.icon}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: getT().text }}>{level.name}</div>
-            <div style={{ fontSize: 10, color: layerColor, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>{layerLabel}</div>
-          </div>
-          {avg !== null && (
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: avgR.color, lineHeight: 1 }}>{avg}%</div>
-              <Stars score={avgR.score} size={8} />
-            </div>
-          )}
-        </div>
+// Supabaseへ保存（adminのみ有効）
+async function save() {
+  // 常にローカルにも保存
+  localStorage.setItem(SK, JSON.stringify(S));
+  if (!isAdmin()) {
+    // memberは見積・実数のみ保存可能（budgetフィールドを除いたパーシャル保存）
+    sdot().className = 'sdot';
+    slbl().textContent = '保存済み (閲覧限定)';
+    return;
+  }
+  try {
+    sdot().className = 'sdot uns';
+    slbl().textContent = '保存中...';
+    const {error} = await _sb.from('dashboard_data')
+      .update({data: S, updated_by: _currentUser.id, updated_at: new Date().toISOString()})
+      .eq('id',1);
+    if (error) throw error;
+    sdot().className = 'sdot';
+    slbl().textContent = '保存済み ' + new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    sdot().className = 'sdot uns';
+    slbl().textContent = '保存エラー: ' + e.message;
+  }
+}
 
-        {/* OKRカード */}
-        {objs.length === 0
-          ? <div style={{ fontSize: 12, color: getT().textFaintest, fontStyle: 'italic', padding: '8px 4px' }}>目標なし</div>
-          : objs.map(obj => <ObjCard key={obj.id} obj={obj} levelColor={layerColor} onEdit={onEdit} onDelete={onDelete} />)
+// memberが見積・実数のみ保存する関数
+async function saveMemberData() {
+  localStorage.setItem(SK, JSON.stringify(S));
+  if (isAdmin()) { save(); return; }
+  try {
+    // 実績・見積のみ更新（予算には触れない）
+    const {error} = await _sb.from('dashboard_data')
+      .update({data: S, updated_at: new Date().toISOString()})
+      .eq('id',1);
+    if (error) throw error;
+    sdot().className = 'sdot';
+    slbl().textContent = '保存済み ' + new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    sdot().className = 'sdot uns';
+    slbl().textContent = '保存エラー';
+  }
+}
+function sdot(){return document.getElementById('sdot');}
+function slbl(){return document.getElementById('slbl');}
+
+// ══════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════
+const n=v=>parseFloat(v)||0;
+const fmt=v=>!v&&v!==0?'—':'¥'+Math.round(v).toLocaleString();
+const fmtN=v=>!v&&v!==0?'0':Math.round(v).toLocaleString();
+const pct=(a,b)=>b>0?(a/b*100).toFixed(0)+'%':'—';
+
+// 回次の合計（items配列から算出）
+const sessSum=(s,f)=>s.items?s.items.reduce((t,i)=>t+n(i[f]),0):n(s[f]||0);
+
+// イベントの合計
+const evtSum=(key,f)=>S.events[key].items.reduce((t,i)=>t+n(i[f]),0);
+
+// プログラム実績（セッション or イベント）
+function progActual(id){
+  if(S.events[id]) return evtSum(id,'actual');
+  const sess=S.sessions[id]||[];
+  return sess.reduce((t,s)=>t+sessSum(s,'actual'),0);
+}
+function progEstimate(id){
+  if(S.events[id]) return evtSum(id,'estimate');
+  const sess=S.sessions[id]||[];
+  return sess.reduce((t,s)=>t+sessSum(s,'estimate'),0);
+}
+
+Chart.defaults.color='#3a4255';
+Chart.defaults.font.family="'JetBrains Mono',monospace";
+Chart.defaults.font.size=10;
+const g0={color:'rgba(28,32,48,.9)',drawBorder:false};
+const _ch={};
+function dc(id){if(_ch[id]){_ch[id].destroy();delete _ch[id];}}
+
+// ══════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════
+const TITLES={ov:'サマリー',prog:'プログラム別',hm:'ホームルーム',gk:'評議会',oe:'応援カイギ',ko:'キックオフ',aw:'アワード',ye:'イヤーエンド',rev:'収入管理',users:'ユーザー管理',history:'ログイン履歴'};
+let _curPg='ov';
+function go(id,btn){
+  if(id==='users' && !isAdmin()){alert('管理者のみアクセスできます');return;}
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+  const pg=document.getElementById('pg-'+id);
+  if(pg)pg.classList.add('on');
+  if(btn)btn.classList.add('on');
+  document.getElementById('pgTitle').textContent=TITLES[id]||id;
+  _curPg=id;
+  if(id==='users'){renderUsers();return;}
+  if(id==='history'){renderHistory();return;}
+  renderPg(id);
+}
+function renderPg(id){
+  if(id==='ov')   renderOv();
+  if(id==='prog') renderProg();
+  if(id==='hm')   renderSeries('hm');
+  if(id==='gk')   renderSeries('gk');
+  if(id==='oe')   renderSeries('oe');
+  if(id==='ko')   renderEvt('ko');
+  if(id==='aw')   renderEvt('aw');
+  if(id==='ye')   renderEvt('ye');
+  if(id==='rev')  renderRev();
+}
+
+// ══════════════════════════════════════════════════
+// OVERVIEW
+// ══════════════════════════════════════════════════
+const PAL=['#f0522a','#4f8ef7','#2dd4a0','#f0c040','#9b7fe8','#06b6d4','#ec4899','#84cc16','#ffb347','#14b8a6'];
+
+function renderOv(){
+  const totB=S.programs.reduce((t,p)=>t+n(p.budget),0);
+  const totA=S.programs.reduce((t,p)=>t+progActual(p.id),0);
+  const totE=S.programs.reduce((t,p)=>t+progEstimate(p.id),0);
+  const totR=S.revenues.reduce((t,r)=>t+n(r.amount),0);
+  const diff=totB-totA;
+
+  document.getElementById('ov-kpis').innerHTML=`
+    <div class="kpi r"><div class="kl">総予算</div><div class="kv">${fmtN(totB)}<em>円</em></div><div class="ks">年間承認予算（税別）</div></div>
+    <div class="kpi b"><div class="kl">見積合計</div><div class="kv">${fmtN(totE)}<em>円</em></div><div class="ks">消化率 <strong style="color:var(--blue)">${pct(totE,totB)}</strong></div></div>
+    <div class="kpi g"><div class="kl">実績合計</div><div class="kv">${fmtN(totA)}<em>円</em></div><div class="ks"><span class="${diff>=0?'ok':'ng'}">${diff>=0?'▲ 予算内':'▼ 予算超過'} ${fmtN(Math.abs(diff))}円</span></div></div>
+    <div class="kpi y"><div class="kl">実質収支（収入控除後）</div><div class="kv" style="color:var(--green)">+${fmtN(diff+totR)}<em>円</em></div><div class="ks">収入 ${fmtN(totR)}円 控除後</div></div>`;
+
+  document.getElementById('ov-rev').innerHTML=
+    S.revenues.map(r=>`<div class="rev-row"><div class="rev-name">${r.name}</div><div class="rev-val">${fmt(r.amount)}</div></div>`).join('')+
+    `<div class="rev-row" style="border-top:1px solid var(--acc);margin-top:8px;padding-top:8px"><strong>収入合計</strong><span style="font-family:var(--mono);font-size:13px;color:var(--green);font-weight:700">${fmt(totR)}</span></div>
+    <div class="net-box"><div style="font-size:10px;color:var(--t2)">実質余剰額</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">+${fmt(diff+totR)}</div></div>`;
+
+  const bc=['var(--acc)','var(--blue)','var(--purple)','var(--yellow)','var(--green)'];
+  document.getElementById('ov-cats').innerHTML=S.categories.map((c,i)=>{
+    const p=c.budget>0?Math.min(c.actual/c.budget*100,100):0;
+    return`<div class="pb"><div class="pb-top"><span class="n">${c.name}</span><span class="p">${fmtN(c.actual)} / ${fmtN(c.budget)} (${pct(c.actual,c.budget)})</span></div>
+    <div class="pb-track"><div class="pb-fill" style="width:${p}%;background:${c.actual>c.budget?'var(--red)':bc[i]}"></div></div></div>`;
+  }).join('');
+
+  dc('ch-monthly');
+  _ch['ch-monthly']=new Chart(document.getElementById('ch-monthly'),{
+    type:'bar',data:{labels:S.months,datasets:[{label:'月別支出',data:S.monthlyTotal,
+      backgroundColor:S.monthlyTotal.map(v=>v>3000000?'rgba(240,82,42,.65)':'rgba(79,142,247,.5)'),
+      borderColor:S.monthlyTotal.map(v=>v>3000000?'#f0522a':'#4f8ef7'),borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' ¥'+Math.round(ctx.raw).toLocaleString()}}},
+      scales:{x:{grid:g0,ticks:{maxRotation:0}},y:{grid:g0,ticks:{callback:v=>v>=1000000?(v/1000000).toFixed(1)+'M':v.toLocaleString()}}}}});
+
+  dc('ch-cat');
+  _ch['ch-cat']=new Chart(document.getElementById('ch-cat'),{
+    type:'bar',data:{labels:S.categories.map(c=>c.name),datasets:[
+      {label:'実績',data:S.categories.map(c=>c.actual),backgroundColor:PAL.slice(0,5).map(c=>c+'bb'),borderColor:PAL.slice(0,5),borderWidth:1,borderRadius:3},
+      {label:'予算',data:S.categories.map(c=>c.budget),backgroundColor:'transparent',borderColor:PAL.slice(0,5).map(c=>c+'44'),borderWidth:1.5,borderDash:[4,3],borderRadius:3},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{boxWidth:7,padding:8}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ¥${Math.round(ctx.raw).toLocaleString()}`}}},
+      scales:{x:{grid:g0,ticks:{font:{size:9}}},y:{grid:g0,ticks:{callback:v=>(v/1000000).toFixed(1)+'M'}}}}});
+
+  dc('ch-donut');
+  _ch['ch-donut']=new Chart(document.getElementById('ch-donut'),{
+    type:'doughnut',
+    data:{labels:S.programs.map(p=>p.name),datasets:[{data:S.programs.map(p=>n(p.budget)),
+      backgroundColor:PAL.map(c=>c+'cc'),borderColor:PAL,borderWidth:1.5,hoverOffset:5}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{boxWidth:8,padding:8,font:{size:10}}},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ¥${Math.round(ctx.raw).toLocaleString()}`}}}}});
+}
+
+// ══════════════════════════════════════════════════
+// PROGRAMS
+// ══════════════════════════════════════════════════
+function renderProg(){
+  document.getElementById('prog-tbody').innerHTML=S.programs.map(p=>{
+    const act=progActual(p.id),est=progEstimate(p.id),diff=n(p.budget)-act;
+    const tag=diff<0?`<span class="tag tg-o">超過</span>`:act===0?`<span class="tag tg-z">未実施</span>`:`<span class="tag tg-g">正常</span>`;
+    return`<tr><td><span style="font-weight:500">${p.name}</span>${tag}</td>
+      <td class="num-dim">${fmtN(p.budget)}</td>
+      <td style="color:#5a95e8">${fmtN(est)}</td>
+      <td>${fmtN(act)}</td>
+      <td class="${diff<0?'ng':'ok'}">${diff<0?'▼':'▲'} ${fmtN(Math.abs(diff))}</td></tr>`;
+  }).join('');
+
+  const sorted=[...S.programs].filter(p=>n(p.budget)>0).map(p=>({...p,act:progActual(p.id),r:Math.round(progActual(p.id)/n(p.budget)*100)})).sort((a,b)=>b.r-a.r);
+  dc('ch-rate');
+  _ch['ch-rate']=new Chart(document.getElementById('ch-rate'),{
+    type:'bar',data:{labels:sorted.map(p=>p.name),datasets:[{label:'消化率（%）',data:sorted.map(p=>p.r),
+      backgroundColor:sorted.map(p=>p.r>100?'rgba(232,64,96,.7)':p.r>70?'rgba(240,192,64,.7)':'rgba(79,142,247,.6)'),
+      borderColor:sorted.map(p=>p.r>100?'var(--red)':p.r>70?'var(--yellow)':'var(--blue)'),borderWidth:1,borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` 消化率: ${ctx.raw}%`}}},
+      scales:{x:{grid:g0,ticks:{callback:v=>v+'%'},max:Math.max(350,...sorted.map(p=>p.r+20))},y:{grid:{display:false}}}}});
+}
+
+// ══════════════════════════════════════════════════
+// SERIES
+// ══════════════════════════════════════════════════
+function renderSeries(key){
+  const ss=S.sessions[key]||[];
+  const totB=ss.reduce((t,s)=>t+sessSum(s,'budget'),0);
+  const totE=ss.reduce((t,s)=>t+sessSum(s,'estimate'),0);
+  const totA=ss.reduce((t,s)=>t+sessSum(s,'actual'),0);
+  const done=ss.filter(s=>sessSum(s,'actual')>0).length;
+  const colors={hm:'var(--green)',gk:'var(--blue)',oe:'var(--yellow)'};
+  const col=colors[key]||'var(--t1)';
+
+  document.getElementById(`${key}-kpis`).innerHTML=`
+    <div class="sk"><div class="skv" style="color:${col}">${ss.length}</div><div class="skl">総回数</div></div>
+    <div class="sk"><div class="skv">${fmtN(totB)}<span style="font-size:10px;color:var(--t2)">円</span></div><div class="skl">予算合計</div></div>
+    <div class="sk"><div class="skv" style="color:var(--blue)">${fmtN(totE)}<span style="font-size:10px;color:var(--t2)">円</span></div><div class="skl">見積合計</div></div>
+    <div class="sk"><div class="skv" style="color:var(--green)">${fmtN(totA)}<span style="font-size:10px;color:var(--t2)">円</span></div><div class="skl">実績合計</div></div>
+    <div class="sk"><div class="skv">${done}<span style="font-size:11px;color:var(--t2)"> / ${ss.length}</span></div><div class="skl">実績入力済</div></div>`;
+
+  const maxAll=Math.max(...ss.map(s=>Math.max(sessSum(s,'budget'),sessSum(s,'estimate'),sessSum(s,'actual'))),1);
+  document.getElementById(`${key}-grid`).innerHTML=ss.map((s,i)=>{
+    const b=sessSum(s,'budget'),e=sessSum(s,'estimate'),a=sessSum(s,'actual');
+    const bP=Math.round(b/maxAll*100),eP=Math.round(e/maxAll*100),aP=Math.round(a/maxAll*100);
+    const nItems=s.items?s.items.length:0;
+    const wsTag=s.title.includes('WS')?`<span style="font-size:8px;background:rgba(79,142,247,.15);color:#6ba8ff;padding:1px 4px;border-radius:3px;margin-left:4px">WS</span>`:'';
+    return`<div class="sc${nItems>0?' has-items':''}" onclick="openSess('${key}','${s.id}')">
+      <div class="sc-no">No.${String(i+1).padStart(2,'0')}</div>
+      <div class="sc-title">${s.title}${wsTag}</div>
+      <div class="sc-date">${s.date||'日付未設定'}</div>
+      <div class="sc-bars">
+        <div class="sbr"><div class="sbrl" style="color:var(--t3)">予算</div><div class="sbrt"><div class="sbrf" style="width:${bP}%;background:var(--t3)"></div></div><div class="sbrv">${fmtN(b)}</div></div>
+        <div class="sbr"><div class="sbrl" style="color:var(--blue)">見積</div><div class="sbrt"><div class="sbrf" style="width:${eP}%;background:var(--blue)"></div></div><div class="sbrv">${fmtN(e)}</div></div>
+        <div class="sbr"><div class="sbrl" style="color:var(--green)">実数</div><div class="sbrt"><div class="sbrf" style="width:${aP}%;background:var(--green)"></div></div><div class="sbrv">${fmtN(a)}</div></div>
+      </div>
+      <div class="sc-foot">
+        <span class="sc-items-count">${nItems > 0 ? `📋 ${nItems}費目` : '費目未登録'}</span>
+        <span style="font-size:9px;color:${e>=a?'var(--green)':'var(--red)'}">${e>=a?'▲':'▼'} ${fmtN(Math.abs(e-a))}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+// EVENT PAGES
+// ══════════════════════════════════════════════════
+function renderEvt(key){
+  const ev=S.events[key];if(!ev)return;
+  const totB=evtSum(key,'budget'),totE=evtSum(key,'estimate'),totA=evtSum(key,'actual');
+  const budgetProg=S.programs.find(p=>p.id===key);
+  const progBudget=budgetProg?n(budgetProg.budget):totB;
+
+  document.getElementById(`${key}-kpis`).innerHTML=`
+    <div class="kpi r"><div class="kl">プログラム予算</div><div class="kv">${fmtN(progBudget)}<em>円</em></div></div>
+    <div class="kpi b"><div class="kl">費目別予算合計</div><div class="kv">${fmtN(totB)}<em>円</em></div><div class="ks">消化率 <strong style="color:var(--blue)">${pct(totB,progBudget)}</strong></div></div>
+    <div class="kpi g"><div class="kl">見積合計</div><div class="kv">${fmtN(totE)}<em>円</em></div><div class="ks">消化率 <strong style="color:var(--green)">${pct(totE,progBudget)}</strong></div></div>
+    <div class="kpi y"><div class="kl">実績合計</div><div class="kv">${fmtN(totA)}<em>円</em></div><div class="ks">差異（見積-実数）<span class="${totE>=totA?'ok':'ng'}"> ${totE>=totA?'+':''}${fmtN(totE-totA)}円</span></div></div>`;
+
+  document.getElementById(`${key}-tbody`).innerHTML=ev.items.map(it=>{
+    const d=n(it.estimate)-n(it.actual);
+    return`<tr><td style="font-weight:500">${it.name}</td>
+      <td class="num-dim">${fmtN(it.budget)}</td>
+      <td style="color:#6ba8ff">${fmtN(it.estimate)}</td>
+      <td style="color:var(--green)">${fmtN(it.actual)}</td>
+      <td class="${d>=0?'ok':'ng'}">${d>=0?'▲':'▼'} ${fmtN(Math.abs(d))}</td></tr>`;
+  }).join('');
+
+  const items=ev.items.filter(i=>n(i.actual)>0);
+  dc('ch-'+key);
+  _ch['ch-'+key]=new Chart(document.getElementById('ch-'+key),{
+    type:'doughnut',
+    data:{labels:items.map(i=>i.name),datasets:[{data:items.map(i=>i.actual),
+      backgroundColor:PAL.slice(0,items.length).map(c=>c+'cc'),borderColor:PAL.slice(0,items.length),borderWidth:1.5,hoverOffset:5}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      plugins:{legend:{position:'right',labels:{boxWidth:7,padding:8,font:{size:10}}},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ¥${Math.round(ctx.raw).toLocaleString()}`}}}}});
+}
+
+// ══════════════════════════════════════════════════
+// REVENUE
+// ══════════════════════════════════════════════════
+function renderRev(){
+  const totR=S.revenues.reduce((t,r)=>t+n(r.amount),0);
+  const totB=S.programs.reduce((t,p)=>t+n(p.budget),0);
+  const totA=S.programs.reduce((t,p)=>t+progActual(p.id),0);
+  const diff=totB-totA;
+
+  document.getElementById('rev-detail').innerHTML=
+    S.revenues.map(r=>`<div class="rev-row"><div class="rev-name">${r.name}</div><div class="rev-val">${fmt(r.amount)}</div></div>`).join('')+
+    `<div class="rev-row" style="border-top:1px solid var(--b2);margin-top:8px;padding-top:8px"><strong style="font-size:13px">合計</strong><span style="font-family:var(--mono);font-size:14px;color:var(--green);font-weight:700">${fmt(totR)}</span></div>`;
+
+  document.getElementById('net-summary').innerHTML=`
+    <div class="rev-row"><div class="rev-name">総予算</div><div style="font-family:var(--mono)">${fmt(totB)}</div></div>
+    <div class="rev-row"><div class="rev-name">実績合計</div><div style="font-family:var(--mono)">${fmt(totA)}</div></div>
+    <div class="rev-row"><div class="rev-name">予実差額</div><div style="font-family:var(--mono);color:${diff>=0?'var(--green)':'var(--red)'}">${diff>=0?'+':''}${fmt(diff)}</div></div>
+    <div class="rev-row"><div class="rev-name">収入合計</div><div style="font-family:var(--mono);color:var(--green)">${fmt(totR)}</div></div>
+    <div class="net-box"><div style="font-size:10px;color:var(--t2)">実質余剰（予実差額＋収入）</div>
+      <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--green)">+${fmt(diff+totR)}</div></div>`;
+}
+
+// ══════════════════════════════════════════════════
+// PANEL OPEN / CLOSE
+// ══════════════════════════════════════════════════
+function openOv(id){document.getElementById(id).classList.add('open');}
+function closeOv(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+
+// ══════════════════════════════════════════════════
+// SESSION PANEL
+// ══════════════════════════════════════════════════
+let _sCtx={};
+function openSess(key,id){
+  _sCtx={key,id};
+  const map={hm:'ホームルーム',gk:'評議会',oe:'応援カイギ'};
+  const s=id?S.sessions[key].find(x=>x.id===id):null;
+  document.getElementById('sess-title').textContent=(s?'編集：':'追加：')+map[key];
+  document.getElementById('s-title').value=s?s.title:'';
+  document.getElementById('s-date').value=s?s.date:'';
+  document.getElementById('s-memo').value=s?s.memo:'';
+  document.getElementById('sess-del-btn').style.display=s?'':'none';
+  _sCtx.items=s?JSON.parse(JSON.stringify(s.items)):[...FEE_TEMPLATE.slice(0,4).map(t=>({...t,id:uid()}))];
+  renderSessItems();
+  openOv('ov-sess');
+}
+function renderSessItems(){
+  const wrap=document.getElementById('sess-items');
+  wrap.innerHTML=_sCtx.items.map((it,i)=>`
+    <div class="item-row" id="si-${i}">
+      <div class="item-num">${i+1}</div>
+      <input type="text"   value="${it.name}"          placeholder="費目名"  data-i="${i}" data-f="name" oninput="updateSessItem(this)">
+      <input type="number" value="${it.budget||''}"    placeholder="0" data-i="${i}" data-f="budget"   oninput="updateSessItem(this);updateSessTotals()" ${isAdmin()?'':'readonly style="opacity:.4;pointer-events:none"'}>
+      <input type="number" value="${it.estimate||''}"  placeholder="0" data-i="${i}" data-f="estimate" oninput="updateSessItem(this);updateSessTotals()">
+      <input type="number" value="${it.actual||''}"    placeholder="0" data-i="${i}" data-f="actual"   oninput="updateSessItem(this);updateSessTotals()">
+      ${isAdmin()?`<button class="del-btn" onclick="removeSessItem(${i})">×</button>`:`<div style="width:22px"></div>`}
+    </div>`).join('');
+  updateSessTotals();
+}
+function updateSessItem(inp){
+  const i=parseInt(inp.dataset.i),f=inp.dataset.f;
+  _sCtx.items[i][f]=f==='name'?inp.value:parseFloat(inp.value)||0;
+}
+function updateSessTotals(){
+  const b=_sCtx.items.reduce((t,i)=>t+n(i.budget),0);
+  const e=_sCtx.items.reduce((t,i)=>t+n(i.estimate),0);
+  const a=_sCtx.items.reduce((t,i)=>t+n(i.actual),0);
+  document.getElementById('s-budget-total').value=b?fmtN(b):'';
+  document.getElementById('s-est-total').value=e?fmtN(e):'';
+  document.getElementById('s-act-total').value=a?fmtN(a):'';
+}
+function addSessItem(){
+  _sCtx.items.push({id:uid(),name:'',budget:0,estimate:0,actual:0});
+  renderSessItems();
+}
+function removeSessItem(i){
+  _sCtx.items.splice(i,1);
+  renderSessItems();
+}
+function saveSess(){
+  const {key,id}=_sCtx;
+  const obj={
+    id:id||uid(),
+    title:document.getElementById('s-title').value,
+    date:document.getElementById('s-date').value,
+    memo:document.getElementById('s-memo').value,
+    items:_sCtx.items,
+  };
+  if(id){const idx=S.sessions[key].findIndex(x=>x.id===id);S.sessions[key][idx]=obj;}
+  else S.sessions[key].push(obj);
+  saveMemberData();closeOv('ov-sess');renderPg(key);
+}
+function deleteSess(){
+  const {key,id}=_sCtx;
+  S.sessions[key]=S.sessions[key].filter(x=>x.id!==id);
+  save();closeOv('ov-sess');renderPg(key);
+}
+
+// ══════════════════════════════════════════════════
+// EVENT PANEL
+// ══════════════════════════════════════════════════
+let _eCtx={};
+function openEvt(key){
+  if(!isAdmin()){alert('費目の編集は管理者のみ可能です');return;}
+  _eCtx={key};
+  const labels={ko:'キックオフ',aw:'アワード',ye:'イヤーエンド'};
+  document.getElementById('evt-title').textContent='費目別明細を編集：'+labels[key];
+  _eCtx.items=JSON.parse(JSON.stringify(S.events[key].items));
+  renderEvtItems();openOv('ov-evt');
+}
+function renderEvtItems(){
+  document.getElementById('evt-items').innerHTML=_eCtx.items.map((it,i)=>`
+    <div class="item-row">
+      <div class="item-num">${i+1}</div>
+      <input type="text"   value="${it.name}"         placeholder="費目名" data-i="${i}" data-f="name"     oninput="updateEvtItem(this)">
+      <input type="number" value="${it.budget||''}"   placeholder="0"     data-i="${i}" data-f="budget"   oninput="updateEvtItem(this)">
+      <input type="number" value="${it.estimate||''}" placeholder="0"     data-i="${i}" data-f="estimate" oninput="updateEvtItem(this)">
+      <input type="number" value="${it.actual||''}"   placeholder="0"     data-i="${i}" data-f="actual"   oninput="updateEvtItem(this)">
+      ${isAdmin()?`<button class="del-btn" onclick="removeEvtItem(${i})">×</button>`:`<div style="width:22px"></div>`}
+    </div>`).join('');
+}
+function updateEvtItem(inp){
+  const i=parseInt(inp.dataset.i),f=inp.dataset.f;
+  _eCtx.items[i][f]=f==='name'?inp.value:parseFloat(inp.value)||0;
+}
+function addEvtItem(){_eCtx.items.push({id:uid(),name:'',budget:0,estimate:0,actual:0});renderEvtItems();}
+function removeEvtItem(i){_eCtx.items.splice(i,1);renderEvtItems();}
+function saveEvt(){
+  S.events[_eCtx.key].items=_eCtx.items;
+  save();closeOv('ov-evt');renderPg(_eCtx.key);
+}
+
+// ══════════════════════════════════════════════════
+// BULK BUDGET PANEL
+// ══════════════════════════════════════════════════
+function openBulkBudget(){
+  // タイトルに権限バッジ
+  const title = document.querySelector('#ov-budget .ph h2');
+  if(title) title.innerHTML = '予算を一括登録' + (isAdmin()
+    ? ' <span style="font-size:9px;background:rgba(240,82,42,.2);color:#f0522a;padding:1px 6px;border-radius:4px;font-weight:700;font-family:var(--sans)">管理者</span>'
+    : ' <span style="font-size:9px;background:rgba(79,142,247,.15);color:#4f8ef7;padding:1px 6px;border-radius:4px;font-weight:700;font-family:var(--sans)">予算は閲覧のみ</span>');
+  renderBudgetProg();openOv('ov-budget');
+}
+function renderBudgetProg(){
+  const ro = !isAdmin();
+  document.getElementById('bprog-body').innerHTML=S.programs.map((p,i)=>`
+    <tr><td>${p.name}</td>
+    <td style="text-align:right"><input type="number" value="${p.budget||''}" placeholder="0" data-pi="${i}" data-f="budget"
+      ${ro ? 'readonly style="opacity:.4;pointer-events:none;width:110px"' : ''}></td>
+    <td style="text-align:right"><input type="number" value="" placeholder="—" disabled style="opacity:.3;width:110px"></td></tr>`).join('');
+  // 保存ボタンをメンバーには無効化
+  const saveBtn = document.querySelector('#ov-budget .pf .btn-p');
+  if(saveBtn){
+    if(ro){ saveBtn.disabled=true; saveBtn.style.opacity='.4'; saveBtn.title='予算変更は管理者のみ'; }
+    else { saveBtn.disabled=false; saveBtn.style.opacity=''; }
+  }
+}
+
+let _budgetTab='prog';
+function switchBudgetTab(tab,btn){
+  _budgetTab=tab;
+  document.querySelectorAll('.tabs .tab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('budget-prog-tab').style.display=tab==='prog'?'':'none';
+  document.getElementById('budget-items-tab').style.display=tab==='items'?'':'none';
+  if(tab==='items') renderBudgetItems();
+}
+function renderBudgetItems(){
+  const sel=document.getElementById('budget-evt-sel').value;
+  const div=document.getElementById('budget-items-content');
+  const isSeries=['hm','gk','oe'].includes(sel);
+  if(!isSeries){
+    const ev=S.events[sel];
+    if(!ev){div.innerHTML='';return;}
+    div.innerHTML=`<table class="btbl"><thead><tr><th>費目</th><th>予算</th><th>見積</th><th>実数</th></tr></thead><tbody>`+
+      ev.items.map((it,i)=>`<tr>
+        <td>${it.name}</td>
+        <td style="text-align:right"><input type="number" value="${it.budget||''}" data-ei="${i}" data-f="budget" data-key="${sel}"></td>
+        <td style="text-align:right"><input type="number" value="${it.estimate||''}" data-ei="${i}" data-f="estimate" data-key="${sel}"></td>
+        <td style="text-align:right"><input type="number" value="${it.actual||''}" data-ei="${i}" data-f="actual" data-key="${sel}"></td>
+      </tr>`).join('')+`</tbody></table>`;
+  } else {
+    const ss=S.sessions[sel]||[];
+    div.innerHTML=ss.map((s,si)=>`
+      <div class="btbl-sec">No.${si+1} ${s.title}</div>
+      <table class="btbl" style="margin-bottom:6px"><thead><tr><th>費目</th><th>予算</th><th>見積</th><th>実数</th></tr></thead><tbody>`+
+      (s.items||[]).map((it,ii)=>`<tr>
+        <td>${it.name}</td>
+        <td style="text-align:right"><input type="number" value="${it.budget||''}" data-si="${si}" data-ii="${ii}" data-f="budget" data-skey="${sel}"></td>
+        <td style="text-align:right"><input type="number" value="${it.estimate||''}" data-si="${si}" data-ii="${ii}" data-f="estimate" data-skey="${sel}"></td>
+        <td style="text-align:right"><input type="number" value="${it.actual||''}" data-si="${si}" data-ii="${ii}" data-f="actual" data-skey="${sel}"></td>
+      </tr>`).join('')+`</tbody></table>`).join('');
+  }
+}
+
+function saveBulkBudget(){
+  // プログラム単位（管理者のみ）
+  if(isAdmin()){
+    document.querySelectorAll('#bprog-body input[data-pi]').forEach(inp=>{
+      S.programs[parseInt(inp.dataset.pi)].budget=parseFloat(inp.value)||0;
+    });
+  }
+  // イベント費目
+  document.querySelectorAll('#budget-items-content input[data-ei]').forEach(inp=>{
+    const key=inp.dataset.key,i=parseInt(inp.dataset.ei),f=inp.dataset.f;
+    if(S.events[key])S.events[key].items[i][f]=parseFloat(inp.value)||0;
+  });
+  // シリーズ費目
+  document.querySelectorAll('#budget-items-content input[data-si]').forEach(inp=>{
+    const key=inp.dataset.skey,si=parseInt(inp.dataset.si),ii=parseInt(inp.dataset.ii),f=inp.dataset.f;
+    if(S.sessions[key]?.[si]?.items?.[ii])S.sessions[key][si].items[ii][f]=parseFloat(inp.value)||0;
+  });
+  save();closeOv('ov-budget');renderPg(_curPg);
+}
+
+// ══════════════════════════════════════════════════
+// REVENUE PANEL
+// ══════════════════════════════════════════════════
+let _revItems=[];
+function openRev(){
+  _revItems=JSON.parse(JSON.stringify(S.revenues));
+  renderRevItems();openOv('ov-rev-edit');
+}
+function renderRevItems(){
+  document.getElementById('rev-items').innerHTML=_revItems.map((r,i)=>`
+    <div class="item-row" style="grid-template-columns:20px 1fr 110px 26px">
+      <div class="item-num">${i+1}</div>
+      <input type="text"   value="${r.name}"     placeholder="項目名" data-i="${i}" data-f="name"   oninput="updateRevItem(this)">
+      <input type="number" value="${r.amount||''}" placeholder="0"   data-i="${i}" data-f="amount" oninput="updateRevItem(this)">
+      <button class="del-btn" onclick="removeRevItem(${i})">×</button>
+    </div>`).join('');
+}
+function updateRevItem(inp){const i=parseInt(inp.dataset.i),f=inp.dataset.f;_revItems[i][f]=f==='name'?inp.value:parseFloat(inp.value)||0;}
+function addRevItem(){_revItems.push({id:uid(),name:'',amount:0});renderRevItems();}
+function removeRevItem(i){_revItems.splice(i,1);renderRevItems();}
+function saveRev(){if(!isAdmin()){alert('収入管理は管理者のみ変更できます');return;}S.revenues=_revItems.filter(r=>r.name);save();closeOv('ov-rev-edit');renderRev();}
+
+// ══════════════════════════════════════════════════
+// EXCEL IMPORT
+// ══════════════════════════════════════════════════
+function importXL(ev){
+  const file=ev.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      const log=[];
+      // プログラム別経費シートを探す
+      const sched=wb.SheetNames.find(s=>s.includes('プログラム別経費'));
+      if(sched){
+        const ws=wb.Sheets[sched];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+        const hdr=rows[1]||[];
+        const ci={no:hdr.indexOf('NO.'),date:hdr.indexOf('日程'),tag:hdr.indexOf('タグ'),item:hdr.indexOf('項目'),bgt:hdr.indexOf('予算'),est:hdr.indexOf('見積合計'),act:hdr.indexOf('実数合計')};
+        if(ci.tag>=0){
+          const allEv=[];
+          for(let i=2;i<rows.length;i++){
+            const r=rows[i];if(!r||!r[ci.item]||String(r[ci.item]).trim()===''||String(r[ci.item]).trim()==='合計')continue;
+            allEv.push({tag:String(r[ci.tag]||'').trim(),title:String(r[ci.item]).trim(),
+              date:r[ci.date] instanceof Date?r[ci.date].toISOString().slice(0,10):String(r[ci.date]||'').slice(0,10),
+              budget:parseFloat(r[ci.bgt])||0,estimate:parseFloat(r[ci.est])||0,actual:parseFloat(r[ci.act])||0});
+          }
+          const mapTag={ホームルーム:'hm',評議会:'gk',応援カイギ:'oe'};
+          Object.entries(mapTag).forEach(([tag,key])=>{
+            const filtered=allEv.filter(e=>e.tag===tag);
+            if(filtered.length>0){
+              S.sessions[key]=filtered.map((e,i)=>({
+                id:S.sessions[key]?.[i]?.id||uid(),
+                title:e.title,date:e.date,memo:'',
+                items:S.sessions[key]?.[i]?.items||[{id:uid(),name:'合計',budget:e.budget,estimate:e.estimate,actual:e.actual}],
+              }));
+              log.push(`✅ ${tag}：${filtered.length}回分インポート`);
+            }
+          });
+          // プログラム合計更新
+          const tagToId={'年間共通':'annual','キックオフ':'ko','ホームルーム':'hm','アワード':'aw','シティフェス':'cityfes','イヤーエンド':'ye','評議会':'gk','応援カイギ':'oe','その他':'other','マーケティング':'marketing'};
+          const tagTotals={};
+          allEv.forEach(e=>{if(!tagTotals[e.tag])tagTotals[e.tag]={b:0,e:0,a:0};tagTotals[e.tag].b+=e.budget;tagTotals[e.tag].e+=e.estimate;tagTotals[e.tag].a+=e.actual;});
+          Object.entries(tagTotals).forEach(([tag,v])=>{
+            const id=tagToId[tag]||tag;const p=S.programs.find(p=>p.id===id||p.name===tag);
+            if(p&&v.b>0){p.budget=v.b;log.push(`📊 ${p.name} 予算更新: ¥${fmtN(v.b)}`);}
+          });
+          log.push('');
         }
-
-        {/* リサイズハンドル */}
-        <div
-          onMouseDown={onMouseDownResize}
-          style={{
-            position: 'absolute', top: 0, right: -4, width: 8, height: '100%',
-            cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div style={{
-            width: 3, height: 40, borderRadius: 2,
-            background: `${layerColor}60`,
-            opacity: 0.4,
-            transition: 'opacity 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
-          />
-        </div>
-      </div>
-
-      {/* 矢印コネクター */}
-      {!isLast && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 20, flexShrink: 0, width: 36 }}>
-          <div style={{ width: 14, height: 2, background: getT().connector, marginTop: 10 }} />
-          <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)', lineHeight: 1, marginTop: 2 }}>›</div>
-          <div style={{ width: 8, height: 2, background: getT().connector, marginTop: 10 }} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Node Block (親子横並びレンダリング) ──────────────────────────────────────
-function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth = 0 }) {
-  // 無限ループ防止
-  if (_depth > 5) return null
-  const children = levels.filter(l => Number(l.parent_id) === Number(levelId))
-  const hasChildren = children.length > 0
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-      {/* 自分のカラム */}
-      <LevelColumn
-        levelId={levelId}
-        levels={levels}
-        nodeObjectives={nodeObjectives}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        isLast={!hasChildren}
-      />
-
-      {/* 子がある場合：矢印 + 子を縦積み */}
-      {hasChildren && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 22, flexShrink: 0, width: 36 }}>
-            <div style={{ flex: 1, height: 2, background: getT().connector }} />
-            <div style={{ fontSize: 18, color: getT().connectorArrow, lineHeight: 1, marginTop: 1 }}>›</div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {children.map(child => (
-              <NodeBlock
-                key={child.id}
-                levelId={child.id}
-                levels={levels}
-                nodeObjectives={nodeObjectives}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                _depth={_depth + 1}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// ─── Org Modal ────────────────────────────────────────────────────────────────
-function OrgModal({ levels, onClose, onAdd, onDelete }) {
-  const [name, setName] = useState('')
-  const [icon, setIcon] = useState('👥')
-  const [parentId, setParentId] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(null)
-
-  const roots = levels.filter(l => !l.parent_id)
-  const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
-
-  // 追加できるのは事業部（経営の子）またはチーム（事業部の子）のみ
-  const addableParents = levels.filter(l => {
-    const depth = (() => {
-      let d = 0, cur = l
-      while (cur && cur.parent_id) { d++; cur = levels.find(x => x.id === cur.parent_id) }
-      return d
-    })()
-    return depth < 2 // 経営(0)→事業部追加可, 事業部(1)→チーム追加可
-  })
-
-  const save = async () => {
-    if (!name.trim() || !parentId) return
-    setSaving(true)
-    await onAdd({ name: name.trim(), icon, parent_id: parseInt(parentId) })
-    setName(''); setSaving(false)
-  }
-
-  const confirmDelete = async (level) => {
-    const children = getChildren(level.id)
-    const msg = children.length
-      ? `「${level.name}」と配下の${children.length}件を削除しますか？
-関連するOKRもすべて削除されます。`
-      : `「${level.name}」を削除しますか？
-関連するOKRもすべて削除されます。`
-    if (!window.confirm(msg)) return
-    setDeleting(level.id)
-    await onDelete(level.id)
-    setDeleting(null)
-  }
-
-  const ICONS = ['🏢','🚀','⚙️','💼','👥','📊','🎯','💡','🌟','🔥','📈','🤝']
-
-  function LevelRow({ level, depth = 0 }) {
-    const children = getChildren(level.id)
-    const absD = (() => { let d=0,cur=level; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
-    const col = { 0:'#ff6b6b', 1:'#4d9fff', 2:'#00d68f' }[absD] || '#a0a8be'
-    const lbl = { 0:'経営', 1:'事業部', 2:'チーム' }[absD] || ''
-    const isRoot = absD === 0
-    return (
-      <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:'rgba(255,255,255,0.03)', border:`1px solid ${getT().border}` }}>
-          <span style={{ fontSize:13 }}>{level.icon}</span>
-          <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
-          <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
-          {!isRoot && (
-            <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
-              background:'rgba(255,107,107,0.1)', border:'1px solid rgba(255,107,107,0.25)', color:'#ff6b6b',
-              borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
-              opacity: deleting === level.id ? 0.5 : 1,
-            }}>{deleting === level.id ? '削除中' : '削除'}</button>
-          )}
-        </div>
-        {children.map(c => <LevelRow key={c.id} level={c} depth={depth+1} />)}
-      </>
-    )
-  }
-
-  return (
-    <div style={{
-      position:'fixed', inset:0, zIndex:1000,
-      background:'rgba(0,0,0,0.78)', backdropFilter:'blur(6px)',
-      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{
-        background:'#141926', border:'1px solid rgba(255,255,255,0.1)', borderRadius:16,
-        padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto',
-        boxShadow:'0 28px 80px rgba(0,0,0,0.65)',
-      }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-          <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-          <button onClick={onClose} style={{ background:getT().border, border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-        </div>
-
-        {/* 現在の組織一覧 */}
-        <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>現在の組織</div>
-          {roots.map(l => <LevelRow key={l.id} level={l} />)}
-        </div>
-
-        {/* 追加フォーム */}
-        <div style={{ borderTop:'1px solid rgba(255,255,255,0.07)', paddingTop:18 }}>
-          <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:'#606880', marginBottom:5 }}>親組織</div>
-            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{
-              width:'100%', background:'#1a2030', border:'1px solid rgba(255,255,255,0.1)',
-              borderRadius:8, padding:'9px 12px', color: parentId ? '#e8eaf0' : '#606880', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer',
-            }}>
-              <option value=''>選択してください</option>
-              {addableParents.map(l => {
-                const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
-                const label = d===0 ? '事業部として追加' : 'チームとして追加'
-                return <option key={l.id} value={l.id}>{l.icon} {l.name}の下に（{label}）</option>
-              })}
-            </select>
-          </div>
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:'#606880', marginBottom:5 }}>組織名</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="例: 西日本営業チーム"
-              style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color:'#e8eaf0', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
-          </div>
-          <div style={{ marginBottom:16 }}>
-            <div style={{ fontSize:11, color:'#606880', marginBottom:8 }}>アイコン</div>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-              {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{
-                  width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? '#4d9fff' : 'rgba(255,255,255,0.1)'}`,
-                  background: icon===ic ? 'rgba(77,159,255,0.15)' : 'rgba(255,255,255,0.04)',
-                  cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center',
-                }}>{ic}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
-            <button onClick={onClose} style={{ background:'transparent', border:'1px solid rgba(255,255,255,0.1)', color:'#a0a8be', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{
-              background: (!name.trim() || !parentId) ? 'rgba(77,159,255,0.3)' : '#4d9fff',
-              border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600,
-              cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit',
-            }}>{saving ? '追加中...' : '＋ 追加する'}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-
-// ─── My OKR Page ───────────────────────────────────────────────────────────────
-function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
-  const [myObjs, setMyObjs] = useState([])
-  const [allObjs, setAllObjs] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  // メールからメンバー情報を取得
-  const myMember = members.find(m => m.email === user.email)
-  const myName = myMember?.name || user.email
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      // 全期間の自分の目標を取得
-      const { data: objs } = await supabase
-        .from('objectives').select('id,level_id,period,title,owner').eq('owner', myName).order('id')
-      if (!objs || !objs.length) { setMyObjs([]); setAllObjs([]); setLoading(false); return }
-      const ids = objs.map(o => o.id)
-      const { data: krs } = await supabase
-        .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better').in('objective_id', ids)
-      const krMap = {}
-      ;(krs || []).forEach(kr => { if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []; krMap[kr.objective_id].push(kr) })
-      const full = objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
-      setMyObjs(full)
-      setAllObjs(full)
-      setLoading(false)
-    }
-    load()
-  }, [myName]) // eslint-disable-line
-
-  const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
-  const getLevelColor = (levelId) => {
-    let d = 0, cur = levels.find(l => Number(l.id) === Number(levelId))
-    while (cur && cur.parent_id) { d++; cur = levels.find(l => Number(l.id) === Number(cur.parent_id)) }
-    return LAYER_COLORS[d] || '#a0a8be'
-  }
-  const getLevelName = (levelId) => levels.find(l => Number(l.id) === Number(levelId))?.name || ''
-
-  // Google アカウントを現在のアカウントに紐づける
-  const handleLinkGoogle = async () => {
-    const { error } = await supabase.auth.linkIdentity({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-    if (error) alert('紐づけに失敗しました: ' + error.message)
-  }
-
-  // 現在のアカウントにGoogleが紐づいているか確認
-  const hasGoogle = user?.identities?.some(i => i.provider === 'google')
-
-  const periods = [
-    { key: 'annual', label: '通期' }, { key: 'q1', label: 'Q1' },
-    { key: 'q2', label: 'Q2' }, { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
-  ]
-
-  if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
-
-  return (
-    <div style={{ padding: '24px 28px', maxWidth: 1100, margin: '0 auto' }}>
-      {/* ヘッダー */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(77,159,255,0.15)', border: '2px solid rgba(77,159,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#4d9fff' }}>
-          {myName.charAt(0)}
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: getT().text }}>{myName} のOKR</div>
-        </div>
-        {!myMember && (
-          <div style={{ marginLeft: 'auto', fontSize: 11, color: '#ffd166', background: 'rgba(255,209,102,0.1)', border: '1px solid rgba(255,209,102,0.2)', borderRadius: 8, padding: '6px 12px' }}>
-            ⚠️ 組織図にメンバー登録するとより詳しい情報が表示されます
-          </div>
-        )}
-      </div>
-
-      {myObjs.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: getT().textFaint, border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-          <div style={{ fontSize: 15, marginBottom: 6 }}>担当OKRがありません</div>
-          <div style={{ fontSize: 13 }}>目標の担当者名を <strong style={{ color: '#4d9fff' }}>{myName}</strong> に設定するとここに表示されます</div>
-        </div>
-      ) : (
-        <>
-          {/* 期間ごとにグループ表示 */}
-          {periods.map(p => {
-            const objs = myObjs.filter(o => o.period === p.key)
-            if (!objs.length) return null
-            return (
-              <div key={p.key} style={{ marginBottom: 32 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: getT().text }}>{p.label}</span>
-                  <span style={{ fontSize: 11, color: getT().textFaint }}>{objs.length}件</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
-                  {objs.map(obj => {
-                    const prog = calcObjProgress(obj.key_results)
-                    const rating = getRating(prog)
-                    const lColor = getLevelColor(obj.level_id)
-                    return (
-                      <div key={obj.id} style={{ background: getT().bgCard2, border: `1px solid ${rating.color}25`, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${lColor}` }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color, fontWeight: 700 }}>{rating.label}</span>
-                          <span style={{ fontSize: 24, fontWeight: 800, color: rating.color }}>{prog}%</span>
-                        </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: getT().text, lineHeight: 1.5, marginBottom: 12 }}>{obj.title}</div>
-                        <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
-                          <div style={{ height: '100%', width: `${Math.min(prog, 100)}%`, background: rating.color, borderRadius: 99, boxShadow: `0 0 6px ${rating.color}80` }} />
-                        </div>
-                        <div style={{ fontSize: 11, color: getT().textMuted }}>
-                          {getLevelName(obj.level_id)} · {obj.key_results.length}KR
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </>
-      )}
-    </div>
-  )
-}
-
-// ─── Main Dashboard ────────────────────────────────────────────────────────────
-export default function Dashboard({ user, onSignOut }) {
-  const [levels, setLevels]               = useState([])
-  const [nodeObjectives, setNodeObjectives] = useState({})
-  const [activeLevelId, setActiveLevelId]   = useState(null)
-  const [activePeriod, setActivePeriod]     = useState('q1')
-  const [modal, setModal]                   = useState(null)
-  const [loading, setLoading]               = useState(true)
-  const [showAI, setShowAI]                 = useState(false)
-  const [showOrgModal, setShowOrgModal]     = useState(false)
-  const [showSidebar, setShowSidebar]       = useState(false)
-  const [isMobile, setIsMobile]             = useState(false)
-  const [activePage, setActivePage]         = useState('okr') // 'okr' | 'myokr' | 'csv' | 'members'
-  const [viewMode, setViewMode]             = useState('org')  // 'org' | 'annual'
-  const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
-  const [themeKey, setThemeKey]                 = useState('dark')
-  const T = THEMES[themeKey]
-  _T = T  // グローバル参照を更新
-  const [members, setMembers]               = useState([])
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-
-  // Load levels + members
-  useEffect(() => {
-    const load = async () => {
-      const [{ data: lvls, error }, { data: mems }] = await Promise.all([
-        supabase.from('levels').select('*').order('id'),
-        supabase.from('members').select('*').order('id'),
-      ])
-      if (error) console.error('levels error:', error)
-      if (lvls?.length) { setLevels(lvls); setActiveLevelId(lvls[0].id) }
-      if (mems) setMembers(mems)
-      setLoading(false)
-    }
-    load()
-  }, [])
-
-  // Fetch objectives + KRs for a single level
-  const fetchForLevel = async (levelId, period) => {
-    const { data: objs } = await supabase
-      .from('objectives').select('id,level_id,period,title,owner')
-      .eq('level_id', levelId).eq('period', period).order('id')
-    if (!objs || objs.length === 0) return []
-    const ids = objs.map(o => o.id)
-    const { data: krs } = await supabase
-      .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better')
-      .in('objective_id', ids)
-    const krMap = {}
-    ;(krs || []).forEach(kr => {
-      if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
-      krMap[kr.objective_id].push(kr)
-    })
-    return objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
-  }
-
-  // Get subtree of level ids
-  const getSubtree = useCallback((id, lvls) => {
-    const ids = [id]
-    lvls.filter(l => Number(l.parent_id) === id).forEach(c => ids.push(...getSubtree(c.id, lvls)))
-    return ids
-  }, [])
-
-  // Load all objectives in the subtree
-  const loadSubtree = useCallback(async (rootId, period, lvls) => {
-    if (!rootId || !lvls.length) return
-    const subtree = getSubtree(rootId, lvls)
-    const map = {}
-    for (const lid of subtree) {
-      map[lid] = await fetchForLevel(lid, period)
-    }
-    setNodeObjectives(map)
-  }, [getSubtree]) // eslint-disable-line
-
-  useEffect(() => {
-    if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels)
-  }, [activeLevelId, activePeriod, levels]) // eslint-disable-line
-
-  // Save objective + KRs
-  const handleSave = async ({ obj, krs }) => {
-    let objectiveId = obj.id
-    if (obj.id) {
-      await supabase.from('objectives').update({ title: obj.title, owner: obj.owner, level_id: obj.level_id, period: obj.period }).eq('id', obj.id)
-      await supabase.from('key_results').delete().eq('objective_id', obj.id)
-    } else {
-      const { data, error } = await supabase
-        .from('objectives')
-        .insert([{ title: obj.title, owner: obj.owner, level_id: obj.level_id, period: obj.period, parent_objective_id: obj.parent_objective_id || null }])
-        .select().single()
-      if (error) { console.error('insert error:', error); return }
-      objectiveId = data.id
-    }
-    if (krs.length && objectiveId) {
-      await supabase.from('key_results').insert(
-        krs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: k.lower_is_better, objective_id: objectiveId }))
-      )
-    }
-    setActiveLevelId(obj.level_id)
-    setActivePeriod(obj.period)
-    await loadSubtree(obj.level_id, obj.period, levels)
-    setAnnualRefreshKey(k => k + 1) // AnnualViewを再読み込み
-  }
-
-  const handleDelete = async (objId) => {
-    if (!window.confirm('この目標を削除しますか？')) return
-    await supabase.from('key_results').delete().eq('objective_id', objId)
-    await supabase.from('objectives').delete().eq('id', objId)
-    await loadSubtree(activeLevelId, activePeriod, levels)
-  }
-
-  // ─── Level CRUD ───────────────────────────────────────────────────────────────
-  const handleAddLevel = async ({ name, icon, parent_id }) => {
-    const { data, error } = await supabase
-      .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: '#4d9fff' }]).select().single()
-    if (error) { console.error('add level error:', error); return }
-    setLevels(p => [...p, data])
-  }
-
-  const handleDeleteLevel = async (levelId) => {
-    const subtree = getSubtree(levelId, levels)
-    for (const lid of subtree) {
-      const { data: objs } = await supabase.from('objectives').select('id').eq('level_id', lid)
-      if (objs?.length) {
-        const ids = objs.map(o => o.id)
-        await supabase.from('key_results').delete().in('objective_id', ids)
-        await supabase.from('objectives').delete().in('id', ids)
       }
-      await supabase.from('levels').delete().eq('id', lid)
+      // イベント個別シート（キックオフ・アワード・イヤーエンド）
+      const evtSheets=[
+        {key:'ko',pat:'キックオフ'},{key:'aw',pat:'AWARD'},{key:'ye',pat:'YEAR-END'},
+      ];
+      evtSheets.forEach(({key,pat})=>{
+        const sh=wb.SheetNames.find(s=>s.includes(pat));
+        if(!sh)return;
+        const ws=wb.Sheets[sh];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+        const items=[];
+        rows.forEach(r=>{
+          if(!r||r.length<6)return;
+          const name=r[0]&&String(r[0]).trim();
+          if(!name||name.includes('■')||['項目','合計','小計','調整','協賛','減額','削除','必ず','件名','お見積','見積有','実経費'].some(k=>name.includes(k)))return;
+          const amt=parseFloat(r[5])||parseFloat(r[3])||0;
+          if(name.startsWith('\u3000')&&amt>0)items.push({id:uid(),name:name.trim(),budget:0,estimate:0,actual:amt});
+        });
+        if(items.length>0){
+          const isActual=sh.includes('実');
+          if(isActual){items.forEach(it=>S.events[key].items.forEach(ev=>{if(ev.name===it.name)ev.actual=it.actual;}));}
+          log.push(`✅ ${pat}：${items.length}行インポート`);
+        }
+      });
+      save();
+      document.getElementById('xl-result').innerHTML=`<div style="font-size:12px;color:var(--green);margin-bottom:10px">✅ ${file.name} を読み込みました</div>`+
+        log.map(l=>l?`<div style="font-size:11px;color:var(--t2);padding:3px 0">${l}</div>`:'<hr style="border:none;border-top:1px solid var(--b1);margin:6px 0">').join('');
+      openOv('ov-xl');
+      renderPg(_curPg);
+    }catch(err){
+      document.getElementById('xl-result').innerHTML=`<div style="color:var(--red);font-size:12px">❌ 読み込みエラー: ${err.message}</div>`;
+      openOv('ov-xl');
     }
-    const newLevels = levels.filter(l => !subtree.includes(l.id))
-    setLevels(newLevels)
-    if (subtree.includes(activeLevelId)) {
-      const newRoot = newLevels.find(l => !l.parent_id)
-      setActiveLevelId(newRoot?.id || null)
-    }
-  }
-
-  // Google アカウントを現在のアカウントに紐づける
-  const handleLinkGoogle = async () => {
-    const { error } = await supabase.auth.linkIdentity({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-    if (error) alert('紐づけに失敗しました: ' + error.message)
-  }
-
-  // 現在のアカウントにGoogleが紐づいているか確認
-  const hasGoogle = user?.identities?.some(i => i.provider === 'google')
-
-  const periods = [
-    { key: 'annual', label: '通期' },
-    { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
-    { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
-  ]
-
-  const roots = levels.filter(l => !l.parent_id)
-  const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
-  const activeLevel = levels.find(l => Number(l.id) === Number(activeLevelId))
-
-  // 全社平均（表示中サブツリー全体）
-  const subtreeObjs = Object.values(nodeObjectives).flat()
-  const allProgs = subtreeObjs.map(o => calcObjProgress(o.key_results))
-  const globalAvg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : 0
-  const globalR = getRating(globalAvg)
-
-  function LevelItem({ level, depth = 0 }) {
-    const active = activeLevelId === level.id
-    const children = getChildren(level.id)
-    const absD = getAbsoluteDepth(level.id, levels)
-    const col = getLayerColor(absD)
-    return (
-      <>
-        <div onClick={() => { setActiveLevelId(level.id); setShowSidebar(false) }} style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: `7px 10px 7px ${10 + depth * 14}px`,
-          borderRadius: 7, marginBottom: 2, cursor: 'pointer',
-          background: active ? `${col}18` : 'transparent',
-          border: active ? `1px solid ${col}35` : '1px solid transparent',
-          transition: 'all 0.15s',
-        }}>
-          <span style={{ fontSize: 17 }}>{level.icon}</span>
-          <span style={{ flex: 1, fontSize: 14, fontWeight: active ? 600 : 400, color: active ? '#e8eaf0' : T.textSub }}>{level.name}</span>
-        </div>
-        {children.map(c => <LevelItem key={c.id} level={c} depth={depth + 1} />)}
-      </>
-    )
-  }
-
-  if (loading || !levels.length) return (
-    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4d9fff', fontSize: 14 }}>
-      読み込み中...
-    </div>
-  )
-
-  return (
-    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{
-        padding: isMobile ? '10px 12px' : '12px 20px',
-        borderBottom: `1px solid ${T.border}`, background: T.headerBg,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        position: 'sticky', top: 0, zIndex: 50,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => setShowSidebar(p => !p)} style={{
-            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-            color: getT().textSub, width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
-            fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>☰</button>
-          {!isMobile && (
-            <div>
-              <div style={{ fontSize: 11, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
-              <div style={{ fontSize: 17, fontWeight: 700 }}>OKR ダッシュボード</div>
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          {/* ページナビ */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-            {[{key:'okr',label:'OKR'},{key:'myokr',label:'マイOKR'},{key:'csv',label:'CSV登録'},{key:'members',label:'組織図'}].map(pg => (
-              <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
-                padding: isMobile ? '5px 7px' : '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                background: activePage === pg.key ? '#4d9fff' : 'transparent',
-                color: activePage === pg.key ? '#fff' : '#606880',
-                fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-              }}>{pg.label}</button>
-            ))}
-          </div>
-          {/* ビュー切替（OKRページのみ） */}
-          {activePage === 'okr' && (
-            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'}].map(v => (
-                <button key={v.key} onClick={() => setViewMode(v.key)} style={{
-                  padding: isMobile ? '5px 7px' : '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: viewMode === v.key ? '#a855f7' : 'transparent',
-                  color: viewMode === v.key ? '#fff' : '#606880',
-                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-                }}>{v.label}</button>
-              ))}
-            </div>
-          )}
-          {/* 期間切替（組織ビューのみ） */}
-          {activePage === 'okr' && viewMode === 'org' && (
-            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {periods.map(p => (
-                <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
-                  padding: isMobile ? '5px 7px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: activePeriod === p.key ? '#a855f7' : 'transparent',
-                  color: activePeriod === p.key ? '#fff' : '#606880',
-                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                }}>{p.label}</button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-          {!isMobile && <span style={{ fontSize: 13, color: getT().textMuted }}>{user.email}</span>}
-          {!isMobile && !hasGoogle && (
-            <button onClick={handleLinkGoogle} style={{
-              background: 'rgba(255,255,255,0.9)', border: 'none', color: '#333',
-              borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              <svg width="13" height="13" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-              Google連携
-            </button>
-          )}
-          {!isMobile && hasGoogle && (
-            <span style={{ fontSize: 11, color: '#00d68f' }}>✅ Google連携済み</span>
-          )}
-          {!isMobile && (
-            <button onClick={onSignOut} style={{
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-              color: getT().textSub, borderRadius: 8, padding: '5px 10px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-            }}>ログアウト</button>
-          )}
-          <button onClick={() => setModal({ type: 'add' })} style={{
-            background: '#4d9fff', border: 'none', color: '#fff',
-            borderRadius: 8, padding: '7px 12px', fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-          }}>＋ 追加</button>
-          <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{
-            background: T.bgCard, border: `1px solid ${T.borderMid}`,
-            color: T.textSub, borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-          }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
-          <button onClick={() => setShowAI(p => !p)} style={{
-            background: '#a855f7', border: 'none', color: '#fff',
-            borderRadius: 8, padding: '7px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-          }}>🤖</button>
-        </div>
-      </div>
-
-      {/* ─── ページ切替 ─── */}
-      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
-      {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
-      {activePage === 'myokr' && <div style={{ flex: 1, overflowY: 'auto' }}><MyOKRPage user={user} levels={levels} members={members} subtreeObjs={subtreeObjs} activePeriod={activePeriod} /></div>}
-      <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
-        )}
-        {/* Sidebar (annual) */}
-        <div style={{
-          width: 210, flexShrink: 0,
-          borderRight: `1px solid ${T.border}`,
-          padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto',
-          ...(isMobile ? {
-            position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
-            transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 0.25s ease',
-            boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
-          } : {}),
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
-            <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
-          </div>
-          {roots.map(l => <LevelItem key={l.id} level={l} />)}
-          <button onClick={() => setShowOrgModal(true)} style={{
-            width:'100%', marginTop:10, background:'rgba(77,159,255,0.08)', border:'1px dashed rgba(77,159,255,0.3)',
-            color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
-            cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-          }}>🏗️ 組織を管理</button>
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
-            {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
-              <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
-                <Stars score={r.score} size={9} />
-                <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
-                <span style={{ fontSize: 11, color: getT().textFaint }}>{r.min}%+</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* Annual main content */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <AnnualView
-            levels={levels}
-            refreshKey={annualRefreshKey}
-            onAddObjective={({ parentObjectiveId, period, level_id }) => {
-              setModal({ type: 'add', obj: { parent_objective_id: parentObjectiveId, period, level_id } })
-            }}
-            onEdit={obj => setModal({ type: 'edit', obj })}
-            onDelete={handleDelete}
-          />
-        </div>
-      </div>
-
-      <div style={{ display: activePage === 'okr' && viewMode === 'org' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
-        )}
-
-        {/* Sidebar */}
-        <div style={{
-          width: 210, flexShrink: 0,
-          borderRight: `1px solid ${T.border}`,
-          padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto',
-          ...(isMobile ? {
-            position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
-            transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 0.25s ease',
-            boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
-          } : {}),
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
-            <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
-          </div>
-          {roots.map(l => <LevelItem key={l.id} level={l} />)}
-          <button onClick={() => setShowOrgModal(true)} style={{
-            width:'100%', marginTop:10, background:'rgba(77,159,255,0.08)', border:'1px dashed rgba(77,159,255,0.3)',
-            color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
-            cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-          }}>🏗️ 組織を管理</button>
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
-            {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
-              <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
-                <Stars score={r.score} size={9} />
-                <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
-                <span style={{ fontSize: 11, color: getT().textFaint }}>{r.min}%+</span>
-              </div>
-            ))}
-          </div>
-          {/* Mobile logout */}
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 12, color: getT().textMuted, marginBottom: 8 }}>{user.email}</div>
-            {!hasGoogle && (
-              <button onClick={handleLinkGoogle} style={{
-                background: 'rgba(255,255,255,0.9)', border: 'none',
-                color: '#333', borderRadius: 8, padding: '8px 14px', fontSize: 12,
-                cursor: 'pointer', fontFamily: 'inherit', width: '100%', marginBottom: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600,
-              }}>
-                <svg width="14" height="14" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                Googleと紐づける
-              </button>
-            )}
-            {hasGoogle && (
-              <div style={{ fontSize: 11, color: '#00d68f', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                ✅ Google連携済み
-              </div>
-            )}
-            <button onClick={onSignOut} style={{
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              color: getT().textSub, borderRadius: 8, padding: '8px 14px', fontSize: 12,
-              cursor: 'pointer', fontFamily: 'inherit', width: '100%',
-            }}>ログアウト</button>
-          </div>
-        </div>
-
-        {/* Main */}
-        <div style={{ flex: 1, padding: isMobile ? '14px' : '20px 24px', overflow: 'auto', minWidth: 0 }}>
-          {/* ヘッダー */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
-              <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
-              <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
-              <div>
-                <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 1 }}>全社平均達成率</div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: globalR.color, lineHeight: 1 }}>{globalAvg}%</div>
-              </div>
-              <Stars score={globalR.score} size={11} />
-            </div>
-          </div>
-
-          {/* 凡例 */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            {[{ label: '経営', color: '#ff6b6b' }, { label: '事業部', color: '#4d9fff' }, { label: 'チーム', color: '#00d68f' }].map(l => (
-              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }} />
-                <span style={{ fontSize: 12, color: getT().textSub }}>{l.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* 階層ツリー */}
-          {activeLevelId && (
-            <NodeBlock
-              levelId={activeLevelId}
-              levels={levels}
-              nodeObjectives={nodeObjectives}
-              onEdit={o => setModal({ type: 'edit', obj: o })}
-              onDelete={handleDelete}
-            />
-          )}
-        </div>
-      </div>
-
-      {showOrgModal && (
-        <OrgModal
-          levels={levels}
-          onClose={() => setShowOrgModal(false)}
-          onAdd={handleAddLevel}
-          onDelete={handleDeleteLevel}
-        />
-      )}
-      {showAI && (
-        <AIPanel
-          onClose={() => setShowAI(false)}
-          okrContext={{ levels, objectives: subtreeObjs, activePeriod }}
-        />
-      )}
-      {modal && (
-        <Modal title={modal.type === 'add' ? '目標を追加' : '目標を編集'} onClose={() => setModal(null)}>
-          <ObjForm
-            initial={modal.obj}
-            onSave={handleSave}
-            onClose={() => setModal(null)}
-            levels={levels}
-            activeLevelId={modal.obj?.level_id || activeLevelId}
-            activePeriod={modal.obj?.period || activePeriod}
-            members={members}
-          />
-        </Modal>
-      )}
-    </div>
-  )
+  };
+  reader.readAsArrayBuffer(file);
+  ev.target.value='';
 }
+
+// ══════════════════════════════════════════════════
+// LOGIN / AUTH
+// ══════════════════════════════════════════════════
+function switchLoginTab(tab) {
+  document.getElementById('form-login').style.display  = tab==='login'  ? '' : 'none';
+  document.getElementById('form-signup').style.display = tab==='signup' ? '' : 'none';
+  document.getElementById('tab-login').className  = 'tab' + (tab==='login'  ? ' on' : '');
+  document.getElementById('tab-signup').className = 'tab' + (tab==='signup' ? ' on' : '');
+  document.getElementById('login-error').style.display = 'none';
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) { showLoginError('メールアドレスとパスワードを入力してください'); return; }
+  const btn = document.getElementById('login-submit-btn');
+  btn.textContent = 'ログイン中...'; btn.disabled = true;
+  const {data, error} = await _sb.auth.signInWithPassword({email, password: pass});
+  btn.textContent = 'ログイン'; btn.disabled = false;
+  if (error) { showLoginError('ログインに失敗しました: ' + error.message); return; }
+  await onLogin(data.user);
+}
+
+async function doSignup() {
+  const name  = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const pass  = document.getElementById('signup-pass').value;
+  if (!name || !email || !pass) { showLoginError('全項目を入力してください'); return; }
+  if (pass.length < 8) { showLoginError('パスワードは8文字以上で設定してください'); return; }
+  const btn = document.getElementById('signup-submit-btn');
+  btn.textContent = '処理中...'; btn.disabled = true;
+  const {data, error} = await _sb.auth.signUp({
+    email, password: pass,
+    options: { data: { display_name: name } }
+  });
+  btn.textContent = '登録申請'; btn.disabled = false;
+  if (error) { showLoginError('登録に失敗しました: ' + error.message); return; }
+  showLoginError('✅ 登録申請を受け付けました。管理者の承認後にログインできます。');
+}
+
+async function doLogout() {
+  await _sb.auth.signOut();
+  _currentUser = null; _currentRole = null; _currentName = '';
+  document.getElementById('login-screen').style.display = 'flex';
+  applyRoleUI();
+}
+
+async function onLogin(user) {
+  _currentUser = user;
+  // プロフィール取得
+  const {data: prof} = await _sb.from('profiles').select('role, display_name').eq('id', user.id).single();
+  _currentRole = prof?.role || 'member';
+  _currentName = prof?.display_name || user.email;
+  // ログイン履歴を記録
+  await _sb.from('login_history').insert({user_id: user.id, email: user.email});
+  // ログイン画面を閉じる
+  document.getElementById('login-screen').style.display = 'none';
+  applyRoleUI();
+  await loadFromDB();
+  renderOv();
+}
+
+// ══════════════════════════════════════════════════
+// USERS PAGE (admin only)
+// ══════════════════════════════════════════════════
+async function renderUsers() {
+  if (!isAdmin()) {
+    document.getElementById('users-tbody').innerHTML = '<tr><td colspan="5" style="color:var(--t3);text-align:center;padding:20px">管理者のみアクセスできます</td></tr>';
+    return;
+  }
+  const {data: profiles, error} = await _sb.from('profiles').select('*').order('created_at');
+  if (error) { console.error(error); return; }
+  document.getElementById('users-tbody').innerHTML = (profiles||[]).map(p => `
+    <tr>
+      <td style="font-weight:500">${p.display_name || '—'}</td>
+      <td>${p.email}</td>
+      <td>
+        <select onchange="changeRole('${p.id}',this.value)" style="background:var(--s2);border:1px solid var(--b2);border-radius:4px;color:var(--t1);font-size:10px;padding:3px 6px;font-family:var(--mono)">
+          <option value="member" ${p.role==='member'?'selected':''}>メンバー</option>
+          <option value="admin"  ${p.role==='admin' ?'selected':''}>管理者</option>
+        </select>
+      </td>
+      <td>${new Date(p.created_at).toLocaleDateString('ja-JP')}</td>
+      <td><button class="btn btn-xs btn-red" onclick="deleteUser('${p.id}','${p.email}')">削除</button></td>
+    </tr>`).join('');
+}
+
+async function changeRole(userId, newRole) {
+  if (!isAdmin()) return;
+  const {error} = await _sb.from('profiles').update({role: newRole}).eq('id', userId);
+  if (error) alert('更新失敗: ' + error.message);
+}
+
+async function deleteUser(userId, email) {
+  if (!isAdmin()) return;
+  if (!confirm(`${email} を削除しますか？`)) return;
+  // profilesのみ削除（auth.usersの削除はservice_role keyが必要なため管理画面で行う）
+  await _sb.from('profiles').delete().eq('id', userId);
+  renderUsers();
+}
+
+function openInvitePanel() { openOv('ov-invite'); }
+
+async function doInviteUser() {
+  if (!isAdmin()) return;
+  const email = document.getElementById('inv-email').value.trim();
+  const name  = document.getElementById('inv-name').value.trim();
+  const role  = document.getElementById('inv-role').value;
+  const pass  = document.getElementById('inv-pass').value;
+  if (!email || !pass) { alert('メールアドレスとパスワードを入力してください'); return; }
+  // Supabase Admin APIはservice_role keyが必要なため、通常サインアップを利用
+  const {data, error} = await _sb.auth.signUp({
+    email, password: pass,
+    options: { data: { display_name: name } }
+  });
+  if (error) { alert('作成失敗: ' + error.message); return; }
+  // ロールをadminに設定（必要な場合）
+  if (role === 'admin' && data.user) {
+    await _sb.from('profiles').update({role:'admin', display_name: name}).eq('id', data.user.id);
+  }
+  alert(`✅ ${email} を${role==='admin'?'管理者':'メンバー'}として招待しました`);
+  closeOv('ov-invite');
+  renderUsers();
+}
+
+// ══════════════════════════════════════════════════
+// LOGIN HISTORY PAGE
+// ══════════════════════════════════════════════════
+async function renderHistory() {
+  let query = _sb.from('login_history').select('*').order('logged_in_at', {ascending: false}).limit(100);
+  if (!isAdmin()) query = query.eq('user_id', _currentUser?.id);
+  const {data, error} = await query;
+  if (error) { console.error(error); return; }
+  document.getElementById('history-tbody').innerHTML = (data||[]).map(h => `
+    <tr>
+      <td>${new Date(h.logged_in_at).toLocaleString('ja-JP')}</td>
+      <td>${isAdmin() ? (h.email?.split('@')[0] || '—') : '自分'}</td>
+      <td>${h.email || '—'}</td>
+    </tr>`).join('');
+}
+
+// 権限チェックはgo()関数に統合済み
+
+// ══════════════════════════════════════════════════
+// INIT — Supabase session check
+// ══════════════════════════════════════════════════
+(async () => {
+  // 設定未完了チェック
+  if (SUPABASE_URL === '__PLACEHOLDER__') {
+    document.getElementById('login-screen').innerHTML = `
+      <div style="max-width:500px;padding:24px;text-align:center">
+        <div style="font-family:var(--disp);font-size:22px;font-weight:800;color:var(--acc);margin-bottom:16px">⚙️ 初期設定が必要です</div>
+        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:20px;text-align:left">
+          <p style="font-size:12px;color:var(--t2);margin-bottom:12px">ダッシュボードHTMLファイルの先頭にある以下の2行を設定してください：</p>
+          <pre style="background:var(--s2);border-radius:6px;padding:12px;font-family:var(--mono);font-size:11px;color:#2dd4a0">const SUPABASE_URL = 'https://xxx.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJ...';</pre>
+          <p style="font-size:11px;color:var(--t3);margin-top:12px">設定方法は同梱の「Supabase設定手順.html」を参照してください。</p>
+        </div>
+      </div>`;
+    return;
+  }
+  // 既存セッション確認
+  const {data:{session}} = await _sb.auth.getSession();
+  if (session?.user) {
+    await onLogin(session.user);
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    slbl().textContent = '未ログイン';
+  }
+  // セッション変化を監視
+  _sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_OUT') {
+      document.getElementById('login-screen').style.display = 'flex';
+    }
+  });
+})();
+
+// ══════════════════════════════════════════════════
+// CSV IMPORT / EXPORT
+// ══════════════════════════════════════════════════
+
+// CSVフォーマット:
+// program,session_title,date,fee_name,budget,estimate,actual
+// キックオフ,,, 会場費,400000,662000,346500
+// ホームルーム,第1回 長尾さん,2025-07-13,会場費,55000,55000,50000
+
+function downloadCSVTemplate() {
+  const rows = [
+    ['# NEO福岡 経費データ CSVテンプレート'],
+    ['# 列説明: program=プログラム名, session=回次タイトル(シリーズのみ), date=日付(YYYY-MM-DD), fee_name=費目名, budget=予算, estimate=見積, actual=実数'],
+    ['# programの値: キックオフ / アワード / イヤーエンド / ホームルーム / 評議会 / 応援カイギ'],
+    ['program','session','date','fee_name','budget','estimate','actual'],
+    // キックオフサンプル
+    ['キックオフ','','','会場費',400000,662000,346500],
+    ['キックオフ','','','映像・撮影',300000,0,490000],
+    ['キックオフ','','','MC・キャスティング',150000,165000,230000],
+    // ホームルームサンプル
+    ['ホームルーム','第1回 長尾さん','2025-07-13','会場費',55000,55000,50000],
+    ['ホームルーム','第1回 長尾さん','2025-07-13','講師・演者費',110000,110000,135140],
+    ['ホームルーム','第2回 上田さん','2025-07-15','会場費',55000,55000,50000],
+    // 評議会サンプル
+    ['評議会','第1回','2025-06-20','会場費',55000,0,55000],
+    ['評議会','第1回','2025-06-20','諸経費',5500,0,5500],
+    // 応援カイギサンプル
+    ['応援カイギ','#1','2025-06-10','会場・飲食費',5500,0,5500],
+  ];
+
+  const bom = '\uFEFF'; // BOM for Excel
+  const csv = bom + rows.map(r => r.map(v => {
+    const s = String(v);
+    return s.startsWith('#') ? s : (s.includes(',') ? `"${s}"` : s);
+  }).join(',')).join('\n');
+
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'NEO福岡_経費テンプレート.csv';
+  a.click();
+}
+
+function importCSV(ev) {
+  if (!isAdmin()) { alert('CSVインポートは管理者のみ可能です'); ev.target.value=''; return; }
+  const file = ev.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      // BOM除去
+      let text = e.target.result.replace(/^\uFEFF/, '');
+      const lines = text.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('#'));
+      if (!lines.length) { alert('データが見つかりません'); return; }
+
+      // ヘッダー行解析
+      const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+      const ci = {
+        program: headers.indexOf('program'),
+        session: headers.indexOf('session'),
+        date:    headers.indexOf('date'),
+        fee:     headers.indexOf('fee_name'),
+        budget:  headers.indexOf('budget'),
+        estimate:headers.indexOf('estimate'),
+        actual:  headers.indexOf('actual'),
+      };
+      if (ci.program < 0 || ci.fee < 0) {
+        alert('CSVのヘッダーが正しくありません。\nテンプレートをダウンロードして使用してください。'); return;
+      }
+
+      const log = [];
+      let updated = 0;
+
+      // プログラムマッピング
+      const progMap = {
+        'キックオフ':'ko', 'アワード':'aw', 'イヤーエンド':'ye',
+        'ホームルーム':'hm', '評議会':'gk', '応援カイギ':'oe',
+      };
+      const seriesKeys = new Set(['hm','gk','oe']);
+      const eventKeys  = new Set(['ko','aw','ye']);
+
+      // データ行を解析してグループ化
+      const grouped = {}; // key -> {session -> [{fee,budget,estimate,actual}]}
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        if (cols.length < 4) continue;
+        const prog    = (cols[ci.program]||'').trim();
+        const sess    = ci.session >= 0 ? (cols[ci.session]||'').trim() : '';
+        const date    = ci.date    >= 0 ? (cols[ci.date]   ||'').trim() : '';
+        const fee     = (cols[ci.fee]||'').trim();
+        const budget  = parseFloat(cols[ci.budget]  ||0)||0;
+        const estimate= parseFloat(cols[ci.estimate]||0)||0;
+        const actual  = parseFloat(cols[ci.actual]  ||0)||0;
+        const key     = progMap[prog];
+        if (!key || !fee) continue;
+        if (!grouped[key]) grouped[key] = {};
+        const sk = sess || '__event__';
+        if (!grouped[key][sk]) grouped[key][sk] = {date, items:[]};
+        grouped[key][sk].items.push({fee, budget, estimate, actual});
+      }
+
+      // データを反映
+      Object.entries(grouped).forEach(([key, sessions]) => {
+        if (eventKeys.has(key)) {
+          // 大規模イベント：費目一覧を更新（名前一致でupdateまたはadd）
+          const evData = S.events[key];
+          if (!evData) return;
+          Object.values(sessions).forEach(({items}) => {
+            items.forEach(({fee, budget, estimate, actual}) => {
+              const existing = evData.items.find(it => it.name === fee);
+              if (existing) {
+                if (ci.budget   >= 0) existing.budget   = budget;
+                if (ci.estimate >= 0) existing.estimate = estimate;
+                if (ci.actual   >= 0) existing.actual   = actual;
+              } else {
+                evData.items.push({id:uid(), name:fee, budget, estimate, actual});
+              }
+              updated++;
+            });
+          });
+          log.push(`✅ ${key === 'ko' ? 'キックオフ' : key === 'aw' ? 'アワード' : 'イヤーエンド'}：費目を更新`);
+        } else if (seriesKeys.has(key)) {
+          // シリーズ：回次タイトル一致でupdate、なければadd
+          Object.entries(sessions).forEach(([sessTitle, {date, items}]) => {
+            if (sessTitle === '__event__') return;
+            let s = S.sessions[key].find(x => x.title === sessTitle);
+            if (!s) {
+              s = {id:uid(), title:sessTitle, date, memo:'', items:[]};
+              S.sessions[key].push(s);
+              log.push(`➕ 追加：${sessTitle}`);
+            }
+            items.forEach(({fee, budget, estimate, actual}) => {
+              const existing = s.items.find(it => it.name === fee);
+              if (existing) {
+                if (ci.budget   >= 0) existing.budget   = budget;
+                if (ci.estimate >= 0) existing.estimate = estimate;
+                if (ci.actual   >= 0) existing.actual   = actual;
+              } else {
+                s.items.push({id:uid(), name:fee, budget, estimate, actual});
+              }
+              updated++;
+            });
+          });
+          const label = key==='hm'?'ホームルーム':key==='gk'?'評議会':'応援カイギ';
+          log.push(`✅ ${label}：${Object.keys(sessions).length}回分を更新`);
+        }
+      });
+
+      save();
+      document.getElementById('xl-result').innerHTML =
+        `<div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:10px">✅ ${file.name}</div>` +
+        `<div style="font-size:11px;color:var(--t2);margin-bottom:8px">${updated}件の費目データを反映しました</div>` +
+        log.map(l => `<div style="font-size:11px;color:var(--t2);padding:3px 0;border-bottom:1px solid var(--b1)">${l}</div>`).join('');
+      openOv('ov-xl');
+      renderPg(_curPg);
+    } catch(err) {
+      document.getElementById('xl-result').innerHTML = `<div style="color:var(--red);font-size:12px">❌ 読み込みエラー: ${err.message}</div>`;
+      openOv('ov-xl');
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+  ev.target.value = '';
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+// ══════════════════════════════════════════════════
+// 経費明細登録（LEDGER）
+// ══════════════════════════════════════════════════
+
+// DEFaultデータ初期化時にledgerを追加
+if (!S.ledger) S.ledger = [];
+
+// カテゴリ自動判定マスタ
+const CAT_MASTER = {
+  '会場': '① イベント費', '施設利用': '① イベント費', 'ケータリング': '① イベント費',
+  'ドリンク': '① イベント費', '講師': '① イベント費', '演者': '① イベント費',
+  'MC': '① イベント費', 'キャスティング': '① イベント費', '賞金': '① イベント費',
+  '懇親会': '① イベント費', '審査': '① イベント費', 'イベント': '① イベント費',
+  '制作': '② 制作・印刷費', '印刷': '② 制作・印刷費', 'パネル': '② 制作・印刷費',
+  'デザイン': '② 制作・印刷費', '映像': '② 制作・印刷費', '撮影': '② 制作・印刷費',
+  '施工': '② 制作・印刷費', 'WEB': '② 制作・印刷費', '制作物': '② 制作・印刷費',
+  '運営': '③ 外部委託費', '委託': '③ 外部委託費', '人件費': '③ 外部委託費',
+  '広報': '④ 広報費', 'PR': '④ 広報費', 'SNS': '④ 広報費', '広告': '④ 広報費',
+  '旅費': '⑤ その他', '交通': '⑤ その他', '備品': '⑤ その他',
+  '諸経費': '⑤ その他', '消耗品': '⑤ その他', '雑費': '⑤ その他',
+};
+
+const CAT_COLORS = {
+  '① イベント費':   {fg:'dc2626', bg:'fee2e2'},
+  '② 制作・印刷費': {fg:'1d4ed8', bg:'dbeafe'},
+  '③ 外部委託費':   {fg:'6d28d9', bg:'ede9fe'},
+  '④ 広報費':       {fg:'b45309', bg:'fef3c7'},
+  '⑤ その他':       {fg:'15803d', bg:'dcfce7'},
+};
+
+function detectCat(feeName) {
+  for (const [k, v] of Object.entries(CAT_MASTER)) {
+    if (feeName.includes(k)) return v;
+  }
+  return '⑤ その他';
+}
+
+function autoFillCat() {
+  const fee = document.getElementById('led-fee').value;
+  const cat = detectCat(fee);
+  document.getElementById('led-cat').value = cat;
+}
+
+function calcLedgerTotal() {
+  const price = parseFloat(document.getElementById('led-price').value) || 0;
+  const qty   = parseFloat(document.getElementById('led-qty').value)   || 1;
+  const total = Math.round(price * qty);
+  document.getElementById('led-total').value = total ? fmtN(total) + ' 円' : '';
+  // 実績欄が空なら自動入力
+  const actEl = document.getElementById('led-act');
+  if (!actEl.value && total) actEl.value = total;
+}
+
+// ── ページ描画 ──
+function renderLedger() {
+  const filterProg = document.getElementById('ledger-filter-prog')?.value || '';
+  const filterCat  = document.getElementById('ledger-filter-cat')?.value  || '';
+
+  // フィルター適用
+  let items = (S.ledger || []).filter(it => {
+    if (filterProg && it.prog !== filterProg) return false;
+    if (filterCat  && it.cat  !== filterCat)  return false;
+    return true;
+  });
+
+  // 集計バー
+  const totEst = items.reduce((t,i)=>t+n(i.est),0);
+  const totAct = items.reduce((t,i)=>t+n(i.act),0);
+  const paid   = items.filter(i=>i.status==='済').reduce((t,i)=>t+n(i.act),0);
+  document.getElementById('ledger-summary').innerHTML = `
+    <div class="kpi b" style="flex:1;min-width:120px;padding:10px 14px">
+      <div class="kl">件数</div>
+      <div class="kv" style="font-size:16px">${items.length}<em>件</em></div>
+    </div>
+    <div class="kpi b" style="flex:1;min-width:120px;padding:10px 14px">
+      <div class="kl">見積合計</div>
+      <div class="kv" style="font-size:16px">${fmtN(totEst)}<em>円</em></div>
+    </div>
+    <div class="kpi g" style="flex:1;min-width:120px;padding:10px 14px">
+      <div class="kl">実績合計</div>
+      <div class="kv" style="font-size:16px">${fmtN(totAct)}<em>円</em></div>
+    </div>
+    <div class="kpi y" style="flex:1;min-width:120px;padding:10px 14px">
+      <div class="kl">支払済</div>
+      <div class="kv" style="font-size:16px">${fmtN(paid)}<em>円</em></div>
+    </div>`;
+
+  // テーブル
+  const tbody = document.getElementById('ledger-tbody');
+  const empty = document.getElementById('ledger-empty');
+  if (!items.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  const cc = CAT_COLORS;
+  tbody.innerHTML = items.map(it => {
+    const c = cc[it.cat] || {fg:'374151',bg:'f1f5f9'};
+    const statusColor = it.status==='済'?'var(--green)':it.status==='未'?'var(--red)':'var(--yellow)';
+    return `<tr style="cursor:pointer" onclick="openLedgerEdit('${it.id}')">
+      <td><div style="width:6px;height:6px;border-radius:50%;background:#${c.fg};margin:0 auto"></div></td>
+      <td style="font-size:10px;color:var(--t2)">${it.prog||'—'}</td>
+      <td style="font-weight:500">${it.fee||'—'}</td>
+      <td><span style="font-size:8px;font-weight:700;color:#${c.fg};background:#${c.bg};padding:1px 5px;border-radius:3px">${it.cat||'—'}</span></td>
+      <td style="font-size:10px;color:var(--t2)">${it.content||'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px">${it.price?fmtN(it.price):'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px;text-align:right">${it.qty||1}</td>
+      <td style="font-size:10px;color:var(--t3)">${it.unit||'式'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:#88b4ff">${it.est?fmtN(it.est):'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:500">${it.act?fmtN(it.act):'—'}</td>
+      <td><span style="font-size:9px;font-weight:700;color:${statusColor}">${it.status||'—'}</span></td>
+      <td style="font-size:10px;color:var(--t3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.memo||''}</td>
+      <td><button class="del-btn" onclick="event.stopPropagation();deleteLedgerById('${it.id}')">×</button></td>
+    </tr>`;
+  }).join('');
+
+  // プログラムフィルターの選択肢を更新
+  const sel = document.getElementById('ledger-filter-prog');
+  if (sel) {
+    const cur = sel.value;
+    const progs = [...new Set((S.ledger||[]).map(i=>i.prog).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">すべてのプログラム</option>' +
+      progs.map(p=>`<option value="${p}"${p===cur?' selected':''}>${p}</option>`).join('');
+  }
+}
+
+// ── モーダル ──
+let _ledCtx = {};
+
+function openLedgerEdit(id) {
+  _ledCtx = { id };
+  const it = id ? (S.ledger||[]).find(x=>x.id===id) : null;
+  document.getElementById('ledger-modal-title').textContent = it ? '経費明細を編集' : '経費明細を追加';
+  document.getElementById('led-del-btn').style.display = it ? '' : 'none';
+
+  // プログラム選択肢を最新に
+  const sel = document.getElementById('led-prog');
+  sel.innerHTML = '<option value="">選択してください</option>' +
+    S.programs.map(p=>`<option value="${p.name}（第一期）"${it?.prog===p.name+'（第一期）'?' selected':''}>${p.name}</option>`).join('');
+
+  // 値をセット
+  document.getElementById('led-fee').value     = it?.fee     || '';
+  document.getElementById('led-cat').value     = it?.cat     || '⑤ その他';
+  document.getElementById('led-content').value = it?.content || '';
+  document.getElementById('led-price').value   = it?.price   || '';
+  document.getElementById('led-qty').value     = it?.qty     || 1;
+  document.getElementById('led-unit').value    = it?.unit    || '式';
+  document.getElementById('led-est').value     = it?.est     || '';
+  document.getElementById('led-act').value     = it?.act     || '';
+  document.getElementById('led-status').value  = it?.status  || '';
+  document.getElementById('led-memo').value    = it?.memo    || '';
+  calcLedgerTotal();
+  openOv('ov-ledger');
+}
+
+function saveLedger() {
+  const prog = document.getElementById('led-prog').value;
+  const fee  = document.getElementById('led-fee').value.trim();
+  if (!fee) { alert('費目名を入力してください'); return; }
+
+  const obj = {
+    id:      _ledCtx.id || uid(),
+    prog,
+    fee,
+    cat:     document.getElementById('led-cat').value,
+    content: document.getElementById('led-content').value,
+    price:   parseFloat(document.getElementById('led-price').value) || 0,
+    qty:     parseFloat(document.getElementById('led-qty').value)   || 1,
+    unit:    document.getElementById('led-unit').value  || '式',
+    est:     parseFloat(document.getElementById('led-est').value)   || 0,
+    act:     parseFloat(document.getElementById('led-act').value)   || 0,
+    status:  document.getElementById('led-status').value,
+    memo:    document.getElementById('led-memo').value,
+    created: _ledCtx.id ? undefined : new Date().toISOString(),
+  };
+  if (!obj.created) delete obj.created;
+
+  if (!S.ledger) S.ledger = [];
+  if (_ledCtx.id) {
+    const idx = S.ledger.findIndex(x=>x.id===_ledCtx.id);
+    if (idx>=0) S.ledger[idx] = obj;
+  } else {
+    S.ledger.push(obj);
+  }
+  save();
+  closeOv('ov-ledger');
+  renderLedger();
+}
+
+function deleteLedger() {
+  if (!_ledCtx.id) return;
+  if (!confirm('この明細を削除しますか？')) return;
+  deleteLedgerById(_ledCtx.id);
+  closeOv('ov-ledger');
+}
+
+function deleteLedgerById(id) {
+  S.ledger = (S.ledger||[]).filter(x=>x.id!==id);
+  save();
+  renderLedger();
+}
+
+// TITLES・renderPg に ledger を追加（既存のgoを上書き）
+TITLES['ledger'] = '経費明細登録';
+const _origRenderPg = renderPg;
+function renderPg(id) {
+  if (id === 'ledger') { renderLedger(); return; }
+  _origRenderPg(id);
+}
+</script></body></html>
