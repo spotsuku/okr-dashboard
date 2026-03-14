@@ -290,6 +290,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--sans);display:flex;f
   <button class="nb" onclick="go('ye',this)"><span class="ic">🎉</span>イヤーエンド</button>
   <div class="sb-sec">管理</div>
   <button class="nb" id="nb-budget" onclick="openBulkBudget()"><span class="ic">✏️</span>予算を一括登録</button>
+  <button class="nb" id="nb-defaults" onclick="openSeriesDefaults()"><span class="ic">⚙️</span>デフォルト費目設定</button>
   <button class="nb" onclick="go('ledger',this)"><span class="ic">📝</span>経費明細登録</button>
   <button class="nb" onclick="go('rev',this)"><span class="ic">💰</span>収入管理</button>
   <button class="nb" id="nb-users" onclick="go('users',this)" style="display:none"><span class="ic">👥</span>ユーザー管理</button>
@@ -631,6 +632,58 @@ body{background:var(--bg);color:var(--t1);font-family:var(--sans);display:flex;f
     <div class="pf">
       <button class="btn btn-g" onclick="closeOv('ov-rev-edit')">キャンセル</button>
       <button class="btn btn-p" onclick="saveRev()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- シリーズ デフォルト費目設定 -->
+<div class="ov" id="ov-defaults">
+  <div class="panel wide">
+    <div class="ph">
+      <h2>⚙️ デフォルト費目設定</h2>
+      <button class="xbtn" onclick="closeOv('ov-defaults')">×</button>
+    </div>
+    <div class="pb-body">
+      <p style="font-size:11px;color:var(--t2);margin-bottom:14px">
+        各シリーズで「＋ 追加」したとき、この費目と予算が自動で入力されます。
+      </p>
+      <div class="tabs" id="defaults-tabs" style="flex-wrap:wrap;gap:4px">
+        <button class="tab on" onclick="switchDefaultsTab('hm',this)">🏫 ホームルーム</button>
+        <button class="tab" onclick="switchDefaultsTab('gk',this)">🏛 評議会</button>
+        <button class="tab" onclick="switchDefaultsTab('oe',this)">📣 応援カイギ</button>
+        <button class="tab" onclick="switchDefaultsTab('ko',this)">🚀 キックオフ</button>
+        <button class="tab" onclick="switchDefaultsTab('aw',this)">🏆 アワード</button>
+        <button class="tab" onclick="switchDefaultsTab('ye',this)">🎉 イヤーエンド</button>
+        <button class="tab" onclick="switchDefaultsTab('md',this)">🏟 マッチデイ</button>
+      </div>
+      <div id="defaults-apply-row" style="display:none;margin-bottom:10px">
+        <button class="btn btn-sm" onclick="applyDefaultsToEvent()" style="background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.3);color:var(--blue);font-size:10px">
+          📋 このデフォルトをイベント費目に適用する
+        </button>
+        <span style="font-size:9px;color:var(--t3);margin-left:8px">※既存の費目は保持され、新しい費目が追加されます</span>
+      </div>
+      <div id="defaults-content">
+        <div class="item-hdr">
+          <span></span><span>費目名</span>
+          <span style="text-align:right">デフォルト予算（円）</span>
+          <span style="text-align:right">デフォルト見積（円）</span>
+          <span style="text-align:right">デフォルト実数（円）</span>
+          <span></span>
+        </div>
+        <div id="defaults-items"></div>
+        <button class="add-btn" onclick="addDefaultItem()">＋ 費目を追加</button>
+      </div>
+      <div style="margin-top:14px;padding:10px 12px;background:var(--s2);border-radius:7px;border:1px solid var(--b1)">
+        <div style="font-size:10px;color:var(--t2);margin-bottom:6px">💡 プレビュー：次回追加時の費目合計</div>
+        <div id="defaults-preview" style="font-family:var(--mono);font-size:12px;color:var(--t1)"></div>
+      </div>
+    </div>
+    <div class="pf" style="justify-content:space-between">
+      <button class="btn btn-red btn-sm" onclick="resetDefaults()" style="font-size:9px">リセット</button>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-g" onclick="closeOv('ov-defaults')">キャンセル</button>
+        <button class="btn btn-p" onclick="saveDefaults()">保存する</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2344,4 +2397,351 @@ function showAiCsvError(msg) {
   document.getElementById('ai-csv-error').textContent = msg;
   document.getElementById('ai-csv-title').textContent = '❌ 解析エラー';
 }
+
+// ══════════════════════════════════════════════════
+// シリーズ デフォルト費目設定
+// ══════════════════════════════════════════════════
+
+// デフォルト費目テンプレートの初期値
+const SERIES_DEFAULTS_INIT = {
+  hm: [
+    {id:uid(),name:'会場費',     budget:55000, estimate:0, actual:0},
+    {id:uid(),name:'講師・演者費',budget:110000,estimate:0, actual:0},
+    {id:uid(),name:'備品・消耗品',budget:15000, estimate:0, actual:0},
+    {id:uid(),name:'運営人件費',  budget:0,     estimate:0, actual:0},
+    {id:uid(),name:'旅費交通費',  budget:60000, estimate:0, actual:0},
+    {id:uid(),name:'諸経費',      budget:20000, estimate:0, actual:0},
+  ],
+  gk: [
+    {id:uid(),name:'会場費',  budget:55000,estimate:0,actual:0},
+    {id:uid(),name:'諸経費',  budget:5500, estimate:0,actual:0},
+  ],
+  oe: [
+    {id:uid(),name:'会場・飲食費',budget:5500,estimate:0,actual:0},
+  ],
+};
+
+// S.defaults が未設定なら初期値をセット
+if (!S.defaults) {
+  S.defaults = JSON.parse(JSON.stringify(SERIES_DEFAULTS_INIT));
+}
+
+// 現在編集中のタブ
+let _defTab = 'hm';
+let _defItems = {};  // {hm:[...], gk:[...], oe:[...]}
+
+function openSeriesDefaults() {
+  if (!isAdmin()) { alert('デフォルト費目設定は管理者のみ変更できます'); return; }
+  // 現在の設定をコピー
+  _defItems = {
+    hm: JSON.parse(JSON.stringify(S.defaults?.hm || SERIES_DEFAULTS_INIT.hm)),
+    gk: JSON.parse(JSON.stringify(S.defaults?.gk || SERIES_DEFAULTS_INIT.gk)),
+    oe: JSON.parse(JSON.stringify(S.defaults?.oe || SERIES_DEFAULTS_INIT.oe)),
+  };
+  _defTab = 'hm';
+  // タブを初期化
+  document.querySelectorAll('#defaults-tabs .tab').forEach((t,i) => t.className = 'tab' + (i===0?' on':''));
+  renderDefaultsItems();
+  openOv('ov-defaults');
+}
+
+function switchDefaultsTab(key, btn) {
+  _defTab = key;
+  document.querySelectorAll('#defaults-tabs .tab').forEach(t => t.classList.remove('on'));
+  btn.classList.add('on');
+  renderDefaultsItems();
+}
+
+function renderDefaultsItems() {
+  const items = _defItems[_defTab] || [];
+  document.getElementById('defaults-items').innerHTML = items.map((it, i) => `
+    <div class="item-row">
+      <div class="item-num">${i+1}</div>
+      <input type="text"   value="${it.name}"           placeholder="費目名"
+        data-i="${i}" data-f="name"     oninput="updateDefItem(this)">
+      <input type="number" value="${it.budget||''}"     placeholder="0"
+        data-i="${i}" data-f="budget"   oninput="updateDefItem(this);updateDefaultsPreview()">
+      <input type="number" value="${it.estimate||''}"   placeholder="0"
+        data-i="${i}" data-f="estimate" oninput="updateDefItem(this)">
+      <input type="number" value="${it.actual||''}"     placeholder="0"
+        data-i="${i}" data-f="actual"   oninput="updateDefItem(this)">
+      <button class="del-btn" onclick="removeDefItem(${i})">×</button>
+    </div>`).join('');
+  updateDefaultsPreview();
+}
+
+function updateDefItem(inp) {
+  const i = parseInt(inp.dataset.i), f = inp.dataset.f;
+  _defItems[_defTab][i][f] = f === 'name' ? inp.value : parseFloat(inp.value) || 0;
+}
+
+function addDefaultItem() {
+  _defItems[_defTab].push({id: uid(), name:'', budget:0, estimate:0, actual:0});
+  renderDefaultsItems();
+}
+
+function removeDefItem(i) {
+  _defItems[_defTab].splice(i, 1);
+  renderDefaultsItems();
+}
+
+function updateDefaultsPreview() {
+  const items = _defItems[_defTab] || [];
+  const totB = items.reduce((t,i) => t + n(i.budget), 0);
+  const label = {hm:'ホームルーム', gk:'評議会', oe:'応援カイギ'}[_defTab];
+  const lines = items.filter(i => i.name && i.budget > 0)
+    .map(i => `<span style="color:var(--t2)">${i.name}</span>: <span style="color:var(--acc2)">${fmtN(i.budget)}円</span>`);
+  document.getElementById('defaults-preview').innerHTML =
+    lines.length
+      ? lines.join('　／　') + `<div style="margin-top:6px;color:var(--green)">合計予算 ${fmtN(totB)}円 / 回</div>`
+      : '<span style="color:var(--t3)">費目が設定されていません</span>';
+}
+
+function resetDefaults() {
+  if (!confirm(`${_defTab === 'hm' ? 'ホームルーム' : _defTab === 'gk' ? '評議会' : '応援カイギ'}のデフォルト設定を初期値にリセットしますか？`)) return;
+  _defItems[_defTab] = JSON.parse(JSON.stringify(SERIES_DEFAULTS_INIT[_defTab])).map(i=>({...i,id:uid()}));
+  renderDefaultsItems();
+}
+
+function saveDefaults() {
+  if (!S.defaults) S.defaults = {};
+  S.defaults.hm = _defItems.hm;
+  S.defaults.gk = _defItems.gk;
+  S.defaults.oe = _defItems.oe;
+  save();
+  closeOv('ov-defaults');
+
+  // サイドバーバッジで通知
+  const btn = document.getElementById('nb-defaults');
+  if (btn) {
+    btn.style.color = 'var(--green)';
+    setTimeout(() => btn.style.color = '', 2000);
+  }
+}
+
+// ── openSess を上書き：新規追加時にデフォルト費目を適用 ──
+const _origOpenSess = openSess;
+function openSess(key, id) {
+  _sCtx = {key, id};
+  const map = {hm:'ホームルーム', gk:'評議会', oe:'応援カイギ'};
+  const s = id ? S.sessions[key].find(x => x.id === id) : null;
+  document.getElementById('sess-title').textContent = (s ? '編集：' : '追加：') + map[key];
+  document.getElementById('s-title').value = s ? s.title : '';
+  document.getElementById('s-date').value  = s ? s.date  : '';
+  document.getElementById('s-memo').value  = s ? s.memo  : '';
+  document.getElementById('sess-del-btn').style.display = s ? '' : 'none';
+
+  if (s) {
+    // 編集時：既存の費目をそのまま使用
+    _sCtx.items = JSON.parse(JSON.stringify(s.items));
+  } else {
+    // 新規追加時：デフォルト費目を適用（予算のみプリセット、見積・実数は空）
+    const defaults = S.defaults?.[key] || SERIES_DEFAULTS_INIT[key];
+    _sCtx.items = defaults
+      .filter(d => d.name)
+      .map(d => ({
+        id: uid(),
+        name: d.name,
+        budget:   d.budget   || 0,
+        estimate: d.estimate || 0,
+        actual:   d.actual   || 0,
+      }));
+  }
+
+  renderSessItems();
+  openOv('ov-sess');
+}
+
+// ══════════════════════════════════════════════════
+// デフォルト費目設定の拡張（KO/AW/YE/マッチデイ対応）
+// ══════════════════════════════════════════════════
+
+// イベント系デフォルト初期値
+const EVENT_DEFAULTS_INIT = {
+  ko: [
+    {id:uid(),name:'会場費',              budget:400000, estimate:0,actual:0},
+    {id:uid(),name:'ケータリング・ドリンク',budget:150000,estimate:0,actual:0},
+    {id:uid(),name:'制作・パネル',        budget:200000, estimate:0,actual:0},
+    {id:uid(),name:'映像・撮影',          budget:300000, estimate:0,actual:0},
+    {id:uid(),name:'運営委託',            budget:150000, estimate:0,actual:0},
+    {id:uid(),name:'MC・キャスティング',  budget:150000, estimate:0,actual:0},
+    {id:uid(),name:'旅費交通費',          budget:100000, estimate:0,actual:0},
+    {id:uid(),name:'諸経費',              budget:100000, estimate:0,actual:0},
+  ],
+  aw: [
+    {id:uid(),name:'会場費',              budget:500000,  estimate:0,actual:0},
+    {id:uid(),name:'ケータリング',        budget:300000,  estimate:0,actual:0},
+    {id:uid(),name:'審査員・キャスティング',budget:400000,estimate:0,actual:0},
+    {id:uid(),name:'運営・進行人件費',    budget:400000,  estimate:0,actual:0},
+    {id:uid(),name:'制作・施工',          budget:800000,  estimate:0,actual:0},
+    {id:uid(),name:'賞金・懇親会',        budget:600000,  estimate:0,actual:0},
+    {id:uid(),name:'デザイン費',          budget:200000,  estimate:0,actual:0},
+    {id:uid(),name:'諸経費',              budget:100000,  estimate:0,actual:0},
+  ],
+  ye: [
+    {id:uid(),name:'会場費',              budget:1100000, estimate:0,actual:0},
+    {id:uid(),name:'ケータリング',        budget:300000,  estimate:0,actual:0},
+    {id:uid(),name:'制作・施工',          budget:200000,  estimate:0,actual:0},
+    {id:uid(),name:'運営・進行人件費',    budget:200000,  estimate:0,actual:0},
+    {id:uid(),name:'MC・キャスティング',  budget:100000,  estimate:0,actual:0},
+    {id:uid(),name:'デザイン・花装飾',    budget:100000,  estimate:0,actual:0},
+    {id:uid(),name:'その他諸経費',        budget:35000,   estimate:0,actual:0},
+  ],
+  md: [
+    {id:uid(),name:'会場費（試合）',      budget:0, estimate:0,actual:0},
+    {id:uid(),name:'ケータリング',        budget:0, estimate:0,actual:0},
+    {id:uid(),name:'制作・装飾',          budget:0, estimate:0,actual:0},
+    {id:uid(),name:'運営人件費',          budget:0, estimate:0,actual:0},
+    {id:uid(),name:'MC・キャスティング',  budget:0, estimate:0,actual:0},
+    {id:uid(),name:'諸経費',              budget:0, estimate:0,actual:0},
+  ],
+};
+
+// S.defaults にイベント系を追加
+if (!S.defaults) S.defaults = {};
+['ko','aw','ye','md'].forEach(k => {
+  if (!S.defaults[k]) S.defaults[k] = JSON.parse(JSON.stringify(EVENT_DEFAULTS_INIT[k])).map(i=>({...i,id:uid()}));
+});
+// マッチデイ用セッションデータも初期化
+if (!S.sessions.md) S.sessions.md = [];
+// マッチデイ用イベントデータも初期化
+if (!S.events.md) S.events.md = { label:'マッチデイ', items: [] };
+
+// switchDefaultsTab を上書き（イベント系タブで「適用」ボタン表示制御）
+const _origSwitchDefaultsTab = switchDefaultsTab;
+function switchDefaultsTab(key, btn) {
+  _defTab = key;
+  document.querySelectorAll('#defaults-tabs .tab').forEach(t => t.classList.remove('on'));
+  btn.classList.add('on');
+  // シリーズ系とイベント系で「適用」ボタンの表示切替
+  const isEvent = ['ko','aw','ye','md'].includes(key);
+  const applyRow = document.getElementById('defaults-apply-row');
+  if (applyRow) applyRow.style.display = isEvent ? '' : 'none';
+  // _defItems にまだなければ初期化
+  if (!_defItems[key]) {
+    const src = S.defaults?.[key] || EVENT_DEFAULTS_INIT[key] || [];
+    _defItems[key] = JSON.parse(JSON.stringify(src)).map(i=>({...i,id:i.id||uid()}));
+  }
+  renderDefaultsItems();
+}
+
+// openSeriesDefaults を上書き（全7タブ対応）
+const _origOpenSeriesDefaults = openSeriesDefaults;
+function openSeriesDefaults() {
+  if (!isAdmin()) { alert('デフォルト費目設定は管理者のみ変更できます'); return; }
+  // 全キーのデータをコピー
+  const allKeys = ['hm','gk','oe','ko','aw','ye','md'];
+  _defItems = {};
+  allKeys.forEach(k => {
+    const src = S.defaults?.[k] || SERIES_DEFAULTS_INIT[k] || EVENT_DEFAULTS_INIT[k] || [];
+    _defItems[k] = JSON.parse(JSON.stringify(src)).map(i=>({...i,id:i.id||uid()}));
+  });
+  _defTab = 'hm';
+  // タブリセット
+  const tabs = document.querySelectorAll('#defaults-tabs .tab');
+  tabs.forEach((t,i) => t.className = 'tab' + (i===0?' on':''));
+  const applyRow = document.getElementById('defaults-apply-row');
+  if (applyRow) applyRow.style.display = 'none';
+  renderDefaultsItems();
+  openOv('ov-defaults');
+}
+
+// saveDefaults を上書き（全7キー保存）
+const _origSaveDefaults = saveDefaults;
+function saveDefaults() {
+  if (!S.defaults) S.defaults = {};
+  ['hm','gk','oe','ko','aw','ye','md'].forEach(k => {
+    if (_defItems[k]) S.defaults[k] = _defItems[k];
+  });
+  save();
+  closeOv('ov-defaults');
+  const btn = document.getElementById('nb-defaults');
+  if (btn) { btn.style.color='var(--green)'; setTimeout(()=>btn.style.color='',2000); }
+  // 現在表示中のイベントページを再描画
+  if (['ko','aw','ye'].includes(_curPg)) renderPg(_curPg);
+}
+
+// resetDefaults を上書き（イベント系初期値も対応）
+const _origResetDefaults = resetDefaults;
+function resetDefaults() {
+  const label = {hm:'ホームルーム',gk:'評議会',oe:'応援カイギ',ko:'キックオフ',aw:'アワード',ye:'イヤーエンド',md:'マッチデイ'}[_defTab];
+  if (!confirm(`${label}のデフォルト設定を初期値にリセットしますか？`)) return;
+  const src = SERIES_DEFAULTS_INIT[_defTab] || EVENT_DEFAULTS_INIT[_defTab] || [];
+  _defItems[_defTab] = JSON.parse(JSON.stringify(src)).map(i=>({...i,id:uid()}));
+  renderDefaultsItems();
+}
+
+// イベント費目にデフォルトを適用（既存費目は残し、ないものだけ追加）
+function applyDefaultsToEvent() {
+  const key = _defTab;
+  if (!['ko','aw','ye','md'].includes(key)) return;
+  const defaults = _defItems[key] || [];
+  if (!S.events[key]) S.events[key] = {label: key, items: []};
+  const existing = S.events[key].items.map(i => i.name);
+  let added = 0;
+  defaults.forEach(d => {
+    if (!d.name) return;
+    if (existing.includes(d.name)) {
+      // 既存費目の予算のみ更新
+      const it = S.events[key].items.find(i => i.name === d.name);
+      if (it && d.budget) { it.budget = d.budget; }
+    } else {
+      S.events[key].items.push({id:uid(), name:d.name, budget:d.budget||0, estimate:0, actual:0});
+      added++;
+    }
+  });
+  save();
+  closeOv('ov-defaults');
+  // 対応ページに移動
+  const pageKey = key;
+  go(pageKey, null);
+  document.querySelectorAll('.nb').forEach(b => {
+    const labels = {ko:'キックオフ',aw:'アワード',ye:'イヤーエンド'};
+    if (b.textContent.includes(labels[pageKey]||'')) b.classList.add('on');
+    else b.classList.remove('on');
+  });
+  alert(`✅ デフォルト費目を適用しました（${added}件追加・既存${defaults.length-added}件の予算を更新）`);
+}
+
+// マッチデイ用のナビボタンとページがなければ動的追加
+(function initMatchday() {
+  TITLES['md'] = 'マッチデイ';
+  // renderPg に md を追加
+  const _rp = renderPg;
+  function renderPg(id) {
+    if (id === 'md') { renderEvt('md'); return; }
+    _rp(id);
+  }
+  // サイドバーに「マッチデイ」ボタンを追加（大規模イベントセクション）
+  const yeBtn = [...document.querySelectorAll('.nb')].find(b => b.textContent.includes('イヤーエンド'));
+  if (yeBtn && !document.getElementById('nb-md')) {
+    const mdBtn = document.createElement('button');
+    mdBtn.className = 'nb';
+    mdBtn.id = 'nb-md';
+    mdBtn.innerHTML = '<span class="ic">🏟</span>マッチデイ';
+    mdBtn.onclick = function(){ go('md', this); };
+    yeBtn.insertAdjacentElement('afterend', mdBtn);
+  }
+  // pg-md ページがなければ追加
+  if (!document.getElementById('pg-md')) {
+    const pgYe = document.getElementById('pg-ye');
+    if (pgYe) {
+      const pgMd = document.createElement('div');
+      pgMd.className = 'pg';
+      pgMd.id = 'pg-md';
+      pgMd.innerHTML = `
+        <div class="g4" id="md-kpis"></div>
+        <div class="g2">
+          <div class="card"><div class="ct"><div class="pip"></div>費目別明細
+            <button class="btn btn-xs btn-g" style="margin-left:auto" onclick="openEvt('md')">✏️ 編集</button>
+          </div>
+          <table class="tbl"><thead><tr><th>費目</th><th>予算</th><th>見積</th><th>実数</th><th>差異</th></tr></thead>
+          <tbody id="md-tbody"></tbody></table></div>
+          <div class="card"><div class="ct"><div class="pip" style="background:var(--blue)"></div>実数内訳</div>
+          <div class="ch-t"><canvas id="ch-md"></canvas></div></div>
+        </div>`;
+      pgYe.insertAdjacentElement('afterend', pgMd);
+    }
+  }
+})();
 </script></body></html>
