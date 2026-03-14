@@ -300,9 +300,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--sans);display:flex;f
     </button>
     <input type="file" id="xlFile" accept=".xlsx,.xls" style="display:none" onchange="importXL(event)">
     <button class="upload-area" id="csv-upload-btn" style="margin-top:6px;background:rgba(45,212,160,.08);border-color:rgba(45,212,160,.2);color:var(--green)" onclick="document.getElementById('csvFile').click()">
-      <span>📥</span> CSVで一括登録
+      <span>🤖</span> AIでCSV解析・取込
     </button>
-    <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="importCSV(event)">
+    <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="aiImportCSV(event)">
     <button onclick="downloadCSVTemplate()" style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:none;border:1px dashed var(--b2);border-radius:7px;cursor:pointer;font-size:10px;color:var(--t2);font-family:var(--sans);width:100%;margin-top:4px;transition:all .15s" onmouseover="this.style.color='var(--t1)'" onmouseout="this.style.color='var(--t2)'">
       <span>⬇</span> CSVテンプレートDL
     </button>
@@ -634,6 +634,46 @@ body{background:var(--bg);color:var(--t1);font-family:var(--sans);display:flex;f
     </div>
   </div>
 </div>
+
+<!-- AI CSV解析モーダル -->
+<div class="ov" id="ov-ai-csv">
+  <div class="panel wide" style="width:900px;max-height:92vh">
+    <div class="ph">
+      <h2 id="ai-csv-title">🤖 AIがCSVを解析中...</h2>
+      <button class="xbtn" onclick="closeOv('ov-ai-csv')">×</button>
+    </div>
+    <div class="pb-body" id="ai-csv-body">
+      <!-- 解析中 -->
+      <div id="ai-csv-loading" style="text-align:center;padding:40px">
+        <div style="font-size:28px;margin-bottom:12px;animation:spin 1s linear infinite;display:inline-block">⚙️</div>
+        <div style="font-size:13px;color:var(--t2)" id="ai-csv-status">CSVを読み込み中...</div>
+      </div>
+      <!-- 解析結果プレビュー -->
+      <div id="ai-csv-result" style="display:none">
+        <div id="ai-csv-summary" style="margin-bottom:14px"></div>
+        <div style="overflow-x:auto">
+          <table class="tbl" style="min-width:800px" id="ai-csv-table">
+            <thead><tr id="ai-csv-thead"></tr></thead>
+            <tbody id="ai-csv-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- エラー -->
+      <div id="ai-csv-error" style="display:none;color:var(--red);font-size:12px;padding:16px"></div>
+    </div>
+    <div class="pf" id="ai-csv-footer" style="justify-content:space-between">
+      <div style="font-size:10px;color:var(--t3)" id="ai-csv-count"></div>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-g" onclick="closeOv('ov-ai-csv')">キャンセル</button>
+        <button class="btn btn-p" id="ai-csv-import-btn" onclick="confirmAiImport()" style="display:none">✅ この内容で取り込む</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+</style>
 
 <!-- 経費明細編集 -->
 <div class="ov" id="ov-ledger">
@@ -2071,5 +2111,237 @@ const _origRenderPg = renderPg;
 function renderPg(id) {
   if (id === 'ledger') { renderLedger(); return; }
   _origRenderPg(id);
+}
+
+// ══════════════════════════════════════════════════
+// AI CSV 解析・取込
+// ══════════════════════════════════════════════════
+
+let _aiCsvParsed = []; // 解析済みデータを保持
+
+async function aiImportCSV(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  ev.target.value = '';
+
+  // モーダルを開いてローディング表示
+  document.getElementById('ai-csv-title').textContent = '🤖 AIがCSVを解析中...';
+  document.getElementById('ai-csv-loading').style.display = '';
+  document.getElementById('ai-csv-result').style.display = 'none';
+  document.getElementById('ai-csv-error').style.display = 'none';
+  document.getElementById('ai-csv-import-btn').style.display = 'none';
+  document.getElementById('ai-csv-count').textContent = '';
+  openOv('ov-ai-csv');
+
+  // CSVを読み込む
+  const text = await new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => res(e.target.result.replace(/^\uFEFF/, ''));
+    reader.onerror = rej;
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) {
+    showAiCsvError('データが少なすぎます（2行以上必要です）');
+    return;
+  }
+
+  // ヘッダーと最初の5行をサンプルとして送る
+  const sampleLines = lines.slice(0, Math.min(6, lines.length));
+  const sampleText = sampleLines.join('\n');
+
+  document.getElementById('ai-csv-status').textContent = 'Claude AIが列を解析しています...';
+
+  // プログラム名一覧
+  const progNames = S.programs.map(p => p.name).join('、');
+
+  // Anthropic APIに送って解析
+  const prompt = `以下はNEO福岡という団体の経費管理CSVデータです。
+ヘッダー行と最初の数行のサンプルを見て、各列が何を意味するかを解析してください。
+
+【CSVサンプル】
+${sampleText}
+
+【マッピング先のフィールド】
+- program: プログラム名（${progNames} のいずれか、または近いもの）
+- fee: 費目名（例: 会場費、講師費、備品費など）
+- content: 内容・品目の説明
+- price: 単価（数値）
+- qty: 数量（数値、なければ1）
+- unit: 単位（式、個、名など）
+- estimate: 見積金額（数値）
+- actual: 実績・実数金額（数値）
+- status: 支払状況（済/未/一部、またはそれに相当する値）
+- memo: 備考・メモ
+
+【指示】
+1. 各CSVの列ヘッダーがどのフィールドに対応するかをJSONで返してください
+2. 対応するフィールドがない列は null にしてください
+3. 全データ行を解析し、各行をマッピング済みオブジェクトの配列にしてください
+4. program が不明な場合は元の値をそのまま使ってください
+5. 数値フィールドはカンマや円記号を除去して数値に変換してください
+
+以下のJSON形式のみで返答してください（説明文不要）:
+{
+  "mapping": {"元の列名": "フィールド名またはnull", ...},
+  "rows": [
+    {"program":"...","fee":"...","content":"...","price":0,"qty":1,"unit":"式","estimate":0,"actual":0,"status":"","memo":""},
+    ...
+  ],
+  "summary": "解析内容の1行説明（日本語）"
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    const rawText = data.content?.find(b => b.type === 'text')?.text || '';
+
+    // JSONを抽出してパース
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの応答からJSONを抽出できませんでした');
+
+    let parsed;
+    try { parsed = JSON.parse(jsonMatch[0]); }
+    catch(e) { throw new Error('JSONのパースに失敗しました: ' + e.message); }
+
+    // 全データ行も処理（サンプル以降の行）
+    if (lines.length > 6) {
+      document.getElementById('ai-csv-status').textContent = '残りのデータを処理中...';
+      const headers = parseCSVLine(lines[0]);
+      const mappingEntries = Object.entries(parsed.mapping);
+
+      for (let i = 6; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const cols = parseCSVLine(lines[i]);
+        const row = { program:'', fee:'', content:'', price:0, qty:1, unit:'式', estimate:0, actual:0, status:'', memo:'' };
+        headers.forEach((h, idx) => {
+          const field = parsed.mapping[h];
+          if (!field || !cols[idx]) return;
+          const val = cols[idx].trim();
+          if (['price','qty','estimate','actual'].includes(field)) {
+            row[field] = parseFloat(val.replace(/[,¥￥円]/g, '')) || 0;
+          } else {
+            row[field] = val;
+          }
+        });
+        parsed.rows.push(row);
+      }
+    }
+
+    // カテゴリ自動付与
+    parsed.rows = parsed.rows.map(r => ({
+      ...r,
+      cat: detectCat(r.fee || ''),
+      id: uid(),
+    }));
+
+    _aiCsvParsed = parsed.rows;
+    showAiCsvResult(parsed);
+
+  } catch(err) {
+    showAiCsvError('AI解析エラー: ' + err.message);
+  }
+}
+
+function showAiCsvResult(parsed) {
+  document.getElementById('ai-csv-loading').style.display = 'none';
+  document.getElementById('ai-csv-error').style.display = 'none';
+  document.getElementById('ai-csv-result').style.display = '';
+  document.getElementById('ai-csv-title').textContent = '🤖 AI解析結果 — 内容を確認してください';
+  document.getElementById('ai-csv-import-btn').style.display = '';
+
+  const rows = parsed.rows || [];
+  const totAct = rows.reduce((t,r)=>t+n(r.actual),0);
+  const totEst = rows.reduce((t,r)=>t+n(r.estimate),0);
+
+  document.getElementById('ai-csv-summary').innerHTML = `
+    <div style="background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:12px 16px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--green);font-weight:700;margin-bottom:6px">✅ ${parsed.summary || 'AI解析完了'}</div>
+      <div style="display:flex;gap:20px;font-size:10px;color:var(--t2)">
+        <span>📋 <strong style="color:var(--t1)">${rows.length}件</strong> を検出</span>
+        <span>💰 見積合計 <strong style="color:#88b4ff">${fmtN(totEst)}円</strong></span>
+        <span>✅ 実績合計 <strong style="color:var(--green)">${fmtN(totAct)}円</strong></span>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--t3);margin-bottom:8px">
+      列マッピング: ${Object.entries(parsed.mapping).map(([k,v])=>v?`<span style="color:var(--t2)">${k}</span>→<span style="color:var(--blue)">${v}</span>`:'').filter(Boolean).join('　')}
+    </div>`;
+
+  // テーブルヘッダー
+  document.getElementById('ai-csv-thead').innerHTML = `
+    <th style="width:20px"><input type="checkbox" id="ai-csv-check-all" onchange="toggleAllAiRows(this)" checked></th>
+    <th>プログラム</th><th>費目名</th><th>カテゴリ</th><th>内容</th>
+    <th style="text-align:right">見積</th><th style="text-align:right">実績</th>
+    <th>支払</th><th>備考</th>`;
+
+  // テーブル行
+  const CAT_C = {'① イベント費':['dc2626','fee2e2'],'② 制作・印刷費':['1d4ed8','dbeafe'],
+    '③ 外部委託費':['6d28d9','ede9fe'],'④ 広報費':['b45309','fef3c7'],'⑤ その他':['15803d','dcfce7']};
+  document.getElementById('ai-csv-tbody').innerHTML = rows.map((r,i) => {
+    const cc = CAT_C[r.cat] || ['374151','fafafa'];
+    const progShort = (r.program||'').replace('（第一期）','').replace('（第二期）','');
+    return `<tr>
+      <td><input type="checkbox" class="ai-row-check" data-i="${i}" checked></td>
+      <td style="font-size:10px;color:var(--t2)">${progShort||'—'}</td>
+      <td style="font-weight:500;font-size:11px">${r.fee||'—'}</td>
+      <td><span style="font-size:8px;font-weight:700;color:#${cc[0]};background:#${cc[1]};padding:1px 5px;border-radius:3px">${r.cat}</span></td>
+      <td style="font-size:10px;color:var(--t2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.content||'—'}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:#88b4ff">${r.estimate?fmtN(r.estimate):'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:500">${r.actual?fmtN(r.actual):'—'}</td>
+      <td style="font-size:9px;color:${r.status==='済'?'var(--green)':r.status?'var(--yellow)':'var(--t3)'}">${r.status||'—'}</td>
+      <td style="font-size:10px;color:var(--t3)">${r.memo||''}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ai-csv-count').textContent = `${rows.length}件を取り込みます（チェックを外した行は除外）`;
+}
+
+function toggleAllAiRows(cb) {
+  document.querySelectorAll('.ai-row-check').forEach(c => c.checked = cb.checked);
+}
+
+function confirmAiImport() {
+  const checked = [...document.querySelectorAll('.ai-row-check')]
+    .map((cb, i) => cb.checked ? _aiCsvParsed[i] : null)
+    .filter(Boolean);
+
+  if (!checked.length) { alert('取り込む行がありません'); return; }
+
+  if (!S.ledger) S.ledger = [];
+  checked.forEach(r => S.ledger.push({ ...r, id: uid() }));
+  save();
+  closeOv('ov-ai-csv');
+
+  // 経費明細ページに移動
+  go('ledger', document.querySelector('.nb:nth-child(n)'));
+  // サイドバーの正しいボタンをアクティブに
+  document.querySelectorAll('.nb').forEach(b => {
+    if (b.textContent.includes('経費明細')) { b.classList.add('on'); }
+    else b.classList.remove('on');
+  });
+  renderLedger();
+
+  // 結果通知
+  document.getElementById('xl-result').innerHTML =
+    `<div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">✅ AI解析で${checked.length}件を経費明細に取り込みました</div>`;
+  openOv('ov-xl');
+}
+
+function showAiCsvError(msg) {
+  document.getElementById('ai-csv-loading').style.display = 'none';
+  document.getElementById('ai-csv-result').style.display = 'none';
+  document.getElementById('ai-csv-error').style.display = '';
+  document.getElementById('ai-csv-error').textContent = msg;
+  document.getElementById('ai-csv-title').textContent = '❌ 解析エラー';
 }
 </script></body></html>
