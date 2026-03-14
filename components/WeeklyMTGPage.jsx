@@ -380,7 +380,6 @@ function DeptSection({ level, reports, prevReports, compareMode, onEdit, onDelet
 export default function WeeklyMTGPage({ levels, themeKey = 'dark' }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
 
-  const wT = () => T
   const weeks = getPastWeeks(10)
   const [weekIdx,       setWeekIdx]       = useState(0)
   const [reports,       setReports]       = useState([])
