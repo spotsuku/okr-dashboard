@@ -132,20 +132,20 @@ function ReportModal({ initial, onSave, onClose, levels, weekStart, objectives, 
   }, [selectedObj?.id])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'stretch', justifyContent: 'center' }}>
-      <div style={{ background: wT().bgCard2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 0, width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column', margin: '0 auto' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div style={{ background: wT().bgCard2, border: `1px solid ${wT().borderMid}`, borderRadius: 14, width: '100%', maxWidth: 900, height: '88vh', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* ヘッダー */}
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>{initial?.id ? 'KAレポートを編集' : 'KAレポートを追加'}</span>
+        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${wT().border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+          <span style={{ fontWeight: 700, fontSize: 15, color: wT().text }}>{initial?.id ? 'KAレポートを編集' : 'KAレポートを追加'}</span>
           <button onClick={onClose} style={{ background: wT().borderLight, border: 'none', color: wT().textSub, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
 
         {/* 2カラム本体 */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
           {/* ─── 左：OKR参照パネル ─── */}
-          <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.07)', display: 'flex', flexDirection: 'column', background: wT().bgCard2 }}>
+          <div style={{ width: 320, flexShrink: 0, borderRight: `1px solid ${wT().border}`, display: 'flex', flexDirection: 'column', background: wT().bg }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
               <div style={{ fontSize: 10, color: '#4d9fff', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>📋 OKR参照</div>
               {lbl('所属部署')}
@@ -208,7 +208,7 @@ function ReportModal({ initial, onSave, onClose, levels, weekStart, objectives, 
           </div>
 
           {/* ─── 右：KA入力フォーム ─── */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', background: wT().bgCard2 }}>
             <div style={{ fontSize: 10, color: wT().textSub, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>✏️ KA入力</div>
 
             {lbl('KAタイトル *')}
