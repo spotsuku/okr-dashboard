@@ -5,11 +5,11 @@ import { supabase } from '../lib/supabase'
 // Dashboardのグローバルテーマ参照を使用
 // テーマはprops経由でWeeklyMTGPageに渡される（SSR安全）
 const DARK_T = {
-  bg:wT().bg, bgCard:wT().bgCard, bgCard2:wT().bgCard2, bgSidebar:wT().bgCard,
-  border:wT().border, borderLight:wT().borderLight,
-  borderMid:wT().borderMid, text:wT().text, textSub:wT().textSub,
-  textMuted:wT().textMuted, textFaint:wT().textFaint, textFaintest:wT().textFaintest,
-  headerBg:wT().bg, connector:'rgba(255,255,255,0.12)',
+  bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
+  border:'rgba(255,255,255,0.07)', borderLight:'rgba(255,255,255,0.04)',
+  borderMid:'rgba(255,255,255,0.1)', text:'#e8eaf0', textSub:'#a0a8be',
+  textMuted:'#606880', textFaint:'#404660', textFaintest:'#303450',
+  headerBg:'#090d18', connector:'rgba(255,255,255,0.12)',
 }
 const LIGHT_T = {
   bg:'#f0f2f7', bgCard:'#ffffff', bgCard2:'#f7f8fc', bgSidebar:'#ffffff',
@@ -49,7 +49,7 @@ function getDepth(levelId, levels) {
 // メンバーのアバターカラー（名前ハッシュ）
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
-  if (!name) return wT().textMuted
+  if (!name) return '#606880'
   let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
@@ -59,7 +59,7 @@ const STATUS_CFG = {
   focus:  { label: '🎯 注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
   good:   { label: '✅ Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
   more:   { label: '🔺 More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
-  normal: { label: '未分類',  color: wT().textMuted, bg: wT().borderLight, border: wT().borderMid },
+  normal: { label: '未分類',  color: '#606880', bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)' },
 }
 const PERIOD_LABELS = { annual: '通期', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 
