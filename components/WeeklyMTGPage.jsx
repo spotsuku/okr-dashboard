@@ -332,7 +332,9 @@ export default function WeeklyMTGPage({ levels }) {
       const { id, ...rest } = data
       await supabase.from('weekly_reports').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id)
     } else {
-      await supabase.from('weekly_reports').insert([data])
+      // id/updated_atを除外してinsert
+      const { id: _id, updated_at: _ua, created_at: _ca, ...insertData } = data
+      await supabase.from('weekly_reports').insert([insertData])
     }
     // 再読み込み
     const { data: curr } = await supabase.from('weekly_reports').select('*').eq('week_start', currentWeek).order('level_id').order('id')
