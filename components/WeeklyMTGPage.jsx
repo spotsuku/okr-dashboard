@@ -18,9 +18,12 @@ const LIGHT_T = {
   textMuted:'#7080a0', textFaint:'#90a0bc', textFaintest:'#b0bcd0',
   headerBg:'#ffffff', connector:'rgba(0,0,0,0.15)',
 }
-// Dashboardのgetт()があればそれを使い、なければダークをデフォルト
+// グローバルテーマ参照（Dashboard.jsxのgetT()と同期）
 function wT() {
-  try { return (typeof getT === 'function') ? getT() : DARK_T } catch(e) { return DARK_T }
+  if (typeof window === 'undefined') return DARK_T
+  try {
+    return window.__OKR_THEME__ || DARK_T
+  } catch(e) { return DARK_T }
 }
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
@@ -77,7 +80,8 @@ function Avatar({ name, size = 24 }) {
 }
 
 // ─── KA入力モーダル ────────────────────────────────────────────────────────────
-function ReportModal({ initial, onSave, onClose, levels, weekStart, objectives, members, activePeriod }) {
+function ReportModal({ initial, onSave, onClose, levels, weekStart, objectives, members, activePeriod }, themeKey = 'dark' }) {
+  const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const [kaTitle,     setKaTitle]     = useState(initial?.ka_title || '')
   const [objectiveId, setObjectiveId] = useState(String(initial?.objective_id || ''))
   const [owner,       setOwner]       = useState(initial?.owner || '')
@@ -281,7 +285,8 @@ function ReportModal({ initial, onSave, onClose, levels, weekStart, objectives, 
 }
 
 // ─── KA行 ─────────────────────────────────────────────────────────────────────
-function KARow({ report, prevReport, compareMode, onEdit, onDelete, objectives }) {
+function KARow({ report, prevReport, compareMode, onEdit, onDelete, objectives }, themeKey = 'dark' }) {
+  const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const cfg = STATUS_CFG[report.status] || STATUS_CFG.normal
   const compareCfg = { new: { label: '新規', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)' }, changed: { label: '変化', color: '#a855f7', bg: 'rgba(168,85,247,0.12)' }, same: { label: '継続', color: wT().textMuted, bg: wT().borderLight } }[!prevReport ? 'new' : prevReport.status !== report.status ? 'changed' : 'same']
   const obj = report.objective_id ? objectives.find(o => o.id === Number(report.objective_id)) : null
@@ -335,7 +340,8 @@ function KARow({ report, prevReport, compareMode, onEdit, onDelete, objectives }
 }
 
 // ─── 部署セクション ────────────────────────────────────────────────────────────
-function DeptSection({ level, reports, prevReports, compareMode, onEdit, onDelete, depth, objectives }) {
+function DeptSection({ level, reports, prevReports, compareMode, onEdit, onDelete, depth, objectives }, themeKey = 'dark' }) {
+  const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const [open, setOpen] = useState(true)
   const color = LAYER_COLORS[depth] || wT().textSub
   const layerLabel = depth === 0 ? '経営' : depth === 1 ? '事業部' : 'チーム'
@@ -364,7 +370,7 @@ function DeptSection({ level, reports, prevReports, compareMode, onEdit, onDelet
               </tr>
             </thead>
             <tbody>
-              {reports.map(r => <KARow key={r.id} report={r} prevReport={prevReports.find(p=>p.ka_title===r.ka_title&&p.owner===r.owner)} compareMode={compareMode} onEdit={onEdit} onDelete={onDelete} objectives={objectives} />)}
+              {reports.map(r => <KARow key={r.id} report={r} prevReport={prevReports.find(p=>p.ka_title===r.ka_title&&p.owner===r.owner)} compareMode={compareMode} onEdit={onEdit} onDelete={onDelete} objectives={objectives} themeKey={themeKey} />)}
             </tbody>
           </table>
         </div>
@@ -375,7 +381,9 @@ function DeptSection({ level, reports, prevReports, compareMode, onEdit, onDelet
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function WeeklyMTGPage({ levels }) {
+export default function WeeklyMTGPage({ levels, themeKey = 'dark' }) {
+  const T = W_THEMES[themeKey] || W_THEMES.dark
+  const wT = () => T
   const weeks = getPastWeeks(10)
   const [weekIdx,       setWeekIdx]       = useState(0)
   const [reports,       setReports]       = useState([])
@@ -568,7 +576,7 @@ export default function WeeklyMTGPage({ levels }) {
             </div>
           )}
           {!loading && grouped.map(({ level, depth, reports: rpts, prevReports: pRpts }) => (
-            <DeptSection key={level.id} level={level} reports={rpts} prevReports={pRpts} compareMode={compareMode} onEdit={r => setModal({ type:'edit', report:r })} onDelete={handleDelete} depth={depth} objectives={objectives} />
+            <DeptSection key={level.id} level={level} reports={rpts} prevReports={pRpts} compareMode={compareMode} onEdit={r => setModal({ type:'edit', report:r })} onDelete={handleDelete} depth={depth} objectives={objectives} themeKey={themeKey} />
           ))}
         </div>
       </div>
@@ -584,6 +592,7 @@ export default function WeeklyMTGPage({ levels }) {
           objectives={objectives}
           members={members}
           activePeriod={activePeriod}
+          themeKey={themeKey}
         />
       )}
     </div>
