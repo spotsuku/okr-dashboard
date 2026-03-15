@@ -78,7 +78,6 @@ function KACard({ report, onSave, onDelete, objectives, members, wT, defaultOpen
   const [tasks,       setTasks]       = useState([])
   const [tasksLoaded, setTasksLoaded] = useState(false)
 
-  const obj = report.objective_id ? objectives.find(o => o.id === Number(report.objective_id)) : null
   const cfg = STATUS_CFG[status] || STATUS_CFG.normal
   const ownerColor = avatarColor(report.owner)
 
@@ -142,7 +141,7 @@ function KACard({ report, onSave, onDelete, objectives, members, wT, defaultOpen
         <Avatar name={report.owner} size={22} />
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.3 }}>{report.ka_title}</div>
-          {obj && <div style={{ fontSize:10, color:'#4d9fff', background:'rgba(77,159,255,0.08)', border:'1px solid rgba(77,159,255,0.2)', borderRadius:4, padding:'1px 6px', display:'inline-block', marginTop:3, maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>🎯 [{PERIOD_LABELS[obj.period]||obj.period}] {obj.title}</div>}
+          {report.kr_title && <div style={{ fontSize:10, color:'#4d9fff', background:'rgba(77,159,255,0.08)', border:'1px solid rgba(77,159,255,0.2)', borderRadius:4, padding:'1px 6px', display:'inline-block', marginTop:3, maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>📊 {report.kr_title}</div>}
         </div>
         <span onClick={cycleStatus} style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:99, cursor:'pointer', flexShrink:0, background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}`, whiteSpace:'nowrap' }}>{cfg.label}</span>
         {report.owner && <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}><span style={{ fontSize:11, color:ownerColor, fontWeight:600 }}>{report.owner}</span></div>}
@@ -308,6 +307,54 @@ function AddKAModal({ onSave, onClose, levels, weekStart, objectives, members, d
   )
 }
 
+// ─── KRブロック（KR + KA一覧） ────────────────────────────────────────────────
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectives, wT, weekStart, levelId, objId }) {
+  const krReports = reports.filter(r => r.kr_id === kr.id)
+  const pct = kr.target ? Math.min(Math.round((kr.current / kr.target) * 100), 150) : 0
+  const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
+
+  const addKA = async () => {
+    const insertData = {
+      week_start: weekStart, level_id: levelId, objective_id: objId,
+      kr_id: kr.id, kr_title: kr.title,
+      ka_title: '新しいKA', owner: null, status: 'normal',
+      good: null, more: null, focus_output: null, next_tasks: null,
+      next_action: null, assistant: null, report_time: null,
+    }
+    await supabase.from('weekly_reports').insert([insertData])
+    onAddKA()
+  }
+
+  return (
+    <div style={{ marginBottom:16 }}>
+      {/* KRヘッダー */}
+      <div style={{ padding:'8px 12px', background: wT().bgCard, border:`1px solid ${wT().border}`, borderLeft:`3px solid ${pctColor}`, borderRadius:8, marginBottom:8 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4 }}>{pct}%</div>
+          <span style={{ fontSize:12, color:wT().textSub, lineHeight:1.4, flex:1 }}>{kr.title}</span>
+          <span style={{ fontSize:11, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ flex:1, height:4, borderRadius:2, background:wT().borderLight, overflow:'hidden' }}>
+            <div style={{ height:'100%', width:`${Math.min(pct,100)}%`, background:pctColor, borderRadius:2 }} />
+          </div>
+        </div>
+      </div>
+
+      {/* このKRのKA一覧 */}
+      <div style={{ paddingLeft:12 }}>
+        {krReports.map(r => (
+          <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} objectives={objectives} members={members} wT={wT} />
+        ))}
+        {/* KA追加ボタン */}
+        <div onClick={addKA} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:7, border:`1px dashed ${wT().borderMid}`, cursor:'pointer', color:wT().textMuted, fontSize:11, marginTop:4 }}>
+          <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function WeeklyMTGPage({ levels, themeKey = 'dark' }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
@@ -315,81 +362,63 @@ export default function WeeklyMTGPage({ levels, themeKey = 'dark' }) {
   const [weekIdx,       setWeekIdx]       = useState(0)
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
+  const [keyResults,    setKeyResults]    = useState([])
   const [members,       setMembers]       = useState([])
   const [loading,       setLoading]       = useState(false)
   const [activeLevelId, setActiveLevelId] = useState(null)
-  const [activeObjId,   setActiveObjId]   = useState(null)  // 選択中OKR
+  const [activeObjId,   setActiveObjId]   = useState(null)
   const [activePeriod,  setActivePeriod]  = useState('all')
-  const [modal,         setModal]         = useState(null)
 
   const currentWeek = weeks[weekIdx]
 
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period').order('level_id').then(({data})=>setObjectives(data||[]))
+    supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults(data||[]))
     supabase.from('members').select('id,name,role,level_id').order('name').then(({data})=>setMembers(data||[]))
   }, [])
 
   useEffect(() => {
     if (!currentWeek) return
     setLoading(true)
-    supabase.from('weekly_reports').select('*').eq('week_start', currentWeek).order('level_id').order('id')
+    supabase.from('weekly_reports').select('*').eq('week_start', currentWeek).order('id')
       .then(({data})=>{ setReports(data||[]); setLoading(false) })
   }, [currentWeek])
 
   const reload = async () => {
-    const {data} = await supabase.from('weekly_reports').select('*').eq('week_start', currentWeek).order('level_id').order('id')
+    const {data} = await supabase.from('weekly_reports').select('*').eq('week_start', currentWeek).order('id')
     setReports(data||[])
   }
 
-  const handleAdd = async (data) => {
-    const insertData = {
-      week_start:data.week_start, level_id:data.level_id, objective_id:data.objective_id||null,
-      ka_title:data.ka_title, owner:data.owner||null, status:data.status||'normal',
-      kr_title:null, assistant:null, focus_output:null, good:null, more:null,
-      next_action:null, next_tasks:null, report_time:null,
-    }
-    await supabase.from('weekly_reports').insert([insertData])
-    await reload()
-  }
-
-  const handleSave = (updated) => {
-    setReports(p => p.map(r => r.id === updated.id ? updated : r))
-  }
-
+  const handleSave = (updated) => setReports(p => p.map(r => r.id===updated.id ? updated : r))
   const handleDelete = async (id) => {
     if (!window.confirm('削除しますか？')) return
     await supabase.from('weekly_reports').delete().eq('id', id)
-    setReports(p => p.filter(r => r.id !== id))
+    setReports(p => p.filter(r => r.id!==id))
   }
 
-  // 表示するOKR（選択部署・期間でフィルタ）
+  // 表示OKR
   const visibleLevels = activeLevelId ? levels.filter(l=>Number(l.id)===Number(activeLevelId)) : levels
   const visibleObjs = objectives.filter(o => {
     const levelOk = visibleLevels.some(l => Number(l.id) === Number(o.level_id))
-    const periodOk = activePeriod === 'all' || o.period === activePeriod
+    const periodOk = activePeriod==='all' || o.period===activePeriod
     return levelOk && periodOk
   })
+  const selectedObj = activeObjId ? objectives.find(o => o.id===Number(activeObjId)) : null
+  const selectedObjKRs = activeObjId ? keyResults.filter(kr => Number(kr.objective_id)===Number(activeObjId)) : []
+  const depth = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
+  const objColor = LAYER_COLORS[depth] || '#a0a8be'
 
-  // 選択中OKRに紐づくKA
-  const activeObjReports = activeObjId
-    ? reports.filter(r => Number(r.objective_id) === Number(activeObjId))
-    : reports.filter(r => visibleLevels.some(l => Number(l.id) === Number(r.level_id)))
-
-  const selectedObj = activeObjId ? objectives.find(o => o.id === Number(activeObjId)) : null
-
-  // サイドバーレンダリング
+  // サイドバー
   const roots = levels.filter(l => !l.parent_id)
   function renderSb(level, indent=0) {
-    const depth = getDepth(level.id, levels)
-    const color = LAYER_COLORS[depth] || '#a0a8be'
-    const count = reports.filter(r => Number(r.level_id) === Number(level.id)).length
+    const d = getDepth(level.id, levels)
+    const color = LAYER_COLORS[d] || '#a0a8be'
     const isActive = Number(activeLevelId) === Number(level.id)
     return (
       <div key={level.id}>
         <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', paddingLeft:8+indent*14, borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent' }}>
           <span style={{ fontSize:13 }}>{level.icon}</span>
           <span style={{ fontSize:11, flex:1, fontWeight:isActive?700:500, color:isActive?color:wT().textSub }}>{level.name}</span>
-          {count>0 && <span style={{ fontSize:10, padding:'1px 5px', borderRadius:99, background:`${color}18`, color, fontWeight:700 }}>{count}</span>}
         </div>
         {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
       </div>
@@ -411,7 +440,7 @@ export default function WeeklyMTGPage({ levels, themeKey = 'dark' }) {
             </button>
           ))}
         </div>
-        <button onClick={()=>setModal({type:'add'})} style={{ padding:'5px 14px', borderRadius:7, fontSize:12, fontWeight:700, background:'#4d9fff', border:'none', color:'#fff', cursor:'pointer', fontFamily:'inherit', marginLeft:'auto' }}>＋ KA追加</button>
+        <span style={{ marginLeft:'auto', fontSize:11, color:wT().textMuted }}>{currentWeek}</span>
       </div>
 
       {/* 期間タブ */}
@@ -420,93 +449,93 @@ export default function WeeklyMTGPage({ levels, themeKey = 'dark' }) {
         {periodTabs.map(([key,lbl])=>(
           <button key={key} onClick={()=>{setActivePeriod(key);setActiveObjId(null)}} style={{ padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:activePeriod===key?(key==='all'?wT().borderMid:'rgba(77,159,255,0.15)'):'transparent', border:`1px solid ${activePeriod===key?(key==='all'?wT().border:'rgba(77,159,255,0.4)'):wT().borderMid}`, color:activePeriod===key?(key==='all'?wT().text:'#4d9fff'):wT().textMuted }}>{lbl}</button>
         ))}
-        <span style={{ marginLeft:'auto', fontSize:11, color:wT().textMuted }}>{currentWeek}</span>
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
 
-        {/* サイドバー */}
-        <div style={{ width:160, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
+        {/* 部署サイドバー */}
+        <div style={{ width:155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
           <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
           <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?'rgba(77,159,255,0.3)':'transparent'}`, background:!activeLevelId?'rgba(77,159,255,0.12)':'transparent' }}>
             <span>🏢</span><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?'#4d9fff':wT().textSub }}>全部署</span>
-            <span style={{ fontSize:10, padding:'1px 5px', borderRadius:99, background:'rgba(77,159,255,0.12)', color:'#4d9fff', fontWeight:700 }}>{reports.length}</span>
           </div>
           {roots.map(r=>renderSb(r,0))}
         </div>
 
-        {/* 左：OKR一覧 */}
-        <div style={{ width:250, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', padding:10, background:wT().bg }}>
-          <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 OKR（{visibleObjs.length}件）</div>
-          {visibleObjs.length === 0 && <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>OKRがありません</div>}
+        {/* 中央：Objective一覧 */}
+        <div style={{ width:260, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', padding:10, background:wT().bg }}>
+          <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 Objective（{visibleObjs.length}件）</div>
+          {visibleObjs.length===0 && <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>}
           {visibleObjs.map(obj => {
-            const isActive = Number(activeObjId) === Number(obj.id)
-            const depth = getDepth(obj.level_id, levels)
-            const color = LAYER_COLORS[depth] || '#a0a8be'
-            const kaCount = reports.filter(r => Number(r.objective_id) === Number(obj.id)).length
+            const isActive = Number(activeObjId)===Number(obj.id)
+            const d = getDepth(obj.level_id, levels)
+            const color = LAYER_COLORS[d] || '#a0a8be'
+            const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
+            const krCount = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id)).length
+            const kaCount = reports.filter(r=>Number(r.objective_id)===Number(obj.id)).length
             return (
-              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'9px 11px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}12`:wT().bgCard, transition:'all 0.12s' }}>
-                <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, display:'inline-block', marginBottom:4, background:`${color}18`, color }}>{PERIOD_LABELS[obj.period]||obj.period}</span>
-                <div style={{ fontSize:11, fontWeight:600, lineHeight:1.4, marginBottom:5, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
-                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                  <div style={{ flex:1, height:3, borderRadius:2, background:wT().borderLight, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:'30%', background:color, borderRadius:2 }} />
-                  </div>
-                  <span style={{ fontSize:10, color:wT().textMuted }}>KA {kaCount}件</span>
+              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
+                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{PERIOD_LABELS[obj.period]||obj.period}</span>
+                  {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
+                </div>
+                <div style={{ fontSize:12, fontWeight:600, lineHeight:1.4, marginBottom:6, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
+                <div style={{ display:'flex', gap:8, fontSize:10, color:wT().textMuted }}>
+                  <span>KR {krCount}件</span>
+                  <span style={{ color: kaCount>0?'#4d9fff':wT().textFaint }}>KA {kaCount}件</span>
                 </div>
               </div>
             )
           })}
         </div>
 
-        {/* 右：KAインライン編集 */}
-        <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', background:wT().bgCard2 }}>
-          {/* セクションヘッダー */}
-          <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:10, paddingBottom:8, borderBottom:`1px solid ${wT().border}` }}>
-            <div style={{ flex:1 }}>
-              {selectedObj ? <>
-                <div style={{ fontSize:10, color:LAYER_COLORS[getDepth(selectedObj.level_id,levels)]||'#a0a8be', fontWeight:700, marginBottom:3 }}>{PERIOD_LABELS[selectedObj.period]||selectedObj.period}</div>
-                <div style={{ fontSize:13, fontWeight:700, color:wT().text, lineHeight:1.4 }}>{selectedObj.title}</div>
-              </> : <div style={{ fontSize:13, fontWeight:700, color:wT().text }}>全KA一覧</div>}
+        {/* 右：Objective詳細 + KR + KA */}
+        <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', background:wT().bgCard2 }}>
+          {!selectedObj ? (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
+              <div style={{ fontSize:36 }}>🎯</div>
+              <div style={{ fontSize:13 }}>左のObjectiveをクリックしてください</div>
             </div>
-            <button onClick={()=>setModal({type:'add', levelId:activeLevelId, objId:activeObjId})} style={{ padding:'4px 10px', borderRadius:6, background:'rgba(77,159,255,0.12)', border:'1px solid rgba(77,159,255,0.3)', color:'#4d9fff', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>＋ KA追加</button>
-          </div>
+          ) : (
+            <>
+              {/* Objective詳細ヘッダー */}
+              <div style={{ padding:'12px 14px', background:`${objColor}0e`, border:`1px solid ${objColor}30`, borderLeft:`4px solid ${objColor}`, borderRadius:10, marginBottom:16 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${objColor}20`, color:objColor }}>{PERIOD_LABELS[selectedObj.period]||selectedObj.period}</span>
+                  <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
+                </div>
+                <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
+              </div>
 
-          <div style={{ fontSize:10, color:wT().textFaint, marginBottom:8 }}>💡 KA行をクリックするとその場で編集できます</div>
+              {/* KRがない場合 */}
+              {selectedObjKRs.length===0 && (
+                <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>
+                  KRが登録されていません。OKRページからKRを追加してください。
+                </div>
+              )}
 
-          {loading && <div style={{ textAlign:'center', padding:40, color:'#4d9fff', fontSize:13 }}>読み込み中...</div>}
-          {!loading && activeObjReports.length===0 && (
-            <div style={{ textAlign:'center', padding:50 }}>
-              <div style={{ fontSize:36, marginBottom:10 }}>📋</div>
-              <div style={{ fontSize:13, color:wT().textMuted, marginBottom:10 }}>KAがまだありません</div>
-              <button onClick={()=>setModal({type:'add',levelId:activeLevelId,objId:activeObjId})} style={{ padding:'7px 18px', borderRadius:8, background:'#4d9fff', border:'none', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>＋ KA追加</button>
-            </div>
-          )}
-          {!loading && activeObjReports.map(r=>(
-            <KACard key={r.id} report={r} onSave={handleSave} onDelete={handleDelete} objectives={objectives} members={members} wT={wT} />
-          ))}
-          {!loading && activeObjReports.length>0 && (
-            <div onClick={()=>setModal({type:'add',levelId:activeLevelId,objId:activeObjId})} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:8, border:'1px dashed rgba(77,159,255,0.25)', background:'rgba(77,159,255,0.02)', cursor:'pointer', color:'#4d9fff', fontSize:12, marginTop:4 }}>
-              ＋ KAを追加
-            </div>
+              {/* KRごとにブロック表示 */}
+              {loading && <div style={{ textAlign:'center', padding:20, color:'#4d9fff', fontSize:13 }}>読み込み中...</div>}
+              {!loading && selectedObjKRs.map(kr => (
+                <KRBlock
+                  key={kr.id}
+                  kr={kr}
+                  reports={reports}
+                  onAddKA={reload}
+                  onSaveKA={handleSave}
+                  onDeleteKA={handleDelete}
+                  members={members}
+                  objectives={objectives}
+                  wT={wT}
+                  weekStart={currentWeek}
+                  levelId={selectedObj.level_id}
+                  objId={selectedObj.id}
+                />
+              ))}
+            </>
           )}
         </div>
       </div>
-
-      {/* 追加モーダル */}
-      {modal?.type==='add' && (
-        <AddKAModal
-          onSave={handleAdd}
-          onClose={()=>setModal(null)}
-          levels={levels}
-          weekStart={currentWeek}
-          objectives={objectives}
-          members={members}
-          defaultLevelId={modal.levelId}
-          defaultObjId={modal.objId}
-          wT={wT}
-        />
-      )}
     </div>
   )
 }
