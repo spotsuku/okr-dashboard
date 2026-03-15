@@ -306,7 +306,7 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function MyOKRPage({ user, levels, members, themeKey = 'dark', onAIFeedback }) {
+export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
   const W_THEMES = {
     dark: {
       bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -343,7 +343,12 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
         supabase.from('key_results').select('*').eq('owner', myName),
         supabase.from('weekly_reports').select('*').eq('owner', myName).eq('week_start', currentWeek),
       ])
-      const objIds = (myObjs||[]).map(o=>o.id)
+      // ★ 年度フィルタを適用
+      const filteredObjs = (myObjs || []).filter(o => {
+        if (fiscalYear === '2026') return !o.period.includes('_')
+        return o.period.startsWith(`${fiscalYear}_`)
+      })
+      const objIds = filteredObjs.map(o=>o.id)
       let krsForObjs = []
       if (objIds.length > 0) {
         const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds)
@@ -359,14 +364,14 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
       const revMap = {}
       revData.forEach(r => { revMap[r.kr_id] = r })
 
-      setObjectives(myObjs || [])
+      setObjectives(filteredObjs)
       setKeyResults(allMyKRs)
       setKaReports(myKAs || [])
       setReviews(revMap)
       setLoading(false)
     }
     load()
-  }, [myName])
+  }, [myName, fiscalYear])
 
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
@@ -405,7 +410,12 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
           <div style={{ fontSize:10, color:wT().textMuted, marginBottom:1 }}>{myMember?.role || 'メンバー'}</div>
           <div style={{ fontSize:15, fontWeight:700 }}>{myName} のOKR</div>
         </div>
-        <div style={{ marginLeft:'auto', fontSize:11, color:wT().textMuted }}>{currentWeek} 週</div>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color: fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
+            📅 {fiscalYear}年度
+          </div>
+          <div style={{ fontSize:11, color:wT().textMuted }}>{currentWeek} 週</div>
+        </div>
       </div>
 
       {/* 期間タブ */}
