@@ -34,19 +34,29 @@ export async function POST(request) {
 - 補正した内容はfixesに日本語で記録する
 - データに問題があればwarningsをカウントする`
 
-  // ─── KA解析プロンプト ────────────────────────────────────────────────────
+  // ─── KA解析プロンプト（複雑なシート形式対応） ────────────────────────────
   const kaSystemPrompt = `あなたはKA（Key Action）データのCSV解析AIです。
-与えられたCSVテキストを解析し、以下のJSONフォーマットで返してください。
+複雑なスプレッドシート形式のCSVからKAデータを抽出してください。
+
+【重要】このCSVは会議用の複雑なシートです。以下のルールで解析してください：
+
+1. 「部門KA（Key Action）」列または類似の列からKAを抽出する
+2. 1つのセルに複数のKA（KA1:〜、KA2:〜 の形式）が含まれる場合は、それぞれを個別の行として展開する
+3. KAの担当者は「部門KR責任者」「担当者」「報告担当」などの列から取得する
+4. 所属部署は「部署」列または行の文脈から判断する
+5. ステータスはGood/More/評価などの列から推測する（記載がなければ normal）
+6. 週の日付は今週の月曜日（2026-03-16）をデフォルトとする
+
 出力フォーマット（JSONのみ、前後に説明文やバッククォートは不要）:
 {
   "rows": [
     {
-      "kaTitle": "KAタイトル",
+      "kaTitle": "KAタイトル（KA1:などのプレフィックスは除去）",
       "owner": "担当者名",
       "department": "部署名（下記リストから最も近いものを選ぶ）",
       "status": "normal|focus|good|more",
       "weekStart": "YYYY-MM-DD形式の月曜日",
-      "fixes": ["補正内容の説明（日本語）"]
+      "fixes": ["補正・抽出内容の説明（日本語）"]
     }
   ],
   "summary": {
@@ -55,23 +65,24 @@ export async function POST(request) {
     "warnings": 警告件数
   }
 }
+
 利用可能な部署名リスト: ${departments.join(', ')}
-補正ルール:
-- 列名が異なっても意味から推測してマッピングする
-  （例：「内容」「タスク」「アクション」→kaTitle、「担当」「責任者」→owner）
+
+補正・抽出ルール:
+- 「KA1:」「KA2:」「KA1：」などのプレフィックスを除去してタイトルを抽出する
+- 例：「KA1：CSジャーニーの可視化」→ kaTitle: "CSジャーニーの可視化"
 - 部署名はリストの中から最も近いものに補正する
-- ステータスは以下に統一する:
-  「未分類」「なし」「-」→ normal
-  「注力」「フォーカス」「focus」「🎯」→ focus
-  「good」「良い」「達成」「✅」→ good
-  「more」「課題」「改善」「🔺」→ more
-- 週の日付は必ず月曜日に補正する（例：2026-03-18(水)→2026-03-16(月)）
-- 日付が未入力の場合は今週の月曜日を使用する
-- 全角数字・全角英字は半角に変換する
-- 担当者名のスペースを整える
-- 補正した内容はfixesに日本語で記録する
-- KAタイトルが空の行はスキップする
-- データに問題があればwarningsをカウントする`
+- ステータスの推測:
+  評価列に「Good」が多い・良い評価 → good
+  評価列に「More」が多い・課題が多い → more
+  「注力」「フォーカス」→ focus
+  記載なし・不明 → normal
+- 担当者名は姓のみの場合もある（そのまま使用）
+- 空白・ヘッダー・URLのみ・説明文のみの行はスキップ
+- KAタイトルが空または見出し行はスキップ
+- 補正・抽出内容はfixesに日本語で記録する
+- 部署不明・担当者不明はwarningsをカウント
+- 必ず全てのKAを漏れなく抽出すること`
 
   const systemPrompt = mode === 'ka' ? kaSystemPrompt : okrSystemPrompt
 
@@ -84,9 +95,12 @@ export async function POST(request) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: systemPrompt,
-      messages: [{ role: 'user', content: `以下のCSVを解析してください:\n\n${csvText}` }],
+      messages: [{
+        role: 'user',
+        content: `以下のCSVを解析して、全てのKAを抽出してください:\n\n${csvText}`
+      }],
     }),
   })
 
@@ -97,10 +111,13 @@ export async function POST(request) {
 
   try {
     const text = data.content[0].text
-    const clean = text.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    // JSON部分だけを正規表現で抽出（前後の説明文・バッククォートを除去）
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('JSONが見つかりません')
+    const parsed = JSON.parse(jsonMatch[0].trim())
     return Response.json(parsed)
   } catch (e) {
-    return Response.json({ error: 'AIの応答をパースできませんでした' }, { status: 500 })
+    console.error('Parse error:', e)
+    return Response.json({ error: 'AIの応答をパースできませんでした: ' + e.message }, { status: 500 })
   }
 }
