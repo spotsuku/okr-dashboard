@@ -70,6 +70,8 @@ function KACard({report,onSave,onDelete,members,wT,canEdit}){
   const[editingTitle,setEditingTitle]=useState(false)
   const[kaTitle,setKaTitle]=useState(report.ka_title||'')
   const[titleSaving,setTitleSaving]=useState(false)
+  const[ownerDraft,setOwnerDraft]=useState(report.owner||'')
+  const[ownerSaving,setOwnerSaving]=useState(false)
 
   const cfg=STATUS_CFG[status]||STATUS_CFG.normal
   const ownerMember=members?.find(m=>m.name===report.owner)
@@ -95,7 +97,7 @@ function KACard({report,onSave,onDelete,members,wT,canEdit}){
 
   const save=async(e)=>{
     e&&e.stopPropagation();setSaving(true)
-    await supabase.from('weekly_reports').update({good,more,focus_output:focusOutput,status}).eq('id',report.id)
+    await supabase.from('weekly_reports').update({good,more,focus_output:focusOutput,status,owner:ownerDraft||report.owner}).eq('id',report.id)
     for(const t of tasks){
       const data={title:t.title||'',assignee:t.assignee||null,due_date:t.due_date||null,done:t.done,report_id:report.id}
       if(t.id){await supabase.from('ka_tasks').update(data).eq('id',t.id)}
@@ -113,14 +115,14 @@ function KACard({report,onSave,onDelete,members,wT,canEdit}){
     <div onClick={()=>!open&&setOpen(true)} style={{background:wT().bgCard,border:`1px solid ${open?'#4d9fff50':wT().border}`,borderRadius:10,marginBottom:8,overflow:'hidden',cursor:open?'default':'pointer',transition:'border-color 0.15s'}}>
       <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 12px'}} onClick={()=>setOpen(p=>!p)}>
         <Avatar name={report.owner} avatarUrl={ownerMember?.avatar_url} size={24}/>
-        <div style={{flex:1,minWidth:0}} onClick={e=>e.stopPropagation()}>
-          {editingTitle?(
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
+        <div style={{flex:1,minWidth:0}}>
+          {editingTitle&&canEdit?(
+            <div style={{display:'flex',alignItems:'center',gap:6}} onClick={e=>e.stopPropagation()}>
               <input autoFocus value={kaTitle} onChange={e=>setKaTitle(e.target.value)}
                 onKeyDown={e=>{if(e.key==='Enter')saveTitleInline();if(e.key==='Escape'){setKaTitle(report.ka_title);setEditingTitle(false)}}}
                 style={{flex:1,background:wT().bgCard2,border:'1px solid #4d9fff80',borderRadius:6,padding:'4px 8px',color:wT().text,fontSize:13,fontWeight:600,outline:'none',fontFamily:'inherit'}}/>
-              <button onClick={saveTitleInline} disabled={titleSaving} style={{padding:'3px 10px',borderRadius:5,background:'#4d9fff',border:'none',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0}}>{titleSaving?'…':'✓'}</button>
-              <button onClick={()=>{setKaTitle(report.ka_title);setEditingTitle(false)}} style={{padding:'3px 8px',borderRadius:5,background:'transparent',border:`1px solid ${wT().borderMid}`,color:wT().textMuted,fontSize:11,cursor:'pointer',flexShrink:0}}>✕</button>
+              <button onClick={e=>{e.stopPropagation();saveTitleInline()}} disabled={titleSaving} style={{padding:'3px 10px',borderRadius:5,background:'#4d9fff',border:'none',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',flexShrink:0}}>{titleSaving?'…':'✓'}</button>
+              <button onClick={e=>{e.stopPropagation();setKaTitle(report.ka_title);setEditingTitle(false)}} style={{padding:'3px 8px',borderRadius:5,background:'transparent',border:`1px solid ${wT().borderMid}`,color:wT().textMuted,fontSize:11,cursor:'pointer',flexShrink:0}}>✕</button>
             </div>
           ):(
             <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -136,7 +138,11 @@ function KACard({report,onSave,onDelete,members,wT,canEdit}){
           {report.kr_title&&<div style={{fontSize:10,color:'#4d9fff',background:'rgba(77,159,255,0.08)',border:'1px solid rgba(77,159,255,0.2)',borderRadius:4,padding:'1px 6px',display:'inline-block',marginTop:3,maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📊 {report.kr_title}</div>}
         </div>
         <span onClick={cycleStatus} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:99,cursor:'pointer',flexShrink:0,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.border}`,whiteSpace:'nowrap'}}>{cfg.label}</span>
-        {report.owner&&<span style={{fontSize:11,color:avatarColor(report.owner),fontWeight:600,flexShrink:0}}>{report.owner}</span>}
+        {/* 担当者アイコン＋名前（ヘッダー） */}
+        <div onClick={e=>e.stopPropagation()} style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+          <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={22}/>
+          <span style={{fontSize:11,color:avatarColor(ownerDraft||report.owner),fontWeight:600}}>{ownerDraft||report.owner||'未設定'}</span>
+        </div>
         <button onClick={e=>{e.stopPropagation();onDelete(report.id)}} style={{width:22,height:22,borderRadius:4,border:'none',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,107,107,0.08)',color:'#ff6b6b',flexShrink:0}}>✕</button>
         <span style={{color:wT().textFaint,fontSize:11,transform:open?'rotate(180deg)':'rotate(0deg)',transition:'transform 0.2s',display:'inline-block',flexShrink:0}}>▾</span>
       </div>
@@ -148,6 +154,17 @@ function KACard({report,onSave,onDelete,members,wT,canEdit}){
       )}
       {open&&(
         <div style={{padding:'0 12px 12px'}} onClick={e=>e.stopPropagation()}>
+          {/* ★ 担当者変更UI */}
+          <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:wT().bgCard,borderRadius:8,border:`1px solid ${wT().border}`,marginBottom:10}}>
+            <span style={{fontSize:10,color:wT().textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',flexShrink:0}}>担当者</span>
+            <Avatar name={ownerDraft||report.owner} avatarUrl={members.find(m=>m.name===(ownerDraft||report.owner))?.avatar_url} size={20}/>
+            <select value={ownerDraft} onChange={e=>setOwnerDraft(e.target.value)}
+              style={{flex:1,background:wT().bgCard2,border:`1px solid ${wT().borderMid}`,borderRadius:6,padding:'5px 8px',color:ownerDraft?avatarColor(ownerDraft):wT().textMuted,fontSize:12,outline:'none',fontFamily:'inherit',cursor:'pointer',fontWeight:ownerDraft?600:400}}>
+              <option value="">-- 未設定 --</option>
+              {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+            <span style={{fontSize:10,color:wT().textFaint}}>※保存ボタンで反映</span>
+          </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8,minWidth:0}}>
             <div><div style={fl('#00d68f','rgba(0,214,143,0.1)')}>✅ Good</div><textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="うまくいったこと" style={taS}/></div>
             <div><div style={fl('#ff6b6b','rgba(255,107,107,0.1)')}>🔺 More</div><textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} placeholder="課題・改善点" style={taS}/></div>
