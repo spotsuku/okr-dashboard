@@ -31,7 +31,7 @@ export default function LoginPage() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://okr-dashboard-taupe.vercel.app' },
+      options: { redirectTo: typeof window !== 'undefined' ? window.location.origin : 'https://okr-dashboard-taupe.vercel.app' },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
   }
