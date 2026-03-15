@@ -308,48 +308,164 @@ function AddKAModal({ onSave, onClose, levels, weekStart, objectives, members, d
   )
 }
 
-// ─── KRブロック（KR + KA一覧） ────────────────────────────────────────────────
+// ─── 5段階評価スター ──────────────────────────────────────────────────────────
+const RATING_LABELS = ['', '😞 全く進んでいない', '🙁 あまり進んでいない', '😐 少し進んでいる', '🙂 順調に進んでいる', '😄 完了・目標達成']
+const RATING_COLORS = ['', '#ff6b6b', '#ff9f43', '#ffd166', '#4d9fff', '#00d68f']
+
+function StarRating({ value, onChange, wT }) {
+  const [hovered, setHovered] = useState(0)
+  const display = hovered || value
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+      <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+        {[1,2,3,4,5].map(n => (
+          <div key={n} onClick={() => onChange(n === value ? 0 : n)} onMouseEnter={() => setHovered(n)} onMouseLeave={() => setHovered(0)}
+            style={{ width:28, height:28, borderRadius:7, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, transition:'all 0.1s',
+              background: n <= display ? `${RATING_COLORS[n]}20` : wT().borderLight,
+              border: `1px solid ${n <= display ? RATING_COLORS[n]+'60' : wT().border}`,
+              transform: n <= display ? 'scale(1.1)' : 'scale(1)',
+            }}>
+            {n <= display ? '⭐' : '☆'}
+          </div>
+        ))}
+        {display > 0 && <span style={{ fontSize:11, color: RATING_COLORS[display], fontWeight:600, marginLeft:4 }}>{RATING_LABELS[display]}</span>}
+      </div>
+    </div>
+  )
+}
+
+// ─── KRブロック（評価 + Good/More/注力 + KA一覧） ────────────────────────────
 function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectives, wT, weekStart, levelId, objId }) {
-  const krReports = reports.filter(r => r.kr_id === kr.id)
+  const krReports = reports.filter(r => Number(r.kr_id) === Number(kr.id))
   const pct = kr.target ? Math.min(Math.round((kr.current / kr.target) * 100), 150) : 0
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
 
+  // KRレビューのstate
+  const [review,       setReview]      = useState(null)   // DB行
+  const [rating,       setRating]      = useState(0)
+  const [good,         setGood]        = useState('')
+  const [more,         setMore]        = useState('')
+  const [focus,        setFocus]       = useState('')
+  const [reviewOpen,   setReviewOpen]  = useState(false)
+  const [reviewSaving, setReviewSaving]= useState(false)
+  const [reviewSaved,  setReviewSaved] = useState(false)
+
+  // 週次レビューをロード
+  useEffect(() => {
+    supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setReview(data); setRating(data.rating||0)
+          setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'')
+        }
+      })
+  }, [kr.id, weekStart])
+
+  const saveReview = async () => {
+    setReviewSaving(true)
+    const payload = { kr_id: kr.id, week_start: weekStart, rating, good, more, focus, updated_at: new Date().toISOString() }
+    if (review?.id) {
+      await supabase.from('kr_weekly_reviews').update(payload).eq('id', review.id)
+    } else {
+      const { data } = await supabase.from('kr_weekly_reviews').insert([payload]).select().single()
+      if (data) setReview(data)
+    }
+    setReviewSaving(false); setReviewSaved(true)
+    setTimeout(() => setReviewSaved(false), 1500)
+  }
+
   const addKA = async () => {
     const { error } = await supabase.from('weekly_reports').insert([{
-      week_start: weekStart,
-      level_id: levelId,
-      objective_id: objId,
-      kr_id: kr.id,
-      kr_title: kr.title,
-      ka_title: '新しいKA',
-      status: 'normal',
+      week_start: weekStart, level_id: levelId, objective_id: objId,
+      kr_id: kr.id, kr_title: kr.title, ka_title: '新しいKA', status: 'normal',
     }])
     if (error) console.error('KA追加エラー:', error)
     else onAddKA()
   }
 
+  const taStyle = { width:'100%', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
+  const hasReview = rating > 0 || good || more || focus
+
   return (
-    <div style={{ marginBottom:16 }}>
-      {/* KRヘッダー */}
-      <div style={{ padding:'8px 12px', background: wT().bgCard, border:`1px solid ${wT().border}`, borderLeft:`3px solid ${pctColor}`, borderRadius:8, marginBottom:8 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4 }}>{pct}%</div>
-          <span style={{ fontSize:12, color:wT().textSub, lineHeight:1.4, flex:1 }}>{kr.title}</span>
+    <div style={{ marginBottom:20, border:`1px solid ${wT().border}`, borderRadius:10, overflow:'hidden' }}>
+
+      {/* KRヘッダー（クリックで評価エリア開閉） */}
+      <div onClick={() => setReviewOpen(p => !p)} style={{ padding:'10px 14px', background: wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4, flexShrink:0 }}>{pct}%</div>
+          <span style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.4, flex:1 }}>{kr.title}</span>
           <span style={{ fontSize:11, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
+          {/* 評価サマリー */}
+          {!reviewOpen && rating > 0 && (
+            <span style={{ fontSize:13, marginLeft:4 }}>{'⭐'.repeat(rating)}</span>
+          )}
+          <span style={{ fontSize:11, color:wT().textFaint, transform:reviewOpen?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-block', flexShrink:0 }}>▾</span>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
           <div style={{ flex:1, height:4, borderRadius:2, background:wT().borderLight, overflow:'hidden' }}>
             <div style={{ height:'100%', width:`${Math.min(pct,100)}%`, background:pctColor, borderRadius:2 }} />
           </div>
         </div>
+        {/* 閉じてるときのプレビュー */}
+        {!reviewOpen && hasReview && (
+          <div style={{ display:'flex', gap:12, marginTop:6, flexWrap:'wrap' }}>
+            {good && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:4 }}><span style={{ color:'#00d68f', fontWeight:700, fontSize:10 }}>✅</span><span>{good.slice(0,50)}{good.length>50?'…':''}</span></div>}
+            {more && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:4 }}><span style={{ color:'#ff6b6b', fontWeight:700, fontSize:10 }}>🔺</span><span>{more.slice(0,50)}{more.length>50?'…':''}</span></div>}
+          </div>
+        )}
       </div>
 
+      {/* 評価・Good/More/注力アクション入力エリア */}
+      {reviewOpen && (
+        <div style={{ padding:'12px 14px', background:wT().bgCard2, borderBottom:`1px solid ${wT().border}` }} onClick={e=>e.stopPropagation()}>
+
+          {/* 5段階評価 */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:wT().textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の進捗評価</div>
+            <StarRating value={rating} onChange={setRating} wT={wT} />
+          </div>
+
+          {/* Good / More 横並び */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good — うまくいったこと</div>
+              <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="進んでいること・良かったこと" style={taStyle} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
+            </div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🔺 More — 課題・改善点</div>
+              <textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} placeholder="うまくいっていないこと・課題" style={taStyle} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
+            </div>
+          </div>
+
+          {/* コネクター */}
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+            <div style={{ flex:1, height:1, background:wT().border }} />
+            <span style={{ fontSize:10, color:wT().textMuted }}>↓ Moreへの対応</span>
+            <div style={{ flex:1, height:1, background:wT().border }} />
+          </div>
+
+          {/* 注力アクション */}
+          <div style={{ marginBottom:10 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 今週の注力アクション（Moreを改善するために）</div>
+            <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか・何に力を入れるか" style={taStyle} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
+          </div>
+
+          {/* 保存ボタン */}
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+            <button onClick={()=>setReviewOpen(false)} style={{ padding:'5px 12px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
+            <button onClick={saveReview} disabled={reviewSaving} style={{ padding:'5px 16px', borderRadius:6, background:reviewSaved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', transition:'background 0.3s' }}>
+              {reviewSaved ? '✓ 保存済み' : reviewSaving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* このKRのKA一覧 */}
-      <div style={{ paddingLeft:12 }}>
+      <div style={{ padding:'10px 12px', background:wT().bgCard2 }}>
+        <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>📋 KA一覧</div>
         {krReports.map(r => (
           <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} objectives={objectives} members={members} wT={wT} />
         ))}
-        {/* KA追加ボタン */}
         <div onClick={addKA} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:7, border:`1px dashed ${wT().borderMid}`, cursor:'pointer', color:wT().textMuted, fontSize:11, marginTop:4 }}>
           <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
         </div>
