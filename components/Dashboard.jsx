@@ -7,6 +7,7 @@ import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
 import WeeklyMTGPage from './WeeklyMTGPage'
 import MyOKRPageNew from './MyOKRPage'
+import BulkRegisterPage from './BulkRegisterPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -1300,7 +1301,7 @@ export default function Dashboard({ user, onSignOut }) {
 
           {/* ページナビ（中央） */}
           <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-            {[{key:'okr',label:'OKR'},{key:'myokr',label:'マイOKR'},{key:'csv',label:'CSV登録'},{key:'members',label:'組織図'},{key:'weekly',label:'週次MTG'}].map(pg => (
+            {[{key:'okr',label:'OKR'},{key:'myokr',label:'マイOKR'},{key:'bulk',label:'一括登録'},{key:'csv',label:'CSV登録'},{key:'members',label:'組織図'},{key:'weekly',label:'週次MTG'}].map(pg => (
               <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
                 padding: isMobile ? '5px 6px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
                 background: activePage === pg.key ? '#4d9fff' : 'transparent',
@@ -1403,6 +1404,7 @@ export default function Dashboard({ user, onSignOut }) {
       </div>
 
       {/* ─── ページ切替 ─── */}
+      {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
       {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
