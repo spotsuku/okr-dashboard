@@ -6,6 +6,7 @@ import MemberPage from './MemberPage'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
 import WeeklyMTGPage from './WeeklyMTGPage'
+import MyOKRPageNew from './MyOKRPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -1231,7 +1232,7 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
       {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
-      {activePage === 'myokr' && <div style={{ flex: 1, overflowY: 'auto' }}><MyOKRPage user={user} levels={levels} members={members} subtreeObjs={subtreeObjs} activePeriod={activePeriod} /></div>}
+      {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} /></div>}
       <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
