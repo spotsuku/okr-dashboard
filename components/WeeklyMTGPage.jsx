@@ -135,7 +135,7 @@ function KACard({report,onSave,onDelete,members,wT,canEdit}){
               )}
             </div>
           )}
-          {report.kr_title&&<div style={{fontSize:10,color:'#4d9fff',background:'rgba(77,159,255,0.08)',border:'1px solid rgba(77,159,255,0.2)',borderRadius:4,padding:'1px 6px',display:'inline-block',marginTop:3,maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📊 {report.kr_title}</div>}
+          {report.kr_title&&<div style={{fontSize:10,color:'#4d9fff',background:'rgba(77,159,255,0.1)',border:'1px solid rgba(77,159,255,0.3)',borderRadius:4,padding:'2px 8px',display:'inline-flex',alignItems:'center',gap:4,marginTop:3,maxWidth:280,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}><span style={{fontWeight:700,flexShrink:0}}>📊 KR</span><span style={{color:'rgba(77,159,255,0.7)',margin:'0 2px'}}>|</span><span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{report.kr_title}</span></div>}
         </div>
         <span onClick={cycleStatus} style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:99,cursor:'pointer',flexShrink:0,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.border}`,whiteSpace:'nowrap'}}>{cfg.label}</span>
         {/* 担当者アイコン＋名前（ヘッダー） */}
@@ -378,7 +378,12 @@ export default function WeeklyMTGPage({levels,themeKey='dark',fiscalYear='2026',
 
   const myMember=members.find(m=>m.email===user?.email)
   const myName=myMember?.name||''
-  const canEditKA=useCallback((ownerName)=>!!(myName&&ownerName&&myName===ownerName),[myName])
+  // ownerが未設定（新規KA）または自分がownerの場合に編集可
+  const canEditKA=useCallback((ownerName)=>{
+    if(!ownerName||ownerName==='')return true  // owner未設定は誰でも編集可
+    if(!myName)return false
+    return myName===ownerName
+  },[myName])
 
   const visibleLevels=activeLevelId?levels.filter(l=>Number(l.id)===Number(activeLevelId)):levels
   const visibleObjs=objectives.filter(o=>{
