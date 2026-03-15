@@ -667,7 +667,7 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 }
 
 // ─── Org Modal ────────────────────────────────────────────────────────────────
-function OrgModal({ levels, onClose, onAdd, onDelete }) {
+function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear }) {
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('👥')
   const [parentId, setParentId] = useState('')
@@ -742,14 +742,42 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
         padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto',
         boxShadow:'0 28px 80px rgba(0,0,0,0.65)',
       }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-          <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
+            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color: fiscalYear==='2026'?'#4d9fff':'#ff9f43', border: fiscalYear==='2026'?'1px solid rgba(77,159,255,0.3)':'1px solid rgba(255,159,67,0.3)'}}>
+              {fiscalYear}年度
+            </span>
+          </div>
           <button onClick={onClose} style={{ background:getT().border, border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
         </div>
 
+        {/* 他年度からコピー */}
+        {onCopyFromYear && (
+          <div style={{ marginBottom:16, padding:'10px 12px', background:'rgba(168,85,247,0.06)', border:'1px solid rgba(168,85,247,0.2)', borderRadius:10 }}>
+            <div style={{ fontSize:11, color:'#a855f7', fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {['2025','2026'].filter(y=>y!==fiscalYear).map(y=>(
+                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:'1px solid rgba(168,85,247,0.4)', background:'rgba(168,85,247,0.1)', color:'#a855f7', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                  {y}年度からコピー
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize:10, color:'#606880', marginTop:6 }}>※ 現在の{fiscalYear}年度の組織に追加されます（重複は除外）</div>
+          </div>
+        )}
+
         <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>現在の組織</div>
-          {roots.map(l => <LevelRow key={l.id} level={l} />)}
+          <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>
+            {fiscalYear}年度の現在の組織（{levels.length}件）
+          </div>
+          {levels.length === 0 ? (
+            <div style={{ fontSize:12, color:'#404660', fontStyle:'italic', padding:'12px 8px', textAlign:'center' }}>
+              この年度の組織がまだありません。他年度からコピーするか、新規追加してください。
+            </div>
+          ) : (
+            roots.map(l => <LevelRow key={l.id} level={l} />)
+          )}
         </div>
 
         <div style={{ borderTop:'1px solid rgba(255,255,255,0.07)', paddingTop:18 }}>
@@ -835,6 +863,36 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
     return LAYER_COLORS[d] || '#a0a8be'
   }
   const getLevelName = (levelId) => levels.find(l => Number(l.id) === Number(levelId))?.name || ''
+
+  const handleCopyFromYear = async (fromYear) => {
+    // fromYearの組織構成を取得
+    const { data: srcLevels } = await supabase.from('levels').select('*').eq('fiscal_year', fromYear).order('id')
+    if (!srcLevels?.length) { alert(`${fromYear}年度の組織データがありません`); return }
+    if (!window.confirm(`${fromYear}年度の組織構成（${srcLevels.length}件）を${fiscalYear}年度にコピーしますか？`)) return
+
+    // id→新idのマップ
+    const idMap = {}
+    // rootから順にinsert（parent_idの依存順）
+    const sorted = []
+    const addSorted = (parentId) => {
+      srcLevels.filter(l => (parentId === null ? !l.parent_id : Number(l.parent_id) === Number(parentId))).forEach(l => { sorted.push(l); addSorted(l.id) })
+    }
+    addSorted(null)
+
+    for (const l of sorted) {
+      const newParentId = l.parent_id ? idMap[l.parent_id] : null
+      const { data: inserted } = await supabase.from('levels').insert([{
+        name: l.name, icon: l.icon, color: l.color || '#4d9fff',
+        parent_id: newParentId || null, fiscal_year: fiscalYear,
+      }]).select().single()
+      if (inserted) idMap[l.id] = inserted.id
+    }
+
+    // 再ロード
+    const { data: newLvls } = await supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id')
+    if (newLvls?.length) { setLevels(newLvls); setActiveLevelId(newLvls[0].id) }
+    alert(`${fromYear}年度の組織構成を${fiscalYear}年度にコピーしました！`)
+  }
 
   const handleLinkGoogle = async () => {
     const { error } = await supabase.auth.linkIdentity({
@@ -950,17 +1008,20 @@ export default function Dashboard({ user, onSignOut }) {
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true)
       const [{ data: lvls, error }, { data: mems }] = await Promise.all([
-        supabase.from('levels').select('*').order('id'),
+        supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id'),
         supabase.from('members').select('*').order('id'),
       ])
       if (error) console.error('levels error:', error)
-      if (lvls?.length) { setLevels(lvls); setActiveLevelId(lvls[0].id) }
+      const validLvls = lvls || []
+      if (validLvls.length) { setLevels(validLvls); setActiveLevelId(validLvls[0].id) }
+      else { setLevels([]); setActiveLevelId(null) }
       if (mems) setMembers(mems)
       setLoading(false)
     }
     load()
-  }, [])
+  }, [fiscalYear])
 
   // ─── 年度に応じたperiodキーを生成 ─────────────────────────────────────────
   // 2026年度: 'q1', 'q2', 'q3', 'q4', 'annual' （既存データそのまま）
@@ -1048,7 +1109,7 @@ export default function Dashboard({ user, onSignOut }) {
 
   const handleAddLevel = async ({ name, icon, parent_id }) => {
     const { data, error } = await supabase
-      .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: '#4d9fff' }]).select().single()
+      .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: '#4d9fff', fiscal_year: fiscalYear }]).select().single()
     if (error) { console.error('add level error:', error); return }
     setLevels(p => [...p, data])
   }
@@ -1070,6 +1131,36 @@ export default function Dashboard({ user, onSignOut }) {
       const newRoot = newLevels.find(l => !l.parent_id)
       setActiveLevelId(newRoot?.id || null)
     }
+  }
+
+  const handleCopyFromYear = async (fromYear) => {
+    // fromYearの組織構成を取得
+    const { data: srcLevels } = await supabase.from('levels').select('*').eq('fiscal_year', fromYear).order('id')
+    if (!srcLevels?.length) { alert(`${fromYear}年度の組織データがありません`); return }
+    if (!window.confirm(`${fromYear}年度の組織構成（${srcLevels.length}件）を${fiscalYear}年度にコピーしますか？`)) return
+
+    // id→新idのマップ
+    const idMap = {}
+    // rootから順にinsert（parent_idの依存順）
+    const sorted = []
+    const addSorted = (parentId) => {
+      srcLevels.filter(l => (parentId === null ? !l.parent_id : Number(l.parent_id) === Number(parentId))).forEach(l => { sorted.push(l); addSorted(l.id) })
+    }
+    addSorted(null)
+
+    for (const l of sorted) {
+      const newParentId = l.parent_id ? idMap[l.parent_id] : null
+      const { data: inserted } = await supabase.from('levels').insert([{
+        name: l.name, icon: l.icon, color: l.color || '#4d9fff',
+        parent_id: newParentId || null, fiscal_year: fiscalYear,
+      }]).select().single()
+      if (inserted) idMap[l.id] = inserted.id
+    }
+
+    // 再ロード
+    const { data: newLvls } = await supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id')
+    if (newLvls?.length) { setLevels(newLvls); setActiveLevelId(newLvls[0].id) }
+    alert(`${fromYear}年度の組織構成を${fiscalYear}年度にコピーしました！`)
   }
 
   const handleLinkGoogle = async () => {
@@ -1418,6 +1509,8 @@ export default function Dashboard({ user, onSignOut }) {
           onClose={() => setShowOrgModal(false)}
           onAdd={handleAddLevel}
           onDelete={handleDeleteLevel}
+          fiscalYear={fiscalYear}
+          onCopyFromYear={handleCopyFromYear}
         />
       )}
       {showAI && (
