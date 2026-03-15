@@ -8,7 +8,7 @@ const SUGGESTIONS = [
   'KRの設定方法のベストプラクティスを教えてください',
 ]
 
-export default function AIPanel({ onClose, okrContext }) {
+export default function AIPanel({ onClose, okrContext, initialMessage }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -22,6 +22,13 @@ export default function AIPanel({ onClose, okrContext }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // initialMessageがあれば自動送信
+  useEffect(() => {
+    if (initialMessage) {
+      send(initialMessage)
+    }
+  }, []) // eslint-disable-line
 
   const send = async (text) => {
     const userText = text || input.trim()
