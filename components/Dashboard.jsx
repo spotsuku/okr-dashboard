@@ -939,6 +939,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
+  const [initialAIMessage, setInitialAIMessage] = useState(null)
   const [showOrgModal, setShowOrgModal]     = useState(false)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
@@ -1232,7 +1233,7 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
       {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
-      {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} /></div>}
+      {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
@@ -1399,8 +1400,9 @@ export default function Dashboard({ user, onSignOut }) {
       )}
       {showAI && (
         <AIPanel
-          onClose={() => setShowAI(false)}
+          onClose={() => { setShowAI(false); setInitialAIMessage(null) }}
           okrContext={{ levels, objectives: subtreeObjs, activePeriod }}
+          initialMessage={initialAIMessage}
         />
       )}
       {modal && (
