@@ -308,28 +308,58 @@ function AddKAModal({ onSave, onClose, levels, weekStart, objectives, members, d
   )
 }
 
-// ─── 5段階評価スター ──────────────────────────────────────────────────────────
-const RATING_LABELS = ['', '😞 全く進んでいない', '🙁 あまり進んでいない', '😐 少し進んでいる', '🙂 順調に進んでいる', '😄 完了・目標達成']
-const RATING_COLORS = ['', '#ff6b6b', '#ff9f43', '#ffd166', '#4d9fff', '#00d68f']
+// ─── 天気評価 ─────────────────────────────────────────────────────────────────
+// 達成率 → KR星評価（客観・自動計算）
+function calcKRStars(current, target, lowerIsBetter) {
+  if (!target || target === 0) return 0
+  const ratio = lowerIsBetter ? target / Math.max(current, 0.001) : current / target
+  const pct = ratio * 100
+  if (pct >= 130) return 5
+  if (pct >= 110) return 4
+  if (pct >= 100) return 3
+  if (pct >=  80) return 2
+  if (pct >=  60) return 1
+  return 0
+}
+const KR_STAR_CFG = [
+  { stars:0, label:'60%未満', color:'#606880' },
+  { stars:1, label:'60%台',   color:'#ff6b6b' },
+  { stars:2, label:'80%台',   color:'#ff9f43' },
+  { stars:3, label:'100%達成',color:'#4d9fff' },
+  { stars:4, label:'110%超',  color:'#00d68f' },
+  { stars:5, label:'130%以上',color:'#a855f7' },
+]
 
-function StarRating({ value, onChange, wT }) {
-  const [hovered, setHovered] = useState(0)
-  const display = hovered || value
+// 天気（主観・本人選択）
+const WEATHER_CFG = [
+  { score:0, icon:'—',  label:'未選択',      color:'#606880', bg:'rgba(255,255,255,0.05)' },
+  { score:1, icon:'⛈', label:'嵐',          color:'#8090b0', bg:'rgba(128,144,176,0.12)' },
+  { score:2, icon:'🌧', label:'雨',          color:'#4d9fff', bg:'rgba(77,159,255,0.12)' },
+  { score:3, icon:'☁️', label:'曇り',        color:'#a0a8be', bg:'rgba(160,168,190,0.12)' },
+  { score:4, icon:'🌤', label:'晴れのち曇り', color:'#ffd166', bg:'rgba(255,209,102,0.15)' },
+  { score:5, icon:'☀️', label:'快晴',        color:'#ff9f43', bg:'rgba(255,159,67,0.12)' },
+]
+
+function WeatherPicker({ value, onChange, wT }) {
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-      <div style={{ display:'flex', gap:4, alignItems:'center' }}>
-        {[1,2,3,4,5].map(n => (
-          <div key={n} onClick={() => onChange(n === value ? 0 : n)} onMouseEnter={() => setHovered(n)} onMouseLeave={() => setHovered(0)}
-            style={{ width:28, height:28, borderRadius:7, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, transition:'all 0.1s',
-              background: n <= display ? `${RATING_COLORS[n]}20` : wT().borderLight,
-              border: `1px solid ${n <= display ? RATING_COLORS[n]+'60' : wT().border}`,
-              transform: n <= display ? 'scale(1.1)' : 'scale(1)',
+    <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+      {WEATHER_CFG.slice(1).map(w => {
+        const isActive = w.score === value
+        return (
+          <div key={w.score} onClick={()=>onChange(isActive ? 0 : w.score)}
+            style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, cursor:'pointer', transition:'all 0.15s', userSelect:'none',
+              background: isActive ? w.bg : 'transparent',
+              border: `1px solid ${isActive ? w.color+'70' : wT().borderMid}`,
+              transform: isActive ? 'scale(1.06)' : 'scale(1)',
             }}>
-            {n <= display ? '⭐' : '☆'}
+            <span style={{ fontSize:20, lineHeight:1 }}>{w.icon}</span>
+            <span style={{ fontSize:11, fontWeight:isActive?700:500, color:isActive?w.color:wT().textMuted }}>{w.label}</span>
           </div>
-        ))}
-        {display > 0 && <span style={{ fontSize:11, color: RATING_COLORS[display], fontWeight:600, marginLeft:4 }}>{RATING_LABELS[display]}</span>}
-      </div>
+        )
+      })}
+      {value > 0 && (
+        <button onClick={()=>onChange(0)} style={{ fontSize:10, color:wT().textFaint, background:'transparent', border:`1px solid ${wT().border}`, borderRadius:6, padding:'4px 8px', cursor:'pointer', fontFamily:'inherit' }}>リセット</button>
+      )}
     </div>
   )
 }
@@ -341,8 +371,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
 
   // KRレビューのstate
-  const [review,       setReview]      = useState(null)   // DB行
-  const [rating,       setRating]      = useState(0)
+  const [review,       setReview]      = useState(null)
+  const [weather,      setWeather]     = useState(0)   // 主観・天気
   const [good,         setGood]        = useState('')
   const [more,         setMore]        = useState('')
   const [focus,        setFocus]       = useState('')
@@ -350,12 +380,16 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
   const [reviewSaving, setReviewSaving]= useState(false)
   const [reviewSaved,  setReviewSaved] = useState(false)
 
+  // KR達成率から星を自動計算（客観）
+  const krStars = calcKRStars(kr.current, kr.target, kr.lower_is_better)
+  const krStarCfg = KR_STAR_CFG[krStars] || KR_STAR_CFG[0]
+
   // 週次レビューをロード
   useEffect(() => {
     supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
       .then(({ data }) => {
         if (data) {
-          setReview(data); setRating(data.rating||0)
+          setReview(data); setWeather(data.weather||0)
           setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'')
         }
       })
@@ -363,7 +397,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
 
   const saveReview = async () => {
     setReviewSaving(true)
-    const payload = { kr_id: kr.id, week_start: weekStart, rating, good, more, focus, updated_at: new Date().toISOString() }
+    const payload = { kr_id: kr.id, week_start: weekStart, weather, good, more, focus, updated_at: new Date().toISOString() }
     if (review?.id) {
       await supabase.from('kr_weekly_reviews').update(payload).eq('id', review.id)
     } else {
@@ -395,9 +429,10 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
           <div style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4, flexShrink:0 }}>{pct}%</div>
           <span style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.4, flex:1 }}>{kr.title}</span>
           <span style={{ fontSize:11, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
-          {/* 評価サマリー */}
-          {!reviewOpen && rating > 0 && (
-            <span style={{ fontSize:13, marginLeft:4 }}>{'⭐'.repeat(rating)}</span>
+          {/* KR星（客観）+ 天気（主観）サマリー */}
+          <span style={{ fontSize:13, letterSpacing:1, flexShrink:0 }}>{'★'.repeat(krStars)}{'☆'.repeat(5-krStars)}</span>
+          {!reviewOpen && weather > 0 && (
+            <span style={{ fontSize:18, lineHeight:1 }}>{WEATHER_CFG[weather]?.icon}</span>
           )}
           <span style={{ fontSize:11, color:wT().textFaint, transform:reviewOpen?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-block', flexShrink:0 }}>▾</span>
         </div>
@@ -419,10 +454,27 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
       {reviewOpen && (
         <div style={{ padding:'12px 14px', background:wT().bgCard2, borderBottom:`1px solid ${wT().border}` }} onClick={e=>e.stopPropagation()}>
 
-          {/* 5段階評価 */}
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:wT().textMuted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の進捗評価</div>
-            <StarRating value={rating} onChange={setRating} wT={wT} />
+          {/* KR達成評価（客観・自動） + 天気（主観・選択） */}
+          <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:16, marginBottom:14, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${wT().border}` }}>
+            {/* 左：KR星評価（自動計算） */}
+            <div style={{ borderRight:`1px solid ${wT().border}`, paddingRight:16 }}>
+              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>KR達成評価（自動）</div>
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <div style={{ fontSize:22, letterSpacing:2 }}>
+                  {'★'.repeat(krStars)}
+                  <span style={{ color:wT().borderMid, fontSize:22 }}>{'★'.repeat(5-krStars)}</span>
+                </div>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:700, color:krStarCfg.color }}>{krStarCfg.label}</div>
+                  <div style={{ fontSize:10, color:wT().textMuted }}>達成率 {pct}%</div>
+                </div>
+              </div>
+            </div>
+            {/* 右：天気（主観・選択） */}
+            <div>
+              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の体感・主観</div>
+              <WeatherPicker value={weather} onChange={setWeather} wT={wT} />
+            </div>
           </div>
 
           {/* Good / More 横並び */}
