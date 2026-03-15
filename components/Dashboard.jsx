@@ -1010,11 +1010,16 @@ export default function Dashboard({ user, onSignOut }) {
     const load = async () => {
       setLoading(true)
       const [{ data: lvls, error }, { data: mems }] = await Promise.all([
-        supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id'),
+        supabase.from('levels').select('*').order('id'),
         supabase.from('members').select('*').order('id'),
       ])
       if (error) console.error('levels error:', error)
-      const validLvls = lvls || []
+      // fiscal_yearでフロント側フィルタ（nullは2026年度扱い）
+      const validLvls = (lvls || []).filter(l =>
+        fiscalYear === '2026'
+          ? (!l.fiscal_year || l.fiscal_year === '2026')
+          : l.fiscal_year === fiscalYear
+      )
       if (validLvls.length) { setLevels(validLvls); setActiveLevelId(validLvls[0].id) }
       else { setLevels([]); setActiveLevelId(null) }
       if (mems) setMembers(mems)
@@ -1211,7 +1216,7 @@ export default function Dashboard({ user, onSignOut }) {
     )
   }
 
-  if (loading || !levels.length) return (
+  if (loading) return (
     <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4d9fff', fontSize: 14 }}>
       読み込み中...
     </div>
