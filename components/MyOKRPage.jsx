@@ -286,84 +286,8 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
   )
 }
 
-// ─── AIフィードバックパネル ────────────────────────────────────────────────────
-function AIFeedbackPanel({ obj, krs, reviews, kaReports, myName, wT }) {
-  const [feedback, setFeedback] = useState('')
-  const [loading,  setLoading]  = useState(false)
-
-  const getFeedback = async () => {
-    setLoading(true); setFeedback('')
-    const krSummary = krs.map(kr => {
-      const rev = reviews[kr.id]
-      const pct = calcPct(kr.current, kr.target, kr.lower_is_better)
-      return `KR「${kr.title}」: 達成率${pct}% (${kr.current}${kr.unit}/${kr.target}${kr.unit})` +
-        (rev?.good  ? `\n  Good: ${rev.good}`  : '') +
-        (rev?.more  ? `\n  More: ${rev.more}`  : '') +
-        (rev?.focus ? `\n  注力: ${rev.focus}` : '')
-    }).join('\n')
-    const kaSummary = kaReports.map(r =>
-      `KA「${r.ka_title}」[${r.status}]` +
-      (r.good ? ` Good:${r.good}` : '') +
-      (r.more ? ` More:${r.more}` : '')
-    ).join('\n')
-    const prompt = `あなたはOKRコーチです。以下は${myName}さんの今週のOKR進捗です。
-Objective: ${obj.title}
-${krSummary}
-${kaSummary ? '\nKA一覧:\n' + kaSummary : ''}
----
-この状況を踏まえ、以下を日本語で簡潔に答えてください：
-1. 今週の良かった点（1〜2点）
-2. 改善が必要な点（1〜2点）
-3. 来週に向けた具体的なアドバイス（2〜3点）
-4. モチベーションを高める一言
-返答は400字以内で、箇条書きを使って読みやすく。`
-
-    try {
-      const res = await fetch('/api/ai-feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      })
-      const data = await res.json()
-      setFeedback(data.feedback || 'フィードバックの取得に失敗しました')
-    } catch (e) {
-      setFeedback('エラーが発生しました: ' + e.message)
-    }
-    setLoading(false)
-  }
-
-  return (
-    <div style={{ border:`1px solid rgba(168,85,247,0.3)`, borderRadius:10, overflow:'hidden', marginBottom:16 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:'rgba(168,85,247,0.08)', cursor:'pointer' }} onClick={!feedback && !loading ? getFeedback : undefined}>
-        <span style={{ fontSize:16 }}>🤖</span>
-        <span style={{ fontSize:13, fontWeight:700, color:'#a855f7' }}>AIコーチからのフィードバック</span>
-        {!feedback && !loading && (
-          <button onClick={getFeedback} style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:6, background:'rgba(168,85,247,0.15)', border:'1px solid rgba(168,85,247,0.4)', color:'#a855f7', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-            フィードバックをもらう
-          </button>
-        )}
-        {loading && <span style={{ marginLeft:'auto', fontSize:11, color:'#a855f7' }}>AIが分析中...</span>}
-        {feedback && !loading && (
-          <button onClick={getFeedback} style={{ marginLeft:'auto', padding:'4px 10px', borderRadius:6, background:'transparent', border:`1px solid rgba(168,85,247,0.3)`, color:'#a855f7', fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>🔄 再生成</button>
-        )}
-      </div>
-      {loading && (
-        <div style={{ padding:'16px 14px', display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ width:8, height:8, borderRadius:'50%', background:'#a855f7', animation:'pulse 1s infinite' }} />
-          <span style={{ fontSize:12, color:wT().textSub }}>OKR状況を分析中...</span>
-        </div>
-      )}
-      {feedback && (
-        <div style={{ padding:'12px 14px' }}>
-          <div style={{ fontSize:12, color:wT().text, lineHeight:1.8, whiteSpace:'pre-wrap' }}>{feedback}</div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function MyOKRPage({ user, levels, members, themeKey = 'dark' }) {
+export default function MyOKRPage({ user, levels, members, themeKey = 'dark', onAIFeedback }) {
   const W_THEMES = {
     dark: {
       bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -532,8 +456,37 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark' }) 
                 )
               })()}
 
-              {/* AIフィードバック */}
-              <AIFeedbackPanel obj={selectedObj} krs={objKRs} reviews={reviews} kaReports={objKAs} myName={myName} wT={wT} />
+              {/* AIコーチボタン */}
+              {onAIFeedback && (
+                <div style={{ marginBottom:14 }}>
+                  <button onClick={() => {
+                    const krSummary = objKRs.map(kr => {
+                      const rev = reviews[kr.id]
+                      const pct = calcPct(kr.current, kr.target, kr.lower_is_better)
+                      return `KR「${kr.title}」: 達成率${pct}% (${kr.current}${kr.unit}/${kr.target}${kr.unit})` +
+                        (rev?.good  ? `\n  Good: ${rev.good}`  : '') +
+                        (rev?.more  ? `\n  More: ${rev.more}`  : '') +
+                        (rev?.focus ? `\n  注力: ${rev.focus}` : '')
+                    }).join('\n')
+                    const kaSummary = objKAs.map(r =>
+                      `KA「${r.ka_title}」[${r.status}]` +
+                      (r.good ? ` Good:${r.good}` : '') +
+                      (r.more ? ` More:${r.more}` : '')
+                    ).join('\n')
+                    const msg = `${myName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
+                    onAIFeedback(msg)
+                  }} style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 14px', borderRadius:10, border:'1px solid rgba(168,85,247,0.35)', background:'rgba(168,85,247,0.08)', cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}
+                    onMouseEnter={e=>e.currentTarget.style.background='rgba(168,85,247,0.15)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='rgba(168,85,247,0.08)'}>
+                    <div style={{ width:30, height:30, borderRadius:'50%', background:'linear-gradient(135deg,#4d9fff,#a855f7)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0 }}>🤖</div>
+                    <div style={{ textAlign:'left' }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:'#a855f7' }}>AIコーチにフィードバックをもらう</div>
+                      <div style={{ fontSize:10, color:wT().textMuted }}>現在のKR・KA状況をもとにアドバイスをもらえます</div>
+                    </div>
+                    <span style={{ marginLeft:'auto', fontSize:11, color:'#a855f7' }}>→</span>
+                  </button>
+                </div>
+              )}
 
               {/* KR一覧 */}
               {objKRs.length > 0 && (
