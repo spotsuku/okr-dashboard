@@ -1308,9 +1308,9 @@ export default function Dashboard({ user, onSignOut }) {
 
       {/* ─── ページ切替 ─── */}
       {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
-      {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} /></div>}
-      {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
-      {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
+      {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
 
       {/* Annual View */}
       <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
