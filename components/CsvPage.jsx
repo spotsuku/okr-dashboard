@@ -8,11 +8,18 @@ const SAMPLE_CSV = `目標名,担当者,所属部署,期間,KR1タイトル,KR1�
 ユースイベント参加者を200名にする,鈴木一郎,ユース事業部,q1,参加者数,200,120,名,満足度,90,78,%`
 
 // 年度に応じたperiodキーを生成
-// 2026年度: 'q1' など（既存通り）
-// 2025年度: '2025_q1' など
 function toPeriodKey(period, fiscalYear) {
   return fiscalYear === '2026' ? period : `${fiscalYear}_${period}`
 }
+
+// levelsの階層深度を取得
+function getLevelDepth(levelId, levels) {
+  let d = 0, cur = levels.find(l => l.id === levelId)
+  while (cur && cur.parent_id) { d++; cur = levels.find(l => l.id === cur.parent_id) }
+  return d
+}
+const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
+const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
 
 export default function CsvPage({ levels, fiscalYear = '2026' }) {
   const [step, setStep] = useState('upload')
@@ -27,6 +34,33 @@ export default function CsvPage({ levels, fiscalYear = '2026' }) {
   const fileRef = useRef()
 
   const departments = levels.map(l => l.name)
+
+  // 階層付き部署セレクトコンポーネント
+  function DeptSelect({ value, onChange }) {
+    const roots = levels.filter(l => !l.parent_id)
+    const renderOptions = (levelId, indent = 0) => {
+      const level = levels.find(l => l.id === levelId)
+      if (!level) return []
+      const depth = getLevelDepth(levelId, levels)
+      const label = LAYER_LABELS[depth] || ''
+      const prefix = '　'.repeat(indent)
+      const result = [
+        <option key={level.id} value={level.name}>
+          {prefix}{level.icon} {level.name}（{label}）
+        </option>
+      ]
+      levels.filter(l => Number(l.parent_id) === Number(levelId)).forEach(child => {
+        result.push(...renderOptions(child.id, indent + 1))
+      })
+      return result
+    }
+    return (
+      <select value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '6px 8px', color: '#e8eaf0', fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+        {roots.flatMap(r => renderOptions(r.id, 0))}
+      </select>
+    )
+  }
 
   const handleFile = (file) => {
     if (!file) return
@@ -204,11 +238,20 @@ export default function CsvPage({ levels, fiscalYear = '2026' }) {
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ fontSize: 11, color: '#606880' }}>利用可能な部署名：</div>
-              {departments.map(d => (
-                <span key={d} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#a0a8be' }}>{d}</span>
-              ))}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, color: '#606880', marginBottom: 6 }}>利用可能な部署・チーム名：</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {levels.map(l => {
+                  const depth = getLevelDepth(l.id, levels)
+                  const color = LAYER_COLORS[depth] || '#a0a8be'
+                  const label = LAYER_LABELS[depth] || ''
+                  return (
+                    <span key={l.id} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: `${color}12`, border: `1px solid ${color}30`, color }}>
+                      {l.icon} {l.name} <span style={{ fontSize: 9, opacity: 0.7 }}>{label}</span>
+                    </span>
+                  )
+                })}
+              </div>
             </div>
             <button onClick={() => { setCsvText(SAMPLE_CSV); setFileName('') }}
               style={{ marginTop: 12, background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)', color: '#a855f7', borderRadius: 7, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
@@ -278,12 +321,19 @@ export default function CsvPage({ levels, fiscalYear = '2026' }) {
                     <input value={row.title} onChange={e => updateRow(row._id, 'title', e.target.value)}
                       style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '7px 10px', color: '#dde0ec', fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8 }} />
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <div style={{ flex: 2, minWidth: 120 }}>
-                        <div style={{ fontSize: 10, color: '#606880', marginBottom: 3 }}>部署</div>
-                        <select value={row.department} onChange={e => updateRow(row._id, 'department', e.target.value)}
-                          style={{ width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '6px 8px', color: '#e8eaf0', fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
-                          {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
+                      <div style={{ flex: 2, minWidth: 140 }}>
+                        <div style={{ fontSize: 10, color: '#606880', marginBottom: 3 }}>
+                          部署 / チーム
+                          {(() => {
+                            const level = levels.find(l => l.name === row.department)
+                            if (!level) return <span style={{ color: '#ff6b6b', marginLeft: 6 }}>⚠️ 未マッチ</span>
+                            const depth = getLevelDepth(level.id, levels)
+                            const color = LAYER_COLORS[depth] || '#a0a8be'
+                            const label = LAYER_LABELS[depth] || ''
+                            return <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 99, background: `${color}18`, color }}>{label}</span>
+                          })()}
+                        </div>
+                        <DeptSelect value={row.department} onChange={val => updateRow(row._id, 'department', val)} />
                       </div>
                       <div style={{ flex: 2, minWidth: 100 }}>
                         <div style={{ fontSize: 10, color: '#606880', marginBottom: 3 }}>担当者</div>
