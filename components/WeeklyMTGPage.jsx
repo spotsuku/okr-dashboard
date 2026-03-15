@@ -129,7 +129,7 @@ function KACard({ report, onSave, onDelete, objectives, members, wT, defaultOpen
     onSave({ ...report, good, more, focus_output: focusOutput, status })
   }
 
-  const taStyle = { width:'100%', background: wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, transition:'border-color 0.15s' }
+  const taStyle = { width:'100%', boxSizing:'border-box', background: wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, transition:'border-color 0.15s' }
   const flblStyle = (color, bg) => ({ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:5, display:'inline-flex', alignItems:'center', gap:4, marginBottom:3, color, background:bg })
   const doneTasks = tasks.filter(t=>t.done).length
 
@@ -162,7 +162,7 @@ function KACard({ report, onSave, onDelete, objectives, members, wT, defaultOpen
       {open && (
         <div style={{ padding:'0 12px 12px' }} onClick={e=>e.stopPropagation()}>
           {/* Good / More */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
             <div>
               <div style={flblStyle('#00d68f','rgba(0,214,143,0.1)')}>✅ Good — うまくいったこと</div>
               <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="うまくいったこと・継続したいこと" style={taStyle} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
@@ -417,7 +417,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
     else onAddKA()
   }
 
-  const taStyle = { width:'100%', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
+  const taStyle = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
   const hasReview = weather > 0 || good || more || focus
 
   return (
@@ -478,12 +478,12 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
           </div>
 
           {/* Good / More 横並び */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-            <div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
+            <div style={{ minWidth:0 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good — うまくいったこと</div>
               <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="進んでいること・良かったこと" style={taStyle} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
             </div>
-            <div>
+            <div style={{ minWidth:0 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🔺 More — 課題・改善点</div>
               <textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} placeholder="うまくいっていないこと・課題" style={taStyle} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
             </div>
