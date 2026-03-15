@@ -348,6 +348,8 @@ function KACsvTab({ levels, fiscalYear }) {
   const [step, setStep] = useState('upload')
   const [csvText, setCsvText] = useState('')
   const [fileName, setFileName] = useState('')
+  const [aiLogs, setAiLogs] = useState([])
+  const [aiSummary, setAiSummary] = useState(null)
   const [editRows, setEditRows] = useState([])
   const [dragOver, setDragOver] = useState(false)
   const [registering, setRegistering] = useState(false)
@@ -364,6 +366,8 @@ function KACsvTab({ levels, fiscalYear }) {
     supabase.from('members').select('id,name').order('name').then(({ data }) => setMembers(data || []))
   }, [])
 
+  const departments = levels.map(l => l.name)
+
   const handleFile = (file) => {
     if (!file) return
     setFileName(file.name)
@@ -372,47 +376,41 @@ function KACsvTab({ levels, fiscalYear }) {
     reader.readAsText(file, 'UTF-8')
   }
 
-  const parseKACsv = () => {
+  // ★ AI解析（KAモード）
+  const analyzeWithAI = async () => {
     if (!csvText.trim()) return
-    setError('')
-    const lines = csvText.trim().split('\n').map(l => l.trim()).filter(Boolean)
-    if (lines.length < 2) { setError('データが不足しています（ヘッダー行＋データ行が必要です）'); return }
-    const headers = lines[0].split(',').map(h => h.trim())
-    const rows = []
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map(c => c.trim())
-      const get = (keys) => {
-        for (const k of keys) {
-          const idx = headers.findIndex(h => h.includes(k))
-          if (idx >= 0) return cols[idx] || ''
-        }
-        return ''
-      }
-      const rawStatus = get(['ステータス', 'status', '状態'])
-      const normalizedStatus = STATUS_MAP[rawStatus.replace(/\s/g, '')] || 'normal'
-      const rawWeek = get(['週', 'week', '週次', '開始日'])
-      const weekStart = rawWeek ? getMondayOf(rawWeek) : getMondayOf(new Date().toISOString())
-      const deptName = get(['部署', '所属', 'department', 'チーム', 'team'])
-      const level = levels.find(l => l.name === deptName || l.name.includes(deptName) || deptName.includes(l.name))
-      rows.push({
-        _id: i,
-        kaTitle: get(['KAタイトル', 'タイトル', 'title', 'KA', '内容']),
-        owner: get(['担当者', 'owner', '責任者', '担当']),
-        department: level ? level.name : deptName,
-        status: normalizedStatus,
-        weekStart,
+    setStep('analyzing'); setAiLogs([]); setError('')
+    setAiLogs([{ msg: 'CSVを読み込みました。AIがKAデータを解析します...', type: 'info', time: new Date().toLocaleTimeString() }])
+    try {
+      setAiLogs(p => [...p, { msg: '列名・部署名・ステータス・日付の表記を解析中...', type: 'info', time: new Date().toLocaleTimeString() }])
+      const res = await fetch('/api/csv-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvText, departments, mode: 'ka' }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) { setError(data.error || 'AI解析に失敗しました'); setStep('upload'); return }
+
+      const logs = [{ msg: '✅ 列マッピング完了', type: 'success', time: new Date().toLocaleTimeString() }]
+      data.rows.filter(r => r.fixes?.length > 0).forEach(r =>
+        r.fixes.forEach(f => logs.push({ msg: `✅ ${f}`, type: 'success', time: new Date().toLocaleTimeString() }))
+      )
+      if (data.summary.warnings > 0) logs.push({ msg: `⚠️ ${data.summary.warnings}件に警告があります`, type: 'warn', time: new Date().toLocaleTimeString() })
+      logs.push({ msg: `✅ AI解析完了！${data.summary.total}件のKAを検出しました`, type: 'success', time: new Date().toLocaleTimeString() })
+
+      // AIの結果にIDを付与
+      setAiLogs(logs)
+      setEditRows(data.rows.map((r, i) => ({
+        ...r,
+        _id: i + 1,
+        weekStart: r.weekStart || weeks[0],
         objectiveId: null,
         krId: null,
         krTitle: '',
-        fixes: [
-          ...(rawStatus && rawStatus !== normalizedStatus ? [`ステータス「${rawStatus}」→「${normalizedStatus}」に統一`] : []),
-          ...(rawWeek && weekStart !== rawWeek ? [`週を月曜日起算「${weekStart}」に補正`] : []),
-          ...(!level && deptName ? [`部署「${deptName}」は手動確認が必要`] : []),
-        ]
-      })
-    }
-    setEditRows(rows)
-    setStep('preview')
+      })))
+      setAiSummary(data.summary)
+      setTimeout(() => setStep('preview'), 600)
+    } catch (e) { setError('通信エラー: ' + e.message); setStep('upload') }
   }
 
   const updateRow = (id, field, val) => setEditRows(p => p.map(r => r._id === id ? { ...r, [field]: val } : r))
@@ -444,51 +442,87 @@ function KACsvTab({ levels, fiscalYear }) {
     if (ok > 0) setStep('done')
   }
 
-  const reset = () => { setStep('upload'); setCsvText(''); setFileName(''); setEditRows([]); setError('') }
+  const reset = () => { setStep('upload'); setCsvText(''); setFileName(''); setAiLogs([]); setAiSummary(null); setEditRows([]); setError('') }
 
   return (
     <div>
-      <StepBar steps={['upload', 'preview', 'done']} current={step} />
+      <StepBar steps={['upload', 'analyzing', 'preview', 'done']} current={step} />
       {error && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>{error}</div>}
 
+      {/* アップロード */}
       {step === 'upload' && (
         <div>
           <DropZone onFile={handleFile} csvText={csvText} setCsvText={setCsvText} fileName={fileName} dragOver={dragOver} setDragOver={setDragOver} fileRef={fileRef} />
           <div style={{ background: 'rgba(0,214,143,0.06)', border: '1px solid rgba(0,214,143,0.2)', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#00d68f', marginBottom: 10 }}>📋 KA登録CSVの形式</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#00d68f', marginBottom: 10 }}>🤖 AIが自動で補正できること（KA）</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12 }}>
+              {[
+                '列名のゆらぎ（「内容」「タスク」→ KAタイトル）',
+                '部署名の略称・表記ゆれ',
+                'ステータスの表記統一（「注力」→ focus）',
+                '日付を月曜日に自動補正',
+                '全角/半角の自動変換',
+                '担当者名のスペース補正',
+              ].map(t => (
+                <div key={t} style={{ fontSize: 11, color: '#8090b0', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ color: '#00d68f' }}>✓</span> {t}
+                </div>
+              ))}
+            </div>
             <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#8090b0', background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '10px 12px', marginBottom: 10, lineHeight: 1.8 }}>
               KAタイトル,担当者,所属部署,ステータス,週<br />
               CSジャーニーの可視化,田中花子,パートナー事業部,注力,2026-03-17
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12 }}>
-              {[['KAタイトル', 'KAの内容（必須）'], ['担当者', 'メンバー名'], ['所属部署', '部署またはチーム名'], ['ステータス', '未分類/注力/Good/More'], ['週', '週の開始日（月曜）例: 2026-03-17']].map(([col, desc]) => (
-                <div key={col} style={{ fontSize: 11, color: '#8090b0', display: 'flex', gap: 6 }}>
-                  <span style={{ color: '#4d9fff', fontWeight: 700, flexShrink: 0 }}>{col}:</span> {desc}
-                </div>
-              ))}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: '#606880', marginBottom: 6 }}>利用可能な部署・チーム：</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {levels.map(l => {
+                  const depth = getLevelDepth(l.id, levels)
+                  const color = LAYER_COLORS[depth] || '#a0a8be'
+                  return <span key={l.id} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: `${color}12`, border: `1px solid ${color}30`, color }}>{l.icon} {l.name}</span>
+                })}
+              </div>
             </div>
             <button onClick={() => { setCsvText(SAMPLE_KA_CSV); setFileName('') }}
               style={{ background: 'rgba(0,214,143,0.12)', border: '1px solid rgba(0,214,143,0.25)', color: '#00d68f', borderRadius: 7, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
               サンプルCSVを読み込む
             </button>
           </div>
-          <button onClick={parseKACsv} disabled={!csvText.trim()} style={{ width: '100%', border: 'none', color: csvText.trim() ? '#fff' : '#404660', borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: csvText.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', background: csvText.trim() ? 'linear-gradient(135deg,#00d68f,#4d9fff)' : 'rgba(255,255,255,0.06)' }}>
-            📋 プレビューを確認する
+          <button onClick={analyzeWithAI} disabled={!csvText.trim()} style={{ width: '100%', border: 'none', color: csvText.trim() ? '#fff' : '#404660', borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: csvText.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', background: csvText.trim() ? 'linear-gradient(135deg,#00d68f,#4d9fff)' : 'rgba(255,255,255,0.06)' }}>
+            🤖 AIで解析する（KAデータ）
           </button>
         </div>
       )}
 
-      {step === 'preview' && (
+      {/* AI解析中 */}
+      {step === 'analyzing' && (
+        <div style={{ background: '#111828', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: '24px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#00d68f', boxShadow: '0 0 10px #00d68f' }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#00d68f' }}>AIがKAデータを解析中...</span>
+          </div>
+          {aiLogs.map((log, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: log.type === 'success' ? '#00d68f' : log.type === 'warn' ? '#ffd166' : '#8090b0', marginBottom: 8 }}>
+              <span style={{ fontSize: 10, color: '#404660', flexShrink: 0 }}>{log.time}</span>{log.msg}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* プレビュー */}
+      {step === 'preview' && aiSummary && (
         <div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-            <div style={{ background: '#111828', border: '1px solid rgba(77,159,255,0.25)', borderRadius: 10, padding: '12px 18px', flex: 1, minWidth: 100 }}>
-              <div style={{ fontSize: 10, color: '#606880', marginBottom: 4 }}>登録件数</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#4d9fff' }}>{editRows.length}</div>
-            </div>
-            <div style={{ background: '#111828', border: '1px solid rgba(255,159,67,0.25)', borderRadius: 10, padding: '12px 18px', flex: 1, minWidth: 100 }}>
-              <div style={{ fontSize: 10, color: '#606880', marginBottom: 4 }}>要確認</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#ff9f43' }}>{editRows.filter(r => r.fixes?.length > 0).length}</div>
-            </div>
+            {[
+              { label: '検出件数', value: aiSummary.total, color: '#4d9fff' },
+              { label: '自動補正', value: `${aiSummary.fixed}件`, color: '#00d68f' },
+              { label: '要確認', value: `${aiSummary.warnings}件`, color: aiSummary.warnings ? '#ffd166' : '#00d68f' },
+            ].map(s => (
+              <div key={s.label} style={{ background: '#111828', border: `1px solid ${s.color}25`, borderRadius: 10, padding: '12px 18px', flex: 1, minWidth: 100 }}>
+                <div style={{ fontSize: 10, color: '#606880', marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
+              </div>
+            ))}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
@@ -498,10 +532,12 @@ function KACsvTab({ levels, fiscalYear }) {
               const krsForObj = row.objectiveId ? getKRsForObj(row.objectiveId) : []
               const statusCfg = STATUS_OPTIONS.find(s => s.value === row.status) || STATUS_OPTIONS[0]
               return (
-                <div key={row._id} style={{ background: '#111828', border: `1px solid ${row.fixes?.length ? 'rgba(255,159,67,0.25)' : 'rgba(0,214,143,0.15)'}`, borderRadius: 12, padding: '14px 16px' }}>
+                <div key={row._id} style={{ background: '#111828', border: `1px solid ${row.fixes?.length ? 'rgba(0,214,143,0.3)' : 'rgba(0,214,143,0.15)'}`, borderRadius: 12, padding: '14px 16px' }}>
                   {row.fixes?.length > 0 && (
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                      {row.fixes.map((f, i) => <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,159,67,0.15)', color: '#ff9f43', border: '1px solid rgba(255,159,67,0.3)' }}>⚠️ {f}</span>)}
+                      {row.fixes.map((f, i) => (
+                        <span key={i} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,214,143,0.12)', color: '#00d68f', border: '1px solid rgba(0,214,143,0.3)' }}>🤖 {f}</span>
+                      ))}
                     </div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -512,9 +548,16 @@ function KACsvTab({ levels, fiscalYear }) {
                       {/* 基本情報 */}
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                         <div style={{ flex: 2, minWidth: 130 }}>
-                          <div style={{ fontSize: 10, color: '#606880', marginBottom: 3 }}>部署 / チーム</div>
+                          <div style={{ fontSize: 10, color: '#606880', marginBottom: 3 }}>部署 / チーム
+                            {(() => {
+                              const lv = levels.find(l => l.name === row.department)
+                              if (!lv) return <span style={{ color: '#ff6b6b', marginLeft: 6 }}>⚠️ 未マッチ</span>
+                              const depth = getLevelDepth(lv.id, levels)
+                              const color = LAYER_COLORS[depth] || '#a0a8be'
+                              return <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 99, background: `${color}18`, color }}>{LAYER_LABELS[depth]}</span>
+                            })()}
+                          </div>
                           <DeptSelect value={row.department} onChange={val => {
-                            const lv = levels.find(l => l.name === val)
                             updateRow(row._id, 'department', val)
                             updateRow(row._id, 'objectiveId', null)
                             updateRow(row._id, 'krId', null)
@@ -581,6 +624,7 @@ function KACsvTab({ levels, fiscalYear }) {
               )
             })}
           </div>
+
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={reset} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#a0a8be', borderRadius: 8, padding: '10px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← やり直す</button>
             <button onClick={handleRegister} disabled={registering || editRows.length === 0} style={{ flex: 1, background: 'linear-gradient(135deg,#00d68f,#4d9fff)', border: 'none', color: '#fff', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 700, cursor: registering ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: registering ? 0.6 : 1 }}>
@@ -601,7 +645,6 @@ function KACsvTab({ levels, fiscalYear }) {
     </div>
   )
 }
-
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function CsvPage({ levels, fiscalYear = '2026' }) {
   const [activeTab, setActiveTab] = useState('okr')
