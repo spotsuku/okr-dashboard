@@ -250,11 +250,12 @@ function AddKAModal({ onSave, onClose, levels, weekStart, objectives, members, d
     if (!kaTitle.trim()) return
     setSaving(true)
     await onSave({
-      week_start: weekStart, level_id: parseInt(levelId),
+      week_start: weekStart,
+      level_id: parseInt(levelId),
       objective_id: objectiveId ? parseInt(objectiveId) : null,
-      ka_title: kaTitle.trim(), owner: owner || null,
-      status, good:null, more:null, focus_output:null, next_tasks:null,
-      next_action:null, kr_title:null, assistant:null, report_time:null,
+      ka_title: kaTitle.trim(),
+      owner: owner || null,
+      status,
     })
     setSaving(false)
     onClose()
@@ -314,15 +315,17 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
 
   const addKA = async () => {
-    const insertData = {
-      week_start: weekStart, level_id: levelId, objective_id: objId,
-      kr_id: kr.id, kr_title: kr.title,
-      ka_title: '新しいKA', owner: null, status: 'normal',
-      good: null, more: null, focus_output: null, next_tasks: null,
-      next_action: null, assistant: null, report_time: null,
-    }
-    await supabase.from('weekly_reports').insert([insertData])
-    onAddKA()
+    const { error } = await supabase.from('weekly_reports').insert([{
+      week_start: weekStart,
+      level_id: levelId,
+      objective_id: objId,
+      kr_id: kr.id,
+      kr_title: kr.title,
+      ka_title: '新しいKA',
+      status: 'normal',
+    }])
+    if (error) console.error('KA追加エラー:', error)
+    else onAddKA()
   }
 
   return (
