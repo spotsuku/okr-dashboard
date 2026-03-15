@@ -55,13 +55,36 @@ const STATUS_CFG = {
   normal: { label:'未分類',  color:'#606880', bg:'rgba(255,255,255,0.04)',border:'rgba(255,255,255,0.1)'},
 }
 
-function Avatar({ name, size=22 }) {
+// ─── Avatar（画像 or イニシャル） ─────────────────────────────────────────────
+function Avatar({ name, avatarUrl, size = 22, wT }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        style={{
+          width: size, height: size, borderRadius: '50%',
+          objectFit: 'cover', flexShrink: 0,
+          border: `1.5px solid ${avatarColor(name)}60`,
+        }}
+      />
+    )
+  }
   if (!name) return null
   const c = avatarColor(name)
-  return <div style={{ width:size, height:size, borderRadius:'50%', background:`${c}25`, border:`1.5px solid ${c}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:size*0.36, fontWeight:700, color:c, flexShrink:0 }}>{name.slice(0,2)}</div>
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      background: `${c}25`, border: `1.5px solid ${c}60`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.36, fontWeight: 700, color: c, flexShrink: 0,
+    }}>
+      {name.slice(0, 2)}
+    </div>
+  )
 }
 
-// ─── KRカード（KR進捗 + 週次レビュー） ────────────────────────────────────────
+// ─── KRカード ─────────────────────────────────────────────────────────────────
 function KRCard({ kr, myName, members, wT }) {
   const [currentVal,  setCurrentVal]  = useState(String(kr.current ?? ''))
   const [editingVal,  setEditingVal]  = useState(false)
@@ -112,12 +135,10 @@ function KRCard({ kr, myName, members, wT }) {
 
   return (
     <div style={{ border:`1px solid ${open ? pctColor+'50' : wT().border}`, borderRadius:10, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
-      {/* KRヘッダー */}
       <div onClick={() => setOpen(p=>!p)} style={{ padding:'10px 14px', background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
           <span style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4 }}>{pct}%</span>
           <span style={{ fontSize:13, fontWeight:600, color:wT().text, flex:1, lineHeight:1.4 }}>{kr.title}</span>
-          {/* KR現在値インライン編集 */}
           <div onClick={e=>e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:4 }}>
             {editingVal ? (
               <>
@@ -139,7 +160,6 @@ function KRCard({ kr, myName, members, wT }) {
               </div>
             )}
           </div>
-          {/* 星 + 天気サマリー */}
           <span style={{ fontSize:12, letterSpacing:1, color:'#ffd166', flexShrink:0 }}>{'★'.repeat(stars)}<span style={{ color:wT().borderMid }}>{'★'.repeat(5-stars)}</span></span>
           {!open && weather > 0 && <span style={{ fontSize:16 }}>{WEATHER_CFG[weather]?.icon}</span>}
           <span style={{ fontSize:11, color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-block' }}>▾</span>
@@ -147,7 +167,6 @@ function KRCard({ kr, myName, members, wT }) {
         <div style={{ height:4, borderRadius:2, background:wT().borderLight, overflow:'hidden' }}>
           <div style={{ height:'100%', width:`${Math.min(pct,100)}%`, background:pctColor, borderRadius:2, transition:'width 0.4s' }} />
         </div>
-        {/* 閉じてるときのプレビュー */}
         {!open && (good||more) && (
           <div style={{ display:'flex', gap:12, marginTop:5, flexWrap:'wrap' }}>
             {good && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#00d68f', fontSize:10 }}>✅</span><span>{good.slice(0,50)}{good.length>50?'…':''}</span></div>}
@@ -156,10 +175,8 @@ function KRCard({ kr, myName, members, wT }) {
         )}
       </div>
 
-      {/* 展開エリア */}
       {open && (
         <div style={{ padding:'12px 14px', background:wT().bgCard2 }} onClick={e=>e.stopPropagation()}>
-          {/* KR達成評価 + 天気 */}
           <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:14, marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${wT().border}` }}>
             <div style={{ borderRight:`1px solid ${wT().border}`, paddingRight:14 }}>
               <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>KR達成評価（自動）</div>
@@ -186,7 +203,6 @@ function KRCard({ kr, myName, members, wT }) {
               </div>
             </div>
           </div>
-          {/* Good / More */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
             <div style={{ minWidth:0 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good — うまくいったこと</div>
@@ -203,7 +219,7 @@ function KRCard({ kr, myName, members, wT }) {
             <div style={{ flex:1, height:1, background:wT().border }} />
           </div>
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 今週の注力アクション（Moreを改善するために）</div>
+            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 今週の注力アクション</div>
             <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか・何に力を入れるか" style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
@@ -218,7 +234,7 @@ function KRCard({ kr, myName, members, wT }) {
   )
 }
 
-// ─── KAカード（インライン編集） ────────────────────────────────────────────────
+// ─── KAカード ─────────────────────────────────────────────────────────────────
 function MyKACard({ report, onSave, onDelete, wT, members }) {
   const [open,   setOpen]   = useState(false)
   const [good,   setGood]   = useState(report.good || '')
@@ -229,6 +245,9 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
   const [saved,  setSaved]  = useState(false)
   const cfg = STATUS_CFG[status] || STATUS_CFG.normal
   const STATUS_ORDER = ['normal','focus','good','more']
+
+  // ownerのavatar_urlを取得
+  const ownerMember = members?.find(m => m.name === report.owner)
 
   const save = async (e) => {
     e && e.stopPropagation()
@@ -243,7 +262,7 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
   return (
     <div onClick={() => !open && setOpen(true)} style={{ background:wT().bgCard, border:`1px solid ${open?'#4d9fff50':wT().border}`, borderRadius:9, marginBottom:7, cursor:open?'default':'pointer', transition:'border-color 0.15s' }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px' }} onClick={() => setOpen(p=>!p)}>
-        <Avatar name={report.owner} size={20} />
+        <Avatar name={report.owner} avatarUrl={ownerMember?.avatar_url} size={20} wT={wT} />
         <span style={{ fontSize:13, fontWeight:600, color:wT().text, flex:1 }}>{report.ka_title}</span>
         <span onClick={e=>{ e.stopPropagation(); const idx=STATUS_ORDER.indexOf(status); setStatus(STATUS_ORDER[(idx+1)%STATUS_ORDER.length]) }} style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:99, cursor:'pointer', background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}` }}>{cfg.label}</span>
         <button onClick={e=>{e.stopPropagation();onDelete(report.id)}} style={{ width:20,height:20,borderRadius:4,border:'none',cursor:'pointer',fontSize:9,background:'rgba(255,107,107,0.08)',color:'#ff6b6b' }}>✕</button>
@@ -310,7 +329,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
   const [objectives, setObjectives] = useState([])
   const [keyResults, setKeyResults] = useState([])
   const [kaReports,  setKaReports]  = useState([])
-  const [reviews,    setReviews]    = useState({}) // kr_id → review
+  const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [activeObjId,setActiveObjId]= useState(null)
   const [activePeriod,setActivePeriod]=useState('all')
@@ -319,23 +338,18 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
     if (!myName) return
     const load = async () => {
       setLoading(true)
-      // 自分がオーナーのObjective + 自分がアサインされているKR・KAを取得
       const [{ data: myObjs }, { data: allKRs }, { data: myKAs }] = await Promise.all([
         supabase.from('objectives').select('id,title,level_id,period,owner').eq('owner', myName).order('period'),
         supabase.from('key_results').select('*').eq('owner', myName),
         supabase.from('weekly_reports').select('*').eq('owner', myName).eq('week_start', currentWeek),
       ])
-      // ownerカラムがない場合はobjective_idで全KRを取得
       const objIds = (myObjs||[]).map(o=>o.id)
       let krsForObjs = []
       if (objIds.length > 0) {
         const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds)
         krsForObjs = data || []
       }
-      // マージ（重複除去）
       const allMyKRs = [...(allKRs||[]), ...krsForObjs].filter((kr,i,arr)=>arr.findIndex(k=>k.id===kr.id)===i)
-
-      // 週次レビューを取得
       const krIds = allMyKRs.map(k=>k.id)
       let revData = []
       if (krIds.length > 0) {
@@ -354,11 +368,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
     load()
   }, [myName])
 
-  // 選択ObjのKR
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
-
   const visibleObjs = objectives.filter(o => activePeriod==='all' || o.period===activePeriod)
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
@@ -377,7 +389,18 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
 
       {/* ヘッダー */}
       <div style={{ padding:'11px 16px', borderBottom:`1px solid ${wT().border}`, display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-        <div style={{ width:36, height:36, borderRadius:'50%', background:`${avatarColor(myName)}25`, border:`2px solid ${avatarColor(myName)}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:avatarColor(myName) }}>{myName.slice(0,2)}</div>
+        {/* ユーザーアバター（画像 or イニシャル） */}
+        {myMember?.avatar_url ? (
+          <img
+            src={myMember.avatar_url}
+            alt={myName}
+            style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover', border:`2px solid ${avatarColor(myName)}60`, flexShrink:0 }}
+          />
+        ) : (
+          <div style={{ width:36, height:36, borderRadius:'50%', background:`${avatarColor(myName)}25`, border:`2px solid ${avatarColor(myName)}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:avatarColor(myName), flexShrink:0 }}>
+            {myName.slice(0,2)}
+          </div>
+        )}
         <div>
           <div style={{ fontSize:10, color:wT().textMuted, marginBottom:1 }}>{myMember?.role || 'メンバー'}</div>
           <div style={{ fontSize:15, fontWeight:700 }}>{myName} のOKR</div>
@@ -394,7 +417,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-
         {/* 左：Objective一覧 */}
         <div style={{ width:260, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', padding:10, background:wT().bg }}>
           <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 マイObjective（{visibleObjs.length}件）</div>
@@ -408,7 +430,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
             const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
             const objKRsCount = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id)).length
             const objKAsCount = kaReports.filter(r=>Number(r.objective_id)===Number(obj.id)).length
-            // obj進捗（KR平均）
             const myKRs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const avgPct = myKRs.length > 0 ? Math.round(myKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/myKRs.length) : 0
             const pctColor = avgPct>=100?'#00d68f':avgPct>=60?'#4d9fff':'#ff6b6b'
@@ -441,7 +462,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
             </div>
           ) : (
             <>
-              {/* Objectiveヘッダー */}
               {(() => {
                 const d = getDepth(selectedObj.level_id, levels)
                 const color = LAYER_COLORS[d] || '#a0a8be'
@@ -456,7 +476,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
                 )
               })()}
 
-              {/* AIコーチボタン */}
               {onAIFeedback && (
                 <div style={{ marginBottom:14 }}>
                   <button onClick={() => {
@@ -488,7 +507,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
                 </div>
               )}
 
-              {/* KR一覧 */}
               {objKRs.length > 0 && (
                 <div style={{ marginBottom:16 }}>
                   <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📊 Key Results（{objKRs.length}件）</div>
@@ -501,7 +519,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', on
                 <div style={{ fontSize:12, color:wT().textFaint, fontStyle:'italic', padding:'10px 4px', marginBottom:12 }}>このObjectiveにKRがありません</div>
               )}
 
-              {/* KA一覧 */}
               <div>
                 <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📋 今週のKA（{objKAs.length}件）</div>
                 {objKAs.map(r => (
