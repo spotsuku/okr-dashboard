@@ -418,7 +418,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, objectiv
   }
 
   const taStyle = { width:'100%', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
-  const hasReview = rating > 0 || good || more || focus
+  const hasReview = weather > 0 || good || more || focus
 
   return (
     <div style={{ marginBottom:20, border:`1px solid ${wT().border}`, borderRadius:10, overflow:'hidden' }}>
