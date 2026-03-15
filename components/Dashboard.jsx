@@ -213,7 +213,7 @@ function Btn({ children, onClick, color = '#4d9fff', variant = 'filled', small, 
 }
 
 // ─── Objective Form ────────────────────────────────────────────────────────────
-function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod, members }) {
+function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod, fiscalYear, members }) {
   const [title, setTitle]     = useState(initial?.title || '')
   const [owner, setOwner]     = useState(initial?.owner || '')
   const [levelId, setLevelId] = useState(String(activeLevelId || levels[0]?.id))
@@ -248,6 +248,20 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 
   return (
     <>
+      {/* 年度表示バッジ */}
+      <div style={{ marginBottom: 13 }}>
+        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>年度</div>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)',
+          border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.4)' : 'rgba(255,159,67,0.4)'}`,
+          borderRadius: 8, padding: '6px 12px',
+          color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43',
+          fontSize: 13, fontWeight: 700,
+        }}>
+          📅 {fiscalYear}年度
+        </div>
+      </div>
       <FSelect label="所属レベル" value={levelId} onChange={setLevelId}
         options={levels.map(l => ({ value: String(l.id), label: `${l.icon} ${l.name}` }))} />
       <FSelect label="期間" value={period} onChange={setPeriod} options={periodOpts} />
@@ -361,7 +375,6 @@ function KASection({ krId }) {
 
   return (
     <div style={{ marginLeft: 50, marginTop: 6, marginBottom: 8 }}>
-      {/* トグル */}
       <div
         onClick={() => setOpen(p => !p)}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}
@@ -378,14 +391,12 @@ function KASection({ krId }) {
 
       {open && (
         <>
-          {/* 週次ヘッダー */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(77,159,255,0.06)', border: '1px solid rgba(77,159,255,0.15)', borderRadius: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 11 }}>📅</span>
             <span style={{ fontSize: 11, color: '#4d9fff', fontWeight: 600 }}>今週のKA</span>
             <span style={{ fontSize: 10, color: getT().textMuted, marginLeft: 'auto' }}>{weekStart}</span>
           </div>
 
-          {/* タブ */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
             {[['all','すべて'],['focus','🎯 注力'],['good','✅ Good'],['more','🔺 More']].map(([key, lbl]) => (
               <button key={key} onClick={() => setTab(key)} style={{
@@ -397,14 +408,12 @@ function KASection({ krId }) {
             ))}
           </div>
 
-          {/* KAリスト */}
           {loading && <div style={{ fontSize: 11, color: getT().textMuted, padding: '4px 0' }}>読み込み中...</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
             {filtered.map(ka => (
               <div key={ka.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '6px 10px', borderRadius: 7, background: TYPE_CONFIG[ka.type]?.bg, border: `1px solid ${TYPE_CONFIG[ka.type]?.border}` }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: TYPE_CONFIG[ka.type]?.color, flexShrink: 0, marginTop: 5 }} />
                 <span style={{ flex: 1, fontSize: 12, color: getT().textSub, lineHeight: 1.4 }}>{ka.title}</span>
-                {/* タイプ変更 */}
                 <select value={ka.type} onChange={e => updateType(ka.id, e.target.value)} onClick={e => e.stopPropagation()} style={{
                   fontSize: 9, background: 'transparent', border: 'none', color: TYPE_CONFIG[ka.type]?.color,
                   cursor: 'pointer', fontFamily: 'inherit', padding: 0, outline: 'none',
@@ -422,7 +431,6 @@ function KASection({ krId }) {
             )}
           </div>
 
-          {/* KA追加 */}
           {adding ? (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input
@@ -525,7 +533,6 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                       <Bar value={kprog} color={kr_rating.color} />
                     </div>
                   </div>
-                  {/* KAセクション */}
                   <KASection krId={kr.id} />
                 </div>
               )
@@ -563,9 +570,7 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-      {/* カラム本体 */}
       <div style={{ width: colWidth, flexShrink: 0, position: 'relative' }}>
-        {/* レベルヘッダー */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
           borderRadius: 8, background: `${layerColor}12`, border: `1px solid ${layerColor}30`,
@@ -584,13 +589,11 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
           )}
         </div>
 
-        {/* OKRカード */}
         {objs.length === 0
           ? <div style={{ fontSize: 12, color: getT().textFaintest, fontStyle: 'italic', padding: '8px 4px' }}>目標なし</div>
           : objs.map(obj => <ObjCard key={obj.id} obj={obj} levelColor={layerColor} onEdit={onEdit} onDelete={onDelete} />)
         }
 
-        {/* リサイズハンドル */}
         <div
           onMouseDown={onMouseDownResize}
           style={{
@@ -610,7 +613,6 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
         </div>
       </div>
 
-      {/* 矢印コネクター */}
       {!isLast && (
         <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 20, flexShrink: 0, width: 36 }}>
           <div style={{ width: 14, height: 2, background: getT().connector, marginTop: 10 }} />
@@ -622,16 +624,14 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
   )
 }
 
-// ─── Node Block (親子横並びレンダリング) ──────────────────────────────────────
+// ─── Node Block ──────────────────────────────────────────────────────────────
 function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth = 0 }) {
-  // 無限ループ防止
   if (_depth > 5) return null
   const children = levels.filter(l => Number(l.parent_id) === Number(levelId))
   const hasChildren = children.length > 0
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-      {/* 自分のカラム */}
       <LevelColumn
         levelId={levelId}
         levels={levels}
@@ -641,7 +641,6 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
         isLast={!hasChildren}
       />
 
-      {/* 子がある場合：矢印 + 子を縦積み */}
       {hasChildren && (
         <>
           <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 22, flexShrink: 0, width: 36 }}>
@@ -678,14 +677,13 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
   const roots = levels.filter(l => !l.parent_id)
   const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
 
-  // 追加できるのは事業部（経営の子）またはチーム（事業部の子）のみ
   const addableParents = levels.filter(l => {
     const depth = (() => {
       let d = 0, cur = l
       while (cur && cur.parent_id) { d++; cur = levels.find(x => x.id === cur.parent_id) }
       return d
     })()
-    return depth < 2 // 経営(0)→事業部追加可, 事業部(1)→チーム追加可
+    return depth < 2
   })
 
   const save = async () => {
@@ -698,10 +696,8 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
   const confirmDelete = async (level) => {
     const children = getChildren(level.id)
     const msg = children.length
-      ? `「${level.name}」と配下の${children.length}件を削除しますか？
-関連するOKRもすべて削除されます。`
-      : `「${level.name}」を削除しますか？
-関連するOKRもすべて削除されます。`
+      ? `「${level.name}」と配下の${children.length}件を削除しますか？\n関連するOKRもすべて削除されます。`
+      : `「${level.name}」を削除しますか？\n関連するOKRもすべて削除されます。`
     if (!window.confirm(msg)) return
     setDeleting(level.id)
     await onDelete(level.id)
@@ -751,13 +747,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete }) {
           <button onClick={onClose} style={{ background:getT().border, border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
         </div>
 
-        {/* 現在の組織一覧 */}
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>現在の組織</div>
           {roots.map(l => <LevelRow key={l.id} level={l} />)}
         </div>
 
-        {/* 追加フォーム */}
         <div style={{ borderTop:'1px solid rgba(255,255,255,0.07)', paddingTop:18 }}>
           <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
           <div style={{ marginBottom:12 }}>
@@ -812,14 +806,12 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
   const [allObjs, setAllObjs] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // メールからメンバー情報を取得
   const myMember = members.find(m => m.email === user.email)
   const myName = myMember?.name || user.email
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      // 全期間の自分の目標を取得
       const { data: objs } = await supabase
         .from('objectives').select('id,level_id,period,title,owner').eq('owner', myName).order('id')
       if (!objs || !objs.length) { setMyObjs([]); setAllObjs([]); setLoading(false); return }
@@ -844,7 +836,6 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
   }
   const getLevelName = (levelId) => levels.find(l => Number(l.id) === Number(levelId))?.name || ''
 
-  // Google アカウントを現在のアカウントに紐づける
   const handleLinkGoogle = async () => {
     const { error } = await supabase.auth.linkIdentity({
       provider: 'google',
@@ -853,7 +844,6 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
     if (error) alert('紐づけに失敗しました: ' + error.message)
   }
 
-  // 現在のアカウントにGoogleが紐づいているか確認
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
@@ -865,7 +855,6 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 1100, margin: '0 auto' }}>
-      {/* ヘッダー */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
         <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(77,159,255,0.15)', border: '2px solid rgba(77,159,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#4d9fff' }}>
           {myName.charAt(0)}
@@ -889,7 +878,6 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
         </div>
       ) : (
         <>
-          {/* 期間ごとにグループ表示 */}
           {periods.map(p => {
             const objs = myObjs.filter(o => o.period === p.key)
             if (!objs.length) return null
@@ -935,6 +923,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(null)
+  const [fiscalYear, setFiscalYear]         = useState('2026') // ← 年度state追加
   const [activePeriod, setActivePeriod]     = useState('q1')
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
@@ -943,13 +932,13 @@ export default function Dashboard({ user, onSignOut }) {
   const [showOrgModal, setShowOrgModal]     = useState(false)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
-  const [activePage, setActivePage]         = useState('okr') // 'okr' | 'myokr' | 'csv' | 'members'
-  const [viewMode, setViewMode]             = useState('org')  // 'org' | 'annual'
+  const [activePage, setActivePage]         = useState('okr')
+  const [viewMode, setViewMode]             = useState('org')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
   const [themeKey, setThemeKey]                 = useState('dark')
   const T = THEMES[themeKey]
-  _T = T  // グローバル参照を更新
-  if (typeof window !== 'undefined') window.__OKR_THEME__ = T  // WeeklyMTGPage用
+  _T = T
+  if (typeof window !== 'undefined') window.__OKR_THEME__ = T
   const [members, setMembers]               = useState([])
 
   useEffect(() => {
@@ -959,7 +948,6 @@ export default function Dashboard({ user, onSignOut }) {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Load levels + members
   useEffect(() => {
     const load = async () => {
       const [{ data: lvls, error }, { data: mems }] = await Promise.all([
@@ -974,11 +962,23 @@ export default function Dashboard({ user, onSignOut }) {
     load()
   }, [])
 
-  // Fetch objectives + KRs for a single level
-  const fetchForLevel = async (levelId, period) => {
+  // ─── 年度に応じたperiodキーを生成 ─────────────────────────────────────────
+  // 2026年度: 'q1', 'q2', 'q3', 'q4', 'annual' （既存データそのまま）
+  // 2025年度: '2025_q1', '2025_q2', '2025_q3', '2025_q4', '2025_annual'
+  const toPeriodKey = (period, year) => year === '2026' ? period : `${year}_${period}`
+  const fromPeriodKey = (periodKey) => {
+    if (periodKey.includes('_')) {
+      const parts = periodKey.split('_')
+      return parts[parts.length - 1] // 'q1' など
+    }
+    return periodKey
+  }
+
+  const fetchForLevel = async (levelId, period, year = '2026') => {
+    const periodKey = toPeriodKey(period, year)
     const { data: objs } = await supabase
       .from('objectives').select('id,level_id,period,title,owner')
-      .eq('level_id', levelId).eq('period', period).order('id')
+      .eq('level_id', levelId).eq('period', periodKey).order('id')
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
     const { data: krs } = await supabase
@@ -992,38 +992,39 @@ export default function Dashboard({ user, onSignOut }) {
     return objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
   }
 
-  // Get subtree of level ids
   const getSubtree = useCallback((id, lvls) => {
     const ids = [id]
     lvls.filter(l => Number(l.parent_id) === id).forEach(c => ids.push(...getSubtree(c.id, lvls)))
     return ids
   }, [])
 
-  // Load all objectives in the subtree
-  const loadSubtree = useCallback(async (rootId, period, lvls) => {
+  const loadSubtree = useCallback(async (rootId, period, lvls, year = '2026') => {
     if (!rootId || !lvls.length) return
     const subtree = getSubtree(rootId, lvls)
     const map = {}
     for (const lid of subtree) {
-      map[lid] = await fetchForLevel(lid, period)
+      map[lid] = await fetchForLevel(lid, period, year)
     }
     setNodeObjectives(map)
   }, [getSubtree]) // eslint-disable-line
 
   useEffect(() => {
-    if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels)
-  }, [activeLevelId, activePeriod, levels]) // eslint-disable-line
+    if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+  }, [activeLevelId, activePeriod, levels, fiscalYear]) // eslint-disable-line
 
-  // Save objective + KRs
   const handleSave = async ({ obj, krs }) => {
-    let objectiveId = obj.id
-    if (obj.id) {
-      await supabase.from('objectives').update({ title: obj.title, owner: obj.owner, level_id: obj.level_id, period: obj.period }).eq('id', obj.id)
-      await supabase.from('key_results').delete().eq('objective_id', obj.id)
+    // 年度プレフィックスを付与してperiodKeyを生成
+    const periodKey = toPeriodKey(obj.period, fiscalYear)
+    const objToSave = { ...obj, period: periodKey }
+
+    let objectiveId = objToSave.id
+    if (objToSave.id) {
+      await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
+      await supabase.from('key_results').delete().eq('objective_id', objToSave.id)
     } else {
       const { data, error } = await supabase
         .from('objectives')
-        .insert([{ title: obj.title, owner: obj.owner, level_id: obj.level_id, period: obj.period, parent_objective_id: obj.parent_objective_id || null }])
+        .insert([{ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period, parent_objective_id: objToSave.parent_objective_id || null }])
         .select().single()
       if (error) { console.error('insert error:', error); return }
       objectiveId = data.id
@@ -1033,20 +1034,18 @@ export default function Dashboard({ user, onSignOut }) {
         krs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: k.lower_is_better, objective_id: objectiveId }))
       )
     }
-    setActiveLevelId(obj.level_id)
-    setActivePeriod(obj.period)
-    await loadSubtree(obj.level_id, obj.period, levels)
-    setAnnualRefreshKey(k => k + 1) // AnnualViewを再読み込み
+    setActiveLevelId(objToSave.level_id)
+    await loadSubtree(objToSave.level_id, obj.period, levels, fiscalYear)
+    setAnnualRefreshKey(k => k + 1)
   }
 
   const handleDelete = async (objId) => {
     if (!window.confirm('この目標を削除しますか？')) return
     await supabase.from('key_results').delete().eq('objective_id', objId)
     await supabase.from('objectives').delete().eq('id', objId)
-    await loadSubtree(activeLevelId, activePeriod, levels)
+    await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
   }
 
-  // ─── Level CRUD ───────────────────────────────────────────────────────────────
   const handleAddLevel = async ({ name, icon, parent_id }) => {
     const { data, error } = await supabase
       .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: '#4d9fff' }]).select().single()
@@ -1073,7 +1072,6 @@ export default function Dashboard({ user, onSignOut }) {
     }
   }
 
-  // Google アカウントを現在のアカウントに紐づける
   const handleLinkGoogle = async () => {
     const { error } = await supabase.auth.linkIdentity({
       provider: 'google',
@@ -1082,7 +1080,6 @@ export default function Dashboard({ user, onSignOut }) {
     if (error) alert('紐づけに失敗しました: ' + error.message)
   }
 
-  // 現在のアカウントにGoogleが紐づいているか確認
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
@@ -1095,7 +1092,6 @@ export default function Dashboard({ user, onSignOut }) {
   const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
   const activeLevel = levels.find(l => Number(l.id) === Number(activeLevelId))
 
-  // 全社平均（表示中サブツリー全体）
   const subtreeObjs = Object.values(nodeObjectives).flat()
   const allProgs = subtreeObjs.map(o => calcObjProgress(o.key_results))
   const globalAvg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : 0
@@ -1129,6 +1125,56 @@ export default function Dashboard({ user, onSignOut }) {
       読み込み中...
     </div>
   )
+
+  // サイドバーの共通コンテンツ
+  function SidebarContent() {
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
+          <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
+          {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
+        </div>
+        {roots.map(l => <LevelItem key={l.id} level={l} />)}
+        <button onClick={() => setShowOrgModal(true)} style={{
+          width:'100%', marginTop:10, background:'rgba(77,159,255,0.08)', border:'1px dashed rgba(77,159,255,0.3)',
+          color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
+          cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+        }}>🏗️ 組織を管理</button>
+        <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
+          {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
+            <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
+              <Stars score={r.score} size={9} />
+              <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
+              <span style={{ fontSize: 11, color: getT().textFaint }}>{r.min}%+</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 12, color: getT().textMuted, marginBottom: 8 }}>{user.email}</div>
+          {!hasGoogle && (
+            <button onClick={handleLinkGoogle} style={{
+              background: 'rgba(255,255,255,0.9)', border: 'none',
+              color: '#333', borderRadius: 8, padding: '8px 14px', fontSize: 12,
+              cursor: 'pointer', fontFamily: 'inherit', width: '100%', marginBottom: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              Googleと紐づける
+            </button>
+          )}
+          {hasGoogle && (
+            <div style={{ fontSize: 11, color: '#00d68f', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>✅ Google連携済み</div>
+          )}
+          <button onClick={onSignOut} style={{
+            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+            color: getT().textSub, borderRadius: 8, padding: '8px 14px', fontSize: 12,
+            cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+          }}>ログアウト</button>
+        </div>
+      </>
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', display: 'flex', flexDirection: 'column' }}>
@@ -1174,6 +1220,19 @@ export default function Dashboard({ user, onSignOut }) {
                   color: viewMode === v.key ? '#fff' : '#606880',
                   fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
                 }}>{v.label}</button>
+              ))}
+            </div>
+          )}
+          {/* 年度切替（OKRページ組織ビューのみ） */}
+          {activePage === 'okr' && viewMode === 'org' && (
+            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
+              {['2025', '2026'].map(yr => (
+                <button key={yr} onClick={() => setFiscalYear(yr)} style={{
+                  padding: isMobile ? '5px 7px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: fiscalYear === yr ? '#ff9f43' : 'transparent',
+                  color: fiscalYear === yr ? '#fff' : '#606880',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
+                }}>{yr}年度</button>
               ))}
             </div>
           )}
@@ -1234,11 +1293,12 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
+
+      {/* Annual View */}
       <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
-        {/* Sidebar (annual) */}
         <div style={{
           width: 210, flexShrink: 0,
           borderRight: `1px solid ${T.border}`,
@@ -1250,28 +1310,8 @@ export default function Dashboard({ user, onSignOut }) {
             boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
           } : {}),
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
-            <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
-          </div>
-          {roots.map(l => <LevelItem key={l.id} level={l} />)}
-          <button onClick={() => setShowOrgModal(true)} style={{
-            width:'100%', marginTop:10, background:'rgba(77,159,255,0.08)', border:'1px dashed rgba(77,159,255,0.3)',
-            color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
-            cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-          }}>🏗️ 組織を管理</button>
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
-            {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
-              <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
-                <Stars score={r.score} size={9} />
-                <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
-                <span style={{ fontSize: 11, color: getT().textFaint }}>{r.min}%+</span>
-              </div>
-            ))}
-          </div>
+          <SidebarContent />
         </div>
-        {/* Annual main content */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <AnnualView
             levels={levels}
@@ -1285,9 +1325,10 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
+      {/* Org View */}
       <div style={{ display: activePage === 'okr' && viewMode === 'org' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: T.themeKey === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.6)', zIndex: 299 }} />
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
 
         {/* Sidebar */}
@@ -1302,51 +1343,7 @@ export default function Dashboard({ user, onSignOut }) {
             boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
           } : {}),
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
-            <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-            {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
-          </div>
-          {roots.map(l => <LevelItem key={l.id} level={l} />)}
-          <button onClick={() => setShowOrgModal(true)} style={{
-            width:'100%', marginTop:10, background:'rgba(77,159,255,0.08)', border:'1px dashed rgba(77,159,255,0.3)',
-            color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
-            cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-          }}>🏗️ 組織を管理</button>
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
-            {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
-              <div key={r.score} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px', marginBottom: 2 }}>
-                <Stars score={r.score} size={9} />
-                <span style={{ fontSize: 12, color: r.color, flex: 1 }}>{r.label}</span>
-                <span style={{ fontSize: 11, color: getT().textFaint }}>{r.min}%+</span>
-              </div>
-            ))}
-          </div>
-          {/* Mobile logout */}
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
-            <div style={{ fontSize: 12, color: getT().textMuted, marginBottom: 8 }}>{user.email}</div>
-            {!hasGoogle && (
-              <button onClick={handleLinkGoogle} style={{
-                background: 'rgba(255,255,255,0.9)', border: 'none',
-                color: '#333', borderRadius: 8, padding: '8px 14px', fontSize: 12,
-                cursor: 'pointer', fontFamily: 'inherit', width: '100%', marginBottom: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600,
-              }}>
-                <svg width="14" height="14" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                Googleと紐づける
-              </button>
-            )}
-            {hasGoogle && (
-              <div style={{ fontSize: 11, color: '#00d68f', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                ✅ Google連携済み
-              </div>
-            )}
-            <button onClick={onSignOut} style={{
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              color: getT().textSub, borderRadius: 8, padding: '8px 14px', fontSize: 12,
-              cursor: 'pointer', fontFamily: 'inherit', width: '100%',
-            }}>ログアウト</button>
-          </div>
+          <SidebarContent />
         </div>
 
         {/* Main */}
@@ -1356,6 +1353,13 @@ export default function Dashboard({ user, onSignOut }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
               <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
+              {/* 年度バッジ */}
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)',
+                color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43',
+                border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}`,
+              }}>{fiscalYear}年度</span>
               <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
@@ -1414,6 +1418,7 @@ export default function Dashboard({ user, onSignOut }) {
             levels={levels}
             activeLevelId={modal.obj?.level_id || activeLevelId}
             activePeriod={modal.obj?.period || activePeriod}
+            fiscalYear={fiscalYear}
             members={members}
           />
         </Modal>
