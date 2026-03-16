@@ -2,11 +2,287 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function MemberPage() {
+const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43']
+function avatarColor(name) {
+  if (!name) return '#606880'
+  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+
+// ─── ユーザー一覧タブ ──────────────────────────────────────────────────────────
+const ROLES = ['管理者', 'ディレクター', 'マネージャー', 'メンバー', 'その他']
+
+function UserListTab({ members, currentUser, isAdmin }) {
+  const [authUsers, setAuthUsers] = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState('')
+  const [linkModal, setLinkModal] = useState(null)   // { authUser }
+  const [roleModal, setRoleModal] = useState(null)   // { authUser }
+  const [processing, setProcessing] = useState(false)
+
+  useEffect(() => { fetchUsers() }, [])
+
+  const fetchUsers = async () => {
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/admin-users')
+      const data = await res.json()
+      if (!res.ok || data.error) { setError(data.error || '取得に失敗しました'); setLoading(false); return }
+      // 最終ログイン順でソート
+      const sorted = (data.users || []).sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0))
+      setAuthUsers(sorted)
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const handleDelete = async (authUser) => {
+    if (!window.confirm(`${authUser.email} のアカウントを削除しますか？
+※この操作は取り消せません`)) return
+    setProcessing(true)
+    const res = await fetch('/api/admin-users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', userId: authUser.id })
+    })
+    const data = await res.json()
+    if (data.error) { alert('削除に失敗しました: ' + data.error) }
+    else { await fetchUsers() }
+    setProcessing(false)
+  }
+
+  const handleLink = async (authUser, memberId) => {
+    setProcessing(true)
+    // membersテーブルのemailを更新して紐付け
+    if (memberId) {
+      await supabase.from('members').update({ email: authUser.email }).eq('id', parseInt(memberId))
+    } else {
+      // 紐付け解除
+      await supabase.from('members').update({ email: null }).eq('email', authUser.email)
+    }
+    setLinkModal(null)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const handleRoleUpdate = async (authUser, role) => {
+    setProcessing(true)
+    const member = members.find(m => m.email === authUser.email)
+    if (member) {
+      await supabase.from('members').update({ role }).eq('id', member.id)
+    }
+    setRoleModal(null)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  // 管理権限の付与・剥奪
+  const handleToggleAdmin = async (authUser, member) => {
+    const newVal = !member.is_admin
+    const label  = newVal ? '管理者権限を付与' : '管理者権限を解除'
+    if (!window.confirm(`${member.name} の${label}しますか？`)) return
+    setProcessing(true)
+    await supabase.from('members').update({ is_admin: newVal }).eq('id', member.id)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const formatDate = (d) => {
+    if (!d) return 'ログイン履歴なし'
+    const dt = new Date(d)
+    return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
+  }
+
+  if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>Authユーザーを取得中...</div>
+
+  if (error) return (
+    <div style={{ padding: '20px', background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.25)', borderRadius: 12, color: '#ff6b6b', fontSize: 13, marginBottom: 20 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>⚠️ エラー: {error}</div>
+      <div style={{ color: '#a0a8be', fontSize: 12, lineHeight: 1.6 }}>
+        Supabase Admin APIへのアクセスに失敗しました。<br/>
+        Vercelの環境変数に <code style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 6px', borderRadius: 4 }}>SUPABASE_SERVICE_ROLE_KEY</code> が設定されているか確認してください。<br/>
+        （Supabase ダッシュボード → Settings → API → service_role）
+      </div>
+    </div>
+  )
+
+  // membersテーブルとの照合
+  const getUserMember = (email) => members.find(m => m.email === email)
+  const linkedCount   = authUsers.filter(u => getUserMember(u.email)).length
+  const unlinkedCount = authUsers.length - linkedCount
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      {/* サマリー */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Authアカウント総数', value: authUsers.length, color: '#4d9fff' },
+          { label: '組織図と連携済み',   value: linkedCount,      color: '#00d68f' },
+          { label: '未紐付け',           value: unlinkedCount,    color: '#ff9f43' },
+        ].map(s => (
+          <div key={s.label} style={{ background: '#111828', border: `1px solid ${s.color}25`, borderRadius: 12, padding: '14px 20px', flex: 1, minWidth: 140 }}>
+            <div style={{ fontSize: 10, color: '#606880', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ユーザーリスト */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {authUsers.map(u => {
+          const member    = getUserMember(u.email)
+          const isMe      = u.email === currentUser?.email
+          const color     = member ? avatarColor(member.name) : '#606880'
+          const hasLinked = !!member
+
+          return (
+            <div key={u.id} style={{ background: '#111828', border: `1px solid ${hasLinked ? 'rgba(0,214,143,0.15)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
+              {/* 自分バッジ */}
+              {isMe && <div style={{ position: 'absolute', top: 8, right: 12, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(77,159,255,0.15)', color: '#4d9fff', border: '1px solid rgba(77,159,255,0.3)' }}>自分</div>}
+
+              {/* アバター */}
+              {member?.avatar_url ? (
+                <img src={member.avatar_url} alt={member.name} style={{ width: 46, height: 46, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${color}50`, flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 46, height: 46, borderRadius: '50%', background: `${color}20`, border: `2px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color, flexShrink: 0 }}>
+                  {member ? member.name.slice(0, 2) : u.email?.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+
+              {/* メイン情報 */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  {member ? (
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#e8eaf0' }}>{member.name}</span>
+                  ) : (
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#606880', fontStyle: 'italic' }}>（未紐付け）</span>
+                  )}
+                  {member?.is_admin && (
+                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', fontWeight: 700, border: '1px solid rgba(255,209,102,0.35)' }}>👑 管理者</span>
+                  )}
+                  {member?.role && (
+                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: `${color}15`, color, fontWeight: 600, border: `1px solid ${color}30` }}>{member.role}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: '#4d9fff', marginBottom: 3 }}>✉ {u.email}</div>
+                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#404660', flexWrap: 'wrap' }}>
+                  {member?.role && <span>🏷 {member.role}</span>}
+                  <span>🕐 最終ログイン: {formatDate(u.last_sign_in_at)}</span>
+                  <span>📅 登録日: {formatDate(u.created_at)}</span>
+                </div>
+              </div>
+
+              {/* アクション */}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexDirection: 'column', alignItems: 'flex-end' }}>
+                {/* 紐付けステータス */}
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: hasLinked ? 'rgba(0,214,143,0.12)' : 'rgba(255,159,67,0.1)', color: hasLinked ? '#00d68f' : '#ff9f43', border: `1px solid ${hasLinked ? 'rgba(0,214,143,0.3)' : 'rgba(255,159,67,0.25)'}` }}>
+                  {hasLinked ? '✓ 組織図連携済み' : '未紐付け'}
+                </div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {/* 紐付け変更（管理者のみ） */}
+                  {isAdmin && (
+                    <button onClick={() => setLinkModal({ authUser: u })} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(77,159,255,0.3)', background: 'rgba(77,159,255,0.08)', color: '#4d9fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      {hasLinked ? '紐付け変更' : '紐付け'}
+                    </button>
+                  )}
+                  {/* ロール変更（管理者のみ・紐付け済みの場合） */}
+                  {isAdmin && member && (
+                    <button onClick={() => setRoleModal({ authUser: u, member })} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      ロール変更
+                    </button>
+                  )}
+                  {/* 管理権限付与・剥奪（管理者のみ・自分以外・紐付け済み） */}
+                  {isAdmin && !isMe && member && (
+                    <button onClick={() => handleToggleAdmin(u, member)} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${member.is_admin ? 'rgba(255,209,102,0.4)' : 'rgba(255,209,102,0.2)'}`, background: member.is_admin ? 'rgba(255,209,102,0.15)' : 'rgba(255,209,102,0.06)', color: '#ffd166', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      {member.is_admin ? '👑 管理者解除' : '👑 管理者にする'}
+                    </button>
+                  )}
+                  {/* 削除（管理者のみ・自分は削除不可） */}
+                  {isAdmin && !isMe && (
+                    <button onClick={() => handleDelete(u)} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(255,107,107,0.25)', background: 'rgba(255,107,107,0.08)', color: '#ff6b6b', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      削除
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 紐付けモーダル */}
+      {linkModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setLinkModal(null)}>
+          <div style={{ background: '#111828', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '24px', width: 440, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>組織図メンバーと紐付け</div>
+            <div style={{ fontSize: 12, color: '#4d9fff', marginBottom: 16 }}>{linkModal.authUser.email}</div>
+            <div style={{ fontSize: 12, color: '#606880', marginBottom: 16 }}>紐付けるメンバーを選択してください（変更すると旧紐付けは解除されます）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+              <div onClick={() => handleLink(linkModal.authUser, null)}
+                style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(255,107,107,0.2)', background: 'rgba(255,107,107,0.06)', color: '#ff6b6b', fontSize: 12, fontWeight: 600 }}>
+                🔗 紐付けを解除する
+              </div>
+              {members.map(m => {
+                const alreadyLinked = m.email === linkModal.authUser.email
+                const linkedToOther = m.email && m.email !== linkModal.authUser.email
+                const c = avatarColor(m.name)
+                return (
+                  <div key={m.id} onClick={() => !linkedToOther && handleLink(linkModal.authUser, m.id)}
+                    style={{ padding: '10px 14px', borderRadius: 8, cursor: linkedToOther ? 'not-allowed' : 'pointer', border: `1px solid ${alreadyLinked ? 'rgba(0,214,143,0.4)' : linkedToOther ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'}`, background: alreadyLinked ? 'rgba(0,214,143,0.1)' : linkedToOther ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', gap: 10, opacity: linkedToOther ? 0.4 : 1 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${c}20`, border: `1.5px solid ${c}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: c, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e8eaf0' }}>{m.name}</div>
+                      <div style={{ fontSize: 11, color: '#606880' }}>{m.role} {m.email ? `（${m.email}）` : '（メール未設定）'}</div>
+                    </div>
+                    {alreadyLinked && <span style={{ fontSize: 10, color: '#00d68f', fontWeight: 700 }}>現在</span>}
+                    {linkedToOther && <span style={{ fontSize: 10, color: '#606880' }}>他のアカウントと連携中</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={() => setLinkModal(null)} style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#a0a8be', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* ロール変更モーダル */}
+      {roleModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setRoleModal(null)}>
+          <div style={{ background: '#111828', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '24px', width: 360 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>ロールを変更</div>
+            <div style={{ fontSize: 12, color: '#a855f7', marginBottom: 16 }}>{roleModal.member.name}（{roleModal.authUser.email}）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {ROLES.map(r => {
+                const isActive = roleModal.member.role === r
+                return (
+                  <div key={r} onClick={() => handleRoleUpdate(roleModal.authUser, r)}
+                    style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${isActive ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)'}`, background: isActive ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: isActive ? '#a855f7' : '#e8eaf0', fontWeight: isActive ? 700 : 400 }}>{r}</span>
+                    {isActive && <span style={{ fontSize: 10, color: '#a855f7', fontWeight: 700 }}>現在</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={() => setRoleModal(null)} style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#a0a8be', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function MemberPage({ currentUser }) {
   const [members, setMembers] = useState([])
   const [levels, setLevels] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
+  const [activeTab, setActiveTab] = useState('org')
+
+  // ログインユーザーが管理者かどうか
+  const myMember = members.find(m => m.email === currentUser?.email)
+  const isAdmin  = myMember?.is_admin === true
 
   useEffect(() => { loadData() }, [])
 
@@ -100,13 +376,38 @@ export default function MemberPage() {
 
   if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
 
+  const tabs = [
+    { key: 'org',   label: '👥 組織図',      desc: 'メンバーの所属・役割' },
+    { key: 'users', label: '🔑 ユーザー一覧', desc: 'ログインアカウント' },
+  ]
+
   return (
     <div style={{ padding: '24px 28px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>組織図</div>
-        <div style={{ fontSize: 13, color: '#606880' }}>メンバーの所属・役割を一覧で確認できます</div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>組織管理</div>
+        <div style={{ fontSize: 13, color: '#606880' }}>メンバーの所属・役割とログインアカウントを確認できます</div>
       </div>
-      {roots.map(r => <LevelSection key={r.id} levelId={r.id} depth={0} />)}
+
+      {/* タブ */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: 'rgba(255,255,255,0.04)', padding: 4, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', maxWidth: 460 }}>
+        {tabs.map(tab => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+            flex: 1, padding: '10px 16px', borderRadius: 9, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+            background: activeTab === tab.key ? (tab.key === 'org' ? 'linear-gradient(135deg,#4d9fff,#a855f7)' : 'linear-gradient(135deg,#00d68f,#4d9fff)') : 'transparent',
+            color: activeTab === tab.key ? '#fff' : '#606880',
+            transition: 'all 0.15s',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{tab.label}</div>
+            <div style={{ fontSize: 10, opacity: activeTab === tab.key ? 0.85 : 0.6, marginTop: 2 }}>{tab.desc}</div>
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'org' && (
+        <div>{roots.map(r => <LevelSection key={r.id} levelId={r.id} depth={0} />)}</div>
+      )}
+      {activeTab === 'users' && <UserListTab members={members} currentUser={currentUser} isAdmin={isAdmin} />}
+
       {modal && (
         <MemberModal
           initial={modal.member}
