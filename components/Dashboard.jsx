@@ -1088,8 +1088,10 @@ export default function Dashboard({ user, onSignOut }) {
   }, [activeLevelId, activePeriod, levels, fiscalYear]) // eslint-disable-line
 
   const handleSave = async ({ obj, krs }) => {
-    // 年度プレフィックスを付与してperiodKeyを生成
-    const periodKey = toPeriodKey(obj.period, fiscalYear)
+    // 既にプレフィックス付き（例: 2025_q4）ならそのまま、なければ付与
+    const periodKey = obj.period.includes('_') && fiscalYear !== '2026'
+      ? obj.period
+      : toPeriodKey(obj.period, fiscalYear)
     const objToSave = { ...obj, period: periodKey }
 
     let objectiveId = objToSave.id
