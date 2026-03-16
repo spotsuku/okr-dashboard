@@ -351,7 +351,10 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       <div onClick={() => setReviewOpen(p=>!p)} style={{ padding:'10px 14px', background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
           <div style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4, flexShrink:0 }}>{pct}%</div>
-          <span style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.4, flex:1 }}>{kr.title}</span>
+          <span style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.4, flex:1 }}>
+            <span style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.12)', padding:'1px 5px', borderRadius:3, marginRight:6, verticalAlign:'middle' }}>KR</span>
+            {kr.title}
+          </span>
           <span style={{ fontSize:11, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
           {kr.owner && <OwnerBadge name={kr.owner} members={members} size={20} />}
           <span style={{ fontSize:13, letterSpacing:1, flexShrink:0, color:starCfg.color }}>{'★'.repeat(stars)}{'☆'.repeat(5-stars)}</span>
