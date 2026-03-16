@@ -525,7 +525,10 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
-                        <span style={{ fontSize: 13, color: getT().textSub, lineHeight: 1.35 }}>{kr.title}</span>
+                        <span style={{ fontSize: 13, color: getT().textSub, lineHeight: 1.35 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#4d9fff', background: 'rgba(77,159,255,0.12)', padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
+                          {kr.title}
+                        </span>
                         <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>
                           {kr.current}{kr.unit} / {kr.target}{kr.unit}
                           {kr.lower_is_better && <span style={{ color: getT().textFaint, marginLeft: 4 }}>↓良</span>}
