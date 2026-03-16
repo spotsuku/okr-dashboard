@@ -1032,6 +1032,24 @@ export default function Dashboard({ user, onSignOut }) {
     load()
   }, [fiscalYear])
 
+  // ─── 不正なperiodキー（二重プレフィックス）を自動修正 ─────────────────────
+  useEffect(() => {
+    const fixBadPeriods = async () => {
+      const { data: objs } = await supabase.from('objectives').select('id,period')
+      if (!objs) return
+      const badObjs = objs.filter(o => /^\d{4}_\d{4}_/.test(o.period))
+      for (const o of badObjs) {
+        const fixed = o.period.replace(/^(\d{4})_\1_/, '$1_')
+        await supabase.from('objectives').update({ period: fixed }).eq('id', o.id)
+      }
+      if (badObjs.length > 0) {
+        console.log(`Fixed ${badObjs.length} objectives with double-prefixed period keys`)
+        if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+      }
+    }
+    fixBadPeriods()
+  }, []) // eslint-disable-line
+
   // ─── 年度に応じたperiodキーを生成 ─────────────────────────────────────────
   // 2026年度: 'q1', 'q2', 'q3', 'q4', 'annual' （既存データそのまま）
   // 2025年度: '2025_q1', '2025_q2', '2025_q3', '2025_q4', '2025_annual'
