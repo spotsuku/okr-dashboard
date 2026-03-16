@@ -983,7 +983,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(null)
   const [fiscalYear, setFiscalYear]         = useState('2026') // ← 年度state追加
-  const [activePeriod, setActivePeriod]     = useState('q1')
+  const [activePeriod, setActivePeriod]     = useState('all')
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
@@ -1042,10 +1042,15 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   const fetchForLevel = async (levelId, period, year = '2026') => {
-    const periodKey = toPeriodKey(period, year)
-    const { data: objs } = await supabase
-      .from('objectives').select('id,level_id,period,title,owner')
-      .eq('level_id', levelId).eq('period', periodKey).order('id')
+    let query = supabase.from('objectives').select('id,level_id,period,title,owner').eq('level_id', levelId).order('id')
+    if (period === 'all') {
+      // 年度に対応する全periodキーを取得
+      const allPeriodKeys = ['annual','q1','q2','q3','q4'].map(p => toPeriodKey(p, year))
+      query = query.in('period', allPeriodKeys)
+    } else {
+      query = query.eq('period', toPeriodKey(period, year))
+    }
+    const { data: objs } = await query
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
     const { data: krs } = await supabase
@@ -1180,6 +1185,7 @@ export default function Dashboard({ user, onSignOut }) {
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
+    { key: 'all',    label: 'すべて' },
     { key: 'annual', label: '通期' },
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
     { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
@@ -1405,7 +1411,7 @@ export default function Dashboard({ user, onSignOut }) {
 
       {/* ─── ページ切替 ─── */}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
-      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage /></div>}
+      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage currentUser={user} /></div>}
       {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
@@ -1432,6 +1438,7 @@ export default function Dashboard({ user, onSignOut }) {
           <AnnualView
             levels={levels}
             refreshKey={annualRefreshKey}
+            fiscalYear={fiscalYear}
             onAddObjective={({ parentObjectiveId, period, level_id }) => {
               setModal({ type: 'add', obj: { parent_objective_id: parentObjectiveId, period, level_id } })
             }}
