@@ -338,23 +338,40 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     if (!myName) return
     const load = async () => {
       setLoading(true)
-      const [{ data: myObjs }, { data: allKRs }, { data: myKAs }] = await Promise.all([
+      // ① 自分がOwner/KR担当/KA担当のデータを並行取得
+      const [{ data: myObjs }, { data: myKRs }, { data: myKAs }] = await Promise.all([
         supabase.from('objectives').select('id,title,level_id,period,owner').eq('owner', myName).order('period'),
         supabase.from('key_results').select('*').eq('owner', myName),
-        supabase.from('weekly_reports').select('*').eq('owner', myName).eq('week_start', currentWeek),
+        supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done'),
       ])
       // ★ 年度フィルタを適用
-      const filteredObjs = (myObjs || []).filter(o => {
+      const filterByFY = (objs) => (objs || []).filter(o => {
         if (fiscalYear === '2026') return !o.period.includes('_')
         return o.period.startsWith(`${fiscalYear}_`)
       })
-      const objIds = filteredObjs.map(o=>o.id)
+      const ownedObjs = filterByFY(myObjs)
+
+      // ② KR担当/KA担当の親Objectiveも取得して統合
+      const krObjIds = (myKRs || []).map(kr => kr.objective_id).filter(Boolean)
+      const kaObjIds = (myKAs || []).map(r => r.objective_id).filter(Boolean)
+      const ownedObjIds = ownedObjs.map(o => o.id)
+      const missingObjIds = [...new Set([...krObjIds, ...kaObjIds])].filter(id => !ownedObjIds.includes(id))
+
+      let extraObjs = []
+      if (missingObjIds.length > 0) {
+        const { data } = await supabase.from('objectives').select('id,title,level_id,period,owner').in('id', missingObjIds)
+        extraObjs = filterByFY(data)
+      }
+      const filteredObjs = [...ownedObjs, ...extraObjs].filter((o,i,arr) => arr.findIndex(x => x.id === o.id) === i)
+
+      // ③ 自分がOwnerのObjectiveに紐づく全KRも取得
+      const objIds = filteredObjs.map(o => o.id)
       let krsForObjs = []
       if (objIds.length > 0) {
         const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds)
         krsForObjs = data || []
       }
-      const allMyKRs = [...(allKRs||[]), ...krsForObjs].filter((kr,i,arr)=>arr.findIndex(k=>k.id===kr.id)===i)
+      const allMyKRs = [...(myKRs||[]), ...krsForObjs].filter((kr,i,arr)=>arr.findIndex(k=>k.id===kr.id)===i)
       const krIds = allMyKRs.map(k=>k.id)
       let revData = []
       if (krIds.length > 0) {
@@ -376,7 +393,12 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
-  const visibleObjs = objectives.filter(o => activePeriod==='all' || o.period===activePeriod)
+  const visibleObjs = objectives.filter(o => {
+    if (activePeriod === 'all') return true
+    // 2025_q1 → q1 に変換して比較（年度プレフィックス対応）
+    const rawPeriod = o.period.includes('_') ? o.period.split('_').pop() : o.period
+    return rawPeriod === activePeriod
+  })
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
   const handleKADelete = async (id) => {
