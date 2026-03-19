@@ -18,6 +18,9 @@ function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 const PERIOD_LABELS = { annual:'通期', q1:'Q1', q2:'Q2', q3:'Q3', q4:'Q4' }
+// 年度プレフィックスを除去してraw期間キーを取得 (2025_q4 → q4)
+function rawPeriod(period) { return period?.includes('_') ? period.split('_').pop() : period }
+function periodLabel(period) { return PERIOD_LABELS[rawPeriod(period)] || period }
 const LAYER_COLORS  = { 0:'#ff6b6b', 1:'#4d9fff', 2:'#00d68f', 3:'#ffd166' }
 
 function getDepth(levelId, levels) {
@@ -393,12 +396,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
-  const visibleObjs = objectives.filter(o => {
-    if (activePeriod === 'all') return true
-    // 2025_q1 → q1 に変換して比較（年度プレフィックス対応）
-    const rawPeriod = o.period.includes('_') ? o.period.split('_').pop() : o.period
-    return rawPeriod === activePeriod
-  })
+  const visibleObjs = objectives.filter(o => activePeriod === 'all' || rawPeriod(o.period) === activePeriod)
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
   const handleKADelete = async (id) => {
@@ -468,7 +466,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             return (
               <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{PERIOD_LABELS[obj.period]||obj.period}</span>
+                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{periodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
                 </div>
                 <div style={{ fontSize:12, fontWeight:600, lineHeight:1.4, marginBottom:6, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
@@ -500,7 +498,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 return (
                   <div style={{ padding:'12px 14px', background:`${color}0e`, border:`1px solid ${color}30`, borderLeft:`4px solid ${color}`, borderRadius:10, marginBottom:14 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${color}20`, color }}>{PERIOD_LABELS[selectedObj.period]||selectedObj.period}</span>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${color}20`, color }}>{periodLabel(selectedObj.period)}</span>
                       <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
                     </div>
                     <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>

@@ -1130,7 +1130,7 @@ export default function Dashboard({ user, onSignOut }) {
       )
     }
     setActiveLevelId(objToSave.level_id)
-    await loadSubtree(objToSave.level_id, obj.period, levels, fiscalYear)
+    await loadSubtree(objToSave.level_id, activePeriod, levels, fiscalYear)
     setAnnualRefreshKey(k => k + 1)
   }
 
