@@ -1075,7 +1075,7 @@ export default function Dashboard({ user, onSignOut }) {
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
     const { data: krs } = await supabase
-      .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better')
+      .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better,owner')
       .in('objective_id', ids)
     const krMap = {}
     ;(krs || []).forEach(kr => {
@@ -1435,7 +1435,7 @@ export default function Dashboard({ user, onSignOut }) {
       {/* ─── ページ切替 ─── */}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage currentUser={user} /></div>}
-      {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} /></div>}
+      {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
 

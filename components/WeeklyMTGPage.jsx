@@ -451,7 +451,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user }) {
+export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod='all' }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
@@ -460,7 +460,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [loading,       setLoading]       = useState(false)
   const [activeLevelId, setActiveLevelId] = useState(null)
   const [activeObjId,   setActiveObjId]   = useState(null)
-  const [activePeriod,  setActivePeriod]  = useState('all')
+  const [activePeriod,  setActivePeriod]  = useState(initialPeriod)
 
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period,owner').order('level_id').then(({data})=>setObjectives(data||[]))
@@ -494,8 +494,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return myName === owner
   }, [myName])
 
-  // 年度・部署フィルタ
-  const visibleLevels = activeLevelId ? levels.filter(l=>Number(l.id)===Number(activeLevelId)) : levels
+  // 年度・部署フィルタ（子階層も含む：OKRページと同じサブツリー方式）
+  const getSubtreeIds = (id) => {
+    const ids = [Number(id)]
+    levels.filter(l => Number(l.parent_id) === Number(id)).forEach(c => ids.push(...getSubtreeIds(c.id)))
+    return ids
+  }
+  const visibleLevelIds = activeLevelId ? getSubtreeIds(activeLevelId) : levels.map(l=>l.id)
+  const visibleLevels = levels.filter(l => visibleLevelIds.includes(Number(l.id)))
   const visibleObjs = objectives.filter(o => {
     const levelOk = visibleLevels.some(l => Number(l.id)===Number(o.level_id))
     if (!levelOk) return false
