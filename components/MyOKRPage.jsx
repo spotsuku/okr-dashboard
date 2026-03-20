@@ -405,7 +405,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     setKaReports(p=>p.filter(r=>r.id!==id))
   }
 
-  const periodTabs = [['all','すべて'],['annual','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
 
   if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
 

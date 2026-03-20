@@ -548,7 +548,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     )
   }
 
-  const periodTabs = [['all','すべて'],['annual','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>

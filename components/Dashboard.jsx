@@ -1209,8 +1209,7 @@ export default function Dashboard({ user, onSignOut }) {
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
-    { key: 'all',    label: 'すべて' },
-    { key: 'annual', label: '通期' },
+    { key: 'all', label: '通期' },
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
     { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
   ]
