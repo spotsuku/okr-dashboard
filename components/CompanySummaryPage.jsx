@@ -155,7 +155,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
       for (let i = 0; i < objIds.length; i += chunkSize) {
         const chunk = objIds.slice(i, i + chunkSize)
         const { data: krs } = await supabase.from('key_results')
-          .select('id,objective_id,title,target,current,unit,lower_is_better')
+          .select('*')
           .in('objective_id', chunk)
         if (krs) allKrs = allKrs.concat(krs)
       }

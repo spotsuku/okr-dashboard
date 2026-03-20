@@ -1076,7 +1076,7 @@ export default function Dashboard({ user, onSignOut }) {
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
     const { data: krs } = await supabase
-      .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better,owner')
+      .from('key_results').select('*')
       .in('objective_id', ids)
     const krMap = {}
     ;(krs || []).forEach(kr => {
@@ -1104,7 +1104,7 @@ export default function Dashboard({ user, onSignOut }) {
 
   useEffect(() => {
     if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
-  }, [activeLevelId, activePeriod, levels, fiscalYear]) // eslint-disable-line
+  }, [activeLevelId, activePeriod, levels, fiscalYear, activePage]) // eslint-disable-line
 
   const handleSave = async ({ obj, krs }) => {
     // 既にプレフィックス付き（例: 2025_q4）ならそのまま、なければ付与
