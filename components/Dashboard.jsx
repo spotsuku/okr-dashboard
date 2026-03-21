@@ -219,7 +219,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   const [title, setTitle]     = useState(initial?.title || '')
   const [owner, setOwner]     = useState(initial?.owner || '')
   const [levelId, setLevelId] = useState(String(activeLevelId || levels[0]?.id))
-  const [period, setPeriod]   = useState(activePeriod)
+  const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
       ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current) }))
@@ -1033,18 +1033,27 @@ export default function Dashboard({ user, onSignOut }) {
     load()
   }, [fiscalYear])
 
-  // ─── 不正なperiodキー（二重プレフィックス）を自動修正 ─────────────────────
+  // ─── 不正なperiodキーを自動修正 ─────────────────────────────────────────
   useEffect(() => {
     const fixBadPeriods = async () => {
       const { data: objs } = await supabase.from('objectives').select('id,period')
       if (!objs) return
-      const badObjs = objs.filter(o => /^\d{4}_\d{4}_/.test(o.period))
-      for (const o of badObjs) {
-        const fixed = o.period.replace(/^(\d{4})_\1_/, '$1_')
-        await supabase.from('objectives').update({ period: fixed }).eq('id', o.id)
+      let fixed = 0
+      // 二重プレフィックス修正 (2025_2025_q1 → 2025_q1)
+      const doublePrefix = objs.filter(o => /^\d{4}_\d{4}_/.test(o.period))
+      for (const o of doublePrefix) {
+        await supabase.from('objectives').update({ period: o.period.replace(/^(\d{4})_\1_/, '$1_') }).eq('id', o.id)
+        fixed++
       }
-      if (badObjs.length > 0) {
-        console.log(`Fixed ${badObjs.length} objectives with double-prefixed period keys`)
+      // 無効な period='all' / '2025_all' 等を削除（KR含む）
+      const invalidAll = objs.filter(o => o.period === 'all' || o.period.endsWith('_all'))
+      for (const o of invalidAll) {
+        await supabase.from('key_results').delete().eq('objective_id', o.id)
+        await supabase.from('weekly_reports').delete().eq('objective_id', o.id)
+        await supabase.from('objectives').delete().eq('id', o.id)
+      }
+      if (invalidAll.length > 0) console.log(`Deleted ${invalidAll.length} objectives with invalid period='all'`)
+      if ((fixed + invalidAll.length) > 0) {
         if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
       }
     }
@@ -1107,10 +1116,12 @@ export default function Dashboard({ user, onSignOut }) {
   }, [activeLevelId, activePeriod, levels, fiscalYear, activePage]) // eslint-disable-line
 
   const handleSave = async ({ obj, krs }) => {
+    // 'all' は表示フィルタ用の値であり保存用として無効 → q1 にフォールバック
+    const safePeriod = obj.period === 'all' ? 'q1' : obj.period
     // 既にプレフィックス付き（例: 2025_q4）ならそのまま、なければ付与
-    const periodKey = obj.period.includes('_') && fiscalYear !== '2026'
-      ? obj.period
-      : toPeriodKey(obj.period, fiscalYear)
+    const periodKey = safePeriod.includes('_') && fiscalYear !== '2026'
+      ? safePeriod
+      : toPeriodKey(safePeriod, fiscalYear)
     const objToSave = { ...obj, period: periodKey }
 
     let objectiveId = objToSave.id
