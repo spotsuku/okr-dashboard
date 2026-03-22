@@ -56,6 +56,36 @@ function calcObjProgress(krs) {
   }, 0) / valid.length)
 }
 
+// ─── 週ヘルパー ──────────────────────────────────────────────────────────────
+function getMonday(d) {
+  const dt = new Date(d)
+  const day = dt.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  dt.setDate(dt.getDate() + diff)
+  dt.setHours(0, 0, 0, 0)
+  return dt
+}
+function toDateStr(d) {
+  const dt = typeof d === 'string' ? new Date(d) : d
+  return dt.toISOString().split('T')[0]
+}
+function formatWeekLabel(mondayStr) {
+  const d = new Date(mondayStr)
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const sun = new Date(d)
+  sun.setDate(sun.getDate() + 6)
+  const m2 = sun.getMonth() + 1
+  const d2 = sun.getDate()
+  return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
+}
+function isFriday() { return new Date().getDay() === 5 }
+function getNextMonday() {
+  const d = getMonday(new Date())
+  d.setDate(d.getDate() + 7)
+  return toDateStr(d)
+}
+
 // ─── アバター ─────────────────────────────────────────────────────────────────
 function Avatar({ name, avatarUrl, size = 22 }) {
   const [hov, setHov] = useState(false)
@@ -298,7 +328,7 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, activeWeek }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
   const doneReports   = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status === 'done')
@@ -317,7 +347,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [reviewOpen,   setReviewOpen]   = useState(false)
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewSaved,  setReviewSaved]  = useState(false)
-  const weekStart = new Date().toISOString().split('T')[0]
+  const weekStart = activeWeek || toDateStr(getMonday(new Date()))
 
   useEffect(() => {
     supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).order('week_start', { ascending:false }).limit(1).maybeSingle()
@@ -571,6 +601,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [activeLevelId, setActiveLevelId] = useState(null)
   const [activeObjId,   setActiveObjId]   = useState(null)
   const [activePeriod,  setActivePeriod]  = useState(initialPeriod)
+  const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
 
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period,owner').order('level_id').then(({data})=>setObjectives(data||[]))
@@ -579,15 +610,71 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   }, [])
 
   useEffect(() => {
-    // ★ 週フィルタなし：全KAを取得
     setLoading(true)
     supabase.from('weekly_reports').select('*').order('id')
       .then(({data}) => { setReports(data||[]); setLoading(false) })
   }, [])
 
+  // ★ 週一覧をreportsのweek_startから計算（既存の週 + 今週）
+  const weeksList = (() => {
+    const thisMonday = toDateStr(getMonday(new Date()))
+    const set = new Set([thisMonday])
+    reports.forEach(r => { if (r.week_start) set.add(r.week_start) })
+    return [...set].sort()
+  })()
+
+  // ★ 金曜日に翌週分を自動作成（未作成の場合のみ）
+  useEffect(() => {
+    if (!isFriday()) return
+    if (reports.length === 0) return
+    const nextMon = getNextMonday()
+    const hasNext = reports.some(r => r.week_start === nextMon)
+    if (hasNext) return
+    // 今週のKAを翌週にコピー（done以外）
+    const thisMonday = toDateStr(getMonday(new Date()))
+    const thisWeekKAs = reports.filter(r => r.week_start === thisMonday && r.status !== 'done')
+    if (thisWeekKAs.length === 0) return
+    const copies = thisWeekKAs.map(r => ({
+      week_start: nextMon, level_id: r.level_id, objective_id: r.objective_id,
+      kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
+      owner: r.owner, status: 'normal',
+    }))
+    supabase.from('weekly_reports').insert(copies).then(() => reload())
+  }, [reports.length])
+
   const reload = async () => {
     const {data} = await supabase.from('weekly_reports').select('*').order('id')
     setReports(data||[])
+  }
+
+  // ★ 手動で週を作成（今週のKAをコピー）
+  const createWeek = async (targetMonday) => {
+    const hasData = reports.some(r => r.week_start === targetMonday)
+    if (hasData) return
+    // 直近の既存週からコピー
+    const prevWeeks = weeksList.filter(w => w < targetMonday)
+    const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
+    if (srcWeek) {
+      const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
+      if (srcKAs.length > 0) {
+        const copies = srcKAs.map(r => ({
+          week_start: targetMonday, level_id: r.level_id, objective_id: r.objective_id,
+          kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
+          owner: r.owner, status: 'normal',
+        }))
+        await supabase.from('weekly_reports').insert(copies)
+      }
+    }
+    await reload()
+    setActiveWeek(targetMonday)
+  }
+
+  // ★ 翌週分を手動作成
+  const createNextWeek = () => {
+    const lastWeek = weeksList.length > 0 ? weeksList[weeksList.length - 1] : toDateStr(getMonday(new Date()))
+    const nextMon = new Date(lastWeek)
+    nextMon.setDate(nextMon.getDate() + 7)
+    createWeek(toDateStr(nextMon))
   }
   const handleSave   = (updated) => setReports(p => p.map(r => r.id===updated.id ? updated : r))
   const handleDelete = async (id) => {
@@ -634,6 +721,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const selectedObjKRs = activeObjId ? keyResults.filter(kr => Number(kr.objective_id)===Number(activeObjId)) : []
   const depth          = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
   const objColor       = LAYER_COLORS[depth] || '#a0a8be'
+
+  // ★ 選択中の週のレポートのみ
+  const weekReports = activeWeek ? reports.filter(r => r.week_start === activeWeek) : reports
 
   // ★ KRの達成状況を判定（100%以上 = 達成済み）
   const isKRDone = (kr) => kr.target > 0 && kr.current >= kr.target
@@ -700,6 +790,30 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         ))}
       </div>
 
+      {/* 週タブ */}
+      <div style={{ display:'flex', gap:4, padding:'7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto' }}>
+        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>週：</span>
+        {weeksList.map(w => {
+          const isActive = activeWeek === w
+          const thisMonday = toDateStr(getMonday(new Date()))
+          const isThisWeek = w === thisMonday
+          return (
+            <button key={w} onClick={() => setActiveWeek(w)} style={{
+              padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, flexShrink:0,
+              background: isActive ? 'rgba(77,159,255,0.15)' : 'transparent',
+              border: `1px solid ${isActive ? 'rgba(77,159,255,0.4)' : wT().borderMid}`,
+              color: isActive ? '#4d9fff' : wT().textMuted,
+            }}>
+              {formatWeekLabel(w)}{isThisWeek ? ' (今週)' : ''}
+            </button>
+          )
+        })}
+        <button onClick={createNextWeek} style={{
+          padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
+          background:'rgba(0,214,143,0.1)', border:'1px solid rgba(0,214,143,0.3)', color:'#00d68f',
+        }}>＋ 翌週を作成</button>
+      </div>
+
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* 部署サイドバー */}
         <div style={{ width:155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
@@ -722,7 +836,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             const color = LAYER_COLORS[d] || '#a0a8be'
             const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
             const krs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
-            const kaCount = reports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
+            const kaCount = weekReports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
             return (
               <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
@@ -771,7 +885,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             <CompanySummary
               objectives={visibleObjs}
               keyResults={keyResults}
-              reports={reports}
+              reports={weekReports}
               members={members}
               levels={levels}
               wT={wT}
@@ -798,7 +912,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 <KRBlock
                   key={kr.id}
                   kr={kr}
-                  reports={reports}
+                  reports={weekReports}
                   onAddKA={reload}
                   onSaveKA={handleSave}
                   onDeleteKA={handleDelete}
@@ -809,6 +923,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   objOwner={selectedObj.owner}
                   canEditKA={canEditKA}
                   onKROwnerChange={handleKROwnerChange}
+                  activeWeek={activeWeek}
                 />
               ))}
             </>
