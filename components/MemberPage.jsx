@@ -298,16 +298,15 @@ export default function MemberPage({ currentUser }) {
   }
 
   const handleSave = async (form) => {
+    const payload = {
+      name: form.name, role: form.role, level_id: form.level_id,
+      email: form.email, avatar_url: form.avatar_url,
+      sub_level_ids: form.sub_level_ids || [],
+    }
     if (form.id) {
-      await supabase.from('members').update({
-        name: form.name, role: form.role, level_id: form.level_id,
-        email: form.email, avatar_url: form.avatar_url,
-      }).eq('id', form.id)
+      await supabase.from('members').update(payload).eq('id', form.id)
     } else {
-      await supabase.from('members').insert([{
-        name: form.name, role: form.role, level_id: form.level_id,
-        email: form.email, avatar_url: form.avatar_url,
-      }])
+      await supabase.from('members').insert([payload])
     }
     setModal(null)
     loadData()
@@ -331,7 +330,8 @@ export default function MemberPage({ currentUser }) {
 
   const roots = levels.filter(l => !l.parent_id)
   const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
-  const getLevelMembers = id => members.filter(m => m.level_id === id)
+  const getLevelMembers = id => members.filter(m => m.level_id === id || (m.sub_level_ids && m.sub_level_ids.includes(id)))
+  const isSub = (m, levelId) => m.level_id !== levelId && (m.sub_level_ids || []).includes(levelId)
   const getLayerColor = id => LAYER_COLORS[getDepth(id)] || '#a0a8be'
 
   function LevelSection({ levelId, depth = 0 }) {
@@ -352,7 +352,7 @@ export default function MemberPage({ currentUser }) {
         </div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: children.length ? 24 : 0 }}>
           {mems.map(m => (
-            <MemberCard key={m.id} member={m} color={color}
+            <MemberCard key={m.id} member={m} color={color} isSub={isSub(m, levelId)}
               onEdit={() => setModal({ type: 'edit', member: m })}
               onDelete={() => handleDelete(m.id)} />
           ))}
@@ -449,7 +449,7 @@ export function MemberAvatar({ member, color, size = 48 }) {
   )
 }
 
-function MemberCard({ member, color, onEdit, onDelete }) {
+function MemberCard({ member, color, onEdit, onDelete, isSub }) {
   const [hover, setHover] = useState(false)
   return (
     <div
@@ -472,7 +472,10 @@ function MemberCard({ member, color, onEdit, onDelete }) {
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
         <MemberAvatar member={member} color={color} size={48} />
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec', marginBottom: 4 }}>{member.name}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec', marginBottom: 4 }}>
+        {member.name}
+        {isSub && <span style={{ fontSize: 9, color: '#ff9f43', background: 'rgba(255,159,67,0.15)', border: '1px solid rgba(255,159,67,0.3)', padding: '1px 5px', borderRadius: 99, marginLeft: 4, fontWeight: 600, verticalAlign: 'middle' }}>兼</span>}
+      </div>
       <div style={{ fontSize: 11, color, marginBottom: 4, fontWeight: 600 }}>{member.role}</div>
       {member.email && <div style={{ fontSize: 10, color: '#404660', wordBreak: 'break-all' }}>{member.email}</div>}
     </div>
@@ -484,6 +487,7 @@ function MemberModal({ initial, levels, defaultLevelId, onSave, onClose }) {
   const [role, setRole]         = useState(initial?.role || '')
   const [email, setEmail]       = useState(initial?.email || '')
   const [levelId, setLevelId]   = useState(String(initial?.level_id || defaultLevelId || ''))
+  const [subLevelIds, setSubLevelIds] = useState((initial?.sub_level_ids || []).map(String))
   const [avatarUrl, setAvatarUrl] = useState(initial?.avatar_url || '')
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving]     = useState(false)
@@ -519,7 +523,7 @@ function MemberModal({ initial, levels, defaultLevelId, onSave, onClose }) {
   const save = async () => {
     if (!name.trim() || !levelId) return
     setSaving(true)
-    await onSave({ id: initial?.id, name, role, email, level_id: parseInt(levelId), avatar_url: avatarUrl })
+    await onSave({ id: initial?.id, name, role, email, level_id: parseInt(levelId), sub_level_ids: subLevelIds.filter(id => id !== levelId).map(Number), avatar_url: avatarUrl })
     setSaving(false)
   }
 
@@ -584,13 +588,36 @@ function MemberModal({ initial, levels, defaultLevelId, onSave, onClose }) {
           </div>
         ))}
 
-        {/* 所属 */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>所属</div>
-          <select value={levelId} onChange={e => setLevelId(e.target.value)}
+        {/* 主所属 */}
+        <div style={{ marginBottom: 13 }}>
+          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>主所属 *</div>
+          <select value={levelId} onChange={e => { setLevelId(e.target.value); setSubLevelIds(s => s.filter(id => id !== e.target.value)) }}
             style={{ width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer' }}>
             <option value="">選択してください</option>
             {levels.map(l => <option key={l.id} value={String(l.id)}>{l.icon} {l.name}</option>)}
+          </select>
+        </div>
+
+        {/* 兼任（副所属） */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>兼任（副所属）</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: subLevelIds.length > 0 ? 8 : 0 }}>
+            {subLevelIds.map(sid => {
+              const lv = levels.find(l => String(l.id) === sid)
+              return lv ? (
+                <span key={sid} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: 'rgba(255,159,67,0.12)', border: '1px solid rgba(255,159,67,0.3)', color: '#ff9f43', fontSize: 11, fontWeight: 600 }}>
+                  {lv.icon} {lv.name}
+                  <span onClick={() => setSubLevelIds(s => s.filter(id => id !== sid))} style={{ cursor: 'pointer', marginLeft: 2, fontSize: 13, lineHeight: 1 }}>✕</span>
+                </span>
+              ) : null
+            })}
+          </div>
+          <select value="" onChange={e => { if (e.target.value && e.target.value !== levelId && !subLevelIds.includes(e.target.value)) setSubLevelIds(s => [...s, e.target.value]) }}
+            style={{ width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 12px', color: '#a0a8be', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer' }}>
+            <option value="">＋ 兼任先を追加...</option>
+            {levels.filter(l => String(l.id) !== levelId && !subLevelIds.includes(String(l.id))).map(l => (
+              <option key={l.id} value={String(l.id)}>{l.icon} {l.name}</option>
+            ))}
           </select>
         </div>
 

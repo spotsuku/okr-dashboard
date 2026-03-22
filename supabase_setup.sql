@@ -69,3 +69,10 @@ CREATE POLICY "auth users can manage objectives"
 -- key_results: 認証済みユーザーは全操作可
 CREATE POLICY "auth users can manage key_results"
   ON key_results FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- ============================================================
+-- メンバーの複数所属（兼任）対応
+-- 既存の level_id は主所属として維持
+-- sub_level_ids に副所属（兼任先）の level_id 配列を格納
+-- ============================================================
+ALTER TABLE members ADD COLUMN IF NOT EXISTS sub_level_ids BIGINT[] DEFAULT '{}';

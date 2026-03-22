@@ -923,7 +923,7 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
           {myName.charAt(0)}
         </div>
         <div>
-          <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}</div>
+          <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}{myMember?.sub_level_ids?.length > 0 ? ` + ${myMember.sub_level_ids.map(id => getLevelName(id)).join('・')}` : ''}</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: getT().text }}>{myName} のOKR</div>
         </div>
         {!myMember && (
