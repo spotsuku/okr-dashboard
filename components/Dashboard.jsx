@@ -54,11 +54,11 @@ const getT = () => _T
 
 // ─── Rating helpers ────────────────────────────────────────────────────────────
 const RATINGS = [
-  { min: 150, score: 5, label: '奇跡',    color: '#ff9f43' },
-  { min: 120, score: 4, label: '変革',    color: '#a855f7' },
-  { min: 100, score: 3, label: '順調以上', color: '#00d68f' },
-  { min:  80, score: 2, label: '順調',    color: '#4d9fff' },
-  { min:  60, score: 1, label: '最低限',  color: '#ffd166' },
+  { min: 120, score: 5, label: '卓越',    color: '#a855f7' },
+  { min: 110, score: 4, label: '優秀',    color: '#ff9f43' },
+  { min: 100, score: 3, label: '達成',    color: '#00d68f' },
+  { min:  90, score: 2, label: '順調',    color: '#4d9fff' },
+  { min:  80, score: 1, label: '進行中',  color: '#ffd166' },
   { min:   0, score: 0, label: '未達',    color: '#ff6b6b' },
 ]
 const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
@@ -227,7 +227,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   )
   const [saving, setSaving] = useState(false)
 
-  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }])
+  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
   const updateKR = (key, field, val) => setKRs(p => p.map(k => (k.id || k._tmpId) === key ? { ...k, [field]: val } : k))
 
@@ -295,10 +295,20 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
               <div style={{ flex: 1 }}><FInput value={String(kr.current)} onChange={v => updateKR(key, 'current', v)} placeholder="現在値" type="number" /></div>
               <div style={{ flex: 1 }}><FInput value={kr.unit} onChange={v => updateKR(key, 'unit', v)} placeholder="単位" /></div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: getT().textSub }}>
-              <input type="checkbox" checked={!!kr.lower_is_better} onChange={e => updateKR(key, 'lower_is_better', e.target.checked)} />
-              低い方が良い指標（チャーン率・バグ数など）
-            </label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: getT().textSub, flex: 1 }}>
+                <input type="checkbox" checked={!!kr.lower_is_better} onChange={e => updateKR(key, 'lower_is_better', e.target.checked)} />
+                低い方が良い指標（チャーン率・バグ数など）
+              </label>
+              <select value={kr.owner||''} onChange={e => updateKR(key, 'owner', e.target.value)} style={{
+                background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
+                padding: '5px 8px', color: kr.owner ? '#e8eaf0' : '#505878', fontSize: 12,
+                outline: 'none', fontFamily: 'inherit', cursor: 'pointer', maxWidth: 160,
+              }}>
+                <option value="">KR担当者</option>
+                {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+              </select>
+            </div>
           </div>
         )
       })}
@@ -1138,7 +1148,7 @@ export default function Dashboard({ user, onSignOut }) {
     }
     if (krs.length && objectiveId) {
       await supabase.from('key_results').insert(
-        krs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: k.lower_is_better, objective_id: objectiveId }))
+        krs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: k.lower_is_better, owner: k.owner || '', objective_id: objectiveId }))
       )
     }
     setActiveLevelId(objToSave.level_id)

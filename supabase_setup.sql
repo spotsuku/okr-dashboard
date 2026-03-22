@@ -76,3 +76,6 @@ CREATE POLICY "auth users can manage key_results"
 -- sub_level_ids に副所属（兼任先）の level_id 配列を格納
 -- ============================================================
 ALTER TABLE members ADD COLUMN IF NOT EXISTS sub_level_ids BIGINT[] DEFAULT '{}';
+
+-- KR担当者カラムの追加
+ALTER TABLE key_results ADD COLUMN IF NOT EXISTS owner TEXT DEFAULT '';

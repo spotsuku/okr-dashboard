@@ -123,15 +123,15 @@ const WEATHER_CFG = [
   { score:5, icon:'☀️', label:'快晴',        color:'#ff9f43', bg:'rgba(255,159,67,0.12)'  },
 ]
 const KR_STAR_CFG = [
-  { label:'60%未満', color:'#606880' },{ label:'60%台', color:'#ff6b6b' },
-  { label:'80%台', color:'#ff9f43' },  { label:'100%達成', color:'#4d9fff' },
-  { label:'110%超', color:'#00d68f' }, { label:'130%以上', color:'#a855f7' },
+  { label:'80%未満', color:'#606880' },{ label:'80%〜89%', color:'#ffd166' },
+  { label:'90%〜99%', color:'#4d9fff' },{ label:'100%〜109%', color:'#00d68f' },
+  { label:'110%〜119%', color:'#ff9f43' },{ label:'120%以上', color:'#a855f7' },
 ]
 function calcStars(cur, tgt, lib) {
   if (!tgt) return 0
   const p = (lib ? tgt/Math.max(cur,0.001) : cur/tgt)*100
-  if (p>=130) return 5; if (p>=110) return 4; if (p>=100) return 3
-  if (p>=80)  return 2; if (p>=60)  return 1; return 0
+  if (p>=120) return 5; if (p>=110) return 4; if (p>=100) return 3
+  if (p>=90)  return 2; if (p>=80)  return 1; return 0
 }
 function WeatherPicker({ value, onChange, wT }) {
   return (
@@ -487,109 +487,6 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   )
 }
 
-// ─── 全社サマリー ────────────────────────────────────────────────────────────────
-function CompanySummary({ objectives, keyResults, reports, members, levels, wT, isObjDone, isKRDone, onSelectObj }) {
-  const totalObj = objectives.length
-  const doneObj = objectives.filter(o => isObjDone(o)).length
-  const totalKR = keyResults.filter(kr => objectives.some(o => o.id === kr.objective_id)).length
-  const doneKR = keyResults.filter(kr => objectives.some(o => o.id === kr.objective_id) && isKRDone(kr)).length
-  const activeReports = reports.filter(r => objectives.some(o => o.id === r.objective_id) && r.status !== 'done')
-  const doneReports = reports.filter(r => objectives.some(o => o.id === r.objective_id) && r.status === 'done')
-
-  // ステータス別KA集計
-  const statusCounts = {}
-  Object.keys(STATUS_CFG).forEach(k => { statusCounts[k] = 0 })
-  reports.filter(r => objectives.some(o => o.id === r.objective_id)).forEach(r => {
-    statusCounts[r.status || 'normal'] = (statusCounts[r.status || 'normal'] || 0) + 1
-  })
-
-  // 部署別サマリー
-  const levelSummaryFixed = levels.filter(l => objectives.some(o => Number(o.level_id) === Number(l.id))).map(level => {
-    const lvlObjs = objectives.filter(o => Number(o.level_id) === Number(level.id))
-    const lvlKRs = keyResults.filter(kr => lvlObjs.some(o => o.id === kr.objective_id))
-    const lvlKAs = reports.filter(r => lvlObjs.some(o => o.id === r.objective_id) && r.status !== 'done')
-    const avgProgress = lvlKRs.length > 0 ? Math.round(lvlKRs.reduce((s, kr) => s + (kr.target ? Math.min((kr.current / kr.target) * 100, 150) : 0), 0) / lvlKRs.length) : 0
-    return { level, objCount: lvlObjs.length, krCount: lvlKRs.length, kaCount: lvlKAs.length, avgProgress }
-  }).filter(s => s.objCount > 0)
-
-  const cardS = { padding:'14px 16px', borderRadius:10, border:`1px solid ${wT().border}`, background:wT().bgCard }
-  const numS = { fontSize:28, fontWeight:800, lineHeight:1 }
-  const lblS = { fontSize:10, color:wT().textMuted, fontWeight:600, marginTop:4 }
-
-  return (
-    <div style={{ padding:4, overflowY:'auto', height:'100%' }}>
-      <div style={{ fontSize:15, fontWeight:700, color:wT().text, marginBottom:14 }}>全社サマリー</div>
-
-      {/* 数値カード */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
-        <div style={cardS}>
-          <div style={{ ...numS, color:'#4d9fff' }}>{totalObj}</div>
-          <div style={lblS}>Objective</div>
-          <div style={{ fontSize:10, color:'#00d68f', marginTop:2 }}>{doneObj}件 達成済み</div>
-        </div>
-        <div style={cardS}>
-          <div style={{ ...numS, color:'#a855f7' }}>{totalKR}</div>
-          <div style={lblS}>Key Result</div>
-          <div style={{ fontSize:10, color:'#00d68f', marginTop:2 }}>{doneKR}件 達成済み</div>
-        </div>
-        <div style={cardS}>
-          <div style={{ ...numS, color:'#ff9f43' }}>{activeReports.length}</div>
-          <div style={lblS}>アクティブKA</div>
-          <div style={{ fontSize:10, color:wT().textMuted, marginTop:2 }}>+{doneReports.length}件 完了</div>
-        </div>
-        <div style={cardS}>
-          <div style={{ ...numS, color: totalObj > 0 ? (doneObj/totalObj >= 0.7 ? '#00d68f' : doneObj/totalObj >= 0.3 ? '#4d9fff' : '#ff6b6b') : wT().textFaint }}>
-            {totalObj > 0 ? Math.round((doneObj/totalObj)*100) : 0}%
-          </div>
-          <div style={lblS}>Obj達成率</div>
-        </div>
-      </div>
-
-      {/* KAステータス分布 */}
-      <div style={{ ...cardS, marginBottom:18 }}>
-        <div style={{ fontSize:12, fontWeight:700, color:wT().text, marginBottom:10 }}>KAステータス分布</div>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          {Object.entries(STATUS_CFG).map(([key, cfg]) => (
-            <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:8, background:cfg.bg, border:`1px solid ${cfg.border}` }}>
-              <span style={{ fontSize:18, fontWeight:800, color:cfg.color }}>{statusCounts[key]||0}</span>
-              <span style={{ fontSize:11, color:cfg.color, fontWeight:600 }}>{cfg.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 部署別サマリー */}
-      <div style={{ ...cardS }}>
-        <div style={{ fontSize:12, fontWeight:700, color:wT().text, marginBottom:10 }}>部署別サマリー</div>
-        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-          {levelSummaryFixed.map(({ level, objCount, krCount, kaCount, avgProgress }) => {
-            const d = getDepth(level.id, levels)
-            const color = LAYER_COLORS[d] || '#a0a8be'
-            return (
-              <div key={level.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:8, background:wT().bgCard2, border:`1px solid ${wT().borderLight}` }}>
-                <span style={{ fontSize:13 }}>{level.icon}</span>
-                <span style={{ fontSize:12, fontWeight:600, color, flex:1 }}>{level.name}</span>
-                <span style={{ fontSize:10, color:wT().textMuted }}>Obj {objCount}</span>
-                <span style={{ fontSize:10, color:wT().textMuted }}>KR {krCount}</span>
-                <span style={{ fontSize:10, color:wT().textMuted }}>KA {kaCount}</span>
-                <div style={{ width:60, height:6, borderRadius:3, background:wT().borderLight, overflow:'hidden' }}>
-                  <div style={{ height:'100%', width:`${Math.min(avgProgress,100)}%`, background: avgProgress >= 100 ? '#00d68f' : avgProgress >= 60 ? '#4d9fff' : '#ff6b6b', borderRadius:3 }}/>
-                </div>
-                <span style={{ fontSize:10, fontWeight:700, color: avgProgress >= 100 ? '#00d68f' : avgProgress >= 60 ? '#4d9fff' : '#ff6b6b', minWidth:30, textAlign:'right' }}>{avgProgress}%</span>
-              </div>
-            )
-          })}
-          {levelSummaryFixed.length === 0 && <div style={{ fontSize:12, color:wT().textFaint, padding:10, textAlign:'center' }}>データがありません</div>}
-        </div>
-      </div>
-
-      <div style={{ fontSize:11, color:wT().textFaint, textAlign:'center', marginTop:16, paddingBottom:10 }}>
-        左のObjectiveをクリックすると詳細を表示します
-      </div>
-    </div>
-  )
-}
-
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod='all' }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
@@ -882,17 +779,10 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         {/* 右：KR + KA詳細 */}
         <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', background:wT().bgCard2 }}>
           {!selectedObj ? (
-            <CompanySummary
-              objectives={visibleObjs}
-              keyResults={keyResults}
-              reports={weekReports}
-              members={members}
-              levels={levels}
-              wT={wT}
-              isObjDone={isObjDone}
-              isKRDone={isKRDone}
-              onSelectObj={setActiveObjId}
-            />
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
+              <div style={{ fontSize:36 }}>🎯</div>
+              <div style={{ fontSize:13 }}>左のObjectiveをクリックしてください</div>
+            </div>
           ) : (
             <>
               {/* Objectiveヘッダー */}

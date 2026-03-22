@@ -35,13 +35,13 @@ function calcPct(current, target, lowerIsBetter) {
 }
 function calcKRStars(current, target, lowerIsBetter) {
   const p = calcPct(current, target, lowerIsBetter)
-  if (p >= 130) return 5; if (p >= 110) return 4; if (p >= 100) return 3
-  if (p >= 80)  return 2; if (p >= 60)  return 1; return 0
+  if (p >= 120) return 5; if (p >= 110) return 4; if (p >= 100) return 3
+  if (p >= 90)  return 2; if (p >= 80)  return 1; return 0
 }
 const KR_STAR_CFG = [
-  { label:'60%未満',  color:'#606880' }, { label:'60%台',  color:'#ff6b6b' },
-  { label:'80%台',    color:'#ff9f43' }, { label:'100%達成',color:'#4d9fff' },
-  { label:'110%超',   color:'#00d68f' }, { label:'130%以上',color:'#a855f7' },
+  { label:'80%未満',   color:'#606880' }, { label:'80%〜89%',   color:'#ffd166' },
+  { label:'90%〜99%',  color:'#4d9fff' }, { label:'100%〜109%', color:'#00d68f' },
+  { label:'110%〜119%',color:'#ff9f43' }, { label:'120%以上',   color:'#a855f7' },
 ]
 const WEATHER_CFG = [
   { score:0, icon:'—',  label:'未選択',       color:'#606880' },
