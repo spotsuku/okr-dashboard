@@ -298,7 +298,7 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, canEditKA }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
   const doneReports   = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status === 'done')
@@ -357,6 +357,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </span>
           <span style={{ fontSize:11, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
           {kr.owner && <OwnerBadge name={kr.owner} members={members} size={20} />}
+          <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
+            <select value={kr.owner||''} onChange={e => onKROwnerChange(kr.id, e.target.value)}
+              style={{ background:wT().bgCard2, border:`1px solid ${wT().borderMid}`, borderRadius:5, padding:'2px 6px', color:kr.owner?avatarColor(kr.owner):wT().textMuted, fontSize:10, cursor:'pointer', fontFamily:'inherit', outline:'none', maxWidth:80 }}>
+              <option value="">KR担当</option>
+              {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+          </div>
           <span style={{ fontSize:13, letterSpacing:1, flexShrink:0, color:starCfg.color }}>{'★'.repeat(stars)}{'☆'.repeat(5-stars)}</span>
           {!reviewOpen && weather > 0 && <span style={{ fontSize:18 }}>{WEATHER_CFG[weather]?.icon}</span>}
           <span style={{ fontSize:11, color:wT().textFaint, transform:reviewOpen?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', flexShrink:0 }}>▾</span>
@@ -431,20 +438,123 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
         </div>
         {/* アクティブなKA */}
         {activeReports.map(r => (
-          <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner)} />
+          <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)} />
         ))}
         {/* 完了済みKA（折りたたみ） */}
         {showDone && doneReports.length > 0 && (
           <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${wT().border}` }}>
             <div style={{ fontSize:10, color:wT().textFaint, marginBottom:6 }}>✓ 完了済み</div>
             {doneReports.map(r => (
-              <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner)} />
+              <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)} />
             ))}
           </div>
         )}
         <div onClick={addKA} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:7, border:`1px dashed ${wT().borderMid}`, cursor:'pointer', color:wT().textMuted, fontSize:11, marginTop:4 }}>
           <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── 全社サマリー ────────────────────────────────────────────────────────────────
+function CompanySummary({ objectives, keyResults, reports, members, levels, wT, isObjDone, isKRDone, onSelectObj }) {
+  const totalObj = objectives.length
+  const doneObj = objectives.filter(o => isObjDone(o)).length
+  const totalKR = keyResults.filter(kr => objectives.some(o => o.id === kr.objective_id)).length
+  const doneKR = keyResults.filter(kr => objectives.some(o => o.id === kr.objective_id) && isKRDone(kr)).length
+  const activeReports = reports.filter(r => objectives.some(o => o.id === r.objective_id) && r.status !== 'done')
+  const doneReports = reports.filter(r => objectives.some(o => o.id === r.objective_id) && r.status === 'done')
+
+  // ステータス別KA集計
+  const statusCounts = {}
+  Object.keys(STATUS_CFG).forEach(k => { statusCounts[k] = 0 })
+  reports.filter(r => objectives.some(o => o.id === r.objective_id)).forEach(r => {
+    statusCounts[r.status || 'normal'] = (statusCounts[r.status || 'normal'] || 0) + 1
+  })
+
+  // 部署別サマリー
+  const levelSummaryFixed = levels.filter(l => objectives.some(o => Number(o.level_id) === Number(l.id))).map(level => {
+    const lvlObjs = objectives.filter(o => Number(o.level_id) === Number(level.id))
+    const lvlKRs = keyResults.filter(kr => lvlObjs.some(o => o.id === kr.objective_id))
+    const lvlKAs = reports.filter(r => lvlObjs.some(o => o.id === r.objective_id) && r.status !== 'done')
+    const avgProgress = lvlKRs.length > 0 ? Math.round(lvlKRs.reduce((s, kr) => s + (kr.target ? Math.min((kr.current / kr.target) * 100, 150) : 0), 0) / lvlKRs.length) : 0
+    return { level, objCount: lvlObjs.length, krCount: lvlKRs.length, kaCount: lvlKAs.length, avgProgress }
+  }).filter(s => s.objCount > 0)
+
+  const cardS = { padding:'14px 16px', borderRadius:10, border:`1px solid ${wT().border}`, background:wT().bgCard }
+  const numS = { fontSize:28, fontWeight:800, lineHeight:1 }
+  const lblS = { fontSize:10, color:wT().textMuted, fontWeight:600, marginTop:4 }
+
+  return (
+    <div style={{ padding:4, overflowY:'auto', height:'100%' }}>
+      <div style={{ fontSize:15, fontWeight:700, color:wT().text, marginBottom:14 }}>全社サマリー</div>
+
+      {/* 数値カード */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:18 }}>
+        <div style={cardS}>
+          <div style={{ ...numS, color:'#4d9fff' }}>{totalObj}</div>
+          <div style={lblS}>Objective</div>
+          <div style={{ fontSize:10, color:'#00d68f', marginTop:2 }}>{doneObj}件 達成済み</div>
+        </div>
+        <div style={cardS}>
+          <div style={{ ...numS, color:'#a855f7' }}>{totalKR}</div>
+          <div style={lblS}>Key Result</div>
+          <div style={{ fontSize:10, color:'#00d68f', marginTop:2 }}>{doneKR}件 達成済み</div>
+        </div>
+        <div style={cardS}>
+          <div style={{ ...numS, color:'#ff9f43' }}>{activeReports.length}</div>
+          <div style={lblS}>アクティブKA</div>
+          <div style={{ fontSize:10, color:wT().textMuted, marginTop:2 }}>+{doneReports.length}件 完了</div>
+        </div>
+        <div style={cardS}>
+          <div style={{ ...numS, color: totalObj > 0 ? (doneObj/totalObj >= 0.7 ? '#00d68f' : doneObj/totalObj >= 0.3 ? '#4d9fff' : '#ff6b6b') : wT().textFaint }}>
+            {totalObj > 0 ? Math.round((doneObj/totalObj)*100) : 0}%
+          </div>
+          <div style={lblS}>Obj達成率</div>
+        </div>
+      </div>
+
+      {/* KAステータス分布 */}
+      <div style={{ ...cardS, marginBottom:18 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:wT().text, marginBottom:10 }}>KAステータス分布</div>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {Object.entries(STATUS_CFG).map(([key, cfg]) => (
+            <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:8, background:cfg.bg, border:`1px solid ${cfg.border}` }}>
+              <span style={{ fontSize:18, fontWeight:800, color:cfg.color }}>{statusCounts[key]||0}</span>
+              <span style={{ fontSize:11, color:cfg.color, fontWeight:600 }}>{cfg.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 部署別サマリー */}
+      <div style={{ ...cardS }}>
+        <div style={{ fontSize:12, fontWeight:700, color:wT().text, marginBottom:10 }}>部署別サマリー</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {levelSummaryFixed.map(({ level, objCount, krCount, kaCount, avgProgress }) => {
+            const d = getDepth(level.id, levels)
+            const color = LAYER_COLORS[d] || '#a0a8be'
+            return (
+              <div key={level.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:8, background:wT().bgCard2, border:`1px solid ${wT().borderLight}` }}>
+                <span style={{ fontSize:13 }}>{level.icon}</span>
+                <span style={{ fontSize:12, fontWeight:600, color, flex:1 }}>{level.name}</span>
+                <span style={{ fontSize:10, color:wT().textMuted }}>Obj {objCount}</span>
+                <span style={{ fontSize:10, color:wT().textMuted }}>KR {krCount}</span>
+                <span style={{ fontSize:10, color:wT().textMuted }}>KA {kaCount}</span>
+                <div style={{ width:60, height:6, borderRadius:3, background:wT().borderLight, overflow:'hidden' }}>
+                  <div style={{ height:'100%', width:`${Math.min(avgProgress,100)}%`, background: avgProgress >= 100 ? '#00d68f' : avgProgress >= 60 ? '#4d9fff' : '#ff6b6b', borderRadius:3 }}/>
+                </div>
+                <span style={{ fontSize:10, fontWeight:700, color: avgProgress >= 100 ? '#00d68f' : avgProgress >= 60 ? '#4d9fff' : '#ff6b6b', minWidth:30, textAlign:'right' }}>{avgProgress}%</span>
+              </div>
+            )
+          })}
+          {levelSummaryFixed.length === 0 && <div style={{ fontSize:12, color:wT().textFaint, padding:10, textAlign:'center' }}>データがありません</div>}
+        </div>
+      </div>
+
+      <div style={{ fontSize:11, color:wT().textFaint, textAlign:'center', marginTop:16, paddingBottom:10 }}>
+        左のObjectiveをクリックすると詳細を表示します
       </div>
     </div>
   )
@@ -465,7 +575,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period,owner').order('level_id').then(({data})=>setObjectives(data||[]))
     supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults(data||[]))
-    supabase.from('members').select('id,name,role,level_id,email,avatar_url').order('name').then(({data})=>setMembers(data||[]))
+    supabase.from('members').select('id,name,role,level_id,email,avatar_url,is_admin').order('name').then(({data})=>setMembers(data||[]))
   }, [])
 
   useEffect(() => {
@@ -485,14 +595,22 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     await supabase.from('weekly_reports').delete().eq('id', id)
     setReports(p => p.filter(r => r.id!==id))
   }
+  const handleKROwnerChange = async (krId, newOwner) => {
+    await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, owner: newOwner } : kr))
+  }
 
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || ''
-  const canEditKA = useCallback((owner) => {
-    if (!owner || owner==='') return true
+  const isAdmin  = myMember?.is_admin === true
+  const canEditKA = useCallback((kaOwner, objOwner) => {
+    if (isAdmin) return true                          // 管理者は全KA編集可
+    if (!kaOwner || kaOwner==='') return true          // 未設定は誰でも編集可
     if (!myName) return false
-    return myName === owner
-  }, [myName])
+    if (myName === kaOwner) return true                // KA担当者本人
+    if (objOwner && myName === objOwner) return true   // Objective責任者
+    return false
+  }, [myName, isAdmin])
 
   // 年度・部署フィルタ（子階層も含む：OKRページと同じサブツリー方式）
   const getSubtreeIds = (id) => {
@@ -650,10 +768,17 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         {/* 右：KR + KA詳細 */}
         <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', background:wT().bgCard2 }}>
           {!selectedObj ? (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
-              <div style={{ fontSize:36 }}>🎯</div>
-              <div style={{ fontSize:13 }}>左のObjectiveをクリックしてください</div>
-            </div>
+            <CompanySummary
+              objectives={visibleObjs}
+              keyResults={keyResults}
+              reports={reports}
+              members={members}
+              levels={levels}
+              wT={wT}
+              isObjDone={isObjDone}
+              isKRDone={isKRDone}
+              onSelectObj={setActiveObjId}
+            />
           ) : (
             <>
               {/* Objectiveヘッダー */}
@@ -681,7 +806,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   wT={wT}
                   levelId={selectedObj.level_id}
                   objId={selectedObj.id}
+                  objOwner={selectedObj.owner}
                   canEditKA={canEditKA}
+                  onKROwnerChange={handleKROwnerChange}
                 />
               ))}
             </>
