@@ -229,12 +229,13 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
         </div>
         <div style={{ flex:1, minWidth:0 }}>
           {editingTitle && canEdit ? (
-            <div style={{ display:'flex', alignItems:'center', gap:6 }} onClick={e => e.stopPropagation()}>
-              <input autoFocus value={kaTitle} onChange={e => setKaTitle(e.target.value)}
-                onKeyDown={e => { if (e.key==='Enter') saveTitleInline(); if (e.key==='Escape') { setKaTitle(report.ka_title); setEditingTitle(false) } }}
-                style={{ flex:1, background:wT().bgCard2, border:'1px solid #4d9fff80', borderRadius:6, padding:'4px 8px', color:wT().text, fontSize:13, fontWeight:600, outline:'none', fontFamily:'inherit' }} />
+            <div style={{ display:'flex', alignItems:'flex-start', gap:6 }} onClick={e => e.stopPropagation()}>
+              <textarea autoFocus value={kaTitle} onChange={e => setKaTitle(e.target.value)}
+                onKeyDown={e => { if ((e.metaKey||e.ctrlKey) && e.key==='Enter') saveTitleInline(); if (e.key==='Escape') { setKaTitle(report.ka_title); setEditingTitle(false) } }}
+                rows={2}
+                style={{ flex:1, background:wT().bgCard2, border:'1px solid #4d9fff80', borderRadius:6, padding:'6px 8px', color:wT().text, fontSize:13, fontWeight:600, outline:'none', fontFamily:'inherit', resize:'vertical', lineHeight:1.5 }} />
               <button onClick={e => { e.stopPropagation(); saveTitleInline() }} disabled={titleSaving}
-                style={{ padding:'3px 10px', borderRadius:5, background:'#4d9fff', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', flexShrink:0 }}>{titleSaving?'…':'✓'}</button>
+                style={{ padding:'3px 10px', borderRadius:5, background:'#4d9fff', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', flexShrink:0, marginTop:4 }}>{titleSaving?'…':'✓'}</button>
               <button onClick={e => { e.stopPropagation(); setKaTitle(report.ka_title); setEditingTitle(false) }}
                 style={{ padding:'3px 8px', borderRadius:5, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textMuted, fontSize:10, cursor:'pointer', flexShrink:0 }}>✕</button>
             </div>
