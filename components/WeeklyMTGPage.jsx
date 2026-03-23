@@ -389,11 +389,19 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 
   const addKA = async () => {
     const maxOrder = activeReports.reduce((max, r) => Math.max(max, r.sort_order||0), 0)
-    await supabase.from('weekly_reports').insert([{
+    const payload = {
       week_start: weekStart, level_id:levelId, objective_id:objId,
       kr_id:kr.id, kr_title:kr.title, ka_title:'新しいKA', status:'normal',
       sort_order: maxOrder + 1,
-    }])
+    }
+    let { error } = await supabase.from('weekly_reports').insert([payload])
+    if (error) {
+      // sort_orderカラムが無い場合のフォールバック
+      console.warn('KA insert failed, retrying without sort_order:', error.message)
+      const { sort_order, ...payloadNoSort } = payload
+      const res = await supabase.from('weekly_reports').insert([payloadNoSort])
+      if (res.error) { console.error('KA追加エラー:', res.error); alert('KAの追加に失敗しました: ' + res.error.message); return }
+    }
     onAddKA()
   }
 
@@ -545,6 +553,13 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   useEffect(() => {
     setLoading(true)
     supabase.from('weekly_reports').select('*').order('sort_order').order('id')
+      .then(({data, error}) => {
+        if (error) {
+          console.warn('sort_order order failed, falling back:', error.message)
+          return supabase.from('weekly_reports').select('*').order('id')
+        }
+        return { data, error: null }
+      })
       .then(({data}) => { setReports(data||[]); setLoading(false) })
   }, [])
 
@@ -576,7 +591,11 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   }, [reports.length])
 
   const reload = async () => {
-    const {data} = await supabase.from('weekly_reports').select('*').order('sort_order').order('id')
+    let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id')
+    if (error) {
+      const res = await supabase.from('weekly_reports').select('*').order('id')
+      data = res.data
+    }
     setReports(data||[])
   }
 
