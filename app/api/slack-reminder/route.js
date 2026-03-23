@@ -257,6 +257,7 @@ async function handleReminder(request) {
   const type = url.searchParams.get('type') || 'pre-meeting'
   const weekParam = url.searchParams.get('week')
   const levelId = url.searchParams.get('levelId')
+  const preview = url.searchParams.get('preview') === 'true'
 
   const weekStart = weekParam || toDateStr(getMonday(new Date()))
 
@@ -268,7 +269,7 @@ async function handleReminder(request) {
   const levelName = levelId ? (data.levels.find(l => Number(l.id) === Number(levelId))?.name || '') : ''
 
   if (Object.keys(ownerMap).length === 0) {
-    return Response.json({ success: true, message: '通知対象のメンバーがいません' })
+    return Response.json({ success: true, preview: preview, text: '', message: '通知対象のメンバーがいません', memberCount: 0 })
   }
 
   let payload
@@ -276,6 +277,20 @@ async function handleReminder(request) {
     payload = buildTasksMessage(ownerMap, weekStart, levelName)
   } else {
     payload = buildPreMeetingMessage(ownerMap, weekStart, levelName)
+  }
+
+  // プレビューモード: 送信せずメッセージだけ返す
+  if (preview) {
+    return Response.json({
+      success: true,
+      preview: true,
+      text: payload.text,
+      type,
+      weekStart,
+      levelId: levelId || null,
+      levelName: levelName || '全部署',
+      memberCount: Object.keys(ownerMap).length,
+    })
   }
 
   await sendToSlack(payload)
