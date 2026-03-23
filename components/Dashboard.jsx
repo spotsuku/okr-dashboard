@@ -860,7 +860,7 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
       if (!objs || !objs.length) { setMyObjs([]); setAllObjs([]); setLoading(false); return }
       const ids = objs.map(o => o.id)
       const { data: krs } = await supabase
-        .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better').in('objective_id', ids)
+        .from('key_results').select('*').in('objective_id', ids)
       const krMap = {}
       ;(krs || []).forEach(kr => { if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []; krMap[kr.objective_id].push(kr) })
       const full = objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
@@ -1136,20 +1136,31 @@ export default function Dashboard({ user, onSignOut }) {
 
     let objectiveId = objToSave.id
     if (objToSave.id) {
-      await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
-      await supabase.from('key_results').delete().eq('objective_id', objToSave.id)
+      const { error: updErr } = await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
+      if (updErr) { console.error('objective update error:', updErr); alert('目標の更新に失敗しました: ' + updErr.message); return }
+      const { error: delErr } = await supabase.from('key_results').delete().eq('objective_id', objToSave.id)
+      if (delErr) console.error('KR delete error:', delErr)
     } else {
+      const insertPayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
+      if (objToSave.parent_objective_id) insertPayload.parent_objective_id = objToSave.parent_objective_id
       const { data, error } = await supabase
         .from('objectives')
-        .insert([{ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period, parent_objective_id: objToSave.parent_objective_id || null }])
+        .insert([insertPayload])
         .select().single()
-      if (error) { console.error('insert error:', error); return }
+      if (error) { console.error('objective insert error:', error); alert('目標の保存に失敗しました: ' + error.message); return }
       objectiveId = data.id
     }
-    if (krs.length && objectiveId) {
-      await supabase.from('key_results').insert(
-        krs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: k.lower_is_better, owner: k.owner || '', objective_id: objectiveId }))
-      )
+    const validKRs = krs.filter(k => k.title?.trim())
+    if (validKRs.length && objectiveId) {
+      const krPayload = validKRs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, owner: k.owner || '', objective_id: objectiveId }))
+      const { error: krErr } = await supabase.from('key_results').insert(krPayload)
+      if (krErr) {
+        console.error('KR insert error (with owner):', krErr)
+        // ownerカラムが無い可能性 → ownerを除いてリトライ
+        const fallback = validKRs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, objective_id: objectiveId }))
+        const { error: krErr2 } = await supabase.from('key_results').insert(fallback)
+        if (krErr2) console.error('KR insert error (fallback):', krErr2)
+      }
     }
     setActiveLevelId(objToSave.level_id)
     await loadSubtree(objToSave.level_id, activePeriod, levels, fiscalYear)
