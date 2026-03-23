@@ -1160,19 +1160,20 @@ export default function Dashboard({ user, onSignOut }) {
     }
     const validKRs = krs.filter(k => k.title?.trim())
     if (validKRs.length && objectiveId) {
-      const krPayload = validKRs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, owner: k.owner || '', objective_id: objectiveId }))
-      const { error: krErr } = await supabase.from('key_results').insert(krPayload)
+      // KR insert: ownerカラムが無い環境もあるため段階的にフォールバック
+      const base = { title: 'title', target: 'target', current: 'current', unit: 'unit', lower_is_better: 'lower_is_better', objective_id: 'objective_id' }
+      const makePayload = (kr, withOwner) => {
+        const p = { title: kr.title, target: kr.target, current: kr.current, unit: kr.unit, lower_is_better: !!kr.lower_is_better, objective_id: objectiveId }
+        if (withOwner) p.owner = kr.owner || ''
+        return p
+      }
+      // 1) owner付き
+      let { error: krErr } = await supabase.from('key_results').insert(validKRs.map(k => makePayload(k, true)))
       if (krErr) {
-        console.error('KR insert error:', krErr)
-        // current_valueカラム名の可能性 → current → current_value でリトライ
-        const fallbackCV = validKRs.map(k => ({ title: k.title, target: k.target, current_value: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, owner: k.owner || '', objective_id: objectiveId }))
-        const { error: krErr2 } = await supabase.from('key_results').insert(fallbackCV)
-        if (krErr2) {
-          // ownerカラムも無い可能性 → ownerを除いてリトライ
-          const fallback2 = validKRs.map(k => ({ title: k.title, target: k.target, current_value: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, objective_id: objectiveId }))
-          const { error: krErr3 } = await supabase.from('key_results').insert(fallback2)
-          if (krErr3) { console.error('KR insert error (all fallbacks failed):', krErr3); alert('KRの保存に失敗しました: ' + krErr3.message) }
-        }
+        console.error('KR insert error (with owner):', krErr)
+        // 2) ownerなし
+        const { error: krErr2 } = await supabase.from('key_results').insert(validKRs.map(k => makePayload(k, false)))
+        if (krErr2) { console.error('KR insert error (without owner):', krErr2); alert('KRの保存に失敗しました: ' + krErr2.message) }
       }
     }
     setActiveLevelId(objToSave.level_id)
