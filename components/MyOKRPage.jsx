@@ -342,10 +342,11 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     const load = async () => {
       setLoading(true)
       // ① 自分がOwner/KR担当/KA担当のデータを並行取得
-      const [{ data: myObjs }, { data: myKRs }, { data: myKAs }] = await Promise.all([
+      const [{ data: myObjs }, { data: myKRs }, { data: myKAs }, { data: myAssignedTasks }] = await Promise.all([
         supabase.from('objectives').select('id,title,level_id,period,owner').eq('owner', myName).order('period'),
         supabase.from('key_results').select('*').eq('owner', myName),
         supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done'),
+        supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false),
       ])
       // ★ 年度フィルタを適用
       const filterByFY = (objs) => (objs || []).filter(o => {
@@ -354,9 +355,20 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       })
       const ownedObjs = filterByFY(myObjs)
 
-      // ② KR担当/KA担当の親Objectiveも取得して統合
+      // ①-b 他人のKAで自分がタスク担当のものも取得
+      const assignedReportIds = [...new Set((myAssignedTasks || []).map(t => t.report_id).filter(Boolean))]
+      const myKAIds = new Set((myKAs || []).map(r => r.id))
+      const missingReportIds = assignedReportIds.filter(id => !myKAIds.has(id))
+      let assignedKAs = []
+      if (missingReportIds.length > 0) {
+        const { data } = await supabase.from('weekly_reports').select('*').in('id', missingReportIds).neq('status', 'done')
+        assignedKAs = data || []
+      }
+      const allMyKAs = [...(myKAs || []), ...assignedKAs].filter((r,i,arr) => arr.findIndex(x => x.id === r.id) === i)
+
+      // ② KR担当/KA担当/タスク担当の親Objectiveも取得して統合
       const krObjIds = (myKRs || []).map(kr => kr.objective_id).filter(Boolean)
-      const kaObjIds = (myKAs || []).map(r => r.objective_id).filter(Boolean)
+      const kaObjIds = allMyKAs.map(r => r.objective_id).filter(Boolean)
       const ownedObjIds = ownedObjs.map(o => o.id)
       const missingObjIds = [...new Set([...krObjIds, ...kaObjIds])].filter(id => !ownedObjIds.includes(id))
 
@@ -387,7 +399,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
       setObjectives(filteredObjs)
       setKeyResults(allMyKRs)
-      setKaReports(myKAs || [])
+      setKaReports(allMyKAs)
       setReviews(revMap)
       setLoading(false)
     }
