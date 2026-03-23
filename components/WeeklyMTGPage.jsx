@@ -779,7 +779,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
               // プレビュー用のパラメータ（送信時に再利用）
               const sendParams = new URLSearchParams({ type: 'tasks', week: activeWeek })
               if (activeLevelId) sendParams.set('levelId', activeLevelId)
-              setSlackPreview({ text: json.text, type: json.type, memberCount: json.memberCount, levelName: json.levelName, params: sendParams.toString() })
+              setSlackPreview({ text: json.text, type: json.type, memberCount: json.memberCount, levelName: json.levelName, params: sendParams.toString(), hasPerDeptWebhooks: json.hasPerDeptWebhooks })
             } catch (e) { alert('プレビュー取得エラー: ' + e.message) }
           }} style={{
             padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
@@ -947,6 +947,29 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 fontSize:12, fontWeight:600, background:'transparent',
                 border:`1px solid ${wT().borderMid}`, color:wT().textSub,
               }}>キャンセル</button>
+              {slackPreview.hasPerDeptWebhooks && (
+                <button
+                  disabled={slackSending}
+                  onClick={async () => {
+                    setSlackSending(true)
+                    try {
+                      const res = await fetch(`/api/slack-reminder?${slackPreview.params}&perDept=true`, { method: 'POST' })
+                      const json = await res.json()
+                      if (json.error) { alert('送信失敗: ' + json.error); setSlackSending(false); return }
+                      setSlackPreview(null)
+                      setSlackSending(false)
+                      alert(`部署別チャンネルに通知しました（${json.channelCount}チャンネル, ${json.memberCount}名分）`)
+                    } catch (e) { alert('送信エラー: ' + e.message); setSlackSending(false) }
+                  }}
+                  style={{
+                    padding:'7px 16px', borderRadius:8, cursor: slackSending ? 'wait' : 'pointer',
+                    fontFamily:'inherit', fontSize:12, fontWeight:700,
+                    background: slackSending ? 'rgba(0,214,143,0.3)' : 'rgba(0,214,143,0.12)',
+                    border:'1px solid rgba(0,214,143,0.3)', color:'#00d68f',
+                    opacity: slackSending ? 0.7 : 1,
+                  }}
+                >{slackSending ? '送信中...' : '🏢 部署別に送信'}</button>
+              )}
               <button
                 disabled={slackSending}
                 onClick={async () => {

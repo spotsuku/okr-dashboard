@@ -234,10 +234,9 @@ function buildTasksMessage(ownerMap, weekStart, levelName) {
   return { text }
 }
 
-async function sendToSlack(payload) {
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL
+async function sendToSlack(payload, webhookUrl) {
   if (!webhookUrl) {
-    throw new Error('SLACK_WEBHOOK_URL が設定されていません')
+    throw new Error('Webhook URL が設定されていません')
   }
 
   const res = await fetch(webhookUrl, {
@@ -252,12 +251,45 @@ async function sendToSlack(payload) {
   }
 }
 
+// 部署のWebhook URLを取得（自身→親を辿って最初に見つかったものを使う、なければデフォルト）
+function resolveWebhookUrl(levelId, levels) {
+  const defaultUrl = process.env.SLACK_WEBHOOK_URL
+  if (!levelId) return defaultUrl
+  let cur = levels.find(l => Number(l.id) === Number(levelId))
+  while (cur) {
+    if (cur.slack_webhook_url) return cur.slack_webhook_url
+    cur = cur.parent_id ? levels.find(l => Number(l.id) === Number(cur.parent_id)) : null
+  }
+  return defaultUrl
+}
+
+// トップレベル部署ごとにメンバーを振り分け（部署別送信用）
+function groupMembersByTopLevel(ownerMap, members, levels) {
+  const groups = {} // { levelId: { levelName, webhookUrl, ownerMap } }
+  for (const [name, data] of Object.entries(ownerMap)) {
+    const member = data.member
+    const levelId = member.level_id
+    if (!levelId) continue
+    // このメンバーの所属部署から最も上位のWebhook設定済み部署を特定
+    const webhookUrl = resolveWebhookUrl(levelId, levels)
+    // グループキーはWebhook URL（同じURLに送るメンバーをまとめる）
+    const key = webhookUrl || '__default__'
+    if (!groups[key]) {
+      const levelObj = levels.find(l => Number(l.id) === Number(levelId))
+      groups[key] = { webhookUrl, ownerMap: {} }
+    }
+    groups[key].ownerMap[name] = data
+  }
+  return groups
+}
+
 async function handleReminder(request) {
   const url = new URL(request.url)
   const type = url.searchParams.get('type') || 'pre-meeting'
   const weekParam = url.searchParams.get('week')
   const levelId = url.searchParams.get('levelId')
   const preview = url.searchParams.get('preview') === 'true'
+  const perDept = url.searchParams.get('perDept') === 'true' // 部署別送信モード
 
   const weekStart = weekParam || toDateStr(getMonday(new Date()))
 
@@ -272,6 +304,37 @@ async function handleReminder(request) {
     return Response.json({ success: true, preview: preview, text: '', message: '通知対象のメンバーがいません', memberCount: 0 })
   }
 
+  // 部署別送信モード: 部署ごとのWebhook URLに分割送信
+  if (perDept && !preview) {
+    const groups = groupMembersByTopLevel(ownerMap, data.members, data.levels)
+    const results = []
+    for (const [key, group] of Object.entries(groups)) {
+      if (!group.webhookUrl) continue
+      const buildFn = type === 'tasks' ? buildTasksMessage : buildPreMeetingMessage
+      const payload = buildFn(group.ownerMap, weekStart, '')
+      await sendToSlack(payload, group.webhookUrl)
+      results.push({ memberCount: Object.keys(group.ownerMap).length })
+    }
+    // Webhook未設定のメンバーはデフォルトに送信
+    const defaultGroup = Object.entries(groups).find(([k]) => k === '__default__')
+    if (defaultGroup) {
+      const defaultUrl = process.env.SLACK_WEBHOOK_URL
+      if (defaultUrl) {
+        const buildFn = type === 'tasks' ? buildTasksMessage : buildPreMeetingMessage
+        const payload = buildFn(defaultGroup[1].ownerMap, weekStart, '')
+        await sendToSlack(payload, defaultUrl)
+      }
+    }
+    return Response.json({
+      success: true,
+      type,
+      weekStart,
+      perDept: true,
+      channelCount: results.length + (defaultGroup && process.env.SLACK_WEBHOOK_URL ? 1 : 0),
+      memberCount: Object.keys(ownerMap).length,
+    })
+  }
+
   let payload
   if (type === 'tasks') {
     payload = buildTasksMessage(ownerMap, weekStart, levelName)
@@ -281,6 +344,8 @@ async function handleReminder(request) {
 
   // プレビューモード: 送信せずメッセージだけ返す
   if (preview) {
+    // 部署別Webhook設定があるか確認
+    const hasPerDeptWebhooks = data.levels.some(l => l.slack_webhook_url)
     return Response.json({
       success: true,
       preview: true,
@@ -290,10 +355,12 @@ async function handleReminder(request) {
       levelId: levelId || null,
       levelName: levelName || '全部署',
       memberCount: Object.keys(ownerMap).length,
+      hasPerDeptWebhooks,
     })
   }
 
-  await sendToSlack(payload)
+  const webhookUrl = levelId ? resolveWebhookUrl(Number(levelId), data.levels) : process.env.SLACK_WEBHOOK_URL
+  await sendToSlack(payload, webhookUrl)
 
   return Response.json({
     success: true,

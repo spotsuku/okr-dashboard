@@ -279,6 +279,7 @@ export default function MemberPage({ currentUser }) {
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [activeTab, setActiveTab] = useState('org')
+  const [webhookEdit, setWebhookEdit] = useState(null) // { levelId, url }
 
   // ログインユーザーが管理者かどうか
   const myMember = members.find(m => m.email === currentUser?.email)
@@ -318,6 +319,12 @@ export default function MemberPage({ currentUser }) {
     loadData()
   }
 
+  const handleSaveWebhook = async (levelId, url) => {
+    await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
+    setWebhookEdit(null)
+    loadData()
+  }
+
   const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
   const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
 
@@ -349,7 +356,43 @@ export default function MemberPage({ currentUser }) {
           <span style={{ fontSize: 14, fontWeight: 700, color }}>{level.name}</span>
           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: `${color}18`, color, fontWeight: 600 }}>{label}</span>
           <span style={{ fontSize: 11, color: '#404660' }}>{mems.length}名</span>
+          {isAdmin && (
+            <button onClick={() => setWebhookEdit({ levelId, url: level.slack_webhook_url || '' })} style={{
+              padding: '2px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10, fontWeight: 600,
+              background: level.slack_webhook_url ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${level.slack_webhook_url ? 'rgba(168,85,247,0.3)' : 'rgba(255,255,255,0.1)'}`,
+              color: level.slack_webhook_url ? '#a855f7' : '#606880',
+            }}>
+              {level.slack_webhook_url ? '📨 Slack設定済み' : '📨 Slack設定'}
+            </button>
+          )}
         </div>
+        {/* Slack Webhook URL 編集インライン */}
+        {webhookEdit && webhookEdit.levelId === levelId && (
+          <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(168,85,247,0.06)', borderRadius: 10, border: '1px solid rgba(168,85,247,0.15)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#a855f7', marginBottom: 6 }}>Slack Webhook URL</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={webhookEdit.url}
+                onChange={e => setWebhookEdit(prev => ({ ...prev, url: e.target.value }))}
+                placeholder="https://hooks.slack.com/services/..."
+                style={{
+                  flex: 1, padding: '6px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.06)', color: '#e0e4f0', fontSize: 12, fontFamily: 'monospace', outline: 'none',
+                }}
+              />
+              <button onClick={() => handleSaveWebhook(levelId, webhookEdit.url)} style={{
+                padding: '6px 14px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
+                background: 'linear-gradient(135deg,#a855f7,#4d9fff)', border: 'none', color: '#fff',
+              }}>保存</button>
+              <button onClick={() => setWebhookEdit(null)} style={{
+                padding: '6px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#606880',
+              }}>取消</button>
+            </div>
+            <div style={{ fontSize: 10, color: '#606880', marginTop: 4 }}>未設定の場合、親部署またはデフォルトのWebhookに送信されます</div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: children.length ? 24 : 0 }}>
           {mems.map(m => (
             <MemberCard key={m.id} member={m} color={color} isSub={isSub(m, levelId)}

@@ -5,11 +5,12 @@
 
 -- 1. levels テーブル
 CREATE TABLE IF NOT EXISTS levels (
-  id         BIGSERIAL PRIMARY KEY,
-  name       TEXT NOT NULL,
-  icon       TEXT DEFAULT '📁',
-  color      TEXT DEFAULT '#4d9fff',
-  parent_id  BIGINT REFERENCES levels(id) ON DELETE SET NULL
+  id                BIGSERIAL PRIMARY KEY,
+  name              TEXT NOT NULL,
+  icon              TEXT DEFAULT '📁',
+  color             TEXT DEFAULT '#4d9fff',
+  parent_id         BIGINT REFERENCES levels(id) ON DELETE SET NULL,
+  slack_webhook_url TEXT
 );
 
 -- 2. objectives テーブル
