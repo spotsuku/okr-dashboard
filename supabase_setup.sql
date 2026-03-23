@@ -79,3 +79,11 @@ ALTER TABLE members ADD COLUMN IF NOT EXISTS sub_level_ids BIGINT[] DEFAULT '{}'
 
 -- KR担当者カラムの追加
 ALTER TABLE key_results ADD COLUMN IF NOT EXISTS owner TEXT DEFAULT '';
+
+-- weekly_reports 担当者カラムの追加
+ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS owner TEXT DEFAULT '';
+
+-- ka_tasks 担当者カラムの追加
+ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS assignee TEXT DEFAULT '';
+ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS done BOOLEAN DEFAULT FALSE;

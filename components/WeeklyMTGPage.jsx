@@ -203,10 +203,11 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
   }
   const save = async (e) => {
     e && e.stopPropagation(); setSaving(true)
-    await supabase.from('weekly_reports').update({ good, more, focus_output:focusOutput, status, owner:ownerDraft||report.owner }).eq('id', report.id)
+    const { error:repErr } = await supabase.from('weekly_reports').update({ good, more, focus_output:focusOutput, status, owner:ownerDraft||report.owner }).eq('id', report.id)
+    if (repErr) console.error('KA save error:', repErr)
     for (const t of tasks) {
       const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:report.id }
-      if (t.id) await supabase.from('ka_tasks').update(d).eq('id', t.id)
+      if (t.id) { const {error:tErr} = await supabase.from('ka_tasks').update(d).eq('id', t.id); if(tErr) console.error('task update error:', tErr) }
       else if (t.title?.trim()) {
         const {data:ins} = await supabase.from('ka_tasks').insert([d]).select().single()
         if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
@@ -389,7 +390,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           {kr.owner && <OwnerBadge name={kr.owner} members={members} size={20} />}
           <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
             <select value={kr.owner||''} onChange={e => onKROwnerChange(kr.id, e.target.value)}
-              style={{ background:wT().bgCard2, border:`1px solid ${wT().borderMid}`, borderRadius:5, padding:'2px 6px', color:kr.owner?avatarColor(kr.owner):wT().textMuted, fontSize:10, cursor:'pointer', fontFamily:'inherit', outline:'none', maxWidth:80 }}>
+              style={{ background:wT().bgCard2, border:`1px solid ${wT().borderMid}`, borderRadius:5, padding:'3px 8px', color:kr.owner?avatarColor(kr.owner):wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', minWidth:80 }}>
               <option value="">KR担当</option>
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
@@ -580,7 +581,8 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     setReports(p => p.filter(r => r.id!==id))
   }
   const handleKROwnerChange = async (krId, newOwner) => {
-    await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
+    const { error } = await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
+    if (error) { console.error('KR owner update failed:', error); alert('KR担当者の保存に失敗しました。DBにownerカラムが必要です。'); return }
     setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, owner: newOwner } : kr))
   }
 
