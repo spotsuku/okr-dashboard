@@ -765,6 +765,22 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
           background:'rgba(0,214,143,0.1)', border:'1px solid rgba(0,214,143,0.3)', color:'#00d68f',
         }}>＋ 翌週を作成</button>
+        {isAdmin && (
+          <button onClick={async () => {
+            if (!window.confirm('今週のタスク一覧をSlackに通知しますか？')) return
+            try {
+              const res = await fetch(`/api/slack-reminder?type=tasks&week=${activeWeek}`, {
+                method: 'POST',
+              })
+              const json = await res.json()
+              if (json.error) { alert('送信失敗: ' + json.error); return }
+              alert(`Slackに通知しました（${json.memberCount}名分）`)
+            } catch (e) { alert('送信エラー: ' + e.message) }
+          }} style={{
+            padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
+            background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', color:'#a855f7', marginLeft:8,
+          }}>📨 Slackに通知</button>
+        )}
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
