@@ -89,7 +89,12 @@ ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS due_date DATE;
 ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS done BOOLEAN DEFAULT FALSE;
 
 -- key_results の current_value → current へのリネーム（カラム名不一致修正）
-ALTER TABLE key_results RENAME COLUMN current_value TO current;
+-- 既にcurrentカラムの場合はスキップ
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='key_results' AND column_name='current_value') THEN
+    ALTER TABLE key_results RENAME COLUMN current_value TO current;
+  END IF;
+END $$;
 
 -- weekly_reports 並び順カラムの追加
 ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
