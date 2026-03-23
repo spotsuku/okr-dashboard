@@ -547,7 +547,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period,owner').order('level_id').then(({data})=>setObjectives(data||[]))
     supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
-    supabase.from('members').select('id,name,role,level_id,sub_level_ids,email,avatar_url,is_admin').order('name').then(({data})=>setMembers(data||[]))
+    supabase.from('members').select('*').order('name').then(({data, error})=>{ if(error) console.error('members load error:', error); setMembers(data||[]) })
   }, [])
 
   useEffect(() => {
