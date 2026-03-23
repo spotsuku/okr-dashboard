@@ -44,12 +44,14 @@ const STATUS_LABELS = { normal: '', focus: '注力', good: 'Good', more: 'More',
 async function fetchData(supabase, weekStart) {
   const [
     { data: members },
+    { data: levels },
     { data: objectives },
     { data: keyResults },
     { data: weeklyReports },
     { data: kaTasks },
   ] = await Promise.all([
     supabase.from('members').select('*').order('name'),
+    supabase.from('levels').select('*').order('id'),
     supabase.from('objectives').select('id,title,owner,period,level_id').order('id'),
     supabase.from('key_results').select('id,title,target,current,unit,lower_is_better,objective_id,owner').order('id'),
     supabase.from('weekly_reports').select('*').eq('week_start', weekStart).neq('status', 'done').order('id'),
@@ -57,6 +59,7 @@ async function fetchData(supabase, weekStart) {
   ])
   return {
     members: members || [],
+    levels: levels || [],
     objectives: objectives || [],
     keyResults: keyResults || [],
     weeklyReports: weeklyReports || [],
@@ -64,9 +67,19 @@ async function fetchData(supabase, weekStart) {
   }
 }
 
-function groupByOwner(data) {
-  const { members, objectives, keyResults, weeklyReports, kaTasks } = data
+// 部署サブツリーのID一覧を取得
+function getSubtreeIds(levelId, levels) {
+  const ids = [Number(levelId)]
+  levels.filter(l => Number(l.parent_id) === Number(levelId)).forEach(c => ids.push(...getSubtreeIds(c.id, levels)))
+  return ids
+}
+
+function groupByOwner(data, levelId) {
+  const { members, levels, objectives, keyResults, weeklyReports, kaTasks } = data
   const ownerMap = {}
+
+  // 部署フィルタ: levelIdが指定されていればサブツリーのIDでフィルタ
+  const visibleLevelIds = levelId ? getSubtreeIds(levelId, levels) : null
 
   // KAのreport_idでタスクをグループ化
   const tasksByReport = {}
@@ -82,12 +95,22 @@ function groupByOwner(data) {
     krsByObj[kr.objective_id].push(kr)
   }
 
+  // 部署でフィルタしたObjective/KA
+  const filteredObjs = visibleLevelIds
+    ? objectives.filter(o => visibleLevelIds.includes(Number(o.level_id)))
+    : objectives
+  const filteredObjIds = new Set(filteredObjs.map(o => o.id))
+  const filteredKRs = keyResults.filter(kr => filteredObjIds.has(kr.objective_id))
+  const filteredKAs = visibleLevelIds
+    ? weeklyReports.filter(r => visibleLevelIds.includes(Number(r.level_id)))
+    : weeklyReports
+
   // メンバーごとにデータ集約
   for (const m of members) {
     const name = m.name
-    const myObjs = objectives.filter(o => o.owner === name)
-    const myKRs = keyResults.filter(kr => kr.owner === name)
-    const myKAs = weeklyReports.filter(r => r.owner === name)
+    const myObjs = filteredObjs.filter(o => o.owner === name)
+    const myKRs = filteredKRs.filter(kr => kr.owner === name)
+    const myKAs = filteredKAs.filter(r => r.owner === name)
 
     // 担当しているもの（Obj/KR/KA いずれか）がなければスキップ
     if (myObjs.length === 0 && myKRs.length === 0 && myKAs.length === 0) continue
@@ -118,12 +141,14 @@ function groupByOwner(data) {
 }
 
 // ─── 会議前リマインド（pre-meeting） ───────────────────────────────────────────
-function buildPreMeetingMessage(ownerMap, weekStart) {
+function buildPreMeetingMessage(ownerMap, weekStart, levelName) {
   const friday = new Date(weekStart)
   friday.setDate(friday.getDate() + 4)
-  const header = `⏰ *会議前リマインド（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）*\nGood/Moreの記入をお願いします！`
+  const scope = levelName ? ` [${levelName}]` : ''
+  const header = `⏰ *会議前リマインド${scope}（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）*\nGood/Moreの記入をお願いします！`
 
   let text = header + '\n'
+  const today = toDateStr(new Date())
 
   for (const [name, data] of Object.entries(ownerMap)) {
     text += '\n━━━━━━━━━━━━━━━━\n'
@@ -144,6 +169,20 @@ function buildPreMeetingMessage(ownerMap, weekStart) {
       text += `  📋 KA: ${data.kas.length}件`
       text += hasGoodMore ? ' ✅記入済み\n' : '（Good/More未記入⚠️）\n'
     }
+
+    // 未完了タスク・期限切れリマインド
+    const allTasks = data.kas.flatMap(ka => ka.tasks)
+    const incompleteTasks = allTasks.filter(t => !t.done)
+    const overdueTasks = incompleteTasks.filter(t => t.due_date && t.due_date < today)
+    if (overdueTasks.length > 0) {
+      text += `  🔴 期限超過タスク: ${overdueTasks.length}件\n`
+      for (const t of overdueTasks) {
+        text += `    ⚠️ ${t.title || '(未入力)'}（期限: ${formatDate(t.due_date)}）\n`
+      }
+    }
+    if (incompleteTasks.length > 0 && overdueTasks.length === 0) {
+      text += `  📌 未完了タスク: ${incompleteTasks.length}件\n`
+    }
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://okr-dashboard-taupe.vercel.app'
@@ -153,12 +192,14 @@ function buildPreMeetingMessage(ownerMap, weekStart) {
 }
 
 // ─── 会議後タスク通知（tasks） ──────────────────────────────────────────────────
-function buildTasksMessage(ownerMap, weekStart) {
+function buildTasksMessage(ownerMap, weekStart, levelName) {
   const friday = new Date(weekStart)
   friday.setDate(friday.getDate() + 4)
-  const header = `📋 *今週のタスク一覧（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）*`
+  const scope = levelName ? ` [${levelName}]` : ''
+  const header = `📋 *今週のタスク一覧${scope}（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）*`
 
   let text = header + '\n'
+  const today = toDateStr(new Date())
 
   for (const [name, data] of Object.entries(ownerMap)) {
     if (data.kas.length === 0) continue
@@ -173,13 +214,19 @@ function buildTasksMessage(ownerMap, weekStart) {
       const incompleteTasks = ka.tasks.filter(t => !t.done)
       if (incompleteTasks.length > 0) {
         for (const t of incompleteTasks) {
-          let taskLine = `  ☐ ${t.title || '(未入力)'}`
+          const isOverdue = t.due_date && t.due_date < today
+          let taskLine = `  ${isOverdue ? '⚠️' : '☐'} ${t.title || '(未入力)'}`
           const details = []
           if (t.assignee) details.push(`担当: ${t.assignee}`)
-          if (t.due_date) details.push(`期限: ${formatDate(t.due_date)}`)
+          if (t.due_date) details.push(`期限: ${formatDate(t.due_date)}${isOverdue ? ' 超過!' : ''}`)
           if (details.length > 0) taskLine += `（${details.join(', ')}）`
           text += taskLine + '\n'
         }
+      }
+
+      const doneTasks = ka.tasks.filter(t => t.done)
+      if (doneTasks.length > 0) {
+        text += `  ✅ 完了済み: ${doneTasks.length}件\n`
       }
     }
   }
@@ -209,12 +256,16 @@ async function handleReminder(request) {
   const url = new URL(request.url)
   const type = url.searchParams.get('type') || 'pre-meeting'
   const weekParam = url.searchParams.get('week')
+  const levelId = url.searchParams.get('levelId')
 
   const weekStart = weekParam || toDateStr(getMonday(new Date()))
 
   const supabase = getAdminClient()
   const data = await fetchData(supabase, weekStart)
-  const ownerMap = groupByOwner(data)
+  const ownerMap = groupByOwner(data, levelId ? Number(levelId) : null)
+
+  // 部署名を取得（ヘッダー表示用）
+  const levelName = levelId ? (data.levels.find(l => Number(l.id) === Number(levelId))?.name || '') : ''
 
   if (Object.keys(ownerMap).length === 0) {
     return Response.json({ success: true, message: '通知対象のメンバーがいません' })
@@ -222,9 +273,9 @@ async function handleReminder(request) {
 
   let payload
   if (type === 'tasks') {
-    payload = buildTasksMessage(ownerMap, weekStart)
+    payload = buildTasksMessage(ownerMap, weekStart, levelName)
   } else {
-    payload = buildPreMeetingMessage(ownerMap, weekStart)
+    payload = buildPreMeetingMessage(ownerMap, weekStart, levelName)
   }
 
   await sendToSlack(payload)
@@ -233,6 +284,8 @@ async function handleReminder(request) {
     success: true,
     type,
     weekStart,
+    levelId: levelId || null,
+    levelName: levelName || '全部署',
     memberCount: Object.keys(ownerMap).length,
   })
 }

@@ -767,14 +767,15 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         }}>＋ 翌週を作成</button>
         {isAdmin && (
           <button onClick={async () => {
-            if (!window.confirm('今週のタスク一覧をSlackに通知しますか？')) return
+            const levelLabel = activeLevelId ? (levels.find(l=>Number(l.id)===Number(activeLevelId))?.name || '') : '全部署'
+            if (!window.confirm(`「${levelLabel}」のタスク一覧をSlackに通知しますか？`)) return
             try {
-              const res = await fetch(`/api/slack-reminder?type=tasks&week=${activeWeek}`, {
-                method: 'POST',
-              })
+              const params = new URLSearchParams({ type: 'tasks', week: activeWeek })
+              if (activeLevelId) params.set('levelId', activeLevelId)
+              const res = await fetch(`/api/slack-reminder?${params}`, { method: 'POST' })
               const json = await res.json()
               if (json.error) { alert('送信失敗: ' + json.error); return }
-              alert(`Slackに通知しました（${json.memberCount}名分）`)
+              alert(`Slackに通知しました（${json.levelName}: ${json.memberCount}名分）`)
             } catch (e) { alert('送信エラー: ' + e.message) }
           }} style={{
             padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
