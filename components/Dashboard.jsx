@@ -63,6 +63,14 @@ const RATINGS = [
 ]
 const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
 
+// DBカラム名 current_value → current への正規化
+function normalizeKR(kr) {
+  if (kr.current === undefined && kr.current_value !== undefined) {
+    return { ...kr, current: kr.current_value }
+  }
+  return kr
+}
+
 function calcKRProgress(kr) {
   if (!kr.target || kr.target === 0) return 0
   const raw = kr.lower_is_better
@@ -859,10 +867,10 @@ function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
         .from('objectives').select('id,level_id,period,title,owner').eq('owner', myName).order('id')
       if (!objs || !objs.length) { setMyObjs([]); setAllObjs([]); setLoading(false); return }
       const ids = objs.map(o => o.id)
-      const { data: krs } = await supabase
+      const { data: rawKrs } = await supabase
         .from('key_results').select('*').in('objective_id', ids)
       const krMap = {}
-      ;(krs || []).forEach(kr => { if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []; krMap[kr.objective_id].push(kr) })
+      ;(rawKrs || []).map(normalizeKR).forEach(kr => { if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []; krMap[kr.objective_id].push(kr) })
       const full = objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
       setMyObjs(full)
       setAllObjs(full)
@@ -1094,11 +1102,11 @@ export default function Dashboard({ user, onSignOut }) {
     const { data: objs } = await query
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
-    const { data: krs } = await supabase
+    const { data: rawKrs } = await supabase
       .from('key_results').select('*')
       .in('objective_id', ids)
     const krMap = {}
-    ;(krs || []).forEach(kr => {
+    ;(rawKrs || []).map(normalizeKR).forEach(kr => {
       if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
       krMap[kr.objective_id].push(kr)
     })
@@ -1155,11 +1163,16 @@ export default function Dashboard({ user, onSignOut }) {
       const krPayload = validKRs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, owner: k.owner || '', objective_id: objectiveId }))
       const { error: krErr } = await supabase.from('key_results').insert(krPayload)
       if (krErr) {
-        console.error('KR insert error (with owner):', krErr)
-        // ownerカラムが無い可能性 → ownerを除いてリトライ
-        const fallback = validKRs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, objective_id: objectiveId }))
-        const { error: krErr2 } = await supabase.from('key_results').insert(fallback)
-        if (krErr2) console.error('KR insert error (fallback):', krErr2)
+        console.error('KR insert error:', krErr)
+        // current_valueカラム名の可能性 → current → current_value でリトライ
+        const fallbackCV = validKRs.map(k => ({ title: k.title, target: k.target, current_value: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, owner: k.owner || '', objective_id: objectiveId }))
+        const { error: krErr2 } = await supabase.from('key_results').insert(fallbackCV)
+        if (krErr2) {
+          // ownerカラムも無い可能性 → ownerを除いてリトライ
+          const fallback2 = validKRs.map(k => ({ title: k.title, target: k.target, current_value: k.current, unit: k.unit, lower_is_better: !!k.lower_is_better, objective_id: objectiveId }))
+          const { error: krErr3 } = await supabase.from('key_results').insert(fallback2)
+          if (krErr3) { console.error('KR insert error (all fallbacks failed):', krErr3); alert('KRの保存に失敗しました: ' + krErr3.message) }
+        }
       }
     }
     setActiveLevelId(objToSave.level_id)

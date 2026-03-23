@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS key_results (
   objective_id    BIGINT NOT NULL REFERENCES objectives(id) ON DELETE CASCADE,
   title           TEXT NOT NULL,
   target          FLOAT8 DEFAULT 100,
-  current_value   FLOAT8 DEFAULT 0,
+  current         FLOAT8 DEFAULT 0,
   unit            TEXT DEFAULT '',
   lower_is_better BOOLEAN DEFAULT FALSE,
   created_at      TIMESTAMPTZ DEFAULT NOW()
@@ -87,6 +87,9 @@ ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS owner TEXT DEFAULT '';
 ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS assignee TEXT DEFAULT '';
 ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS due_date DATE;
 ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS done BOOLEAN DEFAULT FALSE;
+
+-- key_results の current_value → current へのリネーム（カラム名不一致修正）
+ALTER TABLE key_results RENAME COLUMN current_value TO current;
 
 -- weekly_reports 並び順カラムの追加
 ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;

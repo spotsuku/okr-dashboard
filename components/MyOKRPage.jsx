@@ -374,7 +374,8 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds)
         krsForObjs = data || []
       }
-      const allMyKRs = [...(myKRs||[]), ...krsForObjs].filter((kr,i,arr)=>arr.findIndex(k=>k.id===kr.id)===i)
+      const normalizeKR = kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr
+      const allMyKRs = [...(myKRs||[]), ...krsForObjs].map(normalizeKR).filter((kr,i,arr)=>arr.findIndex(k=>k.id===kr.id)===i)
       const krIds = allMyKRs.map(k=>k.id)
       let revData = []
       if (krIds.length > 0) {
