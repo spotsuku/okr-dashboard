@@ -152,7 +152,7 @@ function WeatherPicker({ value, onChange, wT }) {
 }
 
 // ─── KAカード ─────────────────────────────────────────────────────────────────
-function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
+function KACard({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps }) {
   const [open,         setOpen]         = useState(false)
   const [good,         setGood]         = useState(report.good || '')
   const [more,         setMore]         = useState(report.more || '')
@@ -224,7 +224,7 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
   return (
     <div onClick={() => !open && setOpen(true)} style={{ background:wT().bgCard, border:`1px solid ${open?'#4d9fff50':wT().border}`, borderRadius:10, marginBottom:8, overflow:'hidden', cursor:open?'default':'pointer', transition:'border-color 0.15s', opacity: status==='done' ? 0.55 : 1 }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }} onClick={() => setOpen(p=>!p)}>
-        <div style={{ cursor:'grab', color:wT().textFaint, fontSize:14, lineHeight:1, flexShrink:0, userSelect:'none', padding:'0 2px' }} title="ドラッグで並べ替え">⠿</div>
+        <div {...(dragHandleProps||{})} style={{ cursor:'grab', color:wT().textFaint, fontSize:14, lineHeight:1, flexShrink:0, userSelect:'none', padding:'0 2px' }} title="ドラッグで並べ替え">⠿</div>
         <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
           <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={24} />
         </div>
@@ -494,18 +494,16 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
         {/* アクティブなKA */}
         {activeReports.map((r, idx) => (
           <div key={r.id}
-            draggable
-            onDragStart={() => handleDragStart(idx)}
             onDragOver={e => handleDragOver(e, idx)}
             onDrop={() => handleDrop(idx)}
-            onDragEnd={handleDragEnd}
             style={{
               opacity: dragIdx === idx ? 0.4 : 1,
               borderTop: overIdx === idx && dragIdx !== null && dragIdx !== idx ? '2px solid #4d9fff' : '2px solid transparent',
               transition: 'opacity 0.15s',
             }}
           >
-            <KACard report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)} />
+            <KACard report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)}
+              dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx), onDragEnd:handleDragEnd }} />
           </div>
         ))}
         {/* 完了済みKA（折りたたみ） */}
