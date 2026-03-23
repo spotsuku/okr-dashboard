@@ -34,6 +34,16 @@ CREATE TABLE IF NOT EXISTS key_results (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 4. key_actions テーブル
+CREATE TABLE IF NOT EXISTS key_actions (
+  id              BIGSERIAL PRIMARY KEY,
+  key_result_id   BIGINT NOT NULL REFERENCES key_results(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL,
+  type            TEXT DEFAULT 'normal',
+  week_start      DATE NOT NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============================================================
 -- 初期データ（組織階層のサンプル）
 -- 必要に応じて編集してください
