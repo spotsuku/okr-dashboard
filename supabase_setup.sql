@@ -35,7 +35,20 @@ CREATE TABLE IF NOT EXISTS key_results (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. key_actions テーブル
+-- 4. members テーブル
+CREATE TABLE IF NOT EXISTS members (
+  id            BIGSERIAL PRIMARY KEY,
+  name          TEXT NOT NULL,
+  role          TEXT DEFAULT '',
+  email         TEXT,
+  level_id      BIGINT REFERENCES levels(id) ON DELETE SET NULL,
+  sub_level_ids BIGINT[] DEFAULT '{}',
+  avatar_url    TEXT DEFAULT '',
+  is_admin      BOOLEAN DEFAULT FALSE,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. key_actions テーブル
 CREATE TABLE IF NOT EXISTS key_actions (
   id              BIGSERIAL PRIMARY KEY,
   key_result_id   BIGINT NOT NULL REFERENCES key_results(id) ON DELETE CASCADE,
@@ -43,6 +56,48 @@ CREATE TABLE IF NOT EXISTS key_actions (
   type            TEXT DEFAULT 'normal',
   week_start      DATE NOT NULL,
   created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. weekly_reports テーブル
+CREATE TABLE IF NOT EXISTS weekly_reports (
+  id            BIGSERIAL PRIMARY KEY,
+  week_start    DATE NOT NULL,
+  level_id      BIGINT REFERENCES levels(id) ON DELETE SET NULL,
+  objective_id  BIGINT REFERENCES objectives(id) ON DELETE CASCADE,
+  kr_id         BIGINT REFERENCES key_results(id) ON DELETE SET NULL,
+  kr_title      TEXT DEFAULT '',
+  ka_title      TEXT DEFAULT '',
+  status        TEXT DEFAULT 'normal',
+  good          TEXT DEFAULT '',
+  more          TEXT DEFAULT '',
+  focus_output  TEXT DEFAULT '',
+  owner         TEXT DEFAULT '',
+  sort_order    INT DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. ka_tasks テーブル
+CREATE TABLE IF NOT EXISTS ka_tasks (
+  id          BIGSERIAL PRIMARY KEY,
+  report_id   BIGINT REFERENCES weekly_reports(id) ON DELETE CASCADE,
+  title       TEXT DEFAULT '',
+  done        BOOLEAN DEFAULT FALSE,
+  assignee    TEXT DEFAULT '',
+  due_date    DATE,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. kr_weekly_reviews テーブル
+CREATE TABLE IF NOT EXISTS kr_weekly_reviews (
+  id           BIGSERIAL PRIMARY KEY,
+  kr_id        BIGINT REFERENCES key_results(id) ON DELETE CASCADE,
+  week_start   DATE NOT NULL,
+  weather      INT DEFAULT 0,
+  good         TEXT DEFAULT '',
+  more         TEXT DEFAULT '',
+  focus        TEXT DEFAULT '',
+  focus_output TEXT DEFAULT '',
+  created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
@@ -81,28 +136,27 @@ CREATE POLICY "auth users can manage objectives"
 CREATE POLICY "auth users can manage key_results"
   ON key_results FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- key_actions: RLS + ポリシー
+-- key_actions
 ALTER TABLE key_actions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "auth users can manage key_actions"
   ON key_actions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- ============================================================
--- メンバーの複数所属（兼任）対応
--- 既存の level_id は主所属として維持
--- sub_level_ids に副所属（兼任先）の level_id 配列を格納
--- ============================================================
-ALTER TABLE members ADD COLUMN IF NOT EXISTS sub_level_ids BIGINT[] DEFAULT '{}';
+-- members
+ALTER TABLE members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage members"
+  ON members FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- KR担当者カラムの追加
-ALTER TABLE key_results ADD COLUMN IF NOT EXISTS owner TEXT DEFAULT '';
+-- weekly_reports
+ALTER TABLE weekly_reports ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage weekly_reports"
+  ON weekly_reports FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- weekly_reports 担当者カラムの追加
-ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS owner TEXT DEFAULT '';
+-- ka_tasks
+ALTER TABLE ka_tasks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage ka_tasks"
+  ON ka_tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- ka_tasks 担当者カラムの追加
-ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS assignee TEXT DEFAULT '';
-ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS due_date DATE;
-ALTER TABLE ka_tasks ADD COLUMN IF NOT EXISTS done BOOLEAN DEFAULT FALSE;
-
--- weekly_reports 並び順カラムの追加
-ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
+-- kr_weekly_reviews
+ALTER TABLE kr_weekly_reviews ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage kr_weekly_reviews"
+  ON kr_weekly_reviews FOR ALL TO authenticated USING (true) WITH CHECK (true);
