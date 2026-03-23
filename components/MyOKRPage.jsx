@@ -238,7 +238,7 @@ function KRCard({ kr, myName, members, wT }) {
 }
 
 // ─── KAカード ─────────────────────────────────────────────────────────────────
-function MyKACard({ report, onSave, onDelete, wT, members }) {
+function MyKACard({ report, onSave, onDelete, wT, members, tasks = [] }) {
   const [open,   setOpen]   = useState(false)
   const [good,   setGood]   = useState(report.good || '')
   const [more,   setMore]   = useState(report.more || '')
@@ -271,10 +271,11 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
         <button onClick={e=>{e.stopPropagation();onDelete(report.id)}} style={{ width:20,height:20,borderRadius:4,border:'none',cursor:'pointer',fontSize:9,background:'rgba(255,107,107,0.08)',color:'#ff6b6b' }}>✕</button>
         <span style={{ fontSize:10, color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-block' }}>▾</span>
       </div>
-      {!open && (good||more) && (
+      {!open && (good||more||tasks.length > 0) && (
         <div style={{ display:'flex', gap:8, padding:'0 12px 7px 40px', flexWrap:'wrap' }}>
           {good && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#00d68f', fontSize:10 }}>✅</span>{good.slice(0,50)}{good.length>50?'…':''}</div>}
           {more && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#ff6b6b', fontSize:10 }}>🔺</span>{more.slice(0,50)}{more.length>50?'…':''}</div>}
+          {tasks.length > 0 && <div style={{ fontSize:11, color:wT().textMuted, display:'flex', gap:3 }}><span style={{ fontSize:10 }}>📌</span>{tasks.filter(t=>!t.done).length}/{tasks.length}件 未完了</div>}
         </div>
       )}
       {open && (
@@ -296,6 +297,19 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
             <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 注力アクション</div>
             <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか" style={taS} />
           </div>
+          {tasks.length > 0 && (
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#a855f7', background:'rgba(168,85,247,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:6, display:'inline-block' }}>📌 タスク（{tasks.filter(t=>!t.done).length}/{tasks.length}件 未完了）</div>
+              {tasks.map(t => (
+                <div key={t.id || t._tmp} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontSize:12 }}>
+                  <span style={{ fontSize:13, flexShrink:0 }}>{t.done ? '✅' : '☐'}</span>
+                  <span style={{ flex:1, color: t.done ? wT().textMuted : wT().text, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title || '(未入力)'}</span>
+                  {t.assignee && <span style={{ fontSize:10, padding:'1px 6px', borderRadius:99, background:'rgba(77,159,255,0.1)', color:'#4d9fff', flexShrink:0 }}>{t.assignee}</span>}
+                  {t.due_date && <span style={{ fontSize:10, color: !t.done && t.due_date < new Date().toISOString().split('T')[0] ? '#ff6b6b' : wT().textMuted, flexShrink:0 }}>{t.due_date.slice(5).replace('-','/')}</span>}
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8, paddingTop:8, borderTop:`1px solid ${wT().border}` }}>
             <button onClick={()=>setOpen(false)} style={{ padding:'5px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
             <button onClick={save} disabled={saving} style={{ padding:'5px 14px', borderRadius:6, background:saved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
@@ -332,6 +346,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [objectives, setObjectives] = useState([])
   const [keyResults, setKeyResults] = useState([])
   const [kaReports,  setKaReports]  = useState([])
+  const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] }
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [activeObjId,setActiveObjId]= useState(null)
@@ -397,9 +412,21 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       const revMap = {}
       revData.forEach(r => { revMap[r.kr_id] = r })
 
+      // ④ 全KAのタスクを取得
+      const kaIds = allMyKAs.map(r => r.id)
+      let allTasksMap = {}
+      if (kaIds.length > 0) {
+        const { data: allTasks } = await supabase.from('ka_tasks').select('*').in('report_id', kaIds).order('id')
+        for (const t of (allTasks || [])) {
+          if (!allTasksMap[t.report_id]) allTasksMap[t.report_id] = []
+          allTasksMap[t.report_id].push(t)
+        }
+      }
+
       setObjectives(filteredObjs)
       setKeyResults(allMyKRs)
       setKaReports(allMyKAs)
+      setKaTasks(allTasksMap)
       setReviews(revMap)
       setLoading(false)
     }
@@ -565,7 +592,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
               <div>
                 <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📋 今週のKA（{objKAs.length}件）</div>
                 {objKAs.map(r => (
-                  <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                  <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} tasks={kaTasks[r.id] || []} />
                 ))}
                 {objKAs.length === 0 && (
                   <div style={{ fontSize:12, color:wT().textFaint, fontStyle:'italic', padding:'6px 0' }}>このObjectiveにKAがありません（週次MTGで追加できます）</div>
