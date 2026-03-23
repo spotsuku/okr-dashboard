@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS key_results (
   current         FLOAT8 DEFAULT 0,
   unit            TEXT DEFAULT '',
   lower_is_better BOOLEAN DEFAULT FALSE,
+  owner           TEXT DEFAULT '',
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -79,6 +80,11 @@ CREATE POLICY "auth users can manage objectives"
 -- key_results: 認証済みユーザーは全操作可
 CREATE POLICY "auth users can manage key_results"
   ON key_results FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- key_actions: RLS + ポリシー
+ALTER TABLE key_actions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage key_actions"
+  ON key_actions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================
 -- メンバーの複数所属（兼任）対応

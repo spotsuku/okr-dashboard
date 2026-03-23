@@ -1160,21 +1160,12 @@ export default function Dashboard({ user, onSignOut }) {
     }
     const validKRs = krs.filter(k => k.title?.trim())
     if (validKRs.length && objectiveId) {
-      // KR insert: ownerカラムが無い環境もあるため段階的にフォールバック
-      const base = { title: 'title', target: 'target', current: 'current', unit: 'unit', lower_is_better: 'lower_is_better', objective_id: 'objective_id' }
-      const makePayload = (kr, withOwner) => {
-        const p = { title: kr.title, target: kr.target, current: kr.current, unit: kr.unit, lower_is_better: !!kr.lower_is_better, objective_id: objectiveId }
-        if (withOwner) p.owner = kr.owner || ''
-        return p
-      }
-      // 1) owner付き
-      let { error: krErr } = await supabase.from('key_results').insert(validKRs.map(k => makePayload(k, true)))
-      if (krErr) {
-        console.error('KR insert error (with owner):', krErr)
-        // 2) ownerなし
-        const { error: krErr2 } = await supabase.from('key_results').insert(validKRs.map(k => makePayload(k, false)))
-        if (krErr2) { console.error('KR insert error (without owner):', krErr2); alert('KRの保存に失敗しました: ' + krErr2.message) }
-      }
+      const krPayloads = validKRs.map(kr => ({
+        title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+        lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+      }))
+      const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
+      if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
     }
     setActiveLevelId(objToSave.level_id)
     await loadSubtree(objToSave.level_id, activePeriod, levels, fiscalYear)
