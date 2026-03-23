@@ -224,6 +224,7 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
   return (
     <div onClick={() => !open && setOpen(true)} style={{ background:wT().bgCard, border:`1px solid ${open?'#4d9fff50':wT().border}`, borderRadius:10, marginBottom:8, overflow:'hidden', cursor:open?'default':'pointer', transition:'border-color 0.15s', opacity: status==='done' ? 0.55 : 1 }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }} onClick={() => setOpen(p=>!p)}>
+        <div style={{ cursor:'grab', color:wT().textFaint, fontSize:14, lineHeight:1, flexShrink:0, userSelect:'none', padding:'0 2px' }} title="ドラッグで並べ替え">⠿</div>
         <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
           <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={24} />
         </div>
@@ -330,11 +331,31 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, activeWeek }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, activeWeek, onReorder }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
+    .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
   const doneReports   = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status === 'done')
   const [showDone, setShowDone] = useState(false)
+  const [dragIdx, setDragIdx] = useState(null)
+  const [overIdx, setOverIdx] = useState(null)
+
+  const handleDragStart = (idx) => setDragIdx(idx)
+  const handleDragOver = (e, idx) => { e.preventDefault(); setOverIdx(idx) }
+  const handleDrop = async (idx) => {
+    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setOverIdx(null); return }
+    const reordered = [...activeReports]
+    const [moved] = reordered.splice(dragIdx, 1)
+    reordered.splice(idx, 0, moved)
+    // sort_orderを更新
+    const updates = reordered.map((r, i) => ({ id: r.id, sort_order: i }))
+    setDragIdx(null); setOverIdx(null)
+    for (const u of updates) {
+      await supabase.from('weekly_reports').update({ sort_order: u.sort_order }).eq('id', u.id)
+    }
+    if (onReorder) onReorder()
+  }
+  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null) }
 
   const pct = kr.target ? Math.min(Math.round((kr.current/kr.target)*100), 150) : 0
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
@@ -367,9 +388,11 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   }
 
   const addKA = async () => {
+    const maxOrder = activeReports.reduce((max, r) => Math.max(max, r.sort_order||0), 0)
     await supabase.from('weekly_reports').insert([{
       week_start: weekStart, level_id:levelId, objective_id:objId,
       kr_id:kr.id, kr_title:kr.title, ka_title:'新しいKA', status:'normal',
+      sort_order: maxOrder + 1,
     }])
     onAddKA()
   }
@@ -469,8 +492,21 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           )}
         </div>
         {/* アクティブなKA */}
-        {activeReports.map(r => (
-          <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)} />
+        {activeReports.map((r, idx) => (
+          <div key={r.id}
+            draggable
+            onDragStart={() => handleDragStart(idx)}
+            onDragOver={e => handleDragOver(e, idx)}
+            onDrop={() => handleDrop(idx)}
+            onDragEnd={handleDragEnd}
+            style={{
+              opacity: dragIdx === idx ? 0.4 : 1,
+              borderTop: overIdx === idx && dragIdx !== null && dragIdx !== idx ? '2px solid #4d9fff' : '2px solid transparent',
+              transition: 'opacity 0.15s',
+            }}
+          >
+            <KACard report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)} />
+          </div>
         ))}
         {/* 完了済みKA（折りたたみ） */}
         {showDone && doneReports.length > 0 && (
@@ -510,7 +546,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   useEffect(() => {
     setLoading(true)
-    supabase.from('weekly_reports').select('*').order('id')
+    supabase.from('weekly_reports').select('*').order('sort_order').order('id')
       .then(({data}) => { setReports(data||[]); setLoading(false) })
   }, [])
 
@@ -542,7 +578,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   }, [reports.length])
 
   const reload = async () => {
-    const {data} = await supabase.from('weekly_reports').select('*').order('id')
+    const {data} = await supabase.from('weekly_reports').select('*').order('sort_order').order('id')
     setReports(data||[])
   }
 
@@ -817,6 +853,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   canEditKA={canEditKA}
                   onKROwnerChange={handleKROwnerChange}
                   activeWeek={activeWeek}
+                  onReorder={reload}
                 />
               ))}
             </>
