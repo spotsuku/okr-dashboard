@@ -335,10 +335,15 @@ export default function MemberPage({ currentUser }) {
     return depth
   }
 
-  const roots = levels.filter(l => !l.parent_id)
   const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
   const getLevelMembers = id => members.filter(m => m.level_id === id || (m.sub_level_ids && m.sub_level_ids.map(Number).includes(Number(id))))
   const isSub = (m, levelId) => m.level_id !== levelId && (m.sub_level_ids || []).map(Number).includes(Number(levelId))
+  // ツリー内にメンバーが1人でもいるかチェック（空の重複ツリーを除外用）
+  const hasAnyMembers = (levelId) => {
+    if (getLevelMembers(levelId).length > 0) return true
+    return getChildren(levelId).some(c => hasAnyMembers(c.id))
+  }
+  const roots = levels.filter(l => !l.parent_id).filter(l => hasAnyMembers(l.id))
   const getLayerColor = id => LAYER_COLORS[getDepth(id)] || '#a0a8be'
 
   function LevelSection({ levelId, depth = 0 }) {
