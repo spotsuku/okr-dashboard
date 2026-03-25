@@ -337,8 +337,8 @@ export default function MemberPage({ currentUser }) {
 
   const roots = levels.filter(l => !l.parent_id)
   const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
-  const getLevelMembers = id => members.filter(m => m.level_id === id || (m.sub_level_ids && m.sub_level_ids.includes(id)))
-  const isSub = (m, levelId) => m.level_id !== levelId && (m.sub_level_ids || []).includes(levelId)
+  const getLevelMembers = id => members.filter(m => m.level_id === id || (m.sub_level_ids && m.sub_level_ids.map(Number).includes(Number(id))))
+  const isSub = (m, levelId) => m.level_id !== levelId && (m.sub_level_ids || []).map(Number).includes(Number(levelId))
   const getLayerColor = id => LAYER_COLORS[getDepth(id)] || '#a0a8be'
 
   function LevelSection({ levelId, depth = 0 }) {
