@@ -482,7 +482,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
 // ══════════════════════════════════════════════════
 // タブ3: メンバーJD（追加・削除・兼務設定付き）
 // ══════════════════════════════════════════════════
-function MemberJDTab({ members, setMembers, levels, jdOverrides, setJdOverrides, isAdmin, initialName, onClearJump }) {
+function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOverrides, isAdmin, initialName, onClearJump }) {
   const [selectedName, setSelectedName] = useState(initialName || null)
   const [verIdx, setVerIdx] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -508,6 +508,7 @@ function MemberJDTab({ members, setMembers, levels, jdOverrides, setJdOverrides,
         levels={levels}
         members={members}
         setMembers={setMembers}
+        tasks={tasks}
       />
     )
   }
@@ -656,7 +657,7 @@ function AddMemberModal({ levels, onClose, onAdded }) {
 }
 
 // ── メンバー詳細（JD + 兼務設定 + 削除） ─────────────────────────────────────
-function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, setVerIdx, onBack, isAdmin, levels, members, setMembers }) {
+function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, setVerIdx, onBack, isAdmin, levels, members, setMembers, tasks }) {
   const [fg, bg] = jdBase.avatar_color || [avatarColor(memberRow?.name), '#111828']
   const versions = jdBase.versions || []
   const [editing, setEditing] = useState(false)
@@ -866,65 +867,98 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
             )}
           </div>
 
-          {/* 業務一覧 */}
-          <div style={{ ...box, marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase' }}>▶ 業務内容一覧（{(EV.tasks || []).filter(t => t.status !== 'del').length}件）</div>
-              {verIdx > 0 && !editing && (
-                <div style={{ display: 'flex', gap: 6, fontSize: 10 }}>
-                  <span style={{ padding: '2px 8px', background: '#d5f5e3', color: '#059669', borderRadius: 4 }}>🟢 新規</span>
-                  <span style={{ padding: '2px 8px', background: '#fdecea', color: '#dc2626', borderRadius: 4 }}>🔴 削除</span>
-                  <span style={{ padding: '2px 8px', background: 'rgba(255,255,255,0.06)', color: '#64748b', borderRadius: 4 }}>⚪ 継続</span>
+          {/* 業務内容一覧 — org_tasks から owner でフィルタ（業務一覧タブと常に同期） */}
+          {(() => {
+            const memberName = memberRow?.name
+            const ownerTasks = (tasks || []).filter(t => t.owner === memberName)
+            const supportTasks = (tasks || []).filter(t => t.support && t.support.includes(memberName) && t.owner !== memberName)
+            // チームごとにグループ化
+            const grouped = {}
+            ownerTasks.forEach(t => {
+              const key = t.team || t.dept || '—'
+              if (!grouped[key]) grouped[key] = []
+              grouped[key].push(t)
+            })
+            return (
+              <div style={{ ...box, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase' }}>
+                    ▶ 担当業務一覧（{ownerTasks.length}件）
+                    <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 8, padding: '1px 6px', borderRadius: 4, background: 'rgba(77,159,255,0.1)', color: '#4d9fff' }}>業務一覧と同期</span>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                    <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: '#606880', width: 120, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>カテゴリ</th>
-                    <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: '#606880', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>業務内容</th>
-                    {editing && <th style={{ width: 50, borderBottom: '1px solid rgba(255,255,255,0.07)' }} />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(editing ? EV.tasks || [] : [...(EV.tasks || []).filter(t => t.status !== 'del'), ...(EV.tasks || []).filter(t => t.status === 'del')]).map((t, i) => {
-                    const isNew = t.status === 'new', isDel = t.status === 'del'
+
+                {ownerTasks.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', fontSize: 12, color: '#404660', fontStyle: 'italic' }}>
+                    業務一覧タブでこのメンバーを責任者に設定すると、ここに反映されます
+                  </div>
+                ) : (
+                  Object.entries(grouped).map(([team, teamTasks]) => {
+                    const color = getDeptColor(teamTasks[0]?.dept || '')
                     return (
-                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: isNew ? 'rgba(5,150,105,0.06)' : isDel ? 'rgba(220,38,38,0.06)' : 'transparent', opacity: isDel && !editing ? 0.55 : 1 }}>
-                        <td style={{ padding: '7px 12px' }}>
-                          {editing ? (
-                            <div style={{ display: 'flex', gap: 4 }}>
-                              <select value={t.status} onChange={e => updateTask(i, 'status', e.target.value)}
-                                style={{ background: '#0e1420', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '3px 5px', color: '#e8eaf0', fontSize: 10, outline: 'none', fontFamily: 'inherit' }}>
-                                {TASK_STATUS_OPTS.map(s => <option key={s} value={s}>{s === 'new' ? '🟢' : s === 'del' ? '🔴' : '⚪'} {s}</option>)}
-                              </select>
-                              <InlineInput value={t.cat} onChange={v => updateTask(i, 'cat', v)} style={{ fontSize: 10, width: 80 }} />
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: isNew ? '#d5f5e3' : isDel ? '#fdecea' : 'rgba(255,255,255,0.06)', color: isNew ? '#059669' : isDel ? '#dc2626' : '#64748b' }}>
-                              {isNew ? '🟢 ' : isDel ? '🔴 ' : '⚪ '}{t.cat}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '7px 12px', textDecoration: isDel && !editing ? 'line-through' : 'none' }}>
-                          {editing ? <InlineInput value={t.task} onChange={v => updateTask(i, 'task', v)} /> : <span style={{ fontSize: 12, color: '#c0c4d8', lineHeight: 1.5 }}>{t.task}</span>}
-                        </td>
-                        {editing && <td style={{ padding: '6px 10px' }}><button onClick={() => removeTask(i)} style={{ padding: '2px 7px', borderRadius: 4, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }}>✕</button></td>}
-                      </tr>
+                      <div key={team} style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 3, height: 12, background: color, borderRadius: 2, display: 'inline-block' }} />
+                          {team}
+                        </div>
+                        <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, overflow: 'hidden' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, color: '#606880', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>業務内容</th>
+                                <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, color: '#606880', width: 110, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>担当（サポート）</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {teamTasks.map((t, i) => (
+                                <tr key={t.id} style={{ borderBottom: i < teamTasks.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                                  <td style={{ padding: '8px 12px', fontSize: 12, color: '#c0c4d8', lineHeight: 1.5 }}>{t.task}</td>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    {t.support ? (
+                                      <span style={{ fontSize: 11, color: '#606880', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 5 }}>{t.support}</span>
+                                    ) : null}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     )
-                  })}
-                </tbody>
-              </table>
-              {editing && <div onClick={addTask} style={{ padding: '8px 12px', fontSize: 11, color: '#00d68f', cursor: 'pointer', background: 'rgba(0,214,143,0.04)', borderTop: '1px dashed rgba(0,214,143,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>＋ 業務を追加</div>}
-            </div>
-            {editing && (
-              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <SaveBtn saving={saving} saved={saved} onClick={saveEdit} label="変更を保存" />
-                <button onClick={() => setEditing(false)} style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#a0a8be', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+                  })
+                )}
+
+                {/* サポート業務（担当欄に名前が入っているもの） */}
+                {supportTasks.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '1px', marginBottom: 8 }}>
+                      サポート業務（{supportTasks.length}件）
+                    </div>
+                    <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <tbody>
+                          {supportTasks.map((t, i) => (
+                            <tr key={t.id} style={{ borderBottom: i < supportTasks.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', background: 'rgba(255,255,255,0.02)' }}>
+                              <td style={{ padding: '7px 12px' }}>
+                                <span style={{ fontSize: 10, color: '#606880', padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: 4 }}>{t.team}</span>
+                              </td>
+                              <td style={{ padding: '7px 12px', fontSize: 12, color: '#a0a8be', lineHeight: 1.5 }}>{t.task}</td>
+                              <td style={{ padding: '7px 12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <Avatar name={t.owner} size={16} />
+                                  <span style={{ fontSize: 11, color: avatarColor(t.owner) }}>{t.owner}</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            )
+          })()}
 
           {/* タイムライン */}
           <div style={box}>
@@ -1024,6 +1058,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
           <MemberJDTab
             members={members} setMembers={setMembers}
             levels={levels}
+            tasks={tasks}
             jdOverrides={jdOverrides} setJdOverrides={setJdOverrides}
             isAdmin={isAdmin}
             initialName={jumpMemberName}
