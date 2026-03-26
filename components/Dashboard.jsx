@@ -8,6 +8,7 @@ import AnnualView from './AnnualView'
 import WeeklyMTGPage from './WeeklyMTGPage'
 import MyOKRPageNew from './MyOKRPage'
 import BulkRegisterPage from './BulkRegisterPage'
+import OrgPage from './OrgPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -47,7 +48,6 @@ const THEMES = {
   },
 }
 
-// グローバルテーマ参照（コンポーネント間で共有）
 let _T = THEMES.dark
 const getT = () => _T
 
@@ -74,7 +74,6 @@ function calcObjProgress(krs) {
   return Math.round(krs.reduce((s, kr) => s + calcKRProgress(kr), 0) / krs.length)
 }
 
-// 絶対レイヤー深度（経営=0, 事業部=1, チーム=2）
 function getAbsoluteDepth(levelId, levels) {
   let depth = 0
   let cur = levels.find(l => Number(l.id) === Number(levelId))
@@ -90,7 +89,6 @@ const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
 const getLayerColor = absDepth => LAYER_COLORS[absDepth] || '#a0a8be'
 const getLayerLabel = absDepth => LAYER_LABELS[absDepth] || ''
 
-// アバター：名前から頭文字2文字を生成
 function Avatar({ name, color, size = 28 }) {
   if (!name) return null
   const initials = name.replace(/\s+/g, '').slice(0, 2)
@@ -104,7 +102,6 @@ function Avatar({ name, color, size = 28 }) {
   )
 }
 
-// ─── Small UI components ───────────────────────────────────────────────────────
 function Stars({ score, size = 13 }) {
   return (
     <div style={{ display: 'flex', gap: 1 }}>
@@ -249,7 +246,6 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 
   return (
     <>
-      {/* 年度表示バッジ */}
       <div style={{ marginBottom: 13 }}>
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>年度</div>
         <div style={{
@@ -376,10 +372,7 @@ function KASection({ krId }) {
 
   return (
     <div style={{ marginLeft: 50, marginTop: 6, marginBottom: 8 }}>
-      <div
-        onClick={() => setOpen(p => !p)}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}
-      >
+      <div onClick={() => setOpen(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}>
         <span style={{ fontSize: 10, color: '#4d9fff', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
         <span style={{ fontSize: 11, color: '#4d9fff' }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
         <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: 'rgba(77,159,255,0.15)', color: '#4d9fff' }}>
@@ -548,7 +541,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
   )
 }
 
-// ─── Level Column（横並びの1列） ──────────────────────────────────────────────
+// ─── Level Column ─────────────────────────────────────────────────────────────
 function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast }) {
   const level = levels.find(l => Number(l.id) === Number(levelId))
   const objs = nodeObjectives[levelId] || []
@@ -559,7 +552,6 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
   const avg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : null
   const avgR = avg !== null ? getRating(avg) : null
   const [colWidth, setColWidth] = useState(280)
-  const dragRef = useRef(null)
   if (!level) return null
 
   const onMouseDownResize = (e) => {
@@ -598,21 +590,10 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
           : objs.map(obj => <ObjCard key={obj.id} obj={obj} levelColor={layerColor} onEdit={onEdit} onDelete={onDelete} />)
         }
 
-        <div
-          onMouseDown={onMouseDownResize}
-          style={{
-            position: 'absolute', top: 0, right: -4, width: 8, height: '100%',
-            cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div style={{
-            width: 3, height: 40, borderRadius: 2,
-            background: `${layerColor}60`,
-            opacity: 0.4,
-            transition: 'opacity 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
+        <div onMouseDown={onMouseDownResize} style={{ position: 'absolute', top: 0, right: -4, width: 8, height: '100%', cursor: 'col-resize', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 3, height: 40, borderRadius: 2, background: `${layerColor}60`, opacity: 0.4, transition: 'opacity 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
           />
         </div>
       </div>
@@ -628,7 +609,6 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
   )
 }
 
-// ─── Node Block ──────────────────────────────────────────────────────────────
 function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth = 0 }) {
   if (_depth > 5) return null
   const children = levels.filter(l => Number(l.parent_id) === Number(levelId))
@@ -636,15 +616,7 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-      <LevelColumn
-        levelId={levelId}
-        levels={levels}
-        nodeObjectives={nodeObjectives}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        isLast={!hasChildren}
-      />
-
+      <LevelColumn levelId={levelId} levels={levels} nodeObjectives={nodeObjectives} onEdit={onEdit} onDelete={onDelete} isLast={!hasChildren} />
       {hasChildren && (
         <>
           <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: 22, flexShrink: 0, width: 36 }}>
@@ -653,15 +625,7 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {children.map(child => (
-              <NodeBlock
-                key={child.id}
-                levelId={child.id}
-                levels={levels}
-                nodeObjectives={nodeObjectives}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                _depth={_depth + 1}
-              />
+              <NodeBlock key={child.id} levelId={child.id} levels={levels} nodeObjectives={nodeObjectives} onEdit={onEdit} onDelete={onDelete} _depth={_depth + 1} />
             ))}
           </div>
         </>
@@ -736,16 +700,9 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
   }
 
   return (
-    <div style={{
-      position:'fixed', inset:0, zIndex:1000,
-      background:'rgba(0,0,0,0.78)', backdropFilter:'blur(6px)',
-      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{
-        background:'#141926', border:'1px solid rgba(255,255,255,0.1)', borderRadius:16,
-        padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto',
-        boxShadow:'0 28px 80px rgba(0,0,0,0.65)',
-      }}>
+    <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.78)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:'#141926', border:'1px solid rgba(255,255,255,0.1)', borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto', boxShadow:'0 28px 80px rgba(0,0,0,0.65)' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
@@ -756,7 +713,6 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
           <button onClick={onClose} style={{ background:getT().border, border:'none', color:'#a0a8be', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
         </div>
 
-        {/* 他年度からコピー */}
         {onCopyFromYear && (
           <div style={{ marginBottom:16, padding:'10px 12px', background:'rgba(168,85,247,0.06)', border:'1px solid rgba(168,85,247,0.2)', borderRadius:10 }}>
             <div style={{ fontSize:11, color:'#a855f7', fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
@@ -788,10 +744,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
           <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:'#606880', marginBottom:5 }}>親組織</div>
-            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{
-              width:'100%', background:'#1a2030', border:'1px solid rgba(255,255,255,0.1)',
-              borderRadius:8, padding:'9px 12px', color: parentId ? '#e8eaf0' : '#606880', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer',
-            }}>
+            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:'#1a2030', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color: parentId ? '#e8eaf0' : '#606880', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
               <option value=''>選択してください</option>
               {addableParents.map(l => {
                 const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
@@ -809,173 +762,16 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
             <div style={{ fontSize:11, color:'#606880', marginBottom:8 }}>アイコン</div>
             <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
               {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{
-                  width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? '#4d9fff' : 'rgba(255,255,255,0.1)'}`,
-                  background: icon===ic ? 'rgba(77,159,255,0.15)' : 'rgba(255,255,255,0.04)',
-                  cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center',
-                }}>{ic}</button>
+                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? '#4d9fff' : 'rgba(255,255,255,0.1)'}`, background: icon===ic ? 'rgba(77,159,255,0.15)' : 'rgba(255,255,255,0.04)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
               ))}
             </div>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
             <button onClick={onClose} style={{ background:'transparent', border:'1px solid rgba(255,255,255,0.1)', color:'#a0a8be', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{
-              background: (!name.trim() || !parentId) ? 'rgba(77,159,255,0.3)' : '#4d9fff',
-              border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600,
-              cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit',
-            }}>{saving ? '追加中...' : '＋ 追加する'}</button>
+            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? 'rgba(77,159,255,0.3)' : '#4d9fff', border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-
-// ─── My OKR Page ───────────────────────────────────────────────────────────────
-function MyOKRPage({ user, levels, members, subtreeObjs, activePeriod }) {
-  const [myObjs, setMyObjs] = useState([])
-  const [allObjs, setAllObjs] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  const myMember = members.find(m => m.email === user.email)
-  const myName = myMember?.name || user.email
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      const { data: objs } = await supabase
-        .from('objectives').select('id,level_id,period,title,owner').eq('owner', myName).order('id')
-      if (!objs || !objs.length) { setMyObjs([]); setAllObjs([]); setLoading(false); return }
-      const ids = objs.map(o => o.id)
-      const { data: krs } = await supabase
-        .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better').in('objective_id', ids)
-      const krMap = {}
-      ;(krs || []).forEach(kr => { if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []; krMap[kr.objective_id].push(kr) })
-      const full = objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
-      setMyObjs(full)
-      setAllObjs(full)
-      setLoading(false)
-    }
-    load()
-  }, [myName]) // eslint-disable-line
-
-  const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
-  const getLevelColor = (levelId) => {
-    let d = 0, cur = levels.find(l => Number(l.id) === Number(levelId))
-    while (cur && cur.parent_id) { d++; cur = levels.find(l => Number(l.id) === Number(cur.parent_id)) }
-    return LAYER_COLORS[d] || '#a0a8be'
-  }
-  const getLevelName = (levelId) => levels.find(l => Number(l.id) === Number(levelId))?.name || ''
-
-  const handleCopyFromYear = async (fromYear) => {
-    // fromYearの組織構成を取得
-    const { data: srcLevels } = await supabase.from('levels').select('*').eq('fiscal_year', fromYear).order('id')
-    if (!srcLevels?.length) { alert(`${fromYear}年度の組織データがありません`); return }
-    if (!window.confirm(`${fromYear}年度の組織構成（${srcLevels.length}件）を${fiscalYear}年度にコピーしますか？`)) return
-
-    // id→新idのマップ
-    const idMap = {}
-    // rootから順にinsert（parent_idの依存順）
-    const sorted = []
-    const addSorted = (parentId) => {
-      srcLevels.filter(l => (parentId === null ? !l.parent_id : Number(l.parent_id) === Number(parentId))).forEach(l => { sorted.push(l); addSorted(l.id) })
-    }
-    addSorted(null)
-
-    for (const l of sorted) {
-      const newParentId = l.parent_id ? idMap[l.parent_id] : null
-      const { data: inserted } = await supabase.from('levels').insert([{
-        name: l.name, icon: l.icon, color: l.color || '#4d9fff',
-        parent_id: newParentId || null, fiscal_year: fiscalYear,
-      }]).select().single()
-      if (inserted) idMap[l.id] = inserted.id
-    }
-
-    // 再ロード
-    const { data: newLvls } = await supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id')
-    if (newLvls?.length) { setLevels(newLvls); setActiveLevelId(newLvls[0].id) }
-    alert(`${fromYear}年度の組織構成を${fiscalYear}年度にコピーしました！`)
-  }
-
-  const handleLinkGoogle = async () => {
-    const { error } = await supabase.auth.linkIdentity({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-    if (error) alert('紐づけに失敗しました: ' + error.message)
-  }
-
-  const hasGoogle = user?.identities?.some(i => i.provider === 'google')
-
-  const periods = [
-    { key: 'annual', label: '通期' }, { key: 'q1', label: 'Q1' },
-    { key: 'q2', label: 'Q2' }, { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
-  ]
-
-  if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
-
-  return (
-    <div style={{ padding: '24px 28px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(77,159,255,0.15)', border: '2px solid rgba(77,159,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#4d9fff' }}>
-          {myName.charAt(0)}
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 2 }}>{myMember?.role || 'メンバー'} · {getLevelName(myMember?.level_id)}</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: getT().text }}>{myName} のOKR</div>
-        </div>
-        {!myMember && (
-          <div style={{ marginLeft: 'auto', fontSize: 11, color: '#ffd166', background: 'rgba(255,209,102,0.1)', border: '1px solid rgba(255,209,102,0.2)', borderRadius: 8, padding: '6px 12px' }}>
-            ⚠️ 組織図にメンバー登録するとより詳しい情報が表示されます
-          </div>
-        )}
-      </div>
-
-      {myObjs.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: getT().textFaint, border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-          <div style={{ fontSize: 15, marginBottom: 6 }}>担当OKRがありません</div>
-          <div style={{ fontSize: 13 }}>目標の担当者名を <strong style={{ color: '#4d9fff' }}>{myName}</strong> に設定するとここに表示されます</div>
-        </div>
-      ) : (
-        <>
-          {periods.map(p => {
-            const objs = myObjs.filter(o => o.period === p.key)
-            if (!objs.length) return null
-            return (
-              <div key={p.key} style={{ marginBottom: 32 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: getT().text }}>{p.label}</span>
-                  <span style={{ fontSize: 11, color: getT().textFaint }}>{objs.length}件</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
-                  {objs.map(obj => {
-                    const prog = calcObjProgress(obj.key_results)
-                    const rating = getRating(prog)
-                    const lColor = getLevelColor(obj.level_id)
-                    return (
-                      <div key={obj.id} style={{ background: getT().bgCard2, border: `1px solid ${rating.color}25`, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${lColor}` }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color, fontWeight: 700 }}>{rating.label}</span>
-                          <span style={{ fontSize: 24, fontWeight: 800, color: rating.color }}>{prog}%</span>
-                        </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: getT().text, lineHeight: 1.5, marginBottom: 12 }}>{obj.title}</div>
-                        <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
-                          <div style={{ height: '100%', width: `${Math.min(prog, 100)}%`, background: rating.color, borderRadius: 99, boxShadow: `0 0 6px ${rating.color}80` }} />
-                        </div>
-                        <div style={{ fontSize: 11, color: getT().textMuted }}>
-                          {getLevelName(obj.level_id)} · {obj.key_results.length}KR
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </>
-      )}
     </div>
   )
 }
@@ -985,7 +781,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(null)
-  const [fiscalYear, setFiscalYear]         = useState('2026') // ← 年度state追加
+  const [fiscalYear, setFiscalYear]         = useState('2026')
   const [activePeriod, setActivePeriod]     = useState('all')
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
@@ -1018,7 +814,6 @@ export default function Dashboard({ user, onSignOut }) {
         supabase.from('members').select('*').order('id'),
       ])
       if (error) console.error('levels error:', error)
-      // fiscal_yearでフロント側フィルタ（nullは2026年度扱い）
       const validLvls = (lvls || []).filter(l =>
         fiscalYear === '2026'
           ? (!l.fiscal_year || l.fiscal_year === '2026')
@@ -1032,22 +827,11 @@ export default function Dashboard({ user, onSignOut }) {
     load()
   }, [fiscalYear])
 
-  // ─── 年度に応じたperiodキーを生成 ─────────────────────────────────────────
-  // 2026年度: 'q1', 'q2', 'q3', 'q4', 'annual' （既存データそのまま）
-  // 2025年度: '2025_q1', '2025_q2', '2025_q3', '2025_q4', '2025_annual'
   const toPeriodKey = (period, year) => year === '2026' ? period : `${year}_${period}`
-  const fromPeriodKey = (periodKey) => {
-    if (periodKey.includes('_')) {
-      const parts = periodKey.split('_')
-      return parts[parts.length - 1] // 'q1' など
-    }
-    return periodKey
-  }
 
   const fetchForLevel = async (levelId, period, year = '2026') => {
     let query = supabase.from('objectives').select('id,level_id,period,title,owner').eq('level_id', levelId).order('id')
     if (period === 'all') {
-      // 年度に対応する全periodキーを取得
       const allPeriodKeys = ['annual','q1','q2','q3','q4'].map(p => toPeriodKey(p, year))
       query = query.in('period', allPeriodKeys)
     } else {
@@ -1088,7 +872,6 @@ export default function Dashboard({ user, onSignOut }) {
   }, [activeLevelId, activePeriod, levels, fiscalYear]) // eslint-disable-line
 
   const handleSave = async ({ obj, krs }) => {
-    // 年度プレフィックスを付与してperiodKeyを生成
     const periodKey = toPeriodKey(obj.period, fiscalYear)
     const objToSave = { ...obj, period: periodKey }
 
@@ -1148,14 +931,11 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   const handleCopyFromYear = async (fromYear) => {
-    // fromYearの組織構成を取得
     const { data: srcLevels } = await supabase.from('levels').select('*').eq('fiscal_year', fromYear).order('id')
     if (!srcLevels?.length) { alert(`${fromYear}年度の組織データがありません`); return }
     if (!window.confirm(`${fromYear}年度の組織構成（${srcLevels.length}件）を${fiscalYear}年度にコピーしますか？`)) return
 
-    // id→新idのマップ
     const idMap = {}
-    // rootから順にinsert（parent_idの依存順）
     const sorted = []
     const addSorted = (parentId) => {
       srcLevels.filter(l => (parentId === null ? !l.parent_id : Number(l.parent_id) === Number(parentId))).forEach(l => { sorted.push(l); addSorted(l.id) })
@@ -1171,7 +951,6 @@ export default function Dashboard({ user, onSignOut }) {
       if (inserted) idMap[l.id] = inserted.id
     }
 
-    // 再ロード
     const { data: newLvls } = await supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id')
     if (newLvls?.length) { setLevels(newLvls); setActiveLevelId(newLvls[0].id) }
     alert(`${fromYear}年度の組織構成を${fiscalYear}年度にコピーしました！`)
@@ -1232,7 +1011,6 @@ export default function Dashboard({ user, onSignOut }) {
     </div>
   )
 
-  // サイドバーの共通コンテンツ
   function SidebarContent() {
     return (
       <>
@@ -1284,16 +1062,10 @@ export default function Dashboard({ user, onSignOut }) {
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', display: 'flex', flexDirection: 'column' }}>
-      {/* Header：2行構成 */}
-      <div style={{
-        borderBottom: `1px solid ${T.border}`, background: T.headerBg,
-        position: 'sticky', top: 0, zIndex: 50,
-      }}>
-        {/* 1行目：ロゴ・ページナビ・ユーザー操作 */}
-        <div style={{
-          padding: isMobile ? '8px 12px' : '8px 20px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        }}>
+      {/* Header */}
+      <div style={{ borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50 }}>
+        {/* 1行目 */}
+        <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <button onClick={() => setShowSidebar(p => !p)} style={{
               background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
@@ -1308,9 +1080,17 @@ export default function Dashboard({ user, onSignOut }) {
             )}
           </div>
 
-          {/* ページナビ（中央） */}
+          {/* ページナビ */}
           <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-            {[{key:'okr',label:'OKR'},{key:'myokr',label:'マイOKR'},{key:'bulk',label:'一括登録'},{key:'csv',label:'CSV登録'},{key:'members',label:'組織図'},{key:'weekly',label:'週次MTG'}].map(pg => (
+            {[
+              {key:'okr',        label:'OKR'},
+              {key:'myokr',      label:'マイOKR'},
+              {key:'bulk',       label:'一括登録'},
+              {key:'csv',        label:'CSV登録'},
+              {key:'members',    label:'メンバー管理'},
+              {key:'weekly',     label:'週次MTG'},
+              {key:'orgjd',      label:'組織'},
+            ].map(pg => (
               <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
                 padding: isMobile ? '5px 6px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
                 background: activePage === pg.key ? '#4d9fff' : 'transparent',
@@ -1321,89 +1101,46 @@ export default function Dashboard({ user, onSignOut }) {
             ))}
           </div>
 
-          {/* 右側：ユーザー操作 */}
+          {/* 右側 */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
             {!isMobile && <span style={{ fontSize: 12, color: getT().textMuted }}>{user.email}</span>}
-            {!isMobile && hasGoogle && (
-              <span style={{ fontSize: 11, color: '#00d68f' }}>✅ Google連携済み</span>
-            )}
+            {!isMobile && hasGoogle && <span style={{ fontSize: 11, color: '#00d68f' }}>✅ Google連携済み</span>}
             {!isMobile && !hasGoogle && (
-              <button onClick={handleLinkGoogle} style={{
-                background: 'rgba(255,255,255,0.9)', border: 'none', color: '#333',
-                borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'inherit',
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}>
+              <button onClick={handleLinkGoogle} style={{ background: 'rgba(255,255,255,0.9)', border: 'none', color: '#333', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <svg width="13" height="13" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
                 Google連携
               </button>
             )}
             {!isMobile && (
-              <button onClick={onSignOut} style={{
-                background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-                color: getT().textSub, borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-              }}>ログアウト</button>
+              <button onClick={onSignOut} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: getT().textSub, borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>ログアウト</button>
             )}
-            <button onClick={() => setModal({ type: 'add' })} style={{
-              background: '#4d9fff', border: 'none', color: '#fff',
-              borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-            }}>＋ 追加</button>
-            <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{
-              background: T.bgCard, border: `1px solid ${T.borderMid}`,
-              color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-            }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
-            <button onClick={() => setShowAI(p => !p)} style={{
-              background: '#a855f7', border: 'none', color: '#fff',
-              borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-            }}>🤖</button>
+            <button onClick={() => setModal({ type: 'add' })} style={{ background: '#4d9fff', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
+            <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
+            <button onClick={() => setShowAI(p => !p)} style={{ background: '#a855f7', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
           </div>
         </div>
 
-        {/* 2行目：ビュー切替・年度・期間（OKRページのみ表示） */}
+        {/* 2行目：OKRページのみ */}
         {activePage === 'okr' && (
-          <div style={{
-            padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6,
-            borderTop: `1px solid ${T.border}`, background: T.headerBg,
-          }}>
-            {/* ビュー切替 */}
+          <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'}].map(v => (
-                <button key={v.key} onClick={() => setViewMode(v.key)} style={{
-                  padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: viewMode === v.key ? '#a855f7' : 'transparent',
-                  color: viewMode === v.key ? '#fff' : '#606880',
-                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-                }}>{v.label}</button>
+                <button key={v.key} onClick={() => setViewMode(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: viewMode === v.key ? '#a855f7' : 'transparent', color: viewMode === v.key ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
               ))}
             </div>
 
-            {/* 年度切替（組織ビューのみ） */}
             {viewMode === 'org' && (
               <>
                 <div style={{ width: 1, height: 18, background: T.border }} />
                 <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
                   {['2025', '2026'].map(yr => (
-                    <button key={yr} onClick={() => setFiscalYear(yr)} style={{
-                      padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                      background: fiscalYear === yr ? '#ff9f43' : 'transparent',
-                      color: fiscalYear === yr ? '#fff' : '#606880',
-                      fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-                    }}>{yr}年度</button>
+                    <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? '#ff9f43' : 'transparent', color: fiscalYear === yr ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
                   ))}
                 </div>
-
                 <div style={{ width: 1, height: 18, background: T.border }} />
-
-                {/* 期間切替 */}
                 <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
                   {periods.map(p => (
-                    <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
-                      padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                      background: activePeriod === p.key ? '#a855f7' : 'transparent',
-                      color: activePeriod === p.key ? '#fff' : '#606880',
-                      fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                    }}>{p.label}</button>
+                    <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePeriod === p.key ? '#a855f7' : 'transparent', color: activePeriod === p.key ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>{p.label}</button>
                   ))}
                 </div>
               </>
@@ -1418,23 +1155,19 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
+      {/* ★ 追加: 組織ページ */}
+      {activePage === 'orgjd' && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <OrgPage themeKey={themeKey} user={user} />
+        </div>
+      )}
 
       {/* Annual View */}
       <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
-        <div style={{
-          width: 210, flexShrink: 0,
-          borderRight: `1px solid ${T.border}`,
-          padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto',
-          ...(isMobile ? {
-            position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
-            transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 0.25s ease',
-            boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
-          } : {}),
-        }}>
+        <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none' } : {}) }}>
           <SidebarContent />
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1456,36 +1189,15 @@ export default function Dashboard({ user, onSignOut }) {
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
-
-        {/* Sidebar */}
-        <div style={{
-          width: 210, flexShrink: 0,
-          borderRight: `1px solid ${T.border}`,
-          padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto',
-          ...(isMobile ? {
-            position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300,
-            transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 0.25s ease',
-            boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none',
-          } : {}),
-        }}>
+        <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: showSidebar ? '4px 0 24px rgba(0,0,0,0.6)' : 'none' } : {}) }}>
           <SidebarContent />
         </div>
-
-        {/* Main */}
         <div style={{ flex: 1, padding: isMobile ? '14px' : '20px 24px', overflow: 'auto', minWidth: 0 }}>
-          {/* ヘッダー */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
               <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
-              {/* 年度バッジ */}
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
-                background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)',
-                color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43',
-                border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}`,
-              }}>{fiscalYear}年度</span>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}` }}>{fiscalYear}年度</span>
               <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
@@ -1497,7 +1209,6 @@ export default function Dashboard({ user, onSignOut }) {
             </div>
           </div>
 
-          {/* 凡例 */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
             {[{ label: '経営', color: '#ff6b6b' }, { label: '事業部', color: '#4d9fff' }, { label: 'チーム', color: '#00d68f' }].map(l => (
               <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1507,7 +1218,6 @@ export default function Dashboard({ user, onSignOut }) {
             ))}
           </div>
 
-          {/* 階層ツリー */}
           {activeLevelId && (
             <NodeBlock
               levelId={activeLevelId}
