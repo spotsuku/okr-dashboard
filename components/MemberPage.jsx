@@ -273,7 +273,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
   )
 }
 
-export default function MemberPage({ currentUser }) {
+export default function MemberPage({ currentUser, fiscalYear = '2026' }) {
   const [members, setMembers] = useState([])
   const [levels, setLevels] = useState([])
   const [loading, setLoading] = useState(true)
@@ -285,7 +285,7 @@ export default function MemberPage({ currentUser }) {
   const myMember = members.find(m => m.email === currentUser?.email)
   const isAdmin  = myMember?.is_admin === true
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [fiscalYear])
 
   const loadData = async () => {
     setLoading(true)
@@ -293,7 +293,14 @@ export default function MemberPage({ currentUser }) {
       supabase.from('levels').select('*').order('id'),
       supabase.from('members').select('*').order('id'),
     ])
-    if (lvls) setLevels(lvls)
+    // fiscal_yearでフィルタ（nullは2026年度扱い）— Dashboard.jsxと同じロジック
+    const validLvls = (lvls || []).filter(l =>
+      fiscalYear === '2026'
+        ? (!l.fiscal_year || l.fiscal_year === '2026')
+        : l.fiscal_year === fiscalYear
+    )
+    if (validLvls.length) setLevels(validLvls)
+    else setLevels([])
     if (mems) setMembers(mems)
     setLoading(false)
   }
@@ -338,12 +345,7 @@ export default function MemberPage({ currentUser }) {
   const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
   const getLevelMembers = id => members.filter(m => m.level_id === id || (m.sub_level_ids && m.sub_level_ids.map(Number).includes(Number(id))))
   const isSub = (m, levelId) => m.level_id !== levelId && (m.sub_level_ids || []).map(Number).includes(Number(levelId))
-  // ツリー内にメンバーが1人でもいるかチェック（空の重複ツリーを除外用）
-  const hasAnyMembers = (levelId) => {
-    if (getLevelMembers(levelId).length > 0) return true
-    return getChildren(levelId).some(c => hasAnyMembers(c.id))
-  }
-  const roots = levels.filter(l => !l.parent_id).filter(l => hasAnyMembers(l.id))
+  const roots = levels.filter(l => !l.parent_id)
   const getLayerColor = id => LAYER_COLORS[getDepth(id)] || '#a0a8be'
 
   function LevelSection({ levelId, depth = 0 }) {

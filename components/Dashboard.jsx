@@ -1471,7 +1471,7 @@ export default function Dashboard({ user, onSignOut }) {
 
       {/* ─── ページ切替 ─── */}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
-      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage currentUser={user} /></div>}
+      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage currentUser={user} fiscalYear={fiscalYear} /></div>}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
