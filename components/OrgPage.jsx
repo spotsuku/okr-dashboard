@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ══════════════════════════════════════════════════
@@ -7,23 +7,23 @@ import { supabase } from '../lib/supabase'
 // ══════════════════════════════════════════════════
 const THEMES = {
   dark: {
-    bg:         '#090d18',
-    bgCard:     '#0e1420',
-    bgCard2:    '#111828',
-    bgInput:    'rgba(255,255,255,0.06)',
-    bgHover:    'rgba(255,255,255,0.04)',
-    bgTable:    'rgba(255,255,255,0.04)',
-    border:     'rgba(255,255,255,0.07)',
-    borderMid:  'rgba(255,255,255,0.12)',
-    borderEdit: 'rgba(77,159,255,0.4)',
-    text:       '#e8eaf0',
-    textSub:    '#c0c4d8',
-    textMuted:  '#a0a8be',
-    textFaint:  '#606880',
-    textFaintest:'#404660',
-    inputBg:    '#0e1420',
-    inputText:  '#e8eaf0',
-    selectBg:   '#111828',
+    bg:          '#07091280',
+    bgCard:      '#131b2e',    // ← 濃い青系カード背景
+    bgCard2:     '#1a2540',    // ← カード内セクション背景
+    bgInput:     'rgba(255,255,255,0.08)',
+    bgHover:     'rgba(255,255,255,0.06)',
+    bgTable:     'rgba(255,255,255,0.06)',
+    border:      'rgba(255,255,255,0.18)',   // ← 大幅に強化
+    borderMid:   'rgba(255,255,255,0.28)',   // ← 大幅に強化
+    borderEdit:  'rgba(77,159,255,0.6)',
+    text:        '#eef0f8',
+    textSub:     '#cdd2e8',
+    textMuted:   '#8b95b8',
+    textFaint:   '#505870',
+    textFaintest:'#363d55',
+    inputBg:     '#131b2e',
+    inputText:   '#eef0f8',
+    selectBg:    '#1a2540',
   },
   light: {
     bg:         '#f0f2f7',
@@ -257,8 +257,8 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
       {depts.map(dept => {
         const color = getDeptColor(dept.name)
         return (
-          <div key={dept.id} style={{ marginBottom: 24, border: `1px solid ${color}30`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ background: `linear-gradient(135deg, ${color}18, ${color}06)`, borderBottom: `2px solid ${color}30`, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div key={dept.id} style={{ marginBottom: 24, border: `2px solid ${color}60`, borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{ background: `linear-gradient(135deg, ${color}18, ${color}06)`, borderBottom: `2px solid ${color}80`, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 4, height: 24, borderRadius: 2, background: color }} />
               <span style={{ fontSize: 16, fontWeight: 700, color }}>{dept.icon} {dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
@@ -274,7 +274,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                   const isEditing = editingMeta === team.id
 
                   return (
-                    <div key={team.id} style={{ background: T().bgCard2, border: `1px solid ${color}25`, borderRadius: 10, padding: '14px 16px' }}>
+                    <div key={team.id} style={{ background: T().bgCard2, border: `1px solid ${color}55`, borderRadius: 10, padding: '14px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: T().text, flex: 1, lineHeight: 1.4 }}>{team.icon} {team.name}</span>
                         {isEditing ? (
@@ -336,7 +336,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 }
 
 // ══════════════════════════════════════════════════
-// タブ2: 業務一覧（管理者は編集可）
+// タブ2: 業務一覧（管理者は編集・並び替え可）
 // ══════════════════════════════════════════════════
 function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
   const [filterDept, setFilterDept] = useState('')
@@ -347,12 +347,19 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
   const [addingTeam, setAddingTeam] = useState(null)
   const [newBuf, setNewBuf] = useState({ task: '', owner: '', support: '' })
   const [saving, setSaving] = useState(false)
+  // ドラッグ状態
+  const dragId = useRef(null)
+  const dragOverId = useRef(null)
 
   const memberNames = members.map(m => m.name)
   const allDepts = [...new Set(tasks.map(t => t.dept))]
   const allOwners = [...new Set(tasks.map(t => t.owner).filter(o => o && o !== '（未定）'))]
 
-  const filtered = tasks.filter(t =>
+  // sort_orderでソート（なければidでソート）
+  const sortedTasks = [...tasks].sort((a, b) =>
+    (a.sort_order ?? a.id) - (b.sort_order ?? b.id)
+  )
+  const filtered = sortedTasks.filter(t =>
     (!filterDept || t.dept === filterDept) &&
     (!filterOwner || t.owner === filterOwner || (t.support && t.support.includes(filterOwner))) &&
     (!query || t.task.includes(query) || t.team.includes(query))
@@ -378,10 +385,58 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
   }
   const addTask = async (dept, team) => {
     if (!newBuf.task.trim()) return
-    const row = { dept, team, ...newBuf }
+    const maxOrder = Math.max(0, ...tasks.filter(t => t.dept === dept && t.team === team).map(t => t.sort_order ?? t.id))
+    const row = { dept, team, ...newBuf, sort_order: maxOrder + 1 }
     const { data } = await supabase.from('org_tasks').insert([row]).select().single()
     setTasks(prev => [...prev, data || { ...row, id: Date.now() }])
     setNewBuf({ task: '', owner: '', support: '' }); setAddingTeam(null)
+  }
+
+  // ドラッグ&ドロップで並び替え（同一チーム内のみ）
+  const handleDragStart = (e, taskId) => {
+    dragId.current = taskId
+    e.dataTransfer.effectAllowed = 'move'
+    e.currentTarget.style.opacity = '0.5'
+  }
+  const handleDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1'
+    dragId.current = null
+    dragOverId.current = null
+  }
+  const handleDragOver = (e, taskId) => {
+    e.preventDefault()
+    dragOverId.current = taskId
+  }
+  const handleDrop = async (e, dept, team) => {
+    e.preventDefault()
+    const fromId = dragId.current
+    const toId = dragOverId.current
+    if (!fromId || !toId || fromId === toId) return
+
+    // 同チーム内のタスクだけ対象
+    const teamTasks = sortedTasks.filter(t => t.dept === dept && t.team === team)
+    const fromIdx = teamTasks.findIndex(t => t.id === fromId)
+    const toIdx = teamTasks.findIndex(t => t.id === toId)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    // 並び替え
+    const reordered = [...teamTasks]
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+
+    // sort_orderを再割り当て
+    const updates = reordered.map((t, i) => ({ ...t, sort_order: i + 1 }))
+    setTasks(prev => {
+      const others = prev.filter(t => !(t.dept === dept && t.team === team))
+      return [...others, ...updates].sort((a, b) => (a.sort_order ?? a.id) - (b.sort_order ?? b.id))
+    })
+
+    // DB更新（バッチ）
+    await Promise.all(updates.map(t =>
+      supabase.from('org_tasks').update({ sort_order: t.sort_order }).eq('id', t.id)
+    ))
+    dragId.current = null
+    dragOverId.current = null
   }
 
   const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
@@ -415,7 +470,11 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
           onBlur={e => e.target.style.borderColor = T().border}
         />
         <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{filtered.length}件</span>
-        {isAdmin && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>👑 管理者モード</span>}
+        {isAdmin && (
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>
+            👑 管理者モード　⠿ドラッグで並び替え可
+          </span>
+        )}
         {(filterDept || filterOwner || query) && <button onClick={() => { setFilterDept(''); setFilterOwner(''); setQuery('') }} style={{ ...sel, color: '#4d9fff', border: '1px solid rgba(77,159,255,0.3)' }}>クリア</button>}
       </div>
 
@@ -423,7 +482,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
         const color = getDeptColor(dept)
         return (
           <div key={dept} style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '8px 14px', background: `${color}12`, border: `1px solid ${color}25`, borderRadius: 8, borderLeft: `4px solid ${color}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '8px 14px', background: `${color}12`, border: `1px solid ${color}55`, borderRadius: 8, borderLeft: `4px solid ${color}` }}>
               <span style={{ fontSize: 14, fontWeight: 700, color }}>{dept}</span>
             </div>
             {Object.entries(teams).map(([team, teamTasks]) => {
@@ -431,10 +490,14 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
               return (
                 <div key={team} style={{ marginBottom: 16, marginLeft: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: T().textMuted, marginBottom: 8 }}>└ {team}</div>
-                  <div style={{ border: `1px solid ${T().border}`, borderRadius: 8, overflow: 'hidden', background: T().bgCard }}>
+                  <div style={{ border: `1px solid ${T().border}`, borderRadius: 8, overflow: 'hidden', background: T().bgCard }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => handleDrop(e, dept, team)}
+                  >
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ background: T().bgTable }}>
+                          {isAdmin && <th style={{ width: 24, borderBottom: `1px solid ${T().border}` }} />}
                           <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, width: 110, borderBottom: `1px solid ${T().border}` }}>責任者</th>
                           <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, borderBottom: `1px solid ${T().border}` }}>業務内容</th>
                           <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, width: 120, borderBottom: `1px solid ${T().border}` }}>担当（サポート）</th>
@@ -446,7 +509,23 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                           const isEditing = editingId === t.id
                           const ownerColor = avatarColor(t.owner)
                           return (
-                            <tr key={t.id} style={{ borderBottom: i < teamTasks.length - 1 ? `1px solid ${T().border}` : 'none', background: isEditing ? 'rgba(77,159,255,0.06)' : 'transparent' }}>
+                            <tr key={t.id}
+                              draggable={isAdmin && !isEditing}
+                              onDragStart={isAdmin ? e => handleDragStart(e, t.id) : undefined}
+                              onDragEnd={isAdmin ? handleDragEnd : undefined}
+                              onDragOver={isAdmin ? e => handleDragOver(e, t.id) : undefined}
+                              style={{
+                                borderBottom: i < teamTasks.length - 1 ? `1px solid ${T().border}` : 'none',
+                                background: isEditing ? 'rgba(77,159,255,0.06)' : 'transparent',
+                                cursor: isAdmin && !isEditing ? 'grab' : 'default',
+                                transition: 'background 0.1s',
+                              }}>
+                              {/* ドラッグハンドル */}
+                              {isAdmin && (
+                                <td style={{ padding: '0 4px 0 8px', color: T().textFaintest, fontSize: 14, userSelect: 'none', cursor: 'grab' }}>
+                                  ⠿
+                                </td>
+                              )}
                               <td style={{ padding: '8px 12px' }}>
                                 {isEditing ? (
                                   <select value={editBuf.owner ?? t.owner} onChange={e => setEditBuf(b => ({ ...b, owner: e.target.value }))}
@@ -486,6 +565,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                         })}
                         {isAdmin && isAddingHere && (
                           <tr style={{ background: 'rgba(0,214,143,0.05)', borderTop: '1px dashed rgba(0,214,143,0.25)' }}>
+                            {isAdmin && <td />}
                             <td style={{ padding: '8px 12px' }}>
                               <select value={newBuf.owner} onChange={e => setNewBuf(b => ({ ...b, owner: e.target.value }))}
                                 style={{ width: '100%', background: T().inputBg, border: '1px solid rgba(0,214,143,0.4)', borderRadius: 5, padding: '4px 6px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
