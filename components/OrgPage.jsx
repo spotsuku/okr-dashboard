@@ -3,6 +3,54 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ══════════════════════════════════════════════════
+// テーマ定義
+// ══════════════════════════════════════════════════
+const THEMES = {
+  dark: {
+    bg:         '#090d18',
+    bgCard:     '#0e1420',
+    bgCard2:    '#111828',
+    bgInput:    'rgba(255,255,255,0.06)',
+    bgHover:    'rgba(255,255,255,0.04)',
+    bgTable:    'rgba(255,255,255,0.04)',
+    border:     'rgba(255,255,255,0.07)',
+    borderMid:  'rgba(255,255,255,0.12)',
+    borderEdit: 'rgba(77,159,255,0.4)',
+    text:       '#e8eaf0',
+    textSub:    '#c0c4d8',
+    textMuted:  '#a0a8be',
+    textFaint:  '#606880',
+    textFaintest:'#404660',
+    inputBg:    '#0e1420',
+    inputText:  '#e8eaf0',
+    selectBg:   '#111828',
+  },
+  light: {
+    bg:         '#f0f2f7',
+    bgCard:     '#ffffff',
+    bgCard2:    '#f7f8fc',
+    bgInput:    'rgba(0,0,0,0.04)',
+    bgHover:    'rgba(0,0,0,0.03)',
+    bgTable:    'rgba(0,0,0,0.03)',
+    border:     'rgba(0,0,0,0.09)',
+    borderMid:  'rgba(0,0,0,0.15)',
+    borderEdit: 'rgba(37,99,235,0.5)',
+    text:       '#1a1f36',
+    textSub:    '#374151',
+    textMuted:  '#4b5563',
+    textFaint:  '#6b7280',
+    textFaintest:'#9ca3af',
+    inputBg:    '#ffffff',
+    inputText:  '#1a1f36',
+    selectBg:   '#ffffff',
+  },
+}
+
+// グローバルテーマ参照（コンテキスト不要の簡易実装）
+let _T = THEMES.dark
+const T = () => _T
+
+// ══════════════════════════════════════════════════
 // 定数
 // ══════════════════════════════════════════════════
 const STATUS_OPTS = [
@@ -58,7 +106,7 @@ function Avatar({ name, size = 36 }) {
 function InlineInput({ value, onChange, placeholder = '', style = {} }) {
   return (
     <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(77,159,255,0.4)', borderRadius: 5, padding: '4px 8px', color: '#e8eaf0', fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', ...style }} />
+      style={{ background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '4px 8px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', ...style }} />
   )
 }
 function SaveBtn({ saving, saved, onClick, label = '保存' }) {
@@ -201,7 +249,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 
   if (depts.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#404660', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>🏗</div>
         <div style={{ fontSize: 15 }}>この年度の組織データがありません</div>
         <div style={{ fontSize: 13, marginTop: 6 }}>OKRページの「組織を管理」から追加してください</div>
@@ -218,12 +266,12 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
             <div style={{ background: `linear-gradient(135deg, ${color}18, ${color}06)`, borderBottom: `2px solid ${color}30`, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 4, height: 24, borderRadius: 2, background: color }} />
               <span style={{ fontSize: 16, fontWeight: 700, color }}>{dept.icon} {dept.name}</span>
-              <span style={{ fontSize: 11, color: '#606880', marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
+              <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
             </div>
             {dept.teams.length === 0 ? (
-              <div style={{ padding: '20px', fontSize: 12, color: '#404660', fontStyle: 'italic' }}>チームがありません（OKRページの「組織を管理」から追加）</div>
+              <div style={{ padding: '20px', fontSize: 12, color: T().textFaintest, fontStyle: 'italic', background: T().bgCard }}> チームがありません（OKRページの「組織を管理」から追加）</div>
             ) : (
-              <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(255px, 1fr))', gap: 12 }}>
+              <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(255px, 1fr))', gap: 12, background: T().bgCard }}>
                 {dept.teams.map(team => {
                   const meta = teamMeta[team.id] || {}
                   const sb = getStatusBadge(meta.status || 'active')
@@ -231,12 +279,12 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                   const isEditing = editingMeta === team.id
 
                   return (
-                    <div key={team.id} style={{ background: '#111828', border: `1px solid ${color}20`, borderRadius: 10, padding: '14px 16px' }}>
+                    <div key={team.id} style={{ background: T().bgCard2, border: `1px solid ${color}25`, borderRadius: 10, padding: '14px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec', flex: 1, lineHeight: 1.4 }}>{team.icon} {team.name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: T().text, flex: 1, lineHeight: 1.4 }}>{team.icon} {team.name}</span>
                         {isEditing ? (
                           <select value={metaBuf.status} onChange={e => setMetaBuf(p => ({ ...p, status: e.target.value }))}
-                            style={{ background: '#0e1420', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 5, padding: '2px 6px', color: '#e8eaf0', fontSize: 10, outline: 'none', fontFamily: 'inherit' }}>
+                            style={{ background: T().selectBg, border: `1px solid ${T().borderMid}`, borderRadius: 5, padding: '2px 6px', color: T().text, fontSize: 10, outline: 'none', fontFamily: 'inherit' }}>
                             {STATUS_OPTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                           </select>
                         ) : (
@@ -248,35 +296,35 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                         <div style={{ marginBottom: 10 }}>
                           <input value={metaBuf.desc_text} onChange={e => setMetaBuf(p => ({ ...p, desc_text: e.target.value }))}
                             placeholder="チームの説明"
-                            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(77,159,255,0.35)', borderRadius: 5, padding: '5px 8px', color: '#e8eaf0', fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
+                            style={{ width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '5px 8px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
                           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                             <button onClick={() => saveTeamMeta(team.id)} disabled={saving}
                               style={{ padding: '3px 10px', borderRadius: 5, background: '#4d9fff', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓ 保存</button>
                             <button onClick={() => setEditingMeta(null)}
-                              style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#a0a8be', fontSize: 10, cursor: 'pointer' }}>✕</button>
+                              style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                           </div>
                         </div>
                       ) : (
-                        meta.desc_text && <p style={{ fontSize: 11, color: '#606880', margin: '0 0 10px', lineHeight: 1.5 }}>{meta.desc_text}</p>
+                        meta.desc_text && <p style={{ fontSize: 11, color: T().textFaint, margin: '0 0 10px', lineHeight: 1.5 }}>{meta.desc_text}</p>
                       )}
 
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                         {teamMembers.map(m => (
                           <div key={m.id} onClick={() => onMemberClick(m.name)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: `${avatarColor(m.name)}15`, border: `1px solid ${avatarColor(m.name)}30`, fontSize: 11, fontWeight: 600, color: avatarColor(m.name), cursor: 'pointer', transition: 'all 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = `${avatarColor(m.name)}28`}
-                            onMouseLeave={e => e.currentTarget.style.background = `${avatarColor(m.name)}15`}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: `${avatarColor(m.name)}18`, border: `1px solid ${avatarColor(m.name)}40`, fontSize: 11, fontWeight: 600, color: avatarColor(m.name), cursor: 'pointer', transition: 'all 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = `${avatarColor(m.name)}30`}
+                            onMouseLeave={e => e.currentTarget.style.background = `${avatarColor(m.name)}18`}
                           >
                             <Avatar name={m.name} size={18} />
                             {m.name}
                           </div>
                         ))}
-                        {teamMembers.length === 0 && <span style={{ fontSize: 10, color: '#404660', fontStyle: 'italic' }}>メンバーなし</span>}
+                        {teamMembers.length === 0 && <span style={{ fontSize: 10, color: T().textFaintest, fontStyle: 'italic' }}>メンバーなし</span>}
                       </div>
 
                       {isAdmin && !isEditing && (
                         <button onClick={() => { setMetaBuf({ status: meta.status || 'active', desc_text: meta.desc_text || '' }); setEditingMeta(team.id) }}
-                          style={{ marginTop: 8, fontSize: 10, color: '#4d9fff', background: 'transparent', border: '1px dashed rgba(77,159,255,0.25)', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          style={{ marginTop: 8, fontSize: 10, color: '#4d9fff', background: 'transparent', border: '1px dashed rgba(77,159,255,0.35)', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
                           ✎ チーム情報を編集
                         </button>
                       )}
@@ -341,11 +389,11 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
     setNewBuf({ task: '', owner: '', support: '' }); setAddingTeam(null)
   }
 
-  const sel = { background: '#111828', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#e8eaf0', cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
+  const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
 
   if (tasks.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#404660', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
         <div style={{ fontSize: 15 }}>業務データがありません</div>
         <div style={{ fontSize: 13, marginTop: 6 }}>Supabase の org_tasks テーブルにデータを追加してください</div>
@@ -356,8 +404,8 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
   return (
     <div>
       {/* フィルター */}
-      <div style={{ background: '#111828', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#606880' }}>フィルター</span>
+      <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: T().textFaint }}>フィルター</span>
         <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={sel}>
           <option value="">事業部：すべて</option>
           {allDepts.map(d => <option key={d} value={d}>{d}</option>)}
@@ -367,11 +415,11 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
           {allOwners.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 業務・チームで検索..."
-          style={{ ...sel, width: 200, background: 'rgba(255,255,255,0.05)' }}
+          style={{ ...sel, width: 200 }}
           onFocus={e => e.target.style.borderColor = '#4d9fff'}
-          onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+          onBlur={e => e.target.style.borderColor = T().border}
         />
-        <span style={{ fontSize: 11, color: '#606880', marginLeft: 'auto' }}>{filtered.length}件</span>
+        <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{filtered.length}件</span>
         {isAdmin && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>👑 管理者モード</span>}
         {(filterDept || filterOwner || query) && <button onClick={() => { setFilterDept(''); setFilterOwner(''); setQuery('') }} style={{ ...sel, color: '#4d9fff', border: '1px solid rgba(77,159,255,0.3)' }}>クリア</button>}
       </div>
@@ -387,15 +435,15 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
               const isAddingHere = addingTeam?.dept === dept && addingTeam?.team === team
               return (
                 <div key={team} style={{ marginBottom: 16, marginLeft: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#a0a8be', marginBottom: 8 }}>└ {team}</div>
-                  <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: T().textMuted, marginBottom: 8 }}>└ {team}</div>
+                  <div style={{ border: `1px solid ${T().border}`, borderRadius: 8, overflow: 'hidden', background: T().bgCard }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: '#606880', width: 110, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>責任者</th>
-                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: '#606880', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>業務内容</th>
-                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: '#606880', width: 120, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>担当（サポート）</th>
-                          {isAdmin && <th style={{ width: 80, borderBottom: '1px solid rgba(255,255,255,0.07)' }} />}
+                        <tr style={{ background: T().bgTable }}>
+                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, width: 110, borderBottom: `1px solid ${T().border}` }}>責任者</th>
+                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, borderBottom: `1px solid ${T().border}` }}>業務内容</th>
+                          <th style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, width: 120, borderBottom: `1px solid ${T().border}` }}>担当（サポート）</th>
+                          {isAdmin && <th style={{ width: 80, borderBottom: `1px solid ${T().border}` }} />}
                         </tr>
                       </thead>
                       <tbody>
@@ -403,11 +451,11 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                           const isEditing = editingId === t.id
                           const ownerColor = avatarColor(t.owner)
                           return (
-                            <tr key={t.id} style={{ borderBottom: i < teamTasks.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', background: isEditing ? 'rgba(77,159,255,0.06)' : 'transparent' }}>
+                            <tr key={t.id} style={{ borderBottom: i < teamTasks.length - 1 ? `1px solid ${T().border}` : 'none', background: isEditing ? 'rgba(77,159,255,0.06)' : 'transparent' }}>
                               <td style={{ padding: '8px 12px' }}>
                                 {isEditing ? (
                                   <select value={editBuf.owner ?? t.owner} onChange={e => setEditBuf(b => ({ ...b, owner: e.target.value }))}
-                                    style={{ width: '100%', background: '#0e1420', border: '1px solid rgba(77,159,255,0.4)', borderRadius: 5, padding: '4px 6px', color: '#e8eaf0', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
+                                    style={{ width: '100%', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '4px 6px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
                                     <option value="">（未定）</option>
                                     {memberNames.map(n => <option key={n} value={n}>{n}</option>)}
                                   </select>
@@ -415,20 +463,20 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                                   <span onClick={() => onMemberClick(t.owner)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: `${ownerColor}18`, color: ownerColor, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                                     <Avatar name={t.owner} size={16} />{t.owner}
                                   </span>
-                                ) : <span style={{ fontSize: 11, color: '#404660' }}>{t.owner || '（未定）'}</span>}
+                                ) : <span style={{ fontSize: 11, color: T().textFaintest }}>{t.owner || '（未定）'}</span>}
                               </td>
                               <td style={{ padding: '8px 12px' }}>
-                                {isEditing ? <InlineInput value={editBuf.task ?? t.task} onChange={v => setEditBuf(b => ({ ...b, task: v }))} /> : <span style={{ fontSize: 12, color: '#c0c4d8', lineHeight: 1.5 }}>{t.task}</span>}
+                                {isEditing ? <InlineInput value={editBuf.task ?? t.task} onChange={v => setEditBuf(b => ({ ...b, task: v }))} /> : <span style={{ fontSize: 12, color: T().textSub, lineHeight: 1.5 }}>{t.task}</span>}
                               </td>
                               <td style={{ padding: '8px 12px' }}>
-                                {isEditing ? <InlineInput value={editBuf.support ?? t.support} onChange={v => setEditBuf(b => ({ ...b, support: v }))} style={{ fontSize: 11 }} /> : t.support ? <span style={{ fontSize: 11, color: '#606880', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 5 }}>{t.support}</span> : null}
+                                {isEditing ? <InlineInput value={editBuf.support ?? t.support} onChange={v => setEditBuf(b => ({ ...b, support: v }))} style={{ fontSize: 11 }} /> : t.support ? <span style={{ fontSize: 11, color: T().textFaint, padding: '2px 7px', background: T().bgInput, borderRadius: 5 }}>{t.support}</span> : null}
                               </td>
                               {isAdmin && (
                                 <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                                   {isEditing ? (
                                     <div style={{ display: 'flex', gap: 4 }}>
                                       <button onClick={() => saveEdit(t)} style={{ padding: '3px 10px', borderRadius: 5, background: '#4d9fff', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓</button>
-                                      <button onClick={() => setEditingId(null)} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#a0a8be', fontSize: 10, cursor: 'pointer' }}>✕</button>
+                                      <button onClick={() => setEditingId(null)} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                                     </div>
                                   ) : (
                                     <div style={{ display: 'flex', gap: 4 }}>
@@ -445,7 +493,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                           <tr style={{ background: 'rgba(0,214,143,0.05)', borderTop: '1px dashed rgba(0,214,143,0.25)' }}>
                             <td style={{ padding: '8px 12px' }}>
                               <select value={newBuf.owner} onChange={e => setNewBuf(b => ({ ...b, owner: e.target.value }))}
-                                style={{ width: '100%', background: '#0e1420', border: '1px solid rgba(0,214,143,0.4)', borderRadius: 5, padding: '4px 6px', color: '#e8eaf0', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
+                                style={{ width: '100%', background: T().inputBg, border: '1px solid rgba(0,214,143,0.4)', borderRadius: 5, padding: '4px 6px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
                                 <option value="">（未定）</option>
                                 {memberNames.map(n => <option key={n} value={n}>{n}</option>)}
                               </select>
@@ -455,7 +503,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                             <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: '#00d68f', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
-                                <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#a0a8be', fontSize: 10, cursor: 'pointer' }}>✕</button>
+                                <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                               </div>
                             </td>
                           </tr>
@@ -534,15 +582,15 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOve
 
           return (
             <div key={m.id} onClick={() => { setSelectedName(m.name); setVerIdx(null) }}
-              style={{ background: '#111828', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 18, cursor: 'pointer', transition: 'all 0.2s' }}
+              style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 12, padding: 18, cursor: 'pointer', transition: 'all 0.2s' }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = fg + '60' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = T().border }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <Avatar name={m.name} size={48} />
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#dde0ec' }}>{m.name}</div>
-                  <div style={{ fontSize: 10, color: '#606880', marginTop: 2 }}>{m.role || '—'}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: T().text }}>{m.name}</div>
+                  <div style={{ fontSize: 10, color: T().textFaint, marginTop: 2 }}>{m.role || '—'}</div>
                 </div>
               </div>
               {lv && <div style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: fg, color: bg, marginBottom: 10, lineHeight: 1.4 }}>{lv.role}</div>}
@@ -555,8 +603,8 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOve
               )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                 {lv && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700, background: empB.bg, color: empB.color }}>{lv.emp.split('→')[0]}</span>}
-                {lv?.working && <span style={{ fontSize: 10, color: '#606880' }}>{lv.working}</span>}
-                {jdBase.versions.length > 0 && <span style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: '#606880', fontWeight: 700 }}>{jdBase.versions.length}バージョン</span>}
+                {lv?.working && <span style={{ fontSize: 10, color: T().textFaint }}>{lv.working}</span>}
+                {jdBase.versions.length > 0 && <span style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 8px', borderRadius: 4, background: T().bgInput, color: T().textFaint, fontWeight: 700 }}>{jdBase.versions.length}バージョン</span>}
               </div>
             </div>
           )
@@ -599,10 +647,10 @@ function AddMemberModal({ levels, onClose, onAdded }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#141926', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 26, width: '100%', maxWidth: 500, maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 28px 80px rgba(0,0,0,0.65)' }}>
+      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 16, padding: 26, width: '100%', maxWidth: 500, maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 28px 80px rgba(0,0,0,0.5)', color: T().text }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>＋ メンバーを追加</h3>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: '#a0a8be', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T().text }}>＋ メンバーを追加</h3>
+          <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16 }}>✕</button>
         </div>
         {[
           { label: '名前 *', val: name, set: setName, ph: '例: 田中 花子' },
@@ -610,14 +658,14 @@ function AddMemberModal({ levels, onClose, onAdded }) {
           { label: 'メールアドレス', val: email, set: setEmail, ph: '例: tanaka@example.com' },
         ].map(f => (
           <div key={f.label} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>{f.label}</div>
+            <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 5 }}>{f.label}</div>
             <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
-              style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+              style={{ width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().border}`, borderRadius: 8, padding: '9px 12px', color: T().inputText, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
           </div>
         ))}
 
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: '#606880', marginBottom: 8 }}>所属チーム（複数選択可・兼務対応）</div>
+          <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 8 }}>所属チーム（複数選択可・兼務対応）</div>
           {roots.map(root => (
             getDepts(root.id).map(dept => {
               const teams = getTeams(dept.id)
@@ -631,7 +679,7 @@ function AddMemberModal({ levels, onClose, onAdded }) {
                       const isSel = selectedIds.includes(team.id)
                       return (
                         <div key={team.id} onClick={() => toggleId(team.id)}
-                          style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? 'rgba(77,159,255,0.2)' : 'rgba(255,255,255,0.04)', border: `1px solid ${isSel ? 'rgba(77,159,255,0.5)' : 'rgba(255,255,255,0.1)'}`, color: isSel ? '#4d9fff' : '#a0a8be', transition: 'all 0.15s' }}>
+                          style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? 'rgba(77,159,255,0.2)' : T().bgInput, border: `1px solid ${isSel ? 'rgba(77,159,255,0.5)' : T().border}`, color: isSel ? '#4d9fff' : T().textMuted, transition: 'all 0.15s' }}>
                           {isSel ? '✓ ' : ''}{team.icon} {team.name}
                         </div>
                       )
@@ -645,7 +693,7 @@ function AddMemberModal({ levels, onClose, onAdded }) {
 
         {error && <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 12, padding: '8px 12px', background: 'rgba(255,107,107,0.1)', borderRadius: 8 }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button onClick={onClose} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#a0a8be', borderRadius: 8, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, borderRadius: 8, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
           <button onClick={save} disabled={saving || !name.trim()}
             style={{ background: !name.trim() ? 'rgba(0,214,143,0.3)' : '#00d68f', border: 'none', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: !name.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
             {saving ? '追加中...' : '追加する'}
@@ -708,17 +756,17 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
   const addTask = () => setEditVer(p => ({ ...p, tasks: [...p.tasks, { cat: '', task: '', status: 'new' }] }))
   const removeTask = i => setEditVer(p => ({ ...p, tasks: p.tasks.filter((_, idx) => idx !== i) }))
 
-  const box = { background: '#111828', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 16 }
-  const ta = { width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(77,159,255,0.35)', borderRadius: 6, padding: '8px 10px', color: '#e8eaf0', fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }
+  const box = { background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 10, padding: 16 }
+  const ta = { width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 6, padding: '8px 10px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }
 
   return (
     <div>
       {/* 操作バー */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button onClick={onBack}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#a0a8be', fontFamily: 'inherit' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', border: `1px solid ${T().border}`, background: T().bgInput, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().textMuted, fontFamily: 'inherit' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(77,159,255,0.1)'; e.currentTarget.style.color = '#4d9fff' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#a0a8be' }}
+          onMouseLeave={e => { e.currentTarget.style.background = T().bgInput; e.currentTarget.style.color = T().textMuted }}
         >← メンバー一覧に戻る</button>
         {isAdmin && !editing && versions.length > 0 && (
           <button onClick={startEdit} style={{ padding: '7px 16px', border: '1px solid rgba(255,209,102,0.35)', background: 'rgba(255,209,102,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#ffd166', fontFamily: 'inherit' }}>
@@ -728,7 +776,7 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
         {isAdmin && editing && (
           <>
             <SaveBtn saving={saving} saved={saved} onClick={saveEdit} label="変更を保存" />
-            <button onClick={() => setEditing(false)} style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#a0a8be', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+            <button onClick={() => setEditing(false)} style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${T().borderMid}`, background: 'transparent', color: T().textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
           </>
         )}
         {isAdmin && memberRow && (
@@ -789,7 +837,7 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
                           const isSel = selectedIds.includes(team.id)
                           return (
                             <div key={team.id} onClick={() => toggleId(team.id)}
-                              style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? 'rgba(77,159,255,0.2)' : 'rgba(255,255,255,0.04)', border: `1px solid ${isSel ? 'rgba(77,159,255,0.5)' : 'rgba(255,255,255,0.1)'}`, color: isSel ? '#4d9fff' : '#a0a8be', transition: 'all 0.15s' }}>
+                              style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? 'rgba(77,159,255,0.2)' : T().bgInput, border: `1px solid ${isSel ? 'rgba(77,159,255,0.5)' : T().border}`, color: isSel ? '#4d9fff' : T().textMuted, transition: 'all 0.15s' }}>
                               {isSel ? '✓ ' : ''}{team.icon} {team.name}
                             </div>
                           )
@@ -804,7 +852,7 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
                   style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: '#4d9fff', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                   {savingTeams ? '保存中...' : '保存'}
                 </button>
-                <button onClick={() => setEditingTeams(false)} style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#a0a8be', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+                <button onClick={() => setEditingTeams(false)} style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${T().borderMid}`, background: 'transparent', color: T().textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
               </div>
             </div>
           ) : (
@@ -812,7 +860,7 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
               {selectedIds.length > 0 ? selectedIds.map(id => {
                 const lv = levels.find(l => Number(l.id) === id)
                 return lv ? <span key={id} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(77,159,255,0.12)', color: '#4d9fff', border: '1px solid rgba(77,159,255,0.25)' }}>{lv.icon} {lv.name}</span> : null
-              }) : <span style={{ fontSize: 11, color: '#404660', fontStyle: 'italic' }}>チーム未設定</span>}
+              }) : <span style={{ fontSize: 11, color: T().textFaintest, fontStyle: 'italic' }}>チーム未設定</span>}
             </div>
           )}
         </div>
@@ -825,7 +873,7 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
             const isA = i === verIdx
             return (
               <button key={i} onClick={() => { setVerIdx(i); setEditing(false) }}
-                style={{ padding: '8px 16px', fontSize: 11, fontWeight: isA ? 700 : 500, color: isA ? bg : '#606880', background: isA ? fg : '#111828', border: `1px solid ${isA ? fg : 'rgba(255,255,255,0.1)'}`, borderRadius: '6px 6px 0 0', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                style={{ padding: '8px 16px', fontSize: 11, fontWeight: isA ? 700 : 500, color: isA ? bg : T().textFaint, background: isA ? fg : T().bgCard2, border: `1px solid ${isA ? fg : T().border}`, borderRadius: '6px 6px 0 0', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                 V{i + 1}: {v.period}
               </button>
             )
@@ -834,7 +882,7 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
       )}
 
       {versions.length === 0 && (
-        <div style={{ ...box, marginBottom: 16, textAlign: 'center', color: '#404660', padding: '30px' }}>JDデータがまだ登録されていません</div>
+        <div style={{ ...box, marginBottom: 16, textAlign: 'center', color: T().textFaintest, padding: '30px' }}>JDデータがまだ登録されていません</div>
       )}
 
       {versions.length > 0 && (
@@ -842,18 +890,18 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
           {/* 役割・責任範囲 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div style={box}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 役割</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 役割</div>
               {editing ? <textarea value={EV.role_desc || ''} onChange={e => setEditVer(p => ({ ...p, role_desc: e.target.value }))} rows={5} style={ta} /> : (
-                <div style={{ fontSize: 12, color: '#a0a8be', lineHeight: 1.8, background: `${fg}12`, padding: 12, borderRadius: 8 }}>
-                  {EV.role_desc ? EV.role_desc.split('\n').map((l, i) => <div key={i}>• {l}</div>) : <span style={{ color: '#404660' }}>—</span>}
+                <div style={{ fontSize: 12, color: T().textMuted, lineHeight: 1.8, background: `${fg}12`, padding: 12, borderRadius: 8 }}>
+                  {EV.role_desc ? EV.role_desc.split('\n').map((l, i) => <div key={i}>• {l}</div>) : <span style={{ color: T().textFaintest }}>—</span>}
                 </div>
               )}
             </div>
             <div style={box}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 責任範囲</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 責任範囲</div>
               {editing ? <textarea value={EV.responsibility || ''} onChange={e => setEditVer(p => ({ ...p, responsibility: e.target.value }))} rows={5} style={ta} /> : (
-                <div style={{ fontSize: 12, color: '#a0a8be', lineHeight: 1.8, background: 'rgba(255,255,255,0.04)', padding: 12, borderRadius: 8 }}>
-                  {EV.responsibility ? EV.responsibility.split('\n').map((l, i) => <div key={i}>• {l}</div>) : <span style={{ color: '#404660' }}>—</span>}
+                <div style={{ fontSize: 12, color: T().textMuted, lineHeight: 1.8, background: T().bgInput, padding: 12, borderRadius: 8 }}>
+                  {EV.responsibility ? EV.responsibility.split('\n').map((l, i) => <div key={i}>• {l}</div>) : <span style={{ color: T().textFaintest }}>—</span>}
                 </div>
               )}
             </div>
@@ -861,9 +909,9 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
 
           {/* 主要定例 */}
           <div style={{ ...box, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 主要定例</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 主要定例</div>
             {editing ? <textarea value={EV.meetings || ''} onChange={e => setEditVer(p => ({ ...p, meetings: e.target.value }))} rows={4} style={ta} /> : (
-              EV.meetings ? <div style={{ fontSize: 12, color: '#a0a8be', lineHeight: 1.8, whiteSpace: 'pre-line', background: 'rgba(255,255,255,0.04)', padding: 12, borderRadius: 8 }}>{EV.meetings}</div> : <span style={{ fontSize: 12, color: '#404660' }}>—</span>
+              EV.meetings ? <div style={{ fontSize: 12, color: T().textMuted, lineHeight: 1.8, whiteSpace: 'pre-line', background: T().bgInput, padding: 12, borderRadius: 8 }}>{EV.meetings}</div> : <span style={{ fontSize: 12, color: T().textFaintest }}>—</span>
             )}
           </div>
 
@@ -882,14 +930,14 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
             return (
               <div style={{ ...box, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase' }}>
                     ▶ 担当業務一覧（{ownerTasks.length}件）
                     <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 8, padding: '1px 6px', borderRadius: 4, background: 'rgba(77,159,255,0.1)', color: '#4d9fff' }}>業務一覧と同期</span>
                   </div>
                 </div>
 
                 {ownerTasks.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center', fontSize: 12, color: '#404660', fontStyle: 'italic' }}>
+                  <div style={{ padding: '20px', textAlign: 'center', fontSize: 12, color: T().textFaintest, fontStyle: 'italic' }}>
                     業務一覧タブでこのメンバーを責任者に設定すると、ここに反映されます
                   </div>
                 ) : (
@@ -901,21 +949,21 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
                           <span style={{ width: 3, height: 12, background: color, borderRadius: 2, display: 'inline-block' }} />
                           {team}
                         </div>
-                        <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, overflow: 'hidden' }}>
+                        <div style={{ border: `1px solid ${T().border}`, borderRadius: 8, overflow: 'hidden', background: T().bgCard }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
-                              <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                                <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, color: '#606880', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>業務内容</th>
-                                <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, color: '#606880', width: 110, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>担当（サポート）</th>
+                              <tr style={{ background: T().bgTable }}>
+                                <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, borderBottom: `1px solid ${T().border}` }}>業務内容</th>
+                                <th style={{ padding: '6px 12px', textAlign: 'left', fontSize: 10, color: T().textFaint, width: 110, borderBottom: `1px solid ${T().border}` }}>担当（サポート）</th>
                               </tr>
                             </thead>
                             <tbody>
                               {teamTasks.map((t, i) => (
-                                <tr key={t.id} style={{ borderBottom: i < teamTasks.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                                  <td style={{ padding: '8px 12px', fontSize: 12, color: '#c0c4d8', lineHeight: 1.5 }}>{t.task}</td>
+                                <tr key={t.id} style={{ borderBottom: i < teamTasks.length - 1 ? `1px solid ${T().border}` : 'none' }}>
+                                  <td style={{ padding: '8px 12px', fontSize: 12, color: T().textSub, lineHeight: 1.5 }}>{t.task}</td>
                                   <td style={{ padding: '8px 12px' }}>
                                     {t.support ? (
-                                      <span style={{ fontSize: 11, color: '#606880', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 5 }}>{t.support}</span>
+                                      <span style={{ fontSize: 11, color: T().textFaint, padding: '2px 7px', background: T().bgInput, borderRadius: 5 }}>{t.support}</span>
                                     ) : null}
                                   </td>
                                 </tr>
@@ -931,18 +979,18 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
                 {/* サポート業務（担当欄に名前が入っているもの） */}
                 {supportTasks.length > 0 && (
                   <div style={{ marginTop: 14 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '1px', marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '1px', marginBottom: 8 }}>
                       サポート業務（{supportTasks.length}件）
                     </div>
-                    <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ border: `1px solid ${T().border}`, borderRadius: 8, overflow: 'hidden', background: T().bgCard }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <tbody>
                           {supportTasks.map((t, i) => (
-                            <tr key={t.id} style={{ borderBottom: i < supportTasks.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', background: 'rgba(255,255,255,0.02)' }}>
+                            <tr key={t.id} style={{ borderBottom: i < supportTasks.length - 1 ? `1px solid ${T().border}` : 'none', background: T().bgHover }}>
                               <td style={{ padding: '7px 12px' }}>
-                                <span style={{ fontSize: 10, color: '#606880', padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: 4 }}>{t.team}</span>
+                                <span style={{ fontSize: 10, color: T().textFaint, padding: '2px 6px', background: T().bgInput, borderRadius: 4 }}>{t.team}</span>
                               </td>
-                              <td style={{ padding: '7px 12px', fontSize: 12, color: '#a0a8be', lineHeight: 1.5 }}>{t.task}</td>
+                              <td style={{ padding: '7px 12px', fontSize: 12, color: T().textMuted, lineHeight: 1.5 }}>{t.task}</td>
                               <td style={{ padding: '7px 12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                   <Avatar name={t.owner} size={16} />
@@ -962,7 +1010,7 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
 
           {/* タイムライン */}
           <div style={box}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 16 }}>▶ 役職推移タイムライン</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 16 }}>▶ 役職推移タイムライン</div>
             <div style={{ position: 'relative', paddingLeft: 24 }}>
               <div style={{ position: 'absolute', left: 8, top: 0, bottom: 0, width: 2, background: `${fg}35`, borderRadius: 1 }} />
               {versions.map((v, i) => {
@@ -971,14 +1019,14 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
                 return (
                   <div key={i} onClick={() => { setVerIdx(i); setEditing(false) }}
                     style={{ position: 'relative', marginBottom: i < versions.length - 1 ? 16 : 0, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', background: isCurrent ? `${fg}18` : 'transparent', border: `1px solid ${isCurrent ? fg + '40' : 'transparent'}`, transition: 'all 0.15s' }}
-                    onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                    onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = T().bgHover }}
                     onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}
                   >
-                    <div style={{ position: 'absolute', left: -20, top: 14, width: 12, height: 12, borderRadius: '50%', background: isLatest ? fg : 'rgba(255,255,255,0.2)', border: `2px solid ${isLatest ? fg : 'rgba(255,255,255,0.25)'}`, boxShadow: isLatest ? `0 0 8px ${fg}70` : 'none' }} />
+                    <div style={{ position: 'absolute', left: -20, top: 14, width: 12, height: 12, borderRadius: '50%', background: isLatest ? fg : T().borderMid, border: `2px solid ${isLatest ? fg : T().border}`, boxShadow: isLatest ? `0 0 8px ${fg}70` : 'none' }} />
                     {isLatest && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: fg, color: bg, marginBottom: 4, display: 'inline-block' }}>最新</span>}
-                    <div style={{ fontSize: 11, color: isCurrent ? fg : '#606880', fontWeight: isCurrent ? 700 : 400 }}>{v.period}</div>
-                    <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? '#dde0ec' : '#a0a8be', lineHeight: 1.4, marginTop: 2 }}>{vd.role || v.role}</div>
-                    <div style={{ fontSize: 10, color: '#606880', marginTop: 4 }}>{vd.emp || v.emp}{vd.working ? ` / ${vd.working}` : ''}</div>
+                    <div style={{ fontSize: 11, color: isCurrent ? fg : T().textFaint, fontWeight: isCurrent ? 700 : 400 }}>{v.period}</div>
+                    <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? T().text : T().textMuted, lineHeight: 1.4, marginTop: 2 }}>{vd.role || v.role}</div>
+                    <div style={{ fontSize: 10, color: T().textFaint, marginTop: 4 }}>{vd.emp || v.emp}{vd.working ? ` / ${vd.working}` : ''}</div>
                   </div>
                 )
               })}
@@ -994,6 +1042,9 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
 // メインページ
 // ══════════════════════════════════════════════════
 export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }) {
+  // グローバルテーマを更新
+  _T = THEMES[themeKey] || THEMES.dark
+
   const [activeTab, setActiveTab] = useState('chart')
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -1018,30 +1069,29 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
     { id: 'members', icon: '👤', label: 'メンバーJD' },
   ]
 
-  const bg = themeKey === 'light' ? '#f0f2f7' : '#090d18'
 
-  if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
+  if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T().bg, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: bg, color: '#e8eaf0', fontFamily: 'system-ui,sans-serif' }}>
+    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, fontFamily: 'system-ui,sans-serif' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 28px' }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: '#4d9fff', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>🏢 組織</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T().text }}>🏢 組織</div>
             <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}` }}>{fiscalYear}年度</span>
             {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>👑 管理者</span>}
           </div>
-          <div style={{ fontSize: 13, color: '#606880', marginTop: 4 }}>NEO福岡の組織図・業務一覧・メンバー別JDを確認できます</div>
+          <div style={{ fontSize: 13, color: T().textFaint, marginTop: 4 }}>NEO福岡の組織図・業務一覧・メンバー別JDを確認できます</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid rgba(255,255,255,0.08)', marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${T().border}`, marginBottom: 24 }}>
           {tabs.map(t => {
             const isA = activeTab === t.id
             return (
               <button key={t.id}
                 onClick={() => { setActiveTab(t.id); if (t.id !== 'members') setJumpMemberName(null) }}
-                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? '#4d9fff' : '#606880', borderBottom: `3px solid ${isA ? '#4d9fff' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? 'rgba(77,159,255,0.08)' : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
+                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? '#4d9fff' : T().textFaint, borderBottom: `3px solid ${isA ? '#4d9fff' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? 'rgba(77,159,255,0.08)' : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
                 {t.icon} {t.label}
               </button>
             )
