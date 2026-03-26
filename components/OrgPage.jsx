@@ -163,16 +163,12 @@ function useOrgData(fiscalYear) {
   const [teamMeta, setTeamMeta] = useState({})
   const [members, setMembers] = useState([])
   const [tasks, setTasks] = useState([])
-  const [jdOverrides, setJdOverrides] = useState({})
+  // jdRows: { [member_id]: Row[] } — DBの全バージョン行
+  const [jdRows, setJdRows] = useState({})
   const [loading, setLoading] = useState(true)
 
   const reload = useCallback(async () => {
     setLoading(true)
-    // fiscalYearに対応するlevelsを取得
-    const fyFilter = fiscalYear === '2026'
-      ? { fiscal_year: '2026' }
-      : { fiscal_year: fiscalYear }
-
     const [
       { data: lvls },
       { data: meta },
@@ -184,34 +180,33 @@ function useOrgData(fiscalYear) {
       supabase.from('org_team_meta').select('*'),
       supabase.from('members').select('*').order('name'),
       supabase.from('org_tasks').select('*').order('id'),
-      supabase.from('org_member_jd').select('*'),
+      supabase.from('org_member_jd').select('*').order('version_idx'),
     ])
 
-    // fiscalYearでフィルタ（Dashboard.jsxと同じロジック）
     const validLvls = (lvls || []).filter(l =>
       fiscalYear === '2026'
         ? (!l.fiscal_year || l.fiscal_year === '2026')
         : l.fiscal_year === fiscalYear
     )
     setLevels(validLvls)
-
     const metaMap = {}
     ;(meta || []).forEach(m => { metaMap[m.level_id] = m })
     setTeamMeta(metaMap)
-
     setMembers(mems || [])
     setTasks(taskData && taskData.length > 0 ? taskData : [])
 
-    const jdMap = {}
-    ;(jdData || []).forEach(row => { jdMap[`${row.member_id}__${row.version_idx}`] = row })
-    setJdOverrides(jdMap)
-
+    const rowMap = {}
+    ;(jdData || []).forEach(row => {
+      if (!rowMap[row.member_id]) rowMap[row.member_id] = []
+      rowMap[row.member_id].push(row)
+    })
+    Object.keys(rowMap).forEach(k => rowMap[k].sort((a, b) => a.version_idx - b.version_idx))
+    setJdRows(rowMap)
     setLoading(false)
   }, [fiscalYear])
 
   useEffect(() => { reload() }, [reload])
-
-  return { levels, teamMeta, members, tasks, jdOverrides, loading, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdOverrides }
+  return { levels, teamMeta, members, tasks, jdRows, loading, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
 }
 
 // ══════════════════════════════════════════════════
@@ -530,7 +525,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
 // ══════════════════════════════════════════════════
 // タブ3: メンバーJD（追加・削除・兼務設定付き）
 // ══════════════════════════════════════════════════
-function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOverrides, isAdmin, initialName, onClearJump }) {
+function MemberJDTab({ members, setMembers, levels, tasks, jdRows, setJdRows, isAdmin, initialName, onClearJump }) {
   const [selectedName, setSelectedName] = useState(initialName || null)
   const [verIdx, setVerIdx] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -542,14 +537,13 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOve
   if (selectedName) {
     const memberRow = members.find(m => m.name === selectedName)
     const jdBase = JD_DEFAULT[selectedName] || { avatar_color: [avatarColor(selectedName), '#111828'], versions: [] }
-    const maxVi = jdBase.versions.length > 0 ? jdBase.versions.length - 1 : 0
     return (
       <MemberDetail
         memberRow={memberRow}
         jdBase={jdBase}
-        jdOverrides={jdOverrides}
-        setJdOverrides={setJdOverrides}
-        verIdx={verIdx !== null ? Math.min(verIdx, maxVi) : maxVi}
+        jdRows={jdRows}
+        setJdRows={setJdRows}
+        verIdx={verIdx}
         setVerIdx={setVerIdx}
         onBack={() => { setSelectedName(null); setVerIdx(null); onClearJump && onClearJump() }}
         isAdmin={isAdmin}
@@ -575,7 +569,12 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOve
         {members.map(m => {
           const jdBase = JD_DEFAULT[m.name] || { avatar_color: [avatarColor(m.name), '#111828'], versions: [] }
           const [fg, bg] = jdBase.avatar_color
-          const lv = jdBase.versions[jdBase.versions.length - 1]
+          // DBのjdRowsがあれば最新バージョンを表示、なければJD_DEFAULTの最終版
+          const dbRows = jdRows[m.name] || []
+          const latestDbRow = dbRows[dbRows.length - 1]
+          const fallbackLv = jdBase.versions[jdBase.versions.length - 1]
+          const lv = latestDbRow ? { role: latestDbRow.role, emp: latestDbRow.emp, working: latestDbRow.working } : fallbackLv
+          const totalVersions = dbRows.length > 0 ? dbRows.length : jdBase.versions.length
           const empB = lv ? getEmpBadge(lv.emp) : EMP_BADGE['業務委託']
           const levelIds = Array.isArray(m.level_ids) ? m.level_ids.map(Number) : (m.level_id ? [Number(m.level_id)] : [])
           const teamNames = levelIds.map(id => levels.find(l => Number(l.id) === id)?.name).filter(Boolean)
@@ -588,12 +587,17 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOve
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <Avatar name={m.name} size={48} />
-                <div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: T().text }}>{m.name}</div>
                   <div style={{ fontSize: 10, color: T().textFaint, marginTop: 2 }}>{m.role || '—'}</div>
                 </div>
+                {totalVersions > 0 && (
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: 'rgba(77,159,255,0.1)', color: '#4d9fff', border: '1px solid rgba(77,159,255,0.2)', fontWeight: 700, flexShrink: 0 }}>
+                    v{totalVersions}
+                  </span>
+                )}
               </div>
-              {lv && <div style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: fg, color: bg, marginBottom: 10, lineHeight: 1.4 }}>{lv.role}</div>}
+              {lv?.role && <div style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: fg, color: bg, marginBottom: 10, lineHeight: 1.4 }}>{lv.role}</div>}
               {teamNames.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
                   {teamNames.map(t => (
@@ -602,9 +606,8 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdOverrides, setJdOve
                 </div>
               )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                {lv && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700, background: empB.bg, color: empB.color }}>{lv.emp.split('→')[0]}</span>}
+                {lv?.emp && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700, background: empB.bg, color: empB.color }}>{lv.emp.split('→')[0]}</span>}
                 {lv?.working && <span style={{ fontSize: 10, color: T().textFaint }}>{lv.working}</span>}
-                {jdBase.versions.length > 0 && <span style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 8px', borderRadius: 4, background: T().bgInput, color: T().textFaint, fontWeight: 700 }}>{jdBase.versions.length}バージョン</span>}
               </div>
             </div>
           )
@@ -705,33 +708,50 @@ function AddMemberModal({ levels, onClose, onAdded }) {
 }
 
 // ── メンバー詳細（JD + 兼務設定 + 削除） ─────────────────────────────────────
-function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, setVerIdx, onBack, isAdmin, levels, members, setMembers, tasks }) {
-  const [fg, bg] = jdBase.avatar_color || [avatarColor(memberRow?.name), '#111828']
-  const versions = jdBase.versions || []
+function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx, onBack, isAdmin, levels, members, setMembers, tasks }) {
+  const memberName = memberRow?.name || ''
+  const [fg, bg] = jdBase.avatar_color || [avatarColor(memberName), '#111828']
+
+  // ── バージョン管理 ────────────────────────────────
+  // DBのjdRowsを正とする。空ならJD_DEFAULTをシード候補として使用
+  const dbRows = jdRows[memberName] || []
+  // 表示用バージョン配列: DBがあればDB優先、なければJD_DEFAULT
+  const versions = dbRows.length > 0
+    ? dbRows.map(row => ({
+        period: row.period || '',
+        role: row.role || '',
+        emp: row.emp || '',
+        working: row.working || '',
+        role_desc: row.role_desc || '',
+        responsibility: row.responsibility || '',
+        meetings: row.meetings || '',
+        tasks: row.tasks ? (typeof row.tasks === 'string' ? JSON.parse(row.tasks) : row.tasks) : [],
+        _dbId: row.id,
+        _vi: row.version_idx,
+      }))
+    : (jdBase.versions || [])
+
+  const effectiveVerIdx = verIdx !== null ? Math.min(verIdx, Math.max(0, versions.length - 1)) : Math.max(0, versions.length - 1)
+  const displayVer = versions[effectiveVerIdx] || {}
+  const empB = getEmpBadge(displayVer.emp || '')
+
   const [editing, setEditing] = useState(false)
   const [editVer, setEditVer] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [addingNewVersion, setAddingNewVersion] = useState(false)
   const [editingTeams, setEditingTeams] = useState(false)
   const [selectedIds, setSelectedIds] = useState(
     Array.isArray(memberRow?.level_ids) ? memberRow.level_ids.map(Number) : (memberRow?.level_id ? [Number(memberRow.level_id)] : [])
   )
   const [savingTeams, setSavingTeams] = useState(false)
 
+  const EV = editing ? editVer : displayVer
+
   const roots = levels.filter(l => !l.parent_id)
   const getDepts = rootId => levels.filter(l => Number(l.parent_id) === Number(rootId))
   const getTeams = deptId => levels.filter(l => Number(l.parent_id) === Number(deptId))
   const toggleId = id => setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
-
-  const getVerData = (vi) => {
-    const base = versions[vi] || {}
-    const ov = jdOverrides[`${memberRow?.name}__${vi}`]
-    if (!ov) return base
-    return { ...base, role: ov.role ?? base.role, emp: ov.emp ?? base.emp, working: ov.working ?? base.working, role_desc: ov.role_desc ?? base.role_desc, responsibility: ov.responsibility ?? base.responsibility, meetings: ov.meetings ?? base.meetings, tasks: ov.tasks ? JSON.parse(ov.tasks) : base.tasks }
-  }
-  const displayVer = getVerData(verIdx)
-  const empB = getEmpBadge(displayVer.emp || '')
-  const EV = editing ? editVer : displayVer
 
   const saveTeams = async () => {
     setSavingTeams(true)
@@ -739,16 +759,87 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
     setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, level_id: selectedIds[0] || null, level_ids: selectedIds } : m))
     setSavingTeams(false); setEditingTeams(false)
   }
-  const startEdit = () => { setEditVer({ ...displayVer, tasks: JSON.parse(JSON.stringify(displayVer.tasks || [])) }); setEditing(true) }
+
+  // JD新規作成（DBが空の場合）
+  const startCreateJD = () => {
+    // JD_DEFAULTがあればそれをシードとして使う
+    const seed = jdBase.versions?.[0] || {}
+    setEditVer({ period: seed.period || '', role: seed.role || '', emp: seed.emp || '業務委託', working: seed.working || '', role_desc: seed.role_desc || '', responsibility: seed.responsibility || '', meetings: seed.meetings || '', tasks: JSON.parse(JSON.stringify(seed.tasks || [])) })
+    setAddingNewVersion(false)
+    setEditing(true)
+  }
+
+  // 新バージョン追加（最新バージョンをベースにコピー）
+  const startAddVersion = () => {
+    const latest = versions[versions.length - 1] || {}
+    setEditVer({
+      period: '',
+      role: latest.role || '',
+      emp: latest.emp || '業務委託',
+      working: latest.working || '',
+      role_desc: latest.role_desc || '',
+      responsibility: latest.responsibility || '',
+      meetings: latest.meetings || '',
+      tasks: JSON.parse(JSON.stringify((latest.tasks || []).map(t => ({ ...t, status: 'same' })))),
+    })
+    setAddingNewVersion(true)
+    setEditing(true)
+  }
+
+  // 既存バージョン編集
+  const startEdit = () => {
+    setEditVer({ ...displayVer, tasks: JSON.parse(JSON.stringify(displayVer.tasks || [])) })
+    setAddingNewVersion(false)
+    setEditing(true)
+  }
+
+  // 保存: 新バージョン or 既存バージョン更新
   const saveEdit = async () => {
     setSaving(true)
-    const payload = { member_id: memberRow?.name, version_idx: verIdx, role: editVer.role, emp: editVer.emp, working: editVer.working, role_desc: editVer.role_desc, responsibility: editVer.responsibility, meetings: editVer.meetings, tasks: JSON.stringify(editVer.tasks) }
-    await supabase.from('org_member_jd').upsert([payload], { onConflict: 'member_id,version_idx' })
-    setJdOverrides(prev => ({ ...prev, [`${memberRow?.name}__${verIdx}`]: payload }))
-    setSaved(true); setTimeout(() => setSaved(false), 1500); setSaving(false); setEditing(false)
+    const vi = addingNewVersion ? versions.length : effectiveVerIdx
+    const payload = {
+      member_id: memberName, version_idx: vi,
+      period: editVer.period || '',
+      role: editVer.role || '', emp: editVer.emp || '', working: editVer.working || '',
+      role_desc: editVer.role_desc || '', responsibility: editVer.responsibility || '',
+      meetings: editVer.meetings || '', tasks: JSON.stringify(editVer.tasks || []),
+    }
+    const { data } = await supabase.from('org_member_jd').upsert([payload], { onConflict: 'member_id,version_idx' }).select().single()
+    // jdRowsを更新
+    setJdRows(prev => {
+      const existing = [...(prev[memberName] || [])]
+      const idx = existing.findIndex(r => r.version_idx === vi)
+      const newRow = data || { ...payload, id: Date.now() }
+      if (idx >= 0) existing[idx] = newRow
+      else existing.push(newRow)
+      existing.sort((a, b) => a.version_idx - b.version_idx)
+      return { ...prev, [memberName]: existing }
+    })
+    if (addingNewVersion) setVerIdx(vi)
+    setSaved(true); setTimeout(() => setSaved(false), 1500); setSaving(false); setEditing(false); setAddingNewVersion(false)
   }
+
+  // バージョン削除
+  const deleteVersion = async (vi) => {
+    if (!window.confirm(`V${vi + 1}を削除しますか？`)) return
+    await supabase.from('org_member_jd').delete().eq('member_id', memberName).eq('version_idx', vi)
+    setJdRows(prev => {
+      const remaining = (prev[memberName] || []).filter(r => r.version_idx !== vi)
+      // version_idxを詰め直す
+      const reindexed = remaining.map((r, i) => ({ ...r, version_idx: i }))
+      // DBのversion_idxも更新
+      reindexed.forEach(async (r, i) => {
+        if (r.version_idx !== remaining[i]?.version_idx) {
+          await supabase.from('org_member_jd').update({ version_idx: i }).eq('member_id', memberName).eq('id', r.id)
+        }
+      })
+      return { ...prev, [memberName]: reindexed }
+    })
+    setVerIdx(Math.max(0, vi - 1))
+  }
+
   const deleteMember = async () => {
-    if (!window.confirm(`「${memberRow?.name}」を削除しますか？`)) return
+    if (!window.confirm(`「${memberName}」を削除しますか？`)) return
     await supabase.from('members').delete().eq('id', memberRow.id)
     setMembers(prev => prev.filter(m => m.id !== memberRow.id)); onBack()
   }
@@ -768,20 +859,34 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(77,159,255,0.1)'; e.currentTarget.style.color = '#4d9fff' }}
           onMouseLeave={e => { e.currentTarget.style.background = T().bgInput; e.currentTarget.style.color = T().textMuted }}
         >← メンバー一覧に戻る</button>
-        {isAdmin && !editing && versions.length > 0 && (
-          <button onClick={startEdit} style={{ padding: '7px 16px', border: '1px solid rgba(255,209,102,0.35)', background: 'rgba(255,209,102,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#ffd166', fontFamily: 'inherit' }}>
-            👑 このバージョンを編集
+
+        {isAdmin && !editing && versions.length === 0 && (
+          <button onClick={startCreateJD} style={{ padding: '7px 16px', border: '1px solid rgba(0,214,143,0.35)', background: 'rgba(0,214,143,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#00d68f', fontFamily: 'inherit' }}>
+            ＋ JDを作成する
           </button>
+        )}
+        {isAdmin && !editing && versions.length > 0 && (
+          <>
+            <button onClick={startEdit} style={{ padding: '7px 16px', border: '1px solid rgba(255,209,102,0.35)', background: 'rgba(255,209,102,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#ffd166', fontFamily: 'inherit' }}>
+              👑 このバージョンを編集
+            </button>
+            <button onClick={startAddVersion} style={{ padding: '7px 16px', border: '1px solid rgba(77,159,255,0.35)', background: 'rgba(77,159,255,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#4d9fff', fontFamily: 'inherit' }}>
+              ＋ 新バージョンを追加
+            </button>
+          </>
         )}
         {isAdmin && editing && (
           <>
-            <SaveBtn saving={saving} saved={saved} onClick={saveEdit} label="変更を保存" />
-            <button onClick={() => setEditing(false)} style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${T().borderMid}`, background: 'transparent', color: T().textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: addingNewVersion ? 'rgba(77,159,255,0.15)' : 'rgba(255,209,102,0.15)', color: addingNewVersion ? '#4d9fff' : '#ffd166', border: `1px solid ${addingNewVersion ? 'rgba(77,159,255,0.3)' : 'rgba(255,209,102,0.3)'}` }}>
+              {addingNewVersion ? '＋ 新バージョン作成中' : `V${effectiveVerIdx + 1} 編集中`}
+            </span>
+            <SaveBtn saving={saving} saved={saved} onClick={saveEdit} label="保存する" />
+            <button onClick={() => { setEditing(false); setAddingNewVersion(false) }} style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${T().borderMid}`, background: 'transparent', color: T().textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
           </>
         )}
         {isAdmin && memberRow && (
           <button onClick={deleteMember} style={{ marginLeft: 'auto', padding: '7px 14px', border: '1px solid rgba(255,107,107,0.3)', background: 'rgba(255,107,107,0.08)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#ff6b6b', fontFamily: 'inherit' }}>
-            🗑 削除
+            🗑 メンバー削除
           </button>
         )}
       </div>
@@ -795,7 +900,13 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {editing ? (
               <>
+                {addingNewVersion && (
+                  <input value={editVer.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
+                    placeholder="期間 例: 2026年4月 〜現在"
+                    style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 200 }} />
+                )}
                 <input value={EV.role || ''} onChange={e => setEditVer(p => ({ ...p, role: e.target.value }))}
+                  placeholder="役職"
                   style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 180 }} />
                 <select value={EV.emp || '業務委託'} onChange={e => setEditVer(p => ({ ...p, emp: e.target.value }))}
                   style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '3px 8px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
@@ -868,21 +979,93 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
 
       {/* バージョンタブ */}
       {versions.length > 0 && (
-        <div style={{ display: 'flex', gap: 4, marginBottom: 20, overflowX: 'auto', paddingBottom: 4 }}>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, overflowX: 'auto', paddingBottom: 4, alignItems: 'flex-end' }}>
           {versions.map((v, i) => {
-            const isA = i === verIdx
+            const isA = i === effectiveVerIdx && !addingNewVersion
+            const label = v.period || `V${i + 1}`
             return (
-              <button key={i} onClick={() => { setVerIdx(i); setEditing(false) }}
+              <button key={i} onClick={() => { setVerIdx(i); setEditing(false); setAddingNewVersion(false) }}
                 style={{ padding: '8px 16px', fontSize: 11, fontWeight: isA ? 700 : 500, color: isA ? bg : T().textFaint, background: isA ? fg : T().bgCard2, border: `1px solid ${isA ? fg : T().border}`, borderRadius: '6px 6px 0 0', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                V{i + 1}: {v.period}
+                V{i + 1}: {label}
               </button>
             )
           })}
+          {isAdmin && addingNewVersion && (
+            <div style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, color: '#00d68f', background: 'rgba(0,214,143,0.15)', border: '1px solid #00d68f', borderRadius: '6px 6px 0 0', whiteSpace: 'nowrap' }}>
+              ✎ 新バージョン作成中
+            </div>
+          )}
         </div>
       )}
 
-      {versions.length === 0 && (
-        <div style={{ ...box, marginBottom: 16, textAlign: 'center', color: T().textFaintest, padding: '30px' }}>JDデータがまだ登録されていません</div>
+      {versions.length === 0 && !editing && (
+        <div style={{ ...box, marginBottom: 16, textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📝</div>
+          <div style={{ fontSize: 14, color: T().textMuted, marginBottom: 6 }}>JDデータがまだ登録されていません</div>
+          {isAdmin && (
+            <div style={{ fontSize: 12, color: T().textFaintest }}>上の「＋ JDを作成する」ボタンから登録できます</div>
+          )}
+        </div>
+      )}
+
+      {/* 新規JD作成フォーム（versionsが空の場合） */}
+      {versions.length === 0 && editing && (
+        <div style={{ marginBottom: 16 }}>
+          {/* period入力 */}
+          <div style={{ ...box, marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 期間・役職</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 4 }}>期間</div>
+                <input value={editVer.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
+                  placeholder="例: 2026年4月 〜現在"
+                  style={{ width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 6, padding: '6px 8px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 4 }}>役職名</div>
+                <input value={editVer.role || ''} onChange={e => setEditVer(p => ({ ...p, role: e.target.value }))}
+                  placeholder="例: コミュニティマネージャー"
+                  style={{ width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 6, padding: '6px 8px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 4 }}>雇用形態</div>
+                <select value={editVer.emp || '業務委託'} onChange={e => setEditVer(p => ({ ...p, emp: e.target.value }))}
+                  style={{ width: '100%', background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 8px', color: T().text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }}>
+                  {EMP_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 4 }}>稼働量</div>
+              <input value={editVer.working || ''} onChange={e => setEditVer(p => ({ ...p, working: e.target.value }))}
+                placeholder="例: 週3〜4日"
+                style={{ width: 150, background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 6, padding: '6px 8px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+            </div>
+          </div>
+
+          {/* 役割・責任範囲 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div style={box}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 役割</div>
+              <textarea value={editVer.role_desc || ''} onChange={e => setEditVer(p => ({ ...p, role_desc: e.target.value }))} rows={5} placeholder="1行に1つ記載してください" style={ta} />
+            </div>
+            <div style={box}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 責任範囲</div>
+              <textarea value={editVer.responsibility || ''} onChange={e => setEditVer(p => ({ ...p, responsibility: e.target.value }))} rows={5} placeholder="1行に1つ記載してください" style={ta} />
+            </div>
+          </div>
+
+          {/* 主要定例 */}
+          <div style={{ ...box, marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 10 }}>▶ 主要定例</div>
+            <textarea value={editVer.meetings || ''} onChange={e => setEditVer(p => ({ ...p, meetings: e.target.value }))} rows={4} placeholder="・定例名（頻度）" style={ta} />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <SaveBtn saving={saving} saved={saved} onClick={saveEdit} label="JDを保存する" />
+            <button onClick={() => setEditing(false)} style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${T().borderMid}`, background: 'transparent', color: T().textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+          </div>
+        </div>
       )}
 
       {versions.length > 0 && (
@@ -1008,28 +1191,123 @@ function MemberDetail({ memberRow, jdBase, jdOverrides, setJdOverrides, verIdx, 
             )
           })()}
 
-          {/* タイムライン */}
+          {/* 役職推移タイムライン（リッチ可視化） */}
           <div style={box}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 16 }}>▶ 役職推移タイムライン</div>
-            <div style={{ position: 'relative', paddingLeft: 24 }}>
-              <div style={{ position: 'absolute', left: 8, top: 0, bottom: 0, width: 2, background: `${fg}35`, borderRadius: 1 }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase' }}>▶ 役職推移タイムライン</div>
+              <span style={{ fontSize: 10, color: T().textFaintest }}>{versions.length}バージョン</span>
+            </div>
+
+            {/* 雇用形態変遷グラフ */}
+            {versions.length > 1 && (
+              <div style={{ marginBottom: 20, padding: '12px 16px', background: T().bgCard2, borderRadius: 8, border: `1px solid ${T().border}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, marginBottom: 10 }}>雇用形態・稼働量の推移</div>
+                <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', borderRadius: 6, overflow: 'hidden', height: 32 }}>
+                  {versions.map((v, i) => {
+                    const empB = getEmpBadge(v.emp || '')
+                    const isLast = i === versions.length - 1
+                    return (
+                      <div key={i} onClick={() => { setVerIdx(i); setEditing(false) }}
+                        style={{ flex: 1, background: i === effectiveVerIdx ? empB.color : `${empB.color}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 10, fontWeight: 700, color: '#fff', borderRight: isLast ? 'none' : '2px solid rgba(255,255,255,0.15)', transition: 'all 0.15s', position: 'relative', minWidth: 0 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 6px' }}>V{i + 1}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: 0, marginTop: 4 }}>
+                  {versions.map((v, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: i === effectiveVerIdx ? T().text : T().textFaint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>
+                      {v.emp ? v.emp.split('→')[0] : '—'}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  {[...new Set(versions.map(v => v.emp).filter(Boolean))].map(emp => {
+                    const b = getEmpBadge(emp)
+                    return <span key={emp} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: b.bg, color: b.color }}>{emp}</span>
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* バージョン縦並びタイムライン */}
+            <div style={{ position: 'relative', paddingLeft: 32 }}>
+              <div style={{ position: 'absolute', left: 10, top: 8, bottom: 8, width: 2, background: `${fg}30`, borderRadius: 1 }} />
               {versions.map((v, i) => {
-                const isLatest = i === versions.length - 1, isCurrent = i === verIdx
-                const vd = getVerData(i)
+                const isLatest = i === versions.length - 1
+                const isCurrent = i === effectiveVerIdx
+                const empB = getEmpBadge(v.emp || '')
+                const taskCount = (v.tasks || []).filter(t => t.status !== 'del').length
+                // 前バージョンとの差分
+                const prev = i > 0 ? versions[i - 1] : null
+                const roleChanged = prev && prev.role !== v.role
+                const empChanged = prev && prev.emp !== v.emp
+
                 return (
-                  <div key={i} onClick={() => { setVerIdx(i); setEditing(false) }}
-                    style={{ position: 'relative', marginBottom: i < versions.length - 1 ? 16 : 0, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', background: isCurrent ? `${fg}18` : 'transparent', border: `1px solid ${isCurrent ? fg + '40' : 'transparent'}`, transition: 'all 0.15s' }}
-                    onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = T().bgHover }}
-                    onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <div style={{ position: 'absolute', left: -20, top: 14, width: 12, height: 12, borderRadius: '50%', background: isLatest ? fg : T().borderMid, border: `2px solid ${isLatest ? fg : T().border}`, boxShadow: isLatest ? `0 0 8px ${fg}70` : 'none' }} />
-                    {isLatest && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: fg, color: bg, marginBottom: 4, display: 'inline-block' }}>最新</span>}
-                    <div style={{ fontSize: 11, color: isCurrent ? fg : T().textFaint, fontWeight: isCurrent ? 700 : 400 }}>{v.period}</div>
-                    <div style={{ fontSize: 13, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? T().text : T().textMuted, lineHeight: 1.4, marginTop: 2 }}>{vd.role || v.role}</div>
-                    <div style={{ fontSize: 10, color: T().textFaint, marginTop: 4 }}>{vd.emp || v.emp}{vd.working ? ` / ${vd.working}` : ''}</div>
+                  <div key={i} style={{ position: 'relative', marginBottom: i < versions.length - 1 ? 4 : 0 }}>
+                    {/* タイムラインドット */}
+                    <div style={{ position: 'absolute', left: -26, top: 16, width: 14, height: 14, borderRadius: '50%', background: isLatest ? fg : (isCurrent ? fg : T().bgCard2), border: `2px solid ${isLatest || isCurrent ? fg : T().borderMid}`, boxShadow: isLatest ? `0 0 10px ${fg}80` : 'none', zIndex: 1 }} />
+                    {/* コネクタライン */}
+                    {i < versions.length - 1 && (
+                      <div style={{ position: 'absolute', left: -20, top: 30, width: 2, height: 'calc(100% - 10px)', background: `${fg}20` }} />
+                    )}
+
+                    <div onClick={() => { setVerIdx(i); setEditing(false) }}
+                      style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', marginBottom: 8, background: isCurrent ? `${fg}12` : T().bgCard2, border: `1px solid ${isCurrent ? fg + '50' : T().border}`, transition: 'all 0.15s' }}
+                      onMouseEnter={e => { if (!isCurrent) { e.currentTarget.style.background = T().bgHover; e.currentTarget.style.borderColor = fg + '30' } }}
+                      onMouseLeave={e => { if (!isCurrent) { e.currentTarget.style.background = T().bgCard2; e.currentTarget.style.borderColor = T().border } }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                            {isLatest && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 99, background: fg, color: bg }}>最新</span>}
+                            <span style={{ fontSize: 11, color: isCurrent ? fg : T().textFaint, fontWeight: isCurrent ? 700 : 400 }}>
+                              V{i + 1} {v.period && `— ${v.period}`}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: isCurrent ? T().text : T().textMuted, lineHeight: 1.4 }}>
+                            {roleChanged && <span style={{ fontSize: 10, marginRight: 6, padding: '1px 6px', borderRadius: 3, background: 'rgba(255,209,102,0.15)', color: '#ffd166' }}>役職変更</span>}
+                            {v.role || '（役職未設定）'}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empB.bg, color: empB.color, fontWeight: 700 }}>
+                              {empChanged && '↑ '}{v.emp || '—'}
+                            </span>
+                            {v.working && <span style={{ fontSize: 10, color: T().textFaint }}>{v.working}</span>}
+                            {taskCount > 0 && <span style={{ fontSize: 10, color: T().textFaintest, marginLeft: 4 }}>業務 {taskCount}件</span>}
+                          </div>
+                        </div>
+                        {/* 管理者：バージョン削除ボタン */}
+                        {isAdmin && versions.length > 1 && dbRows.length > 0 && (
+                          <button onClick={e => { e.stopPropagation(); deleteVersion(i) }}
+                            style={{ padding: '3px 7px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().border}`, color: T().textFaintest, fontSize: 10, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {/* JD_DEFAULTからDBへのシード促進メッセージ */}
+                      {dbRows.length === 0 && isAdmin && i === versions.length - 1 && (
+                        <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(77,159,255,0.08)', borderRadius: 6, fontSize: 10, color: '#4d9fff', border: '1px dashed rgba(77,159,255,0.25)' }}>
+                          💡 このデータはデフォルト値です。「このバージョンを編集」から保存するとDBに記録されます
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               })}
+
+              {/* 新バージョン追加プレースホルダー */}
+              {isAdmin && !editing && versions.length > 0 && (
+                <div onClick={startAddVersion}
+                  style={{ position: 'relative', padding: '10px 14px', borderRadius: 10, cursor: 'pointer', border: `1px dashed rgba(0,214,143,0.3)`, background: 'rgba(0,214,143,0.04)', display: 'flex', alignItems: 'center', gap: 8, color: '#00d68f', fontSize: 12 }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,214,143,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,214,143,0.04)'}
+                >
+                  <div style={{ position: 'absolute', left: -26, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%', border: '2px dashed rgba(0,214,143,0.5)', background: T().bgCard }} />
+                  ＋ 新しいバージョンを追加
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -1049,7 +1327,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const { levels, teamMeta, members, tasks, jdOverrides, loading, setLevels, setTeamMeta, setMembers, setTasks, setJdOverrides } = useOrgData(fiscalYear)
+  const { levels, teamMeta, members, tasks, jdRows, loading, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -1109,7 +1387,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             members={members} setMembers={setMembers}
             levels={levels}
             tasks={tasks}
-            jdOverrides={jdOverrides} setJdOverrides={setJdOverrides}
+            jdRows={jdRows} setJdRows={setJdRows}
             isAdmin={isAdmin}
             initialName={jumpMemberName}
             onClearJump={() => setJumpMemberName(null)}
