@@ -1283,49 +1283,49 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
-              </div>
-              {isAdmin && (
-                <button onClick={startEditProfile}
-                  style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                  ✎ 編集
-                </button>
-              )}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            {!editingProfile && editing ? (
-              <>
-                {addingNewVersion && (
-                  <input value={editVer.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
-                    placeholder="期間 例: 2026年4月 〜現在"
-                    style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 200 }} />
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
+                </div>
+                {isAdmin && (
+                  <button onClick={startEditProfile}
+                    style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                    ✎ 編集
+                  </button>
                 )}
-                <input value={EV.role || ''} onChange={e => setEditVer(p => ({ ...p, role: e.target.value }))}
-                  placeholder="役職"
-                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 180 }} />
-                <select value={EV.emp || '業務委託'} onChange={e => setEditVer(p => ({ ...p, emp: e.target.value }))}
-                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '3px 8px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
-                  {EMP_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-                <input value={EV.working || ''} onChange={e => setEditVer(p => ({ ...p, working: e.target.value }))} placeholder="稼働量"
-                  style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '3px 8px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', width: 100 }} />
-              </>
-            ) : (
-              <>
-                {EV.role && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700 }}>{EV.role}</span>}
-                {EV.emp && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: empB.bg, color: empB.color, fontWeight: 700 }}>{EV.emp}</span>}
-                {EV.working && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.15)', color: '#fff' }}>{EV.working}</span>}
-              </>
-            )}
-          </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {editing ? (
+                  <>
+                    {addingNewVersion && (
+                      <input value={editVer.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
+                        placeholder="期間 例: 2026年4月 〜現在"
+                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 200 }} />
+                    )}
+                    <input value={EV.role || ''} onChange={e => setEditVer(p => ({ ...p, role: e.target.value }))}
+                      placeholder="役職"
+                      style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 180 }} />
+                    <select value={EV.emp || '業務委託'} onChange={e => setEditVer(p => ({ ...p, emp: e.target.value }))}
+                      style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '3px 8px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
+                      {EMP_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    <input value={EV.working || ''} onChange={e => setEditVer(p => ({ ...p, working: e.target.value }))} placeholder="稼働量"
+                      style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '3px 8px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', width: 100 }} />
+                  </>
+                ) : (
+                  <>
+                    {EV.role && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700 }}>{EV.role}</span>}
+                    {EV.emp && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: empB.bg, color: empB.color, fontWeight: 700 }}>{EV.emp}</span>}
+                    {EV.working && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.15)', color: '#fff' }}>{EV.working}</span>}
+                  </>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
-
       {/* 兼務チーム設定 */}
       {isAdmin && memberRow && (
         <div style={{ ...box, marginBottom: 16 }}>
