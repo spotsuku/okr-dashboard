@@ -7,42 +7,44 @@ import { supabase } from '../lib/supabase'
 // ══════════════════════════════════════════════════
 const THEMES = {
   dark: {
-    bg:          '#07091280',
-    bgCard:      '#131b2e',    // ← 濃い青系カード背景
-    bgCard2:     '#1a2540',    // ← カード内セクション背景
-    bgInput:     'rgba(255,255,255,0.08)',
-    bgHover:     'rgba(255,255,255,0.06)',
-    bgTable:     'rgba(255,255,255,0.06)',
-    border:      'rgba(255,255,255,0.18)',   // ← 大幅に強化
-    borderMid:   'rgba(255,255,255,0.28)',   // ← 大幅に強化
-    borderEdit:  'rgba(77,159,255,0.6)',
-    text:        '#eef0f8',
-    textSub:     '#cdd2e8',
-    textMuted:   '#8b95b8',
-    textFaint:   '#505870',
-    textFaintest:'#363d55',
-    inputBg:     '#131b2e',
-    inputText:   '#eef0f8',
-    selectBg:    '#1a2540',
+    bg:          '#0f1117',
+    bgCard:      '#1a1d27',
+    bgCard2:     '#21253a',
+    bgInput:     'rgba(255,255,255,0.07)',
+    bgHover:     'rgba(255,255,255,0.05)',
+    bgTable:     'rgba(255,255,255,0.04)',
+    border:      'rgba(255,255,255,0.12)',
+    borderMid:   'rgba(255,255,255,0.20)',
+    borderEdit:  'rgba(47,122,120,0.8)',
+    text:        '#e8ecf0',
+    textSub:     '#b8c0d0',
+    textMuted:   '#7a8599',
+    textFaint:   '#4a5468',
+    textFaintest:'#333b4d',
+    inputBg:     '#1a1d27',
+    inputText:   '#e8ecf0',
+    selectBg:    '#21253a',
+    accent:      '#2f7a78',
   },
   light: {
-    bg:         '#f0f2f7',
-    bgCard:     '#ffffff',
-    bgCard2:    '#f7f8fc',
-    bgInput:    'rgba(0,0,0,0.04)',
-    bgHover:    'rgba(0,0,0,0.03)',
-    bgTable:    'rgba(0,0,0,0.03)',
-    border:     'rgba(0,0,0,0.09)',
-    borderMid:  'rgba(0,0,0,0.15)',
-    borderEdit: 'rgba(37,99,235,0.5)',
-    text:       '#1a1f36',
-    textSub:    '#374151',
-    textMuted:  '#4b5563',
-    textFaint:  '#6b7280',
-    textFaintest:'#9ca3af',
-    inputBg:    '#ffffff',
-    inputText:  '#1a1f36',
-    selectBg:   '#ffffff',
+    bg:          '#f5f6f8',
+    bgCard:      '#ffffff',
+    bgCard2:     '#f9fafb',
+    bgInput:     '#f3f4f6',
+    bgHover:     '#f0f2f5',
+    bgTable:     '#f9fafb',
+    border:      '#e5e7eb',
+    borderMid:   '#d1d5db',
+    borderEdit:  '#2f7a78',
+    text:        '#111827',
+    textSub:     '#374151',
+    textMuted:   '#6b7280',
+    textFaint:   '#9ca3af',
+    textFaintest:'#d1d5db',
+    inputBg:     '#ffffff',
+    inputText:   '#111827',
+    selectBg:    '#ffffff',
+    accent:      '#2f7a78',
   },
 }
 
@@ -181,7 +183,7 @@ function SupportSelect({ value, onChange, memberNames, borderColor }) {
 function SaveBtn({ saving, saved, onClick, label = '保存' }) {
   return (
     <button onClick={onClick} disabled={saving}
-      style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: saved ? '#00d68f' : '#4d9fff', color: '#fff', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.3s' }}>
+      style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: saved ? '#2f7a78' : '#2f7a78', color: '#fff', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.3s' }}>
       {saved ? '✓ 保存済み' : saving ? '保存中...' : label}
     </button>
   )
@@ -233,6 +235,7 @@ function useOrgData(fiscalYear) {
   const [members, setMembers] = useState([])
   const [tasks, setTasks] = useState([])
   const [jdRows, setJdRows] = useState({})
+  const [taskHistory, setTaskHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [syncStatus, setSyncStatus] = useState('connecting')
 
@@ -244,12 +247,14 @@ function useOrgData(fiscalYear) {
       { data: mems },
       { data: taskData },
       { data: jdData },
+      { data: histData },
     ] = await Promise.all([
       supabase.from('levels').select('*').order('id'),
       supabase.from('org_team_meta').select('*'),
       supabase.from('members').select('*').order('name'),
       supabase.from('org_tasks').select('*').order('id'),
       supabase.from('org_member_jd').select('*').order('version_idx'),
+      supabase.from('org_task_history').select('*').order('changed_at'),
     ])
 
     const validLvls = (lvls || []).filter(l =>
@@ -271,6 +276,7 @@ function useOrgData(fiscalYear) {
     })
     Object.keys(rowMap).forEach(k => rowMap[k].sort((a, b) => a.version_idx - b.version_idx))
     setJdRows(rowMap)
+    setTaskHistory(histData || [])
     setLoading(false)
   }, [fiscalYear])
 
@@ -312,6 +318,9 @@ function useOrgData(fiscalYear) {
           return next
         })
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'org_task_history' }, payload => {
+        if (payload.eventType === 'INSERT') setTaskHistory(prev => [...prev, payload.new])
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'org_team_meta' }, payload => {
         setTeamMeta(prev => {
           const next = { ...prev }
@@ -327,7 +336,7 @@ function useOrgData(fiscalYear) {
     return () => { supabase.removeChannel(channel) }
   }, [fiscalYear]) // eslint-disable-line
 
-  return { levels, teamMeta, members, tasks, jdRows, loading, syncStatus, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
+  return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
 }
 
 // ══════════════════════════════════════════════════
@@ -459,11 +468,12 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 // ══════════════════════════════════════════════════
 // タブ2: 業務一覧（管理者は編集・並び替え可）
 // ══════════════════════════════════════════════════
-function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
+function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser }) {
   const [filterDept, setFilterDept] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [query, setQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+  const [historyTask, setHistoryTask] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editBuf, setEditBuf] = useState({})
   const [addingTeam, setAddingTeam] = useState(null)
@@ -501,6 +511,20 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
     setSaving(true)
     const updated = { ...t, ...editBuf }
     await supabase.from('org_tasks').upsert([updated])
+    // ownerが変わった場合は引き継ぎ履歴を記録
+    const prevOwner = t.owner || null
+    const nextOwner = updated.owner || null
+    if (prevOwner !== nextOwner) {
+      const histRow = {
+        task_id: t.id,
+        from_owner: prevOwner,
+        to_owner: nextOwner,
+        changed_by: currentUser || null,
+        note: '',
+      }
+      const { data: hist } = await supabase.from('org_task_history').insert([histRow]).select().single()
+      if (hist) setTaskHistory(prev => [...prev, hist])
+    }
     setTasks(prev => prev.map(x => x.id === t.id ? updated : x))
     setSaving(false); setEditingId(null)
   }
@@ -715,8 +739,13 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                                       <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
                                     </div>
                                   ) : (
-                                    <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => { setEditingId(t.id); setEditBuf({}) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(77,159,255,0.1)', border: '1px solid rgba(77,159,255,0.25)', color: '#4d9fff', fontSize: 10, cursor: 'pointer' }} title="編集">✎</button>
+                                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                      {taskHistory.filter(h => h.task_id === t.id).length > 0 && (
+                                        <button onClick={() => setHistoryTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(47,122,120,0.1)', border: '1px solid rgba(47,122,120,0.25)', color: '#2f7a78', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }} title="引き継ぎ履歴">
+                                          🔄 {taskHistory.filter(h => h.task_id === t.id).length}
+                                        </button>
+                                      )}
+                                      <button onClick={() => { setEditingId(t.id); setEditBuf({ owner: t.owner || '', task: t.task || '', support: t.support || '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(77,159,255,0.1)', border: '1px solid rgba(77,159,255,0.25)', color: '#4d9fff', fontSize: 10, cursor: 'pointer' }} title="編集">✎</button>
                                       <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,159,67,0.08)', border: '1px solid rgba(255,159,67,0.25)', color: '#ff9f43', fontSize: 10, cursor: 'pointer' }} title="アーカイブ">📦</button>
                                       <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
                                     </div>
@@ -747,7 +776,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                             </td>
                             <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: '#00d68f', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
+                                <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: '#2f7a78', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
                                 <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                               </div>
                             </td>
@@ -757,7 +786,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                     </table>
                     {isAdmin && !isAddingHere && !showArchived && (
                       <div onClick={() => { setAddingTeam({ dept, team }); setNewBuf({ task: '', owner: '', support: '' }) }}
-                        style={{ padding: '8px 12px', fontSize: 11, color: '#00d68f', cursor: 'pointer', background: 'rgba(0,214,143,0.04)', borderTop: '1px dashed rgba(0,214,143,0.15)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        style={{ padding: '8px 12px', fontSize: 11, color: '#2f7a78', cursor: 'pointer', background: 'rgba(47,122,120,0.04)', borderTop: '1px dashed rgba(47,122,120,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>
                         ＋ 業務を追加
                       </div>
                     )}
@@ -768,6 +797,9 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
           </div>
         )
       })}
+      {historyTask && (
+        <TaskHistoryModal task={historyTask} history={taskHistory} onClose={() => setHistoryTask(null)} />
+      )}
     </div>
   )
 }
@@ -775,7 +807,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
 // ══════════════════════════════════════════════════
 // タブ3: メンバーJD（追加・削除・兼務設定付き）
 // ══════════════════════════════════════════════════
-function MemberJDTab({ members, setMembers, levels, tasks, jdRows, setJdRows, isAdmin, initialName, onClearJump }) {
+function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, setJdRows, isAdmin, initialName, onClearJump }) {
   const [selectedName, setSelectedName] = useState(initialName || null)
   const [verIdx, setVerIdx] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -801,6 +833,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdRows, setJdRows, is
         members={members}
         setMembers={setMembers}
         tasks={tasks}
+        taskHistory={taskHistory}
       />
     )
   }
@@ -810,7 +843,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdRows, setJdRows, is
       {isAdmin && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <button onClick={() => setShowAddModal(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, background: '#00d68f', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, background: '#2f7a78', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
             ＋ メンバーを追加
           </button>
         </div>
@@ -842,7 +875,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdRows, setJdRows, is
                   <div style={{ fontSize: 10, color: T().textFaint, marginTop: 2 }}>{m.role || '—'}</div>
                 </div>
                 {totalVersions > 0 && (
-                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: 'rgba(77,159,255,0.1)', color: '#4d9fff', border: '1px solid rgba(77,159,255,0.2)', fontWeight: 700, flexShrink: 0 }}>
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: 'rgba(47,122,120,0.1)', color: '#2f7a78', border: '1px solid rgba(77,159,255,0.2)', fontWeight: 700, flexShrink: 0 }}>
                     v{totalVersions}
                   </span>
                 )}
@@ -851,7 +884,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdRows, setJdRows, is
               {teamNames.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
                   {teamNames.map(t => (
-                    <span key={t} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(77,159,255,0.12)', color: '#4d9fff', border: '1px solid rgba(77,159,255,0.2)' }}>{t}</span>
+                    <span key={t} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(47,122,120,0.1)', color: '#2f7a78', border: '1px solid rgba(47,122,120,0.25)' }}>{t}</span>
                   ))}
                 </div>
               )}
@@ -868,6 +901,75 @@ function MemberJDTab({ members, setMembers, levels, tasks, jdRows, setJdRows, is
         <AddMemberModal levels={levels} onClose={() => setShowAddModal(false)}
           onAdded={newM => { setMembers(prev => [...prev, newM]); setShowAddModal(false) }} />
       )}
+    </div>
+  )
+}
+
+
+// ── 引き継ぎ履歴モーダル ─────────────────────────────────────────────────────
+function TaskHistoryModal({ task, history, onClose }) {
+  const records = history
+    .filter(h => h.task_id === task.id)
+    .sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at))
+
+  const fmt = (dateStr) => {
+    const d = new Date(dateStr)
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', color: T().text }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 4 }}>引き継ぎ履歴</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T().text, lineHeight: 1.4 }}>{task.task}</div>
+          </div>
+          <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 15, flexShrink: 0, marginLeft: 12 }}>✕</button>
+        </div>
+
+        {records.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: T().textFaintest, fontSize: 13 }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+            引き継ぎ履歴はまだありません
+          </div>
+        ) : (
+          <div style={{ position: 'relative', paddingLeft: 24 }}>
+            <div style={{ position: 'absolute', left: 7, top: 8, bottom: 8, width: 2, background: T().border, borderRadius: 1 }} />
+            {records.map((r, i) => {
+              const isFirst = i === 0
+              const isLatest = i === records.length - 1
+              return (
+                <div key={r.id} style={{ position: 'relative', marginBottom: i < records.length - 1 ? 16 : 0 }}>
+                  <div style={{ position: 'absolute', left: -20, top: 10, width: 10, height: 10, borderRadius: '50%', background: isLatest ? '#2f7a78' : T().borderMid, border: `2px solid ${isLatest ? '#2f7a78' : T().border}`, boxShadow: isLatest ? '0 0 6px rgba(47,122,120,0.5)' : 'none' }} />
+                  <div style={{ background: T().bgCard2, border: `1px solid ${T().border}`, borderRadius: 8, padding: '10px 14px' }}>
+                    <div style={{ fontSize: 10, color: T().textFaint, marginBottom: 6 }}>{fmt(r.changed_at)}{r.changed_by ? ` · ${r.changed_by}` : ''}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {r.from_owner ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 5, background: `${avatarColor(r.from_owner)}15`, color: avatarColor(r.from_owner), fontSize: 12, fontWeight: 600 }}>
+                          <Avatar name={r.from_owner} size={16} />{r.from_owner}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: T().textFaintest, fontStyle: 'italic' }}>（未設定）</span>
+                      )}
+                      <span style={{ color: '#2f7a78', fontSize: 14, fontWeight: 700 }}>→</span>
+                      {r.to_owner ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 5, background: `${avatarColor(r.to_owner)}15`, color: avatarColor(r.to_owner), fontSize: 12, fontWeight: 600 }}>
+                          <Avatar name={r.to_owner} size={16} />{r.to_owner}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: T().textFaintest, fontStyle: 'italic' }}>（未設定）</span>
+                      )}
+                    </div>
+                    {r.note && <div style={{ fontSize: 11, color: T().textMuted, marginTop: 6, padding: '5px 8px', background: T().bgInput, borderRadius: 5 }}>{r.note}</div>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -958,7 +1060,7 @@ function AddMemberModal({ levels, onClose, onAdded }) {
 }
 
 // ── メンバー詳細（JD + 兼務設定 + 削除） ─────────────────────────────────────
-function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx, onBack, isAdmin, levels, members, setMembers, tasks }) {
+function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx, onBack, isAdmin, levels, members, setMembers, tasks, taskHistory }) {
   const memberName = memberRow?.name || ''
   const [fg, bg] = jdBase.avatar_color || [avatarColor(memberName), '#111828']
 
@@ -991,6 +1093,9 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const [saved, setSaved] = useState(false)
   const [addingNewVersion, setAddingNewVersion] = useState(false)
   const [editingTeams, setEditingTeams] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [profileBuf, setProfileBuf] = useState({ name: '', role: '' })
+  const [savingProfile, setSavingProfile] = useState(false)
   const [selectedIds, setSelectedIds] = useState(
     Array.isArray(memberRow?.level_ids) ? memberRow.level_ids.map(Number) : (memberRow?.level_id ? [Number(memberRow.level_id)] : [])
   )
@@ -1088,6 +1193,19 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
     setVerIdx(Math.max(0, vi - 1))
   }
 
+  const startEditProfile = () => {
+    setProfileBuf({ name: memberRow?.name || '', role: memberRow?.role || '' })
+    setEditingProfile(true)
+  }
+  const saveProfile = async () => {
+    if (!profileBuf.name.trim()) return
+    setSavingProfile(true)
+    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim() }).eq('id', memberRow.id)
+    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim() } : m))
+    setSavingProfile(false)
+    setEditingProfile(false)
+  }
+
   const deleteMember = async () => {
     if (!window.confirm(`「${memberName}」を削除しますか？`)) return
     await supabase.from('members').delete().eq('id', memberRow.id)
@@ -1111,7 +1229,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
         >← メンバー一覧に戻る</button>
 
         {isAdmin && !editing && versions.length === 0 && (
-          <button onClick={startCreateJD} style={{ padding: '7px 16px', border: '1px solid rgba(0,214,143,0.35)', background: 'rgba(0,214,143,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#00d68f', fontFamily: 'inherit' }}>
+          <button onClick={startCreateJD} style={{ padding: '7px 16px', border: '1px solid rgba(47,122,120,0.4)', background: 'rgba(47,122,120,0.08)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#2f7a78', fontFamily: 'inherit' }}>
             ＋ JDを作成する
           </button>
         )}
@@ -1120,7 +1238,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             <button onClick={startEdit} style={{ padding: '7px 16px', border: '1px solid rgba(255,209,102,0.35)', background: 'rgba(255,209,102,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#ffd166', fontFamily: 'inherit' }}>
               👑 このバージョンを編集
             </button>
-            <button onClick={startAddVersion} style={{ padding: '7px 16px', border: '1px solid rgba(77,159,255,0.35)', background: 'rgba(77,159,255,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#4d9fff', fontFamily: 'inherit' }}>
+            <button onClick={startAddVersion} style={{ padding: '7px 16px', border: '1px solid rgba(47,122,120,0.4)', background: 'rgba(47,122,120,0.08)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#2f7a78', fontFamily: 'inherit' }}>
               ＋ 新バージョンを追加
             </button>
           </>
@@ -1145,10 +1263,41 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
       <div style={{ background: `linear-gradient(135deg, ${fg}, ${fg}bb)`, borderRadius: 12, padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
         <Avatar name={memberRow?.name} size={64} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
+          {editingProfile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+              <input value={profileBuf.name} onChange={e => setProfileBuf(p => ({ ...p, name: e.target.value }))}
+                placeholder="名前"
+                style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.5)', borderRadius: 6, padding: '6px 12px', color: '#fff', fontSize: 20, fontWeight: 800, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+              <input value={profileBuf.role} onChange={e => setProfileBuf(p => ({ ...p, role: e.target.value }))}
+                placeholder="役職・ポジション（例: コミュニティ事業部 マネージャー）"
+                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '5px 12px', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={saveProfile} disabled={savingProfile || !profileBuf.name.trim()}
+                  style={{ padding: '5px 16px', borderRadius: 6, background: 'rgba(255,255,255,0.9)', border: 'none', color: fg, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {savingProfile ? '保存中...' : '✓ 保存'}
+                </button>
+                <button onClick={() => setEditingProfile(false)}
+                  style={{ padding: '5px 12px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
+              </div>
+              {isAdmin && (
+                <button onClick={startEditProfile}
+                  style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                  ✎ 編集
+                </button>
+              )}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            {editing ? (
+            {!editingProfile && editing ? (
               <>
                 {addingNewVersion && (
                   <input value={editVer.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
@@ -1173,6 +1322,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               </>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -1365,7 +1515,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase' }}>
                     ▶ 担当業務一覧（{ownerTasks.length}件）
-                    <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 8, padding: '1px 6px', borderRadius: 4, background: 'rgba(77,159,255,0.1)', color: '#4d9fff' }}>業務一覧と同期</span>
+                    <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 8, padding: '1px 6px', borderRadius: 4, background: 'rgba(47,122,120,0.1)', color: '#2f7a78' }}>業務一覧と同期</span>
                   </div>
                 </div>
 
@@ -1393,7 +1543,17 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                             <tbody>
                               {teamTasks.map((t, i) => (
                                 <tr key={t.id} style={{ borderBottom: i < teamTasks.length - 1 ? `1px solid ${T().border}` : 'none' }}>
-                                  <td style={{ padding: '8px 12px', fontSize: 12, color: T().textSub, lineHeight: 1.5 }}>{t.task}</td>
+                                  <td style={{ padding: '8px 12px', fontSize: 12, color: T().textSub, lineHeight: 1.5 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span>{t.task}</span>
+                                      {(taskHistory || []).filter(h => h.task_id === t.id).length > 0 && (
+                                        <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(47,122,120,0.1)', color: '#2f7a78', border: '1px solid rgba(47,122,120,0.2)', whiteSpace: 'nowrap', cursor: 'default' }}
+                                          title={(taskHistory || []).filter(h => h.task_id === t.id).map(h => `${h.from_owner || '未設定'} → ${h.to_owner || '未設定'}`).join(' / ')}>
+                                          🔄 {(taskHistory || []).filter(h => h.task_id === t.id).length}回引き継ぎ
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td style={{ padding: '8px 12px' }}>
                                     {t.support ? (
                                       <span style={{ fontSize: 11, color: T().textFaint, padding: '2px 7px', background: T().bgInput, borderRadius: 5 }}>{t.support}</span>
@@ -1577,7 +1737,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const { levels, teamMeta, members, tasks, jdRows, loading, syncStatus, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
+  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -1601,13 +1761,13 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T().bg, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, fontFamily: 'system-ui,sans-serif' }}>
+    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 28px' }}>
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: '#4d9fff', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
+          <div style={{ fontSize: 11, color: '#2f7a78', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: T().text }}>🏢 組織</div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}` }}>{fiscalYear}年度</span>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(47,122,120,0.12)' : 'rgba(234,88,12,0.12)', color: fiscalYear === '2026' ? '#2f7a78' : '#ea580c', border: `1px solid ${fiscalYear === '2026' ? 'rgba(47,122,120,0.3)' : 'rgba(234,88,12,0.3)'}` }}>{fiscalYear}年度</span>
             {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>👑 管理者</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
@@ -1629,7 +1789,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             return (
               <button key={t.id}
                 onClick={() => { setActiveTab(t.id); if (t.id !== 'members') setJumpMemberName(null) }}
-                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? '#4d9fff' : T().textFaint, borderBottom: `3px solid ${isA ? '#4d9fff' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? 'rgba(77,159,255,0.08)' : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
+                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? '#2f7a78' : T().textFaint, borderBottom: `3px solid ${isA ? '#2f7a78' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? 'rgba(47,122,120,0.08)' : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
                 {t.icon} {t.label}
               </button>
             )
@@ -1640,13 +1800,15 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
           <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate} />
         )}
         {activeTab === 'tasks' && (
-          <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} />
+          <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
+            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} />
         )}
         {activeTab === 'members' && (
           <MemberJDTab
             members={members} setMembers={setMembers}
             levels={levels}
             tasks={tasks}
+            taskHistory={taskHistory}
             jdRows={jdRows} setJdRows={setJdRows}
             isAdmin={isAdmin}
             initialName={jumpMemberName}
