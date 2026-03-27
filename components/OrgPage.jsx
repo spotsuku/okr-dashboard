@@ -1298,22 +1298,34 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {editing ? (
-                  <>
-                    {addingNewVersion && (
-                      <input value={editVer.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
-                        placeholder="期間 例: 2026年4月 〜現在"
-                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 200 }} />
-                    )}
-                    <input value={EV.role || ''} onChange={e => setEditVer(p => ({ ...p, role: e.target.value }))}
-                      placeholder="役職"
-                      style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '3px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', minWidth: 180 }} />
-                    <select value={EV.emp || '業務委託'} onChange={e => setEditVer(p => ({ ...p, emp: e.target.value }))}
-                      style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '3px 8px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
-                      {EMP_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    <input value={EV.working || ''} onChange={e => setEditVer(p => ({ ...p, working: e.target.value }))} placeholder="稼働量"
-                      style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '3px 8px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', width: 100 }} />
-                  </>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, width: '100%' }}>
+                    {/* 期間（常に表示） */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', minWidth: 32 }}>期間</span>
+                      <input value={EV.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
+                        placeholder="例: 2026年4月 〜現在"
+                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '4px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', flex: 1, minWidth: 200 }} />
+                    </div>
+                    {/* 役職 */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', minWidth: 32 }}>役職</span>
+                      <input value={EV.role || ''} onChange={e => setEditVer(p => ({ ...p, role: e.target.value }))}
+                        placeholder="例: コミュニティマネージャー"
+                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '4px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', flex: 1, minWidth: 200 }} />
+                    </div>
+                    {/* 勤務形態・稼働量 */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', minWidth: 32 }}>形態</span>
+                      <select value={EV.emp || '業務委託'} onChange={e => setEditVer(p => ({ ...p, emp: e.target.value }))}
+                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '4px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
+                        {EMP_OPTS.map(o => <option key={o} value={o} style={{ background: '#1a1d27', color: '#e8ecf0' }}>{o}</option>)}
+                      </select>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>稼働</span>
+                      <input value={EV.working || ''} onChange={e => setEditVer(p => ({ ...p, working: e.target.value }))}
+                        placeholder="例: 週5 / フルタイム"
+                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, padding: '4px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', width: 140 }} />
+                    </div>
+                  </div>
                 ) : (
                   <>
                     {EV.role && <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700 }}>{EV.role}</span>}
