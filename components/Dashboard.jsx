@@ -794,6 +794,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [viewMode, setViewMode]             = useState('org')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
   const [themeKey, setThemeKey]                 = useState('dark')
+  const [syncStatus, setSyncStatus]             = useState('connecting')
   const T = THEMES[themeKey]
   _T = T
   if (typeof window !== 'undefined') window.__OKR_THEME__ = T
@@ -825,10 +826,64 @@ export default function Dashboard({ user, onSignOut }) {
       setLoading(false)
     }
     load()
-  }, [fiscalYear])
+
+    // ── Supabase Realtime ─────────────────────────────────
+    const channel = supabase
+      .channel('dashboard_realtime_' + fiscalYear)
+      // objectives 変更 → 該当levelのOKRを再取得
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'objectives' }, payload => {
+        const levelId = payload.new?.level_id || payload.old?.level_id
+        if (!levelId) return
+        setAnnualRefreshKey(k => k + 1)
+        if (window.__fetchForLevel) {
+          window.__fetchForLevel(levelId).then(data => {
+            setNodeObjectives(m => ({ ...m, [levelId]: data }))
+          })
+        }
+      })
+      // key_results 変更 → 親objectiveのlevelを取得して再描画
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'key_results' }, async payload => {
+        const objId = payload.new?.objective_id || payload.old?.objective_id
+        if (!objId) return
+        const { data: obj } = await supabase.from('objectives').select('level_id').eq('id', objId).single()
+        if (!obj?.level_id) return
+        setAnnualRefreshKey(k => k + 1)
+        if (window.__fetchForLevel) {
+          window.__fetchForLevel(obj.level_id).then(data => {
+            setNodeObjectives(m => ({ ...m, [obj.level_id]: data }))
+          })
+        }
+      })
+      // key_actions 変更 → KAの親KR→Objective→levelを辿って再描画
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'key_actions' }, async payload => {
+        const krId = payload.new?.key_result_id || payload.old?.key_result_id
+        if (!krId) return
+        const { data: kr } = await supabase.from('key_results').select('objective_id').eq('id', krId).single()
+        if (!kr?.objective_id) return
+        const { data: obj } = await supabase.from('objectives').select('level_id').eq('id', kr.objective_id).single()
+        if (!obj?.level_id) return
+        if (window.__fetchForLevel) {
+          window.__fetchForLevel(obj.level_id).then(data => {
+            setNodeObjectives(m => ({ ...m, [obj.level_id]: data }))
+          })
+        }
+      })
+      // members 変更
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, payload => {
+        if (payload.eventType === 'INSERT') setMembers(prev => [...prev, payload.new])
+        else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
+        else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
+      })
+      .subscribe(status => {
+        setSyncStatus(status === 'SUBSCRIBED' ? 'synced' : status === 'CHANNEL_ERROR' ? 'error' : 'connecting')
+      })
+
+    return () => { supabase.removeChannel(channel) }
+  }, [fiscalYear]) // eslint-disable-line
 
   const toPeriodKey = (period, year) => year === '2026' ? period : `${year}_${period}`
 
+  // window経由でRealtimeハンドラからアクセスできるよう公開
   const fetchForLevel = async (levelId, period, year = '2026') => {
     let query = supabase.from('objectives').select('id,level_id,period,title,owner').eq('level_id', levelId).order('id')
     if (period === 'all') {
@@ -850,6 +905,12 @@ export default function Dashboard({ user, onSignOut }) {
     })
     return objs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
   }
+
+  // Realtimeハンドラから現在のactivePeriod/fiscalYearを使えるよう公開
+  useEffect(() => {
+    window.__fetchForLevel = (levelId) => fetchForLevel(levelId, activePeriod, fiscalYear)
+    return () => { delete window.__fetchForLevel }
+  }, [activePeriod, fiscalYear]) // eslint-disable-line
 
   const getSubtree = useCallback((id, lvls) => {
     const ids = [id]
@@ -1116,6 +1177,15 @@ export default function Dashboard({ user, onSignOut }) {
             )}
             <button onClick={() => setModal({ type: 'add' })} style={{ background: '#4d9fff', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
             <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
+            <span style={{
+              fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default',
+              background: syncStatus === 'synced' ? 'rgba(0,214,143,0.15)' : syncStatus === 'error' ? 'rgba(255,107,107,0.15)' : 'rgba(255,209,102,0.15)',
+              color: syncStatus === 'synced' ? '#00d68f' : syncStatus === 'error' ? '#ff6b6b' : '#ffd166',
+              border: `1px solid ${syncStatus === 'synced' ? 'rgba(0,214,143,0.3)' : syncStatus === 'error' ? 'rgba(255,107,107,0.3)' : 'rgba(255,209,102,0.3)'}`,
+              title: syncStatus === 'synced' ? 'リアルタイム同期中' : 'Realtimeへ接続中...',
+            }}>
+              {syncStatus === 'synced' ? '🟢' : syncStatus === 'error' ? '🔴' : '🟡'}
+            </span>
             <button onClick={() => setShowAI(p => !p)} style={{ background: '#a855f7', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
           </div>
         </div>
