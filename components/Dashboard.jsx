@@ -409,7 +409,7 @@ function KASection({ krId }) {
             {filtered.map(ka => (
               <div key={ka.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '6px 10px', borderRadius: 7, background: TYPE_CONFIG[ka.type]?.bg, border: `1px solid ${TYPE_CONFIG[ka.type]?.border}` }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: TYPE_CONFIG[ka.type]?.color, flexShrink: 0, marginTop: 5 }} />
-                <span style={{ flex: 1, fontSize: 12, color: getT().textSub, lineHeight: 1.4 }}>{ka.title}</span>
+                <span style={{ flex: 1, fontSize: 12, color: getT().textSub, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{ka.title}</span>
                 <select value={ka.type} onChange={e => updateType(ka.id, e.target.value)} onClick={e => e.stopPropagation()} style={{
                   fontSize: 9, background: 'transparent', border: 'none', color: TYPE_CONFIG[ka.type]?.color,
                   cursor: 'pointer', fontFamily: 'inherit', padding: 0, outline: 'none',
@@ -428,23 +428,30 @@ function KASection({ krId }) {
           </div>
 
           {adding ? (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <textarea
                 autoFocus
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addKA(); if (e.key === 'Escape') setAdding(false) }}
-                placeholder="KAを入力してEnter"
-                style={{ flex: 1, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, color: getT().text, outline: 'none', fontFamily: 'inherit' }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (newTitle.trim()) addKA() }
+                  if (e.key === 'Escape') setAdding(false)
+                }}
+                placeholder="KAを入力（Enterで追加、Shift+Enterで改行）"
+                rows={2}
+                style={{ flex: 1, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: getT().text, outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 56, lineHeight: 1.6 }}
               />
-              <select value={newType} onChange={e => setNewType(e.target.value)} style={{ fontSize: 11, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '5px 6px', color: getT().text, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
-                <option value="normal">未分類</option>
-                <option value="focus">🎯 注力</option>
-                <option value="good">✅ Good</option>
-                <option value="more">🔺 More</option>
-              </select>
-              <button onClick={addKA} style={{ background: '#2f7a78', border: 'none', color: '#fff', borderRadius: 6, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>追加</button>
-              <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <select value={newType} onChange={e => setNewType(e.target.value)} style={{ fontSize: 11, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '5px 6px', color: getT().text, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
+                  <option value="normal">未分類</option>
+                  <option value="focus">🎯 注力</option>
+                  <option value="good">✅ Good</option>
+                  <option value="more">🔺 More</option>
+                </select>
+                <button onClick={addKA} disabled={!newTitle.trim()} style={{ background: newTitle.trim() ? '#2f7a78' : 'rgba(47,122,120,0.3)', border: 'none', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: newTitle.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>追加</button>
+                <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+                <span style={{ fontSize: 10, color: getT().textFaint, marginLeft: 'auto' }}>Enter: 追加　Shift+Enter: 改行</span>
+              </div>
             </div>
           ) : (
             <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#2f7a78', background: 'rgba(47,122,120,0.06)', border: '1px dashed rgba(77,159,255,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
