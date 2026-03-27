@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ══════════════════════════════════════════════════
@@ -51,6 +51,90 @@ const THEMES = {
 // グローバルテーマ参照（コンテキスト不要の簡易実装）
 let _T = THEMES.dark
 const T = () => _T
+
+
+// ── 期間カレンダー入力ユーティリティ ─────────────────────────────
+// 「2026年4月1日」→ "2026-04-01" (input[type=date]用)
+function periodToDateInput(str) {
+  if (!str) return ''
+  const m = str.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/)
+  if (!m) return ''
+  return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`
+}
+// "2026-04-01" → 「2026年4月1日」
+function dateInputToJa(val) {
+  if (!val) return ''
+  const [y, m, d] = val.split('-')
+  return `${y}年${parseInt(m)}月${parseInt(d)}日`
+}
+// 期間文字列を開始・終了に分割
+// 例: "2026年4月1日〜現在" → { start: "2026-04-01", end: "" }
+function parsePeriod(period) {
+  if (!period) return { start: '', end: '' }
+  const parts = period.split(/[〜~～]/)
+  const startJa = (parts[0] || '').trim()
+  const endJa   = (parts[1] || '').trim()
+  return {
+    start: periodToDateInput(startJa) || startJa,
+    end:   periodToDateInput(endJa)   || (endJa === '現在' || endJa === '' ? endJa : endJa),
+  }
+}
+// { start, end } → 「2026年4月1日 〜 現在」
+function buildPeriod(start, end) {
+  const startJa = start ? dateInputToJa(start) || start : ''
+  const endJa   = end   ? (end === '現在' ? '現在' : dateInputToJa(end) || end) : '現在'
+  if (!startJa) return ''
+  return `${startJa} 〜 ${endJa}`
+}
+
+// ── 期間入力コンポーネント ────────────────────────────────────────
+function PeriodInput({ value, onChange }) {
+  const { start, end } = parsePeriod(value)
+  const [ongoing, setOngoing] = React.useState(end === '現在' || end === '')
+
+  const handleStart = (v) => {
+    onChange(buildPeriod(v, ongoing ? '現在' : end))
+  }
+  const handleEnd = (v) => {
+    onChange(buildPeriod(start, v))
+  }
+  const handleOngoing = (checked) => {
+    setOngoing(checked)
+    onChange(buildPeriod(start, checked ? '現在' : ''))
+  }
+
+  const inputStyle = {
+    background: 'rgba(255,255,255,0.15)',
+    border: '1px solid rgba(255,255,255,0.4)',
+    borderRadius: 5, padding: '4px 8px',
+    color: '#fff', fontSize: 11, outline: 'none',
+    fontFamily: 'inherit', colorScheme: 'dark',
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', minWidth: 24 }}>開始</span>
+        <input type="date" value={start} onChange={e => handleStart(e.target.value)} style={inputStyle} />
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>〜</span>
+        {ongoing ? (
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', padding: '4px 8px', background: 'rgba(255,255,255,0.1)', borderRadius: 5 }}>現在</span>
+        ) : (
+          <input type="date" value={end !== '現在' ? end : ''} onChange={e => handleEnd(e.target.value)} style={inputStyle} />
+        )}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>
+          <input type="checkbox" checked={ongoing} onChange={e => handleOngoing(e.target.checked)}
+            style={{ accentColor: '#2f7a78' }} />
+          現在も継続中
+        </label>
+      </div>
+      {value && (
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', paddingLeft: 30 }}>
+          表示: {value}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ══════════════════════════════════════════════════
 // 定数
@@ -1299,12 +1383,10 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {editing ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, width: '100%' }}>
-                    {/* 期間（常に表示） */}
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', minWidth: 32 }}>期間</span>
-                      <input value={EV.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
-                        placeholder="例: 2026年4月 〜現在"
-                        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 5, padding: '4px 10px', color: '#fff', fontSize: 11, outline: 'none', fontFamily: 'inherit', flex: 1, minWidth: 200 }} />
+                    {/* 期間（カレンダー選択） */}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', minWidth: 32, paddingTop: 6 }}>期間</span>
+                      <PeriodInput value={EV.period || ''} onChange={v => setEditVer(p => ({ ...p, period: v }))} />
                     </div>
                     {/* 役職 */}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1429,9 +1511,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
               <div>
                 <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 4 }}>期間</div>
-                <input value={editVer.period || ''} onChange={e => setEditVer(p => ({ ...p, period: e.target.value }))}
-                  placeholder="例: 2026年4月 〜現在"
-                  style={{ width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 6, padding: '6px 8px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                <PeriodInput value={editVer.period || ''} onChange={v => setEditVer(p => ({ ...p, period: v }))} />
               </div>
               <div>
                 <div style={{ fontSize: 11, color: T().textFaint, marginBottom: 4 }}>役職名</div>
