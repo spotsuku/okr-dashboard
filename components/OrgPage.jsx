@@ -112,9 +112,10 @@ function InlineInput({ value, onChange, placeholder = '', style = {} }) {
 
 // 担当（サポート）複数選択コンポーネント
 function SupportSelect({ value, onChange, memberNames, borderColor }) {
-  // value は「面川文香・古野絢太」形式の文字列
   const selected = value ? value.split('・').map(s => s.trim()).filter(Boolean) : []
   const [open, setOpen] = useState(false)
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 })
+  const triggerRef = useRef(null)
 
   const toggle = (name) => {
     const next = selected.includes(name)
@@ -123,9 +124,27 @@ function SupportSelect({ value, onChange, memberNames, borderColor }) {
     onChange(next.join('・'))
   }
 
+  const handleOpen = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setDropPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 180) })
+    }
+    setOpen(p => !p)
+  }
+
+  // 外側クリックで閉じる
+  useEffect(() => {
+    if (!open) return
+    const close = (e) => {
+      if (triggerRef.current && !triggerRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
   return (
-    <div style={{ position: 'relative' }}>
-      <div onClick={() => setOpen(p => !p)}
+    <div ref={triggerRef} style={{ position: 'relative' }}>
+      <div onClick={handleOpen}
         style={{ background: T().inputBg, border: `1px solid ${borderColor || T().borderEdit}`, borderRadius: 5, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: T().inputText, minHeight: 26, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 3 }}>
         {selected.length === 0
           ? <span style={{ color: T().textFaintest }}>（なし）</span>
@@ -136,15 +155,14 @@ function SupportSelect({ value, onChange, memberNames, borderColor }) {
         <span style={{ marginLeft: 'auto', color: T().textFaintest, fontSize: 9 }}>▾</span>
       </div>
       {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 6, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', maxHeight: 180, overflowY: 'auto', marginTop: 2 }}
-          onMouseLeave={() => setOpen(false)}>
+        <div style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999, background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', maxHeight: 220, overflowY: 'auto' }}>
           {memberNames.map(name => {
             const isSel = selected.includes(name)
             return (
               <div key={name} onClick={() => toggle(name)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer', background: isSel ? `${avatarColor(name)}12` : 'transparent', transition: 'background 0.1s' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', cursor: 'pointer', background: isSel ? `${avatarColor(name)}15` : 'transparent', transition: 'background 0.1s' }}
                 onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = T().bgHover }}
-                onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent' }}
+                onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = isSel ? `${avatarColor(name)}15` : 'transparent' }}
               >
                 <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${isSel ? avatarColor(name) : T().borderMid}`, background: isSel ? avatarColor(name) : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {isSel && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
@@ -616,7 +634,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
               return (
                 <div key={team} style={{ marginBottom: 16, marginLeft: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: T().textMuted, marginBottom: 8 }}>└ {team}</div>
-                  <div style={{ border: `1px solid ${T().border}`, borderRadius: 8, overflow: 'hidden', background: T().bgCard }}
+                  <div style={{ border: `1px solid ${T().border}`, borderRadius: 8, background: T().bgCard, position: 'relative' }}
                     onDragOver={e => e.preventDefault()}
                     onDrop={e => handleDrop(e, dept, team)}
                   >
