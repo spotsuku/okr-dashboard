@@ -13,38 +13,40 @@ import OrgPage from './OrgPage'
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
   dark: {
-    bg:          '#090d18',
-    bgCard:      '#0e1420',
-    bgCard2:     '#111828',
-    bgSidebar:   '#0e1420',
-    border:      'rgba(255,255,255,0.07)',
-    borderLight: 'rgba(255,255,255,0.04)',
-    borderMid:   'rgba(255,255,255,0.1)',
-    text:        '#e8eaf0',
-    textSub:     '#a0a8be',
-    textMuted:   '#606880',
-    textFaint:   '#404660',
-    textFaintest:'#303450',
-    headerBg:    '#090d18',
-    connector:   'rgba(255,255,255,0.12)',
-    connectorArrow: 'rgba(255,255,255,0.2)',
+    bg:           '#0f1117',
+    bgCard:       '#1a1d27',
+    bgCard2:      '#21253a',
+    bgSidebar:    getT().bgSidebar,
+    border:       'rgba(255,255,255,0.10)',
+    borderLight:  'rgba(255,255,255,0.05)',
+    borderMid:    'rgba(255,255,255,0.16)',
+    text:         '#e8ecf0',
+    textSub:      '#b0bac8',
+    textMuted:    '#7a8599',
+    textFaint:    '#4a5468',
+    textFaintest: '#333b4d',
+    headerBg:     getT().bgSidebar,
+    connector:    'rgba(255,255,255,0.10)',
+    connectorArrow:'rgba(255,255,255,0.18)',
+    accent:       '#2f7a78',
   },
   light: {
-    bg:          '#f0f2f7',
-    bgCard:      '#ffffff',
-    bgCard2:     '#f7f8fc',
-    bgSidebar:   '#ffffff',
-    border:      'rgba(0,0,0,0.08)',
-    borderLight: 'rgba(0,0,0,0.05)',
-    borderMid:   'rgba(0,0,0,0.12)',
-    text:        '#1a1f36',
-    textSub:     '#4a5270',
-    textMuted:   '#7080a0',
-    textFaint:   '#90a0bc',
-    textFaintest:'#b0bcd0',
-    headerBg:    '#ffffff',
-    connector:   'rgba(0,0,0,0.15)',
-    connectorArrow: 'rgba(0,0,0,0.2)',
+    bg:           '#f5f6f8',
+    bgCard:       '#ffffff',
+    bgCard2:      '#f9fafb',
+    bgSidebar:    '#ffffff',
+    border:       '#e5e7eb',
+    borderLight:  '#f0f1f3',
+    borderMid:    '#d1d5db',
+    text:         '#111827',
+    textSub:      '#374151',
+    textMuted:    '#6b7280',
+    textFaint:    '#9ca3af',
+    textFaintest: '#d1d5db',
+    headerBg:     '#ffffff',
+    connector:    '#d1d5db',
+    connectorArrow:'#9ca3af',
+    accent:       '#2f7a78',
   },
 }
 
@@ -53,11 +55,11 @@ const getT = () => _T
 
 // ─── Rating helpers ────────────────────────────────────────────────────────────
 const RATINGS = [
-  { min: 150, score: 5, label: '奇跡',    color: '#ff9f43' },
-  { min: 120, score: 4, label: '変革',    color: '#a855f7' },
-  { min: 100, score: 3, label: '順調以上', color: '#00d68f' },
-  { min:  80, score: 2, label: '順調',    color: '#4d9fff' },
-  { min:  60, score: 1, label: '最低限',  color: '#ffd166' },
+  { min: 150, score: 5, label: '奇跡',    color: '#d97706' },
+  { min: 120, score: 4, label: '変革',    color: '#6b7280' },
+  { min: 100, score: 3, label: '順調以上', color: '#2f7a78' },
+  { min:  80, score: 2, label: '順調',    color: '#2f7a78' },
+  { min:  60, score: 1, label: '最低限',  color: '#b45309' },
   { min:   0, score: 0, label: '未達',    color: '#ff6b6b' },
 ]
 const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
@@ -84,7 +86,7 @@ function getAbsoluteDepth(levelId, levels) {
   return depth
 }
 
-const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
+const LAYER_COLORS = { 0: '#ff6b6b', 1: '#2f7a78', 2: '#2f7a78' }
 const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
 const getLayerColor = absDepth => LAYER_COLORS[absDepth] || '#a0a8be'
 const getLayerLabel = absDepth => LAYER_LABELS[absDepth] || ''
@@ -116,7 +118,7 @@ function Bar({ value, color, max = 150 }) {
   return (
     <div style={{ width: '100%', height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', left: `${marker}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.25)', zIndex: 2 }} />
-      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)', boxShadow: `0 0 6px ${color}80` }} />
+      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
     </div>
   )
 }
@@ -147,7 +149,7 @@ function Modal({ title, onClose, children }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: '#141926', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16,
+        background: getT().bgCard, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
         padding: 26, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 28px 80px rgba(0,0,0,0.65)',
       }}>
@@ -172,7 +174,7 @@ function FInput({ label, value, onChange, placeholder, type = 'text' }) {
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         style={{
           width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none',
+          borderRadius: 8, padding: '9px 12px', color: getT().text, fontSize: 13, outline: 'none',
           fontFamily: 'inherit', boxSizing: 'border-box',
         }} />
     </div>
@@ -184,8 +186,8 @@ function FSelect({ label, value, onChange, options }) {
     <div style={{ marginBottom: 13 }}>
       {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
       <select value={value} onChange={e => onChange(e.target.value)} style={{
-        width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none',
+        width: '100%', background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 8, padding: '9px 12px', color: getT().text, fontSize: 13, outline: 'none',
         fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
       }}>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -194,7 +196,7 @@ function FSelect({ label, value, onChange, options }) {
   )
 }
 
-function Btn({ children, onClick, color = '#4d9fff', variant = 'filled', small, danger, disabled }) {
+function Btn({ children, onClick, color = '#2f7a78', variant = 'filled', small, danger, disabled }) {
   const bg = danger ? '#ff6b6b' : color
   return (
     <button onClick={onClick} disabled={disabled} style={{
@@ -250,10 +252,10 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>年度</div>
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
-          background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)',
+          background: fiscalYear === '2026' ? 'rgba(47,122,120,0.12)' : 'rgba(217,119,6,0.1)',
           border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.4)' : 'rgba(255,159,67,0.4)'}`,
           borderRadius: 8, padding: '6px 12px',
-          color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43',
+          color: getT().text,
           fontSize: 13, fontWeight: 700,
         }}>
           📅 {fiscalYear}年度
@@ -266,7 +268,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       <div style={{ marginBottom: 13 }}>
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>オーナー</div>
         <select value={owner} onChange={e => setOwner(e.target.value)} style={{
-          width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)',
+          width: '100%', background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: 8, padding: '9px 12px', color: owner ? '#e8eaf0' : '#505878', fontSize: 13,
           outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
         }}>
@@ -361,9 +363,9 @@ function KASection({ krId }) {
   }
 
   const TYPE_CONFIG = {
-    normal: { label: '未分類', color: '#606880', bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.07)' },
-    focus:  { label: '🎯 今週注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.1)', border: 'rgba(77,159,255,0.25)' },
-    good:   { label: '✅ Good',    color: '#00d68f', bg: 'rgba(0,214,143,0.08)', border: 'rgba(0,214,143,0.2)' },
+    normal: { label: '未分類', color: getT().textMuted, bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.07)' },
+    focus:  { label: '🎯 今週注力', color: '#2f7a78', bg: 'rgba(47,122,120,0.08)', border: 'rgba(47,122,120,0.25)' },
+    good:   { label: '✅ Good',    color: '#2f7a78', bg: 'rgba(47,122,120,0.06)', border: 'rgba(47,122,120,0.18)' },
     more:   { label: '🔺 More',   color: '#ff6b6b', bg: 'rgba(255,107,107,0.08)', border: 'rgba(255,107,107,0.2)' },
   }
 
@@ -373,13 +375,13 @@ function KASection({ krId }) {
   return (
     <div style={{ marginLeft: 50, marginTop: 6, marginBottom: 8 }}>
       <div onClick={() => setOpen(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}>
-        <span style={{ fontSize: 10, color: '#4d9fff', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
-        <span style={{ fontSize: 11, color: '#4d9fff' }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
-        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: 'rgba(77,159,255,0.15)', color: '#4d9fff' }}>
+        <span style={{ fontSize: 10, color: '#2f7a78', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+        <span style={{ fontSize: 11, color: '#2f7a78' }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
+        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: 'rgba(47,122,120,0.12)', color: '#2f7a78' }}>
           {open ? kas.length : ''}
         </span>
         {!open && focusCount > 0 && (
-          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: 'rgba(77,159,255,0.15)', color: '#4d9fff', fontWeight: 700 }}>🎯 {focusCount}</span>
+          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: 'rgba(47,122,120,0.12)', color: '#2f7a78', fontWeight: 700 }}>🎯 {focusCount}</span>
         )}
       </div>
 
@@ -387,7 +389,7 @@ function KASection({ krId }) {
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(77,159,255,0.06)', border: '1px solid rgba(77,159,255,0.15)', borderRadius: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 11 }}>📅</span>
-            <span style={{ fontSize: 11, color: '#4d9fff', fontWeight: 600 }}>今週のKA</span>
+            <span style={{ fontSize: 11, color: '#2f7a78', fontWeight: 600 }}>今週のKA</span>
             <span style={{ fontSize: 10, color: getT().textMuted, marginLeft: 'auto' }}>{weekStart}</span>
           </div>
 
@@ -441,11 +443,11 @@ function KASection({ krId }) {
                 <option value="good">✅ Good</option>
                 <option value="more">🔺 More</option>
               </select>
-              <button onClick={addKA} style={{ background: '#4d9fff', border: 'none', color: '#fff', borderRadius: 6, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>追加</button>
+              <button onClick={addKA} style={{ background: '#2f7a78', border: 'none', color: '#fff', borderRadius: 6, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>追加</button>
               <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
             </div>
           ) : (
-            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#4d9fff', background: 'rgba(77,159,255,0.08)', border: '1px dashed rgba(77,159,255,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#2f7a78', background: 'rgba(47,122,120,0.06)', border: '1px dashed rgba(77,159,255,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
               ＋ KAを追加
             </button>
           )}
@@ -519,7 +521,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
                         <span style={{ fontSize: 13, color: getT().textSub, lineHeight: 1.35 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#4d9fff', background: 'rgba(77,159,255,0.12)', padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#2f7a78', background: 'rgba(77,159,255,0.12)', padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
                           {kr.title}
                         </span>
                         <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>
@@ -677,7 +679,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
   function LevelRow({ level, depth = 0 }) {
     const children = getChildren(level.id)
     const absD = (() => { let d=0,cur=level; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
-    const col = { 0:'#ff6b6b', 1:'#4d9fff', 2:'#00d68f' }[absD] || '#a0a8be'
+    const col = { 0:'#ff6b6b', 1:'#2f7a78', 2:'#2f7a78' }[absD] || '#a0a8be'
     const lbl = { 0:'経営', 1:'事業部', 2:'チーム' }[absD] || ''
     const isRoot = absD === 0
     return (
@@ -702,11 +704,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
   return (
     <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.78)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:'#141926', border:'1px solid rgba(255,255,255,0.1)', borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto', boxShadow:'0 28px 80px rgba(0,0,0,0.65)' }}>
+      <div style={{ background:getT().bgCard, border:'1px solid rgba(255,255,255,0.1)', borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto', boxShadow:'0 28px 80px rgba(0,0,0,0.65)' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color: fiscalYear==='2026'?'#4d9fff':'#ff9f43', border: fiscalYear==='2026'?'1px solid rgba(77,159,255,0.3)':'1px solid rgba(255,159,67,0.3)'}}>
+            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(47,122,120,0.12)':'rgba(217,119,6,0.1)', color: fiscalYear==='2026'?'#2f7a78':'#d97706', border: fiscalYear==='2026'?'1px solid rgba(77,159,255,0.3)':'1px solid rgba(217,119,6,0.25)'}}>
               {fiscalYear}年度
             </span>
           </div>
@@ -715,10 +717,10 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
 
         {onCopyFromYear && (
           <div style={{ marginBottom:16, padding:'10px 12px', background:'rgba(168,85,247,0.06)', border:'1px solid rgba(168,85,247,0.2)', borderRadius:10 }}>
-            <div style={{ fontSize:11, color:'#a855f7', fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
+            <div style={{ fontSize:11, color:'#6b7280', fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {['2025','2026'].filter(y=>y!==fiscalYear).map(y=>(
-                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:'1px solid rgba(168,85,247,0.4)', background:'rgba(168,85,247,0.1)', color:'#a855f7', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:'1px solid rgba(168,85,247,0.4)', background:'rgba(107,114,128,0.1)', color:'#6b7280', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                   {y}年度からコピー
                 </button>
               ))}
@@ -744,7 +746,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
           <div style={{ fontSize:10, color:'#606880', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:'#606880', marginBottom:5 }}>親組織</div>
-            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:'#1a2030', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color: parentId ? '#e8eaf0' : '#606880', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
+            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:getT().bgCard2, border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color: parentId ? '#e8eaf0' : '#606880', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
               <option value=''>選択してください</option>
               {addableParents.map(l => {
                 const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
@@ -762,13 +764,13 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
             <div style={{ fontSize:11, color:'#606880', marginBottom:8 }}>アイコン</div>
             <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
               {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? '#4d9fff' : 'rgba(255,255,255,0.1)'}`, background: icon===ic ? 'rgba(77,159,255,0.15)' : 'rgba(255,255,255,0.04)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
+                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? '#2f7a78' : 'rgba(255,255,255,0.1)'}`, background: icon===ic ? 'rgba(47,122,120,0.12)' : 'rgba(255,255,255,0.04)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
               ))}
             </div>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
             <button onClick={onClose} style={{ background:'transparent', border:'1px solid rgba(255,255,255,0.1)', color:'#a0a8be', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? 'rgba(77,159,255,0.3)' : '#4d9fff', border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
+            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? 'rgba(47,122,120,0.3)' : '#2f7a78', border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
           </div>
         </div>
       </div>
@@ -870,7 +872,7 @@ export default function Dashboard({ user, onSignOut }) {
       })
       // members 変更
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, payload => {
-        if (payload.eventType === 'INSERT') setMembers(prev => [...prev, payload.new])
+        if (payload.eventType === 'INSERT') setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
         else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
         else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
       })
@@ -967,7 +969,7 @@ export default function Dashboard({ user, onSignOut }) {
 
   const handleAddLevel = async ({ name, icon, parent_id }) => {
     const { data, error } = await supabase
-      .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: '#4d9fff', fiscal_year: fiscalYear }]).select().single()
+      .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: '#2f7a78', fiscal_year: fiscalYear }]).select().single()
     if (error) { console.error('add level error:', error); return }
     setLevels(p => [...p, data])
   }
@@ -1006,7 +1008,7 @@ export default function Dashboard({ user, onSignOut }) {
     for (const l of sorted) {
       const newParentId = l.parent_id ? idMap[l.parent_id] : null
       const { data: inserted } = await supabase.from('levels').insert([{
-        name: l.name, icon: l.icon, color: l.color || '#4d9fff',
+        name: l.name, icon: l.icon, color: l.color || '#2f7a78',
         parent_id: newParentId || null, fiscal_year: fiscalYear,
       }]).select().single()
       if (inserted) idMap[l.id] = inserted.id
@@ -1067,7 +1069,7 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4d9fff', fontSize: 14 }}>
+    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2f7a78', fontSize: 14 }}>
       読み込み中...
     </div>
   )
@@ -1081,8 +1083,8 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
         {roots.map(l => <LevelItem key={l.id} level={l} />)}
         <button onClick={() => setShowOrgModal(true)} style={{
-          width:'100%', marginTop:10, background:'rgba(77,159,255,0.08)', border:'1px dashed rgba(77,159,255,0.3)',
-          color:'#4d9fff', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
+          width:'100%', marginTop:10, background:'rgba(47,122,120,0.06)', border:'1px dashed rgba(77,159,255,0.3)',
+          color:'#2f7a78', borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
           cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
         }}>🏗️ 組織を管理</button>
         <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
@@ -1109,7 +1111,7 @@ export default function Dashboard({ user, onSignOut }) {
             </button>
           )}
           {hasGoogle && (
-            <div style={{ fontSize: 11, color: '#00d68f', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>✅ Google連携済み</div>
+            <div style={{ fontSize: 11, color: '#2f7a78', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>✅ Google連携済み</div>
           )}
           <button onClick={onSignOut} style={{
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -1135,7 +1137,7 @@ export default function Dashboard({ user, onSignOut }) {
             }}>☰</button>
             {!isMobile && (
               <div>
-                <div style={{ fontSize: 10, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
+                <div style={{ fontSize: 10, color: '#2f7a78', letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>OKR ダッシュボード</div>
               </div>
             )}
@@ -1154,7 +1156,7 @@ export default function Dashboard({ user, onSignOut }) {
             ].map(pg => (
               <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
                 padding: isMobile ? '5px 6px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                background: activePage === pg.key ? '#4d9fff' : 'transparent',
+                background: activePage === pg.key ? '#2f7a78' : 'transparent',
                 color: activePage === pg.key ? '#fff' : '#606880',
                 fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
                 whiteSpace: 'nowrap',
@@ -1165,7 +1167,7 @@ export default function Dashboard({ user, onSignOut }) {
           {/* 右側 */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
             {!isMobile && <span style={{ fontSize: 12, color: getT().textMuted }}>{user.email}</span>}
-            {!isMobile && hasGoogle && <span style={{ fontSize: 11, color: '#00d68f' }}>✅ Google連携済み</span>}
+            {!isMobile && hasGoogle && <span style={{ fontSize: 11, color: '#2f7a78' }}>✅ Google連携済み</span>}
             {!isMobile && !hasGoogle && (
               <button onClick={handleLinkGoogle} style={{ background: 'rgba(255,255,255,0.9)', border: 'none', color: '#333', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <svg width="13" height="13" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
@@ -1175,18 +1177,18 @@ export default function Dashboard({ user, onSignOut }) {
             {!isMobile && (
               <button onClick={onSignOut} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: getT().textSub, borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>ログアウト</button>
             )}
-            <button onClick={() => setModal({ type: 'add' })} style={{ background: '#4d9fff', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
+            <button onClick={() => setModal({ type: 'add' })} style={{ background: '#2f7a78', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
             <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
             <span style={{
               fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default',
-              background: syncStatus === 'synced' ? 'rgba(0,214,143,0.15)' : syncStatus === 'error' ? 'rgba(255,107,107,0.15)' : 'rgba(255,209,102,0.15)',
-              color: syncStatus === 'synced' ? '#00d68f' : syncStatus === 'error' ? '#ff6b6b' : '#ffd166',
-              border: `1px solid ${syncStatus === 'synced' ? 'rgba(0,214,143,0.3)' : syncStatus === 'error' ? 'rgba(255,107,107,0.3)' : 'rgba(255,209,102,0.3)'}`,
+              background: syncStatus === 'synced' ? 'rgba(47,122,120,0.12)' : syncStatus === 'error' ? 'rgba(255,107,107,0.15)' : 'rgba(180,83,9,0.1)',
+              color: syncStatus === 'synced' ? '#2f7a78' : syncStatus === 'error' ? '#ff6b6b' : '#b45309',
+              border: `1px solid ${syncStatus === 'synced' ? 'rgba(0,214,143,0.3)' : syncStatus === 'error' ? 'rgba(255,107,107,0.3)' : 'rgba(180,83,9,0.25)'}`,
               title: syncStatus === 'synced' ? 'リアルタイム同期中' : 'Realtimeへ接続中...',
             }}>
               {syncStatus === 'synced' ? '🟢' : syncStatus === 'error' ? '🔴' : '🟡'}
             </span>
-            <button onClick={() => setShowAI(p => !p)} style={{ background: '#a855f7', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
+            <button onClick={() => setShowAI(p => !p)} style={{ background: '#6b7280', border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
           </div>
         </div>
 
@@ -1195,7 +1197,7 @@ export default function Dashboard({ user, onSignOut }) {
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'}].map(v => (
-                <button key={v.key} onClick={() => setViewMode(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: viewMode === v.key ? '#a855f7' : 'transparent', color: viewMode === v.key ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
+                <button key={v.key} onClick={() => setViewMode(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: viewMode === v.key ? '#6b7280' : 'transparent', color: viewMode === v.key ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
               ))}
             </div>
 
@@ -1204,13 +1206,13 @@ export default function Dashboard({ user, onSignOut }) {
                 <div style={{ width: 1, height: 18, background: T.border }} />
                 <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
                   {['2025', '2026'].map(yr => (
-                    <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? '#ff9f43' : 'transparent', color: fiscalYear === yr ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
+                    <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? '#d97706' : 'transparent', color: fiscalYear === yr ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
                   ))}
                 </div>
                 <div style={{ width: 1, height: 18, background: T.border }} />
                 <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
                   {periods.map(p => (
-                    <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePeriod === p.key ? '#a855f7' : 'transparent', color: activePeriod === p.key ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>{p.label}</button>
+                    <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePeriod === p.key ? '#6b7280' : 'transparent', color: activePeriod === p.key ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>{p.label}</button>
                   ))}
                 </div>
               </>
@@ -1267,7 +1269,7 @@ export default function Dashboard({ user, onSignOut }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
               <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}` }}>{fiscalYear}年度</span>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(47,122,120,0.12)' : 'rgba(217,119,6,0.1)', color: getT().text, border: `1px solid ${fiscalYear === '2026' ? 'rgba(47,122,120,0.3)' : 'rgba(217,119,6,0.25)'}` }}>{fiscalYear}年度</span>
               <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
@@ -1280,7 +1282,7 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
 
           <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            {[{ label: '経営', color: '#ff6b6b' }, { label: '事業部', color: '#4d9fff' }, { label: 'チーム', color: '#00d68f' }].map(l => (
+            {[{ label: '経営', color: '#ff6b6b' }, { label: '事業部', color: '#2f7a78' }, { label: 'チーム', color: '#2f7a78' }].map(l => (
               <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }} />
                 <span style={{ fontSize: 12, color: getT().textSub }}>{l.label}</span>
