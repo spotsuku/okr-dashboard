@@ -163,9 +163,9 @@ function useOrgData(fiscalYear) {
   const [teamMeta, setTeamMeta] = useState({})
   const [members, setMembers] = useState([])
   const [tasks, setTasks] = useState([])
-  // jdRows: { [member_id]: Row[] } — DBの全バージョン行
   const [jdRows, setJdRows] = useState({})
   const [loading, setLoading] = useState(true)
+  const [syncStatus, setSyncStatus] = useState('connecting')
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -205,8 +205,55 @@ function useOrgData(fiscalYear) {
     setLoading(false)
   }, [fiscalYear])
 
-  useEffect(() => { reload() }, [reload])
-  return { levels, teamMeta, members, tasks, jdRows, loading, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
+  // Supabase Realtime
+  useEffect(() => {
+    reload()
+    const channel = supabase
+      .channel('org_realtime_' + fiscalYear)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'org_tasks' }, payload => {
+        if (payload.eventType === 'INSERT') setTasks(prev => [...prev, payload.new])
+        else if (payload.eventType === 'UPDATE') setTasks(prev => prev.map(t => t.id === payload.new.id ? payload.new : t))
+        else if (payload.eventType === 'DELETE') setTasks(prev => prev.filter(t => t.id !== payload.old.id))
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, payload => {
+        if (payload.eventType === 'INSERT') setMembers(prev => [...prev, payload.new].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja')))
+        else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
+        else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'org_member_jd' }, payload => {
+        setJdRows(prev => {
+          const next = { ...prev }
+          if (payload.eventType === 'DELETE') {
+            const mid = payload.old.member_id
+            next[mid] = (next[mid] || []).filter(r => r.id !== payload.old.id)
+          } else {
+            const row = payload.new
+            const mid = row.member_id
+            const existing = [...(next[mid] || [])]
+            const idx = existing.findIndex(r => r.id === row.id)
+            if (idx >= 0) existing[idx] = row; else existing.push(row)
+            existing.sort((a, b) => a.version_idx - b.version_idx)
+            next[mid] = existing
+          }
+          return next
+        })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'org_team_meta' }, payload => {
+        setTeamMeta(prev => {
+          const next = { ...prev }
+          if (payload.eventType === 'DELETE') delete next[payload.old.level_id]
+          else next[payload.new.level_id] = payload.new
+          return next
+        })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'levels' }, () => { reload() })
+      .subscribe(status => {
+        setSyncStatus(status === 'SUBSCRIBED' ? 'synced' : status === 'CHANNEL_ERROR' ? 'error' : 'connecting')
+      })
+    return () => { supabase.removeChannel(channel) }
+  }, [fiscalYear]) // eslint-disable-line
+
+  return { levels, teamMeta, members, tasks, jdRows, loading, syncStatus, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
 }
 
 // ══════════════════════════════════════════════════
@@ -1407,7 +1454,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const { levels, teamMeta, members, tasks, jdRows, loading, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
+  const { levels, teamMeta, members, tasks, jdRows, loading, syncStatus, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -1440,7 +1487,17 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}` }}>{fiscalYear}年度</span>
             {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>👑 管理者</span>}
           </div>
-          <div style={{ fontSize: 13, color: T().textFaint, marginTop: 4 }}>NEO福岡の組織図・業務一覧・メンバー別JDを確認できます</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: T().textFaint }}>NEO福岡の組織図・業務一覧・メンバー別JDを確認できます</div>
+            <span style={{
+              fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
+              background: syncStatus === 'synced' ? 'rgba(0,214,143,0.12)' : syncStatus === 'error' ? 'rgba(255,107,107,0.12)' : 'rgba(255,209,102,0.12)',
+              color: syncStatus === 'synced' ? '#00d68f' : syncStatus === 'error' ? '#ff6b6b' : '#ffd166',
+              border: `1px solid ${syncStatus === 'synced' ? 'rgba(0,214,143,0.3)' : syncStatus === 'error' ? 'rgba(255,107,107,0.3)' : 'rgba(255,209,102,0.3)'}`,
+            }}>
+              {syncStatus === 'synced' ? '🟢 リアルタイム同期中' : syncStatus === 'error' ? '🔴 同期エラー' : '🟡 接続中...'}
+            </span>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${T().border}`, marginBottom: 24 }}>
