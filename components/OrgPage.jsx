@@ -211,12 +211,17 @@ function useOrgData(fiscalYear) {
     const channel = supabase
       .channel('org_realtime_' + fiscalYear)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'org_tasks' }, payload => {
-        if (payload.eventType === 'INSERT') setTasks(prev => [...prev, payload.new])
-        else if (payload.eventType === 'UPDATE') setTasks(prev => prev.map(t => t.id === payload.new.id ? payload.new : t))
-        else if (payload.eventType === 'DELETE') setTasks(prev => prev.filter(t => t.id !== payload.old.id))
+        if (payload.eventType === 'INSERT') {
+          // ローカルで既に追加済みの場合は重複させない
+          setTasks(prev => prev.some(t => t.id === payload.new.id) ? prev : [...prev, payload.new])
+        } else if (payload.eventType === 'UPDATE') {
+          setTasks(prev => prev.map(t => t.id === payload.new.id ? payload.new : t))
+        } else if (payload.eventType === 'DELETE') {
+          setTasks(prev => prev.filter(t => t.id !== payload.old.id))
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, payload => {
-        if (payload.eventType === 'INSERT') setMembers(prev => [...prev, payload.new].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja')))
+        if (payload.eventType === 'INSERT') { setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'))) }
         else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
         else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
       })
