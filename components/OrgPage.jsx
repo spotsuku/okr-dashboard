@@ -109,6 +109,57 @@ function InlineInput({ value, onChange, placeholder = '', style = {} }) {
       style={{ background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '4px 8px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', ...style }} />
   )
 }
+
+// 担当（サポート）複数選択コンポーネント
+function SupportSelect({ value, onChange, memberNames, borderColor }) {
+  // value は「面川文香・古野絢太」形式の文字列
+  const selected = value ? value.split('・').map(s => s.trim()).filter(Boolean) : []
+  const [open, setOpen] = useState(false)
+
+  const toggle = (name) => {
+    const next = selected.includes(name)
+      ? selected.filter(s => s !== name)
+      : [...selected, name]
+    onChange(next.join('・'))
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div onClick={() => setOpen(p => !p)}
+        style={{ background: T().inputBg, border: `1px solid ${borderColor || T().borderEdit}`, borderRadius: 5, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: T().inputText, minHeight: 26, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 3 }}>
+        {selected.length === 0
+          ? <span style={{ color: T().textFaintest }}>（なし）</span>
+          : selected.map(n => (
+            <span key={n} style={{ background: `${avatarColor(n)}22`, color: avatarColor(n), borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 700 }}>{n}</span>
+          ))
+        }
+        <span style={{ marginLeft: 'auto', color: T().textFaintest, fontSize: 9 }}>▾</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 6, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', maxHeight: 180, overflowY: 'auto', marginTop: 2 }}
+          onMouseLeave={() => setOpen(false)}>
+          {memberNames.map(name => {
+            const isSel = selected.includes(name)
+            return (
+              <div key={name} onClick={() => toggle(name)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer', background: isSel ? `${avatarColor(name)}12` : 'transparent', transition: 'background 0.1s' }}
+                onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = T().bgHover }}
+                onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${isSel ? avatarColor(name) : T().borderMid}`, background: isSel ? avatarColor(name) : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {isSel && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
+                </div>
+                <Avatar name={name} size={16} />
+                <span style={{ fontSize: 12, color: isSel ? avatarColor(name) : T().text, fontWeight: isSel ? 700 : 400 }}>{name}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SaveBtn({ saving, saved, onClick, label = '保存' }) {
   return (
     <button onClick={onClick} disabled={saving}
@@ -394,6 +445,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
   const [filterDept, setFilterDept] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [query, setQuery] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editBuf, setEditBuf] = useState({})
   const [addingTeam, setAddingTeam] = useState(null)
@@ -411,7 +463,11 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
   const sortedTasks = [...tasks].sort((a, b) =>
     (a.sort_order ?? a.id) - (b.sort_order ?? b.id)
   )
-  const filtered = sortedTasks.filter(t =>
+  // アーカイブ済みを分離
+  const activeTasks = sortedTasks.filter(t => !t.is_archived)
+  const archivedTasks = sortedTasks.filter(t => t.is_archived)
+  const baseFiltered = (showArchived ? archivedTasks : activeTasks)
+  const filtered = baseFiltered.filter(t =>
     (!filterDept || t.dept === filterDept) &&
     (!filterOwner || t.owner === filterOwner || (t.support && t.support.includes(filterOwner))) &&
     (!query || t.task.includes(query) || t.team.includes(query))
@@ -491,6 +547,15 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
     dragOverId.current = null
   }
 
+  const archiveTask = async (t) => {
+    await supabase.from('org_tasks').update({ is_archived: true }).eq('id', t.id)
+    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, is_archived: true } : x))
+  }
+  const restoreTask = async (t) => {
+    await supabase.from('org_tasks').update({ is_archived: false }).eq('id', t.id)
+    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, is_archived: false } : x))
+  }
+
   const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
 
   if (tasks.length === 0) {
@@ -522,9 +587,18 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
           onBlur={e => e.target.style.borderColor = T().border}
         />
         <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{filtered.length}件</span>
-        {isAdmin && (
+        <button onClick={() => setShowArchived(p => !p)}
+          style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${showArchived ? 'rgba(255,159,67,0.4)' : T().border}`, background: showArchived ? 'rgba(255,159,67,0.12)' : 'transparent', color: showArchived ? '#ff9f43' : T().textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
+          {showArchived ? '📦 アーカイブ表示中' : `📦 アーカイブ (${archivedTasks.length})`}
+        </button>
+        {isAdmin && !showArchived && (
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>
             👑 管理者モード　⠿ドラッグで並び替え可
+          </span>
+        )}
+        {showArchived && (
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,159,67,0.12)', color: '#ff9f43', border: '1px solid rgba(255,159,67,0.3)', fontWeight: 700 }}>
+            📦 アーカイブ済みのみ表示
           </span>
         )}
         {(filterDept || filterOwner || query) && <button onClick={() => { setFilterDept(''); setFilterOwner(''); setQuery('') }} style={{ ...sel, color: '#4d9fff', border: '1px solid rgba(77,159,255,0.3)' }}>クリア</button>}
@@ -562,15 +636,16 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                           const ownerColor = avatarColor(t.owner)
                           return (
                             <tr key={t.id}
-                              draggable={isAdmin && !isEditing}
-                              onDragStart={isAdmin ? e => handleDragStart(e, t.id) : undefined}
-                              onDragEnd={isAdmin ? handleDragEnd : undefined}
-                              onDragOver={isAdmin ? e => handleDragOver(e, t.id) : undefined}
+                              draggable={isAdmin && !isEditing && !showArchived}
+                              onDragStart={isAdmin && !showArchived ? e => handleDragStart(e, t.id) : undefined}
+                              onDragEnd={isAdmin && !showArchived ? handleDragEnd : undefined}
+                              onDragOver={isAdmin && !showArchived ? e => handleDragOver(e, t.id) : undefined}
                               style={{
                                 borderBottom: i < teamTasks.length - 1 ? `1px solid ${T().border}` : 'none',
-                                background: isEditing ? 'rgba(77,159,255,0.06)' : 'transparent',
-                                cursor: isAdmin && !isEditing ? 'grab' : 'default',
+                                background: isEditing ? 'rgba(77,159,255,0.06)' : showArchived ? 'rgba(255,159,67,0.04)' : 'transparent',
+                                cursor: isAdmin && !isEditing && !showArchived ? 'grab' : 'default',
                                 transition: 'background 0.1s',
+                                opacity: showArchived ? 0.75 : 1,
                               }}>
                               {/* ドラッグハンドル */}
                               {isAdmin && (
@@ -595,7 +670,19 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                                 {isEditing ? <InlineInput value={editBuf.task ?? t.task} onChange={v => setEditBuf(b => ({ ...b, task: v }))} /> : <span style={{ fontSize: 12, color: T().textSub, lineHeight: 1.5 }}>{t.task}</span>}
                               </td>
                               <td style={{ padding: '8px 12px' }}>
-                                {isEditing ? <InlineInput value={editBuf.support ?? t.support} onChange={v => setEditBuf(b => ({ ...b, support: v }))} style={{ fontSize: 11 }} /> : t.support ? <span style={{ fontSize: 11, color: T().textFaint, padding: '2px 7px', background: T().bgInput, borderRadius: 5 }}>{t.support}</span> : null}
+                                {isEditing ? (
+                                  <SupportSelect
+                                    value={editBuf.support ?? t.support ?? ''}
+                                    onChange={v => setEditBuf(b => ({ ...b, support: v }))}
+                                    memberNames={memberNames.filter(n => n !== (editBuf.owner ?? t.owner))}
+                                  />
+                                ) : t.support ? (
+                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                    {t.support.split('・').filter(Boolean).map(n => (
+                                      <span key={n} style={{ fontSize: 11, color: T().textFaint, padding: '2px 7px', background: T().bgInput, borderRadius: 5 }}>{n}</span>
+                                    ))}
+                                  </div>
+                                ) : null}
                               </td>
                               {isAdmin && (
                                 <td style={{ padding: '6px 10px', textAlign: 'right' }}>
@@ -604,10 +691,16 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                                       <button onClick={() => saveEdit(t)} style={{ padding: '3px 10px', borderRadius: 5, background: '#4d9fff', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓</button>
                                       <button onClick={() => setEditingId(null)} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                                     </div>
+                                  ) : showArchived ? (
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                      <button onClick={() => restoreTask(t)} style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(0,214,143,0.1)', border: '1px solid rgba(0,214,143,0.3)', color: '#00d68f', fontSize: 10, fontWeight: 700, cursor: 'pointer' }} title="業務一覧に戻す">↩ 復元</button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
+                                    </div>
                                   ) : (
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => { setEditingId(t.id); setEditBuf({}) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(77,159,255,0.1)', border: '1px solid rgba(77,159,255,0.25)', color: '#4d9fff', fontSize: 10, cursor: 'pointer' }}>✎</button>
-                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }}>✕</button>
+                                      <button onClick={() => { setEditingId(t.id); setEditBuf({}) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(77,159,255,0.1)', border: '1px solid rgba(77,159,255,0.25)', color: '#4d9fff', fontSize: 10, cursor: 'pointer' }} title="編集">✎</button>
+                                      <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,159,67,0.08)', border: '1px solid rgba(255,159,67,0.25)', color: '#ff9f43', fontSize: 10, cursor: 'pointer' }} title="アーカイブ">📦</button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
                                     </div>
                                   )}
                                 </td>
@@ -626,7 +719,14 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                               </select>
                             </td>
                             <td style={{ padding: '8px 12px' }}><InlineInput value={newBuf.task} onChange={v => setNewBuf(b => ({ ...b, task: v }))} placeholder="業務内容" style={{ borderColor: 'rgba(0,214,143,0.4)' }} /></td>
-                            <td style={{ padding: '8px 12px' }}><InlineInput value={newBuf.support} onChange={v => setNewBuf(b => ({ ...b, support: v }))} placeholder="サポート" style={{ fontSize: 11, borderColor: 'rgba(0,214,143,0.4)' }} /></td>
+                            <td style={{ padding: '8px 12px' }}>
+                              <SupportSelect
+                                value={newBuf.support}
+                                onChange={v => setNewBuf(b => ({ ...b, support: v }))}
+                                memberNames={memberNames.filter(n => n !== newBuf.owner)}
+                                borderColor="rgba(0,214,143,0.4)"
+                              />
+                            </td>
                             <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: '#00d68f', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
@@ -637,7 +737,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin }) {
                         )}
                       </tbody>
                     </table>
-                    {isAdmin && !isAddingHere && (
+                    {isAdmin && !isAddingHere && !showArchived && (
                       <div onClick={() => { setAddingTeam({ dept, team }); setNewBuf({ task: '', owner: '', support: '' }) }}
                         style={{ padding: '8px 12px', fontSize: 11, color: '#00d68f', cursor: 'pointer', background: 'rgba(0,214,143,0.04)', borderTop: '1px dashed rgba(0,214,143,0.15)', display: 'flex', alignItems: 'center', gap: 5 }}>
                         ＋ 業務を追加
