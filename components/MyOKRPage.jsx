@@ -18,6 +18,9 @@ function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 const PERIOD_LABELS = { annual:'通期', q1:'Q1', q2:'Q2', q3:'Q3', q4:'Q4' }
+// 年度プレフィックスを除去してraw期間キーを取得 (2025_q4 → q4)
+function rawPeriod(period) { return period?.includes('_') ? period.split('_').pop() : period }
+function periodLabel(period) { return PERIOD_LABELS[rawPeriod(period)] || period }
 const LAYER_COLORS  = { 0:'#ff6b6b', 1:'#4d9fff', 2:'#00d68f', 3:'#ffd166' }
 
 function getDepth(levelId, levels) {
@@ -32,13 +35,13 @@ function calcPct(current, target, lowerIsBetter) {
 }
 function calcKRStars(current, target, lowerIsBetter) {
   const p = calcPct(current, target, lowerIsBetter)
-  if (p >= 130) return 5; if (p >= 110) return 4; if (p >= 100) return 3
-  if (p >= 80)  return 2; if (p >= 60)  return 1; return 0
+  if (p >= 120) return 5; if (p >= 110) return 4; if (p >= 100) return 3
+  if (p >= 90)  return 2; if (p >= 80)  return 1; return 0
 }
 const KR_STAR_CFG = [
-  { label:'60%未満',  color:'#606880' }, { label:'60%台',  color:'#ff6b6b' },
-  { label:'80%台',    color:'#ff9f43' }, { label:'100%達成',color:'#4d9fff' },
-  { label:'110%超',   color:'#00d68f' }, { label:'130%以上',color:'#a855f7' },
+  { label:'80%未満',   color:'#606880' }, { label:'80%〜89%',   color:'#ffd166' },
+  { label:'90%〜99%',  color:'#4d9fff' }, { label:'100%〜109%', color:'#00d68f' },
+  { label:'110%〜119%',color:'#ff9f43' }, { label:'120%以上',   color:'#a855f7' },
 ]
 const WEATHER_CFG = [
   { score:0, icon:'—',  label:'未選択',       color:'#606880' },
@@ -235,7 +238,7 @@ function KRCard({ kr, myName, members, wT }) {
 }
 
 // ─── KAカード ─────────────────────────────────────────────────────────────────
-function MyKACard({ report, onSave, onDelete, wT, members }) {
+function MyKACard({ report, onSave, onDelete, wT, members, tasks = [] }) {
   const [open,   setOpen]   = useState(false)
   const [good,   setGood]   = useState(report.good || '')
   const [more,   setMore]   = useState(report.more || '')
@@ -268,10 +271,11 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
         <button onClick={e=>{e.stopPropagation();onDelete(report.id)}} style={{ width:20,height:20,borderRadius:4,border:'none',cursor:'pointer',fontSize:9,background:'rgba(255,107,107,0.08)',color:'#ff6b6b' }}>✕</button>
         <span style={{ fontSize:10, color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-block' }}>▾</span>
       </div>
-      {!open && (good||more) && (
+      {!open && (good||more||tasks.length > 0) && (
         <div style={{ display:'flex', gap:8, padding:'0 12px 7px 40px', flexWrap:'wrap' }}>
           {good && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#00d68f', fontSize:10 }}>✅</span>{good.slice(0,50)}{good.length>50?'…':''}</div>}
           {more && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#ff6b6b', fontSize:10 }}>🔺</span>{more.slice(0,50)}{more.length>50?'…':''}</div>}
+          {tasks.length > 0 && <div style={{ fontSize:11, color:wT().textMuted, display:'flex', gap:3 }}><span style={{ fontSize:10 }}>📌</span>{tasks.filter(t=>!t.done).length}/{tasks.length}件 未完了</div>}
         </div>
       )}
       {open && (
@@ -293,6 +297,19 @@ function MyKACard({ report, onSave, onDelete, wT, members }) {
             <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 注力アクション</div>
             <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか" style={taS} />
           </div>
+          {tasks.length > 0 && (
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#a855f7', background:'rgba(168,85,247,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:6, display:'inline-block' }}>📌 タスク（{tasks.filter(t=>!t.done).length}/{tasks.length}件 未完了）</div>
+              {tasks.map(t => (
+                <div key={t.id || t._tmp} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontSize:12 }}>
+                  <span style={{ fontSize:13, flexShrink:0 }}>{t.done ? '✅' : '☐'}</span>
+                  <span style={{ flex:1, color: t.done ? wT().textMuted : wT().text, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title || '(未入力)'}</span>
+                  {t.assignee && <span style={{ fontSize:10, padding:'1px 6px', borderRadius:99, background:'rgba(77,159,255,0.1)', color:'#4d9fff', flexShrink:0 }}>{t.assignee}</span>}
+                  {t.due_date && <span style={{ fontSize:10, color: !t.done && t.due_date < new Date().toISOString().split('T')[0] ? '#ff6b6b' : wT().textMuted, flexShrink:0 }}>{t.due_date.slice(5).replace('-','/')}</span>}
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8, paddingTop:8, borderTop:`1px solid ${wT().border}` }}>
             <button onClick={()=>setOpen(false)} style={{ padding:'5px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
             <button onClick={save} disabled={saving} style={{ padding:'5px 14px', borderRadius:6, background:saved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
@@ -329,6 +346,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [objectives, setObjectives] = useState([])
   const [keyResults, setKeyResults] = useState([])
   const [kaReports,  setKaReports]  = useState([])
+  const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] }
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [activeObjId,setActiveObjId]= useState(null)
@@ -338,23 +356,53 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     if (!myName) return
     const load = async () => {
       setLoading(true)
-      const [{ data: myObjs }, { data: allKRs }, { data: myKAs }] = await Promise.all([
+      // ① 自分がOwner/KR担当/KA担当のデータを並行取得
+      const [{ data: myObjs }, { data: myKRs }, { data: myKAs }, { data: myAssignedTasks }] = await Promise.all([
         supabase.from('objectives').select('id,title,level_id,period,owner').eq('owner', myName).order('period'),
         supabase.from('key_results').select('*').eq('owner', myName),
-        supabase.from('weekly_reports').select('*').eq('owner', myName).eq('week_start', currentWeek),
+        supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done'),
+        supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false),
       ])
       // ★ 年度フィルタを適用
-      const filteredObjs = (myObjs || []).filter(o => {
+      const filterByFY = (objs) => (objs || []).filter(o => {
         if (fiscalYear === '2026') return !o.period.includes('_')
         return o.period.startsWith(`${fiscalYear}_`)
       })
-      const objIds = filteredObjs.map(o=>o.id)
+      const ownedObjs = filterByFY(myObjs)
+
+      // ①-b 他人のKAで自分がタスク担当のものも取得
+      const assignedReportIds = [...new Set((myAssignedTasks || []).map(t => t.report_id).filter(Boolean))]
+      const myKAIds = new Set((myKAs || []).map(r => r.id))
+      const missingReportIds = assignedReportIds.filter(id => !myKAIds.has(id))
+      let assignedKAs = []
+      if (missingReportIds.length > 0) {
+        const { data } = await supabase.from('weekly_reports').select('*').in('id', missingReportIds).neq('status', 'done')
+        assignedKAs = data || []
+      }
+      const allMyKAs = [...(myKAs || []), ...assignedKAs].filter((r,i,arr) => arr.findIndex(x => x.id === r.id) === i)
+
+      // ② KR担当/KA担当/タスク担当の親Objectiveも取得して統合
+      const krObjIds = (myKRs || []).map(kr => kr.objective_id).filter(Boolean)
+      const kaObjIds = allMyKAs.map(r => r.objective_id).filter(Boolean)
+      const ownedObjIds = ownedObjs.map(o => o.id)
+      const missingObjIds = [...new Set([...krObjIds, ...kaObjIds])].filter(id => !ownedObjIds.includes(id))
+
+      let extraObjs = []
+      if (missingObjIds.length > 0) {
+        const { data } = await supabase.from('objectives').select('id,title,level_id,period,owner').in('id', missingObjIds)
+        extraObjs = filterByFY(data)
+      }
+      const filteredObjs = [...ownedObjs, ...extraObjs].filter((o,i,arr) => arr.findIndex(x => x.id === o.id) === i)
+
+      // ③ 自分がOwnerのObjectiveに紐づく全KRも取得
+      const objIds = filteredObjs.map(o => o.id)
       let krsForObjs = []
       if (objIds.length > 0) {
         const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds)
         krsForObjs = data || []
       }
-      const allMyKRs = [...(allKRs||[]), ...krsForObjs].filter((kr,i,arr)=>arr.findIndex(k=>k.id===kr.id)===i)
+      const normalizeKR = kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr
+      const allMyKRs = [...(myKRs||[]), ...krsForObjs].map(normalizeKR).filter((kr,i,arr)=>arr.findIndex(k=>k.id===kr.id)===i)
       const krIds = allMyKRs.map(k=>k.id)
       let revData = []
       if (krIds.length > 0) {
@@ -364,9 +412,21 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       const revMap = {}
       revData.forEach(r => { revMap[r.kr_id] = r })
 
+      // ④ 全KAのタスクを取得
+      const kaIds = allMyKAs.map(r => r.id)
+      let allTasksMap = {}
+      if (kaIds.length > 0) {
+        const { data: allTasks } = await supabase.from('ka_tasks').select('*').in('report_id', kaIds).order('id')
+        for (const t of (allTasks || [])) {
+          if (!allTasksMap[t.report_id]) allTasksMap[t.report_id] = []
+          allTasksMap[t.report_id].push(t)
+        }
+      }
+
       setObjectives(filteredObjs)
       setKeyResults(allMyKRs)
-      setKaReports(myKAs || [])
+      setKaReports(allMyKAs)
+      setKaTasks(allTasksMap)
       setReviews(revMap)
       setLoading(false)
     }
@@ -376,7 +436,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
-  const visibleObjs = objectives.filter(o => activePeriod==='all' || o.period===activePeriod)
+  const visibleObjs = objectives.filter(o => activePeriod === 'all' || rawPeriod(o.period) === activePeriod)
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
   const handleKADelete = async (id) => {
@@ -385,7 +445,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     setKaReports(p=>p.filter(r=>r.id!==id))
   }
 
-  const periodTabs = [['all','すべて'],['annual','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
 
   if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
 
@@ -446,7 +506,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             return (
               <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{PERIOD_LABELS[obj.period]||obj.period}</span>
+                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{periodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
                 </div>
                 <div style={{ fontSize:12, fontWeight:600, lineHeight:1.4, marginBottom:6, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
@@ -478,7 +538,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 return (
                   <div style={{ padding:'12px 14px', background:`${color}0e`, border:`1px solid ${color}30`, borderLeft:`4px solid ${color}`, borderRadius:10, marginBottom:14 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${color}20`, color }}>{PERIOD_LABELS[selectedObj.period]||selectedObj.period}</span>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${color}20`, color }}>{periodLabel(selectedObj.period)}</span>
                       <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
                     </div>
                     <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
@@ -532,7 +592,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
               <div>
                 <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📋 今週のKA（{objKAs.length}件）</div>
                 {objKAs.map(r => (
-                  <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                  <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} tasks={kaTasks[r.id] || []} />
                 ))}
                 {objKAs.length === 0 && (
                   <div style={{ fontSize:12, color:wT().textFaint, fontStyle:'italic', padding:'6px 0' }}>このObjectiveにKAがありません（週次MTGで追加できます）</div>

@@ -56,6 +56,36 @@ function calcObjProgress(krs) {
   }, 0) / valid.length)
 }
 
+// ─── 週ヘルパー ──────────────────────────────────────────────────────────────
+function getMonday(d) {
+  const dt = new Date(d)
+  const day = dt.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  dt.setDate(dt.getDate() + diff)
+  dt.setHours(0, 0, 0, 0)
+  return dt
+}
+function toDateStr(d) {
+  const dt = typeof d === 'string' ? new Date(d) : d
+  return dt.toISOString().split('T')[0]
+}
+function formatWeekLabel(mondayStr) {
+  const d = new Date(mondayStr)
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const sun = new Date(d)
+  sun.setDate(sun.getDate() + 6)
+  const m2 = sun.getMonth() + 1
+  const d2 = sun.getDate()
+  return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
+}
+function isFriday() { return new Date().getDay() === 5 }
+function getNextMonday() {
+  const d = getMonday(new Date())
+  d.setDate(d.getDate() + 7)
+  return toDateStr(d)
+}
+
 // ─── アバター ─────────────────────────────────────────────────────────────────
 function Avatar({ name, avatarUrl, size = 22 }) {
   const [hov, setHov] = useState(false)
@@ -93,15 +123,15 @@ const WEATHER_CFG = [
   { score:5, icon:'☀️', label:'快晴',        color:'#ff9f43', bg:'rgba(255,159,67,0.12)'  },
 ]
 const KR_STAR_CFG = [
-  { label:'60%未満', color:'#606880' },{ label:'60%台', color:'#ff6b6b' },
-  { label:'80%台', color:'#ff9f43' },  { label:'100%達成', color:'#4d9fff' },
-  { label:'110%超', color:'#00d68f' }, { label:'130%以上', color:'#a855f7' },
+  { label:'80%未満', color:'#606880' },{ label:'80%〜89%', color:'#ffd166' },
+  { label:'90%〜99%', color:'#4d9fff' },{ label:'100%〜109%', color:'#00d68f' },
+  { label:'110%〜119%', color:'#ff9f43' },{ label:'120%以上', color:'#a855f7' },
 ]
 function calcStars(cur, tgt, lib) {
   if (!tgt) return 0
   const p = (lib ? tgt/Math.max(cur,0.001) : cur/tgt)*100
-  if (p>=130) return 5; if (p>=110) return 4; if (p>=100) return 3
-  if (p>=80)  return 2; if (p>=60)  return 1; return 0
+  if (p>=120) return 5; if (p>=110) return 4; if (p>=100) return 3
+  if (p>=90)  return 2; if (p>=80)  return 1; return 0
 }
 function WeatherPicker({ value, onChange, wT }) {
   return (
@@ -122,7 +152,7 @@ function WeatherPicker({ value, onChange, wT }) {
 }
 
 // ─── KAカード ─────────────────────────────────────────────────────────────────
-function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
+function KACard({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps }) {
   const [open,         setOpen]         = useState(false)
   const [good,         setGood]         = useState(report.good || '')
   const [more,         setMore]         = useState(report.more || '')
@@ -173,10 +203,11 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
   }
   const save = async (e) => {
     e && e.stopPropagation(); setSaving(true)
-    await supabase.from('weekly_reports').update({ good, more, focus_output:focusOutput, status, owner:ownerDraft||report.owner }).eq('id', report.id)
+    const { error:repErr } = await supabase.from('weekly_reports').update({ good, more, focus_output:focusOutput, status, owner:ownerDraft||report.owner }).eq('id', report.id)
+    if (repErr) console.error('KA save error:', repErr)
     for (const t of tasks) {
       const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:report.id }
-      if (t.id) await supabase.from('ka_tasks').update(d).eq('id', t.id)
+      if (t.id) { const {error:tErr} = await supabase.from('ka_tasks').update(d).eq('id', t.id); if(tErr) console.error('task update error:', tErr) }
       else if (t.title?.trim()) {
         const {data:ins} = await supabase.from('ka_tasks').insert([d]).select().single()
         if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
@@ -193,17 +224,19 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
   return (
     <div onClick={() => !open && setOpen(true)} style={{ background:wT().bgCard, border:`1px solid ${open?'#4d9fff50':wT().border}`, borderRadius:10, marginBottom:8, overflow:'hidden', cursor:open?'default':'pointer', transition:'border-color 0.15s', opacity: status==='done' ? 0.55 : 1 }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }} onClick={() => setOpen(p=>!p)}>
+        <div {...(dragHandleProps||{})} style={{ cursor:'grab', color:wT().textFaint, fontSize:14, lineHeight:1, flexShrink:0, userSelect:'none', padding:'0 2px' }} title="ドラッグで並べ替え">⠿</div>
         <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
           <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={24} />
         </div>
         <div style={{ flex:1, minWidth:0 }}>
           {editingTitle && canEdit ? (
-            <div style={{ display:'flex', alignItems:'center', gap:6 }} onClick={e => e.stopPropagation()}>
-              <input autoFocus value={kaTitle} onChange={e => setKaTitle(e.target.value)}
-                onKeyDown={e => { if (e.key==='Enter') saveTitleInline(); if (e.key==='Escape') { setKaTitle(report.ka_title); setEditingTitle(false) } }}
-                style={{ flex:1, background:wT().bgCard2, border:'1px solid #4d9fff80', borderRadius:6, padding:'4px 8px', color:wT().text, fontSize:13, fontWeight:600, outline:'none', fontFamily:'inherit' }} />
+            <div style={{ display:'flex', alignItems:'flex-start', gap:6 }} onClick={e => e.stopPropagation()}>
+              <textarea autoFocus value={kaTitle} onChange={e => setKaTitle(e.target.value)}
+                onKeyDown={e => { if ((e.metaKey||e.ctrlKey) && e.key==='Enter') saveTitleInline(); if (e.key==='Escape') { setKaTitle(report.ka_title); setEditingTitle(false) } }}
+                rows={2}
+                style={{ flex:1, background:wT().bgCard2, border:'1px solid #4d9fff80', borderRadius:6, padding:'6px 8px', color:wT().text, fontSize:13, fontWeight:600, outline:'none', fontFamily:'inherit', resize:'vertical', lineHeight:1.5 }} />
               <button onClick={e => { e.stopPropagation(); saveTitleInline() }} disabled={titleSaving}
-                style={{ padding:'3px 10px', borderRadius:5, background:'#4d9fff', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', flexShrink:0 }}>{titleSaving?'…':'✓'}</button>
+                style={{ padding:'3px 10px', borderRadius:5, background:'#4d9fff', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', flexShrink:0, marginTop:4 }}>{titleSaving?'…':'✓'}</button>
               <button onClick={e => { e.stopPropagation(); setKaTitle(report.ka_title); setEditingTitle(false) }}
                 style={{ padding:'3px 8px', borderRadius:5, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textMuted, fontSize:10, cursor:'pointer', flexShrink:0 }}>✕</button>
             </div>
@@ -298,11 +331,31 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit }) {
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, canEditKA }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
+    .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
   const doneReports   = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status === 'done')
   const [showDone, setShowDone] = useState(false)
+  const [dragIdx, setDragIdx] = useState(null)
+  const [overIdx, setOverIdx] = useState(null)
+
+  const handleDragStart = (idx) => setDragIdx(idx)
+  const handleDragOver = (e, idx) => { e.preventDefault(); setOverIdx(idx) }
+  const handleDrop = async (idx) => {
+    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setOverIdx(null); return }
+    const reordered = [...activeReports]
+    const [moved] = reordered.splice(dragIdx, 1)
+    reordered.splice(idx, 0, moved)
+    // sort_orderを更新
+    const updates = reordered.map((r, i) => ({ id: r.id, sort_order: i }))
+    setDragIdx(null); setOverIdx(null)
+    for (const u of updates) {
+      await supabase.from('weekly_reports').update({ sort_order: u.sort_order }).eq('id', u.id)
+    }
+    if (onReorder) onReorder()
+  }
+  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null) }
 
   const pct = kr.target ? Math.min(Math.round((kr.current/kr.target)*100), 150) : 0
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
@@ -317,7 +370,14 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [reviewOpen,   setReviewOpen]   = useState(false)
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewSaved,  setReviewSaved]  = useState(false)
-  const weekStart = new Date().toISOString().split('T')[0]
+  const [krEditing,    setKrEditing]    = useState(false)
+  const [krTitle,      setKrTitle]      = useState(kr.title || '')
+  const [krCurrent,    setKrCurrent]    = useState(String(kr.current ?? ''))
+  const [krTarget,     setKrTarget]     = useState(String(kr.target ?? ''))
+  const [krUnit,       setKrUnit]       = useState(kr.unit || '')
+  const [krSaving,     setKrSaving]     = useState(false)
+  const [krSaved,      setKrSaved]      = useState(false)
+  const weekStart = activeWeek || toDateStr(getMonday(new Date()))
 
   useEffect(() => {
     supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).order('week_start', { ascending:false }).limit(1).maybeSingle()
@@ -334,11 +394,34 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
     setReviewSaving(false); setReviewSaved(true); setTimeout(() => setReviewSaved(false), 1500)
   }
 
+  const saveKR = async () => {
+    if (!onKRUpdate) return
+    setKrSaving(true)
+    const ok = await onKRUpdate(kr.id, {
+      title: krTitle.trim() || kr.title,
+      current: parseFloat(krCurrent) || 0,
+      target: parseFloat(krTarget) || 0,
+      unit: krUnit,
+    })
+    setKrSaving(false)
+    if (ok) { setKrSaved(true); setTimeout(() => setKrSaved(false), 1500); setKrEditing(false) }
+  }
+
   const addKA = async () => {
-    await supabase.from('weekly_reports').insert([{
+    const maxOrder = activeReports.reduce((max, r) => Math.max(max, r.sort_order||0), 0)
+    const payload = {
       week_start: weekStart, level_id:levelId, objective_id:objId,
       kr_id:kr.id, kr_title:kr.title, ka_title:'新しいKA', status:'normal',
-    }])
+      sort_order: maxOrder + 1,
+    }
+    let { error } = await supabase.from('weekly_reports').insert([payload])
+    if (error) {
+      // sort_orderカラムが無い場合のフォールバック
+      console.warn('KA insert failed, retrying without sort_order:', error.message)
+      const { sort_order, ...payloadNoSort } = payload
+      const res = await supabase.from('weekly_reports').insert([payloadNoSort])
+      if (res.error) { console.error('KA追加エラー:', res.error); alert('KAの追加に失敗しました: ' + res.error.message); return }
+    }
     onAddKA()
   }
 
@@ -357,6 +440,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </span>
           <span style={{ fontSize:11, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
           {kr.owner && <OwnerBadge name={kr.owner} members={members} size={20} />}
+          <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
+            <select value={kr.owner||''} onChange={e => onKROwnerChange(kr.id, e.target.value)}
+              style={{ background:wT().bgCard2, border:`1px solid ${wT().borderMid}`, borderRadius:5, padding:'3px 8px', color:kr.owner?avatarColor(kr.owner):wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', minWidth:80 }}>
+              <option value="">KR担当</option>
+              {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+          </div>
           <span style={{ fontSize:13, letterSpacing:1, flexShrink:0, color:starCfg.color }}>{'★'.repeat(stars)}{'☆'.repeat(5-stars)}</span>
           {!reviewOpen && weather > 0 && <span style={{ fontSize:18 }}>{WEATHER_CFG[weather]?.icon}</span>}
           <span style={{ fontSize:11, color:wT().textFaint, transform:reviewOpen?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', flexShrink:0 }}>▾</span>
@@ -390,6 +480,51 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
               <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の体感・主観</div>
               <WeatherPicker value={weather} onChange={setWeather} wT={wT} />
             </div>
+          </div>
+          {/* KR編集セクション */}
+          <div style={{ marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${krEditing?'rgba(255,159,67,0.4)':wT().border}`, transition:'border-color 0.15s' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#ff9f43', textTransform:'uppercase', letterSpacing:'0.08em' }}>📝 KR設定</div>
+              {!krEditing && (
+                <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:`1px solid rgba(255,159,67,0.3)`, background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
+              )}
+            </div>
+            {!krEditing ? (
+              <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:6, fontSize:12, color:wT().textSub }}>
+                <span>タイトル: <b style={{ color:wT().text }}>{kr.title}</b></span>
+                <span>現在値: <b style={{ color:pctColor }}>{kr.current}{kr.unit}</b></span>
+                <span>目標: <b style={{ color:wT().text }}>{kr.target}{kr.unit}</b></span>
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom:6 }}>
+                  <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>タイトル</div>
+                  <input value={krTitle} onChange={e=>setKrTitle(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>現在値</div>
+                    <input type="number" value={krCurrent} onChange={e=>setKrCurrent(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:pctColor, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>目標値</div>
+                    <input type="number" value={krTarget} onChange={e=>setKrTarget(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>単位</div>
+                    <input value={krUnit} onChange={e=>setKrUnit(e.target.value)} placeholder="件, %, 万円..." style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                </div>
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:6 }}>
+                  <button onClick={() => { setKrEditing(false); setKrTitle(kr.title||''); setKrCurrent(String(kr.current??'')); setKrTarget(String(kr.target??'')); setKrUnit(kr.unit||'') }}
+                    style={{ padding:'4px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>キャンセル</button>
+                  <button onClick={saveKR} disabled={krSaving}
+                    style={{ padding:'4px 14px', borderRadius:6, background:krSaved?'#00d68f':'#ff9f43', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                    {krSaved?'✓ 保存済み':krSaving?'保存中...':'KRを保存'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <div>
@@ -430,15 +565,26 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           )}
         </div>
         {/* アクティブなKA */}
-        {activeReports.map(r => (
-          <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner)} />
+        {activeReports.map((r, idx) => (
+          <div key={r.id}
+            onDragOver={e => handleDragOver(e, idx)}
+            onDrop={() => handleDrop(idx)}
+            style={{
+              opacity: dragIdx === idx ? 0.4 : 1,
+              borderTop: overIdx === idx && dragIdx !== null && dragIdx !== idx ? '2px solid #4d9fff' : '2px solid transparent',
+              transition: 'opacity 0.15s',
+            }}
+          >
+            <KACard report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)}
+              dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx), onDragEnd:handleDragEnd }} />
+          </div>
         ))}
         {/* 完了済みKA（折りたたみ） */}
         {showDone && doneReports.length > 0 && (
           <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${wT().border}` }}>
             <div style={{ fontSize:10, color:wT().textFaint, marginBottom:6 }}>✓ 完了済み</div>
             {doneReports.map(r => (
-              <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner)} />
+              <KACard key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT} canEdit={canEditKA(r.owner, objOwner)} />
             ))}
           </div>
         )}
@@ -451,7 +597,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user }) {
+export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod='all' }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
@@ -460,24 +606,94 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [loading,       setLoading]       = useState(false)
   const [activeLevelId, setActiveLevelId] = useState(null)
   const [activeObjId,   setActiveObjId]   = useState(null)
-  const [activePeriod,  setActivePeriod]  = useState('all')
+  const [activePeriod,  setActivePeriod]  = useState(initialPeriod)
+  const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
+  const [slackPreview,  setSlackPreview]  = useState(null) // { text, type, memberCount, levelName, params }
+  const [slackSending,  setSlackSending]  = useState(false)
 
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period,owner').order('level_id').then(({data})=>setObjectives(data||[]))
-    supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults(data||[]))
-    supabase.from('members').select('id,name,role,level_id,email,avatar_url').order('name').then(({data})=>setMembers(data||[]))
+    supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
+    supabase.from('members').select('*').order('name').then(({data, error})=>{ if(error) console.error('members load error:', error); setMembers(data||[]) })
   }, [])
 
   useEffect(() => {
-    // ★ 週フィルタなし：全KAを取得
     setLoading(true)
-    supabase.from('weekly_reports').select('*').order('id')
+    supabase.from('weekly_reports').select('*').order('sort_order').order('id')
+      .then(({data, error}) => {
+        if (error) {
+          console.warn('sort_order order failed, falling back:', error.message)
+          return supabase.from('weekly_reports').select('*').order('id')
+        }
+        return { data, error: null }
+      })
       .then(({data}) => { setReports(data||[]); setLoading(false) })
   }, [])
 
+  // ★ 週一覧をreportsのweek_startから計算（既存の週 + 今週）
+  const weeksList = (() => {
+    const thisMonday = toDateStr(getMonday(new Date()))
+    const set = new Set([thisMonday])
+    reports.forEach(r => { if (r.week_start) set.add(r.week_start) })
+    return [...set].sort()
+  })()
+
+  // ★ 金曜日に翌週分を自動作成（未作成の場合のみ）
+  useEffect(() => {
+    if (!isFriday()) return
+    if (reports.length === 0) return
+    const nextMon = getNextMonday()
+    const hasNext = reports.some(r => r.week_start === nextMon)
+    if (hasNext) return
+    // 今週のKAを翌週にコピー（done以外）
+    const thisMonday = toDateStr(getMonday(new Date()))
+    const thisWeekKAs = reports.filter(r => r.week_start === thisMonday && r.status !== 'done')
+    if (thisWeekKAs.length === 0) return
+    const copies = thisWeekKAs.map(r => ({
+      week_start: nextMon, level_id: r.level_id, objective_id: r.objective_id,
+      kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
+      owner: r.owner, status: 'normal',
+    }))
+    supabase.from('weekly_reports').insert(copies).then(() => reload())
+  }, [reports.length])
+
   const reload = async () => {
-    const {data} = await supabase.from('weekly_reports').select('*').order('id')
+    let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id')
+    if (error) {
+      const res = await supabase.from('weekly_reports').select('*').order('id')
+      data = res.data
+    }
     setReports(data||[])
+  }
+
+  // ★ 手動で週を作成（今週のKAをコピー）
+  const createWeek = async (targetMonday) => {
+    const hasData = reports.some(r => r.week_start === targetMonday)
+    if (hasData) return
+    // 直近の既存週からコピー
+    const prevWeeks = weeksList.filter(w => w < targetMonday)
+    const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
+    if (srcWeek) {
+      const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
+      if (srcKAs.length > 0) {
+        const copies = srcKAs.map(r => ({
+          week_start: targetMonday, level_id: r.level_id, objective_id: r.objective_id,
+          kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
+          owner: r.owner, status: 'normal',
+        }))
+        await supabase.from('weekly_reports').insert(copies)
+      }
+    }
+    await reload()
+    setActiveWeek(targetMonday)
+  }
+
+  // ★ 翌週分を手動作成
+  const createNextWeek = () => {
+    const lastWeek = weeksList.length > 0 ? weeksList[weeksList.length - 1] : toDateStr(getMonday(new Date()))
+    const nextMon = new Date(lastWeek)
+    nextMon.setDate(nextMon.getDate() + 7)
+    createWeek(toDateStr(nextMon))
   }
   const handleSave   = (updated) => setReports(p => p.map(r => r.id===updated.id ? updated : r))
   const handleDelete = async (id) => {
@@ -485,17 +701,38 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     await supabase.from('weekly_reports').delete().eq('id', id)
     setReports(p => p.filter(r => r.id!==id))
   }
+  const handleKROwnerChange = async (krId, newOwner) => {
+    const { error } = await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
+    if (error) { console.error('KR owner update failed:', error); alert('KR担当者の保存に失敗しました。DBにownerカラムが必要です。'); return }
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, owner: newOwner } : kr))
+  }
+  const handleKRUpdate = async (krId, fields) => {
+    const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
+    if (error) { console.error('KR update failed:', error); return false }
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    return true
+  }
 
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || ''
-  const canEditKA = useCallback((owner) => {
-    if (!owner || owner==='') return true
+  const isAdmin  = myMember?.is_admin === true
+  const canEditKA = useCallback((kaOwner, objOwner) => {
+    if (isAdmin) return true                          // 管理者は全KA編集可
+    if (!kaOwner || kaOwner==='') return true          // 未設定は誰でも編集可
     if (!myName) return false
-    return myName === owner
-  }, [myName])
+    if (myName === kaOwner) return true                // KA担当者本人
+    if (objOwner && myName === objOwner) return true   // Objective責任者
+    return false
+  }, [myName, isAdmin])
 
-  // 年度・部署フィルタ
-  const visibleLevels = activeLevelId ? levels.filter(l=>Number(l.id)===Number(activeLevelId)) : levels
+  // 年度・部署フィルタ（子階層も含む：OKRページと同じサブツリー方式）
+  const getSubtreeIds = (id) => {
+    const ids = [Number(id)]
+    levels.filter(l => Number(l.parent_id) === Number(id)).forEach(c => ids.push(...getSubtreeIds(c.id)))
+    return ids
+  }
+  const visibleLevelIds = activeLevelId ? getSubtreeIds(activeLevelId) : levels.map(l=>l.id)
+  const visibleLevels = levels.filter(l => visibleLevelIds.includes(Number(l.id)))
   const visibleObjs = objectives.filter(o => {
     const levelOk = visibleLevels.some(l => Number(l.id)===Number(o.level_id))
     if (!levelOk) return false
@@ -510,6 +747,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const selectedObjKRs = activeObjId ? keyResults.filter(kr => Number(kr.objective_id)===Number(activeObjId)) : []
   const depth          = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
   const objColor       = LAYER_COLORS[depth] || '#a0a8be'
+
+  // ★ 選択中の週のレポートのみ
+  const weekReports = activeWeek ? reports.filter(r => r.week_start === activeWeek) : reports
 
   // ★ KRの達成状況を判定（100%以上 = 達成済み）
   const isKRDone = (kr) => kr.target > 0 && kr.current >= kr.target
@@ -542,7 +782,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     )
   }
 
-  const periodTabs = [['all','すべて'],['annual','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
@@ -576,6 +816,49 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         ))}
       </div>
 
+      {/* 週タブ */}
+      <div style={{ display:'flex', gap:4, padding:'7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto' }}>
+        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>週：</span>
+        {weeksList.map(w => {
+          const isActive = activeWeek === w
+          const thisMonday = toDateStr(getMonday(new Date()))
+          const isThisWeek = w === thisMonday
+          return (
+            <button key={w} onClick={() => setActiveWeek(w)} style={{
+              padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, flexShrink:0,
+              background: isActive ? 'rgba(77,159,255,0.15)' : 'transparent',
+              border: `1px solid ${isActive ? 'rgba(77,159,255,0.4)' : wT().borderMid}`,
+              color: isActive ? '#4d9fff' : wT().textMuted,
+            }}>
+              {formatWeekLabel(w)}{isThisWeek ? ' (今週)' : ''}
+            </button>
+          )
+        })}
+        <button onClick={createNextWeek} style={{
+          padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
+          background:'rgba(0,214,143,0.1)', border:'1px solid rgba(0,214,143,0.3)', color:'#00d68f',
+        }}>＋ 翌週を作成</button>
+        {isAdmin && (
+          <button onClick={async () => {
+            try {
+              const params = new URLSearchParams({ type: 'tasks', week: activeWeek, preview: 'true' })
+              if (activeLevelId) params.set('levelId', activeLevelId)
+              const res = await fetch(`/api/slack-reminder?${params}`, { method: 'POST' })
+              const json = await res.json()
+              if (json.error) { alert('エラー: ' + json.error); return }
+              if (json.memberCount === 0) { alert(json.message || '通知対象のメンバーがいません'); return }
+              // プレビュー用のパラメータ（送信時に再利用）
+              const sendParams = new URLSearchParams({ type: 'tasks', week: activeWeek })
+              if (activeLevelId) sendParams.set('levelId', activeLevelId)
+              setSlackPreview({ text: json.text, type: json.type, memberCount: json.memberCount, levelName: json.levelName, params: sendParams.toString(), hasPerDeptWebhooks: json.hasPerDeptWebhooks })
+            } catch (e) { alert('プレビュー取得エラー: ' + e.message) }
+          }} style={{
+            padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
+            background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', color:'#a855f7', marginLeft:8,
+          }}>📨 Slackに通知</button>
+        )}
+      </div>
+
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* 部署サイドバー */}
         <div style={{ width:155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
@@ -598,7 +881,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             const color = LAYER_COLORS[d] || '#a0a8be'
             const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
             const krs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
-            const kaCount = reports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
+            const kaCount = weekReports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
             return (
               <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
@@ -667,7 +950,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 <KRBlock
                   key={kr.id}
                   kr={kr}
-                  reports={reports}
+                  reports={weekReports}
                   onAddKA={reload}
                   onSaveKA={handleSave}
                   onDeleteKA={handleDelete}
@@ -675,13 +958,115 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   wT={wT}
                   levelId={selectedObj.level_id}
                   objId={selectedObj.id}
+                  objOwner={selectedObj.owner}
                   canEditKA={canEditKA}
+                  onKROwnerChange={handleKROwnerChange}
+                  onKRUpdate={handleKRUpdate}
+                  activeWeek={activeWeek}
+                  onReorder={reload}
                 />
               ))}
             </>
           )}
         </div>
       </div>
+
+      {/* Slack通知プレビューモーダル */}
+      {slackPreview && (
+        <div onClick={() => { if (!slackSending) setSlackPreview(null) }} style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:9999,
+          display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background:wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:14,
+            width:'100%', maxWidth:640, maxHeight:'80vh', display:'flex', flexDirection:'column',
+            boxShadow:'0 20px 60px rgba(0,0,0,0.5)',
+          }}>
+            {/* ヘッダー */}
+            <div style={{
+              display:'flex', alignItems:'center', justifyContent:'space-between',
+              padding:'14px 18px', borderBottom:`1px solid ${wT().border}`,
+            }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:16 }}>📨</span>
+                <span style={{ fontSize:14, fontWeight:700, color:wT().text }}>Slack通知プレビュー</span>
+                <span style={{ fontSize:11, padding:'2px 8px', borderRadius:99, background:'rgba(168,85,247,0.12)', color:'#a855f7', fontWeight:600 }}>
+                  {slackPreview.levelName || '全部署'} ・ {slackPreview.memberCount}名
+                </span>
+              </div>
+              <button onClick={() => setSlackPreview(null)} disabled={slackSending} style={{
+                background:'transparent', border:'none', color:wT().textMuted, fontSize:18, cursor:'pointer', padding:'2px 6px',
+              }}>✕</button>
+            </div>
+
+            {/* メッセージ本文 */}
+            <div style={{
+              flex:1, overflowY:'auto', padding:'16px 18px',
+              fontFamily:'monospace', fontSize:12, lineHeight:1.7,
+              color:wT().text, whiteSpace:'pre-wrap', wordBreak:'break-word',
+              background:wT().bgCard2, borderBottom:`1px solid ${wT().border}`,
+            }}>
+              {slackPreview.text || '(メッセージなし)'}
+            </div>
+
+            {/* フッター */}
+            <div style={{
+              display:'flex', alignItems:'center', justifyContent:'flex-end', gap:10,
+              padding:'12px 18px',
+            }}>
+              <button onClick={() => setSlackPreview(null)} disabled={slackSending} style={{
+                padding:'7px 16px', borderRadius:8, cursor:'pointer', fontFamily:'inherit',
+                fontSize:12, fontWeight:600, background:'transparent',
+                border:`1px solid ${wT().borderMid}`, color:wT().textSub,
+              }}>キャンセル</button>
+              {slackPreview.hasPerDeptWebhooks && (
+                <button
+                  disabled={slackSending}
+                  onClick={async () => {
+                    setSlackSending(true)
+                    try {
+                      const res = await fetch(`/api/slack-reminder?${slackPreview.params}&perDept=true`, { method: 'POST' })
+                      const json = await res.json()
+                      if (json.error) { alert('送信失敗: ' + json.error); setSlackSending(false); return }
+                      setSlackPreview(null)
+                      setSlackSending(false)
+                      alert(`部署別チャンネルに通知しました（${json.channelCount}チャンネル, ${json.memberCount}名分）`)
+                    } catch (e) { alert('送信エラー: ' + e.message); setSlackSending(false) }
+                  }}
+                  style={{
+                    padding:'7px 16px', borderRadius:8, cursor: slackSending ? 'wait' : 'pointer',
+                    fontFamily:'inherit', fontSize:12, fontWeight:700,
+                    background: slackSending ? 'rgba(0,214,143,0.3)' : 'rgba(0,214,143,0.12)',
+                    border:'1px solid rgba(0,214,143,0.3)', color:'#00d68f',
+                    opacity: slackSending ? 0.7 : 1,
+                  }}
+                >{slackSending ? '送信中...' : '🏢 部署別に送信'}</button>
+              )}
+              <button
+                disabled={slackSending}
+                onClick={async () => {
+                  setSlackSending(true)
+                  try {
+                    const res = await fetch(`/api/slack-reminder?${slackPreview.params}`, { method: 'POST' })
+                    const json = await res.json()
+                    if (json.error) { alert('送信失敗: ' + json.error); setSlackSending(false); return }
+                    setSlackPreview(null)
+                    setSlackSending(false)
+                    alert(`Slackに通知しました（${json.levelName}: ${json.memberCount}名分）`)
+                  } catch (e) { alert('送信エラー: ' + e.message); setSlackSending(false) }
+                }}
+                style={{
+                  padding:'7px 20px', borderRadius:8, cursor: slackSending ? 'wait' : 'pointer',
+                  fontFamily:'inherit', fontSize:12, fontWeight:700,
+                  background: slackSending ? 'rgba(168,85,247,0.3)' : '#a855f7',
+                  border:'none', color:'#fff',
+                  opacity: slackSending ? 0.7 : 1,
+                }}
+              >{slackSending ? '送信中...' : '📨 Slackに送信'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

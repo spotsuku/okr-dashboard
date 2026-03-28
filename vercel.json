@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/slack-reminder?type=pre-meeting",
+      "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/slack-reminder?type=pre-meeting",
+      "schedule": "0 8 * * 5"
+    }
+  ]
+}

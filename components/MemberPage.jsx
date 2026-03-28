@@ -273,18 +273,19 @@ function UserListTab({ members, currentUser, isAdmin }) {
   )
 }
 
-export default function MemberPage({ currentUser }) {
+export default function MemberPage({ currentUser, fiscalYear = '2026' }) {
   const [members, setMembers] = useState([])
   const [levels, setLevels] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [activeTab, setActiveTab] = useState('org')
+  const [webhookEdit, setWebhookEdit] = useState(null) // { levelId, url }
 
   // ログインユーザーが管理者かどうか
   const myMember = members.find(m => m.email === currentUser?.email)
   const isAdmin  = myMember?.is_admin === true
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [fiscalYear])
 
   const loadData = async () => {
     setLoading(true)
@@ -292,22 +293,28 @@ export default function MemberPage({ currentUser }) {
       supabase.from('levels').select('*').order('id'),
       supabase.from('members').select('*').order('id'),
     ])
-    if (lvls) setLevels(lvls)
+    // fiscal_yearでフィルタ（nullは2026年度扱い）— Dashboard.jsxと同じロジック
+    const validLvls = (lvls || []).filter(l =>
+      fiscalYear === '2026'
+        ? (!l.fiscal_year || l.fiscal_year === '2026')
+        : l.fiscal_year === fiscalYear
+    )
+    if (validLvls.length) setLevels(validLvls)
+    else setLevels([])
     if (mems) setMembers(mems)
     setLoading(false)
   }
 
   const handleSave = async (form) => {
+    const payload = {
+      name: form.name, role: form.role, level_id: form.level_id,
+      email: form.email, avatar_url: form.avatar_url,
+      sub_level_ids: form.sub_level_ids || [],
+    }
     if (form.id) {
-      await supabase.from('members').update({
-        name: form.name, role: form.role, level_id: form.level_id,
-        email: form.email, avatar_url: form.avatar_url,
-      }).eq('id', form.id)
+      await supabase.from('members').update(payload).eq('id', form.id)
     } else {
-      await supabase.from('members').insert([{
-        name: form.name, role: form.role, level_id: form.level_id,
-        email: form.email, avatar_url: form.avatar_url,
-      }])
+      await supabase.from('members').insert([payload])
     }
     setModal(null)
     loadData()
@@ -316,6 +323,12 @@ export default function MemberPage({ currentUser }) {
   const handleDelete = async (id) => {
     if (!window.confirm('このメンバーを削除しますか？')) return
     await supabase.from('members').delete().eq('id', id)
+    loadData()
+  }
+
+  const handleSaveWebhook = async (levelId, url) => {
+    await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
+    setWebhookEdit(null)
     loadData()
   }
 
@@ -329,9 +342,10 @@ export default function MemberPage({ currentUser }) {
     return depth
   }
 
-  const roots = levels.filter(l => !l.parent_id)
   const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
-  const getLevelMembers = id => members.filter(m => m.level_id === id)
+  const getLevelMembers = id => members.filter(m => m.level_id === id || (m.sub_level_ids && m.sub_level_ids.map(Number).includes(Number(id))))
+  const isSub = (m, levelId) => m.level_id !== levelId && (m.sub_level_ids || []).map(Number).includes(Number(levelId))
+  const roots = levels.filter(l => !l.parent_id)
   const getLayerColor = id => LAYER_COLORS[getDepth(id)] || '#a0a8be'
 
   function LevelSection({ levelId, depth = 0 }) {
@@ -349,10 +363,46 @@ export default function MemberPage({ currentUser }) {
           <span style={{ fontSize: 14, fontWeight: 700, color }}>{level.name}</span>
           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: `${color}18`, color, fontWeight: 600 }}>{label}</span>
           <span style={{ fontSize: 11, color: '#404660' }}>{mems.length}名</span>
+          {isAdmin && (
+            <button onClick={() => setWebhookEdit({ levelId, url: level.slack_webhook_url || '' })} style={{
+              padding: '2px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10, fontWeight: 600,
+              background: level.slack_webhook_url ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${level.slack_webhook_url ? 'rgba(168,85,247,0.3)' : 'rgba(255,255,255,0.1)'}`,
+              color: level.slack_webhook_url ? '#a855f7' : '#606880',
+            }}>
+              {level.slack_webhook_url ? '📨 Slack設定済み' : '📨 Slack設定'}
+            </button>
+          )}
         </div>
+        {/* Slack Webhook URL 編集インライン */}
+        {webhookEdit && webhookEdit.levelId === levelId && (
+          <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(168,85,247,0.06)', borderRadius: 10, border: '1px solid rgba(168,85,247,0.15)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#a855f7', marginBottom: 6 }}>Slack Webhook URL</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={webhookEdit.url}
+                onChange={e => setWebhookEdit(prev => ({ ...prev, url: e.target.value }))}
+                placeholder="https://hooks.slack.com/services/..."
+                style={{
+                  flex: 1, padding: '6px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.06)', color: '#e0e4f0', fontSize: 12, fontFamily: 'monospace', outline: 'none',
+                }}
+              />
+              <button onClick={() => handleSaveWebhook(levelId, webhookEdit.url)} style={{
+                padding: '6px 14px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
+                background: 'linear-gradient(135deg,#a855f7,#4d9fff)', border: 'none', color: '#fff',
+              }}>保存</button>
+              <button onClick={() => setWebhookEdit(null)} style={{
+                padding: '6px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#606880',
+              }}>取消</button>
+            </div>
+            <div style={{ fontSize: 10, color: '#606880', marginTop: 4 }}>未設定の場合、親部署またはデフォルトのWebhookに送信されます</div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: children.length ? 24 : 0 }}>
           {mems.map(m => (
-            <MemberCard key={m.id} member={m} color={color}
+            <MemberCard key={m.id} member={m} color={color} isSub={isSub(m, levelId)}
               onEdit={() => setModal({ type: 'edit', member: m })}
               onDelete={() => handleDelete(m.id)} />
           ))}
@@ -449,7 +499,7 @@ export function MemberAvatar({ member, color, size = 48 }) {
   )
 }
 
-function MemberCard({ member, color, onEdit, onDelete }) {
+function MemberCard({ member, color, onEdit, onDelete, isSub }) {
   const [hover, setHover] = useState(false)
   return (
     <div
@@ -472,7 +522,10 @@ function MemberCard({ member, color, onEdit, onDelete }) {
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
         <MemberAvatar member={member} color={color} size={48} />
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec', marginBottom: 4 }}>{member.name}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec', marginBottom: 4 }}>
+        {member.name}
+        {isSub && <span style={{ fontSize: 9, color: '#ff9f43', background: 'rgba(255,159,67,0.15)', border: '1px solid rgba(255,159,67,0.3)', padding: '1px 5px', borderRadius: 99, marginLeft: 4, fontWeight: 600, verticalAlign: 'middle' }}>兼</span>}
+      </div>
       <div style={{ fontSize: 11, color, marginBottom: 4, fontWeight: 600 }}>{member.role}</div>
       {member.email && <div style={{ fontSize: 10, color: '#404660', wordBreak: 'break-all' }}>{member.email}</div>}
     </div>
@@ -484,6 +537,7 @@ function MemberModal({ initial, levels, defaultLevelId, onSave, onClose }) {
   const [role, setRole]         = useState(initial?.role || '')
   const [email, setEmail]       = useState(initial?.email || '')
   const [levelId, setLevelId]   = useState(String(initial?.level_id || defaultLevelId || ''))
+  const [subLevelIds, setSubLevelIds] = useState((initial?.sub_level_ids || []).map(String))
   const [avatarUrl, setAvatarUrl] = useState(initial?.avatar_url || '')
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving]     = useState(false)
@@ -519,7 +573,7 @@ function MemberModal({ initial, levels, defaultLevelId, onSave, onClose }) {
   const save = async () => {
     if (!name.trim() || !levelId) return
     setSaving(true)
-    await onSave({ id: initial?.id, name, role, email, level_id: parseInt(levelId), avatar_url: avatarUrl })
+    await onSave({ id: initial?.id, name, role, email, level_id: parseInt(levelId), sub_level_ids: subLevelIds.filter(id => id !== levelId).map(Number), avatar_url: avatarUrl })
     setSaving(false)
   }
 
@@ -584,13 +638,36 @@ function MemberModal({ initial, levels, defaultLevelId, onSave, onClose }) {
           </div>
         ))}
 
-        {/* 所属 */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>所属</div>
-          <select value={levelId} onChange={e => setLevelId(e.target.value)}
+        {/* 主所属 */}
+        <div style={{ marginBottom: 13 }}>
+          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>主所属 *</div>
+          <select value={levelId} onChange={e => { setLevelId(e.target.value); setSubLevelIds(s => s.filter(id => id !== e.target.value)) }}
             style={{ width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 12px', color: '#e8eaf0', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer' }}>
             <option value="">選択してください</option>
             {levels.map(l => <option key={l.id} value={String(l.id)}>{l.icon} {l.name}</option>)}
+          </select>
+        </div>
+
+        {/* 兼任（副所属） */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>兼任（副所属）</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: subLevelIds.length > 0 ? 8 : 0 }}>
+            {subLevelIds.map(sid => {
+              const lv = levels.find(l => String(l.id) === sid)
+              return lv ? (
+                <span key={sid} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: 'rgba(255,159,67,0.12)', border: '1px solid rgba(255,159,67,0.3)', color: '#ff9f43', fontSize: 11, fontWeight: 600 }}>
+                  {lv.icon} {lv.name}
+                  <span onClick={() => setSubLevelIds(s => s.filter(id => id !== sid))} style={{ cursor: 'pointer', marginLeft: 2, fontSize: 13, lineHeight: 1 }}>✕</span>
+                </span>
+              ) : null
+            })}
+          </div>
+          <select value="" onChange={e => { if (e.target.value && e.target.value !== levelId && !subLevelIds.includes(e.target.value)) setSubLevelIds(s => [...s, e.target.value]) }}
+            style={{ width: '100%', background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '9px 12px', color: '#a0a8be', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer' }}>
+            <option value="">＋ 兼任先を追加...</option>
+            {levels.filter(l => String(l.id) !== levelId && !subLevelIds.includes(String(l.id))).map(l => (
+              <option key={l.id} value={String(l.id)}>{l.icon} {l.name}</option>
+            ))}
           </select>
         </div>
 

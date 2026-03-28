@@ -8,6 +8,7 @@ import AnnualView from './AnnualView'
 import WeeklyMTGPage from './WeeklyMTGPage'
 import MyOKRPageNew from './MyOKRPage'
 import BulkRegisterPage from './BulkRegisterPage'
+import CompanySummaryPage from './CompanySummaryPage'
 import OrgPage from './OrgPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -63,6 +64,14 @@ const RATINGS = [
   { min:   0, score: 0, label: '未達',    color: '#ff6b6b' },
 ]
 const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
+
+// DBカラム名 current_value → current への正規化
+function normalizeKR(kr) {
+  if (kr.current === undefined && kr.current_value !== undefined) {
+    return { ...kr, current: kr.current_value }
+  }
+  return kr
+}
 
 function calcKRProgress(kr) {
   if (!kr.target || kr.target === 0) return 0
@@ -217,7 +226,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   const [title, setTitle]     = useState(initial?.title || '')
   const [owner, setOwner]     = useState(initial?.owner || '')
   const [levelId, setLevelId] = useState(String(activeLevelId || levels[0]?.id))
-  const [period, setPeriod]   = useState(activePeriod)
+  const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
       ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current) }))
@@ -225,7 +234,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   )
   const [saving, setSaving] = useState(false)
 
-  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }])
+  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
   const updateKR = (key, field, val) => setKRs(p => p.map(k => (k.id || k._tmpId) === key ? { ...k, [field]: val } : k))
 
@@ -292,10 +301,20 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
               <div style={{ flex: 1 }}><FInput value={String(kr.current)} onChange={v => updateKR(key, 'current', v)} placeholder="現在値" type="number" /></div>
               <div style={{ flex: 1 }}><FInput value={kr.unit} onChange={v => updateKR(key, 'unit', v)} placeholder="単位" /></div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: getT().textSub }}>
-              <input type="checkbox" checked={!!kr.lower_is_better} onChange={e => updateKR(key, 'lower_is_better', e.target.checked)} />
-              低い方が良い指標（チャーン率・バグ数など）
-            </label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: getT().textSub, flex: 1 }}>
+                <input type="checkbox" checked={!!kr.lower_is_better} onChange={e => updateKR(key, 'lower_is_better', e.target.checked)} />
+                低い方が良い指標（チャーン率・バグ数など）
+              </label>
+              <select value={kr.owner||''} onChange={e => updateKR(key, 'owner', e.target.value)} style={{
+                background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
+                padding: '5px 8px', color: kr.owner ? '#e8eaf0' : '#505878', fontSize: 12,
+                outline: 'none', fontFamily: 'inherit', cursor: 'pointer', maxWidth: 160,
+              }}>
+                <option value="">KR担当者</option>
+                {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+              </select>
+            </div>
           </div>
         )
       })}
@@ -890,6 +909,36 @@ export default function Dashboard({ user, onSignOut }) {
     return () => { supabase.removeChannel(channel) }
   }, [fiscalYear]) // eslint-disable-line
 
+  // ─── 不正なperiodキーを自動修正 ─────────────────────────────────────────
+  useEffect(() => {
+    const fixBadPeriods = async () => {
+      const { data: objs } = await supabase.from('objectives').select('id,period')
+      if (!objs) return
+      let fixed = 0
+      // 二重プレフィックス修正 (2025_2025_q1 → 2025_q1)
+      const doublePrefix = objs.filter(o => /^\d{4}_\d{4}_/.test(o.period))
+      for (const o of doublePrefix) {
+        await supabase.from('objectives').update({ period: o.period.replace(/^(\d{4})_\1_/, '$1_') }).eq('id', o.id)
+        fixed++
+      }
+      // 無効な period='all' / '2025_all' 等を削除（KR含む）
+      const invalidAll = objs.filter(o => o.period === 'all' || o.period.endsWith('_all'))
+      for (const o of invalidAll) {
+        await supabase.from('key_results').delete().eq('objective_id', o.id)
+        await supabase.from('weekly_reports').delete().eq('objective_id', o.id)
+        await supabase.from('objectives').delete().eq('id', o.id)
+      }
+      if (invalidAll.length > 0) console.log(`Deleted ${invalidAll.length} objectives with invalid period='all'`)
+      if ((fixed + invalidAll.length) > 0) {
+        if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+      }
+    }
+    fixBadPeriods()
+  }, []) // eslint-disable-line
+
+  // ─── 年度に応じたperiodキーを生成 ─────────────────────────────────────────
+  // 2026年度: 'q1', 'q2', 'q3', 'q4', 'annual' （既存データそのまま）
+  // 2025年度: '2025_q1', '2025_q2', '2025_q3', '2025_q4', '2025_annual'
   const toPeriodKey = (period, year) => year === '2026' ? period : `${year}_${period}`
 
   // window経由でRealtimeハンドラからアクセスできるよう公開
@@ -904,11 +953,11 @@ export default function Dashboard({ user, onSignOut }) {
     const { data: objs } = await query
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
-    const { data: krs } = await supabase
-      .from('key_results').select('id,objective_id,title,target,current,unit,lower_is_better')
+    const { data: rawKrs } = await supabase
+      .from('key_results').select('*')
       .in('objective_id', ids)
     const krMap = {}
-    ;(krs || []).forEach(kr => {
+    ;(rawKrs || []).map(normalizeKR).forEach(kr => {
       if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
       krMap[kr.objective_id].push(kr)
     })
@@ -939,31 +988,42 @@ export default function Dashboard({ user, onSignOut }) {
 
   useEffect(() => {
     if (activeLevelId && levels.length) loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
-  }, [activeLevelId, activePeriod, levels, fiscalYear]) // eslint-disable-line
+  }, [activeLevelId, activePeriod, levels, fiscalYear, activePage]) // eslint-disable-line
 
   const handleSave = async ({ obj, krs }) => {
-    const periodKey = toPeriodKey(obj.period, fiscalYear)
+    const safePeriod = obj.period === 'all' ? 'q1' : obj.period
+    const periodKey = safePeriod.includes('_') && fiscalYear !== '2026'
+      ? safePeriod
+      : toPeriodKey(safePeriod, fiscalYear)
     const objToSave = { ...obj, period: periodKey }
 
     let objectiveId = objToSave.id
     if (objToSave.id) {
-      await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
-      await supabase.from('key_results').delete().eq('objective_id', objToSave.id)
+      const { error: updErr } = await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
+      if (updErr) { console.error('objective update error:', updErr); alert('目標の更新に失敗しました: ' + updErr.message); return }
+      const { error: delErr } = await supabase.from('key_results').delete().eq('objective_id', objToSave.id)
+      if (delErr) console.error('KR delete error:', delErr)
     } else {
+      const insertPayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
+      if (objToSave.parent_objective_id) insertPayload.parent_objective_id = objToSave.parent_objective_id
       const { data, error } = await supabase
         .from('objectives')
-        .insert([{ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period, parent_objective_id: objToSave.parent_objective_id || null }])
+        .insert([insertPayload])
         .select().single()
-      if (error) { console.error('insert error:', error); return }
+      if (error) { console.error('objective insert error:', error); alert('目標の保存に失敗しました: ' + error.message); return }
       objectiveId = data.id
     }
-    if (krs.length && objectiveId) {
-      await supabase.from('key_results').insert(
-        krs.map(k => ({ title: k.title, target: k.target, current: k.current, unit: k.unit, lower_is_better: k.lower_is_better, objective_id: objectiveId }))
-      )
+    const validKRs = krs.filter(k => k.title?.trim())
+    if (validKRs.length && objectiveId) {
+      const krPayloads = validKRs.map(kr => ({
+        title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+        lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+      }))
+      const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
+      if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
     }
     setActiveLevelId(objToSave.level_id)
-    await loadSubtree(objToSave.level_id, obj.period, levels, fiscalYear)
+    await loadSubtree(objToSave.level_id, activePeriod, levels, fiscalYear)
     setAnnualRefreshKey(k => k + 1)
   }
 
@@ -1037,8 +1097,7 @@ export default function Dashboard({ user, onSignOut }) {
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
-    { key: 'all',    label: 'すべて' },
-    { key: 'annual', label: '通期' },
+    { key: 'all', label: '通期' },
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
     { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
   ]
@@ -1159,6 +1218,7 @@ export default function Dashboard({ user, onSignOut }) {
               {key:'csv',        label:'CSV登録'},
               {key:'members',    label:'メンバー管理'},
               {key:'weekly',     label:'週次MTG'},
+              {key:'summary',    label:'全社サマリー'},
               {key:'orgjd',      label:'組織'},
             ].map(pg => (
               <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
@@ -1230,11 +1290,11 @@ export default function Dashboard({ user, onSignOut }) {
 
       {/* ─── ページ切替 ─── */}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
-      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage currentUser={user} /></div>}
-      {activePage === 'weekly' && <div style={{ flex: 1, overflowY: 'auto' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} /></div>}
+      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage currentUser={user} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
-      {/* ★ 追加: 組織ページ */}
+      {activePage === 'summary' && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
       {activePage === 'orgjd' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <OrgPage themeKey={themeKey} user={user} />
