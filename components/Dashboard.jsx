@@ -809,7 +809,13 @@ export default function Dashboard({ user, onSignOut }) {
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(null)
-  const [fiscalYear, setFiscalYear]         = useState('2026')
+  const [fiscalYear, setFiscalYear]         = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('fy') || '2026'
+    }
+    return '2026'
+  })
   const [activePeriod, setActivePeriod]     = useState('all')
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
@@ -818,7 +824,13 @@ export default function Dashboard({ user, onSignOut }) {
   const [showOrgModal, setShowOrgModal]     = useState(false)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
-  const [activePage, setActivePage]         = useState('okr')
+  const [activePage, setActivePage]         = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('page') || 'summary'
+    }
+    return 'summary'
+  })
   const [viewMode, setViewMode]             = useState('org')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
   const [themeKey, setThemeKey]                 = useState('dark')
@@ -834,6 +846,15 @@ export default function Dashboard({ user, onSignOut }) {
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // URL にページ・年度を同期（リロード時に復元される）
+  useEffect(() => {
+    const params = new URLSearchParams()
+    params.set('page', activePage)
+    params.set('fy', fiscalYear)
+    const newUrl = `${window.location.pathname}?${params.toString()}`
+    window.history.replaceState(null, '', newUrl)
+  }, [activePage, fiscalYear])
 
   useEffect(() => {
     const load = async () => {
@@ -1212,13 +1233,13 @@ export default function Dashboard({ user, onSignOut }) {
           {/* ページナビ */}
           <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
             {[
+              {key:'summary',    label:'全社サマリー'},
               {key:'okr',        label:'OKR'},
               {key:'myokr',      label:'マイOKR'},
+              {key:'weekly',     label:'週次MTG'},
+              {key:'members',    label:'メンバー管理'},
               {key:'bulk',       label:'一括登録'},
               {key:'csv',        label:'CSV登録'},
-              {key:'members',    label:'メンバー管理'},
-              {key:'weekly',     label:'週次MTG'},
-              {key:'summary',    label:'全社サマリー'},
               {key:'orgjd',      label:'組織'},
             ].map(pg => (
               <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
@@ -1228,6 +1249,12 @@ export default function Dashboard({ user, onSignOut }) {
                 fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
                 whiteSpace: 'nowrap',
               }}>{pg.label}</button>
+            ))}
+          </div>
+          {/* 年度切り替え（全ページ共通） */}
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
+            {['2025', '2026'].map(yr => (
+              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? '#d97706' : 'transparent', color: fiscalYear === yr ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
             ))}
           </div>
 
@@ -1259,7 +1286,7 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
         </div>
 
-        {/* 2行目：OKRページのみ */}
+        {/* 2行目：OKRページのみ（ビュー切替・期間フィルタ） */}
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
@@ -1270,12 +1297,6 @@ export default function Dashboard({ user, onSignOut }) {
 
             {viewMode === 'org' && (
               <>
-                <div style={{ width: 1, height: 18, background: T.border }} />
-                <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-                  {['2025', '2026'].map(yr => (
-                    <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? '#d97706' : 'transparent', color: fiscalYear === yr ? '#fff' : '#606880', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
-                  ))}
-                </div>
                 <div style={{ width: 1, height: 18, background: T.border }} />
                 <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
                   {periods.map(p => (
