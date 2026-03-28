@@ -48,13 +48,13 @@ const THEMES = {
     border:      '#DDE4EA',
     borderMid:   '#B0C0CC',
     borderEdit:  '#5A8A7A',
-    text:        '#1A202C',
-    textSub:     '#4A5568',
+    text:        '#2D3748',
+    textSub:     '#5A6577',
     textMuted:   '#A0AEC0',
     textFaint:   '#A0AEC0',
     textFaintest:'#DDE4EA',
     inputBg:     '#FFFFFF',
-    inputText:   '#1A202C',
+    inputText:   '#2D3748',
     selectBg:    '#FFFFFF',
     accent:      '#5A8A7A',
     accentDark:  '#3D6B5E',
@@ -176,7 +176,7 @@ const EMP_BADGE = {
 }
 const EMP_OPTS = ['業務委託', '正社員', '業務委託→正社員', '正社員予定']
 const TASK_STATUS_OPTS = ['same', 'new', 'del']
-const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#0F6E56','#F0997B','#B0BAC8','#4A5568','#7a8599','#1A202C']
+const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
 
 // levelsのnameから色を推定
 const DEPT_COLOR_RULES = [
@@ -301,31 +301,31 @@ function SaveBtn({ saving, saved, onClick, label = '保存' }) {
 // JDデフォルトデータ（Supabase org_member_jd が空の場合のフォールバック）
 // ══════════════════════════════════════════════════
 const JD_DEFAULT = {
-  '加藤翼':   { avatar_color:['#5A8A7A','#EEF7F3'], versions:[
+  '加藤翼':   { avatar_color:['#5A8A7A','rgba(90,138,122,0.15)'], versions:[
     { period:'2025年6月 〜現在', role:'コミュニティ事業責任者', emp:'業務委託', working:'週2日', role_desc:'NEO福岡の１年間の運営を統括する\nNEOが複数拠点でコミュニティ運営できる仕組みを構築する', responsibility:'コミュニティ事業部の成果責任\n事業部のコスト管理', meetings:'・NEO立上げ本部定例（毎週土曜 9:00〜10:30）\n・コミュニティ事業定例（毎週水曜13:00〜14:00）\n・チェックイン定例（毎週月曜朝）', tasks:[{cat:'コミュニティ',task:'NEOのコミュニティの基本設計と改善',status:'same'},{cat:'プログラム',task:'アワードの企画設計・PM計画書',status:'new'}]},
   ]},
-  '森朝香':   { avatar_color:['#3D6B5E','#E1F5EE'], versions:[
+  '森朝香':   { avatar_color:['#3D6B5E','rgba(61,107,94,0.15)'], versions:[
     { period:'2025年7月 〜現在', role:'コミュニティマネージャー (教育責任者)', emp:'業務委託', working:'週5（常時）', role_desc:'コミュニティチーム実行責任者（教育責任者業務含む）\n年間プログラムの受講生の受講状況の管理', responsibility:'アカデミア生からヒーローを創出する\n受講生に対するイベントの開催', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例（週2〜3回）\n・毎朝チェックイン', tasks:[{cat:'コミュニティ運営',task:'アカデミア生のカルテ情報の設計・最新アップデート',status:'same'},{cat:'コミュニティ運営',task:'Playful研修の企画・開発・営業・運営',status:'new'}]},
   ]},
-  '面川文香': { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
+  '面川文香': { avatar_color:['#B07D9E','rgba(176,125,158,0.15)'], versions:[
     { period:'2026年2月 〜現在', role:'企業伴走 兼 総務', emp:'正社員', working:'週5', role_desc:'企業伴走チームとして企業会員への密なコミュニケーション支援\n総務・事務局業務の中心担当', responsibility:'企業会員のNEO活用促進\n総務・事務局業務の実行責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例（週2〜3回）\n・毎朝チェックイン', tasks:[{cat:'企業伴走',task:'会員企業への適切な量・質・頻度でのコミュニケーション',status:'same'},{cat:'総務',task:'総務（事務作業・HP更新・郵送物管理・問い合わせ対応・経理連携）',status:'same'}]},
   ]},
-  '古野絢太': { avatar_color:['#0F6E56','rgba(15,110,86,0.15)'], versions:[
+  '古野絢太': { avatar_color:['#5B9EA6','rgba(91,158,166,0.15)'], versions:[
     { period:'2026年4月 〜現在', role:'企業伴走 兼 事務局長補佐', emp:'業務委託', working:'週3〜4日', role_desc:'企業会員への密な伴走支援\n事務局長補佐として組織全体の業務管理補助', responsibility:'担当企業会員のサクセス支援\n事務局長補佐業務の実行', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例\n・毎朝チェックイン', tasks:[{cat:'企業伴走',task:'企業カルテの情報管理・企業公開情報のリサーチ・アップデート',status:'same'},{cat:'事務局補佐',task:'事務局長補佐（全体PM・資料作成・会議フィードバック）',status:'same'}]},
   ]},
-  '鬼木良輔': { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
+  '鬼木良輔': { avatar_color:['#C4956A','rgba(196,149,106,0.15)'], versions:[
     { period:'2025年10月 〜現在', role:'カスタマーサクセスチーム マネージャー', emp:'業務委託', working:'週2〜3日', role_desc:'NEO福岡のカスタマーサクセスチームのマネジメント\n会員企業のサクセスロードマップ設計・実行', responsibility:'CSチームの成果責任（会員企業のサクセス・継続率）\n研修サービスの品質・売上責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・CS定例（週1〜2回）\n・担当企業との個別MTG（月1〜2回）', tasks:[{cat:'CS戦略',task:'会員企業のサクセスロードマップ企画・実行・改善',status:'same'},{cat:'研修',task:'NEO合同AI研修の企画・運営・改善',status:'same'}]},
   ]},
-  '増田雄太朗': { avatar_color:['#5DCAA5','rgba(93,202,165,0.15)'], versions:[
+  '増田雄太朗': { avatar_color:['#6B8DB5','rgba(107,141,181,0.15)'], versions:[
     { period:'2026年1月 〜現在', role:'マーケティングマネージャー （正社員）', emp:'正社員', working:'週5', role_desc:'正社員として全社マーケティングを統括', responsibility:'マーケティング全般の成果責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・マーケ定例（週1〜2回）', tasks:[{cat:'マーケ戦略',task:'年間・四半期ごとのマーケティング計画（KPI設計・チャネル戦略）策定',status:'same'},{cat:'集客',task:'各イベントの集客戦略・広告運用（SNS広告・パートナー連携）',status:'same'}]},
   ]},
-  '菅雅也':   { avatar_color:['#dc2626','#fee2e2'], versions:[
+  '菅雅也':   { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
     { period:'2025年7月 〜現在', role:'クリエイティブマネージャー', emp:'業務委託', working:'週3〜4日', role_desc:'NEO福岡の動画・クリエイティブ制作全般のディレクション', responsibility:'NEO福岡のクリエイティブ品質の責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・広報チーム定例（週1回）', tasks:[{cat:'動画制作',task:'NEO福岡の動画制作・監修・年間動画企画',status:'same'},{cat:'広報',task:'インスタ投稿戦略のアドバイス',status:'same'}]},
   ]},
-  '中島啓太': { avatar_color:['#0f766e','#ccfbf1'], versions:[
+  '中島啓太': { avatar_color:['#8B7EC8','rgba(139,126,200,0.15)'], versions:[
     { period:'2025年7月 〜現在', role:'クラブパートナーシップ ダイレクター', emp:'業務委託', working:'週2〜3日', role_desc:'提携スポーツクラブとの戦略深化', responsibility:'提携クラブとの長期関係維持・拡大', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・パートナー定例（週1回）', tasks:[{cat:'パートナー開発',task:'提携スポーツチームとの中長期戦略の作成・合意形成',status:'same'},{cat:'プログラム連携',task:'アカデミア（HR）カリキュラム企画・スポーツ連携座組み企画',status:'same'}]},
   ]},
-  '中道稔':   { avatar_color:['#F0997B','rgba(240,153,123,0.15)'], versions:[
+  '中道稔':   { avatar_color:['#D4816B','rgba(212,129,107,0.15)'], versions:[
     { period:'2026年4月 〜8月', role:'イベントチームリーダー', emp:'業務委託', working:'週4〜5日', role_desc:'イベントチームリーダーとしてイベント全般を統括', responsibility:'イベント品質・NPS向上責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・イベント定例（週1〜2回）', tasks:[{cat:'イベント運営',task:'現地イベントロジ作成・運営実務準備',status:'same'},{cat:'チームリード',task:'イベントチームのリーダーシップ・指示出し',status:'new'}]},
     { period:'2026年9月 〜（予定）', role:'イベントチームリーダー （正社員）', emp:'正社員予定', working:'週5', role_desc:'正社員として安定的にイベントチームを統括', responsibility:'イベントチームの長期的な品質・体制確立', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・イベント定例（週1〜2回）', tasks:[{cat:'イベント運営',task:'現地イベントロジ作成・運営実務準備',status:'same'},{cat:'チームリード',task:'イベント振り返り・改善提案',status:'same'}]},
   ]},
