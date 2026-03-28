@@ -7,44 +7,68 @@ import { supabase } from '../lib/supabase'
 // ══════════════════════════════════════════════════
 const THEMES = {
   dark: {
-    bg:          '#0f1117',
-    bgCard:      '#1a1d27',
-    bgCard2:     '#21253a',
+    bg:          '#0F1117',
+    bgCard:      '#1A1D27',
+    bgCard2:     '#1A1D27',
     bgInput:     'rgba(255,255,255,0.07)',
     bgHover:     'rgba(255,255,255,0.05)',
     bgTable:     'rgba(255,255,255,0.04)',
-    border:      'rgba(255,255,255,0.12)',
-    borderMid:   'rgba(255,255,255,0.20)',
-    borderEdit:  'rgba(47,122,120,0.8)',
-    text:        '#e8ecf0',
-    textSub:     '#b8c0d0',
+    border:      'rgba(255,255,255,0.10)',
+    borderMid:   'rgba(255,255,255,0.16)',
+    borderEdit:  'rgba(93,202,165,0.6)',
+    text:        '#E8ECF0',
+    textSub:     '#B0BAC8',
     textMuted:   '#7a8599',
-    textFaint:   '#4a5468',
+    textFaint:   '#4A5468',
     textFaintest:'#333b4d',
-    inputBg:     '#1a1d27',
-    inputText:   '#e8ecf0',
-    selectBg:    '#21253a',
-    accent:      '#2f7a78',
+    inputBg:     '#1A1D27',
+    inputText:   '#E8ECF0',
+    selectBg:    '#1A1D27',
+    accent:      '#5DCAA5',
+    accentDark:  '#0F6E56',
+    accentSolid: '#2F7A78',
+    warn:        '#F0997B',
+    warnBg:      'rgba(216,90,48,0.2)',
+    badgeBg:     'rgba(47,122,120,0.25)',
+    badgeBorder: 'rgba(47,122,120,0.3)',
+    navActiveBg: 'rgba(47,122,120,0.15)',
+    navActiveText:'#5DCAA5',
+    progressBg:  'rgba(255,255,255,0.08)',
+    progressFill:'#2F7A78',
+    eventBandBg: '#0F6E56',
+    eventBandText:'#E1F5EE',
   },
   light: {
-    bg:          '#f5f6f8',
-    bgCard:      '#ffffff',
-    bgCard2:     '#f9fafb',
-    bgInput:     '#f3f4f6',
-    bgHover:     '#f0f2f5',
-    bgTable:     '#f9fafb',
-    border:      '#e5e7eb',
-    borderMid:   '#d1d5db',
-    borderEdit:  '#2f7a78',
-    text:        '#111827',
-    textSub:     '#374151',
-    textMuted:   '#6b7280',
-    textFaint:   '#9ca3af',
-    textFaintest:'#d1d5db',
-    inputBg:     '#ffffff',
-    inputText:   '#111827',
-    selectBg:    '#ffffff',
-    accent:      '#2f7a78',
+    bg:          '#EEF2F5',
+    bgCard:      '#FFFFFF',
+    bgCard2:     '#FFFFFF',
+    bgInput:     '#F3F4F6',
+    bgHover:     '#F7FAFC',
+    bgTable:     '#FFFFFF',
+    border:      '#DDE4EA',
+    borderMid:   '#B0C0CC',
+    borderEdit:  '#5A8A7A',
+    text:        '#1A202C',
+    textSub:     '#4A5568',
+    textMuted:   '#A0AEC0',
+    textFaint:   '#A0AEC0',
+    textFaintest:'#DDE4EA',
+    inputBg:     '#FFFFFF',
+    inputText:   '#1A202C',
+    selectBg:    '#FFFFFF',
+    accent:      '#5A8A7A',
+    accentDark:  '#3D6B5E',
+    accentSolid: '#5A8A7A',
+    warn:        '#E8875A',
+    warnBg:      'rgba(232,135,90,0.1)',
+    badgeBg:     'rgba(90,138,122,0.15)',
+    badgeBorder: 'rgba(90,138,122,0.3)',
+    navActiveBg: '#EEF7F3',
+    navActiveText:'#3D6B5E',
+    progressBg:  '#E8EEF2',
+    progressFill:'#5A8A7A',
+    eventBandBg: '#3D6B5E',
+    eventBandText:'#FFFFFF',
   },
 }
 
@@ -104,31 +128,31 @@ function PeriodInput({ value, onChange }) {
   }
 
   const inputStyle = {
-    background: 'rgba(255,255,255,0.15)',
-    border: '1px solid rgba(255,255,255,0.4)',
+    background: T().bgInput,
+    border: `1px solid ${T().borderMid}`,
     borderRadius: 5, padding: '4px 8px',
-    color: '#fff', fontSize: 11, outline: 'none',
-    fontFamily: 'inherit', colorScheme: 'dark',
+    color: T().text, fontSize: 11, outline: 'none',
+    fontFamily: 'inherit',
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', minWidth: 24 }}>開始</span>
+        <span style={{ fontSize: 10, color: T().textMuted, minWidth: 24 }}>開始</span>
         <input type="date" value={start} onChange={e => handleStart(e.target.value)} style={inputStyle} />
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>〜</span>
+        <span style={{ fontSize: 10, color: T().textMuted }}>〜</span>
         {ongoing ? (
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', padding: '4px 8px', background: 'rgba(255,255,255,0.1)', borderRadius: 5 }}>現在</span>
+          <span style={{ fontSize: 11, color: T().textSub, padding: '4px 8px', background: T().border, borderRadius: 5 }}>現在</span>
         ) : (
           <input type="date" value={end !== '現在' ? end : ''} onChange={e => handleEnd(e.target.value)} style={inputStyle} />
         )}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11, color: T().textSub }}>
           <input type="checkbox" checked={ongoing} onChange={e => handleOngoing(e.target.checked)}
-            style={{ accentColor: '#2f7a78' }} />
+            style={{ accentColor: T().accent }} />
           現在も継続中
         </label>
       </div>
       {value && (
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', paddingLeft: 30 }}>
+        <div style={{ fontSize: 10, color: T().textMuted, paddingLeft: 30 }}>
           表示: {value}
         </div>
       )}
@@ -140,30 +164,30 @@ function PeriodInput({ value, onChange }) {
 // 定数
 // ══════════════════════════════════════════════════
 const STATUS_OPTS = [
-  { value: 'active',    label: '🔵 現役',     bg: 'rgba(59,130,246,0.15)',  color: '#3b82f6', border: 'rgba(59,130,246,0.3)' },
-  { value: 'expanding', label: '🟡 拡充中',   bg: 'rgba(202,138,4,0.15)',   color: '#ca8a04', border: 'rgba(202,138,4,0.3)' },
-  { value: 'future',    label: '🟣 追加予定', bg: 'rgba(168,85,247,0.15)',  color: '#a855f7', border: 'rgba(168,85,247,0.3)' },
+  { value: 'active',    label: '🔵 現役',     bg: 'rgba(93,202,165,0.15)',  color: '#5DCAA5', border: 'rgba(93,202,165,0.3)' },
+  { value: 'expanding', label: '🟡 拡充中',   bg: 'rgba(240,153,123,0.15)', color: '#F0997B', border: 'rgba(240,153,123,0.3)' },
+  { value: 'future',    label: '🟣 追加予定', bg: 'rgba(176,186,200,0.15)', color: '#B0BAC8', border: 'rgba(176,186,200,0.3)' },
 ]
 const EMP_BADGE = {
-  '業務委託':        { bg: 'rgba(99,102,241,0.15)',  color: '#6366f1' },
-  '正社員':          { bg: 'rgba(16,185,129,0.15)',  color: '#10b981' },
-  '業務委託→正社員': { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b' },
-  '正社員予定':      { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b' },
+  '業務委託':        { bg: 'rgba(93,202,165,0.15)',  color: '#5DCAA5' },
+  '正社員':          { bg: 'rgba(61,107,94,0.15)',   color: '#3D6B5E' },
+  '業務委託→正社員': { bg: 'rgba(240,153,123,0.15)', color: '#F0997B' },
+  '正社員予定':      { bg: 'rgba(240,153,123,0.15)', color: '#F0997B' },
 }
 const EMP_OPTS = ['業務委託', '正社員', '業務委託→正社員', '正社員予定']
 const TASK_STATUS_OPTS = ['same', 'new', 'del']
-const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#be185d','#0891b2','#ea580c','#9333ea']
+const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#0F6E56','#F0997B','#B0BAC8','#4A5568','#7a8599','#1A202C']
 
 // levelsのnameから色を推定
 const DEPT_COLOR_RULES = [
-  { match: 'コミュニティ', color: '#1a56db' },
-  { match: 'ユース',       color: '#059669' },
-  { match: 'パートナー',   color: '#7c3aed' },
-  { match: '経営',         color: '#d97706' },
+  { match: 'コミュニティ', color: '#5A8A7A' },
+  { match: 'ユース',       color: '#3D6B5E' },
+  { match: 'パートナー',   color: '#0F6E56' },
+  { match: '経営',         color: '#E8875A' },
 ]
 function getDeptColor(name) {
   const rule = DEPT_COLOR_RULES.find(r => name && name.includes(r.match))
-  return rule ? rule.color : '#4d9fff'
+  return rule ? rule.color : '#5A8A7A'
 }
 function getStatusBadge(status) {
   return STATUS_OPTS.find(s => s.value === status) || STATUS_OPTS[0]
@@ -241,7 +265,7 @@ function SupportSelect({ value, onChange, memberNames, borderColor }) {
         <span style={{ marginLeft: 'auto', color: T().textFaintest, fontSize: 9 }}>▾</span>
       </div>
       {open && (
-        <div style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999, background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 6, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', maxHeight: 220, overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999, background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 6, maxHeight: 220, overflowY: 'auto' }}>
           {memberNames.map(name => {
             const isSel = selected.includes(name)
             return (
@@ -267,7 +291,7 @@ function SupportSelect({ value, onChange, memberNames, borderColor }) {
 function SaveBtn({ saving, saved, onClick, label = '保存' }) {
   return (
     <button onClick={onClick} disabled={saving}
-      style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: saved ? '#2f7a78' : '#2f7a78', color: '#fff', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.3s' }}>
+      style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: T().accentSolid, color: '#fff', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.3s' }}>
       {saved ? '✓ 保存済み' : saving ? '保存中...' : label}
     </button>
   )
@@ -277,22 +301,22 @@ function SaveBtn({ saving, saved, onClick, label = '保存' }) {
 // JDデフォルトデータ（Supabase org_member_jd が空の場合のフォールバック）
 // ══════════════════════════════════════════════════
 const JD_DEFAULT = {
-  '加藤翼':   { avatar_color:['#1a56db','#ddeeff'], versions:[
+  '加藤翼':   { avatar_color:['#5A8A7A','#EEF7F3'], versions:[
     { period:'2025年6月 〜現在', role:'コミュニティ事業責任者', emp:'業務委託', working:'週2日', role_desc:'NEO福岡の１年間の運営を統括する\nNEOが複数拠点でコミュニティ運営できる仕組みを構築する', responsibility:'コミュニティ事業部の成果責任\n事業部のコスト管理', meetings:'・NEO立上げ本部定例（毎週土曜 9:00〜10:30）\n・コミュニティ事業定例（毎週水曜13:00〜14:00）\n・チェックイン定例（毎週月曜朝）', tasks:[{cat:'コミュニティ',task:'NEOのコミュニティの基本設計と改善',status:'same'},{cat:'プログラム',task:'アワードの企画設計・PM計画書',status:'new'}]},
   ]},
-  '森朝香':   { avatar_color:['#059669','#d1fae5'], versions:[
+  '森朝香':   { avatar_color:['#3D6B5E','#E1F5EE'], versions:[
     { period:'2025年7月 〜現在', role:'コミュニティマネージャー (教育責任者)', emp:'業務委託', working:'週5（常時）', role_desc:'コミュニティチーム実行責任者（教育責任者業務含む）\n年間プログラムの受講生の受講状況の管理', responsibility:'アカデミア生からヒーローを創出する\n受講生に対するイベントの開催', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例（週2〜3回）\n・毎朝チェックイン', tasks:[{cat:'コミュニティ運営',task:'アカデミア生のカルテ情報の設計・最新アップデート',status:'same'},{cat:'コミュニティ運営',task:'Playful研修の企画・開発・営業・運営',status:'new'}]},
   ]},
-  '面川文香': { avatar_color:['#be185d','#fce7f3'], versions:[
+  '面川文香': { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
     { period:'2026年2月 〜現在', role:'企業伴走 兼 総務', emp:'正社員', working:'週5', role_desc:'企業伴走チームとして企業会員への密なコミュニケーション支援\n総務・事務局業務の中心担当', responsibility:'企業会員のNEO活用促進\n総務・事務局業務の実行責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例（週2〜3回）\n・毎朝チェックイン', tasks:[{cat:'企業伴走',task:'会員企業への適切な量・質・頻度でのコミュニケーション',status:'same'},{cat:'総務',task:'総務（事務作業・HP更新・郵送物管理・問い合わせ対応・経理連携）',status:'same'}]},
   ]},
-  '古野絢太': { avatar_color:['#0891b2','#cffafe'], versions:[
+  '古野絢太': { avatar_color:['#0F6E56','rgba(15,110,86,0.15)'], versions:[
     { period:'2026年4月 〜現在', role:'企業伴走 兼 事務局長補佐', emp:'業務委託', working:'週3〜4日', role_desc:'企業会員への密な伴走支援\n事務局長補佐として組織全体の業務管理補助', responsibility:'担当企業会員のサクセス支援\n事務局長補佐業務の実行', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例\n・毎朝チェックイン', tasks:[{cat:'企業伴走',task:'企業カルテの情報管理・企業公開情報のリサーチ・アップデート',status:'same'},{cat:'事務局補佐',task:'事務局長補佐（全体PM・資料作成・会議フィードバック）',status:'same'}]},
   ]},
-  '鬼木良輔': { avatar_color:['#b45309','#fef3c7'], versions:[
+  '鬼木良輔': { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
     { period:'2025年10月 〜現在', role:'カスタマーサクセスチーム マネージャー', emp:'業務委託', working:'週2〜3日', role_desc:'NEO福岡のカスタマーサクセスチームのマネジメント\n会員企業のサクセスロードマップ設計・実行', responsibility:'CSチームの成果責任（会員企業のサクセス・継続率）\n研修サービスの品質・売上責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・CS定例（週1〜2回）\n・担当企業との個別MTG（月1〜2回）', tasks:[{cat:'CS戦略',task:'会員企業のサクセスロードマップ企画・実行・改善',status:'same'},{cat:'研修',task:'NEO合同AI研修の企画・運営・改善',status:'same'}]},
   ]},
-  '増田雄太朗': { avatar_color:['#7c3aed','#ede9fe'], versions:[
+  '増田雄太朗': { avatar_color:['#5DCAA5','rgba(93,202,165,0.15)'], versions:[
     { period:'2026年1月 〜現在', role:'マーケティングマネージャー （正社員）', emp:'正社員', working:'週5', role_desc:'正社員として全社マーケティングを統括', responsibility:'マーケティング全般の成果責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・マーケ定例（週1〜2回）', tasks:[{cat:'マーケ戦略',task:'年間・四半期ごとのマーケティング計画（KPI設計・チャネル戦略）策定',status:'same'},{cat:'集客',task:'各イベントの集客戦略・広告運用（SNS広告・パートナー連携）',status:'same'}]},
   ]},
   '菅雅也':   { avatar_color:['#dc2626','#fee2e2'], versions:[
@@ -301,11 +325,11 @@ const JD_DEFAULT = {
   '中島啓太': { avatar_color:['#0f766e','#ccfbf1'], versions:[
     { period:'2025年7月 〜現在', role:'クラブパートナーシップ ダイレクター', emp:'業務委託', working:'週2〜3日', role_desc:'提携スポーツクラブとの戦略深化', responsibility:'提携クラブとの長期関係維持・拡大', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・パートナー定例（週1回）', tasks:[{cat:'パートナー開発',task:'提携スポーツチームとの中長期戦略の作成・合意形成',status:'same'},{cat:'プログラム連携',task:'アカデミア（HR）カリキュラム企画・スポーツ連携座組み企画',status:'same'}]},
   ]},
-  '中道稔':   { avatar_color:['#ea580c','#ffedd5'], versions:[
+  '中道稔':   { avatar_color:['#F0997B','rgba(240,153,123,0.15)'], versions:[
     { period:'2026年4月 〜8月', role:'イベントチームリーダー', emp:'業務委託', working:'週4〜5日', role_desc:'イベントチームリーダーとしてイベント全般を統括', responsibility:'イベント品質・NPS向上責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・イベント定例（週1〜2回）', tasks:[{cat:'イベント運営',task:'現地イベントロジ作成・運営実務準備',status:'same'},{cat:'チームリード',task:'イベントチームのリーダーシップ・指示出し',status:'new'}]},
     { period:'2026年9月 〜（予定）', role:'イベントチームリーダー （正社員）', emp:'正社員予定', working:'週5', role_desc:'正社員として安定的にイベントチームを統括', responsibility:'イベントチームの長期的な品質・体制確立', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・イベント定例（週1〜2回）', tasks:[{cat:'イベント運営',task:'現地イベントロジ作成・運営実務準備',status:'same'},{cat:'チームリード',task:'イベント振り返り・改善提案',status:'same'}]},
   ]},
-  '元美和':   { avatar_color:['#9333ea','#f3e8ff'], versions:[
+  '元美和':   { avatar_color:['#B0BAC8','rgba(176,186,200,0.15)'], versions:[
     { period:'2026年3月 〜現在', role:'コミュニティプロデューサー （NEO九州未来評議会専任）', emp:'業務委託', working:'週3〜4日', role_desc:'NEO九州未来評議会の企画・運営・拡大', responsibility:'NEO九州未来評議会の参加企業数・満足度の向上責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・評議会準備定例（月2〜3回）', tasks:[{cat:'評議会運営',task:'NEO九州未来評議会の当日進行設計・台本作成・ファシリテーション補助',status:'same'},{cat:'評議会拡大',task:'新規参加候補リスト作成・紹介ルート開拓・法人営業',status:'same'}]},
   ]},
 }
@@ -472,7 +496,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
         const color = getDeptColor(dept.name)
         return (
           <div key={dept.id} style={{ marginBottom: 24, border: `2px solid ${color}60`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ background: `linear-gradient(135deg, ${color}18, ${color}06)`, borderBottom: `2px solid ${color}80`, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ background: `${color}15`, borderBottom: `2px solid ${color}80`, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 4, height: 24, borderRadius: 2, background: color }} />
               <span style={{ fontSize: 16, fontWeight: 700, color }}>{dept.icon} {dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
@@ -508,7 +532,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                             style={{ width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '5px 8px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
                           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                             <button onClick={() => saveTeamMeta(team.id)} disabled={saving}
-                              style={{ padding: '3px 10px', borderRadius: 5, background: '#4d9fff', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓ 保存</button>
+                              style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓ 保存</button>
                             <button onClick={() => setEditingMeta(null)}
                               style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                           </div>
@@ -533,7 +557,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 
                       {isAdmin && !isEditing && (
                         <button onClick={() => { setMetaBuf({ status: meta.status || 'active', desc_text: meta.desc_text || '' }); setEditingMeta(team.id) }}
-                          style={{ marginTop: 8, fontSize: 10, color: '#4d9fff', background: 'transparent', border: '1px dashed rgba(77,159,255,0.35)', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          style={{ marginTop: 8, fontSize: 10, color: T().accent, background: 'transparent', border: `1px dashed ${T().badgeBorder}`, borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
                           ✎ チーム情報を編集
                         </button>
                       )}
@@ -709,25 +733,25 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
         </select>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 業務・チームで検索..."
           style={{ ...sel, width: 200 }}
-          onFocus={e => e.target.style.borderColor = '#4d9fff'}
+          onFocus={e => e.target.style.borderColor = T().accent}
           onBlur={e => e.target.style.borderColor = T().border}
         />
         <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{filtered.length}件</span>
         <button onClick={() => setShowArchived(p => !p)}
-          style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${showArchived ? 'rgba(255,159,67,0.4)' : T().border}`, background: showArchived ? 'rgba(255,159,67,0.12)' : 'transparent', color: showArchived ? '#ff9f43' : T().textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
+          style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${showArchived ? T().warn : T().border}`, background: showArchived ? T().warnBg : 'transparent', color: showArchived ? T().warn : T().textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
           {showArchived ? '📦 アーカイブ表示中' : `📦 アーカイブ (${archivedTasks.length})`}
         </button>
         {isAdmin && !showArchived && (
-          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>
             👑 管理者モード　⠿ドラッグで並び替え可
           </span>
         )}
         {showArchived && (
-          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,159,67,0.12)', color: '#ff9f43', border: '1px solid rgba(255,159,67,0.3)', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>
             📦 アーカイブ済みのみ表示
           </span>
         )}
-        {(filterDept || filterOwner || query) && <button onClick={() => { setFilterDept(''); setFilterOwner(''); setQuery('') }} style={{ ...sel, color: '#4d9fff', border: '1px solid rgba(77,159,255,0.3)' }}>クリア</button>}
+        {(filterDept || filterOwner || query) && <button onClick={() => { setFilterDept(''); setFilterOwner(''); setQuery('') }} style={{ ...sel, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>クリア</button>}
       </div>
 
       {Object.entries(grouped).map(([dept, teams]) => {
@@ -768,7 +792,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                               onDragOver={isAdmin && !showArchived ? e => handleDragOver(e, t.id) : undefined}
                               style={{
                                 borderBottom: i < teamTasks.length - 1 ? `1px solid ${T().border}` : 'none',
-                                background: isEditing ? 'rgba(77,159,255,0.06)' : showArchived ? 'rgba(255,159,67,0.04)' : 'transparent',
+                                background: isEditing ? T().bgHover : showArchived ? T().bgHover : 'transparent',
                                 cursor: isAdmin && !isEditing && !showArchived ? 'grab' : 'default',
                                 transition: 'background 0.1s',
                                 opacity: showArchived ? 0.75 : 1,
@@ -814,24 +838,24 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                                 <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                                   {isEditing ? (
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => saveEdit(t)} style={{ padding: '3px 10px', borderRadius: 5, background: '#4d9fff', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓</button>
+                                      <button onClick={() => saveEdit(t)} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓</button>
                                       <button onClick={() => setEditingId(null)} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                                     </div>
                                   ) : showArchived ? (
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => restoreTask(t)} style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(0,214,143,0.1)', border: '1px solid rgba(0,214,143,0.3)', color: '#00d68f', fontSize: 10, fontWeight: 700, cursor: 'pointer' }} title="業務一覧に戻す">↩ 復元</button>
-                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
+                                      <button onClick={() => restoreTask(t)} style={{ padding: '3px 10px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, fontWeight: 700, cursor: 'pointer' }} title="業務一覧に戻す">↩ 復元</button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
                                     </div>
                                   ) : (
                                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                       {taskHistory.filter(h => h.task_id === t.id).length > 0 && (
-                                        <button onClick={() => setHistoryTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(47,122,120,0.1)', border: '1px solid rgba(47,122,120,0.25)', color: '#2f7a78', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }} title="引き継ぎ履歴">
+                                        <button onClick={() => setHistoryTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }} title="引き継ぎ履歴">
                                           🔄 {taskHistory.filter(h => h.task_id === t.id).length}
                                         </button>
                                       )}
-                                      <button onClick={() => { setEditingId(t.id); setEditBuf({ owner: t.owner || '', task: t.task || '', support: t.support || '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(77,159,255,0.1)', border: '1px solid rgba(77,159,255,0.25)', color: '#4d9fff', fontSize: 10, cursor: 'pointer' }} title="編集">✎</button>
-                                      <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,159,67,0.08)', border: '1px solid rgba(255,159,67,0.25)', color: '#ff9f43', fontSize: 10, cursor: 'pointer' }} title="アーカイブ">📦</button>
-                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
+                                      <button onClick={() => { setEditingId(t.id); setEditBuf({ owner: t.owner || '', task: t.task || '', support: t.support || '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, cursor: 'pointer' }} title="編集">✎</button>
+                                      <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="アーカイブ">📦</button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
                                     </div>
                                   )}
                                 </td>
@@ -840,27 +864,27 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                           )
                         })}
                         {isAdmin && isAddingHere && (
-                          <tr style={{ background: 'rgba(0,214,143,0.05)', borderTop: '1px dashed rgba(0,214,143,0.25)' }}>
+                          <tr style={{ background: T().bgHover, borderTop: `1px dashed ${T().badgeBorder}` }}>
                             {isAdmin && <td />}
                             <td style={{ padding: '8px 12px' }}>
                               <select value={newBuf.owner} onChange={e => setNewBuf(b => ({ ...b, owner: e.target.value }))}
-                                style={{ width: '100%', background: T().inputBg, border: '1px solid rgba(0,214,143,0.4)', borderRadius: 5, padding: '4px 6px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
+                                style={{ width: '100%', background: T().inputBg, border: `1px solid ${T().badgeBorder}`, borderRadius: 5, padding: '4px 6px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
                                 <option value="">（未定）</option>
                                 {memberNames.map(n => <option key={n} value={n}>{n}</option>)}
                               </select>
                             </td>
-                            <td style={{ padding: '8px 12px' }}><InlineInput value={newBuf.task} onChange={v => setNewBuf(b => ({ ...b, task: v }))} placeholder="業務内容" style={{ borderColor: 'rgba(0,214,143,0.4)' }} /></td>
+                            <td style={{ padding: '8px 12px' }}><InlineInput value={newBuf.task} onChange={v => setNewBuf(b => ({ ...b, task: v }))} placeholder="業務内容" style={{ borderColor: T().badgeBorder }} /></td>
                             <td style={{ padding: '8px 12px' }}>
                               <SupportSelect
                                 value={newBuf.support}
                                 onChange={v => setNewBuf(b => ({ ...b, support: v }))}
                                 memberNames={memberNames.filter(n => n !== newBuf.owner)}
-                                borderColor="rgba(0,214,143,0.4)"
+                                borderColor={T().badgeBorder}
                               />
                             </td>
                             <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: '#2f7a78', border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
+                                <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
                                 <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                               </div>
                             </td>
@@ -870,7 +894,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                     </table>
                     {isAdmin && !isAddingHere && !showArchived && (
                       <div onClick={() => { setAddingTeam({ dept, team }); setNewBuf({ task: '', owner: '', support: '' }) }}
-                        style={{ padding: '8px 12px', fontSize: 11, color: '#2f7a78', cursor: 'pointer', background: 'rgba(47,122,120,0.04)', borderTop: '1px dashed rgba(47,122,120,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        style={{ padding: '8px 12px', fontSize: 11, color: T().accent, cursor: 'pointer', background: T().bgHover, borderTop: `1px dashed ${T().badgeBorder}`, display: 'flex', alignItems: 'center', gap: 5 }}>
                         ＋ 業務を追加
                       </div>
                     )}
@@ -927,7 +951,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
       {isAdmin && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <button onClick={() => setShowAddModal(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, background: '#2f7a78', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
             ＋ メンバーを追加
           </button>
         </div>
@@ -959,7 +983,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
                   <div style={{ fontSize: 10, color: T().textFaint, marginTop: 2 }}>{m.role || '—'}</div>
                 </div>
                 {totalVersions > 0 && (
-                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: 'rgba(47,122,120,0.1)', color: '#2f7a78', border: '1px solid rgba(77,159,255,0.2)', fontWeight: 700, flexShrink: 0 }}>
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}`, fontWeight: 700, flexShrink: 0 }}>
                     v{totalVersions}
                   </span>
                 )}
@@ -968,7 +992,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
               {teamNames.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
                   {teamNames.map(t => (
-                    <span key={t} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(47,122,120,0.1)', color: '#2f7a78', border: '1px solid rgba(47,122,120,0.25)' }}>{t}</span>
+                    <span key={t} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>{t}</span>
                   ))}
                 </div>
               )}
@@ -1002,9 +1026,9 @@ function TaskHistoryModal({ task, history, onClose }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', color: T().text }}>
+      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, color: T().text }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 4 }}>引き継ぎ履歴</div>
@@ -1026,7 +1050,7 @@ function TaskHistoryModal({ task, history, onClose }) {
               const isLatest = i === records.length - 1
               return (
                 <div key={r.id} style={{ position: 'relative', marginBottom: i < records.length - 1 ? 16 : 0 }}>
-                  <div style={{ position: 'absolute', left: -20, top: 10, width: 10, height: 10, borderRadius: '50%', background: isLatest ? '#2f7a78' : T().borderMid, border: `2px solid ${isLatest ? '#2f7a78' : T().border}`, boxShadow: isLatest ? '0 0 6px rgba(47,122,120,0.5)' : 'none' }} />
+                  <div style={{ position: 'absolute', left: -20, top: 10, width: 10, height: 10, borderRadius: '50%', background: isLatest ? T().accent : T().borderMid, border: `2px solid ${isLatest ? T().accent : T().border}` }} />
                   <div style={{ background: T().bgCard2, border: `1px solid ${T().border}`, borderRadius: 8, padding: '10px 14px' }}>
                     <div style={{ fontSize: 10, color: T().textFaint, marginBottom: 6 }}>{fmt(r.changed_at)}{r.changed_by ? ` · ${r.changed_by}` : ''}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1037,7 +1061,7 @@ function TaskHistoryModal({ task, history, onClose }) {
                       ) : (
                         <span style={{ fontSize: 12, color: T().textFaintest, fontStyle: 'italic' }}>（未設定）</span>
                       )}
-                      <span style={{ color: '#2f7a78', fontSize: 14, fontWeight: 700 }}>→</span>
+                      <span style={{ color: T().accent, fontSize: 14, fontWeight: 700 }}>→</span>
                       {r.to_owner ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 5, background: `${avatarColor(r.to_owner)}15`, color: avatarColor(r.to_owner), fontSize: 12, fontWeight: 600 }}>
                           <Avatar name={r.to_owner} size={16} />{r.to_owner}
@@ -1084,9 +1108,9 @@ function AddMemberModal({ levels, onClose, onAdded }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 16, padding: 26, width: '100%', maxWidth: 500, maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 28px 80px rgba(0,0,0,0.5)', color: T().text }}>
+      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 16, padding: 26, width: '100%', maxWidth: 500, maxHeight: '88vh', overflowY: 'auto', color: T().text }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T().text }}>＋ メンバーを追加</h3>
           <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16 }}>✕</button>
@@ -1118,7 +1142,7 @@ function AddMemberModal({ levels, onClose, onAdded }) {
                       const isSel = selectedIds.includes(team.id)
                       return (
                         <div key={team.id} onClick={() => toggleId(team.id)}
-                          style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? 'rgba(77,159,255,0.2)' : T().bgInput, border: `1px solid ${isSel ? 'rgba(77,159,255,0.5)' : T().border}`, color: isSel ? '#4d9fff' : T().textMuted, transition: 'all 0.15s' }}>
+                          style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? T().badgeBg : T().bgInput, border: `1px solid ${isSel ? T().badgeBorder : T().border}`, color: isSel ? T().accent : T().textMuted, transition: 'all 0.15s' }}>
                           {isSel ? '✓ ' : ''}{team.icon} {team.name}
                         </div>
                       )
@@ -1130,11 +1154,11 @@ function AddMemberModal({ levels, onClose, onAdded }) {
           ))}
         </div>
 
-        {error && <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 12, padding: '8px 12px', background: 'rgba(255,107,107,0.1)', borderRadius: 8 }}>{error}</div>}
+        {error && <div style={{ color: T().warn, fontSize: 12, marginBottom: 12, padding: '8px 12px', background: T().warnBg, borderRadius: 8 }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, borderRadius: 8, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
           <button onClick={save} disabled={saving || !name.trim()}
-            style={{ background: !name.trim() ? 'rgba(0,214,143,0.3)' : '#00d68f', border: 'none', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: !name.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+            style={{ background: !name.trim() ? T().badgeBg : T().accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: !name.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
             {saving ? '追加中...' : '追加する'}
           </button>
         </div>
@@ -1308,28 +1332,28 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button onClick={onBack}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', border: `1px solid ${T().border}`, background: T().bgInput, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().textMuted, fontFamily: 'inherit' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(77,159,255,0.1)'; e.currentTarget.style.color = '#4d9fff' }}
+          onMouseEnter={e => { e.currentTarget.style.background = T().badgeBg; e.currentTarget.style.color = T().accent }}
           onMouseLeave={e => { e.currentTarget.style.background = T().bgInput; e.currentTarget.style.color = T().textMuted }}
         >← メンバー一覧に戻る</button>
 
         {isAdmin && !editing && versions.length === 0 && (
-          <button onClick={startCreateJD} style={{ padding: '7px 16px', border: '1px solid rgba(47,122,120,0.4)', background: 'rgba(47,122,120,0.08)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#2f7a78', fontFamily: 'inherit' }}>
+          <button onClick={startCreateJD} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
             ＋ JDを作成する
           </button>
         )}
         {isAdmin && !editing && versions.length > 0 && (
           <>
-            <button onClick={startEdit} style={{ padding: '7px 16px', border: '1px solid rgba(255,209,102,0.35)', background: 'rgba(255,209,102,0.1)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#ffd166', fontFamily: 'inherit' }}>
+            <button onClick={startEdit} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
               👑 このバージョンを編集
             </button>
-            <button onClick={startAddVersion} style={{ padding: '7px 16px', border: '1px solid rgba(47,122,120,0.4)', background: 'rgba(47,122,120,0.08)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#2f7a78', fontFamily: 'inherit' }}>
+            <button onClick={startAddVersion} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
               ＋ 新バージョンを追加
             </button>
           </>
         )}
         {isAdmin && editing && (
           <>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: addingNewVersion ? 'rgba(77,159,255,0.15)' : 'rgba(255,209,102,0.15)', color: addingNewVersion ? '#4d9fff' : '#ffd166', border: `1px solid ${addingNewVersion ? 'rgba(77,159,255,0.3)' : 'rgba(255,209,102,0.3)'}` }}>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: addingNewVersion ? T().badgeBg : T().warnBg, color: addingNewVersion ? T().accent : T().warn, border: `1px solid ${addingNewVersion ? T().badgeBorder : T().warn}` }}>
               {addingNewVersion ? '＋ 新バージョン作成中' : `V${effectiveVerIdx + 1} 編集中`}
             </span>
             <SaveBtn saving={saving} saved={saved} onClick={saveEdit} label="保存する" />
@@ -1337,14 +1361,14 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
           </>
         )}
         {isAdmin && memberRow && (
-          <button onClick={deleteMember} style={{ marginLeft: 'auto', padding: '7px 14px', border: '1px solid rgba(255,107,107,0.3)', background: 'rgba(255,107,107,0.08)', borderRadius: 7, fontSize: 12, cursor: 'pointer', color: '#ff6b6b', fontFamily: 'inherit' }}>
+          <button onClick={deleteMember} style={{ marginLeft: 'auto', padding: '7px 14px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
             🗑 メンバー削除
           </button>
         )}
       </div>
 
       {/* プロフィールヘッダー */}
-      <div style={{ background: `linear-gradient(135deg, ${fg}, ${fg}bb)`, borderRadius: 12, padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
+      <div style={{ background: fg, borderRadius: 12, padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
         <Avatar name={memberRow?.name} size={64} />
         <div style={{ flex: 1 }}>
           {editingProfile ? (
@@ -1425,7 +1449,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
         <div style={{ ...box, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: editingTeams ? 12 : 8 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase' }}>▶ 所属チーム（兼務設定）</div>
-            {!editingTeams && <button onClick={() => setEditingTeams(true)} style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid rgba(255,209,102,0.3)', background: 'rgba(255,209,102,0.08)', color: '#ffd166', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>👑 変更</button>}
+            {!editingTeams && <button onClick={() => setEditingTeams(true)} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>👑 変更</button>}
           </div>
           {editingTeams ? (
             <div>
@@ -1442,7 +1466,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                           const isSel = selectedIds.includes(team.id)
                           return (
                             <div key={team.id} onClick={() => toggleId(team.id)}
-                              style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? 'rgba(77,159,255,0.2)' : T().bgInput, border: `1px solid ${isSel ? 'rgba(77,159,255,0.5)' : T().border}`, color: isSel ? '#4d9fff' : T().textMuted, transition: 'all 0.15s' }}>
+                              style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? T().badgeBg : T().bgInput, border: `1px solid ${isSel ? T().badgeBorder : T().border}`, color: isSel ? T().accent : T().textMuted, transition: 'all 0.15s' }}>
                               {isSel ? '✓ ' : ''}{team.icon} {team.name}
                             </div>
                           )
@@ -1454,7 +1478,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               )}
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button onClick={saveTeams} disabled={savingTeams}
-                  style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: '#4d9fff', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: T().accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                   {savingTeams ? '保存中...' : '保存'}
                 </button>
                 <button onClick={() => setEditingTeams(false)} style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${T().borderMid}`, background: 'transparent', color: T().textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
@@ -1464,7 +1488,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {selectedIds.length > 0 ? selectedIds.map(id => {
                 const lv = levels.find(l => Number(l.id) === id)
-                return lv ? <span key={id} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(77,159,255,0.12)', color: '#4d9fff', border: '1px solid rgba(77,159,255,0.25)' }}>{lv.icon} {lv.name}</span> : null
+                return lv ? <span key={id} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>{lv.icon} {lv.name}</span> : null
               }) : <span style={{ fontSize: 11, color: T().textFaintest, fontStyle: 'italic' }}>チーム未設定</span>}
             </div>
           )}
@@ -1485,7 +1509,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             )
           })}
           {isAdmin && addingNewVersion && (
-            <div style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, color: '#00d68f', background: 'rgba(0,214,143,0.15)', border: '1px solid #00d68f', borderRadius: '6px 6px 0 0', whiteSpace: 'nowrap' }}>
+            <div style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, color: T().accent, background: T().badgeBg, border: `1px solid ${T().accent}`, borderRadius: '6px 6px 0 0', whiteSpace: 'nowrap' }}>
               ✎ 新バージョン作成中
             </div>
           )}
@@ -1607,7 +1631,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase' }}>
                     ▶ 担当業務一覧（{ownerTasks.length}件）
-                    <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 8, padding: '1px 6px', borderRadius: 4, background: 'rgba(47,122,120,0.1)', color: '#2f7a78' }}>業務一覧と同期</span>
+                    <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 8, padding: '1px 6px', borderRadius: 4, background: T().badgeBg, color: T().accent }}>業務一覧と同期</span>
                   </div>
                 </div>
 
@@ -1639,7 +1663,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                       <span>{t.task}</span>
                                       {(taskHistory || []).filter(h => h.task_id === t.id).length > 0 && (
-                                        <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(47,122,120,0.1)', color: '#2f7a78', border: '1px solid rgba(47,122,120,0.2)', whiteSpace: 'nowrap', cursor: 'default' }}
+                                        <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}`, whiteSpace: 'nowrap', cursor: 'default' }}
                                           title={(taskHistory || []).filter(h => h.task_id === t.id).map(h => `${h.from_owner || '未設定'} → ${h.to_owner || '未設定'}`).join(' / ')}>
                                           🔄 {(taskHistory || []).filter(h => h.task_id === t.id).length}回引き継ぎ
                                         </span>
@@ -1748,7 +1772,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                 return (
                   <div key={i} style={{ position: 'relative', marginBottom: i < versions.length - 1 ? 4 : 0 }}>
                     {/* タイムラインドット */}
-                    <div style={{ position: 'absolute', left: -26, top: 16, width: 14, height: 14, borderRadius: '50%', background: isLatest ? fg : (isCurrent ? fg : T().bgCard2), border: `2px solid ${isLatest || isCurrent ? fg : T().borderMid}`, boxShadow: isLatest ? `0 0 10px ${fg}80` : 'none', zIndex: 1 }} />
+                    <div style={{ position: 'absolute', left: -26, top: 16, width: 14, height: 14, borderRadius: '50%', background: isLatest ? fg : (isCurrent ? fg : T().bgCard2), border: `2px solid ${isLatest || isCurrent ? fg : T().borderMid}`, zIndex: 1 }} />
                     {/* コネクタライン */}
                     {i < versions.length - 1 && (
                       <div style={{ position: 'absolute', left: -20, top: 30, width: 2, height: 'calc(100% - 10px)', background: `${fg}20` }} />
@@ -1768,7 +1792,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                             </span>
                           </div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: isCurrent ? T().text : T().textMuted, lineHeight: 1.4 }}>
-                            {roleChanged && <span style={{ fontSize: 10, marginRight: 6, padding: '1px 6px', borderRadius: 3, background: 'rgba(255,209,102,0.15)', color: '#ffd166' }}>役職変更</span>}
+                            {roleChanged && <span style={{ fontSize: 10, marginRight: 6, padding: '1px 6px', borderRadius: 3, background: T().warnBg, color: T().warn }}>役職変更</span>}
                             {v.role || '（役職未設定）'}
                           </div>
                           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1790,7 +1814,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
 
                       {/* JD_DEFAULTからDBへのシード促進メッセージ */}
                       {dbRows.length === 0 && isAdmin && i === versions.length - 1 && (
-                        <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(77,159,255,0.08)', borderRadius: 6, fontSize: 10, color: '#4d9fff', border: '1px dashed rgba(77,159,255,0.25)' }}>
+                        <div style={{ marginTop: 8, padding: '6px 10px', background: T().badgeBg, borderRadius: 6, fontSize: 10, color: T().accent, border: `1px dashed ${T().badgeBorder}` }}>
                           💡 このデータはデフォルト値です。「このバージョンを編集」から保存するとDBに記録されます
                         </div>
                       )}
@@ -1802,11 +1826,11 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               {/* 新バージョン追加プレースホルダー */}
               {isAdmin && !editing && versions.length > 0 && (
                 <div onClick={startAddVersion}
-                  style={{ position: 'relative', padding: '10px 14px', borderRadius: 10, cursor: 'pointer', border: `1px dashed rgba(0,214,143,0.3)`, background: 'rgba(0,214,143,0.04)', display: 'flex', alignItems: 'center', gap: 8, color: '#00d68f', fontSize: 12 }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,214,143,0.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,214,143,0.04)'}
+                  style={{ position: 'relative', padding: '10px 14px', borderRadius: 10, cursor: 'pointer', border: `1px dashed ${T().badgeBorder}`, background: T().bgHover, display: 'flex', alignItems: 'center', gap: 8, color: T().accent, fontSize: 12 }}
+                  onMouseEnter={e => e.currentTarget.style.background = T().badgeBg}
+                  onMouseLeave={e => e.currentTarget.style.background = T().bgHover}
                 >
-                  <div style={{ position: 'absolute', left: -26, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%', border: '2px dashed rgba(0,214,143,0.5)', background: T().bgCard }} />
+                  <div style={{ position: 'absolute', left: -26, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderRadius: '50%', border: `2px dashed ${T().accent}`, background: T().bgCard }} />
                   ＋ 新しいバージョンを追加
                 </div>
               )}
@@ -1850,25 +1874,25 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   ]
 
 
-  if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T().bg, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
+  if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T().bg, color: T().textMuted, fontSize: 14 }}>読み込み中...</div>
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 28px' }}>
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: '#2f7a78', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
+          <div style={{ fontSize: 11, color: T().accent, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: T().text }}>🏢 組織</div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(47,122,120,0.12)' : 'rgba(234,88,12,0.12)', color: fiscalYear === '2026' ? '#2f7a78' : '#ea580c', border: `1px solid ${fiscalYear === '2026' ? 'rgba(47,122,120,0.3)' : 'rgba(234,88,12,0.3)'}` }}>{fiscalYear}年度</span>
-            {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(255,209,102,0.15)', color: '#ffd166', border: '1px solid rgba(255,209,102,0.3)', fontWeight: 700 }}>👑 管理者</span>}
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? T().badgeBg : T().warnBg, color: fiscalYear === '2026' ? T().accent : T().warn, border: `1px solid ${fiscalYear === '2026' ? T().badgeBorder : T().warn}` }}>{fiscalYear}年度</span>
+            {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>👑 管理者</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
             <div style={{ fontSize: 13, color: T().textFaint }}>NEO福岡の組織図・業務一覧・メンバー別JDを確認できます</div>
             <span style={{
               fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
-              background: syncStatus === 'synced' ? 'rgba(0,214,143,0.12)' : syncStatus === 'error' ? 'rgba(255,107,107,0.12)' : 'rgba(255,209,102,0.12)',
-              color: syncStatus === 'synced' ? '#00d68f' : syncStatus === 'error' ? '#ff6b6b' : '#ffd166',
-              border: `1px solid ${syncStatus === 'synced' ? 'rgba(0,214,143,0.3)' : syncStatus === 'error' ? 'rgba(255,107,107,0.3)' : 'rgba(255,209,102,0.3)'}`,
+              background: syncStatus === 'synced' ? T().badgeBg : syncStatus === 'error' ? T().warnBg : T().warnBg,
+              color: syncStatus === 'synced' ? T().accent : syncStatus === 'error' ? T().warn : T().warn,
+              border: `1px solid ${syncStatus === 'synced' ? T().badgeBorder : T().warn}`,
             }}>
               {syncStatus === 'synced' ? '🟢 リアルタイム同期中' : syncStatus === 'error' ? '🔴 同期エラー' : '🟡 接続中...'}
             </span>
@@ -1881,7 +1905,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             return (
               <button key={t.id}
                 onClick={() => { setActiveTab(t.id); if (t.id !== 'members') setJumpMemberName(null) }}
-                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? '#2f7a78' : T().textFaint, borderBottom: `3px solid ${isA ? '#2f7a78' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? 'rgba(47,122,120,0.08)' : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
+                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? T().accent : T().textFaint, borderBottom: `3px solid ${isA ? T().accent : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? T().navActiveBg : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
                 {t.icon} {t.label}
               </button>
             )
