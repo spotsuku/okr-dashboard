@@ -331,7 +331,7 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit, dragHandleProp
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, activeWeek, onReorder }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
     .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
@@ -370,6 +370,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [reviewOpen,   setReviewOpen]   = useState(false)
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewSaved,  setReviewSaved]  = useState(false)
+  const [krEditing,    setKrEditing]    = useState(false)
+  const [krTitle,      setKrTitle]      = useState(kr.title || '')
+  const [krCurrent,    setKrCurrent]    = useState(String(kr.current ?? ''))
+  const [krTarget,     setKrTarget]     = useState(String(kr.target ?? ''))
+  const [krUnit,       setKrUnit]       = useState(kr.unit || '')
+  const [krSaving,     setKrSaving]     = useState(false)
+  const [krSaved,      setKrSaved]      = useState(false)
   const weekStart = activeWeek || toDateStr(getMonday(new Date()))
 
   useEffect(() => {
@@ -385,6 +392,19 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
     if (review?.id) { await supabase.from('kr_weekly_reviews').update(payload).eq('id', review.id) }
     else { const {data} = await supabase.from('kr_weekly_reviews').insert([payload]).select().single(); if (data) setReview(data) }
     setReviewSaving(false); setReviewSaved(true); setTimeout(() => setReviewSaved(false), 1500)
+  }
+
+  const saveKR = async () => {
+    if (!onKRUpdate) return
+    setKrSaving(true)
+    const ok = await onKRUpdate(kr.id, {
+      title: krTitle.trim() || kr.title,
+      current: parseFloat(krCurrent) || 0,
+      target: parseFloat(krTarget) || 0,
+      unit: krUnit,
+    })
+    setKrSaving(false)
+    if (ok) { setKrSaved(true); setTimeout(() => setKrSaved(false), 1500); setKrEditing(false) }
   }
 
   const addKA = async () => {
@@ -460,6 +480,51 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
               <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の体感・主観</div>
               <WeatherPicker value={weather} onChange={setWeather} wT={wT} />
             </div>
+          </div>
+          {/* KR編集セクション */}
+          <div style={{ marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${krEditing?'rgba(255,159,67,0.4)':wT().border}`, transition:'border-color 0.15s' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#ff9f43', textTransform:'uppercase', letterSpacing:'0.08em' }}>📝 KR設定</div>
+              {!krEditing && (
+                <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:`1px solid rgba(255,159,67,0.3)`, background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
+              )}
+            </div>
+            {!krEditing ? (
+              <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:6, fontSize:12, color:wT().textSub }}>
+                <span>タイトル: <b style={{ color:wT().text }}>{kr.title}</b></span>
+                <span>現在値: <b style={{ color:pctColor }}>{kr.current}{kr.unit}</b></span>
+                <span>目標: <b style={{ color:wT().text }}>{kr.target}{kr.unit}</b></span>
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom:6 }}>
+                  <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>タイトル</div>
+                  <input value={krTitle} onChange={e=>setKrTitle(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>現在値</div>
+                    <input type="number" value={krCurrent} onChange={e=>setKrCurrent(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:pctColor, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>目標値</div>
+                    <input type="number" value={krTarget} onChange={e=>setKrTarget(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>単位</div>
+                    <input value={krUnit} onChange={e=>setKrUnit(e.target.value)} placeholder="件, %, 万円..." style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                </div>
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:6 }}>
+                  <button onClick={() => { setKrEditing(false); setKrTitle(kr.title||''); setKrCurrent(String(kr.current??'')); setKrTarget(String(kr.target??'')); setKrUnit(kr.unit||'') }}
+                    style={{ padding:'4px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>キャンセル</button>
+                  <button onClick={saveKR} disabled={krSaving}
+                    style={{ padding:'4px 14px', borderRadius:6, background:krSaved?'#00d68f':'#ff9f43', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                    {krSaved?'✓ 保存済み':krSaving?'保存中...':'KRを保存'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <div>
@@ -640,6 +705,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     const { error } = await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
     if (error) { console.error('KR owner update failed:', error); alert('KR担当者の保存に失敗しました。DBにownerカラムが必要です。'); return }
     setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, owner: newOwner } : kr))
+  }
+  const handleKRUpdate = async (krId, fields) => {
+    const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
+    if (error) { console.error('KR update failed:', error); return false }
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    return true
   }
 
   const myMember = members.find(m => m.email === user?.email)
@@ -890,6 +961,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   objOwner={selectedObj.owner}
                   canEditKA={canEditKA}
                   onKROwnerChange={handleKROwnerChange}
+                  onKRUpdate={handleKRUpdate}
                   activeWeek={activeWeek}
                   onReorder={reload}
                 />
