@@ -1370,6 +1370,8 @@ export default function Dashboard({ user, onSignOut }) {
             levels={levels}
             refreshKey={annualRefreshKey}
             fiscalYear={fiscalYear}
+            themeKey={themeKey}
+            activeLevelId={activeLevelId}
             onAddObjective={({ parentObjectiveId, period, level_id }) => {
               setModal({ type: 'add', obj: { parent_objective_id: parentObjectiveId, period, level_id } })
             }}
