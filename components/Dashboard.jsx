@@ -328,7 +328,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           background: getT().badgeBg,
           border: `1px solid ${getT().badgeBorder}`,
           borderRadius: 8, padding: '6px 12px',
-          color: getT().text,
+          color: '#fff',
           fontSize: 13, fontWeight: 700,
         }}>
           📅 {fiscalYear}年度
@@ -468,9 +468,9 @@ function KASection({ krId }) {
   }
 
   const TYPE_CONFIG = {
-    normal: { label: '未分類', color: getT().textMuted, bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.07)' },
-    focus:  { label: '🎯 今週注力', color: getT().accent, bg: getT().badgeBg, border: getT().badgeBorder },
-    good:   { label: '✅ Good',    color: getT().accent, bg: getT().badgeBg, border: getT().badgeBorder },
+    normal: { label: '未分類', color: getT().textMuted, bg: getT().bgCard2, border: getT().border },
+    focus:  { label: '🎯 今週注力', color: '#fff', bg: getT().badgeBg, border: getT().badgeBorder },
+    good:   { label: '✅ Good',    color: '#fff', bg: getT().badgeBg, border: getT().badgeBorder },
     more:   { label: '🔺 More',   color: getT().warn, bg: getT().warnBg, border: getT().warnBg },
   }
 
@@ -482,11 +482,11 @@ function KASection({ krId }) {
       <div onClick={() => setOpen(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}>
         <span style={{ fontSize: 10, color: getT().accent, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
         <span style={{ fontSize: 11, color: getT().accent }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
-        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: getT().accent }}>
+        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: '#fff' }}>
           {open ? kas.length : ''}
         </span>
         {!open && focusCount > 0 && (
-          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: getT().accent, fontWeight: 700 }}>🎯 {focusCount}</span>
+          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: '#fff', fontWeight: 700 }}>🎯 {focusCount}</span>
         )}
       </div>
 
@@ -559,7 +559,7 @@ function KASection({ krId }) {
               </div>
             </div>
           ) : (
-            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: getT().accent, background: getT().badgeBg, border: `1px dashed ${getT().badgeBorder}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#fff', background: getT().badgeBg, border: `1px dashed ${getT().badgeBorder}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
               ＋ KAを追加
             </button>
           )}
@@ -633,7 +633,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
                         <span style={{ fontSize: 13, color: getT().textSub, lineHeight: 1.35 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: getT().accent, background: getT().badgeBg, padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: getT().badgeBg, padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
                           {kr.title}
                         </span>
                         <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>
@@ -796,7 +796,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
     const isRoot = absD === 0
     return (
       <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:'rgba(255,255,255,0.03)', border:`1px solid ${getT().border}` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:getT().bgCard2, border:`1px solid ${getT().border}` }}>
           <span style={{ fontSize:13 }}>{level.icon}</span>
           <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
           <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
@@ -816,11 +816,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
   return (
     <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.78)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:getT().bgCard, border:'1px solid rgba(255,255,255,0.1)', borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
+      <div style={{ background:getT().bgCard, border:`1px solid ${getT().border}`, borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: getT().badgeBg, color: fiscalYear==='2026'? getT().accent : getT().accentDark, border:`1px solid ${getT().badgeBorder}`}}>
+            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: getT().badgeBg, color: '#fff', border:`1px solid ${getT().badgeBorder}`}}>
               {fiscalYear}年度
             </span>
           </div>
@@ -828,11 +828,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
         </div>
 
         {onCopyFromYear && (
-          <div style={{ marginBottom:16, padding:'10px 12px', background:'rgba(168,85,247,0.06)', border:'1px solid rgba(168,85,247,0.2)', borderRadius:10 }}>
+          <div style={{ marginBottom:16, padding:'10px 12px', background:`${getT().accent}08`, border:`1px solid ${getT().accent}30`, borderRadius:10 }}>
             <div style={{ fontSize:11, color:getT().textMuted, fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {['2025','2026'].filter(y=>y!==fiscalYear).map(y=>(
-                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:'1px solid rgba(168,85,247,0.4)', background:'rgba(107,114,128,0.1)', color:getT().textMuted, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:`1px solid ${getT().accent}40`, background:`${getT().accent}10`, color:getT().textMuted, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                   {y}年度からコピー
                 </button>
               ))}
@@ -846,7 +846,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
             {fiscalYear}年度の現在の組織（{levels.length}件）
           </div>
           {levels.length === 0 ? (
-            <div style={{ fontSize:12, color:'#404660', fontStyle:'italic', padding:'12px 8px', textAlign:'center' }}>
+            <div style={{ fontSize:12, color:getT().textFaint, fontStyle:'italic', padding:'12px 8px', textAlign:'center' }}>
               この年度の組織がまだありません。他年度からコピーするか、新規追加してください。
             </div>
           ) : (
@@ -854,11 +854,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
           )}
         </div>
 
-        <div style={{ borderTop:'1px solid rgba(255,255,255,0.07)', paddingTop:18 }}>
+        <div style={{ borderTop:`1px solid ${getT().border}`, paddingTop:18 }}>
           <div style={{ fontSize:10, color:getT().textMuted, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>親組織</div>
-            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:getT().bgCard2, border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color: parentId ? '#e8eaf0' : getT().textMuted, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
+            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color: parentId ? getT().text : getT().textMuted, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
               <option value=''>選択してください</option>
               {addableParents.map(l => {
                 const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
@@ -870,18 +870,18 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>組織名</div>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="例: 西日本営業チーム"
-              style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color:'#e8eaf0', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
+              style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color:getT().text, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
           </div>
           <div style={{ marginBottom:16 }}>
             <div style={{ fontSize:11, color:getT().textMuted, marginBottom:8 }}>アイコン</div>
             <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
               {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? getT().accentSolid : 'rgba(255,255,255,0.1)'}`, background: icon===ic ? getT().badgeBg : 'rgba(255,255,255,0.04)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
+                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? getT().accentSolid : getT().border}`, background: icon===ic ? getT().badgeBg : getT().bgCard2, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
               ))}
             </div>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
-            <button onClick={onClose} style={{ background:'transparent', border:'1px solid rgba(255,255,255,0.1)', color:getT().textMuted, borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
+            <button onClick={onClose} style={{ background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted, borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
             <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? getT().badgeBg : getT().accentSolid, border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
           </div>
         </div>
@@ -1477,7 +1477,7 @@ export default function Dashboard({ user, onSignOut }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
               <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: getT().badgeBg, color: getT().text, border: `1px solid ${getT().badgeBorder}` }}>{fiscalYear}年度</span>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: getT().badgeBg, color: '#fff', border: `1px solid ${getT().badgeBorder}` }}>{fiscalYear}年度</span>
               <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
