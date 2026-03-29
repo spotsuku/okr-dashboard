@@ -616,7 +616,7 @@ function useOrgData(fiscalYear) {
     ] = await Promise.all([
       supabase.from('levels').select('*').order('id'),
       supabase.from('org_team_meta').select('*'),
-      supabase.from('members').select('*').order('sort_order', { ascending: true, nullsFirst: false }).order('name'),
+      supabase.from('members').select('*').order('id'),
       supabase.from('org_tasks').select('*').order('id'),
       supabase.from('org_member_jd').select('*').order('version_idx'),
       supabase.from('org_task_history').select('*').order('changed_at'),
@@ -1227,13 +1227,14 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
     const reordered = [...members]
     const [moved] = reordered.splice(fromIdx, 1)
     reordered.splice(toIdx, 0, moved)
-    setMembers(reordered)
+    setMembers(reordered.map((m, i) => ({ ...m, sort_order: i })))
     setDragId(null); setDragOverId(null)
-    // sort_order をDBに保存
-    const updates = reordered.map((m, i) => ({ id: m.id, sort_order: i }))
-    for (const u of updates) {
-      await supabase.from('members').update({ sort_order: u.sort_order }).eq('id', u.id)
-    }
+    // sort_order をDBに保存（カラムが未追加でもクラッシュしない）
+    try {
+      for (let i = 0; i < reordered.length; i++) {
+        await supabase.from('members').update({ sort_order: i }).eq('id', reordered[i].id)
+      }
+    } catch (e) { console.warn('sort_order save failed (column may not exist):', e) }
   }
   const handleDragEnd = () => { setDragId(null); setDragOverId(null) }
 
@@ -1274,7 +1275,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-        {members.map(m => {
+        {[...members].sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999) || a.id - b.id).map(m => {
           const jdBase = JD_DEFAULT[m.name] || { avatar_color: [avatarColor(m.name), '#111828'], versions: [] }
           const [fg, bg] = jdBase.avatar_color
           // DBのjdRowsがあれば最新バージョンを表示、なければJD_DEFAULTの最終版
