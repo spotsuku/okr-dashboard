@@ -48,13 +48,13 @@ const THEMES = {
     border:      '#DDE4EA',
     borderMid:   '#B0C0CC',
     borderEdit:  '#5A8A7A',
-    text:        '#1A202C',
-    textSub:     '#4A5568',
+    text:        '#2D3748',
+    textSub:     '#5A6577',
     textMuted:   '#A0AEC0',
     textFaint:   '#A0AEC0',
     textFaintest:'#DDE4EA',
     inputBg:     '#FFFFFF',
-    inputText:   '#1A202C',
+    inputText:   '#2D3748',
     selectBg:    '#FFFFFF',
     accent:      '#5A8A7A',
     accentDark:  '#3D6B5E',
@@ -176,7 +176,7 @@ const EMP_BADGE = {
 }
 const EMP_OPTS = ['業務委託', '正社員', '業務委託→正社員', '正社員予定']
 const TASK_STATUS_OPTS = ['same', 'new', 'del']
-const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#0F6E56','#F0997B','#B0BAC8','#4A5568','#7a8599','#1A202C']
+const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
 
 // levelsのnameから色を推定
 const DEPT_COLOR_RULES = [
@@ -197,15 +197,272 @@ function getEmpBadge(emp) {
   return EMP_BADGE[key]
 }
 function avatarColor(name) {
-  if (!name) return '#606880'
+  if (!name) return T().textMuted
   let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+
+const ROLES = ['管理者', 'ディレクター', 'マネージャー', 'メンバー', 'その他']
+
+// ── ユーザー一覧タブ（MemberPageから移植） ───────────────────────────────────
+function UserListTab({ members, currentUser, isAdmin }) {
+  const [authUsers, setAuthUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [linkModal, setLinkModal] = useState(null)
+  const [roleModal, setRoleModal] = useState(null)
+  const [processing, setProcessing] = useState(false)
+
+  useEffect(() => { fetchUsers() }, [])
+
+  const fetchUsers = async () => {
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/admin-users')
+      const data = await res.json()
+      if (!res.ok || data.error) { setError(data.error || '取得に失敗しました'); setLoading(false); return }
+      const sorted = (data.users || []).sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0))
+      setAuthUsers(sorted)
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const handleDelete = async (authUser) => {
+    if (!window.confirm(`${authUser.email} のアカウントを削除しますか？\n※この操作は取り消せません`)) return
+    setProcessing(true)
+    const res = await fetch('/api/admin-users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', userId: authUser.id })
+    })
+    const data = await res.json()
+    if (data.error) { alert('削除に失敗しました: ' + data.error) }
+    else { await fetchUsers() }
+    setProcessing(false)
+  }
+
+  const handleLink = async (authUser, memberId) => {
+    setProcessing(true)
+    if (memberId) {
+      await supabase.from('members').update({ email: authUser.email }).eq('id', parseInt(memberId))
+    } else {
+      await supabase.from('members').update({ email: null }).eq('email', authUser.email)
+    }
+    setLinkModal(null)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const handleRoleUpdate = async (authUser, role) => {
+    setProcessing(true)
+    const member = members.find(m => m.email === authUser.email)
+    if (member) {
+      await supabase.from('members').update({ role }).eq('id', member.id)
+    }
+    setRoleModal(null)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const handleToggleAdmin = async (authUser, member) => {
+    const newVal = !member.is_admin
+    const label = newVal ? '管理者権限を付与' : '管理者権限を解除'
+    if (!window.confirm(`${member.name} の${label}しますか？`)) return
+    setProcessing(true)
+    await supabase.from('members').update({ is_admin: newVal }).eq('id', member.id)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const formatDate = (d) => {
+    if (!d) return 'ログイン履歴なし'
+    const dt = new Date(d)
+    return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
+  }
+
+  if (loading) return <div style={{ padding: 40, color: T().accent, fontSize: 14 }}>Authユーザーを取得中...</div>
+
+  if (error) return (
+    <div style={{ padding: '20px', background: T().warnBg, border: `1px solid ${T().warn}`, borderRadius: 12, color: T().warn, fontSize: 13, marginBottom: 20 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>⚠️ エラー: {error}</div>
+      <div style={{ color: T().textMuted, fontSize: 12, lineHeight: 1.6 }}>
+        Supabase Admin APIへのアクセスに失敗しました。<br/>
+        Vercelの環境変数に <code style={{ background: T().border, padding: '1px 6px', borderRadius: 4 }}>SUPABASE_SERVICE_ROLE_KEY</code> が設定されているか確認してください。<br/>
+        （Supabase ダッシュボード → Settings → API → service_role）
+      </div>
+    </div>
+  )
+
+  const getUserMember = (email) => members.find(m => m.email === email)
+  const linkedCount = authUsers.filter(u => getUserMember(u.email)).length
+  const unlinkedCount = authUsers.length - linkedCount
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      {/* サマリー */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Authアカウント総数', value: authUsers.length, color: T().accent },
+          { label: '組織図と連携済み',   value: linkedCount,      color: T().accent },
+          { label: '未紐付け',           value: unlinkedCount,    color: T().warn },
+        ].map(s => (
+          <div key={s.label} style={{ background: T().bgCard, border: `1px solid ${s.color}25`, borderRadius: 12, padding: '14px 20px', flex: 1, minWidth: 140 }}>
+            <div style={{ fontSize: 10, color: T().textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ユーザーリスト */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {authUsers.map(u => {
+          const member = getUserMember(u.email)
+          const isMe = u.email === currentUser?.email
+          const color = member ? avatarColor(member.name) : T().textMuted
+          const hasLinked = !!member
+
+          return (
+            <div key={u.id} style={{ background: T().bgCard, border: `1px solid ${hasLinked ? T().badgeBorder : T().border}`, borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
+              {isMe && <div style={{ position: 'absolute', top: 8, right: 12, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>自分</div>}
+
+              {member?.avatar_url ? (
+                <img src={member.avatar_url} alt={member.name} style={{ width: 46, height: 46, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${color}50`, flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 46, height: 46, borderRadius: '50%', background: `${color}20`, border: `2px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color, flexShrink: 0 }}>
+                  {member ? member.name.slice(0, 2) : u.email?.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  {member ? (
+                    <span style={{ fontSize: 15, fontWeight: 700, color: T().text }}>{member.name}</span>
+                  ) : (
+                    <span style={{ fontSize: 13, fontWeight: 600, color: T().textMuted, fontStyle: 'italic' }}>（未紐付け）</span>
+                  )}
+                  {member?.is_admin && (
+                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700, border: `1px solid ${T().warn}` }}>👑 管理者</span>
+                  )}
+                  {member?.role && (
+                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: `${color}15`, color, fontWeight: 600, border: `1px solid ${color}30` }}>{member.role}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: T().accent, marginBottom: 3 }}>✉ {u.email}</div>
+                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: T().textFaint, flexWrap: 'wrap' }}>
+                  {member?.role && <span>🏷 {member.role}</span>}
+                  <span>🕐 最終ログイン: {formatDate(u.last_sign_in_at)}</span>
+                  <span>📅 登録日: {formatDate(u.created_at)}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexDirection: 'column', alignItems: 'flex-end' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: hasLinked ? T().badgeBg : T().warnBg, color: hasLinked ? T().accent : T().warn, border: `1px solid ${hasLinked ? T().badgeBorder : T().warn}` }}>
+                  {hasLinked ? '✓ 組織図連携済み' : '未紐付け'}
+                </div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {isAdmin && (
+                    <button onClick={() => setLinkModal({ authUser: u })} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, color: T().accent, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      {hasLinked ? '紐付け変更' : '紐付け'}
+                    </button>
+                  )}
+                  {isAdmin && member && (
+                    <button onClick={() => setRoleModal({ authUser: u, member })} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, color: T().accent, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      ロール変更
+                    </button>
+                  )}
+                  {isAdmin && !isMe && member && (
+                    <button onClick={() => handleToggleAdmin(u, member)} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${member.is_admin ? T().warn : T().warn}`, background: member.is_admin ? T().warnBg : T().warnBg, color: T().warn, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      {member.is_admin ? '👑 管理者解除' : '👑 管理者にする'}
+                    </button>
+                  )}
+                  {isAdmin && !isMe && (
+                    <button onClick={() => handleDelete(u)} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      削除
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 紐付けモーダル */}
+      {linkModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setLinkModal(null)}>
+          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 440, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>組織図メンバーと紐付け</div>
+            <div style={{ fontSize: 12, color: T().accent, marginBottom: 16 }}>{linkModal.authUser.email}</div>
+            <div style={{ fontSize: 12, color: T().textMuted, marginBottom: 16 }}>紐付けるメンバーを選択してください（変更すると旧紐付けは解除されます）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+              <div onClick={() => handleLink(linkModal.authUser, null)}
+                style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 12, fontWeight: 600 }}>
+                🔗 紐付けを解除する
+              </div>
+              {members.map(m => {
+                const alreadyLinked = m.email === linkModal.authUser.email
+                const linkedToOther = m.email && m.email !== linkModal.authUser.email
+                const c = avatarColor(m.name)
+                return (
+                  <div key={m.id} onClick={() => !linkedToOther && handleLink(linkModal.authUser, m.id)}
+                    style={{ padding: '10px 14px', borderRadius: 8, cursor: linkedToOther ? 'not-allowed' : 'pointer', border: `1px solid ${alreadyLinked ? T().badgeBorder : linkedToOther ? T().border : T().border}`, background: alreadyLinked ? T().badgeBg : linkedToOther ? T().bgHover : T().bgCard, display: 'flex', alignItems: 'center', gap: 10, opacity: linkedToOther ? 0.4 : 1 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${c}20`, border: `1.5px solid ${c}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: c, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: T().text }}>{m.name}</div>
+                      <div style={{ fontSize: 11, color: T().textMuted }}>{m.role} {m.email ? `（${m.email}）` : '（メール未設定）'}</div>
+                    </div>
+                    {alreadyLinked && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700 }}>現在</span>}
+                    {linkedToOther && <span style={{ fontSize: 10, color: T().textMuted }}>他のアカウントと連携中</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={() => setLinkModal(null)} style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${T().border}`, background: 'transparent', color: T().textMuted, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* ロール変更モーダル */}
+      {roleModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setRoleModal(null)}>
+          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 360 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>ロールを変更</div>
+            <div style={{ fontSize: 12, color: T().accent, marginBottom: 16 }}>{roleModal.member.name}（{roleModal.authUser.email}）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {ROLES.map(r => {
+                const isActive = roleModal.member.role === r
+                return (
+                  <div key={r} onClick={() => handleRoleUpdate(roleModal.authUser, r)}
+                    style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${isActive ? T().badgeBorder : T().border}`, background: isActive ? T().badgeBg : T().bgCard, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: isActive ? T().accent : T().text, fontWeight: isActive ? 700 : 400 }}>{r}</span>
+                    {isActive && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700 }}>現在</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={() => setRoleModal(null)} style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${T().border}`, background: 'transparent', color: T().textMuted, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ══════════════════════════════════════════════════
 // 共通UIパーツ
 // ══════════════════════════════════════════════════
-function Avatar({ name, size = 36 }) {
+function Avatar({ name, size = 36, avatar_url }) {
+  if (avatar_url) {
+    return (
+      <img src={avatar_url} alt={name || ''} style={{
+        width: size, height: size, borderRadius: Math.round(size * 0.28),
+        objectFit: 'cover', border: `1.5px solid ${avatarColor(name)}60`, flexShrink: 0
+      }} />
+    )
+  }
   const color = avatarColor(name)
   return (
     <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.28), background: `${color}28`, border: `1.5px solid ${color}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.42, fontWeight: 800, color, flexShrink: 0 }}>
@@ -301,31 +558,31 @@ function SaveBtn({ saving, saved, onClick, label = '保存' }) {
 // JDデフォルトデータ（Supabase org_member_jd が空の場合のフォールバック）
 // ══════════════════════════════════════════════════
 const JD_DEFAULT = {
-  '加藤翼':   { avatar_color:['#5A8A7A','#EEF7F3'], versions:[
+  '加藤翼':   { avatar_color:['#5A8A7A','rgba(90,138,122,0.15)'], versions:[
     { period:'2025年6月 〜現在', role:'コミュニティ事業責任者', emp:'業務委託', working:'週2日', role_desc:'NEO福岡の１年間の運営を統括する\nNEOが複数拠点でコミュニティ運営できる仕組みを構築する', responsibility:'コミュニティ事業部の成果責任\n事業部のコスト管理', meetings:'・NEO立上げ本部定例（毎週土曜 9:00〜10:30）\n・コミュニティ事業定例（毎週水曜13:00〜14:00）\n・チェックイン定例（毎週月曜朝）', tasks:[{cat:'コミュニティ',task:'NEOのコミュニティの基本設計と改善',status:'same'},{cat:'プログラム',task:'アワードの企画設計・PM計画書',status:'new'}]},
   ]},
-  '森朝香':   { avatar_color:['#3D6B5E','#E1F5EE'], versions:[
+  '森朝香':   { avatar_color:['#3D6B5E','rgba(61,107,94,0.15)'], versions:[
     { period:'2025年7月 〜現在', role:'コミュニティマネージャー (教育責任者)', emp:'業務委託', working:'週5（常時）', role_desc:'コミュニティチーム実行責任者（教育責任者業務含む）\n年間プログラムの受講生の受講状況の管理', responsibility:'アカデミア生からヒーローを創出する\n受講生に対するイベントの開催', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例（週2〜3回）\n・毎朝チェックイン', tasks:[{cat:'コミュニティ運営',task:'アカデミア生のカルテ情報の設計・最新アップデート',status:'same'},{cat:'コミュニティ運営',task:'Playful研修の企画・開発・営業・運営',status:'new'}]},
   ]},
-  '面川文香': { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
+  '面川文香': { avatar_color:['#B07D9E','rgba(176,125,158,0.15)'], versions:[
     { period:'2026年2月 〜現在', role:'企業伴走 兼 総務', emp:'正社員', working:'週5', role_desc:'企業伴走チームとして企業会員への密なコミュニケーション支援\n総務・事務局業務の中心担当', responsibility:'企業会員のNEO活用促進\n総務・事務局業務の実行責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例（週2〜3回）\n・毎朝チェックイン', tasks:[{cat:'企業伴走',task:'会員企業への適切な量・質・頻度でのコミュニケーション',status:'same'},{cat:'総務',task:'総務（事務作業・HP更新・郵送物管理・問い合わせ対応・経理連携）',status:'same'}]},
   ]},
-  '古野絢太': { avatar_color:['#0F6E56','rgba(15,110,86,0.15)'], versions:[
+  '古野絢太': { avatar_color:['#5B9EA6','rgba(91,158,166,0.15)'], versions:[
     { period:'2026年4月 〜現在', role:'企業伴走 兼 事務局長補佐', emp:'業務委託', working:'週3〜4日', role_desc:'企業会員への密な伴走支援\n事務局長補佐として組織全体の業務管理補助', responsibility:'担当企業会員のサクセス支援\n事務局長補佐業務の実行', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・NEO地域定例\n・毎朝チェックイン', tasks:[{cat:'企業伴走',task:'企業カルテの情報管理・企業公開情報のリサーチ・アップデート',status:'same'},{cat:'事務局補佐',task:'事務局長補佐（全体PM・資料作成・会議フィードバック）',status:'same'}]},
   ]},
-  '鬼木良輔': { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
+  '鬼木良輔': { avatar_color:['#C4956A','rgba(196,149,106,0.15)'], versions:[
     { period:'2025年10月 〜現在', role:'カスタマーサクセスチーム マネージャー', emp:'業務委託', working:'週2〜3日', role_desc:'NEO福岡のカスタマーサクセスチームのマネジメント\n会員企業のサクセスロードマップ設計・実行', responsibility:'CSチームの成果責任（会員企業のサクセス・継続率）\n研修サービスの品質・売上責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・CS定例（週1〜2回）\n・担当企業との個別MTG（月1〜2回）', tasks:[{cat:'CS戦略',task:'会員企業のサクセスロードマップ企画・実行・改善',status:'same'},{cat:'研修',task:'NEO合同AI研修の企画・運営・改善',status:'same'}]},
   ]},
-  '増田雄太朗': { avatar_color:['#5DCAA5','rgba(93,202,165,0.15)'], versions:[
+  '増田雄太朗': { avatar_color:['#6B8DB5','rgba(107,141,181,0.15)'], versions:[
     { period:'2026年1月 〜現在', role:'マーケティングマネージャー （正社員）', emp:'正社員', working:'週5', role_desc:'正社員として全社マーケティングを統括', responsibility:'マーケティング全般の成果責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・マーケ定例（週1〜2回）', tasks:[{cat:'マーケ戦略',task:'年間・四半期ごとのマーケティング計画（KPI設計・チャネル戦略）策定',status:'same'},{cat:'集客',task:'各イベントの集客戦略・広告運用（SNS広告・パートナー連携）',status:'same'}]},
   ]},
-  '菅雅也':   { avatar_color:['#dc2626','#fee2e2'], versions:[
+  '菅雅也':   { avatar_color:['#E8875A','rgba(232,135,90,0.15)'], versions:[
     { period:'2025年7月 〜現在', role:'クリエイティブマネージャー', emp:'業務委託', working:'週3〜4日', role_desc:'NEO福岡の動画・クリエイティブ制作全般のディレクション', responsibility:'NEO福岡のクリエイティブ品質の責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・広報チーム定例（週1回）', tasks:[{cat:'動画制作',task:'NEO福岡の動画制作・監修・年間動画企画',status:'same'},{cat:'広報',task:'インスタ投稿戦略のアドバイス',status:'same'}]},
   ]},
-  '中島啓太': { avatar_color:['#0f766e','#ccfbf1'], versions:[
+  '中島啓太': { avatar_color:['#8B7EC8','rgba(139,126,200,0.15)'], versions:[
     { period:'2025年7月 〜現在', role:'クラブパートナーシップ ダイレクター', emp:'業務委託', working:'週2〜3日', role_desc:'提携スポーツクラブとの戦略深化', responsibility:'提携クラブとの長期関係維持・拡大', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・パートナー定例（週1回）', tasks:[{cat:'パートナー開発',task:'提携スポーツチームとの中長期戦略の作成・合意形成',status:'same'},{cat:'プログラム連携',task:'アカデミア（HR）カリキュラム企画・スポーツ連携座組み企画',status:'same'}]},
   ]},
-  '中道稔':   { avatar_color:['#F0997B','rgba(240,153,123,0.15)'], versions:[
+  '中道稔':   { avatar_color:['#D4816B','rgba(212,129,107,0.15)'], versions:[
     { period:'2026年4月 〜8月', role:'イベントチームリーダー', emp:'業務委託', working:'週4〜5日', role_desc:'イベントチームリーダーとしてイベント全般を統括', responsibility:'イベント品質・NPS向上責任', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・イベント定例（週1〜2回）', tasks:[{cat:'イベント運営',task:'現地イベントロジ作成・運営実務準備',status:'same'},{cat:'チームリード',task:'イベントチームのリーダーシップ・指示出し',status:'new'}]},
     { period:'2026年9月 〜（予定）', role:'イベントチームリーダー （正社員）', emp:'正社員予定', working:'週5', role_desc:'正社員として安定的にイベントチームを統括', responsibility:'イベントチームの長期的な品質・体制確立', meetings:'・毎週土曜 9:00〜10:30 定例参加\n・イベント定例（週1〜2回）', tasks:[{cat:'イベント運営',task:'現地イベントロジ作成・運営実務準備',status:'same'},{cat:'チームリード',task:'イベント振り返り・改善提案',status:'same'}]},
   ]},
@@ -454,6 +711,12 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
   const [editingMeta, setEditingMeta] = useState(null)
   const [metaBuf, setMetaBuf] = useState({})
   const [saving, setSaving] = useState(false)
+  const [webhookEdit, setWebhookEdit] = useState(null) // { levelId, url }
+
+  const handleSaveWebhook = async (levelId, url) => {
+    await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
+    setWebhookEdit(null)
+  }
 
   // ツリー構造：root(parent_id=null) → 事業部 → チーム
   const roots = levels.filter(l => !l.parent_id)
@@ -500,7 +763,31 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
               <div style={{ width: 4, height: 24, borderRadius: 2, background: color }} />
               <span style={{ fontSize: 16, fontWeight: 700, color }}>{dept.icon} {dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
+              {isAdmin && (
+                <button onClick={() => setWebhookEdit({ levelId: dept.id, url: dept.slack_webhook_url || '' })}
+                  style={{ padding: '2px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10, fontWeight: 600,
+                    background: dept.slack_webhook_url ? T().badgeBg : T().bgHover,
+                    border: `1px solid ${dept.slack_webhook_url ? T().badgeBorder : T().border}`,
+                    color: dept.slack_webhook_url ? T().accent : T().textMuted }}>
+                  {dept.slack_webhook_url ? '📨 Slack設定済み' : '📨 Slack設定'}
+                </button>
+              )}
             </div>
+            {webhookEdit && webhookEdit.levelId === dept.id && (
+              <div style={{ margin: '0 20px 12px', padding: '10px 14px', background: T().badgeBg, borderRadius: 10, border: `1px solid ${T().badgeBorder}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T().accent, marginBottom: 6 }}>Slack Webhook URL</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input value={webhookEdit.url} onChange={e => setWebhookEdit(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="https://hooks.slack.com/services/..."
+                    style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: `1px solid ${T().border}`, background: T().inputBg, color: T().inputText, fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                  <button onClick={() => handleSaveWebhook(dept.id, webhookEdit.url)}
+                    style={{ padding: '6px 14px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, background: T().accentSolid, border: 'none', color: '#fff' }}>保存</button>
+                  <button onClick={() => setWebhookEdit(null)}
+                    style={{ padding: '6px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted }}>取消</button>
+                </div>
+                <div style={{ fontSize: 10, color: T().textFaint, marginTop: 4 }}>未設定の場合、親部署またはデフォルトのWebhookに送信されます</div>
+              </div>
+            )}
             {dept.teams.length === 0 ? (
               <div style={{ padding: '20px', fontSize: 12, color: T().textFaintest, fontStyle: 'italic', background: T().bgCard }}> チームがありません（OKRページの「組織を管理」から追加）</div>
             ) : (
@@ -548,7 +835,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                             onMouseEnter={e => e.currentTarget.style.background = `${avatarColor(m.name)}30`}
                             onMouseLeave={e => e.currentTarget.style.background = `${avatarColor(m.name)}18`}
                           >
-                            <Avatar name={m.name} size={18} />
+                            <Avatar name={m.name} size={18} avatar_url={m.avatar_url} />
                             {m.name}
                           </div>
                         ))}
@@ -977,7 +1264,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
               onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = T().border }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <Avatar name={m.name} size={48} />
+                <Avatar name={m.name} size={48} avatar_url={m.avatar_url} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: T().text }}>{m.name}</div>
                   <div style={{ fontSize: 10, color: T().textFaint, marginTop: 2 }}>{m.role || '—'}</div>
@@ -988,7 +1275,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
                   </span>
                 )}
               </div>
-              {lv?.role && <div style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: fg, color: bg, marginBottom: 10, lineHeight: 1.4 }}>{lv.role}</div>}
+              {lv?.role && <div style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: fg, color: '#fff', marginBottom: 10, lineHeight: 1.4 }}>{lv.role}</div>}
               {teamNames.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
                   {teamNames.map(t => (
@@ -1090,18 +1377,36 @@ function AddMemberModal({ levels, onClose, onAdded }) {
   const [selectedIds, setSelectedIds] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileRef = React.useRef(null)
 
   const roots = levels.filter(l => !l.parent_id)
   const getDepts = rootId => levels.filter(l => Number(l.parent_id) === Number(rootId))
   const getTeams = deptId => levels.filter(l => Number(l.parent_id) === Number(deptId))
   const toggleId = id => setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
 
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { alert('画像ファイルを選択してください'); return }
+    if (file.size > 2 * 1024 * 1024) { alert('2MB以下の画像を選択してください'); return }
+    setUploading(true)
+    const ext = file.name.split('.').pop()
+    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(fileName, file, { cacheControl: '3600', upsert: false })
+    if (error) { alert('アップロードに失敗しました: ' + error.message); setUploading(false); return }
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
+    setAvatarUrl(urlData.publicUrl)
+    setUploading(false)
+  }
+
   const save = async () => {
     if (!name.trim()) { setError('名前は必須です'); return }
     setSaving(true)
     const { data, error: err } = await supabase.from('members').insert([{
       name: name.trim(), role: roleTitle.trim() || null, email: email.trim() || null,
-      level_id: selectedIds[0] || null, level_ids: selectedIds,
+      level_id: selectedIds[0] || null, level_ids: selectedIds, avatar_url: avatarUrl || null,
     }]).select().single()
     if (err) { setError('保存に失敗しました: ' + err.message); setSaving(false); return }
     onAdded(data)
@@ -1115,6 +1420,25 @@ function AddMemberModal({ levels, onClose, onAdded }) {
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T().text }}>＋ メンバーを追加</h3>
           <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16 }}>✕</button>
         </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8 }}>プロフィール画像</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Avatar name={name} size={48} avatar_url={avatarUrl} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, color: T().accent, fontSize: 11, fontWeight: 600, cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                {uploading ? '⏳ アップロード中...' : '📷 画像をアップロード'}
+              </button>
+              {avatarUrl && <button onClick={() => setAvatarUrl('')}
+                style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                🗑 画像を削除
+              </button>}
+              <div style={{ fontSize: 10, color: T().textFaint }}>JPG / PNG / WebP・2MB以下</div>
+            </div>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+        </div>
+
         {[
           { label: '名前 *', val: name, set: setName, ph: '例: 田中 花子' },
           { label: '役職・ロール', val: roleTitle, set: setRoleTitle, ph: '例: コミュニティマネージャー' },
@@ -1204,6 +1528,9 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const [editingProfile, setEditingProfile] = useState(false)
   const [profileBuf, setProfileBuf] = useState({ name: '', role: '' })
   const [savingProfile, setSavingProfile] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState(memberRow?.avatar_url || '')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarFileRef = React.useRef(null)
   const [selectedIds, setSelectedIds] = useState(
     Array.isArray(memberRow?.level_ids) ? memberRow.level_ids.map(Number) : (memberRow?.level_id ? [Number(memberRow.level_id)] : [])
   )
@@ -1215,6 +1542,26 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const getDepts = rootId => levels.filter(l => Number(l.parent_id) === Number(rootId))
   const getTeams = deptId => levels.filter(l => Number(l.parent_id) === Number(deptId))
   const toggleId = id => setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+
+  useEffect(() => { setAvatarUrl(memberRow?.avatar_url || '') }, [memberRow?.id])
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { alert('画像ファイルを選択してください'); return }
+    if (file.size > 2 * 1024 * 1024) { alert('2MB以下の画像を選択してください'); return }
+    setUploadingAvatar(true)
+    const ext = file.name.split('.').pop()
+    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(fileName, file, { cacheControl: '3600', upsert: false })
+    if (error) { alert('アップロードに失敗しました: ' + error.message); setUploadingAvatar(false); return }
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
+    setAvatarUrl(urlData.publicUrl)
+    setUploadingAvatar(false)
+    // Save immediately
+    await supabase.from('members').update({ avatar_url: urlData.publicUrl }).eq('id', memberRow.id)
+    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, avatar_url: urlData.publicUrl } : m))
+  }
 
   const saveTeams = async () => {
     setSavingTeams(true)
@@ -1308,8 +1655,8 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const saveProfile = async () => {
     if (!profileBuf.name.trim()) return
     setSavingProfile(true)
-    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim() }).eq('id', memberRow.id)
-    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim() } : m))
+    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl }).eq('id', memberRow.id)
+    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl } : m))
     setSavingProfile(false)
     setEditingProfile(false)
   }
@@ -1369,7 +1716,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
 
       {/* プロフィールヘッダー */}
       <div style={{ background: fg, borderRadius: 12, padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-        <Avatar name={memberRow?.name} size={64} />
+        <Avatar name={memberRow?.name} size={64} avatar_url={avatarUrl} />
         <div style={{ flex: 1 }}>
           {editingProfile ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
@@ -1397,11 +1744,18 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                   <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
                 </div>
-                {isAdmin && (
-                  <button onClick={startEditProfile}
-                    style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                    ✎ 編集
-                  </button>
+                {isAdmin && !editingProfile && (
+                  <>
+                    <button onClick={startEditProfile}
+                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                      ✎ 編集
+                    </button>
+                    <button onClick={() => avatarFileRef.current?.click()} disabled={uploadingAvatar}
+                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                      {uploadingAvatar ? '⏳...' : '📷'}
+                    </button>
+                    <input ref={avatarFileRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
+                  </>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1448,7 +1802,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
       {isAdmin && memberRow && (
         <div style={{ ...box, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: editingTeams ? 12 : 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#606880', letterSpacing: '2px', textTransform: 'uppercase' }}>▶ 所属チーム（兼務設定）</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T().textMuted, letterSpacing: '2px', textTransform: 'uppercase' }}>▶ 所属チーム（兼務設定）</div>
             {!editingTeams && <button onClick={() => setEditingTeams(true)} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>👑 変更</button>}
           </div>
           {editingTeams ? (
@@ -1503,7 +1857,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             const label = v.period || `V${i + 1}`
             return (
               <button key={i} onClick={() => { setVerIdx(i); setEditing(false); setAddingNewVersion(false) }}
-                style={{ padding: '8px 16px', fontSize: 11, fontWeight: isA ? 700 : 500, color: isA ? bg : T().textFaint, background: isA ? fg : T().bgCard2, border: `1px solid ${isA ? fg : T().border}`, borderRadius: '6px 6px 0 0', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                style={{ padding: '8px 16px', fontSize: 11, fontWeight: isA ? 700 : 500, color: isA ? '#fff' : T().textFaint, background: isA ? fg : T().bgCard2, border: `1px solid ${isA ? fg : T().border}`, borderRadius: '6px 6px 0 0', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                 V{i + 1}: {label}
               </button>
             )
@@ -1871,6 +2225,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
     { id: 'chart',   icon: '🏗', label: '組織図' },
     { id: 'tasks',   icon: '📋', label: '業務一覧' },
     { id: 'members', icon: '👤', label: 'メンバーJD' },
+    { id: 'users',   icon: '👥', label: 'ユーザー管理' },
   ]
 
 
@@ -1931,6 +2286,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             onClearJump={() => setJumpMemberName(null)}
           />
         )}
+        {activeTab === 'users' && <UserListTab members={members} currentUser={user} isAdmin={isAdmin} />}
       </div>
     </div>
   )

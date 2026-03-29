@@ -2,7 +2,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import AIPanel from './AIPanel'
-import MemberPage from './MemberPage'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
 import WeeklyMTGPage from './WeeklyMTGPage'
@@ -58,8 +57,8 @@ const THEMES = {
     border:       '#DDE4EA',
     borderLight:  '#EEF2F5',
     borderMid:    '#B0C0CC',
-    text:         '#1A202C',
-    textSub:      '#4A5568',
+    text:         '#2D3748',
+    textSub:      '#5A6577',
     textMuted:    '#A0AEC0',
     textFaint:    '#A0AEC0',
     textFaintest: '#DDE4EA',
@@ -1274,7 +1273,6 @@ export default function Dashboard({ user, onSignOut }) {
               {key:'okr',        label:'OKR'},
               {key:'myokr',      label:'マイOKR'},
               {key:'weekly',     label:'週次MTG'},
-              {key:'members',    label:'メンバー管理'},
               {key:'bulk',       label:'一括登録'},
               {key:'csv',        label:'CSV登録'},
               {key:'orgjd',      label:'組織'},
@@ -1349,7 +1347,6 @@ export default function Dashboard({ user, onSignOut }) {
 
       {/* ─── ページ切替 ─── */}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
-      {activePage === 'members' && <div style={{ flex: 1, overflowY: 'auto' }}><MemberPage currentUser={user} fiscalYear={fiscalYear} /></div>}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
