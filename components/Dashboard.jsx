@@ -916,14 +916,15 @@ export default function Dashboard({ user, onSignOut }) {
     }
     return 'summary'
   })
-  const [viewMode, setViewMode]             = useState('org')
+  const [viewMode, setViewMode]             = useState('annual')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
-  const [themeKey, setThemeKey]                 = useState('dark')
+  const [themeKey, setThemeKey]                 = useState('light')
   const [syncStatus, setSyncStatus]             = useState('connecting')
   const T = THEMES[themeKey]
   _T = T
   if (typeof window !== 'undefined') window.__OKR_THEME__ = T
   const [members, setMembers]               = useState([])
+  const [undoDelete, setUndoDelete]         = useState(null) // { objId, obj, krs, timer }
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640)
@@ -1134,10 +1135,41 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   const handleDelete = async (objId) => {
-    if (!window.confirm('この目標を削除しますか？')) return
+    // 1. 削除対象のデータをバックアップ
+    const { data: obj } = await supabase.from('objectives').select('*').eq('id', objId).single()
+    const { data: krs } = await supabase.from('key_results').select('*').eq('objective_id', objId)
+    if (!obj) return
+
+    // 2. DBから即削除
     await supabase.from('key_results').delete().eq('objective_id', objId)
     await supabase.from('objectives').delete().eq('id', objId)
+
+    // 3. UI即時更新
     await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+    setAnnualRefreshKey(k => k + 1)
+
+    // 4. 前のundo timerをクリア（あれば即確定）
+    if (undoDelete?.timer) clearTimeout(undoDelete.timer)
+
+    // 5. undoトースト表示（10秒間）
+    const timer = setTimeout(() => setUndoDelete(null), 10000)
+    setUndoDelete({ objId, obj, krs: krs || [], timer })
+  }
+
+  const handleUndoDelete = async () => {
+    if (!undoDelete) return
+    clearTimeout(undoDelete.timer)
+    const { obj, krs } = undoDelete
+    // objectives を復元
+    const { id, ...objData } = obj
+    const { data: restored } = await supabase.from('objectives').insert([objData]).select().single()
+    if (restored && krs.length) {
+      const krPayloads = krs.map(({ id, objective_id, ...kr }) => ({ ...kr, objective_id: restored.id }))
+      await supabase.from('key_results').insert(krPayloads)
+    }
+    setUndoDelete(null)
+    await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+    setAnnualRefreshKey(k => k + 1)
   }
 
   const handleAddLevel = async ({ name, icon, parent_id }) => {
@@ -1506,6 +1538,13 @@ export default function Dashboard({ user, onSignOut }) {
             members={members}
           />
         </Modal>
+      )}
+      {undoDelete && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: T.text, minWidth: 300 }}>
+          <span style={{ flex: 1 }}>「{undoDelete.obj.title?.slice(0, 20)}{undoDelete.obj.title?.length > 20 ? '…' : ''}」を削除しました</span>
+          <button onClick={handleUndoDelete} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>元に戻す</button>
+          <button onClick={() => { clearTimeout(undoDelete.timer); setUndoDelete(null) }} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: '0 4px' }}>✕</button>
+        </div>
       )}
     </div>
   )

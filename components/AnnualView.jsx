@@ -177,10 +177,9 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     onAddObjective({ parentObjectiveId: annualObjId, period: qKey, level_id: levelId })
   }
 
-  // 組織フィルタリング
-  const visibleLevelIds = activeLevelId ? getDescendantIds(activeLevelId, levels) : null
-  const filteredObjs = visibleLevelIds
-    ? annualObjs.filter(o => visibleLevelIds.includes(Number(o.level_id)))
+  // 組織フィルタリング（選択したレベルのOKRのみ表示、子孫は含めない）
+  const filteredObjs = activeLevelId
+    ? annualObjs.filter(o => Number(o.level_id) === Number(activeLevelId))
     : annualObjs
 
   if (loading) return <div style={{ padding: 40, color: T().addBtnBg, fontSize: 14 }}>読み込み中...</div>
