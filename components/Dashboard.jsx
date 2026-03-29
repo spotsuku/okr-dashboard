@@ -393,8 +393,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
                 低い方が良い指標（チャーン率・バグ数など）
               </label>
               <select value={kr.owner||''} onChange={e => updateKR(key, 'owner', e.target.value)} style={{
-                background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
-                padding: '5px 8px', color: kr.owner ? '#e8eaf0' : '#505878', fontSize: 12,
+                background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8,
+                padding: '5px 8px', color: kr.owner ? getT().text : getT().textFaint, fontSize: 12,
                 outline: 'none', fontFamily: 'inherit', cursor: 'pointer', maxWidth: 160,
               }}>
                 <option value="">KR担当者</option>
@@ -636,7 +636,8 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: getT().badgeBg, padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
                           {kr.title}
                         </span>
-                        <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {kr.owner && <span style={{ fontSize: 10, color: getT().accent, background: `${getT().accent}15`, padding: '1px 6px', borderRadius: 4 }}>{kr.owner}</span>}
                           {kr.current}{kr.unit} / {kr.target}{kr.unit}
                           {kr.lower_is_better && <span style={{ color: getT().textFaint, marginLeft: 4 }}>↓良</span>}
                         </span>
