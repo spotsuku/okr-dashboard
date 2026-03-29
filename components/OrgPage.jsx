@@ -1335,7 +1335,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
 
       {showAddModal && (
         <AddMemberModal levels={levels} onClose={() => setShowAddModal(false)}
-          onAdded={newM => { setMembers(prev => [...prev, newM]); setShowAddModal(false) }} />
+          onAdded={newM => { setMembers(prev => prev.some(m => m.id === newM.id) ? prev : [...prev, newM]); setShowAddModal(false) }} />
       )}
     </div>
   )
