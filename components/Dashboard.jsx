@@ -9,6 +9,7 @@ import MyOKRPageNew from './MyOKRPage'
 import BulkRegisterPage from './BulkRegisterPage'
 import CompanySummaryPage from './CompanySummaryPage'
 import OrgPage from './OrgPage'
+import OwnerOKRView from './OwnerOKRView'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -920,6 +921,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
   const [themeKey, setThemeKey]                 = useState('light')
   const [syncStatus, setSyncStatus]             = useState('connecting')
+  const [selectedOwner, setSelectedOwner]       = useState(null)
   const T = THEMES[themeKey]
   _T = T
   if (typeof window !== 'undefined') window.__OKR_THEME__ = T
@@ -1407,7 +1409,7 @@ export default function Dashboard({ user, onSignOut }) {
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'}].map(v => (
+              {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
                 <button key={v.key} onClick={() => setViewMode(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: viewMode === v.key ? T.navActiveBg : 'transparent', color: viewMode === v.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
               ))}
             </div>
@@ -1505,6 +1507,46 @@ export default function Dashboard({ user, onSignOut }) {
               onDelete={handleDelete}
             />
           )}
+        </div>
+      </div>
+
+      {/* Owner View */}
+      <div style={{ display: activePage === 'okr' && viewMode === 'owner' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {isMobile && showSidebar && (
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
+        )}
+        <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
+          <div style={{ fontSize: 10, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>メンバー</div>
+          {members.map(m => {
+            const active = selectedOwner === m.name
+            const c = ['#5A8A7A','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
+            const color = c[Math.abs([...m.name].reduce((h, ch) => ch.charCodeAt(0) + ((h << 5) - h), 0)) % c.length]
+            return (
+              <div key={m.id} onClick={() => { setSelectedOwner(m.name); setShowSidebar(false) }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 2, background: active ? T.navActiveBg : 'transparent', border: active ? `1px solid ${T.navActiveBorder}` : '1px solid transparent', transition: 'all 0.15s' }}>
+                {m.avatar_url ? (
+                  <img src={m.avatar_url} alt={m.name} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}20`, border: `1.5px solid ${color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: active ? 700 : 500, color: active ? T.navActiveText : getT().text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                  {m.role && <div style={{ fontSize: 9, color: getT().textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.role}</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <OwnerOKRView
+            ownerName={selectedOwner}
+            levels={levels}
+            fiscalYear={fiscalYear}
+            themeKey={themeKey}
+            onEdit={obj => setModal({ type: 'edit', obj })}
+            onDelete={handleDelete}
+            refreshKey={annualRefreshKey}
+          />
         </div>
       </div>
 

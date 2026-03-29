@@ -1661,8 +1661,17 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
     setEditingProfile(false)
   }
 
+  const deleteAllJD = async () => {
+    if (!window.confirm(`「${memberName}」のJDデータを全て削除しますか？`)) return
+    await supabase.from('org_member_jd').delete().eq('member_id', memberName)
+    setJdRows(prev => ({ ...prev, [memberName]: [] }))
+    setVerIdx(0)
+    setEditing(false)
+  }
+
   const deleteMember = async () => {
     if (!window.confirm(`「${memberName}」を削除しますか？`)) return
+    await supabase.from('org_member_jd').delete().eq('member_id', memberName)
     await supabase.from('members').delete().eq('id', memberRow.id)
     setMembers(prev => prev.filter(m => m.id !== memberRow.id)); onBack()
   }
@@ -1696,6 +1705,11 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             <button onClick={startAddVersion} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
               ＋ 新バージョンを追加
             </button>
+            {dbRows.length > 0 && (
+              <button onClick={deleteAllJD} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
+                🗑 JDを削除
+              </button>
+            )}
           </>
         )}
         {isAdmin && editing && (
@@ -2158,7 +2172,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                           </div>
                         </div>
                         {/* 管理者：バージョン削除ボタン */}
-                        {isAdmin && versions.length > 1 && dbRows.length > 0 && (
+                        {isAdmin && dbRows.length > 0 && (
                           <button onClick={e => { e.stopPropagation(); deleteVersion(i) }}
                             style={{ padding: '3px 7px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().border}`, color: T().textFaintest, fontSize: 10, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
                             ✕
