@@ -93,12 +93,12 @@ const getT = () => _T
 
 // ─── Rating helpers ────────────────────────────────────────────────────────────
 const RATINGS = [
-  { min: 150, score: 5, label: '奇跡',    color: '#5DCAA5' },
-  { min: 120, score: 4, label: '変革',    color: '#B0BAC8' },
-  { min: 100, score: 3, label: '順調以上', color: '#5DCAA5' },
-  { min:  80, score: 2, label: '順調',    color: '#5DCAA5' },
-  { min:  60, score: 1, label: '最低限',  color: '#F0997B' },
-  { min:   0, score: 0, label: '未達',    color: '#E8875A' },
+  { min: 120, score: 5, label: '奇跡',   color: '#ff9f43' },
+  { min: 110, score: 4, label: '変革',   color: '#a855f7' },
+  { min: 100, score: 3, label: '好調',   color: '#00d68f' },
+  { min:  90, score: 2, label: '順調',   color: '#4d9fff' },
+  { min:  80, score: 1, label: '最低限', color: '#ffd166' },
+  { min:   0, score: 0, label: '未達',   color: '#E8875A' },
 ]
 const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
 

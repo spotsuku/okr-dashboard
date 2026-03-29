@@ -43,12 +43,12 @@ const T = () => _theme
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const RATINGS = [
-  { min: 150, label: '奇跡',     color: '#ff9f43' },
-  { min: 120, label: '変革',     color: '#a855f7' },
-  { min: 100, label: '順調以上', color: '#00d68f' },
-  { min:  80, label: '順調',     color: '#4d9fff' },
-  { min:  60, label: '最低限',   color: '#ffd166' },
-  { min:   0, label: '未達',     color: '#ff6b6b' },
+  { min: 120, label: '奇跡',   color: '#ff9f43' },
+  { min: 110, label: '変革',   color: '#a855f7' },
+  { min: 100, label: '好調',   color: '#00d68f' },
+  { min:  90, label: '順調',   color: '#4d9fff' },
+  { min:  80, label: '最低限', color: '#ffd166' },
+  { min:   0, label: '未達',   color: '#ff6b6b' },
 ]
 const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >= r.min) || RATINGS[RATINGS.length - 1])
 
