@@ -616,7 +616,7 @@ function useOrgData(fiscalYear) {
     ] = await Promise.all([
       supabase.from('levels').select('*').order('id'),
       supabase.from('org_team_meta').select('*'),
-      supabase.from('members').select('*').order('name'),
+      supabase.from('members').select('*').order('sort_order', { ascending: true, nullsFirst: false }).order('name'),
       supabase.from('org_tasks').select('*').order('id'),
       supabase.from('org_member_jd').select('*').order('version_idx'),
       supabase.from('org_task_history').select('*').order('changed_at'),
@@ -661,7 +661,7 @@ function useOrgData(fiscalYear) {
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, payload => {
-        if (payload.eventType === 'INSERT') { setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'))) }
+        if (payload.eventType === 'INSERT') { setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new]) }
         else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
         else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
       })
@@ -1206,6 +1206,36 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
   const [selectedName, setSelectedName] = useState(initialName || null)
   const [verIdx, setVerIdx] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [dragId, setDragId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
+
+  const handleDragStart = (e, memberId) => {
+    setDragId(memberId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const handleDragOver = (e, memberId) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (memberId !== dragOverId) setDragOverId(memberId)
+  }
+  const handleDrop = async (e, targetId) => {
+    e.preventDefault()
+    if (!dragId || dragId === targetId) { setDragId(null); setDragOverId(null); return }
+    const fromIdx = members.findIndex(m => m.id === dragId)
+    const toIdx = members.findIndex(m => m.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) { setDragId(null); setDragOverId(null); return }
+    const reordered = [...members]
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+    setMembers(reordered)
+    setDragId(null); setDragOverId(null)
+    // sort_order をDBに保存
+    const updates = reordered.map((m, i) => ({ id: m.id, sort_order: i }))
+    for (const u of updates) {
+      await supabase.from('members').update({ sort_order: u.sort_order }).eq('id', u.id)
+    }
+  }
+  const handleDragEnd = () => { setDragId(null); setDragOverId(null) }
 
   useEffect(() => {
     if (initialName) { setSelectedName(initialName); setVerIdx(null) }
@@ -1259,9 +1289,19 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
 
           return (
             <div key={m.id} onClick={() => { setSelectedName(m.name); setVerIdx(null) }}
-              style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 12, padding: 18, cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = fg + '60' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = T().border }}
+              draggable={isAdmin}
+              onDragStart={e => handleDragStart(e, m.id)}
+              onDragOver={e => handleDragOver(e, m.id)}
+              onDrop={e => handleDrop(e, m.id)}
+              onDragEnd={handleDragEnd}
+              style={{
+                background: T().bgCard,
+                border: `1px solid ${dragOverId === m.id ? T().accentSolid : T().border}`,
+                borderRadius: 12, padding: 18, cursor: isAdmin ? 'grab' : 'pointer', transition: 'all 0.2s',
+                opacity: dragId === m.id ? 0.4 : 1,
+              }}
+              onMouseEnter={e => { if (!dragId) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = fg + '60' } }}
+              onMouseLeave={e => { if (!dragId) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = T().border } }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <Avatar name={m.name} size={48} avatar_url={m.avatar_url} />
@@ -1661,11 +1701,17 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
     setEditingProfile(false)
   }
 
-  const deleteAllJD = async () => {
-    if (!window.confirm(`「${memberName}」のJDデータを全て削除しますか？`)) return
-    await supabase.from('org_member_jd').delete().eq('member_id', memberName)
-    setJdRows(prev => ({ ...prev, [memberName]: [] }))
-    setVerIdx(0)
+  const deleteSelectedJD = async () => {
+    const ver = versions[effectiveVerIdx]
+    if (!ver?._dbId) return
+    const label = `V${effectiveVerIdx + 1}${ver.period ? ': ' + ver.period : ''}`
+    if (!window.confirm(`「${memberName}」の ${label} を削除しますか？`)) return
+    await supabase.from('org_member_jd').delete().eq('id', ver._dbId)
+    setJdRows(prev => ({
+      ...prev,
+      [memberName]: (prev[memberName] || []).filter(r => r.id !== ver._dbId)
+    }))
+    setVerIdx(Math.max(0, effectiveVerIdx - 1))
     setEditing(false)
   }
 
@@ -1706,8 +1752,8 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               ＋ 新バージョンを追加
             </button>
             {dbRows.length > 0 && (
-              <button onClick={deleteAllJD} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
-                🗑 JDを削除
+              <button onClick={deleteSelectedJD} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
+                🗑 このバージョンを削除
               </button>
             )}
           </>
