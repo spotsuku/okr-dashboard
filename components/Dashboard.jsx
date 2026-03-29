@@ -269,6 +269,33 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }]
   )
   const [saving, setSaving] = useState(false)
+  const [parentObj, setParentObj] = useState(null)
+
+  // 四半期OKRの場合、通期OKRを参照として取得
+  useEffect(() => {
+    const isQuarterly = ['q1','q2','q3','q4'].includes(period)
+    if (!isQuarterly) { setParentObj(null); return }
+    const parentId = initial?.parent_objective_id
+    if (parentId) {
+      // parent_objective_id がある場合は直接取得
+      ;(async () => {
+        const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
+        if (!obj) { setParentObj(null); return }
+        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+        setParentObj({ ...obj, key_results: krData || [] })
+      })()
+    } else {
+      // level_id で通期OKRを検索
+      ;(async () => {
+        const annualKey = fiscalYear === '2026' ? 'annual' : `${fiscalYear}_annual`
+        const { data: objs } = await supabase.from('objectives').select('id,title,owner').eq('period', annualKey).eq('level_id', parseInt(levelId))
+        if (!objs?.length) { setParentObj(null); return }
+        const obj = objs[0]
+        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+        setParentObj({ ...obj, key_results: krData || [] })
+      })()
+    }
+  }, [period, levelId]) // eslint-disable-line
 
   const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
@@ -321,6 +348,28 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>)}
         </select>
       </div>
+
+      {parentObj && (
+        <div style={{ marginBottom: 16, padding: '14px 16px', background: getT().navActiveBg, border: `1px solid ${getT().navActiveBorder}40`, borderRadius: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            📌 通期OKR（参照）
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: getT().text, marginBottom: 10, lineHeight: 1.4 }}>{parentObj.title}</div>
+          {parentObj.key_results.map((kr, i) => {
+            const kp = kr.target > 0 ? Math.round((kr.lower_is_better ? Math.max(0, ((kr.target * 2 - kr.current) / kr.target) * 100) : (kr.current / kr.target) * 100)) : 0
+            const r = RATINGS.find(r => Math.min(kp, 150) >= r.min) || RATINGS[RATINGS.length - 1]
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, padding: '6px 10px', background: getT().bgCard, borderRadius: 7, border: `1px solid ${getT().border}` }}>
+                <span style={{ fontSize: 11, color: getT().textSub, flex: 1, minWidth: 0 }}>KR{i + 1}: {kr.title}</span>
+                <div style={{ width: 60, height: 3, background: getT().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                  <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: r.color, borderRadius: 99 }} />
+                </div>
+                <span style={{ fontSize: 11, color: r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit} ({kp}%)</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Results</div>
       {krs.map((kr, i) => {

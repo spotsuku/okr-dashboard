@@ -257,29 +257,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
             {/* 展開：四半期ドリルダウン */}
             {isOpen && (
               <div style={{ borderTop: `1px solid ${T().border}`, background: T().bgExpanded }}>
-                {/* 通期OKR参照パネル */}
-                {ann.key_results.length > 0 && (
-                  <div style={{ margin: '16px 20px 0', padding: '14px 16px', background: T().refBg, border: `1px solid ${T().refBorder}`, borderRadius: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: T().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      📌 通期OKR（参照）
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: T().textSub, marginBottom: 10, lineHeight: 1.4 }}>{ann.title}</div>
-                    {ann.key_results.map((kr, i) => {
-                      const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
-                      const kr_r = getRating(kp)
-                      return (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, padding: '6px 10px', background: T().bgKr, borderRadius: 7 }}>
-                          <span style={{ fontSize: 11, color: T().textMuted, flex: 1, minWidth: 0 }}>KR{i + 1}: {kr.title}</span>
-                          <div style={{ width: 80, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                            <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
-                          </div>
-                          <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit} ({kp}%)</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
                 <div style={{ display: 'flex', borderBottom: `1px solid ${T().border}` }}>
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
