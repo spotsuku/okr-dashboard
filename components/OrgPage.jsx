@@ -202,10 +202,267 @@ function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
+const ROLES = ['管理者', 'ディレクター', 'マネージャー', 'メンバー', 'その他']
+
+// ── ユーザー一覧タブ（MemberPageから移植） ───────────────────────────────────
+function UserListTab({ members, currentUser, isAdmin }) {
+  const [authUsers, setAuthUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [linkModal, setLinkModal] = useState(null)
+  const [roleModal, setRoleModal] = useState(null)
+  const [processing, setProcessing] = useState(false)
+
+  useEffect(() => { fetchUsers() }, [])
+
+  const fetchUsers = async () => {
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/admin-users')
+      const data = await res.json()
+      if (!res.ok || data.error) { setError(data.error || '取得に失敗しました'); setLoading(false); return }
+      const sorted = (data.users || []).sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0))
+      setAuthUsers(sorted)
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const handleDelete = async (authUser) => {
+    if (!window.confirm(`${authUser.email} のアカウントを削除しますか？\n※この操作は取り消せません`)) return
+    setProcessing(true)
+    const res = await fetch('/api/admin-users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', userId: authUser.id })
+    })
+    const data = await res.json()
+    if (data.error) { alert('削除に失敗しました: ' + data.error) }
+    else { await fetchUsers() }
+    setProcessing(false)
+  }
+
+  const handleLink = async (authUser, memberId) => {
+    setProcessing(true)
+    if (memberId) {
+      await supabase.from('members').update({ email: authUser.email }).eq('id', parseInt(memberId))
+    } else {
+      await supabase.from('members').update({ email: null }).eq('email', authUser.email)
+    }
+    setLinkModal(null)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const handleRoleUpdate = async (authUser, role) => {
+    setProcessing(true)
+    const member = members.find(m => m.email === authUser.email)
+    if (member) {
+      await supabase.from('members').update({ role }).eq('id', member.id)
+    }
+    setRoleModal(null)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const handleToggleAdmin = async (authUser, member) => {
+    const newVal = !member.is_admin
+    const label = newVal ? '管理者権限を付与' : '管理者権限を解除'
+    if (!window.confirm(`${member.name} の${label}しますか？`)) return
+    setProcessing(true)
+    await supabase.from('members').update({ is_admin: newVal }).eq('id', member.id)
+    await fetchUsers()
+    setProcessing(false)
+  }
+
+  const formatDate = (d) => {
+    if (!d) return 'ログイン履歴なし'
+    const dt = new Date(d)
+    return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
+  }
+
+  if (loading) return <div style={{ padding: 40, color: T().accent, fontSize: 14 }}>Authユーザーを取得中...</div>
+
+  if (error) return (
+    <div style={{ padding: '20px', background: T().warnBg, border: `1px solid ${T().warn}`, borderRadius: 12, color: T().warn, fontSize: 13, marginBottom: 20 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>⚠️ エラー: {error}</div>
+      <div style={{ color: T().textMuted, fontSize: 12, lineHeight: 1.6 }}>
+        Supabase Admin APIへのアクセスに失敗しました。<br/>
+        Vercelの環境変数に <code style={{ background: T().border, padding: '1px 6px', borderRadius: 4 }}>SUPABASE_SERVICE_ROLE_KEY</code> が設定されているか確認してください。<br/>
+        （Supabase ダッシュボード → Settings → API → service_role）
+      </div>
+    </div>
+  )
+
+  const getUserMember = (email) => members.find(m => m.email === email)
+  const linkedCount = authUsers.filter(u => getUserMember(u.email)).length
+  const unlinkedCount = authUsers.length - linkedCount
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      {/* サマリー */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Authアカウント総数', value: authUsers.length, color: T().accent },
+          { label: '組織図と連携済み',   value: linkedCount,      color: T().accent },
+          { label: '未紐付け',           value: unlinkedCount,    color: T().warn },
+        ].map(s => (
+          <div key={s.label} style={{ background: T().bgCard, border: `1px solid ${s.color}25`, borderRadius: 12, padding: '14px 20px', flex: 1, minWidth: 140 }}>
+            <div style={{ fontSize: 10, color: T().textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ユーザーリスト */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {authUsers.map(u => {
+          const member = getUserMember(u.email)
+          const isMe = u.email === currentUser?.email
+          const color = member ? avatarColor(member.name) : T().textMuted
+          const hasLinked = !!member
+
+          return (
+            <div key={u.id} style={{ background: T().bgCard, border: `1px solid ${hasLinked ? T().badgeBorder : T().border}`, borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
+              {isMe && <div style={{ position: 'absolute', top: 8, right: 12, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>自分</div>}
+
+              {member?.avatar_url ? (
+                <img src={member.avatar_url} alt={member.name} style={{ width: 46, height: 46, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${color}50`, flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 46, height: 46, borderRadius: '50%', background: `${color}20`, border: `2px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color, flexShrink: 0 }}>
+                  {member ? member.name.slice(0, 2) : u.email?.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  {member ? (
+                    <span style={{ fontSize: 15, fontWeight: 700, color: T().text }}>{member.name}</span>
+                  ) : (
+                    <span style={{ fontSize: 13, fontWeight: 600, color: T().textMuted, fontStyle: 'italic' }}>（未紐付け）</span>
+                  )}
+                  {member?.is_admin && (
+                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700, border: `1px solid ${T().warn}` }}>👑 管理者</span>
+                  )}
+                  {member?.role && (
+                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: `${color}15`, color, fontWeight: 600, border: `1px solid ${color}30` }}>{member.role}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: T().accent, marginBottom: 3 }}>✉ {u.email}</div>
+                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: T().textFaint, flexWrap: 'wrap' }}>
+                  {member?.role && <span>🏷 {member.role}</span>}
+                  <span>🕐 最終ログイン: {formatDate(u.last_sign_in_at)}</span>
+                  <span>📅 登録日: {formatDate(u.created_at)}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexDirection: 'column', alignItems: 'flex-end' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: hasLinked ? T().badgeBg : T().warnBg, color: hasLinked ? T().accent : T().warn, border: `1px solid ${hasLinked ? T().badgeBorder : T().warn}` }}>
+                  {hasLinked ? '✓ 組織図連携済み' : '未紐付け'}
+                </div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {isAdmin && (
+                    <button onClick={() => setLinkModal({ authUser: u })} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, color: T().accent, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      {hasLinked ? '紐付け変更' : '紐付け'}
+                    </button>
+                  )}
+                  {isAdmin && member && (
+                    <button onClick={() => setRoleModal({ authUser: u, member })} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, color: T().accent, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      ロール変更
+                    </button>
+                  )}
+                  {isAdmin && !isMe && member && (
+                    <button onClick={() => handleToggleAdmin(u, member)} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${member.is_admin ? T().warn : T().warn}`, background: member.is_admin ? T().warnBg : T().warnBg, color: T().warn, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      {member.is_admin ? '👑 管理者解除' : '👑 管理者にする'}
+                    </button>
+                  )}
+                  {isAdmin && !isMe && (
+                    <button onClick={() => handleDelete(u)} disabled={processing}
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      削除
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 紐付けモーダル */}
+      {linkModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setLinkModal(null)}>
+          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 440, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>組織図メンバーと紐付け</div>
+            <div style={{ fontSize: 12, color: T().accent, marginBottom: 16 }}>{linkModal.authUser.email}</div>
+            <div style={{ fontSize: 12, color: T().textMuted, marginBottom: 16 }}>紐付けるメンバーを選択してください（変更すると旧紐付けは解除されます）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+              <div onClick={() => handleLink(linkModal.authUser, null)}
+                style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 12, fontWeight: 600 }}>
+                🔗 紐付けを解除する
+              </div>
+              {members.map(m => {
+                const alreadyLinked = m.email === linkModal.authUser.email
+                const linkedToOther = m.email && m.email !== linkModal.authUser.email
+                const c = avatarColor(m.name)
+                return (
+                  <div key={m.id} onClick={() => !linkedToOther && handleLink(linkModal.authUser, m.id)}
+                    style={{ padding: '10px 14px', borderRadius: 8, cursor: linkedToOther ? 'not-allowed' : 'pointer', border: `1px solid ${alreadyLinked ? T().badgeBorder : linkedToOther ? T().border : T().border}`, background: alreadyLinked ? T().badgeBg : linkedToOther ? T().bgHover : T().bgCard, display: 'flex', alignItems: 'center', gap: 10, opacity: linkedToOther ? 0.4 : 1 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${c}20`, border: `1.5px solid ${c}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: c, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: T().text }}>{m.name}</div>
+                      <div style={{ fontSize: 11, color: T().textMuted }}>{m.role} {m.email ? `（${m.email}）` : '（メール未設定）'}</div>
+                    </div>
+                    {alreadyLinked && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700 }}>現在</span>}
+                    {linkedToOther && <span style={{ fontSize: 10, color: T().textMuted }}>他のアカウントと連携中</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={() => setLinkModal(null)} style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${T().border}`, background: 'transparent', color: T().textMuted, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* ロール変更モーダル */}
+      {roleModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setRoleModal(null)}>
+          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 360 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>ロールを変更</div>
+            <div style={{ fontSize: 12, color: T().accent, marginBottom: 16 }}>{roleModal.member.name}（{roleModal.authUser.email}）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {ROLES.map(r => {
+                const isActive = roleModal.member.role === r
+                return (
+                  <div key={r} onClick={() => handleRoleUpdate(roleModal.authUser, r)}
+                    style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${isActive ? T().badgeBorder : T().border}`, background: isActive ? T().badgeBg : T().bgCard, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: isActive ? T().accent : T().text, fontWeight: isActive ? 700 : 400 }}>{r}</span>
+                    {isActive && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700 }}>現在</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={() => setRoleModal(null)} style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${T().border}`, background: 'transparent', color: T().textMuted, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════════
 // 共通UIパーツ
 // ══════════════════════════════════════════════════
-function Avatar({ name, size = 36 }) {
+function Avatar({ name, size = 36, avatar_url }) {
+  if (avatar_url) {
+    return (
+      <img src={avatar_url} alt={name || ''} style={{
+        width: size, height: size, borderRadius: Math.round(size * 0.28),
+        objectFit: 'cover', border: `1.5px solid ${avatarColor(name)}60`, flexShrink: 0
+      }} />
+    )
+  }
   const color = avatarColor(name)
   return (
     <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.28), background: `${color}28`, border: `1.5px solid ${color}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.42, fontWeight: 800, color, flexShrink: 0 }}>
@@ -454,6 +711,12 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
   const [editingMeta, setEditingMeta] = useState(null)
   const [metaBuf, setMetaBuf] = useState({})
   const [saving, setSaving] = useState(false)
+  const [webhookEdit, setWebhookEdit] = useState(null) // { levelId, url }
+
+  const handleSaveWebhook = async (levelId, url) => {
+    await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
+    setWebhookEdit(null)
+  }
 
   // ツリー構造：root(parent_id=null) → 事業部 → チーム
   const roots = levels.filter(l => !l.parent_id)
@@ -500,7 +763,31 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
               <div style={{ width: 4, height: 24, borderRadius: 2, background: color }} />
               <span style={{ fontSize: 16, fontWeight: 700, color }}>{dept.icon} {dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
+              {isAdmin && (
+                <button onClick={() => setWebhookEdit({ levelId: dept.id, url: dept.slack_webhook_url || '' })}
+                  style={{ padding: '2px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10, fontWeight: 600,
+                    background: dept.slack_webhook_url ? T().badgeBg : T().bgHover,
+                    border: `1px solid ${dept.slack_webhook_url ? T().badgeBorder : T().border}`,
+                    color: dept.slack_webhook_url ? T().accent : T().textMuted }}>
+                  {dept.slack_webhook_url ? '📨 Slack設定済み' : '📨 Slack設定'}
+                </button>
+              )}
             </div>
+            {webhookEdit && webhookEdit.levelId === dept.id && (
+              <div style={{ margin: '0 20px 12px', padding: '10px 14px', background: T().badgeBg, borderRadius: 10, border: `1px solid ${T().badgeBorder}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T().accent, marginBottom: 6 }}>Slack Webhook URL</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input value={webhookEdit.url} onChange={e => setWebhookEdit(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="https://hooks.slack.com/services/..."
+                    style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: `1px solid ${T().border}`, background: T().inputBg, color: T().inputText, fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                  <button onClick={() => handleSaveWebhook(dept.id, webhookEdit.url)}
+                    style={{ padding: '6px 14px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, background: T().accentSolid, border: 'none', color: '#fff' }}>保存</button>
+                  <button onClick={() => setWebhookEdit(null)}
+                    style={{ padding: '6px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted }}>取消</button>
+                </div>
+                <div style={{ fontSize: 10, color: T().textFaint, marginTop: 4 }}>未設定の場合、親部署またはデフォルトのWebhookに送信されます</div>
+              </div>
+            )}
             {dept.teams.length === 0 ? (
               <div style={{ padding: '20px', fontSize: 12, color: T().textFaintest, fontStyle: 'italic', background: T().bgCard }}> チームがありません（OKRページの「組織を管理」から追加）</div>
             ) : (
@@ -548,7 +835,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                             onMouseEnter={e => e.currentTarget.style.background = `${avatarColor(m.name)}30`}
                             onMouseLeave={e => e.currentTarget.style.background = `${avatarColor(m.name)}18`}
                           >
-                            <Avatar name={m.name} size={18} />
+                            <Avatar name={m.name} size={18} avatar_url={m.avatar_url} />
                             {m.name}
                           </div>
                         ))}
@@ -977,7 +1264,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
               onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = T().border }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <Avatar name={m.name} size={48} />
+                <Avatar name={m.name} size={48} avatar_url={m.avatar_url} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: T().text }}>{m.name}</div>
                   <div style={{ fontSize: 10, color: T().textFaint, marginTop: 2 }}>{m.role || '—'}</div>
@@ -1090,18 +1377,36 @@ function AddMemberModal({ levels, onClose, onAdded }) {
   const [selectedIds, setSelectedIds] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileRef = React.useRef(null)
 
   const roots = levels.filter(l => !l.parent_id)
   const getDepts = rootId => levels.filter(l => Number(l.parent_id) === Number(rootId))
   const getTeams = deptId => levels.filter(l => Number(l.parent_id) === Number(deptId))
   const toggleId = id => setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
 
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { alert('画像ファイルを選択してください'); return }
+    if (file.size > 2 * 1024 * 1024) { alert('2MB以下の画像を選択してください'); return }
+    setUploading(true)
+    const ext = file.name.split('.').pop()
+    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(fileName, file, { cacheControl: '3600', upsert: false })
+    if (error) { alert('アップロードに失敗しました: ' + error.message); setUploading(false); return }
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
+    setAvatarUrl(urlData.publicUrl)
+    setUploading(false)
+  }
+
   const save = async () => {
     if (!name.trim()) { setError('名前は必須です'); return }
     setSaving(true)
     const { data, error: err } = await supabase.from('members').insert([{
       name: name.trim(), role: roleTitle.trim() || null, email: email.trim() || null,
-      level_id: selectedIds[0] || null, level_ids: selectedIds,
+      level_id: selectedIds[0] || null, level_ids: selectedIds, avatar_url: avatarUrl || null,
     }]).select().single()
     if (err) { setError('保存に失敗しました: ' + err.message); setSaving(false); return }
     onAdded(data)
@@ -1115,6 +1420,25 @@ function AddMemberModal({ levels, onClose, onAdded }) {
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T().text }}>＋ メンバーを追加</h3>
           <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16 }}>✕</button>
         </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8 }}>プロフィール画像</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Avatar name={name} size={48} avatar_url={avatarUrl} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, color: T().accent, fontSize: 11, fontWeight: 600, cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                {uploading ? '⏳ アップロード中...' : '📷 画像をアップロード'}
+              </button>
+              {avatarUrl && <button onClick={() => setAvatarUrl('')}
+                style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                🗑 画像を削除
+              </button>}
+              <div style={{ fontSize: 10, color: T().textFaint }}>JPG / PNG / WebP・2MB以下</div>
+            </div>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+        </div>
+
         {[
           { label: '名前 *', val: name, set: setName, ph: '例: 田中 花子' },
           { label: '役職・ロール', val: roleTitle, set: setRoleTitle, ph: '例: コミュニティマネージャー' },
@@ -1204,6 +1528,9 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const [editingProfile, setEditingProfile] = useState(false)
   const [profileBuf, setProfileBuf] = useState({ name: '', role: '' })
   const [savingProfile, setSavingProfile] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState(memberRow?.avatar_url || '')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarFileRef = React.useRef(null)
   const [selectedIds, setSelectedIds] = useState(
     Array.isArray(memberRow?.level_ids) ? memberRow.level_ids.map(Number) : (memberRow?.level_id ? [Number(memberRow.level_id)] : [])
   )
@@ -1215,6 +1542,26 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const getDepts = rootId => levels.filter(l => Number(l.parent_id) === Number(rootId))
   const getTeams = deptId => levels.filter(l => Number(l.parent_id) === Number(deptId))
   const toggleId = id => setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+
+  useEffect(() => { setAvatarUrl(memberRow?.avatar_url || '') }, [memberRow?.id])
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { alert('画像ファイルを選択してください'); return }
+    if (file.size > 2 * 1024 * 1024) { alert('2MB以下の画像を選択してください'); return }
+    setUploadingAvatar(true)
+    const ext = file.name.split('.').pop()
+    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(fileName, file, { cacheControl: '3600', upsert: false })
+    if (error) { alert('アップロードに失敗しました: ' + error.message); setUploadingAvatar(false); return }
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
+    setAvatarUrl(urlData.publicUrl)
+    setUploadingAvatar(false)
+    // Save immediately
+    await supabase.from('members').update({ avatar_url: urlData.publicUrl }).eq('id', memberRow.id)
+    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, avatar_url: urlData.publicUrl } : m))
+  }
 
   const saveTeams = async () => {
     setSavingTeams(true)
@@ -1308,8 +1655,8 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const saveProfile = async () => {
     if (!profileBuf.name.trim()) return
     setSavingProfile(true)
-    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim() }).eq('id', memberRow.id)
-    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim() } : m))
+    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl }).eq('id', memberRow.id)
+    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl } : m))
     setSavingProfile(false)
     setEditingProfile(false)
   }
@@ -1369,7 +1716,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
 
       {/* プロフィールヘッダー */}
       <div style={{ background: fg, borderRadius: 12, padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-        <Avatar name={memberRow?.name} size={64} />
+        <Avatar name={memberRow?.name} size={64} avatar_url={avatarUrl} />
         <div style={{ flex: 1 }}>
           {editingProfile ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
@@ -1397,11 +1744,18 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                   <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
                 </div>
-                {isAdmin && (
-                  <button onClick={startEditProfile}
-                    style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                    ✎ 編集
-                  </button>
+                {isAdmin && !editingProfile && (
+                  <>
+                    <button onClick={startEditProfile}
+                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                      ✎ 編集
+                    </button>
+                    <button onClick={() => avatarFileRef.current?.click()} disabled={uploadingAvatar}
+                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                      {uploadingAvatar ? '⏳...' : '📷'}
+                    </button>
+                    <input ref={avatarFileRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
+                  </>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1871,6 +2225,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
     { id: 'chart',   icon: '🏗', label: '組織図' },
     { id: 'tasks',   icon: '📋', label: '業務一覧' },
     { id: 'members', icon: '👤', label: 'メンバーJD' },
+    { id: 'users',   icon: '👥', label: 'ユーザー管理' },
   ]
 
 
@@ -1931,6 +2286,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             onClearJump={() => setJumpMemberName(null)}
           />
         )}
+        {activeTab === 'users' && <UserListTab members={members} currentUser={user} isAdmin={isAdmin} />}
       </div>
     </div>
   )
