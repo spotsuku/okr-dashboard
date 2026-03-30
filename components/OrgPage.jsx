@@ -616,7 +616,7 @@ function useOrgData(fiscalYear) {
     ] = await Promise.all([
       supabase.from('levels').select('*').order('id'),
       supabase.from('org_team_meta').select('*'),
-      supabase.from('members').select('*').order('name'),
+      supabase.from('members').select('*').order('id'),
       supabase.from('org_tasks').select('*').order('id'),
       supabase.from('org_member_jd').select('*').order('version_idx'),
       supabase.from('org_task_history').select('*').order('changed_at'),
@@ -661,7 +661,7 @@ function useOrgData(fiscalYear) {
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, payload => {
-        if (payload.eventType === 'INSERT') { setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'))) }
+        if (payload.eventType === 'INSERT') { setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new]) }
         else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
         else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
       })
@@ -1206,6 +1206,37 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
   const [selectedName, setSelectedName] = useState(initialName || null)
   const [verIdx, setVerIdx] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [dragId, setDragId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
+
+  const handleDragStart = (e, memberId) => {
+    setDragId(memberId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const handleDragOver = (e, memberId) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (memberId !== dragOverId) setDragOverId(memberId)
+  }
+  const handleDrop = async (e, targetId) => {
+    e.preventDefault()
+    if (!dragId || dragId === targetId) { setDragId(null); setDragOverId(null); return }
+    const fromIdx = members.findIndex(m => m.id === dragId)
+    const toIdx = members.findIndex(m => m.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) { setDragId(null); setDragOverId(null); return }
+    const reordered = [...members]
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+    setMembers(reordered.map((m, i) => ({ ...m, sort_order: i })))
+    setDragId(null); setDragOverId(null)
+    // sort_order をDBに保存（カラムが未追加でもクラッシュしない）
+    try {
+      for (let i = 0; i < reordered.length; i++) {
+        await supabase.from('members').update({ sort_order: i }).eq('id', reordered[i].id)
+      }
+    } catch (e) { console.warn('sort_order save failed (column may not exist):', e) }
+  }
+  const handleDragEnd = () => { setDragId(null); setDragOverId(null) }
 
   useEffect(() => {
     if (initialName) { setSelectedName(initialName); setVerIdx(null) }
@@ -1244,7 +1275,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-        {members.map(m => {
+        {[...members].sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999) || a.id - b.id).map(m => {
           const jdBase = JD_DEFAULT[m.name] || { avatar_color: [avatarColor(m.name), '#111828'], versions: [] }
           const [fg, bg] = jdBase.avatar_color
           // DBのjdRowsがあれば最新バージョンを表示、なければJD_DEFAULTの最終版
@@ -1259,9 +1290,19 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
 
           return (
             <div key={m.id} onClick={() => { setSelectedName(m.name); setVerIdx(null) }}
-              style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 12, padding: 18, cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = fg + '60' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = T().border }}
+              draggable={isAdmin}
+              onDragStart={e => handleDragStart(e, m.id)}
+              onDragOver={e => handleDragOver(e, m.id)}
+              onDrop={e => handleDrop(e, m.id)}
+              onDragEnd={handleDragEnd}
+              style={{
+                background: T().bgCard,
+                border: `1px solid ${dragOverId === m.id ? T().accentSolid : T().border}`,
+                borderRadius: 12, padding: 18, cursor: isAdmin ? 'grab' : 'pointer', transition: 'all 0.2s',
+                opacity: dragId === m.id ? 0.4 : 1,
+              }}
+              onMouseEnter={e => { if (!dragId) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = fg + '60' } }}
+              onMouseLeave={e => { if (!dragId) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = T().border } }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <Avatar name={m.name} size={48} avatar_url={m.avatar_url} />
@@ -1294,7 +1335,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
 
       {showAddModal && (
         <AddMemberModal levels={levels} onClose={() => setShowAddModal(false)}
-          onAdded={newM => { setMembers(prev => [...prev, newM]); setShowAddModal(false) }} />
+          onAdded={newM => { setMembers(prev => prev.some(m => m.id === newM.id) ? prev : [...prev, newM]); setShowAddModal(false) }} />
       )}
     </div>
   )
@@ -1409,6 +1450,15 @@ function AddMemberModal({ levels, onClose, onAdded }) {
       level_id: selectedIds[0] || null, level_ids: selectedIds, avatar_url: avatarUrl || null,
     }]).select().single()
     if (err) { setError('保存に失敗しました: ' + err.message); setSaving(false); return }
+    // メールアドレスがある場合、Authアカウントも作成
+    if (email.trim()) {
+      try {
+        await fetch('/api/admin-users', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'createUser', email: email.trim() })
+        })
+      } catch (e) { console.warn('Auth account creation failed:', e) }
+    }
     onAdded(data)
   }
 
@@ -1649,20 +1699,46 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   }
 
   const startEditProfile = () => {
-    setProfileBuf({ name: memberRow?.name || '', role: memberRow?.role || '' })
+    setProfileBuf({ name: memberRow?.name || '', role: memberRow?.role || '', email: memberRow?.email || '' })
     setEditingProfile(true)
   }
   const saveProfile = async () => {
     if (!profileBuf.name.trim()) return
     setSavingProfile(true)
-    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl }).eq('id', memberRow.id)
-    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl } : m))
+    const newEmail = profileBuf.email.trim() || null
+    const oldEmail = memberRow?.email || null
+    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim(), email: newEmail, avatar_url: avatarUrl }).eq('id', memberRow.id)
+    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim(), email: newEmail, avatar_url: avatarUrl } : m))
+    // 新しいメールアドレスが追加された場合、Authアカウントを作成
+    if (newEmail && newEmail !== oldEmail) {
+      try {
+        await fetch('/api/admin-users', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'createUser', email: newEmail })
+        })
+      } catch (e) { console.warn('Auth account creation failed:', e) }
+    }
     setSavingProfile(false)
     setEditingProfile(false)
   }
 
+  const deleteSelectedJD = async () => {
+    const ver = versions[effectiveVerIdx]
+    if (!ver?._dbId) return
+    const label = `V${effectiveVerIdx + 1}${ver.period ? ': ' + ver.period : ''}`
+    if (!window.confirm(`「${memberName}」の ${label} を削除しますか？`)) return
+    await supabase.from('org_member_jd').delete().eq('id', ver._dbId)
+    setJdRows(prev => ({
+      ...prev,
+      [memberName]: (prev[memberName] || []).filter(r => r.id !== ver._dbId)
+    }))
+    setVerIdx(Math.max(0, effectiveVerIdx - 1))
+    setEditing(false)
+  }
+
   const deleteMember = async () => {
     if (!window.confirm(`「${memberName}」を削除しますか？`)) return
+    await supabase.from('org_member_jd').delete().eq('member_id', memberName)
     await supabase.from('members').delete().eq('id', memberRow.id)
     setMembers(prev => prev.filter(m => m.id !== memberRow.id)); onBack()
   }
@@ -1696,6 +1772,11 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             <button onClick={startAddVersion} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
               ＋ 新バージョンを追加
             </button>
+            {dbRows.length > 0 && (
+              <button onClick={deleteSelectedJD} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
+                🗑 このバージョンを削除
+              </button>
+            )}
           </>
         )}
         {isAdmin && editing && (
@@ -1726,6 +1807,10 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               <input value={profileBuf.role} onChange={e => setProfileBuf(p => ({ ...p, role: e.target.value }))}
                 placeholder="役職・ポジション（例: コミュニティ事業部 マネージャー）"
                 style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '5px 12px', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+              <input value={profileBuf.email} onChange={e => setProfileBuf(p => ({ ...p, email: e.target.value }))}
+                placeholder="メールアドレス（例: name@example.com）"
+                type="email"
+                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '5px 12px', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveProfile} disabled={savingProfile || !profileBuf.name.trim()}
                   style={{ padding: '5px 16px', borderRadius: 6, background: 'rgba(255,255,255,0.9)', border: 'none', color: fg, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1743,6 +1828,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                 <div>
                   <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
+                  {memberRow?.email && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>✉ {memberRow.email}</div>}
                 </div>
                 {isAdmin && !editingProfile && (
                   <>
@@ -2158,7 +2244,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                           </div>
                         </div>
                         {/* 管理者：バージョン削除ボタン */}
-                        {isAdmin && versions.length > 1 && dbRows.length > 0 && (
+                        {isAdmin && dbRows.length > 0 && (
                           <button onClick={e => { e.stopPropagation(); deleteVersion(i) }}
                             style={{ padding: '3px 7px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().border}`, color: T().textFaintest, fontSize: 10, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
                             ✕

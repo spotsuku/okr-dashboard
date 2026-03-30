@@ -2,14 +2,53 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
+// ─── themes ────────────────────────────────────────────────────────────────
+const THEMES = {
+  dark: {
+    bg: '#0F1117', bgCard: '#111828', bgExpanded: 'rgba(0,0,0,0.2)',
+    bgInner: 'rgba(255,255,255,0.03)', bgKr: 'rgba(255,255,255,0.03)',
+    bgKrOuter: 'rgba(255,255,255,0.02)',
+    text: '#E8ECF0', textSub: '#dde0ec', textMuted: '#606880',
+    textFaint: '#404660', textFaintest: '#303650',
+    border: 'rgba(255,255,255,0.06)', borderDash: 'rgba(255,255,255,0.08)',
+    borderLight: 'rgba(255,255,255,0.07)', borderKr: 'rgba(255,255,255,0.06)',
+    progressBg: 'rgba(255,255,255,0.06)',
+    btnEditBg: 'rgba(77,159,255,0.12)', btnEditBorder: 'rgba(77,159,255,0.25)', btnEditColor: '#4d9fff',
+    btnDelBg: 'rgba(255,107,107,0.1)', btnDelBorder: 'rgba(255,107,107,0.2)', btnDelColor: '#ff6b6b',
+    tabActiveBg: 'rgba(255,255,255,0.05)',
+    badgePeriodBg: 'rgba(255,255,255,0.06)',
+    addBtnBg: '#4d9fff',
+    refBg: 'rgba(255,255,255,0.03)', refBorder: 'rgba(255,255,255,0.08)',
+  },
+  light: {
+    bg: '#EEF2F5', bgCard: '#FFFFFF', bgExpanded: '#F5F7FA',
+    bgInner: '#F8FAFC', bgKr: '#F5F7FA',
+    bgKrOuter: '#F8FAFC',
+    text: '#2D3748', textSub: '#2D3748', textMuted: '#5A6577',
+    textFaint: '#A0AEC0', textFaintest: '#DDE4EA',
+    border: '#E2E8F0', borderDash: '#CBD5E0',
+    borderLight: '#E2E8F0', borderKr: '#E2E8F0',
+    progressBg: '#E8EEF2',
+    btnEditBg: '#EBF4FF', btnEditBorder: '#B3D4FC', btnEditColor: '#3B82C4',
+    btnDelBg: '#FFF1F0', btnDelBorder: '#FECACA', btnDelColor: '#DC6B6B',
+    tabActiveBg: '#EEF2F5',
+    badgePeriodBg: '#EEF2F5',
+    addBtnBg: '#5A8A7A',
+    refBg: '#F0F7F4', refBorder: '#D4E8DE',
+  },
+}
+
+let _theme = THEMES.dark
+const T = () => _theme
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 const RATINGS = [
-  { min: 150, label: '奇跡',     color: '#ff9f43' },
-  { min: 120, label: '変革',     color: '#a855f7' },
-  { min: 100, label: '順調以上', color: '#00d68f' },
-  { min:  80, label: '順調',     color: '#4d9fff' },
-  { min:  60, label: '最低限',   color: '#ffd166' },
-  { min:   0, label: '未達',     color: '#ff6b6b' },
+  { min: 120, label: '奇跡',   color: '#ff9f43' },
+  { min: 110, label: '変革',   color: '#a855f7' },
+  { min: 100, label: '好調',   color: '#00d68f' },
+  { min:  90, label: '順調',   color: '#4d9fff' },
+  { min:  80, label: '最低限', color: '#ffd166' },
+  { min:   0, label: '未達',   color: '#ff6b6b' },
 ]
 const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >= r.min) || RATINGS[RATINGS.length - 1])
 
@@ -36,13 +75,26 @@ const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
 const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 
-// 年度に応じたperiodキー変換
 function toPeriodKey(period, fiscalYear) {
   return fiscalYear === '2026' ? period : `${fiscalYear}_${period}`
 }
 
+// サイドバーで選択中のlevelIdの子孫を全て取得
+function getDescendantIds(levelId, levels) {
+  const ids = [Number(levelId)]
+  let frontier = [Number(levelId)]
+  while (frontier.length) {
+    const next = levels.filter(l => frontier.includes(Number(l.parent_id))).map(l => Number(l.id))
+    ids.push(...next)
+    frontier = next
+  }
+  return ids
+}
+
 // ─── AnnualView ─────────────────────────────────────────────────────────────
-export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey, fiscalYear = '2026' }) {
+export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey, fiscalYear = '2026', themeKey = 'dark', activeLevelId }) {
+  _theme = THEMES[themeKey] || THEMES.dark
+
   const [annualObjs, setAnnualObjs] = useState([])
   const [quarterMap, setQuarterMap] = useState({})
   const [expanded,   setExpanded]   = useState({})
@@ -54,7 +106,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   const loadAll = async () => {
     setLoading(true)
 
-    // 1. 通期OKRを年度対応のperiodキーで取得
     const annualKey = toPeriodKey('annual', fiscalYear)
     const { data: annObjs } = await supabase
       .from('objectives')
@@ -64,7 +115,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
     if (!annObjs?.length) { setAnnualObjs([]); setQuarterMap({}); setLoading(false); return }
 
-    // 2. 通期OKRのKRを取得
     const annIds = annObjs.map(o => o.id)
     const { data: annKRs } = await supabase
       .from('key_results')
@@ -79,7 +129,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const fullAnnObjs = annObjs.map(o => ({ ...o, key_results: annKRMap[o.id] || [] }))
     setAnnualObjs(fullAnnObjs)
 
-    // 3. 四半期OKRを年度対応のperiodキーで取得
     const qKeys = Q_KEYS.map(q => toPeriodKey(q, fiscalYear))
     const { data: qObjs } = await supabase
       .from('objectives')
@@ -89,7 +138,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
     if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
 
-    // 4. 四半期OKRのKRを取得
     const qIds = qObjs.map(o => o.id)
     const { data: qKRs } = await supabase
       .from('key_results')
@@ -103,14 +151,11 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     })
     const fullQObjs = qObjs.map(o => ({ ...o, key_results: qKRMap[o.id] || [] }))
 
-    // 5. annualObjIdごとに四半期OKRをグループ化
     const qMap = {}
     fullAnnObjs.forEach(ann => { qMap[ann.id] = { q1: [], q2: [], q3: [], q4: [] } })
 
     fullQObjs.forEach(qObj => {
-      // '2025_q1' → 'q1' のように末尾のqキーを取得
       const baseQ = qObj.period.includes('_') ? qObj.period.split('_').pop() : qObj.period
-
       if (qObj.parent_objective_id && qMap[qObj.parent_objective_id]) {
         qMap[qObj.parent_objective_id][baseQ]?.push(qObj)
       } else {
@@ -132,13 +177,18 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     onAddObjective({ parentObjectiveId: annualObjId, period: qKey, level_id: levelId })
   }
 
-  if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
-  if (!levels?.length) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
+  // 組織フィルタリング（選択したレベルのOKRのみ表示、子孫は含めない）
+  const filteredObjs = activeLevelId
+    ? annualObjs.filter(o => Number(o.level_id) === Number(activeLevelId))
+    : annualObjs
 
-  if (!annualObjs.length) return (
-    <div style={{ padding: '60px 20px', textAlign: 'center', color: '#404660', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14, maxWidth: 600, margin: '40px auto' }}>
+  if (loading) return <div style={{ padding: 40, color: T().addBtnBg, fontSize: 14 }}>読み込み中...</div>
+  if (!levels?.length) return <div style={{ padding: 40, color: T().addBtnBg, fontSize: 14 }}>読み込み中...</div>
+
+  if (!filteredObjs.length) return (
+    <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, border: `1px dashed ${T().borderDash}`, borderRadius: 14, maxWidth: 600, margin: '40px auto' }}>
       <div style={{ fontSize: 36, marginBottom: 12 }}>📅</div>
-      <div style={{ fontSize: 15, marginBottom: 6 }}>{fiscalYear}年度の通期OKRがありません</div>
+      <div style={{ fontSize: 15, marginBottom: 6, color: T().text }}>{activeLevelId ? 'この組織の' : ''}{fiscalYear}年度の通期OKRがありません</div>
       <div style={{ fontSize: 13 }}>まず「通期」の目標を追加してください</div>
     </div>
   )
@@ -147,15 +197,15 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     <div style={{ padding: '24px 24px', maxWidth: 900, margin: '0 auto' }}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>年間ブレイクダウン</div>
-          <div style={{ fontSize: 13, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.4)' : 'rgba(255,159,67,0.4)'}` }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: T().text }}>年間ブレイクダウン</div>
+          <div style={{ fontSize: 13, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg, border: `1px solid ${T().addBtnBg}40` }}>
             📅 {fiscalYear}年度
           </div>
         </div>
-        <div style={{ fontSize: 13, color: '#606880' }}>通期OKRをクリックして四半期への展開を確認・管理できます</div>
+        <div style={{ fontSize: 13, color: T().textMuted }}>通期OKRをクリックして四半期への展開を確認・管理できます</div>
       </div>
 
-      {annualObjs.map(ann => {
+      {filteredObjs.map(ann => {
         const prog = calcObjProgress(ann.key_results)
         const r = getRating(prog)
         const depth = getAbsoluteDepth(ann.level_id, levels)
@@ -168,25 +218,25 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         const qData = quarterMap[ann.id] || { q1: [], q2: [], q3: [], q4: [] }
 
         return (
-          <div key={ann.id} style={{ marginBottom: 16, background: '#111828', border: `1px solid ${isOpen ? lColor + '40' : lColor + '18'}`, borderRadius: 16, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+          <div key={ann.id} style={{ marginBottom: 16, background: T().bgCard, border: `1px solid ${isOpen ? lColor + '40' : lColor + '18'}`, borderRadius: 16, overflow: 'hidden', transition: 'border-color 0.2s' }}>
 
             {/* 通期ヘッダー */}
             <div onClick={() => toggleExpand(ann.id)} style={{ padding: '18px 20px', cursor: 'pointer', borderLeft: `4px solid ${lColor}`, display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${lColor}15`, color: lColor, fontWeight: 600 }}>{levelIcon} {levelName}</span>
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(255,255,255,0.06)', color: '#606880' }}>通期</span>
+                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().badgePeriodBg, color: T().textMuted }}>通期</span>
                   {r && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${r.color}18`, color: r.color, fontWeight: 700 }}>{r.label}</span>}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#dde0ec', lineHeight: 1.4, marginBottom: ann.owner ? 6 : 10 }}>{ann.title}</div>
-                {ann.owner && <div style={{ fontSize: 11, color: '#606880', marginBottom: 8 }}>担当：{ann.owner}</div>}
+                <div style={{ fontSize: 14, fontWeight: 700, color: T().textSub, lineHeight: 1.4, marginBottom: ann.owner ? 6 : 10 }}>{ann.title}</div>
+                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8 }}>担当：{ann.owner}</div>}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
                     const qr = qProg != null ? getRating(qProg) : null
                     return (
-                      <div key={qKey} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, fontWeight: 600, background: qr ? `${qr.color}15` : 'rgba(255,255,255,0.04)', color: qr ? qr.color : '#303650', border: `1px solid ${qr ? qr.color + '30' : 'rgba(255,255,255,0.07)'}` }}>
+                      <div key={qKey} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, fontWeight: 600, background: qr ? `${qr.color}15` : T().badgePeriodBg, color: qr ? qr.color : T().textFaintest, border: `1px solid ${qr ? qr.color + '30' : T().borderLight}` }}>
                         {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '未設定'}
                       </div>
                     )
@@ -194,26 +244,26 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: r?.color || '#404660' }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: r?.color || T().textFaint }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: 'rgba(77,159,255,0.12)', border: '1px solid rgba(77,159,255,0.25)', color: '#4d9fff', borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
-                  <div style={{ fontSize: 16, color: isOpen ? '#4d9fff' : '#404660', transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
+                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: `1px solid ${T().btnEditBorder}`, color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: `1px solid ${T().btnDelBorder}`, color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                  <div style={{ fontSize: 16, color: isOpen ? T().btnEditColor : T().textFaint, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
                 </div>
               </div>
             </div>
 
             {/* 展開：四半期ドリルダウン */}
             {isOpen && (
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}>
-                <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ borderTop: `1px solid ${T().border}`, background: T().bgExpanded }}>
+                <div style={{ display: 'flex', borderBottom: `1px solid ${T().border}` }}>
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
                     const qr = qProg != null ? getRating(qProg) : null
                     const isActive = curQ === qKey
                     return (
-                      <button key={qKey} onClick={() => setActiveQ(p => ({ ...p, [ann.id]: qKey }))} style={{ flex: 1, padding: '10px 8px', border: 'none', cursor: 'pointer', background: isActive ? 'rgba(255,255,255,0.05)' : 'transparent', borderBottom: isActive ? `2px solid ${qr?.color || '#4d9fff'}` : '2px solid transparent', color: isActive ? (qr?.color || '#4d9fff') : qObjs.length ? '#606880' : '#303650', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s' }}>
+                      <button key={qKey} onClick={() => setActiveQ(p => ({ ...p, [ann.id]: qKey }))} style={{ flex: 1, padding: '10px 8px', border: 'none', cursor: 'pointer', background: isActive ? T().tabActiveBg : 'transparent', borderBottom: isActive ? `2px solid ${qr?.color || T().addBtnBg}` : '2px solid transparent', color: isActive ? (qr?.color || T().addBtnBg) : qObjs.length ? T().textMuted : T().textFaintest, fontSize: 12, fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s' }}>
                         {Q_LABELS[qKey]}
                         <div style={{ fontSize: 10, marginTop: 2, fontWeight: 400 }}>{qProg != null ? `${qProg}%` : qObjs.length ? '計画中' : '未設定'}</div>
                       </button>
@@ -229,34 +279,34 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                         const qr = getRating(qProg)
                         return (
                           <div key={qObj.id} style={{ marginBottom: 14 }}>
-                            <div style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${qr.color}25`, borderRadius: 12, padding: '14px 16px', borderLeft: `3px solid ${qr.color}` }}>
+                            <div style={{ background: T().bgInner, border: `1px solid ${qr.color}25`, borderRadius: 12, padding: '14px 16px', borderLeft: `3px solid ${qr.color}` }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                 <div style={{ flex: 1 }}>
                                   <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${qr.color}18`, color: qr.color, fontWeight: 700, display: 'inline-block', marginBottom: 6 }}>{qr.label}</span>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#dde0ec', lineHeight: 1.4 }}>{qObj.title}</div>
-                                  {qObj.owner && <div style={{ fontSize: 11, color: '#505878', marginTop: 4 }}>担当：{qObj.owner}</div>}
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: T().textSub, lineHeight: 1.4 }}>{qObj.title}</div>
+                                  {qObj.owner && <div style={{ fontSize: 11, color: T().textMuted, marginTop: 4 }}>担当：{qObj.owner}</div>}
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
                                   <div style={{ fontSize: 24, fontWeight: 800, color: qr.color }}>{qProg}%</div>
                                   <div style={{ display: 'flex', gap: 4 }}>
-                                    {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: 'rgba(77,159,255,0.12)', border: '1px solid rgba(77,159,255,0.25)', color: '#4d9fff', borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                                    {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)', color: '#ff6b6b', borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                                    {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: `1px solid ${T().btnEditBorder}`, color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                                    {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: `1px solid ${T().btnDelBorder}`, color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
-                                <div style={{ height: '100%', width: `${Math.min(qProg, 100)}%`, background: qr.color, borderRadius: 99, boxShadow: `0 0 6px ${qr.color}60` }} />
+                              <div style={{ height: 5, background: T().progressBg, borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
+                                <div style={{ height: '100%', width: `${Math.min(qProg, 100)}%`, background: qr.color, borderRadius: 99 }} />
                               </div>
                               {qObj.key_results.length > 0 && (
                                 <div style={{ marginTop: 8 }}>
-                                  <div style={{ fontSize: 10, color: '#404660', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>この四半期のKR</div>
+                                  <div style={{ fontSize: 10, color: T().textFaint, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>この四半期のKR</div>
                                   {qObj.key_results.map((kr, i) => {
                                     const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
                                     const kr_r = getRating(kp)
                                     return (
-                                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 7, padding: '7px 10px' }}>
-                                        <span style={{ fontSize: 11, color: '#c0c4d8', flex: 1, minWidth: 0 }}>{kr.title}</span>
-                                        <div style={{ width: 80, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, background: T().bgKr, borderRadius: 7, padding: '7px 10px' }}>
+                                        <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>{kr.title}</span>
+                                        <div style={{ width: 80, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
                                           <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
                                         </div>
                                         <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
@@ -270,15 +320,15 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                         )
                       })}
                       {ann.key_results.length > 0 && (
-                        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ fontSize: 11, color: '#404660', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>通期KRへの貢献（累計）</div>
+                        <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T().border}` }}>
+                          <div style={{ fontSize: 11, color: T().textFaint, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>通期KRへの貢献（累計）</div>
                           {ann.key_results.map((kr, i) => {
                             const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
                             const kr_r = getRating(kp)
                             return (
-                              <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '10px 12px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <span style={{ fontSize: 12, color: '#a0a8be', flex: 1 }}>{kr.title}</span>
-                                <div style={{ width: 100, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                              <div key={i} style={{ background: T().bgKrOuter, border: `1px solid ${T().borderKr}`, borderRadius: 8, padding: '10px 12px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>{kr.title}</span>
+                                <div style={{ width: 100, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
                                   <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
                                 </div>
                                 <span style={{ fontSize: 12, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
@@ -289,11 +339,11 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                       )}
                     </div>
                   ) : (
-                    <div style={{ textAlign: 'center', padding: '28px 20px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 12, color: '#404660' }}>
+                    <div style={{ textAlign: 'center', padding: '28px 20px', border: `1px dashed ${T().borderDash}`, borderRadius: 12, color: T().textFaint }}>
                       <div style={{ fontSize: 24, marginBottom: 8 }}>＋</div>
-                      <div style={{ fontSize: 13, marginBottom: 4 }}>{Q_LABELS[curQ]}のOKRを追加</div>
-                      <div style={{ fontSize: 11, color: '#303650', marginBottom: 16 }}>この通期OKRに紐づいた四半期目標を設定します</div>
-                      <button onClick={() => handleAddQ(ann.id, curQ, ann.level_id)} style={{ background: '#4d9fff', border: 'none', color: '#fff', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <div style={{ fontSize: 13, marginBottom: 4, color: T().textMuted }}>{Q_LABELS[curQ]}のOKRを追加</div>
+                      <div style={{ fontSize: 11, color: T().textFaintest, marginBottom: 16 }}>この通期OKRに紐づいた四半期目標を設定します</div>
+                      <button onClick={() => handleAddQ(ann.id, curQ, ann.level_id)} style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                         ＋ {Q_LABELS[curQ]} OKRを追加
                       </button>
                     </div>

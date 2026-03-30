@@ -21,14 +21,14 @@ const W_THEMES = { dark: DARK_T, light: LIGHT_T }
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────────
 const RATINGS = [
-  { min: 150, score: 5, label: '奇跡',    color: '#ff9f43' },
-  { min: 120, score: 4, label: '変革',    color: '#a855f7' },
-  { min: 100, score: 3, label: '順調以上', color: '#00d68f' },
-  { min:  80, score: 2, label: '順調',    color: '#4d9fff' },
-  { min:  60, score: 1, label: '最低限',  color: '#ffd166' },
-  { min:   0, score: 0, label: '未達',    color: '#ff6b6b' },
+  { min: 120, score: 5, label: '奇跡',   color: '#ff9f43' },
+  { min: 110, score: 4, label: '変革',   color: '#a855f7' },
+  { min: 100, score: 3, label: '好調',   color: '#00d68f' },
+  { min:  90, score: 2, label: '順調',   color: '#4d9fff' },
+  { min:  80, score: 1, label: '最低限', color: '#ffd166' },
+  { min:   0, score: 0, label: '未達',   color: '#ff6b6b' },
 ]
-const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
+const getRating = pct => RATINGS.find(r => Math.min(pct, 200) >= r.min) || RATINGS[RATINGS.length - 1]
 
 function calcKRProgress(kr) {
   if (!kr.target || kr.target === 0) return 0

@@ -9,6 +9,7 @@ import MyOKRPageNew from './MyOKRPage'
 import BulkRegisterPage from './BulkRegisterPage'
 import CompanySummaryPage from './CompanySummaryPage'
 import OrgPage from './OrgPage'
+import OwnerOKRView from './OwnerOKRView'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -93,12 +94,12 @@ const getT = () => _T
 
 // ─── Rating helpers ────────────────────────────────────────────────────────────
 const RATINGS = [
-  { min: 150, score: 5, label: '奇跡',    color: '#5DCAA5' },
-  { min: 120, score: 4, label: '変革',    color: '#B0BAC8' },
-  { min: 100, score: 3, label: '順調以上', color: '#5DCAA5' },
-  { min:  80, score: 2, label: '順調',    color: '#5DCAA5' },
-  { min:  60, score: 1, label: '最低限',  color: '#F0997B' },
-  { min:   0, score: 0, label: '未達',    color: '#E8875A' },
+  { min: 120, score: 5, label: '奇跡',   color: '#ff9f43' },
+  { min: 110, score: 4, label: '変革',   color: '#a855f7' },
+  { min: 100, score: 3, label: '好調',   color: '#00d68f' },
+  { min:  90, score: 2, label: '順調',   color: '#4d9fff' },
+  { min:  80, score: 1, label: '最低限', color: '#ffd166' },
+  { min:   0, score: 0, label: '未達',   color: '#E8875A' },
 ]
 const getRating = pct => RATINGS.find(r => Math.min(pct, 150) >= r.min) || RATINGS[RATINGS.length - 1]
 
@@ -269,6 +270,33 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }]
   )
   const [saving, setSaving] = useState(false)
+  const [parentObj, setParentObj] = useState(null)
+
+  // 四半期OKRの場合、通期OKRを参照として取得
+  useEffect(() => {
+    const isQuarterly = ['q1','q2','q3','q4'].includes(period)
+    if (!isQuarterly) { setParentObj(null); return }
+    const parentId = initial?.parent_objective_id
+    if (parentId) {
+      // parent_objective_id がある場合は直接取得
+      ;(async () => {
+        const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
+        if (!obj) { setParentObj(null); return }
+        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+        setParentObj({ ...obj, key_results: krData || [] })
+      })()
+    } else {
+      // level_id で通期OKRを検索
+      ;(async () => {
+        const annualKey = fiscalYear === '2026' ? 'annual' : `${fiscalYear}_annual`
+        const { data: objs } = await supabase.from('objectives').select('id,title,owner').eq('period', annualKey).eq('level_id', parseInt(levelId))
+        if (!objs?.length) { setParentObj(null); return }
+        const obj = objs[0]
+        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+        setParentObj({ ...obj, key_results: krData || [] })
+      })()
+    }
+  }, [period, levelId]) // eslint-disable-line
 
   const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
@@ -300,7 +328,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           background: getT().badgeBg,
           border: `1px solid ${getT().badgeBorder}`,
           borderRadius: 8, padding: '6px 12px',
-          color: getT().text,
+          color: '#fff',
           fontSize: 13, fontWeight: 700,
         }}>
           📅 {fiscalYear}年度
@@ -321,6 +349,28 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>)}
         </select>
       </div>
+
+      {parentObj && (
+        <div style={{ marginBottom: 16, padding: '14px 16px', background: getT().navActiveBg, border: `1px solid ${getT().navActiveBorder}40`, borderRadius: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            📌 通期OKR（参照）
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: getT().text, marginBottom: 10, lineHeight: 1.4 }}>{parentObj.title}</div>
+          {parentObj.key_results.map((kr, i) => {
+            const kp = kr.target > 0 ? Math.round((kr.lower_is_better ? Math.max(0, ((kr.target * 2 - kr.current) / kr.target) * 100) : (kr.current / kr.target) * 100)) : 0
+            const r = RATINGS.find(r => Math.min(kp, 150) >= r.min) || RATINGS[RATINGS.length - 1]
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, padding: '6px 10px', background: getT().bgCard, borderRadius: 7, border: `1px solid ${getT().border}` }}>
+                <span style={{ fontSize: 11, color: getT().textSub, flex: 1, minWidth: 0 }}>KR{i + 1}: {kr.title}</span>
+                <div style={{ width: 60, height: 3, background: getT().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                  <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: r.color, borderRadius: 99 }} />
+                </div>
+                <span style={{ fontSize: 11, color: r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit} ({kp}%)</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Results</div>
       {krs.map((kr, i) => {
@@ -343,8 +393,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
                 低い方が良い指標（チャーン率・バグ数など）
               </label>
               <select value={kr.owner||''} onChange={e => updateKR(key, 'owner', e.target.value)} style={{
-                background: '#1a2030', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
-                padding: '5px 8px', color: kr.owner ? '#e8eaf0' : '#505878', fontSize: 12,
+                background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8,
+                padding: '5px 8px', color: kr.owner ? getT().text : getT().textFaint, fontSize: 12,
                 outline: 'none', fontFamily: 'inherit', cursor: 'pointer', maxWidth: 160,
               }}>
                 <option value="">KR担当者</option>
@@ -418,9 +468,9 @@ function KASection({ krId }) {
   }
 
   const TYPE_CONFIG = {
-    normal: { label: '未分類', color: getT().textMuted, bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.07)' },
-    focus:  { label: '🎯 今週注力', color: getT().accent, bg: getT().badgeBg, border: getT().badgeBorder },
-    good:   { label: '✅ Good',    color: getT().accent, bg: getT().badgeBg, border: getT().badgeBorder },
+    normal: { label: '未分類', color: getT().textMuted, bg: getT().bgCard2, border: getT().border },
+    focus:  { label: '🎯 今週注力', color: '#fff', bg: getT().badgeBg, border: getT().badgeBorder },
+    good:   { label: '✅ Good',    color: '#fff', bg: getT().badgeBg, border: getT().badgeBorder },
     more:   { label: '🔺 More',   color: getT().warn, bg: getT().warnBg, border: getT().warnBg },
   }
 
@@ -432,11 +482,11 @@ function KASection({ krId }) {
       <div onClick={() => setOpen(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}>
         <span style={{ fontSize: 10, color: getT().accent, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
         <span style={{ fontSize: 11, color: getT().accent }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
-        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: getT().accent }}>
+        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: '#fff' }}>
           {open ? kas.length : ''}
         </span>
         {!open && focusCount > 0 && (
-          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: getT().accent, fontWeight: 700 }}>🎯 {focusCount}</span>
+          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: '#fff', fontWeight: 700 }}>🎯 {focusCount}</span>
         )}
       </div>
 
@@ -509,7 +559,7 @@ function KASection({ krId }) {
               </div>
             </div>
           ) : (
-            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: getT().accent, background: getT().badgeBg, border: `1px dashed ${getT().badgeBorder}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#fff', background: getT().badgeBg, border: `1px dashed ${getT().badgeBorder}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
               ＋ KAを追加
             </button>
           )}
@@ -583,10 +633,11 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
                         <span style={{ fontSize: 13, color: getT().textSub, lineHeight: 1.35 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: getT().accent, background: getT().badgeBg, padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: getT().badgeBg, padding: '1px 5px', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }}>KR</span>
                           {kr.title}
                         </span>
-                        <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {kr.owner && <span style={{ fontSize: 10, color: getT().accent, background: `${getT().accent}15`, padding: '1px 6px', borderRadius: 4 }}>{kr.owner}</span>}
                           {kr.current}{kr.unit} / {kr.target}{kr.unit}
                           {kr.lower_is_better && <span style={{ color: getT().textFaint, marginLeft: 4 }}>↓良</span>}
                         </span>
@@ -746,7 +797,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
     const isRoot = absD === 0
     return (
       <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:'rgba(255,255,255,0.03)', border:`1px solid ${getT().border}` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:getT().bgCard2, border:`1px solid ${getT().border}` }}>
           <span style={{ fontSize:13 }}>{level.icon}</span>
           <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
           <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
@@ -766,11 +817,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
   return (
     <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.78)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:getT().bgCard, border:'1px solid rgba(255,255,255,0.1)', borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
+      <div style={{ background:getT().bgCard, border:`1px solid ${getT().border}`, borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: getT().badgeBg, color: fiscalYear==='2026'? getT().accent : getT().accentDark, border:`1px solid ${getT().badgeBorder}`}}>
+            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: getT().badgeBg, color: '#fff', border:`1px solid ${getT().badgeBorder}`}}>
               {fiscalYear}年度
             </span>
           </div>
@@ -778,11 +829,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
         </div>
 
         {onCopyFromYear && (
-          <div style={{ marginBottom:16, padding:'10px 12px', background:'rgba(168,85,247,0.06)', border:'1px solid rgba(168,85,247,0.2)', borderRadius:10 }}>
+          <div style={{ marginBottom:16, padding:'10px 12px', background:`${getT().accent}08`, border:`1px solid ${getT().accent}30`, borderRadius:10 }}>
             <div style={{ fontSize:11, color:getT().textMuted, fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {['2025','2026'].filter(y=>y!==fiscalYear).map(y=>(
-                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:'1px solid rgba(168,85,247,0.4)', background:'rgba(107,114,128,0.1)', color:getT().textMuted, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:`1px solid ${getT().accent}40`, background:`${getT().accent}10`, color:getT().textMuted, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                   {y}年度からコピー
                 </button>
               ))}
@@ -796,7 +847,7 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
             {fiscalYear}年度の現在の組織（{levels.length}件）
           </div>
           {levels.length === 0 ? (
-            <div style={{ fontSize:12, color:'#404660', fontStyle:'italic', padding:'12px 8px', textAlign:'center' }}>
+            <div style={{ fontSize:12, color:getT().textFaint, fontStyle:'italic', padding:'12px 8px', textAlign:'center' }}>
               この年度の組織がまだありません。他年度からコピーするか、新規追加してください。
             </div>
           ) : (
@@ -804,11 +855,11 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
           )}
         </div>
 
-        <div style={{ borderTop:'1px solid rgba(255,255,255,0.07)', paddingTop:18 }}>
+        <div style={{ borderTop:`1px solid ${getT().border}`, paddingTop:18 }}>
           <div style={{ fontSize:10, color:getT().textMuted, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>親組織</div>
-            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:getT().bgCard2, border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color: parentId ? '#e8eaf0' : getT().textMuted, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
+            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color: parentId ? getT().text : getT().textMuted, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
               <option value=''>選択してください</option>
               {addableParents.map(l => {
                 const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
@@ -820,18 +871,18 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>組織名</div>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="例: 西日本営業チーム"
-              style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color:'#e8eaf0', fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
+              style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color:getT().text, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
           </div>
           <div style={{ marginBottom:16 }}>
             <div style={{ fontSize:11, color:getT().textMuted, marginBottom:8 }}>アイコン</div>
             <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
               {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? getT().accentSolid : 'rgba(255,255,255,0.1)'}`, background: icon===ic ? getT().badgeBg : 'rgba(255,255,255,0.04)', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
+                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? getT().accentSolid : getT().border}`, background: icon===ic ? getT().badgeBg : getT().bgCard2, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
               ))}
             </div>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
-            <button onClick={onClose} style={{ background:'transparent', border:'1px solid rgba(255,255,255,0.1)', color:getT().textMuted, borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
+            <button onClick={onClose} style={{ background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted, borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
             <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? getT().badgeBg : getT().accentSolid, border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
           </div>
         </div>
@@ -867,14 +918,16 @@ export default function Dashboard({ user, onSignOut }) {
     }
     return 'summary'
   })
-  const [viewMode, setViewMode]             = useState('org')
+  const [viewMode, setViewMode]             = useState('annual')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
-  const [themeKey, setThemeKey]                 = useState('dark')
+  const [themeKey, setThemeKey]                 = useState('light')
   const [syncStatus, setSyncStatus]             = useState('connecting')
+  const [selectedOwner, setSelectedOwner]       = useState(null)
   const T = THEMES[themeKey]
   _T = T
   if (typeof window !== 'undefined') window.__OKR_THEME__ = T
   const [members, setMembers]               = useState([])
+  const [undoDelete, setUndoDelete]         = useState(null) // { objId, obj, krs, timer }
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640)
@@ -1085,10 +1138,41 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   const handleDelete = async (objId) => {
-    if (!window.confirm('この目標を削除しますか？')) return
+    // 1. 削除対象のデータをバックアップ
+    const { data: obj } = await supabase.from('objectives').select('*').eq('id', objId).single()
+    const { data: krs } = await supabase.from('key_results').select('*').eq('objective_id', objId)
+    if (!obj) return
+
+    // 2. DBから即削除
     await supabase.from('key_results').delete().eq('objective_id', objId)
     await supabase.from('objectives').delete().eq('id', objId)
+
+    // 3. UI即時更新
     await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+    setAnnualRefreshKey(k => k + 1)
+
+    // 4. 前のundo timerをクリア（あれば即確定）
+    if (undoDelete?.timer) clearTimeout(undoDelete.timer)
+
+    // 5. undoトースト表示（10秒間）
+    const timer = setTimeout(() => setUndoDelete(null), 10000)
+    setUndoDelete({ objId, obj, krs: krs || [], timer })
+  }
+
+  const handleUndoDelete = async () => {
+    if (!undoDelete) return
+    clearTimeout(undoDelete.timer)
+    const { obj, krs } = undoDelete
+    // objectives を復元
+    const { id, ...objData } = obj
+    const { data: restored } = await supabase.from('objectives').insert([objData]).select().single()
+    if (restored && krs.length) {
+      const krPayloads = krs.map(({ id, objective_id, ...kr }) => ({ ...kr, objective_id: restored.id }))
+      await supabase.from('key_results').insert(krPayloads)
+    }
+    setUndoDelete(null)
+    await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+    setAnnualRefreshKey(k => k + 1)
   }
 
   const handleAddLevel = async ({ name, icon, parent_id }) => {
@@ -1326,7 +1410,7 @@ export default function Dashboard({ user, onSignOut }) {
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'}].map(v => (
+              {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
                 <button key={v.key} onClick={() => setViewMode(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: viewMode === v.key ? T.navActiveBg : 'transparent', color: viewMode === v.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
               ))}
             </div>
@@ -1370,6 +1454,8 @@ export default function Dashboard({ user, onSignOut }) {
             levels={levels}
             refreshKey={annualRefreshKey}
             fiscalYear={fiscalYear}
+            themeKey={themeKey}
+            activeLevelId={activeLevelId}
             onAddObjective={({ parentObjectiveId, period, level_id }) => {
               setModal({ type: 'add', obj: { parent_objective_id: parentObjectiveId, period, level_id } })
             }}
@@ -1392,7 +1478,7 @@ export default function Dashboard({ user, onSignOut }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
               <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: getT().badgeBg, color: getT().text, border: `1px solid ${getT().badgeBorder}` }}>{fiscalYear}年度</span>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: getT().badgeBg, color: '#fff', border: `1px solid ${getT().badgeBorder}` }}>{fiscalYear}年度</span>
               <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
@@ -1422,6 +1508,46 @@ export default function Dashboard({ user, onSignOut }) {
               onDelete={handleDelete}
             />
           )}
+        </div>
+      </div>
+
+      {/* Owner View */}
+      <div style={{ display: activePage === 'okr' && viewMode === 'owner' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {isMobile && showSidebar && (
+          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
+        )}
+        <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
+          <div style={{ fontSize: 10, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>メンバー</div>
+          {members.map(m => {
+            const active = selectedOwner === m.name
+            const c = ['#5A8A7A','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
+            const color = c[Math.abs([...m.name].reduce((h, ch) => ch.charCodeAt(0) + ((h << 5) - h), 0)) % c.length]
+            return (
+              <div key={m.id} onClick={() => { setSelectedOwner(m.name); setShowSidebar(false) }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 2, background: active ? T.navActiveBg : 'transparent', border: active ? `1px solid ${T.navActiveBorder}` : '1px solid transparent', transition: 'all 0.15s' }}>
+                {m.avatar_url ? (
+                  <img src={m.avatar_url} alt={m.name} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}20`, border: `1.5px solid ${color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: active ? 700 : 500, color: active ? T.navActiveText : getT().text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                  {m.role && <div style={{ fontSize: 9, color: getT().textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.role}</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <OwnerOKRView
+            ownerName={selectedOwner}
+            levels={levels}
+            fiscalYear={fiscalYear}
+            themeKey={themeKey}
+            onEdit={obj => setModal({ type: 'edit', obj })}
+            onDelete={handleDelete}
+            refreshKey={annualRefreshKey}
+          />
         </div>
       </div>
 
@@ -1455,6 +1581,13 @@ export default function Dashboard({ user, onSignOut }) {
             members={members}
           />
         </Modal>
+      )}
+      {undoDelete && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: T.text, minWidth: 300 }}>
+          <span style={{ flex: 1 }}>「{undoDelete.obj.title?.slice(0, 20)}{undoDelete.obj.title?.length > 20 ? '…' : ''}」を削除しました</span>
+          <button onClick={handleUndoDelete} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>元に戻す</button>
+          <button onClick={() => { clearTimeout(undoDelete.timer); setUndoDelete(null) }} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: '0 4px' }}>✕</button>
+        </div>
       )}
     </div>
   )

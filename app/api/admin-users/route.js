@@ -24,8 +24,20 @@ export async function GET() {
 // ─── POST: ユーザー操作（削除・ロール変更） ───────────────────────────────────
 export async function POST(request) {
   try {
-    const { action, userId, role } = await request.json()
+    const { action, userId, role, email } = await request.json()
     const admin = getAdminClient()
+
+    if (action === 'createUser') {
+      if (!email) return Response.json({ error: 'メールアドレスが必要です' }, { status: 400 })
+      const password = crypto.randomUUID()
+      const { data, error } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      })
+      if (error) return Response.json({ error: error.message }, { status: 500 })
+      return Response.json({ success: true, user: data.user })
+    }
 
     if (action === 'delete') {
       const { error } = await admin.auth.admin.deleteUser(userId)

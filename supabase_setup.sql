@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS members (
   sub_level_ids BIGINT[] DEFAULT '{}',
   avatar_url    TEXT DEFAULT '',
   is_admin      BOOLEAN DEFAULT FALSE,
+  sort_order    INT DEFAULT 0,
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 

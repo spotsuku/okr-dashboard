@@ -725,13 +725,8 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return false
   }, [myName, isAdmin])
 
-  // 年度・部署フィルタ（子階層も含む：OKRページと同じサブツリー方式）
-  const getSubtreeIds = (id) => {
-    const ids = [Number(id)]
-    levels.filter(l => Number(l.parent_id) === Number(id)).forEach(c => ids.push(...getSubtreeIds(c.id)))
-    return ids
-  }
-  const visibleLevelIds = activeLevelId ? getSubtreeIds(activeLevelId) : levels.map(l=>l.id)
+  // 年度・部署フィルタ（選択レベルのOKRのみ表示）
+  const visibleLevelIds = activeLevelId ? [Number(activeLevelId)] : levels.map(l=>l.id)
   const visibleLevels = levels.filter(l => visibleLevelIds.includes(Number(l.id)))
   const visibleObjs = objectives.filter(o => {
     const levelOk = visibleLevels.some(l => Number(l.id)===Number(o.level_id))
