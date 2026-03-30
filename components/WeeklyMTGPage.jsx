@@ -725,21 +725,24 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return false
   }, [myName, isAdmin])
 
-  // 年度・部署フィルタ（選択レベルのOKRのみ表示）
+  // 年度・部署フィルタ（左パネルは通期OKRのみ表示）
   const visibleLevelIds = activeLevelId ? [Number(activeLevelId)] : levels.map(l=>l.id)
   const visibleLevels = levels.filter(l => visibleLevelIds.includes(Number(l.id)))
+  const annualPeriodKey = fiscalYear === '2026' ? 'annual' : `${fiscalYear}_annual`
   const visibleObjs = objectives.filter(o => {
     const levelOk = visibleLevels.some(l => Number(l.id)===Number(o.level_id))
     if (!levelOk) return false
-    if (activePeriod === 'all') {
-      return fiscalYear==='2026' ? !o.period.includes('_') : o.period.startsWith(`${fiscalYear}_`)
-    }
-    const pk = fiscalYear==='2026' ? activePeriod : `${fiscalYear}_${activePeriod}`
-    return o.period === pk
+    return o.period === annualPeriodKey
   })
 
   const selectedObj    = activeObjId ? objectives.find(o => o.id===Number(activeObjId)) : null
-  const selectedObjKRs = activeObjId ? keyResults.filter(kr => Number(kr.objective_id)===Number(activeObjId)) : []
+  const [rightPeriod, setRightPeriod] = useState('annual')
+  // 右パネル：期間タブに応じたOKRを表示
+  const rightPeriodKey = fiscalYear === '2026' ? rightPeriod : `${fiscalYear}_${rightPeriod}`
+  const rightObj = !selectedObj ? null
+    : rightPeriod === 'annual' ? selectedObj
+    : objectives.find(o => Number(o.level_id) === Number(selectedObj.level_id) && o.period === rightPeriodKey) || null
+  const selectedObjKRs = rightObj ? keyResults.filter(kr => Number(kr.objective_id)===Number(rightObj.id)) : []
   const depth          = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
   const objColor       = LAYER_COLORS[depth] || '#a0a8be'
 
@@ -801,14 +804,6 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           ))}
           <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:STATUS_CFG.done.bg, color:STATUS_CFG.done.color, border:`1px solid ${STATUS_CFG.done.border}` }}>{STATUS_CFG.done.label}</span>
         </div>
-      </div>
-
-      {/* 期間タブ */}
-      <div style={{ display:'flex', gap:4, padding:'7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center' }}>
-        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4 }}>期間：</span>
-        {periodTabs.map(([key,lbl]) => (
-          <button key={key} onClick={()=>{setActivePeriod(key);setActiveObjId(null)}} style={{ padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:activePeriod===key?(key==='all'?wT().borderMid:'rgba(77,159,255,0.15)'):'transparent', border:`1px solid ${activePeriod===key?(key==='all'?wT().border:'rgba(77,159,255,0.4)'):wT().borderMid}`, color:activePeriod===key?(key==='all'?wT().text:'#4d9fff'):wT().textMuted }}>{lbl}</button>
-        ))}
       </div>
 
       {/* 週タブ */}
@@ -878,7 +873,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             const krs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const kaCount = weekReports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
             return (
-              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
+              <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod('annual')}} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
                   <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{getPeriodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
@@ -905,7 +900,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 const color = LAYER_COLORS[d] || '#a0a8be'
                 const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
                 return (
-                  <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'9px 12px', borderRadius:9, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?'rgba(0,214,143,0.5)':'rgba(0,214,143,0.15)'}`, background:isActive?'rgba(0,214,143,0.1)':'rgba(0,214,143,0.04)', transition:'all 0.12s', opacity:0.8 }}>
+                  <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod('annual')}} style={{ padding:'9px 12px', borderRadius:9, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?'rgba(0,214,143,0.5)':'rgba(0,214,143,0.15)'}`, background:isActive?'rgba(0,214,143,0.1)':'rgba(0,214,143,0.04)', transition:'all 0.12s', opacity:0.8 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       <span style={{ fontSize:11 }}>🏆</span>
                       <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>{getPeriodLabel(obj.period)}</span>
@@ -928,20 +923,42 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             </div>
           ) : (
             <>
-              {/* Objectiveヘッダー */}
-              <div style={{ padding:'12px 14px', background: isObjDone(selectedObj)?'rgba(0,214,143,0.08)':`${objColor}0e`, border:`1px solid ${isObjDone(selectedObj)?'rgba(0,214,143,0.3)':objColor+'30'}`, borderLeft:`4px solid ${isObjDone(selectedObj)?'#00d68f':objColor}`, borderRadius:10, marginBottom:16 }}>
+              {/* 通期Objectiveヘッダー */}
+              <div style={{ padding:'12px 14px', background:`${objColor}0e`, border:`1px solid ${objColor}30`, borderLeft:`4px solid ${objColor}`, borderRadius:10, marginBottom:12 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${objColor}20`, color:objColor }}>{getPeriodLabel(selectedObj.period)}</span>
+                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${objColor}20`, color:objColor }}>通期</span>
                   <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
-                  {isObjDone(selectedObj) && <span style={{ fontSize:11, fontWeight:700, padding:'2px 10px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f', border:'1px solid rgba(0,214,143,0.3)' }}>🏆 達成済み</span>}
                   {selectedObj.owner && <div style={{ marginLeft:'auto' }}><OwnerBadge name={selectedObj.owner} members={members} size={24} /></div>}
                 </div>
-                <div style={{ fontSize:14, fontWeight:700, color: isObjDone(selectedObj)?'#00d68f':wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
               </div>
 
-              {selectedObjKRs.length===0 && <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>KRが登録されていません。OKRページからKRを追加してください。</div>}
+              {/* 期間切替タブ */}
+              <div style={{ display:'flex', gap:4, marginBottom:14 }}>
+                {[['annual','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']].map(([key,lbl]) => (
+                  <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'5px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
+                ))}
+              </div>
+
+              {/* 選択期間のObjective表示 */}
+              {rightObj && rightPeriod !== 'annual' && (
+                <div style={{ padding:'10px 14px', background: isObjDone(rightObj)?'rgba(0,214,143,0.08)':wT().bgCard, border:`1px solid ${isObjDone(rightObj)?'rgba(0,214,143,0.3)':wT().border}`, borderRadius:8, marginBottom:14 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:'rgba(77,159,255,0.15)', color:'#4d9fff' }}>{getPeriodLabel(rightObj.period)}</span>
+                    <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
+                    {isObjDone(rightObj) && <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>🏆 達成済み</span>}
+                    {rightObj.owner && <div style={{ marginLeft:'auto' }}><OwnerBadge name={rightObj.owner} members={members} size={22} /></div>}
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:600, color: isObjDone(rightObj)?'#00d68f':wT().text, lineHeight:1.4 }}>{rightObj.title}</div>
+                </div>
+              )}
+              {!rightObj && rightPeriod !== 'annual' && (
+                <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>この期間のOKRはまだ設定されていません</div>
+              )}
+
+              {rightObj && selectedObjKRs.length===0 && <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>KRが登録されていません。OKRページからKRを追加してください。</div>}
               {loading && <div style={{ textAlign:'center', padding:20, color:'#4d9fff', fontSize:13 }}>読み込み中...</div>}
-              {!loading && selectedObjKRs.map(kr => (
+              {!loading && rightObj && selectedObjKRs.map(kr => (
                 <KRBlock
                   key={kr.id}
                   kr={kr}
@@ -951,9 +968,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   onDeleteKA={handleDelete}
                   members={members}
                   wT={wT}
-                  levelId={selectedObj.level_id}
-                  objId={selectedObj.id}
-                  objOwner={selectedObj.owner}
+                  levelId={rightObj.level_id}
+                  objId={rightObj.id}
+                  objOwner={rightObj.owner}
                   canEditKA={canEditKA}
                   onKROwnerChange={handleKROwnerChange}
                   onKRUpdate={handleKRUpdate}
