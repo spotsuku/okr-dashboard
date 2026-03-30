@@ -1450,6 +1450,15 @@ function AddMemberModal({ levels, onClose, onAdded }) {
       level_id: selectedIds[0] || null, level_ids: selectedIds, avatar_url: avatarUrl || null,
     }]).select().single()
     if (err) { setError('保存に失敗しました: ' + err.message); setSaving(false); return }
+    // メールアドレスがある場合、Authアカウントも作成
+    if (email.trim()) {
+      try {
+        await fetch('/api/admin-users', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'createUser', email: email.trim() })
+        })
+      } catch (e) { console.warn('Auth account creation failed:', e) }
+    }
     onAdded(data)
   }
 
@@ -1690,14 +1699,25 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   }
 
   const startEditProfile = () => {
-    setProfileBuf({ name: memberRow?.name || '', role: memberRow?.role || '' })
+    setProfileBuf({ name: memberRow?.name || '', role: memberRow?.role || '', email: memberRow?.email || '' })
     setEditingProfile(true)
   }
   const saveProfile = async () => {
     if (!profileBuf.name.trim()) return
     setSavingProfile(true)
-    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl }).eq('id', memberRow.id)
-    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim(), avatar_url: avatarUrl } : m))
+    const newEmail = profileBuf.email.trim() || null
+    const oldEmail = memberRow?.email || null
+    await supabase.from('members').update({ name: profileBuf.name.trim(), role: profileBuf.role.trim(), email: newEmail, avatar_url: avatarUrl }).eq('id', memberRow.id)
+    setMembers(prev => prev.map(m => m.id === memberRow.id ? { ...m, name: profileBuf.name.trim(), role: profileBuf.role.trim(), email: newEmail, avatar_url: avatarUrl } : m))
+    // 新しいメールアドレスが追加された場合、Authアカウントを作成
+    if (newEmail && newEmail !== oldEmail) {
+      try {
+        await fetch('/api/admin-users', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'createUser', email: newEmail })
+        })
+      } catch (e) { console.warn('Auth account creation failed:', e) }
+    }
     setSavingProfile(false)
     setEditingProfile(false)
   }
@@ -1787,6 +1807,10 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
               <input value={profileBuf.role} onChange={e => setProfileBuf(p => ({ ...p, role: e.target.value }))}
                 placeholder="役職・ポジション（例: コミュニティ事業部 マネージャー）"
                 style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '5px 12px', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+              <input value={profileBuf.email} onChange={e => setProfileBuf(p => ({ ...p, email: e.target.value }))}
+                placeholder="メールアドレス（例: name@example.com）"
+                type="email"
+                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '5px 12px', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveProfile} disabled={savingProfile || !profileBuf.name.trim()}
                   style={{ padding: '5px 16px', borderRadius: 6, background: 'rgba(255,255,255,0.9)', border: 'none', color: fg, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1804,6 +1828,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                 <div>
                   <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
+                  {memberRow?.email && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>✉ {memberRow.email}</div>}
                 </div>
                 {isAdmin && !editingProfile && (
                   <>
