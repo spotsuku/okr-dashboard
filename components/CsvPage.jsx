@@ -185,7 +185,7 @@ function OKRCsvTab({ levels, fiscalYear }) {
       if (!level) { ng++; continue }
       const periodKey = toPeriodKey(row.period, fiscalYear)
       const { data: obj, error: e1 } = await supabase.from('objectives')
-        .insert([{ title: row.title, owner: row.owner, level_id: level.id, period: periodKey }]).select().single()
+        .insert({ title: row.title, owner: row.owner, level_id: level.id, period: periodKey }).select().single()
       if (e1) { ng++; continue }
       if (row.krs?.length) {
         await supabase.from('key_results').insert(
@@ -434,7 +434,7 @@ function KACsvTab({ levels, fiscalYear }) {
         kr_title: row.krTitle || null,
         objective_id: row.objectiveId || null,
       }
-      const { error: e } = await supabase.from('weekly_reports').insert([payload])
+      const { error: e } = await supabase.from('weekly_reports').insert(payload)
       if (e) { ng++; console.error('KA insert error:', e) } else ok++
     }
     setRegistering(false)

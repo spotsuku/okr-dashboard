@@ -209,7 +209,7 @@ function KACard({ report, onSave, onDelete, members, wT, canEdit, dragHandleProp
       const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:report.id }
       if (t.id) { const {error:tErr} = await supabase.from('ka_tasks').update(d).eq('id', t.id); if(tErr) console.error('task update error:', tErr) }
       else if (t.title?.trim()) {
-        const {data:ins} = await supabase.from('ka_tasks').insert([d]).select().single()
+        const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
         if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
       }
     }
@@ -390,7 +390,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
     setReviewSaving(true)
     const payload = { kr_id:kr.id, week_start:weekStart, weather, good, more, focus, updated_at:new Date().toISOString() }
     if (review?.id) { await supabase.from('kr_weekly_reviews').update(payload).eq('id', review.id) }
-    else { const {data} = await supabase.from('kr_weekly_reviews').insert([payload]).select().single(); if (data) setReview(data) }
+    else { const {data} = await supabase.from('kr_weekly_reviews').insert(payload).select().single(); if (data) setReview(data) }
     setReviewSaving(false); setReviewSaved(true); setTimeout(() => setReviewSaved(false), 1500)
   }
 
@@ -414,12 +414,12 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       kr_id:kr.id, kr_title:kr.title, ka_title:'新しいKA', status:'normal',
       sort_order: maxOrder + 1,
     }
-    let { error } = await supabase.from('weekly_reports').insert([payload])
+    let { error } = await supabase.from('weekly_reports').insert(payload)
     if (error) {
       // sort_orderカラムが無い場合のフォールバック
       console.warn('KA insert failed, retrying without sort_order:', error.message)
       const { sort_order, ...payloadNoSort } = payload
-      const res = await supabase.from('weekly_reports').insert([payloadNoSort])
+      const res = await supabase.from('weekly_reports').insert(payloadNoSort)
       if (res.error) { console.error('KA追加エラー:', res.error); alert('KAの追加に失敗しました: ' + res.error.message); return }
     }
     onAddKA()

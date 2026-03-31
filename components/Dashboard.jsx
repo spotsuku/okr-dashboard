@@ -452,7 +452,7 @@ function KASection({ krId }) {
   const addKA = async () => {
     if (!newTitle.trim()) return
     const { data } = await supabase.from('key_actions')
-      .insert([{ key_result_id: krId, title: newTitle.trim(), type: newType, week_start: weekStart }])
+      .insert({ key_result_id: krId, title: newTitle.trim(), type: newType, week_start: weekStart })
       .select().single()
     if (data) { setKAs(p => [...p, data]); setNewTitle(''); setAdding(false) }
   }
@@ -1118,7 +1118,7 @@ export default function Dashboard({ user, onSignOut }) {
       if (objToSave.parent_objective_id) insertPayload.parent_objective_id = objToSave.parent_objective_id
       const { data, error } = await supabase
         .from('objectives')
-        .insert([insertPayload])
+        .insert(insertPayload)
         .select().single()
       if (error) { console.error('objective insert error:', error); alert('目標の保存に失敗しました: ' + error.message); return }
       objectiveId = data.id
@@ -1165,7 +1165,7 @@ export default function Dashboard({ user, onSignOut }) {
     const { obj, krs } = undoDelete
     // objectives を復元
     const { id, ...objData } = obj
-    const { data: restored } = await supabase.from('objectives').insert([objData]).select().single()
+    const { data: restored } = await supabase.from('objectives').insert(objData).select().single()
     if (restored && krs.length) {
       const krPayloads = krs.map(({ id, objective_id, ...kr }) => ({ ...kr, objective_id: restored.id }))
       await supabase.from('key_results').insert(krPayloads)
@@ -1177,7 +1177,7 @@ export default function Dashboard({ user, onSignOut }) {
 
   const handleAddLevel = async ({ name, icon, parent_id }) => {
     const { data, error } = await supabase
-      .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: getT().accentSolid, fiscal_year: fiscalYear }]).select().single()
+      .from('levels').insert({ name, icon, parent_id: parent_id || null, color: getT().accentSolid, fiscal_year: fiscalYear }).select().single()
     if (error) { console.error('add level error:', error); return }
     setLevels(p => [...p, data])
   }
@@ -1215,10 +1215,10 @@ export default function Dashboard({ user, onSignOut }) {
 
     for (const l of sorted) {
       const newParentId = l.parent_id ? idMap[l.parent_id] : null
-      const { data: inserted } = await supabase.from('levels').insert([{
+      const { data: inserted } = await supabase.from('levels').insert({
         name: l.name, icon: l.icon, color: l.color || getT().accentSolid,
         parent_id: newParentId || null, fiscal_year: fiscalYear,
-      }]).select().single()
+      }).select().single()
       if (inserted) idMap[l.id] = inserted.id
     }
 

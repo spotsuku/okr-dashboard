@@ -128,7 +128,7 @@ function KRCard({ kr, myName, members, wT }) {
     if (review?.id) {
       await supabase.from('kr_weekly_reviews').update(payload).eq('id', review.id)
     } else {
-      const { data } = await supabase.from('kr_weekly_reviews').insert([payload]).select().single()
+      const { data } = await supabase.from('kr_weekly_reviews').insert(payload).select().single()
       if (data) setReview(data)
     }
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1500)

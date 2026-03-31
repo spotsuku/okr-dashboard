@@ -986,7 +986,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
         changed_by: currentUser || null,
         note: '',
       }
-      const { data: hist } = await supabase.from('org_task_history').insert([histRow]).select().single()
+      const { data: hist } = await supabase.from('org_task_history').insert(histRow).select().single()
       if (hist) setTaskHistory(prev => [...prev, hist])
     }
     setTasks(prev => prev.map(x => x.id === t.id ? updated : x))
@@ -1003,7 +1003,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
     const maxOrder = Math.max(0, ...matchedTasks.map(t => t.sort_order ?? t.id))
     const levelId = levelHierarchy?.[dept]?.[team] || null
     const row = { dept, team, ...newBuf, sort_order: maxOrder + 1, ...(levelId ? { level_id: levelId } : {}) }
-    const { data, error } = await supabase.from('org_tasks').insert([row]).select().single()
+    const { data, error } = await supabase.from('org_tasks').insert(row).select().single()
     if (error) {
       alert('業務の追加に失敗しました: ' + error.message)
       return
@@ -1521,10 +1521,10 @@ function AddMemberModal({ levels, onClose, onAdded }) {
   const save = async () => {
     if (!name.trim()) { setError('名前は必須です'); return }
     setSaving(true)
-    const { data, error: err } = await supabase.from('members').insert([{
+    const { data, error: err } = await supabase.from('members').insert({
       name: name.trim(), role: roleTitle.trim() || null, email: email.trim() || null,
       level_id: selectedIds[0] || null, level_ids: selectedIds, avatar_url: avatarUrl || null,
-    }]).select().single()
+    }).select().single()
     if (err) { setError('保存に失敗しました: ' + err.message); setSaving(false); return }
     // メールアドレスがある場合、Authアカウントも作成
     if (email.trim()) {
