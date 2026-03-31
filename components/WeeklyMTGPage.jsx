@@ -226,7 +226,7 @@ function TaskPopover({ reportId, members, wT, onClose }) {
 }
 
 // ─── KAテーブル行 ──────────────────────────────────────────────────────────────
-function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps }) {
+function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps, dragIdx, overIdx, rowIdx, onDragOver, onDrop }) {
   const [good,         setGood]         = useState(report.good || '')
   const [more,         setMore]         = useState(report.more || '')
   const [focusOutput,  setFocusOutput]  = useState(report.focus_output || '')
@@ -236,6 +236,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   const [editingTitle, setEditingTitle] = useState(false)
   const [showTasks,    setShowTasks]    = useState(false)
   const [taskCount,    setTaskCount]    = useState({ done:0, total:0 })
+  const lastEnterRef   = useRef(0)
 
   const autoSave = useAutoSave('weekly_reports', report.id, { enabled: canEdit })
   const cfg = STATUS_CFG[status] || STATUS_CFG.normal
@@ -289,12 +290,35 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     }
   }
 
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setKaTitle(report.ka_title)
+      setEditingTitle(false)
+      autoSave.setFocusedField(null)
+      return
+    }
+    if (e.key === 'Enter') {
+      const now = Date.now()
+      if (now - lastEnterRef.current < 500) {
+        // ダブルEnter → 確定（最後の改行を除去）
+        e.preventDefault()
+        setKaTitle(prev => prev.replace(/\n$/, ''))
+        // 次のティックでblur
+        setTimeout(() => e.target?.blur(), 0)
+      }
+      lastEnterRef.current = now
+    }
+  }
+
   const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:12 }
   const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.5, minHeight:36, transition:'border-color 0.15s' }
   const isDone = status === 'done'
+  const isDragging = dragIdx !== undefined && dragIdx === rowIdx
+  const isDragOver = overIdx !== undefined && overIdx === rowIdx && dragIdx !== null && dragIdx !== rowIdx
 
   return (
-    <tr style={{ opacity: isDone ? 0.5 : 1, background: isDone ? wT().borderLight : 'transparent' }}>
+    <tr style={{ opacity: isDone ? 0.5 : isDragging ? 0.4 : 1, background: isDone ? wT().borderLight : 'transparent', borderTop: isDragOver ? '2px solid #4d9fff' : 'none' }}
+      onDragOver={onDragOver} onDrop={onDrop}>
       {/* ドラッグハンドル */}
       <td style={{ ...cellS, width:28, textAlign:'center', cursor:'grab' }}>
         <span {...(dragHandleProps||{})} style={{ color:wT().textFaint, fontSize:13, userSelect:'none' }} title="ドラッグで並べ替え">⠿</span>
@@ -318,13 +342,14 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       {/* KAタイトル */}
       <td style={{ ...cellS, minWidth:120 }}>
         {editingTitle && canEdit ? (
-          <input autoFocus value={kaTitle} onChange={e=>setKaTitle(e.target.value)}
+          <textarea autoFocus value={kaTitle} onChange={e=>setKaTitle(e.target.value)}
             onBlur={handleTitleBlur}
-            onKeyDown={e => { if (e.key==='Enter') { e.target.blur() } if (e.key==='Escape') { setKaTitle(report.ka_title); setEditingTitle(false); autoSave.setFocusedField(null) } }}
-            style={{ width:'100%', boxSizing:'border-box', background:wT().bgCard2, border:'1px solid #4d9fff80', borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:12, fontWeight:600, outline:'none', fontFamily:'inherit' }} />
+            onKeyDown={handleTitleKeyDown}
+            rows={2}
+            style={{ width:'100%', boxSizing:'border-box', background:wT().bgCard2, border:'1px solid #4d9fff80', borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:12, fontWeight:600, outline:'none', fontFamily:'inherit', resize:'vertical', lineHeight:1.5 }} />
         ) : (
           <div onClick={() => { if (canEdit) { setEditingTitle(true); autoSave.setFocusedField('ka_title') } }}
-            style={{ fontSize:12, fontWeight:600, color:isDone?wT().textMuted:wT().text, textDecoration:isDone?'line-through':'none', cursor:canEdit?'text':'default', lineHeight:1.4, minHeight:20 }}>
+            style={{ fontSize:12, fontWeight:600, color:isDone?wT().textMuted:wT().text, textDecoration:isDone?'line-through':'none', cursor:canEdit?'text':'default', lineHeight:1.4, minHeight:20, whiteSpace:'pre-wrap' }}>
             {kaTitle||report.ka_title||'(無題)'}
           </div>
         )}
@@ -603,7 +628,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       )}
 
       {/* KAテーブル */}
-      <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'hidden' }}>
+      <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'visible' }}>
         <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
           <colgroup>
             <col style={{ width:28 }} />
@@ -631,33 +656,12 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </thead>
           <tbody>
             {activeReports.map((r, idx) => (
-              <tr key={r.id} style={{ display:'contents' }}
+              <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
+                canEdit={canEditKA(r.owner, objOwner)}
+                dragIdx={dragIdx} overIdx={overIdx} rowIdx={idx}
+                dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx), onDragEnd:handleDragEnd }}
                 onDragOver={e => handleDragOver(e, idx)}
-                onDrop={() => handleDrop(idx)}>
-                <td colSpan={9} style={{ padding:0 }}>
-                  <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed',
-                    opacity: dragIdx === idx ? 0.4 : 1,
-                    borderTop: overIdx === idx && dragIdx !== null && dragIdx !== idx ? '2px solid #4d9fff' : 'none',
-                  }}>
-                    <colgroup>
-                      <col style={{ width:28 }} />
-                      <col style={{ width:90 }} />
-                      <col style={{ width:'18%' }} />
-                      <col style={{ width:70 }} />
-                      <col />
-                      <col />
-                      <col />
-                      <col style={{ width:70 }} />
-                      <col style={{ width:20 }} />
-                    </colgroup>
-                    <tbody>
-                      <KARow report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                        canEdit={canEditKA(r.owner, objOwner)}
-                        dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx), onDragEnd:handleDragEnd }} />
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
+                onDrop={() => handleDrop(idx)} />
             ))}
           </tbody>
         </table>
