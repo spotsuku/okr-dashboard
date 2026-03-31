@@ -182,7 +182,7 @@ const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#6B8DB5','#B07D9
 const DEPT_COLOR_RULES = [
   { match: 'コミュニティ', color: '#5A8A7A' },
   { match: 'ユース',       color: '#3D6B5E' },
-  { match: 'パートナー',   color: '#0F6E56' },
+  { match: 'クラブ連携',   color: '#0F6E56' },
   { match: '経営',         color: '#E8875A' },
 ]
 function getDeptColor(name) {
@@ -1003,8 +1003,12 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
     const maxOrder = Math.max(0, ...matchedTasks.map(t => t.sort_order ?? t.id))
     const levelId = levelHierarchy?.[dept]?.[team] || null
     const row = { dept, team, ...newBuf, sort_order: maxOrder + 1, ...(levelId ? { level_id: levelId } : {}) }
-    const { data } = await supabase.from('org_tasks').insert([row]).select().single()
-    setTasks(prev => [...prev, data || { ...row, id: Date.now() }])
+    const { data, error } = await supabase.from('org_tasks').insert([row]).select().single()
+    if (error) {
+      alert('業務の追加に失敗しました: ' + error.message)
+      return
+    }
+    setTasks(prev => [...prev, data])
     setNewBuf({ task: '', owner: '', support: '' }); setAddingTeam(null)
   }
 
@@ -2131,12 +2135,53 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             const memberName = memberRow?.name
             const ownerTasks = (tasks || []).filter(t => t.owner === memberName)
             const supportTasks = (tasks || []).filter(t => t.support && t.support.includes(memberName) && t.owner !== memberName)
-            // チームごとにグループ化
+            // levels階層を使ってタスクをマッチ（TaskListのmatchTaskと同じロジック）
+            const matchTaskLocal = (t) => {
+              if (!levels || levels.length === 0) return { dept: t.dept, team: t.team || t.dept || '—' }
+              const roots = levels.filter(l => !l.parent_id)
+              const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
+              const hier = {}
+              roots.forEach(root => {
+                getChildren(root.id).forEach(dept => {
+                  hier[dept.name] = {}
+                  const teams = getChildren(dept.id)
+                  if (teams.length === 0) { hier[dept.name][dept.name] = dept.id }
+                  else { teams.forEach(team => { hier[dept.name][team.name] = team.id }) }
+                })
+              })
+              if (t.level_id) {
+                for (const [deptName, teams] of Object.entries(hier)) {
+                  for (const [teamName, levelId] of Object.entries(teams)) {
+                    if (Number(t.level_id) === Number(levelId)) return { dept: deptName, team: teamName }
+                  }
+                }
+              }
+              for (const [deptName, teams] of Object.entries(hier)) {
+                for (const teamName of Object.keys(teams)) {
+                  if (t.team === teamName) return { dept: deptName, team: teamName }
+                }
+              }
+              for (const [deptName, teams] of Object.entries(hier)) {
+                for (const teamName of Object.keys(teams)) {
+                  if (t.team && teamName && (t.team.includes(teamName) || teamName.includes(t.team)))
+                    return { dept: deptName, team: teamName }
+                }
+              }
+              for (const [deptName, teams] of Object.entries(hier)) {
+                if (t.dept === deptName || (t.dept && (t.dept.includes(deptName) || deptName.includes(t.dept)))) {
+                  const firstTeam = Object.keys(teams)[0]
+                  if (firstTeam) return { dept: deptName, team: firstTeam }
+                }
+              }
+              return { dept: t.dept, team: t.team || t.dept || '—' }
+            }
+            // チームごとにグループ化（levels階層にマッチ）
             const grouped = {}
             ownerTasks.forEach(t => {
-              const key = t.team || t.dept || '—'
-              if (!grouped[key]) grouped[key] = []
-              grouped[key].push(t)
+              const m = matchTaskLocal(t)
+              const key = m.team
+              if (!grouped[key]) grouped[key] = { tasks: [], dept: m.dept }
+              grouped[key].tasks.push(t)
             })
             return (
               <div style={{ ...box, marginBottom: 16 }}>
@@ -2152,8 +2197,9 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                     業務一覧タブでこのメンバーを責任者に設定すると、ここに反映されます
                   </div>
                 ) : (
-                  Object.entries(grouped).map(([team, teamTasks]) => {
-                    const color = getDeptColor(teamTasks[0]?.dept || '')
+                  Object.entries(grouped).map(([team, group]) => {
+                    const teamTasks = group.tasks
+                    const color = getDeptColor(group.dept || '')
                     return (
                       <div key={team} style={{ marginBottom: 14 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
