@@ -863,7 +863,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 // ══════════════════════════════════════════════════
 // タブ2: 業務一覧（管理者は編集・並び替え可）
 // ══════════════════════════════════════════════════
-function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser }) {
+function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser, levels }) {
   const [filterDept, setFilterDept] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [query, setQuery] = useState('')
@@ -879,7 +879,10 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   const dragOverId = useRef(null)
 
   const memberNames = members.map(m => m.name)
-  const allDepts = [...new Set(tasks.map(t => t.dept))]
+  const allDepts = [...new Set([
+    ...tasks.map(t => t.dept),
+    ...(levels || []).filter(l => l.parent_id && levels.some(p => !p.parent_id && Number(p.id) === Number(l.parent_id))).map(l => l.name)
+  ])]
   const allOwners = [...new Set(tasks.map(t => t.owner).filter(o => o && o !== '（未定）'))]
 
   // sort_orderでソート（なければidでソート）
@@ -901,6 +904,25 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
     if (!grouped[t.dept][t.team]) grouped[t.dept][t.team] = []
     grouped[t.dept][t.team].push(t)
   })
+  // levelsからorg階層を反映（タスクがないチームも表示）
+  if (levels && levels.length > 0 && !filterOwner && !query) {
+    const roots = levels.filter(l => !l.parent_id)
+    const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
+    roots.forEach(root => {
+      const depts = getChildren(root.id)
+      depts.forEach(dept => {
+        if (filterDept && dept.name !== filterDept) return
+        const teams = getChildren(dept.id)
+        if (!grouped[dept.name]) grouped[dept.name] = {}
+        teams.forEach(team => {
+          if (!grouped[dept.name][team.name]) grouped[dept.name][team.name] = []
+        })
+        if (teams.length === 0 && !grouped[dept.name][dept.name]) {
+          grouped[dept.name][dept.name] = []
+        }
+      })
+    })
+  }
 
   const saveEdit = async (t) => {
     setSaving(true)
@@ -2358,7 +2380,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
         )}
         {activeTab === 'tasks' && (
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
-            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} />
+            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} />
         )}
         {activeTab === 'members' && (
           <MemberJDTab
