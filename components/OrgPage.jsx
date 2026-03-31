@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ══════════════════════════════════════════════════
@@ -879,10 +879,63 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   const dragOverId = useRef(null)
 
   const memberNames = members.map(m => m.name)
-  const allDepts = [...new Set([
-    ...tasks.map(t => t.dept),
-    ...(levels || []).filter(l => l.parent_id && levels.some(p => !p.parent_id && Number(p.id) === Number(l.parent_id))).map(l => l.name)
-  ])]
+
+  // levels階層を構築: { deptName: { teamName: levelId, ... }, ... }
+  const levelHierarchy = useMemo(() => {
+    if (!levels || levels.length === 0) return null
+    const roots = levels.filter(l => !l.parent_id)
+    const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
+    const result = {}
+    roots.forEach(root => {
+      getChildren(root.id).forEach(dept => {
+        result[dept.name] = {}
+        const teams = getChildren(dept.id)
+        if (teams.length === 0) {
+          result[dept.name][dept.name] = dept.id
+        } else {
+          teams.forEach(team => { result[dept.name][team.name] = team.id })
+        }
+      })
+    })
+    return result
+  }, [levels])
+
+  // タスクをlevels階層にマッチする関数
+  const matchTask = useCallback((t) => {
+    if (!levelHierarchy) return { dept: t.dept, team: t.team }
+    // level_idがあれば直接マッチ
+    if (t.level_id) {
+      for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+        for (const [teamName, levelId] of Object.entries(teams)) {
+          if (Number(t.level_id) === Number(levelId)) return { dept: deptName, team: teamName }
+        }
+      }
+    }
+    // チーム名でマッチ（完全一致 → 部分一致）
+    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+      for (const teamName of Object.keys(teams)) {
+        if (t.team === teamName) return { dept: deptName, team: teamName }
+      }
+    }
+    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+      for (const teamName of Object.keys(teams)) {
+        if (t.team && teamName && (t.team.includes(teamName) || teamName.includes(t.team)))
+          return { dept: deptName, team: teamName }
+      }
+    }
+    // 部署名でマッチ
+    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+      if (t.dept === deptName || (t.dept && (t.dept.includes(deptName) || deptName.includes(t.dept)))) {
+        const firstTeam = Object.keys(teams)[0]
+        if (firstTeam) return { dept: deptName, team: firstTeam }
+      }
+    }
+    return { dept: t.dept, team: t.team }
+  }, [levelHierarchy])
+
+  const allDepts = levelHierarchy
+    ? Object.keys(levelHierarchy)
+    : [...new Set(tasks.map(t => t.dept))]
   const allOwners = [...new Set(tasks.map(t => t.owner).filter(o => o && o !== '（未定）'))]
 
   // sort_orderでソート（なければidでソート）
@@ -893,36 +946,30 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   const activeTasks = sortedTasks.filter(t => !t.is_archived)
   const archivedTasks = sortedTasks.filter(t => t.is_archived)
   const baseFiltered = (showArchived ? archivedTasks : activeTasks)
-  const filtered = baseFiltered.filter(t =>
-    (!filterDept || t.dept === filterDept) &&
-    (!filterOwner || t.owner === filterOwner || (t.support && t.support.includes(filterOwner))) &&
-    (!query || t.task.includes(query) || t.team.includes(query))
-  )
-  const grouped = {}
-  filtered.forEach(t => {
-    if (!grouped[t.dept]) grouped[t.dept] = {}
-    if (!grouped[t.dept][t.team]) grouped[t.dept][t.team] = []
-    grouped[t.dept][t.team].push(t)
+  const filtered = baseFiltered.filter(t => {
+    const m = matchTask(t)
+    return (!filterDept || m.dept === filterDept) &&
+      (!filterOwner || t.owner === filterOwner || (t.support && t.support.includes(filterOwner))) &&
+      (!query || t.task.includes(query) || m.team.includes(query))
   })
-  // levelsからorg階層を反映（タスクがないチームも表示）
-  if (levels && levels.length > 0 && !filterOwner && !query) {
-    const roots = levels.filter(l => !l.parent_id)
-    const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
-    roots.forEach(root => {
-      const depts = getChildren(root.id)
-      depts.forEach(dept => {
-        if (filterDept && dept.name !== filterDept) return
-        const teams = getChildren(dept.id)
-        if (!grouped[dept.name]) grouped[dept.name] = {}
-        teams.forEach(team => {
-          if (!grouped[dept.name][team.name]) grouped[dept.name][team.name] = []
-        })
-        if (teams.length === 0 && !grouped[dept.name][dept.name]) {
-          grouped[dept.name][dept.name] = []
-        }
-      })
+
+  // levels階層ベースでグループ化
+  const grouped = {}
+  if (levelHierarchy && !filterOwner && !query) {
+    // 先にlevels構造で空のグループを作成
+    Object.entries(levelHierarchy).forEach(([deptName, teams]) => {
+      if (filterDept && deptName !== filterDept) return
+      grouped[deptName] = {}
+      Object.keys(teams).forEach(teamName => { grouped[deptName][teamName] = [] })
     })
   }
+  // タスクをマッチしたグループに配置
+  filtered.forEach(t => {
+    const m = matchTask(t)
+    if (!grouped[m.dept]) grouped[m.dept] = {}
+    if (!grouped[m.dept][m.team]) grouped[m.dept][m.team] = []
+    grouped[m.dept][m.team].push(t)
+  })
 
   const saveEdit = async (t) => {
     setSaving(true)
@@ -952,8 +999,10 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   }
   const addTask = async (dept, team) => {
     if (!newBuf.task.trim()) return
-    const maxOrder = Math.max(0, ...tasks.filter(t => t.dept === dept && t.team === team).map(t => t.sort_order ?? t.id))
-    const row = { dept, team, ...newBuf, sort_order: maxOrder + 1 }
+    const matchedTasks = tasks.filter(t => { const m = matchTask(t); return m.dept === dept && m.team === team })
+    const maxOrder = Math.max(0, ...matchedTasks.map(t => t.sort_order ?? t.id))
+    const levelId = levelHierarchy?.[dept]?.[team] || null
+    const row = { dept, team, ...newBuf, sort_order: maxOrder + 1, ...(levelId ? { level_id: levelId } : {}) }
     const { data } = await supabase.from('org_tasks').insert([row]).select().single()
     setTasks(prev => [...prev, data || { ...row, id: Date.now() }])
     setNewBuf({ task: '', owner: '', support: '' }); setAddingTeam(null)
@@ -981,7 +1030,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
     if (!fromId || !toId || fromId === toId) return
 
     // 同チーム内のタスクだけ対象
-    const teamTasks = sortedTasks.filter(t => t.dept === dept && t.team === team)
+    const teamTasks = sortedTasks.filter(t => { const m = matchTask(t); return m.dept === dept && m.team === team })
     const fromIdx = teamTasks.findIndex(t => t.id === fromId)
     const toIdx = teamTasks.findIndex(t => t.id === toId)
     if (fromIdx === -1 || toIdx === -1) return
@@ -993,8 +1042,9 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
 
     // sort_orderを再割り当て
     const updates = reordered.map((t, i) => ({ ...t, sort_order: i + 1 }))
+    const matchedIds = new Set(teamTasks.map(t => t.id))
     setTasks(prev => {
-      const others = prev.filter(t => !(t.dept === dept && t.team === team))
+      const others = prev.filter(t => !matchedIds.has(t.id))
       return [...others, ...updates].sort((a, b) => (a.sort_order ?? a.id) - (b.sort_order ?? b.id))
     })
 
@@ -1017,12 +1067,12 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
 
   const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
 
-  if (tasks.length === 0) {
+  if (tasks.length === 0 && (!levelHierarchy || Object.keys(levelHierarchy).length === 0)) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
         <div style={{ fontSize: 15 }}>業務データがありません</div>
-        <div style={{ fontSize: 13, marginTop: 6 }}>Supabase の org_tasks テーブルにデータを追加してください</div>
+        <div style={{ fontSize: 13, marginTop: 6 }}>組織図タブでチームを追加するか、org_tasks テーブルにデータを追加してください</div>
       </div>
     )
   }
