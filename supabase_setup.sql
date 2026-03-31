@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS org_tasks (
   task        TEXT DEFAULT '',
   owner       TEXT DEFAULT '',
   support     TEXT DEFAULT '',
-  level_id    BIGINT REFERENCES levels(id) ON DELETE SET NULL,
+  level_id    BIGINT,
   sort_order  INT DEFAULT 0,
   is_archived BOOLEAN DEFAULT FALSE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS org_tasks (
 -- 10. org_task_history テーブル（担当変更履歴）
 CREATE TABLE IF NOT EXISTS org_task_history (
   id          BIGSERIAL PRIMARY KEY,
-  task_id     BIGINT REFERENCES org_tasks(id) ON DELETE CASCADE,
+  task_id     BIGINT,
   from_owner  TEXT DEFAULT '',
   to_owner    TEXT DEFAULT '',
   changed_by  TEXT DEFAULT '',
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS org_task_history (
 -- 11. org_team_meta テーブル（チームメタ情報）
 CREATE TABLE IF NOT EXISTS org_team_meta (
   id          BIGSERIAL PRIMARY KEY,
-  level_id    BIGINT REFERENCES levels(id) ON DELETE CASCADE UNIQUE,
+  level_id    BIGINT UNIQUE,
   status      TEXT DEFAULT 'active',
   desc_text   TEXT DEFAULT '',
   created_at  TIMESTAMPTZ DEFAULT NOW()
@@ -243,7 +243,7 @@ CREATE POLICY "auth users can manage org_member_jd"
 -- テーブルが存在しない場合は上記の CREATE TABLE 文をそのまま実行してください。
 --
 -- org_tasks テーブルに level_id カラムを追加:
--- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS level_id BIGINT REFERENCES levels(id) ON DELETE SET NULL;
+-- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS level_id BIGINT;
 -- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
 -- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
 --
