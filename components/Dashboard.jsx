@@ -266,8 +266,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
-      ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current) }))
-      : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }]
+      ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current), owner: k.owner || '' }))
+      : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }]
   )
   const [saving, setSaving] = useState(false)
   const [parentObj, setParentObj] = useState(null)
@@ -306,7 +306,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
     if (!title.trim()) return
     setSaving(true)
     await onSave({
-      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period },
+      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: initial?.parent_objective_id || null },
       krs: krs.map(k => ({ ...k, target: parseFloat(k.target) || 0, current: parseFloat(k.current) || 0 })),
     })
     setSaving(false)
