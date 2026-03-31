@@ -1853,6 +1853,114 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const addTask = () => setEditVer(p => ({ ...p, tasks: [...p.tasks, { cat: '', task: '', status: 'new' }] }))
   const removeTask = i => setEditVer(p => ({ ...p, tasks: p.tasks.filter((_, idx) => idx !== i) }))
 
+  // ── JD PDF出力 ──────────────────────────────────
+  const exportPDF = () => {
+    const ver = versions[effectiveVerIdx]
+    if (!ver) return
+    const name = memberRow?.name || '（名前なし）'
+    const role = memberRow?.role || ''
+    const tasksList = (ver.tasks || []).filter(t => t.status !== 'del')
+    // org_tasksからこのメンバーの担当業務を取得
+    const ownerTasks = (tasks || []).filter(t => t.owner === name)
+    const supportTasks = (tasks || []).filter(t => t.support && t.support.includes(name) && t.owner !== name)
+
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><title>${name} - Job Description</title>
+<style>
+@page { size: A4; margin: 20mm 18mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; color: #1a1a2e; font-size: 11px; line-height: 1.7; }
+.header { background: ${fg}; color: #fff; padding: 24px 28px; border-radius: 10px; margin-bottom: 18px; }
+.header .name { font-size: 24px; font-weight: 800; letter-spacing: 2px; }
+.header .sub { font-size: 11px; opacity: 0.85; margin-top: 4px; }
+.badges { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.badge { font-size: 10px; padding: 3px 10px; border-radius: 5px; background: rgba(255,255,255,0.2); font-weight: 700; }
+.section { margin-bottom: 14px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }
+.section-title { font-size: 10px; font-weight: 700; color: #666; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.item { font-size: 11px; color: #333; line-height: 1.8; }
+.item li { list-style: none; padding-left: 12px; position: relative; }
+.item li::before { content: "•"; position: absolute; left: 0; color: ${fg}; font-weight: 700; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th { background: #f5f5f5; text-align: left; padding: 6px 10px; font-size: 10px; color: #666; border-bottom: 1px solid #ddd; }
+td { padding: 7px 10px; border-bottom: 1px solid #eee; color: #333; }
+.footer { margin-top: 20px; text-align: center; font-size: 9px; color: #aaa; border-top: 1px solid #eee; padding-top: 8px; }
+.ver-info { font-size: 10px; color: rgba(255,255,255,0.7); margin-top: 6px; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="header">
+  <div class="name">${name}</div>
+  <div class="sub">${role}</div>
+  <div class="badges">
+    ${ver.role ? `<span class="badge">${ver.role}</span>` : ''}
+    ${ver.emp ? `<span class="badge">${ver.emp}</span>` : ''}
+    ${ver.working ? `<span class="badge">${ver.working}</span>` : ''}
+  </div>
+  <div class="ver-info">V${effectiveVerIdx + 1}: ${ver.period || '—'}</div>
+</div>
+
+<div class="two-col">
+  <div class="section">
+    <div class="section-title">▶ 役割</div>
+    <div class="item"><ul>${(ver.role_desc || '—').split('\\n').filter(Boolean).map(l => `<li>${l}</li>`).join('')}</ul></div>
+  </div>
+  <div class="section">
+    <div class="section-title">▶ 責任範囲</div>
+    <div class="item"><ul>${(ver.responsibility || '—').split('\\n').filter(Boolean).map(l => `<li>${l}</li>`).join('')}</ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">▶ 主要定例</div>
+  <div class="item">${(ver.meetings || '—').split('\\n').filter(Boolean).map(l => `<div>${l}</div>`).join('')}</div>
+</div>
+
+${ownerTasks.length > 0 ? `
+<div class="section">
+  <div class="section-title">▶ 担当業務一覧（${ownerTasks.length}件）</div>
+  <table>
+    <thead><tr><th>チーム</th><th>業務内容</th><th>サポート</th></tr></thead>
+    <tbody>${ownerTasks.map(t => `<tr><td>${t.team || t.dept || '—'}</td><td>${t.task || ''}</td><td>${t.support || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+${supportTasks.length > 0 ? `
+<div class="section">
+  <div class="section-title">▶ サポート業務（${supportTasks.length}件）</div>
+  <table>
+    <thead><tr><th>チーム</th><th>業務内容</th><th>責任者</th></tr></thead>
+    <tbody>${supportTasks.map(t => `<tr><td>${t.team || t.dept || '—'}</td><td>${t.task || ''}</td><td>${t.owner || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+${tasksList.length > 0 ? `
+<div class="section">
+  <div class="section-title">▶ JD業務タスク（${tasksList.length}件）</div>
+  <table>
+    <thead><tr><th>カテゴリ</th><th>タスク</th><th>ステータス</th></tr></thead>
+    <tbody>${tasksList.map(t => `<tr><td>${t.cat || '—'}</td><td>${t.task || ''}</td><td>${t.status === 'new' ? '🆕 新規' : t.status === 'same' ? '継続' : t.status || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+${versions.length > 1 ? `
+<div class="section">
+  <div class="section-title">▶ 役職推移（${versions.length}バージョン）</div>
+  <table>
+    <thead><tr><th>Ver</th><th>期間</th><th>役職</th><th>雇用形態</th><th>稼働</th></tr></thead>
+    <tbody>${versions.map((v, i) => `<tr style="${i === effectiveVerIdx ? 'background:#f0faf5;font-weight:700' : ''}"><td>V${i + 1}</td><td>${v.period || '—'}</td><td>${v.role || '—'}</td><td>${v.emp || '—'}</td><td>${v.working || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+<div class="footer">Job Description — ${name} — 出力日: ${new Date().toLocaleDateString('ja-JP')}</div>
+</body></html>`
+
+    const w = window.open('', '_blank')
+    if (!w) { alert('ポップアップがブロックされました。ブラウザの設定を確認してください。'); return }
+    w.document.write(html)
+    w.document.close()
+    w.onload = () => { w.print() }
+  }
+
   const box = { background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 10, padding: 16 }
   const ta = { width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 6, padding: '8px 10px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }
 
@@ -1869,6 +1977,11 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
         {isAdmin && !editing && versions.length === 0 && (
           <button onClick={startCreateJD} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
             ＋ JDを作成する
+          </button>
+        )}
+        {!editing && versions.length > 0 && (
+          <button onClick={exportPDF} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
+            📄 PDF出力
           </button>
         )}
         {isAdmin && !editing && versions.length > 0 && (
