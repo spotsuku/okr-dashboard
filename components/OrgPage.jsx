@@ -974,7 +974,12 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   const saveEdit = async (t) => {
     setSaving(true)
     const updated = { ...t, ...editBuf }
-    await supabase.from('org_tasks').upsert(updated)
+    const { error: upsertError } = await supabase.from('org_tasks').upsert(updated)
+    if (upsertError) {
+      alert('業務の保存に失敗しました: ' + upsertError.message)
+      setSaving(false)
+      return
+    }
     // ownerが変わった場合は引き継ぎ履歴を記録
     const prevOwner = t.owner || null
     const nextOwner = updated.owner || null
@@ -994,22 +999,29 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   }
   const deleteTask = async (t) => {
     if (!window.confirm(`「${t.task}」を削除しますか？`)) return
-    await supabase.from('org_tasks').delete().eq('id', t.id)
+    const { error } = await supabase.from('org_tasks').delete().eq('id', t.id)
+    if (error) {
+      alert('業務の削除に失敗しました: ' + error.message)
+      return
+    }
     setTasks(prev => prev.filter(x => x.id !== t.id))
   }
   const addTask = async (dept, team) => {
-    if (!newBuf.task.trim()) return
+    if (saving || !newBuf.task.trim()) return
+    setSaving(true)
     const matchedTasks = tasks.filter(t => { const m = matchTask(t); return m.dept === dept && m.team === team })
     const maxOrder = Math.max(0, ...matchedTasks.map(t => t.sort_order ?? t.id))
     const levelId = levelHierarchy?.[dept]?.[team] || null
-    const row = { dept, team, ...newBuf, sort_order: maxOrder + 1, ...(levelId ? { level_id: levelId } : {}) }
+    const row = { dept, team, ...newBuf, sort_order: maxOrder + 1, is_archived: false, ...(levelId ? { level_id: levelId } : {}) }
     const { data, error } = await supabase.from('org_tasks').insert(row).select().single()
     if (error) {
       alert('業務の追加に失敗しました: ' + error.message)
+      setSaving(false)
       return
     }
-    setTasks(prev => [...prev, data])
+    setTasks(prev => prev.some(t => t.id === data.id) ? prev : [...prev, data])
     setNewBuf({ task: '', owner: '', support: '' }); setAddingTeam(null)
+    setSaving(false)
   }
 
   // ドラッグ&ドロップで並び替え（同一チーム内のみ）
@@ -1247,7 +1259,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                             </td>
                             <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
+                                <button onClick={() => addTask(dept, team)} disabled={saving} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? '追加中...' : '追加'}</button>
                                 <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                               </div>
                             </td>

@@ -258,10 +258,10 @@ CREATE POLICY "auth users can manage org_member_jd"
 --
 -- テーブルが存在しない場合は上記の CREATE TABLE 文をそのまま実行してください。
 --
--- org_tasks テーブルに level_id カラムを追加:
--- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS level_id BIGINT;
--- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
--- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
+-- org_tasks テーブルに level_id カラムを追加（既存環境向け・冪等）:
+ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS level_id BIGINT;
+ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
 --
 -- levels テーブルに fiscal_year カラムを追加:
 -- ALTER TABLE levels ADD COLUMN IF NOT EXISTS fiscal_year TEXT DEFAULT '2026';
