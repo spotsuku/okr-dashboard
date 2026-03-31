@@ -738,7 +738,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 
   const saveTeamMeta = async (levelId) => {
     setSaving(true)
-    await supabase.from('org_team_meta').upsert([{ level_id: levelId, ...metaBuf }], { onConflict: 'level_id' })
+    await supabase.from('org_team_meta').upsert({ level_id: levelId, ...metaBuf }, { onConflict: 'level_id' })
     onTeamMetaUpdate(levelId, metaBuf)
     setSaving(false); setEditingMeta(null)
   }
@@ -974,7 +974,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   const saveEdit = async (t) => {
     setSaving(true)
     const updated = { ...t, ...editBuf }
-    await supabase.from('org_tasks').upsert([updated])
+    await supabase.from('org_tasks').upsert(updated)
     // ownerが変わった場合は引き継ぎ履歴を記録
     const prevOwner = t.owner || null
     const nextOwner = updated.owner || null
@@ -1740,7 +1740,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
       role_desc: editVer.role_desc || '', responsibility: editVer.responsibility || '',
       meetings: editVer.meetings || '', tasks: JSON.stringify(editVer.tasks || []),
     }
-    const { data } = await supabase.from('org_member_jd').upsert([payload], { onConflict: 'member_id,version_idx' }).select().single()
+    const { data } = await supabase.from('org_member_jd').upsert(payload, { onConflict: 'member_id,version_idx' }).select().single()
     // jdRowsを更新
     setJdRows(prev => {
       const existing = [...(prev[memberName] || [])]
