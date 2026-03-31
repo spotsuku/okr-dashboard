@@ -603,17 +603,11 @@ function useOrgData(fiscalYear) {
   const [taskHistory, setTaskHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [syncStatus, setSyncStatus] = useState('connecting')
+  const [orgTableError, setOrgTableError] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
-    const [
-      { data: lvls },
-      { data: meta },
-      { data: mems },
-      { data: taskData },
-      { data: jdData },
-      { data: histData },
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabase.from('levels').select('*').order('id'),
       supabase.from('org_team_meta').select('*'),
       supabase.from('members').select('*').order('id'),
@@ -621,6 +615,14 @@ function useOrgData(fiscalYear) {
       supabase.from('org_member_jd').select('*').order('version_idx'),
       supabase.from('org_task_history').select('*').order('changed_at'),
     ])
+    const [lvls, meta, mems, taskData, jdData, histData] = results.map(r => r.data)
+    const orgErrors = results.slice(3).filter(r => r.error)
+    if (orgErrors.length > 0) {
+      console.warn('org_* テーブルが未作成の可能性があります。supabase_setup.sql を実行してください。', orgErrors.map(r => r.error))
+      setOrgTableError(true)
+    } else {
+      setOrgTableError(false)
+    }
 
     const validLvls = (lvls || []).filter(l =>
       fiscalYear === '2026'
@@ -701,7 +703,7 @@ function useOrgData(fiscalYear) {
     return () => { supabase.removeChannel(channel) }
   }, [fiscalYear]) // eslint-disable-line
 
-  return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
+  return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
 }
 
 // ══════════════════════════════════════════════════
@@ -863,7 +865,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 // ══════════════════════════════════════════════════
 // タブ2: 業務一覧（管理者は編集・並び替え可）
 // ══════════════════════════════════════════════════
-function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser, levels }) {
+function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser, levels, orgTableError }) {
   const [filterDept, setFilterDept] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [query, setQuery] = useState('')
@@ -1015,7 +1017,12 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
     const row = { dept, team, ...newBuf, sort_order: maxOrder + 1, is_archived: false, ...(levelId ? { level_id: levelId } : {}) }
     const { data, error } = await supabase.from('org_tasks').insert(row).select().single()
     if (error) {
-      alert('業務の追加に失敗しました: ' + error.message)
+      const hint = (error.code === '42P01' || error.message?.includes('relation') || error.code === 'PGRST204')
+        ? '\n\norg_tasks テーブルが未作成の可能性があります。supabase_setup.sql を Supabase SQL Editor で実行してください。'
+        : (error.code === '42703' || error.message?.includes('column'))
+        ? '\n\nカラムが不足している可能性があります。supabase_setup.sql の ALTER TABLE 文を実行してください。'
+        : ''
+      alert('業務の追加に失敗しました: ' + error.message + hint)
       setSaving(false)
       return
     }
@@ -1083,6 +1090,18 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
 
   const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
 
+  if (orgTableError) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#c0392b', background: '#fdf0ef', border: '1px dashed #e74c3c', borderRadius: 14 }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>org_tasks テーブルの読み込みに失敗しました</div>
+        <div style={{ fontSize: 13, marginTop: 8, color: '#7f3b3b', lineHeight: 1.6 }}>
+          Supabase SQL Editor で <code>supabase_setup.sql</code> を実行してテーブルを作成してください。<br />
+          既存テーブルにカラムが不足している場合は ALTER TABLE 文のみ実行してください。
+        </div>
+      </div>
+    )
+  }
   if (tasks.length === 0 && (!levelHierarchy || Object.keys(levelHierarchy).length === 0)) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
@@ -2423,7 +2442,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
+  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, orgTableError, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -2488,7 +2507,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
         )}
         {activeTab === 'tasks' && (
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
-            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} />
+            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} orgTableError={orgTableError} />
         )}
         {activeTab === 'members' && (
           <MemberJDTab
