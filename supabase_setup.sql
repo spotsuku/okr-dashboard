@@ -102,6 +102,57 @@ CREATE TABLE IF NOT EXISTS kr_weekly_reviews (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 9. org_tasks テーブル（業務タスク）
+CREATE TABLE IF NOT EXISTS org_tasks (
+  id          BIGSERIAL PRIMARY KEY,
+  dept        TEXT DEFAULT '',
+  team        TEXT DEFAULT '',
+  task        TEXT DEFAULT '',
+  owner       TEXT DEFAULT '',
+  support     TEXT DEFAULT '',
+  level_id    BIGINT REFERENCES levels(id) ON DELETE SET NULL,
+  sort_order  INT DEFAULT 0,
+  is_archived BOOLEAN DEFAULT FALSE,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. org_task_history テーブル（担当変更履歴）
+CREATE TABLE IF NOT EXISTS org_task_history (
+  id          BIGSERIAL PRIMARY KEY,
+  task_id     BIGINT REFERENCES org_tasks(id) ON DELETE CASCADE,
+  from_owner  TEXT DEFAULT '',
+  to_owner    TEXT DEFAULT '',
+  changed_by  TEXT DEFAULT '',
+  note        TEXT DEFAULT '',
+  changed_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 11. org_team_meta テーブル（チームメタ情報）
+CREATE TABLE IF NOT EXISTS org_team_meta (
+  id          BIGSERIAL PRIMARY KEY,
+  level_id    BIGINT REFERENCES levels(id) ON DELETE CASCADE UNIQUE,
+  status      TEXT DEFAULT 'active',
+  desc_text   TEXT DEFAULT '',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 12. org_member_jd テーブル（メンバーJD）
+CREATE TABLE IF NOT EXISTS org_member_jd (
+  id              BIGSERIAL PRIMARY KEY,
+  member_id       TEXT NOT NULL,
+  version_idx     INT NOT NULL DEFAULT 0,
+  period          TEXT DEFAULT '',
+  role            TEXT DEFAULT '',
+  emp             TEXT DEFAULT '',
+  working         TEXT DEFAULT '',
+  role_desc       TEXT DEFAULT '',
+  responsibility  TEXT DEFAULT '',
+  meetings        TEXT DEFAULT '',
+  tasks           TEXT DEFAULT '',
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(member_id, version_idx)
+);
+
 -- ============================================================
 -- 初期データ（組織階層のサンプル）
 -- 必要に応じて編集してください
@@ -162,3 +213,40 @@ CREATE POLICY "auth users can manage ka_tasks"
 ALTER TABLE kr_weekly_reviews ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "auth users can manage kr_weekly_reviews"
   ON kr_weekly_reviews FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- org_tasks
+ALTER TABLE org_tasks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage org_tasks"
+  ON org_tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- org_task_history
+ALTER TABLE org_task_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage org_task_history"
+  ON org_task_history FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- org_team_meta
+ALTER TABLE org_team_meta ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage org_team_meta"
+  ON org_team_meta FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- org_member_jd
+ALTER TABLE org_member_jd ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth users can manage org_member_jd"
+  ON org_member_jd FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- ============================================================
+-- 既存DBマイグレーション用SQL
+-- テーブルが既に存在するが level_id 等のカラムが不足している場合に使用
+-- 必要な部分だけ Supabase SQL Editor で実行してください
+-- ============================================================
+--
+-- テーブルが存在しない場合は上記の CREATE TABLE 文をそのまま実行してください。
+--
+-- org_tasks テーブルに level_id カラムを追加:
+-- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS level_id BIGINT REFERENCES levels(id) ON DELETE SET NULL;
+-- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+-- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
+--
+-- org_task_history テーブルを新規作成（上記 CREATE TABLE 文を使用）
+-- org_team_meta テーブルを新規作成（上記 CREATE TABLE 文を使用）
+-- org_member_jd テーブルを新規作成（上記 CREATE TABLE 文を使用）
