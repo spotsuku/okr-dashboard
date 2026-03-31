@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS levels (
   icon              TEXT DEFAULT '📁',
   color             TEXT DEFAULT '#4d9fff',
   parent_id         BIGINT REFERENCES levels(id) ON DELETE SET NULL,
-  slack_webhook_url TEXT
+  slack_webhook_url TEXT,
+  fiscal_year       TEXT DEFAULT '2026'
 );
 
 -- 2. objectives テーブル
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS objectives (
   period    TEXT NOT NULL DEFAULT 'q1',
   title     TEXT NOT NULL,
   owner     TEXT DEFAULT '',
+  parent_objective_id BIGINT REFERENCES objectives(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -99,7 +101,9 @@ CREATE TABLE IF NOT EXISTS kr_weekly_reviews (
   more         TEXT DEFAULT '',
   focus        TEXT DEFAULT '',
   focus_output TEXT DEFAULT '',
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  updated_at   TIMESTAMPTZ DEFAULT NOW(),
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(kr_id, week_start)
 );
 
 -- 9. org_tasks テーブル（業務タスク）
@@ -178,59 +182,71 @@ ALTER TABLE objectives   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE key_results  ENABLE ROW LEVEL SECURITY;
 
 -- levels: 認証済みユーザーは全操作可
+DROP POLICY IF EXISTS "auth users can manage levels" ON levels;
 CREATE POLICY "auth users can manage levels"
   ON levels FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- objectives: 認証済みユーザーは全操作可
+DROP POLICY IF EXISTS "auth users can manage objectives" ON objectives;
 CREATE POLICY "auth users can manage objectives"
   ON objectives FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- key_results: 認証済みユーザーは全操作可
+DROP POLICY IF EXISTS "auth users can manage key_results" ON key_results;
 CREATE POLICY "auth users can manage key_results"
   ON key_results FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- key_actions
 ALTER TABLE key_actions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage key_actions" ON key_actions;
 CREATE POLICY "auth users can manage key_actions"
   ON key_actions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- members
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage members" ON members;
 CREATE POLICY "auth users can manage members"
   ON members FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- weekly_reports
 ALTER TABLE weekly_reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage weekly_reports" ON weekly_reports;
 CREATE POLICY "auth users can manage weekly_reports"
   ON weekly_reports FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- ka_tasks
 ALTER TABLE ka_tasks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage ka_tasks" ON ka_tasks;
 CREATE POLICY "auth users can manage ka_tasks"
   ON ka_tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- kr_weekly_reviews
 ALTER TABLE kr_weekly_reviews ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage kr_weekly_reviews" ON kr_weekly_reviews;
 CREATE POLICY "auth users can manage kr_weekly_reviews"
   ON kr_weekly_reviews FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- org_tasks
 ALTER TABLE org_tasks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage org_tasks" ON org_tasks;
 CREATE POLICY "auth users can manage org_tasks"
   ON org_tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- org_task_history
 ALTER TABLE org_task_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage org_task_history" ON org_task_history;
 CREATE POLICY "auth users can manage org_task_history"
   ON org_task_history FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- org_team_meta
 ALTER TABLE org_team_meta ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage org_team_meta" ON org_team_meta;
 CREATE POLICY "auth users can manage org_team_meta"
   ON org_team_meta FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- org_member_jd
 ALTER TABLE org_member_jd ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage org_member_jd" ON org_member_jd;
 CREATE POLICY "auth users can manage org_member_jd"
   ON org_member_jd FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
@@ -246,6 +262,18 @@ CREATE POLICY "auth users can manage org_member_jd"
 -- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS level_id BIGINT;
 -- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
 -- ALTER TABLE org_tasks ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
+--
+-- levels テーブルに fiscal_year カラムを追加:
+-- ALTER TABLE levels ADD COLUMN IF NOT EXISTS fiscal_year TEXT DEFAULT '2026';
+--
+-- objectives テーブルに parent_objective_id カラムを追加:
+-- ALTER TABLE objectives ADD COLUMN IF NOT EXISTS parent_objective_id BIGINT REFERENCES objectives(id) ON DELETE SET NULL;
+--
+-- kr_weekly_reviews テーブルに updated_at カラムを追加:
+-- ALTER TABLE kr_weekly_reviews ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+--
+-- kr_weekly_reviews テーブルに UNIQUE 制約を追加:
+-- ALTER TABLE kr_weekly_reviews ADD CONSTRAINT kr_weekly_reviews_kr_id_week_start_key UNIQUE (kr_id, week_start);
 --
 -- org_task_history テーブルを新規作成（上記 CREATE TABLE 文を使用）
 -- org_team_meta テーブルを新規作成（上記 CREATE TABLE 文を使用）
