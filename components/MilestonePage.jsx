@@ -35,6 +35,8 @@ const MONTHS_SELECT = [
   { value: 2,  label: '2月' }, { value: 3,  label: '3月' },
 ]
 
+const GRID_COLS = '120px repeat(12, minmax(0, 1fr))'
+
 // ─── ユーティリティ ──────────────────────────────────────────────────────────
 function getDaysLeftInfo(dueDate) {
   if (!dueDate) return { text: null, style: {} }
@@ -82,7 +84,7 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
         outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
 
   return (
-    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center' }}>
+    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'hidden' }}>
       <div
         onClick={isAdmin ? () => onEdit(milestone) : undefined}
         style={{
@@ -105,12 +107,12 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
 }
 
 // ─── OrgRow ──────────────────────────────────────────────────────────────────
-function OrgRow({ org, isChild, onEdit, isAdmin, T }) {
+function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
   const { name, color, milestones } = org
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: `${isChild ? '72px' : '88px'} repeat(12, 1fr)`,
+      gridTemplateColumns: GRID_COLS,
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
       minHeight: isChild ? 36 : 44, alignItems: 'center', position: 'relative',
     }}>
@@ -118,12 +120,28 @@ function OrgRow({ org, isChild, onEdit, isAdmin, T }) {
         display: 'flex', alignItems: 'center', gap: 5,
         padding: isChild ? '4px 6px 4px 16px' : '4px 8px 4px 0',
         fontSize: isChild ? 10 : 11, fontWeight: 500, color: T.textSub,
+        overflow: 'hidden', minWidth: 0,
       }}>
         <span style={{
           width: isChild ? 5 : 7, height: isChild ? 5 : 7,
           borderRadius: '50%', backgroundColor: color || '#888', flexShrink: 0,
         }} />
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{name}</span>
+        {isAdmin && (
+          <button
+            onClick={() => onAddMilestone(org.id)}
+            title="マイルストーンを追加"
+            style={{
+              flexShrink: 0, width: 16, height: 16, borderRadius: '50%',
+              border: `1px solid ${T.borderMid}`, background: 'transparent',
+              color: T.textMuted, fontSize: 11, lineHeight: '14px',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0, opacity: 0.5, transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = 1}
+            onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+          >+</button>
+        )}
       </div>
       {milestones.map(ms => (
         <MilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} />
@@ -133,22 +151,36 @@ function OrgRow({ org, isChild, onEdit, isAdmin, T }) {
 }
 
 // ─── MilestoneEditModal ──────────────────────────────────────────────────────
-function MilestoneEditModal({ milestone, onClose, onSaved, T }) {
+function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
+  const isNew = !milestone.id
   const [form, setForm] = useState({
-    title:       milestone.title,
-    start_month: milestone.start_month,
-    end_month:   milestone.end_month,
+    title:       milestone.title || '',
+    start_month: milestone.start_month || 4,
+    end_month:   milestone.end_month || 6,
     due_date:    milestone.due_date || '',
-    focus_level: milestone.focus_level,
-    status:      milestone.status,
+    focus_level: milestone.focus_level || 'normal',
+    status:      milestone.status || 'pending',
   })
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   async function handleSave() {
+    if (!form.title.trim()) return
     setSaving(true)
     try {
-      const { error } = await supabase.from('milestones').update(form).eq('id', milestone.id)
-      if (error) throw error
+      if (isNew) {
+        const { error } = await supabase.from('milestones').insert({
+          ...form,
+          org_id: milestone.org_id,
+          fiscal_year: milestone.fiscal_year,
+          sort_order: milestone.sort_order || 0,
+        })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('milestones').update(form).eq('id', milestone.id)
+        if (error) throw error
+      }
       onSaved()
       onClose()
     } catch (e) {
@@ -158,11 +190,30 @@ function MilestoneEditModal({ milestone, onClose, onSaved, T }) {
     }
   }
 
+  async function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    setDeleting(true)
+    try {
+      const { error } = await supabase.from('milestones').delete().eq('id', milestone.id)
+      if (error) throw error
+      if (onDeleted) onDeleted()
+      onClose()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const labelSt = { display: 'block', fontSize: 11, color: T.textSub, marginBottom: 4 }
   const inputSt = {
     width: '100%', marginBottom: 12, fontSize: 13, padding: '6px 8px',
     border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
     background: T.bgCard, color: T.text, fontFamily: 'inherit',
+    boxSizing: 'border-box',
   }
 
   return (
@@ -174,10 +225,12 @@ function MilestoneEditModal({ milestone, onClose, onSaved, T }) {
         background: T.bgCard, border: `0.5px solid ${T.borderMid}`,
         borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw',
       }}>
-        <p style={{ fontWeight: 500, marginBottom: 16, fontSize: 14, color: T.text }}>マイルストーンを編集</p>
+        <p style={{ fontWeight: 500, marginBottom: 16, fontSize: 14, color: T.text }}>
+          {isNew ? 'マイルストーンを追加' : 'マイルストーンを編集'}
+        </p>
 
         <label style={labelSt}>タイトル</label>
-        <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={inputSt} />
+        <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={inputSt} placeholder="マイルストーン名を入力" autoFocus />
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
@@ -211,14 +264,99 @@ function MilestoneEditModal({ milestone, onClose, onSaved, T }) {
         </select>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          {!isNew && (
+            <button onClick={handleDelete} disabled={deleting} style={{
+              padding: '8px 12px', border: `1px solid ${confirmDelete ? '#dc2626' : T.borderMid}`, borderRadius: 6,
+              cursor: 'pointer', background: confirmDelete ? '#dc2626' : 'transparent',
+              fontSize: 12, color: confirmDelete ? '#fff' : '#dc2626', fontFamily: 'inherit',
+              transition: 'all 0.15s',
+            }}>{deleting ? '削除中...' : confirmDelete ? '本当に削除' : '削除'}</button>
+          )}
+          <div style={{ flex: 1 }} />
           <button onClick={onClose} style={{
-            flex: 1, padding: 8, border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
+            padding: '8px 16px', border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
             cursor: 'pointer', background: 'transparent', fontSize: 13, color: T.textSub, fontFamily: 'inherit',
           }}>キャンセル</button>
-          <button onClick={handleSave} disabled={saving} style={{
-            flex: 1, padding: 8, border: 'none', borderRadius: 6, cursor: 'pointer',
+          <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
+            padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer',
             background: T.text, color: T.bgCard, fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
-          }}>{saving ? '保存中...' : '保存'}</button>
+            opacity: !form.title.trim() ? 0.5 : 1,
+          }}>{saving ? '保存中...' : isNew ? '追加' : '保存'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── AddOrgModal（事業部追加モーダル）─────────────────────────────────────────
+function AddOrgModal({ levels, fiscalYear, onClose, onSaved, T }) {
+  const [name, setName] = useState('')
+  const [parentId, setParentId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const parentLevels = levels.filter(l => !l.parent_id)
+
+  async function handleSave() {
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('levels').insert({
+        name: name.trim(),
+        parent_id: parentId ? Number(parentId) : null,
+        icon: '📁',
+        color: '#4d9fff',
+        fiscal_year: fiscalYear,
+      })
+      if (error) throw error
+      onSaved()
+      onClose()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const labelSt = { display: 'block', fontSize: 11, color: T.textSub, marginBottom: 4 }
+  const inputSt = {
+    width: '100%', marginBottom: 12, fontSize: 13, padding: '6px 8px',
+    border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
+    background: T.bgCard, color: T.text, fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.bgCard, border: `0.5px solid ${T.borderMid}`,
+        borderRadius: 12, padding: 24, width: 380, maxWidth: '90vw',
+      }}>
+        <p style={{ fontWeight: 500, marginBottom: 16, fontSize: 14, color: T.text }}>事業部・部署を追加</p>
+
+        <label style={labelSt}>親組織（空で最上位に追加）</label>
+        <select value={parentId} onChange={e => setParentId(e.target.value)} style={inputSt}>
+          <option value="">（最上位の事業部として追加）</option>
+          {parentLevels.map(l => (
+            <option key={l.id} value={l.id}>{l.name}の配下に追加</option>
+          ))}
+        </select>
+
+        <label style={labelSt}>名前</label>
+        <input value={name} onChange={e => setName(e.target.value)} style={inputSt} placeholder="例：新規事業部" autoFocus />
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{
+            padding: '8px 16px', border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
+            cursor: 'pointer', background: 'transparent', fontSize: 13, color: T.textSub, fontFamily: 'inherit',
+          }}>キャンセル</button>
+          <button onClick={handleSave} disabled={saving || !name.trim()} style={{
+            padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer',
+            background: T.text, color: T.bgCard, fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
+            opacity: !name.trim() ? 0.5 : 1,
+          }}>{saving ? '追加中...' : '追加'}</button>
         </div>
       </div>
     </div>
@@ -226,7 +364,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, T }) {
 }
 
 // ─── MilestonePage（メインコンポーネント）────────────────────────────────────
-export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
+export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLevelsChanged }) {
   const T = W_THEMES[themeKey] || DARK_T
 
   const [milestones, setMilestones] = useState([])
@@ -234,6 +372,8 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
   const [error, setError] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
+  const [showAddOrg, setShowAddOrg] = useState(false)
+  const [showAllOrgs, setShowAllOrgs] = useState(false)
 
   // admin判定
   useEffect(() => {
@@ -290,17 +430,31 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
     }))
   })()
 
-  // マイルストーンを持つ組織のみ表示
-  const filteredTree = orgTree.filter(org =>
+  // マイルストーンを持つ組織のみ表示（showAllOrgs時は全表示）
+  const filteredTree = showAllOrgs ? orgTree : orgTree.filter(org =>
     org.milestones.length > 0 || org.children.some(c => c.milestones.length > 0)
   ).map(org => ({
     ...org,
-    children: org.children.filter(c => c.milestones.length > 0),
+    children: showAllOrgs ? org.children : org.children.filter(c => c.milestones.length > 0),
   }))
 
   const handleEdit = useCallback((ms) => {
     if (isAdmin) setEditTarget(ms)
   }, [isAdmin])
+
+  const handleAddMilestone = useCallback((orgId) => {
+    setEditTarget({
+      org_id: orgId,
+      fiscal_year: Number(fiscalYear) || 2026,
+      title: '',
+      start_month: 4,
+      end_month: 6,
+      due_date: '',
+      focus_level: 'normal',
+      status: 'pending',
+      sort_order: milestones.length,
+    })
+  }, [fiscalYear, milestones.length])
 
   const currentMonth = new Date().getMonth() + 1
   const currentColIndex = MONTH_ORDER.indexOf(currentMonth)
@@ -308,9 +462,29 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
       {/* ヘッダー */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 18, fontWeight: 500, color: T.text, margin: 0 }}>年間マイルストーン</h1>
         <span style={{ fontSize: 12, color: T.textMuted }}>{fiscalYear}年度（4月〜翌3月）</span>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+            <button
+              onClick={() => setShowAllOrgs(v => !v)}
+              style={{
+                padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: 6,
+                cursor: 'pointer', background: showAllOrgs ? hexWithAlpha('#4d9fff', 0.12) : 'transparent',
+                fontSize: 12, color: T.textSub, fontFamily: 'inherit',
+              }}
+            >{showAllOrgs ? '全組織表示中' : '全組織を表示'}</button>
+            <button
+              onClick={() => setShowAddOrg(true)}
+              style={{
+                padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: 6,
+                cursor: 'pointer', background: 'transparent',
+                fontSize: 12, color: T.textSub, fontFamily: 'inherit',
+              }}
+            >+ 事業部を追加</button>
+          </div>
+        )}
       </div>
 
       {/* ローディング / エラー */}
@@ -321,11 +495,12 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
       {!loading && !error && (
         <div style={{
           background: T.bgCard, border: `0.5px solid ${T.borderLight}`,
-          borderRadius: 12, padding: 16, overflowX: 'auto', minWidth: 0,
+          borderRadius: 12, padding: 16, overflow: 'hidden', width: '100%',
+          boxSizing: 'border-box',
         }}>
-          <div style={{ minWidth: 700 }}>
+          <div style={{ width: '100%', minWidth: 0 }}>
             {/* Q ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '88px repeat(12, 1fr)', gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
               <div />
               {QUARTERS.map((q, i) => (
                 <div key={q.label} style={{
@@ -333,6 +508,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
                   fontSize: 11, fontWeight: 500, color: T.textSub,
                   padding: '4px 2px 2px', borderBottom: `0.5px solid ${T.borderLight}`,
                   borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
+                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                 }}>
                   {q.label}
                   <span style={{ fontWeight: 400, color: T.textMuted, marginLeft: 4 }}>{q.months}</span>
@@ -341,7 +517,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
             </div>
 
             {/* 月ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '88px repeat(12, 1fr)', gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
               <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
               {MONTH_LABELS.map((label, i) => {
                 const isCurrent = i === currentColIndex
@@ -355,7 +531,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
                     borderBottom: `0.5px solid ${T.borderLight}`,
                     borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
                     backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
-                    position: 'relative',
+                    position: 'relative', overflow: 'hidden',
                   }}>
                     {label}
                     {isCurrent && (
@@ -374,9 +550,9 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
             {/* 事業部行 */}
             {filteredTree.map(org => (
               <div key={org.id} style={{ display: 'contents' }}>
-                <OrgRow org={org} isChild={false} onEdit={handleEdit} isAdmin={isAdmin} T={T} />
+                <OrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
                 {org.children.map(child => (
-                  <OrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} isAdmin={isAdmin} T={T} />
+                  <OrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
                 ))}
               </div>
             ))}
@@ -384,6 +560,18 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
             {filteredTree.length === 0 && (
               <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>
                 マイルストーンがありません
+                {isAdmin && (
+                  <div style={{ marginTop: 8 }}>
+                    <button
+                      onClick={() => setShowAllOrgs(true)}
+                      style={{
+                        padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: 6,
+                        cursor: 'pointer', background: 'transparent',
+                        fontSize: 12, color: T.textSub, fontFamily: 'inherit',
+                      }}
+                    >全組織を表示してマイルストーンを追加</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -411,18 +599,30 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user }) {
               <span>= 期日超過</span>
             </div>
             {isAdmin && (
-              <span style={{ marginLeft: 'auto' }}>バーをクリックして編集</span>
+              <span style={{ marginLeft: 'auto' }}>バーをクリックして編集 ・ 組織名の＋で追加</span>
             )}
           </div>
         </div>
       )}
 
-      {/* 編集モーダル */}
+      {/* 編集/追加モーダル */}
       {editTarget && (
         <MilestoneEditModal
           milestone={editTarget}
           onClose={() => setEditTarget(null)}
           onSaved={loadMilestones}
+          onDeleted={loadMilestones}
+          T={T}
+        />
+      )}
+
+      {/* 事業部追加モーダル */}
+      {showAddOrg && (
+        <AddOrgModal
+          levels={levels}
+          fiscalYear={fiscalYear}
+          onClose={() => setShowAddOrg(false)}
+          onSaved={() => { if (onLevelsChanged) onLevelsChanged() }}
           T={T}
         />
       )}
