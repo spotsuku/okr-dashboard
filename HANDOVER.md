@@ -29,7 +29,8 @@ okr-dashboard/
 │   ├── WeeklyMTGPage.jsx            # KAレビューページ（週次MTG）
 │   ├── MemberPage.jsx               # 組織図・ユーザー管理
 │   ├── CsvPage.jsx                  # CSV一括登録（OKR/KA）
-│   └── BulkRegisterPage.jsx         # フォーム一括登録（OKR/KA）
+│   ├── BulkRegisterPage.jsx         # フォーム一括登録（OKR/KA）
+│   └── MilestonePage.jsx            # 年間マイルストーン（ガントチャート）
 └── lib/
     └── supabase.js
 ```
@@ -47,6 +48,7 @@ okr-dashboard/
 | weekly_reports | KA | id, ka_title, owner, status, level_id, objective_id, kr_id, kr_title, week_start |
 | kr_weekly_reviews | KRのGood/More記録 | id, kr_id, week_start, weather, good, more, focus |
 | ka_tasks | KA配下のタスク | id, report_id, title, assignee, due_date, done |
+| milestones | 年間マイルストーン | id, fiscal_year, org_id, start_month, end_month, due_date, title, focus_level, status, sort_order |
 
 ## 重要な設計メモ
 
@@ -196,3 +198,5 @@ function avatarColor(name) {
 | BulkRegisterPage.jsx | 反映待ち | 新規・OKR/KA一括登録 |
 | app/api/csv-analyze/route.js | 反映待ち | KAモード追加・max_tokens 8000 |
 | app/api/admin-users/route.js | 反映待ち | 新規・Supabase Admin API |
+| MilestonePage.jsx | 反映待ち | 新規・年間マイルストーン（ガントチャート） |
+| supabase_milestones.sql | 反映待ち | 新規・milestonesテーブル作成＋初期データ |
