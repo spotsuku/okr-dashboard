@@ -588,35 +588,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                         {krKAs.length > 0 && (
                           <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
                             <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
-                            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
-                              <thead>
-                                <tr style={{ borderBottom:`1px solid ${wT().border}` }}>
-                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>担当</th>
-                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>KAタイトル</th>
-                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>状態</th>
-                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>Good</th>
-                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>More</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {krKAs.map(r => {
-                                  const sCfg = STATUS_CFG[r.status] || STATUS_CFG.normal
-                                  return (
-                                    <tr key={r.id} style={{ borderBottom:`1px solid ${wT().borderLight}` }}>
-                                      <td style={{ padding:'5px 6px', whiteSpace:'nowrap' }}>
-                                        {r.owner ? <Avatar name={r.owner} size={18} wT={wT} /> : <span style={{ color:wT().textFaint }}>--</span>}
-                                      </td>
-                                      <td style={{ padding:'5px 6px', color:wT().text, lineHeight:1.4 }}>{r.ka_title}</td>
-                                      <td style={{ padding:'5px 6px' }}>
-                                        <span style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:sCfg.bg, color:sCfg.color, border:`1px solid ${sCfg.border}`, whiteSpace:'nowrap' }}>{sCfg.label}</span>
-                                      </td>
-                                      <td style={{ padding:'5px 6px', color:wT().textSub, fontSize:10, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.good || ''}</td>
-                                      <td style={{ padding:'5px 6px', color:wT().textSub, fontSize:10, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.more || ''}</td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
+                            {krKAs.map(r => (
+                              <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} tasks={kaTasks[r.id] || []} />
+                            ))}
                           </div>
                         )}
                       </div>
