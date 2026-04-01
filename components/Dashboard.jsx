@@ -586,6 +586,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
           <Ring value={Math.min(prog, 100)} color={rating.color} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: levelColor, padding: '1px 6px', borderRadius: 3 }}>Objective</span>
               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${rating.color}18`, color: rating.color }}>{rating.label}</span>
               <Stars score={rating.score} size={9} />
             </div>
@@ -903,7 +904,7 @@ export default function Dashboard({ user, onSignOut }) {
     }
     return '2026'
   })
-  const [activePeriod, setActivePeriod]     = useState('all')
+  const [activePeriod, setActivePeriod]     = useState('annual')
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
@@ -1054,12 +1055,7 @@ export default function Dashboard({ user, onSignOut }) {
   // window経由でRealtimeハンドラからアクセスできるよう公開
   const fetchForLevel = async (levelId, period, year = '2026') => {
     let query = supabase.from('objectives').select('id,level_id,period,title,owner').eq('level_id', levelId).order('id')
-    if (period === 'all') {
-      const allPeriodKeys = ['annual','q1','q2','q3','q4'].map(p => toPeriodKey(p, year))
-      query = query.in('period', allPeriodKeys)
-    } else {
-      query = query.eq('period', toPeriodKey(period, year))
-    }
+    query = query.eq('period', toPeriodKey(period, year))
     const { data: objs } = await query
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
@@ -1238,7 +1234,7 @@ export default function Dashboard({ user, onSignOut }) {
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
-    { key: 'all', label: '通期' },
+    { key: 'annual', label: '通期' },
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
     { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
   ]

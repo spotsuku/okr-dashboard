@@ -722,7 +722,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [slackSending,  setSlackSending]  = useState(false)
 
   useEffect(() => {
-    supabase.from('objectives').select('id,title,level_id,period,owner').order('level_id').then(({data})=>setObjectives(data||[]))
+    supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').then(({data})=>setObjectives(data||[]))
     supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
     supabase.from('members').select('*').order('name').then(({data, error})=>{ if(error) console.error('members load error:', error); setMembers(data||[]) })
   }, [])
@@ -868,7 +868,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const rightPeriodKey = fiscalYear === '2026' ? rightPeriod : `${fiscalYear}_${rightPeriod}`
   const rightObj = !selectedObj ? null
     : rightPeriod === 'annual' ? selectedObj
-    : objectives.find(o => Number(o.level_id) === Number(selectedObj.level_id) && o.period === rightPeriodKey) || null
+    : objectives.find(o => Number(o.parent_objective_id) === Number(selectedObj.id) && o.period === rightPeriodKey)
+      || objectives.find(o => Number(o.level_id) === Number(selectedObj.level_id) && o.period === rightPeriodKey)
+      || null
   const selectedObjKRs = rightObj ? keyResults.filter(kr => Number(kr.objective_id)===Number(rightObj.id)) : []
   const depth          = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
   const objColor       = LAYER_COLORS[depth] || '#a0a8be'

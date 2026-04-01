@@ -580,24 +580,67 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
               {objKRs.length > 0 && (
                 <div style={{ marginBottom:16 }}>
                   <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📊 Key Results（{objKRs.length}件）</div>
-                  {objKRs.map(kr => (
-                    <KRCard key={kr.id} kr={kr} myName={myName} members={members} wT={wT} />
-                  ))}
+                  {objKRs.map(kr => {
+                    const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
+                    return (
+                      <div key={kr.id} style={{ marginBottom:14 }}>
+                        <KRCard kr={kr} myName={myName} members={members} wT={wT} />
+                        {krKAs.length > 0 && (
+                          <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
+                            <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
+                            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+                              <thead>
+                                <tr style={{ borderBottom:`1px solid ${wT().border}` }}>
+                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>担当</th>
+                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>KAタイトル</th>
+                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>状態</th>
+                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>Good</th>
+                                  <th style={{ textAlign:'left', padding:'4px 6px', color:wT().textMuted, fontWeight:600, fontSize:10 }}>More</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {krKAs.map(r => {
+                                  const sCfg = STATUS_CFG[r.status] || STATUS_CFG.normal
+                                  return (
+                                    <tr key={r.id} style={{ borderBottom:`1px solid ${wT().borderLight}` }}>
+                                      <td style={{ padding:'5px 6px', whiteSpace:'nowrap' }}>
+                                        {r.owner ? <Avatar name={r.owner} size={18} wT={wT} /> : <span style={{ color:wT().textFaint }}>--</span>}
+                                      </td>
+                                      <td style={{ padding:'5px 6px', color:wT().text, lineHeight:1.4 }}>{r.ka_title}</td>
+                                      <td style={{ padding:'5px 6px' }}>
+                                        <span style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:sCfg.bg, color:sCfg.color, border:`1px solid ${sCfg.border}`, whiteSpace:'nowrap' }}>{sCfg.label}</span>
+                                      </td>
+                                      <td style={{ padding:'5px 6px', color:wT().textSub, fontSize:10, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.good || ''}</td>
+                                      <td style={{ padding:'5px 6px', color:wT().textSub, fontSize:10, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.more || ''}</td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
               {objKRs.length === 0 && (
                 <div style={{ fontSize:12, color:wT().textFaint, fontStyle:'italic', padding:'10px 4px', marginBottom:12 }}>このObjectiveにKRがありません</div>
               )}
 
-              <div>
-                <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📋 今週のKA（{objKAs.length}件）</div>
-                {objKAs.map(r => (
-                  <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} tasks={kaTasks[r.id] || []} />
-                ))}
-                {objKAs.length === 0 && (
-                  <div style={{ fontSize:12, color:wT().textFaint, fontStyle:'italic', padding:'6px 0' }}>このObjectiveにKAがありません（週次MTGで追加できます）</div>
-                )}
-              </div>
+              {(() => {
+                const krIds = new Set(objKRs.map(kr => Number(kr.id)))
+                const unlinkedKAs = objKAs.filter(r => !r.kr_id || !krIds.has(Number(r.kr_id)))
+                if (unlinkedKAs.length === 0) return null
+                return (
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📋 その他のKA（{unlinkedKAs.length}件）</div>
+                    {unlinkedKAs.map(r => (
+                      <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} tasks={kaTasks[r.id] || []} />
+                    ))}
+                  </div>
+                )
+              })()}
             </>
           )}
         </div>
