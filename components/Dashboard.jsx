@@ -1448,6 +1448,7 @@ export default function Dashboard({ user, onSignOut }) {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <AnnualView
             levels={levels}
+            members={members}
             refreshKey={annualRefreshKey}
             fiscalYear={fiscalYear}
             themeKey={themeKey}

@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAutoSave } from '../lib/useAutoSave'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 function getMondayOf(date) {
@@ -237,88 +238,260 @@ function KRCard({ kr, myName, members, wT }) {
   )
 }
 
-// ─── KAカード ─────────────────────────────────────────────────────────────────
-function MyKACard({ report, onSave, onDelete, wT, members, tasks = [] }) {
-  const [open,   setOpen]   = useState(false)
-  const [good,   setGood]   = useState(report.good || '')
-  const [more,   setMore]   = useState(report.more || '')
-  const [focus,  setFocus]  = useState(report.focus_output || '')
-  const [status, setStatus] = useState(report.status || 'normal')
-  const [saving, setSaving] = useState(false)
-  const [saved,  setSaved]  = useState(false)
-  const cfg = STATUS_CFG[status] || STATUS_CFG.normal
-  const STATUS_ORDER = ['normal','focus','good','more']
+// ─── タスクポップオーバー ──────────────────────────────────────────────────────
+function TaskPopover({ reportId, members, wT, onClose }) {
+  const [tasks, setTasks] = useState([])
+  const [loaded, setLoaded] = useState(false)
+  const ref = useRef(null)
 
-  // ownerのavatar_urlを取得
-  const ownerMember = members?.find(m => m.name === report.owner)
+  useEffect(() => {
+    supabase.from('ka_tasks').select('*').eq('report_id', reportId).order('id')
+      .then(({data}) => { setTasks(data||[]); setLoaded(true) })
+  }, [reportId])
 
-  const save = async (e) => {
-    e && e.stopPropagation()
-    setSaving(true)
-    await supabase.from('weekly_reports').update({ good, more, focus_output: focus, status }).eq('id', report.id)
-    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1500)
-    onSave({ ...report, good, more, focus_output: focus, status })
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose() }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  const addTask = () => setTasks(p => [...p, { _tmp:Date.now(), title:'', assignee:'', due_date:'', done:false, report_id:reportId }])
+  const updateTask = (key, f, v) => setTasks(p => p.map(t => (t.id||t._tmp)===key ? {...t,[f]:v} : t))
+  const removeTask = async (key) => {
+    const t = tasks.find(x => (x.id||x._tmp)===key)
+    if (t?.id) await supabase.from('ka_tasks').delete().eq('id', t.id)
+    setTasks(p => p.filter(x => (x.id||x._tmp)!==key))
   }
-
-  const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
+  const toggleDone = async (key) => {
+    const t = tasks.find(x => (x.id||x._tmp)===key)
+    const nd = !t.done
+    if (t?.id) await supabase.from('ka_tasks').update({ done:nd }).eq('id', t.id)
+    setTasks(p => p.map(x => (x.id||x._tmp)===key ? {...x,done:nd} : x))
+  }
+  const saveTask = async (key) => {
+    const t = tasks.find(x => (x.id||x._tmp)===key)
+    if (!t) return
+    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:reportId }
+    if (t.id) { await supabase.from('ka_tasks').update(d).eq('id', t.id) }
+    else if (t.title?.trim()) {
+      const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
+      if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
+    }
+  }
+  const done = tasks.filter(t=>t.done).length
 
   return (
-    <div onClick={() => !open && setOpen(true)} style={{ background:wT().bgCard, border:`1px solid ${open?'#4d9fff50':wT().border}`, borderRadius:9, marginBottom:7, cursor:open?'default':'pointer', transition:'border-color 0.15s' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px' }} onClick={() => setOpen(p=>!p)}>
-        <Avatar name={report.owner} avatarUrl={ownerMember?.avatar_url} size={20} wT={wT} />
-        <span style={{ fontSize:13, fontWeight:600, color:wT().text, flex:1 }}>{report.ka_title}</span>
-        <span onClick={e=>{ e.stopPropagation(); const idx=STATUS_ORDER.indexOf(status); setStatus(STATUS_ORDER[(idx+1)%STATUS_ORDER.length]) }} style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:99, cursor:'pointer', background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}` }}>{cfg.label}</span>
-        <button onClick={e=>{e.stopPropagation();onDelete(report.id)}} style={{ width:20,height:20,borderRadius:4,border:'none',cursor:'pointer',fontSize:9,background:'rgba(255,107,107,0.08)',color:'#ff6b6b' }}>✕</button>
-        <span style={{ fontSize:10, color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-block' }}>▾</span>
+    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:380, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {done}/{tasks.length}</span>
+        <button onClick={addTask} style={{ marginLeft:4, background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', borderRadius:4, color:'#a855f7', fontSize:10, padding:'2px 6px', cursor:'pointer', fontFamily:'inherit' }}>＋</button>
+        <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
       </div>
-      {!open && (good||more||tasks.length > 0) && (
-        <div style={{ display:'flex', gap:8, padding:'0 12px 7px 40px', flexWrap:'wrap' }}>
-          {good && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#00d68f', fontSize:10 }}>✅</span>{good.slice(0,50)}{good.length>50?'…':''}</div>}
-          {more && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#ff6b6b', fontSize:10 }}>🔺</span>{more.slice(0,50)}{more.length>50?'…':''}</div>}
-          {tasks.length > 0 && <div style={{ fontSize:11, color:wT().textMuted, display:'flex', gap:3 }}><span style={{ fontSize:10 }}>📌</span>{tasks.filter(t=>!t.done).length}/{tasks.length}件 未完了</div>}
-        </div>
-      )}
-      {open && (
-        <div style={{ padding:'0 12px 12px' }} onClick={e=>e.stopPropagation()}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
-            <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good</div>
-              <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="うまくいったこと" style={taS} />
+      {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
+      {tasks.map(t => {
+        const key = t.id||t._tmp; const tc = avatarColor(t.assignee)
+        return (
+          <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
+            <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${t.done?'#00d68f':wT().borderMid}`, background:t.done?'#00d68f':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {t.done && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
             </div>
-            <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🔺 More</div>
-              <textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} placeholder="課題・改善点" style={taS} />
-            </div>
+            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} onBlur={()=>saveTask(key)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
+            <select value={t.assignee||''} onChange={e=>{updateTask(key,'assignee',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
+              <option value="">担当</option>
+              {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
+            </select>
+            <input type="date" value={t.due_date||''} onChange={e=>{updateTask(key,'due_date',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:3, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-            <div style={{ flex:1, height:1, background:wT().border }} /><span style={{ fontSize:10, color:wT().textMuted }}>↓ Moreへの対応</span><div style={{ flex:1, height:1, background:wT().border }} />
-          </div>
-          <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 注力アクション</div>
-            <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか" style={taS} />
-          </div>
-          {tasks.length > 0 && (
-            <div style={{ marginBottom:10 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#a855f7', background:'rgba(168,85,247,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:6, display:'inline-block' }}>📌 タスク（{tasks.filter(t=>!t.done).length}/{tasks.length}件 未完了）</div>
-              {tasks.map(t => (
-                <div key={t.id || t._tmp} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontSize:12 }}>
-                  <span style={{ fontSize:13, flexShrink:0 }}>{t.done ? '✅' : '☐'}</span>
-                  <span style={{ flex:1, color: t.done ? wT().textMuted : wT().text, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title || '(未入力)'}</span>
-                  {t.assignee && <span style={{ fontSize:10, padding:'1px 6px', borderRadius:99, background:'rgba(77,159,255,0.1)', color:'#4d9fff', flexShrink:0 }}>{t.assignee}</span>}
-                  {t.due_date && <span style={{ fontSize:10, color: !t.done && t.due_date < new Date().toISOString().split('T')[0] ? '#ff6b6b' : wT().textMuted, flexShrink:0 }}>{t.due_date.slice(5).replace('-','/')}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:8, paddingTop:8, borderTop:`1px solid ${wT().border}` }}>
-            <button onClick={()=>setOpen(false)} style={{ padding:'5px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={save} disabled={saving} style={{ padding:'5px 14px', borderRadius:6, background:saved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-              {saved?'✓ 保存済み':saving?'…':'保存'}
-            </button>
-          </div>
-        </div>
-      )}
+        )
+      })}
     </div>
+  )
+}
+
+// ─── KAインライン行 ──────────────────────────────────────────────────────────
+function MyKARow({ report, onSave, onDelete, wT, members }) {
+  const [good,         setGood]         = useState(report.good || '')
+  const [more,         setMore]         = useState(report.more || '')
+  const [focusOutput,  setFocusOutput]  = useState(report.focus_output || '')
+  const [status,       setStatus]       = useState(report.status || 'normal')
+  const [ownerDraft,   setOwnerDraft]   = useState(report.owner || '')
+  const [kaTitle,      setKaTitle]      = useState(report.ka_title || '')
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [showTasks,    setShowTasks]    = useState(false)
+  const [taskCount,    setTaskCount]    = useState({ done:0, total:0 })
+  const lastEnterRef   = useRef(0)
+
+  const autoSave = useAutoSave('weekly_reports', report.id, { enabled: true })
+  const cfg = STATUS_CFG[status] || STATUS_CFG.normal
+  const ownerMember = members?.find(m => m.name === (ownerDraft||report.owner))
+  const STATUS_ORDER = ['normal','focus','good','more']
+
+  useEffect(() => {
+    supabase.from('ka_tasks').select('id,done').eq('report_id', report.id)
+      .then(({data}) => {
+        if (data) setTaskCount({ done:data.filter(t=>t.done).length, total:data.length })
+      })
+  }, [report.id])
+
+  useEffect(() => {
+    const ff = autoSave.focusedField
+    if (ff !== 'good' && report.good !== undefined) setGood(report.good || '')
+    if (ff !== 'more' && report.more !== undefined) setMore(report.more || '')
+    if (ff !== 'focus_output' && report.focus_output !== undefined) setFocusOutput(report.focus_output || '')
+    if (ff !== 'status') setStatus(report.status || 'normal')
+    if (ff !== 'owner') setOwnerDraft(report.owner || '')
+    if (ff !== 'ka_title') setKaTitle(report.ka_title || '')
+  }, [report.good, report.more, report.focus_output, report.status, report.owner, report.ka_title])
+
+  const handleFieldChange = (field, value, setter) => {
+    setter(value)
+    autoSave.save(field, value)
+    onSave({ ...report, [field]: value })
+  }
+
+  const cycleStatus = () => {
+    const idx = STATUS_ORDER.indexOf(status)
+    const next = STATUS_ORDER[(idx+1) % STATUS_ORDER.length]
+    setStatus(next)
+    autoSave.save('status', next)
+    onSave({ ...report, status: next })
+  }
+
+  const handleOwnerChange = (val) => {
+    setOwnerDraft(val)
+    autoSave.save('owner', val)
+    onSave({ ...report, owner: val })
+  }
+
+  const handleTitleBlur = () => {
+    setEditingTitle(false)
+    autoSave.setFocusedField(null)
+    if (kaTitle.trim() && kaTitle !== report.ka_title) {
+      autoSave.saveNow('ka_title', kaTitle.trim())
+      onSave({ ...report, ka_title: kaTitle.trim() })
+    }
+  }
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setKaTitle(report.ka_title)
+      setEditingTitle(false)
+      autoSave.setFocusedField(null)
+      return
+    }
+    if (e.key === 'Enter') {
+      const now = Date.now()
+      if (now - lastEnterRef.current < 500) {
+        e.preventDefault()
+        setKaTitle(prev => prev.replace(/\n$/, ''))
+        setTimeout(() => e.target?.blur(), 0)
+      }
+      lastEnterRef.current = now
+    }
+  }
+
+  const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:12 }
+  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:'1px solid transparent', borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.5, minHeight:36, transition:'border-color 0.15s' }
+
+  return (
+    <tr>
+      {/* 担当 */}
+      <td style={{ ...cellS, width:90 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={20} wT={wT} />
+          <select value={ownerDraft} onChange={e=>handleOwnerChange(e.target.value)}
+            onFocus={()=>autoSave.setFocusedField('owner')} onBlur={()=>autoSave.setFocusedField(null)}
+            style={{ flex:1, background:'transparent', border:'none', color:ownerDraft?avatarColor(ownerDraft):wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', fontWeight:600, minWidth:0, maxWidth:60 }}>
+            <option value="">--</option>
+            {members?.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
+          </select>
+        </div>
+      </td>
+      {/* KAタイトル */}
+      <td style={{ ...cellS, minWidth:120 }}>
+        {editingTitle ? (
+          <textarea autoFocus value={kaTitle} onChange={e=>setKaTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            onKeyDown={handleTitleKeyDown}
+            rows={2}
+            style={{ width:'100%', boxSizing:'border-box', background:wT().bgCard2||wT().bgCard, border:'1px solid #4d9fff80', borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:12, fontWeight:600, outline:'none', fontFamily:'inherit', resize:'vertical', lineHeight:1.5 }} />
+        ) : (
+          <div onClick={() => { setEditingTitle(true); autoSave.setFocusedField('ka_title') }}
+            style={{ fontSize:12, fontWeight:600, color:wT().text, cursor:'text', lineHeight:1.4, minHeight:20, whiteSpace:'pre-wrap' }}>
+            {kaTitle||report.ka_title||'(無題)'}
+          </div>
+        )}
+      </td>
+      {/* ステータス */}
+      <td style={{ ...cellS, width:70, textAlign:'center' }}>
+        <span onClick={cycleStatus}
+          style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:99, cursor:'pointer', background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}`, whiteSpace:'nowrap', display:'inline-block' }}>
+          {cfg.label}
+        </span>
+      </td>
+      {/* Good */}
+      <td style={cellS}>
+        <textarea value={good}
+          onChange={e=>handleFieldChange('good', e.target.value, setGood)}
+          onFocus={e=>{autoSave.setFocusedField('good');e.target.style.borderColor='rgba(0,214,143,0.4)';e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('good',good);e.target.style.borderColor='transparent';e.target.rows=2}}
+          rows={2} placeholder="Good"
+          style={{ ...taS, color:good?wT().text:wT().textFaint }} />
+      </td>
+      {/* More */}
+      <td style={cellS}>
+        <textarea value={more}
+          onChange={e=>handleFieldChange('more', e.target.value, setMore)}
+          onFocus={e=>{autoSave.setFocusedField('more');e.target.style.borderColor='rgba(255,107,107,0.4)';e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('more',more);e.target.style.borderColor='transparent';e.target.rows=2}}
+          rows={2} placeholder="More"
+          style={{ ...taS, color:more?wT().text:wT().textFaint }} />
+      </td>
+      {/* Focus */}
+      <td style={cellS}>
+        <textarea value={focusOutput}
+          onChange={e=>handleFieldChange('focus_output', e.target.value, setFocusOutput)}
+          onFocus={e=>{autoSave.setFocusedField('focus_output');e.target.style.borderColor='rgba(77,159,255,0.4)';e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('focus_output',focusOutput);e.target.style.borderColor='transparent';e.target.rows=2}}
+          rows={2} placeholder="Focus"
+          style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
+      </td>
+      {/* Tasks + Delete */}
+      <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:4, justifyContent:'center' }}>
+          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:taskCount.total>0?'#a855f7':wT().textFaint, cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
+            {taskCount.total>0 ? `${taskCount.done}/${taskCount.total}` : '—'}
+          </span>
+          <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
+        </div>
+        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} />}
+      </td>
+      {/* 自動保存インジケーター */}
+      <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
+        {autoSave.saving && <span style={{ fontSize:9, color:'#4d9fff' }}>⟳</span>}
+        {autoSave.saved && <span style={{ fontSize:9, color:'#00d68f' }}>✓</span>}
+      </td>
+    </tr>
+  )
+}
+
+// KAテーブルヘッダー
+function KATableHeader({ wT }) {
+  const thS = { padding:'4px 8px', fontSize:10, fontWeight:600, color:wT().textMuted, textAlign:'left', borderBottom:`1px solid ${wT().border}` }
+  return (
+    <thead>
+      <tr>
+        <th style={{ ...thS, width:90 }}>担当</th>
+        <th style={{ ...thS, minWidth:120 }}>KA</th>
+        <th style={{ ...thS, width:70, textAlign:'center' }}>状態</th>
+        <th style={thS}>Good</th>
+        <th style={thS}>More</th>
+        <th style={thS}>Focus</th>
+        <th style={{ ...thS, width:70, textAlign:'center' }}>タスク</th>
+        <th style={{ ...thS, width:20 }}></th>
+      </tr>
+    </thead>
   )
 }
 
@@ -346,7 +519,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [objectives, setObjectives] = useState([])
   const [keyResults, setKeyResults] = useState([])
   const [kaReports,  setKaReports]  = useState([])
-  const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] }
+  const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] } - kept for potential future use
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [activeObjId,setActiveObjId]= useState(null)
@@ -588,9 +761,14 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                         {krKAs.length > 0 && (
                           <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
                             <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
-                            {krKAs.map(r => (
-                              <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} tasks={kaTasks[r.id] || []} />
-                            ))}
+                            <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
+                              <KATableHeader wT={wT} />
+                              <tbody>
+                                {krKAs.map(r => (
+                                  <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         )}
                       </div>
@@ -609,9 +787,14 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 return (
                   <div>
                     <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📋 その他のKA（{unlinkedKAs.length}件）</div>
-                    {unlinkedKAs.map(r => (
-                      <MyKACard key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} tasks={kaTasks[r.id] || []} />
-                    ))}
+                    <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
+                      <KATableHeader wT={wT} />
+                      <tbody>
+                        {unlinkedKAs.map(r => (
+                          <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )
               })()}
