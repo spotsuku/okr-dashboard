@@ -118,7 +118,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const annIds = annObjs.map(o => o.id)
     const { data: annKRs } = await supabase
       .from('key_results')
-      .select('id,objective_id,title,target,current,unit,lower_is_better')
+      .select('id,objective_id,title,target,current,unit,lower_is_better,owner')
       .in('objective_id', annIds)
 
     const annKRMap = {}
@@ -141,7 +141,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const qIds = qObjs.map(o => o.id)
     const { data: qKRs } = await supabase
       .from('key_results')
-      .select('id,objective_id,title,target,current,unit,lower_is_better')
+      .select('id,objective_id,title,target,current,unit,lower_is_better,owner')
       .in('objective_id', qIds)
 
     const qKRMap = {}
@@ -157,10 +157,15 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     fullQObjs.forEach(qObj => {
       const baseQ = qObj.period.includes('_') ? qObj.period.split('_').pop() : qObj.period
       if (qObj.parent_objective_id && qMap[qObj.parent_objective_id]) {
+        // parent_objective_idが通期OKRを指している場合
         qMap[qObj.parent_objective_id][baseQ]?.push(qObj)
       } else {
-        const matchingAnn = fullAnnObjs.find(a => Number(a.level_id) === Number(qObj.level_id))
-        if (matchingAnn) qMap[matchingAnn.id][baseQ]?.push(qObj)
+        // parent_objective_idがないか、通期OKR以外を指している場合 → level_idで紐付け
+        // 同じlevel_idの通期OKRが複数ある場合は最初のものに紐付ける
+        const matchingAnns = fullAnnObjs.filter(a => Number(a.level_id) === Number(qObj.level_id))
+        if (matchingAnns.length > 0) {
+          qMap[matchingAnns[0].id][baseQ]?.push(qObj)
+        }
       }
     })
 

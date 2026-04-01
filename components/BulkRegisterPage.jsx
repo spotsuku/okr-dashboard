@@ -107,7 +107,7 @@ function OKRBulkTab({ levels, members, fiscalYear, wT }) {
     for (const row of validRows) {
       const periodKey = toPeriodKey(row.period, fiscalYear)
       const { data: obj, error: e1 } = await supabase.from('objectives')
-        .insert([{ title: row.title.trim(), owner: row.owner || null, level_id: parseInt(row.levelId), period: periodKey }])
+        .insert({ title: row.title.trim(), owner: row.owner || null, level_id: parseInt(row.levelId), period: periodKey })
         .select().single()
       if (e1) { ng++; continue }
       const validKRs = row.krs.filter(k => k.title.trim())
@@ -307,7 +307,7 @@ function KABulkTab({ levels, members, fiscalYear, wT }) {
     let ok = 0, ng = 0
     for (const row of validRows) {
       const kr = row.krId ? keyResults.find(k => k.id === parseInt(row.krId)) : null
-      const { error: e } = await supabase.from('weekly_reports').insert([{
+      const { error: e } = await supabase.from('weekly_reports').insert({
         week_start: row.weekStart,
         level_id: row.levelId ? parseInt(row.levelId) : null,
         objective_id: row.objectiveId ? parseInt(row.objectiveId) : null,
@@ -316,7 +316,7 @@ function KABulkTab({ levels, members, fiscalYear, wT }) {
         ka_title: row.kaTitle.trim(),
         owner: row.owner || null,
         status: row.status,
-      }])
+      })
       if (e) { ng++; console.error('KA insert error:', e) } else ok++
     }
     setRegistering(false)

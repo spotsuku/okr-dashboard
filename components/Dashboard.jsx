@@ -266,8 +266,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
-      ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current) }))
-      : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false }]
+      ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current), owner: k.owner || '' }))
+      : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }]
   )
   const [saving, setSaving] = useState(false)
   const [parentObj, setParentObj] = useState(null)
@@ -306,7 +306,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
     if (!title.trim()) return
     setSaving(true)
     await onSave({
-      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period },
+      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: initial?.parent_objective_id || null },
       krs: krs.map(k => ({ ...k, target: parseFloat(k.target) || 0, current: parseFloat(k.current) || 0 })),
     })
     setSaving(false)
@@ -452,7 +452,7 @@ function KASection({ krId }) {
   const addKA = async () => {
     if (!newTitle.trim()) return
     const { data } = await supabase.from('key_actions')
-      .insert([{ key_result_id: krId, title: newTitle.trim(), type: newType, week_start: weekStart }])
+      .insert({ key_result_id: krId, title: newTitle.trim(), type: newType, week_start: weekStart })
       .select().single()
     if (data) { setKAs(p => [...p, data]); setNewTitle(''); setAdding(false) }
   }
@@ -1118,7 +1118,7 @@ export default function Dashboard({ user, onSignOut }) {
       if (objToSave.parent_objective_id) insertPayload.parent_objective_id = objToSave.parent_objective_id
       const { data, error } = await supabase
         .from('objectives')
-        .insert([insertPayload])
+        .insert(insertPayload)
         .select().single()
       if (error) { console.error('objective insert error:', error); alert('目標の保存に失敗しました: ' + error.message); return }
       objectiveId = data.id
@@ -1165,7 +1165,7 @@ export default function Dashboard({ user, onSignOut }) {
     const { obj, krs } = undoDelete
     // objectives を復元
     const { id, ...objData } = obj
-    const { data: restored } = await supabase.from('objectives').insert([objData]).select().single()
+    const { data: restored } = await supabase.from('objectives').insert(objData).select().single()
     if (restored && krs.length) {
       const krPayloads = krs.map(({ id, objective_id, ...kr }) => ({ ...kr, objective_id: restored.id }))
       await supabase.from('key_results').insert(krPayloads)
@@ -1177,7 +1177,7 @@ export default function Dashboard({ user, onSignOut }) {
 
   const handleAddLevel = async ({ name, icon, parent_id }) => {
     const { data, error } = await supabase
-      .from('levels').insert([{ name, icon, parent_id: parent_id || null, color: getT().accentSolid, fiscal_year: fiscalYear }]).select().single()
+      .from('levels').insert({ name, icon, parent_id: parent_id || null, color: getT().accentSolid, fiscal_year: fiscalYear }).select().single()
     if (error) { console.error('add level error:', error); return }
     setLevels(p => [...p, data])
   }
@@ -1215,10 +1215,10 @@ export default function Dashboard({ user, onSignOut }) {
 
     for (const l of sorted) {
       const newParentId = l.parent_id ? idMap[l.parent_id] : null
-      const { data: inserted } = await supabase.from('levels').insert([{
+      const { data: inserted } = await supabase.from('levels').insert({
         name: l.name, icon: l.icon, color: l.color || getT().accentSolid,
         parent_id: newParentId || null, fiscal_year: fiscalYear,
-      }]).select().single()
+      }).select().single()
       if (inserted) idMap[l.id] = inserted.id
     }
 

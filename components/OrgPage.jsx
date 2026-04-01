@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ══════════════════════════════════════════════════
@@ -182,7 +182,7 @@ const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#6B8DB5','#B07D9
 const DEPT_COLOR_RULES = [
   { match: 'コミュニティ', color: '#5A8A7A' },
   { match: 'ユース',       color: '#3D6B5E' },
-  { match: 'パートナー',   color: '#0F6E56' },
+  { match: 'クラブ連携',   color: '#0F6E56' },
   { match: '経営',         color: '#E8875A' },
 ]
 function getDeptColor(name) {
@@ -603,17 +603,11 @@ function useOrgData(fiscalYear) {
   const [taskHistory, setTaskHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [syncStatus, setSyncStatus] = useState('connecting')
+  const [orgTableError, setOrgTableError] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
-    const [
-      { data: lvls },
-      { data: meta },
-      { data: mems },
-      { data: taskData },
-      { data: jdData },
-      { data: histData },
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabase.from('levels').select('*').order('id'),
       supabase.from('org_team_meta').select('*'),
       supabase.from('members').select('*').order('id'),
@@ -621,6 +615,14 @@ function useOrgData(fiscalYear) {
       supabase.from('org_member_jd').select('*').order('version_idx'),
       supabase.from('org_task_history').select('*').order('changed_at'),
     ])
+    const [lvls, meta, mems, taskData, jdData, histData] = results.map(r => r.data)
+    const orgErrors = results.slice(3).filter(r => r.error)
+    if (orgErrors.length > 0) {
+      console.warn('org_* テーブルが未作成の可能性があります。supabase_setup.sql を実行してください。', orgErrors.map(r => r.error))
+      setOrgTableError(true)
+    } else {
+      setOrgTableError(false)
+    }
 
     const validLvls = (lvls || []).filter(l =>
       fiscalYear === '2026'
@@ -701,7 +703,7 @@ function useOrgData(fiscalYear) {
     return () => { supabase.removeChannel(channel) }
   }, [fiscalYear]) // eslint-disable-line
 
-  return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
+  return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
 }
 
 // ══════════════════════════════════════════════════
@@ -738,7 +740,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 
   const saveTeamMeta = async (levelId) => {
     setSaving(true)
-    await supabase.from('org_team_meta').upsert([{ level_id: levelId, ...metaBuf }], { onConflict: 'level_id' })
+    await supabase.from('org_team_meta').upsert({ level_id: levelId, ...metaBuf }, { onConflict: 'level_id' })
     onTeamMetaUpdate(levelId, metaBuf)
     setSaving(false); setEditingMeta(null)
   }
@@ -863,7 +865,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 // ══════════════════════════════════════════════════
 // タブ2: 業務一覧（管理者は編集・並び替え可）
 // ══════════════════════════════════════════════════
-function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser }) {
+function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser, levels, orgTableError }) {
   const [filterDept, setFilterDept] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [query, setQuery] = useState('')
@@ -879,7 +881,63 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   const dragOverId = useRef(null)
 
   const memberNames = members.map(m => m.name)
-  const allDepts = [...new Set(tasks.map(t => t.dept))]
+
+  // levels階層を構築: { deptName: { teamName: levelId, ... }, ... }
+  const levelHierarchy = useMemo(() => {
+    if (!levels || levels.length === 0) return null
+    const roots = levels.filter(l => !l.parent_id)
+    const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
+    const result = {}
+    roots.forEach(root => {
+      getChildren(root.id).forEach(dept => {
+        result[dept.name] = {}
+        const teams = getChildren(dept.id)
+        if (teams.length === 0) {
+          result[dept.name][dept.name] = dept.id
+        } else {
+          teams.forEach(team => { result[dept.name][team.name] = team.id })
+        }
+      })
+    })
+    return result
+  }, [levels])
+
+  // タスクをlevels階層にマッチする関数
+  const matchTask = useCallback((t) => {
+    if (!levelHierarchy) return { dept: t.dept, team: t.team }
+    // level_idがあれば直接マッチ
+    if (t.level_id) {
+      for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+        for (const [teamName, levelId] of Object.entries(teams)) {
+          if (Number(t.level_id) === Number(levelId)) return { dept: deptName, team: teamName }
+        }
+      }
+    }
+    // チーム名でマッチ（完全一致 → 部分一致）
+    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+      for (const teamName of Object.keys(teams)) {
+        if (t.team === teamName) return { dept: deptName, team: teamName }
+      }
+    }
+    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+      for (const teamName of Object.keys(teams)) {
+        if (t.team && teamName && (t.team.includes(teamName) || teamName.includes(t.team)))
+          return { dept: deptName, team: teamName }
+      }
+    }
+    // 部署名でマッチ
+    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+      if (t.dept === deptName || (t.dept && (t.dept.includes(deptName) || deptName.includes(t.dept)))) {
+        const firstTeam = Object.keys(teams)[0]
+        if (firstTeam) return { dept: deptName, team: firstTeam }
+      }
+    }
+    return { dept: t.dept, team: t.team }
+  }, [levelHierarchy])
+
+  const allDepts = levelHierarchy
+    ? Object.keys(levelHierarchy)
+    : [...new Set(tasks.map(t => t.dept))]
   const allOwners = [...new Set(tasks.map(t => t.owner).filter(o => o && o !== '（未定）'))]
 
   // sort_orderでソート（なければidでソート）
@@ -890,22 +948,40 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   const activeTasks = sortedTasks.filter(t => !t.is_archived)
   const archivedTasks = sortedTasks.filter(t => t.is_archived)
   const baseFiltered = (showArchived ? archivedTasks : activeTasks)
-  const filtered = baseFiltered.filter(t =>
-    (!filterDept || t.dept === filterDept) &&
-    (!filterOwner || t.owner === filterOwner || (t.support && t.support.includes(filterOwner))) &&
-    (!query || t.task.includes(query) || t.team.includes(query))
-  )
+  const filtered = baseFiltered.filter(t => {
+    const m = matchTask(t)
+    return (!filterDept || m.dept === filterDept) &&
+      (!filterOwner || t.owner === filterOwner || (t.support && t.support.includes(filterOwner))) &&
+      (!query || t.task.includes(query) || m.team.includes(query))
+  })
+
+  // levels階層ベースでグループ化
   const grouped = {}
+  if (levelHierarchy && !filterOwner && !query) {
+    // 先にlevels構造で空のグループを作成
+    Object.entries(levelHierarchy).forEach(([deptName, teams]) => {
+      if (filterDept && deptName !== filterDept) return
+      grouped[deptName] = {}
+      Object.keys(teams).forEach(teamName => { grouped[deptName][teamName] = [] })
+    })
+  }
+  // タスクをマッチしたグループに配置
   filtered.forEach(t => {
-    if (!grouped[t.dept]) grouped[t.dept] = {}
-    if (!grouped[t.dept][t.team]) grouped[t.dept][t.team] = []
-    grouped[t.dept][t.team].push(t)
+    const m = matchTask(t)
+    if (!grouped[m.dept]) grouped[m.dept] = {}
+    if (!grouped[m.dept][m.team]) grouped[m.dept][m.team] = []
+    grouped[m.dept][m.team].push(t)
   })
 
   const saveEdit = async (t) => {
     setSaving(true)
     const updated = { ...t, ...editBuf }
-    await supabase.from('org_tasks').upsert([updated])
+    const { error: upsertError } = await supabase.from('org_tasks').upsert(updated)
+    if (upsertError) {
+      alert('業務の保存に失敗しました: ' + upsertError.message)
+      setSaving(false)
+      return
+    }
     // ownerが変わった場合は引き継ぎ履歴を記録
     const prevOwner = t.owner || null
     const nextOwner = updated.owner || null
@@ -917,7 +993,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
         changed_by: currentUser || null,
         note: '',
       }
-      const { data: hist } = await supabase.from('org_task_history').insert([histRow]).select().single()
+      const { data: hist } = await supabase.from('org_task_history').insert(histRow).select().single()
       if (hist) setTaskHistory(prev => [...prev, hist])
     }
     setTasks(prev => prev.map(x => x.id === t.id ? updated : x))
@@ -925,16 +1001,34 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   }
   const deleteTask = async (t) => {
     if (!window.confirm(`「${t.task}」を削除しますか？`)) return
-    await supabase.from('org_tasks').delete().eq('id', t.id)
+    const { error } = await supabase.from('org_tasks').delete().eq('id', t.id)
+    if (error) {
+      alert('業務の削除に失敗しました: ' + error.message)
+      return
+    }
     setTasks(prev => prev.filter(x => x.id !== t.id))
   }
   const addTask = async (dept, team) => {
-    if (!newBuf.task.trim()) return
-    const maxOrder = Math.max(0, ...tasks.filter(t => t.dept === dept && t.team === team).map(t => t.sort_order ?? t.id))
-    const row = { dept, team, ...newBuf, sort_order: maxOrder + 1 }
-    const { data } = await supabase.from('org_tasks').insert([row]).select().single()
-    setTasks(prev => [...prev, data || { ...row, id: Date.now() }])
+    if (saving || !newBuf.task.trim()) return
+    setSaving(true)
+    const matchedTasks = tasks.filter(t => { const m = matchTask(t); return m.dept === dept && m.team === team })
+    const maxOrder = Math.max(0, ...matchedTasks.map(t => t.sort_order ?? t.id))
+    const levelId = levelHierarchy?.[dept]?.[team] || null
+    const row = { dept, team, ...newBuf, sort_order: maxOrder + 1, is_archived: false, ...(levelId ? { level_id: levelId } : {}) }
+    const { data, error } = await supabase.from('org_tasks').insert(row).select().single()
+    if (error) {
+      const hint = (error.code === '42P01' || error.message?.includes('relation') || error.code === 'PGRST204')
+        ? '\n\norg_tasks テーブルが未作成の可能性があります。supabase_setup.sql を Supabase SQL Editor で実行してください。'
+        : (error.code === '42703' || error.message?.includes('column'))
+        ? '\n\nカラムが不足している可能性があります。supabase_setup.sql の ALTER TABLE 文を実行してください。'
+        : ''
+      alert('業務の追加に失敗しました: ' + error.message + hint)
+      setSaving(false)
+      return
+    }
+    setTasks(prev => prev.some(t => t.id === data.id) ? prev : [...prev, data])
     setNewBuf({ task: '', owner: '', support: '' }); setAddingTeam(null)
+    setSaving(false)
   }
 
   // ドラッグ&ドロップで並び替え（同一チーム内のみ）
@@ -959,7 +1053,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
     if (!fromId || !toId || fromId === toId) return
 
     // 同チーム内のタスクだけ対象
-    const teamTasks = sortedTasks.filter(t => t.dept === dept && t.team === team)
+    const teamTasks = sortedTasks.filter(t => { const m = matchTask(t); return m.dept === dept && m.team === team })
     const fromIdx = teamTasks.findIndex(t => t.id === fromId)
     const toIdx = teamTasks.findIndex(t => t.id === toId)
     if (fromIdx === -1 || toIdx === -1) return
@@ -971,8 +1065,9 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
 
     // sort_orderを再割り当て
     const updates = reordered.map((t, i) => ({ ...t, sort_order: i + 1 }))
+    const matchedIds = new Set(teamTasks.map(t => t.id))
     setTasks(prev => {
-      const others = prev.filter(t => !(t.dept === dept && t.team === team))
+      const others = prev.filter(t => !matchedIds.has(t.id))
       return [...others, ...updates].sort((a, b) => (a.sort_order ?? a.id) - (b.sort_order ?? b.id))
     })
 
@@ -995,12 +1090,24 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
 
   const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
 
-  if (tasks.length === 0) {
+  if (orgTableError) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#c0392b', background: '#fdf0ef', border: '1px dashed #e74c3c', borderRadius: 14 }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>org_tasks テーブルの読み込みに失敗しました</div>
+        <div style={{ fontSize: 13, marginTop: 8, color: '#7f3b3b', lineHeight: 1.6 }}>
+          Supabase SQL Editor で <code>supabase_setup.sql</code> を実行してテーブルを作成してください。<br />
+          既存テーブルにカラムが不足している場合は ALTER TABLE 文のみ実行してください。
+        </div>
+      </div>
+    )
+  }
+  if (tasks.length === 0 && (!levelHierarchy || Object.keys(levelHierarchy).length === 0)) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
         <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
         <div style={{ fontSize: 15 }}>業務データがありません</div>
-        <div style={{ fontSize: 13, marginTop: 6 }}>Supabase の org_tasks テーブルにデータを追加してください</div>
+        <div style={{ fontSize: 13, marginTop: 6 }}>組織図タブでチームを追加するか、org_tasks テーブルにデータを追加してください</div>
       </div>
     )
   }
@@ -1171,7 +1278,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                             </td>
                             <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <button onClick={() => addTask(dept, team)} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>追加</button>
+                                <button onClick={() => addTask(dept, team)} disabled={saving} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? '追加中...' : '追加'}</button>
                                 <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
                               </div>
                             </td>
@@ -1445,10 +1552,10 @@ function AddMemberModal({ levels, onClose, onAdded }) {
   const save = async () => {
     if (!name.trim()) { setError('名前は必須です'); return }
     setSaving(true)
-    const { data, error: err } = await supabase.from('members').insert([{
+    const { data, error: err } = await supabase.from('members').insert({
       name: name.trim(), role: roleTitle.trim() || null, email: email.trim() || null,
       level_id: selectedIds[0] || null, level_ids: selectedIds, avatar_url: avatarUrl || null,
-    }]).select().single()
+    }).select().single()
     if (err) { setError('保存に失敗しました: ' + err.message); setSaving(false); return }
     // メールアドレスがある場合、Authアカウントも作成
     if (email.trim()) {
@@ -1664,7 +1771,7 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
       role_desc: editVer.role_desc || '', responsibility: editVer.responsibility || '',
       meetings: editVer.meetings || '', tasks: JSON.stringify(editVer.tasks || []),
     }
-    const { data } = await supabase.from('org_member_jd').upsert([payload], { onConflict: 'member_id,version_idx' }).select().single()
+    const { data } = await supabase.from('org_member_jd').upsert(payload, { onConflict: 'member_id,version_idx' }).select().single()
     // jdRowsを更新
     setJdRows(prev => {
       const existing = [...(prev[memberName] || [])]
@@ -1746,6 +1853,114 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
   const addTask = () => setEditVer(p => ({ ...p, tasks: [...p.tasks, { cat: '', task: '', status: 'new' }] }))
   const removeTask = i => setEditVer(p => ({ ...p, tasks: p.tasks.filter((_, idx) => idx !== i) }))
 
+  // ── JD PDF出力 ──────────────────────────────────
+  const exportPDF = () => {
+    const ver = versions[effectiveVerIdx]
+    if (!ver) return
+    const name = memberRow?.name || '（名前なし）'
+    const role = memberRow?.role || ''
+    const tasksList = (ver.tasks || []).filter(t => t.status !== 'del')
+    // org_tasksからこのメンバーの担当業務を取得
+    const ownerTasks = (tasks || []).filter(t => t.owner === name)
+    const supportTasks = (tasks || []).filter(t => t.support && t.support.includes(name) && t.owner !== name)
+
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><title>${name} - Job Description</title>
+<style>
+@page { size: A4; margin: 20mm 18mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; color: #1a1a2e; font-size: 11px; line-height: 1.7; }
+.header { background: ${fg}; color: #fff; padding: 24px 28px; border-radius: 10px; margin-bottom: 18px; }
+.header .name { font-size: 24px; font-weight: 800; letter-spacing: 2px; }
+.header .sub { font-size: 11px; opacity: 0.85; margin-top: 4px; }
+.badges { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.badge { font-size: 10px; padding: 3px 10px; border-radius: 5px; background: rgba(255,255,255,0.2); font-weight: 700; }
+.section { margin-bottom: 14px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }
+.section-title { font-size: 10px; font-weight: 700; color: #666; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.item { font-size: 11px; color: #333; line-height: 1.8; }
+.item li { list-style: none; padding-left: 12px; position: relative; }
+.item li::before { content: "•"; position: absolute; left: 0; color: ${fg}; font-weight: 700; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th { background: #f5f5f5; text-align: left; padding: 6px 10px; font-size: 10px; color: #666; border-bottom: 1px solid #ddd; }
+td { padding: 7px 10px; border-bottom: 1px solid #eee; color: #333; }
+.footer { margin-top: 20px; text-align: center; font-size: 9px; color: #aaa; border-top: 1px solid #eee; padding-top: 8px; }
+.ver-info { font-size: 10px; color: rgba(255,255,255,0.7); margin-top: 6px; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="header">
+  <div class="name">${name}</div>
+  <div class="sub">${role}</div>
+  <div class="badges">
+    ${ver.role ? `<span class="badge">${ver.role}</span>` : ''}
+    ${ver.emp ? `<span class="badge">${ver.emp}</span>` : ''}
+    ${ver.working ? `<span class="badge">${ver.working}</span>` : ''}
+  </div>
+  <div class="ver-info">V${effectiveVerIdx + 1}: ${ver.period || '—'}</div>
+</div>
+
+<div class="two-col">
+  <div class="section">
+    <div class="section-title">▶ 役割</div>
+    <div class="item"><ul>${(ver.role_desc || '—').split('\\n').filter(Boolean).map(l => `<li>${l}</li>`).join('')}</ul></div>
+  </div>
+  <div class="section">
+    <div class="section-title">▶ 責任範囲</div>
+    <div class="item"><ul>${(ver.responsibility || '—').split('\\n').filter(Boolean).map(l => `<li>${l}</li>`).join('')}</ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">▶ 主要定例</div>
+  <div class="item">${(ver.meetings || '—').split('\\n').filter(Boolean).map(l => `<div>${l}</div>`).join('')}</div>
+</div>
+
+${ownerTasks.length > 0 ? `
+<div class="section">
+  <div class="section-title">▶ 担当業務一覧（${ownerTasks.length}件）</div>
+  <table>
+    <thead><tr><th>チーム</th><th>業務内容</th><th>サポート</th></tr></thead>
+    <tbody>${ownerTasks.map(t => `<tr><td>${t.team || t.dept || '—'}</td><td>${t.task || ''}</td><td>${t.support || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+${supportTasks.length > 0 ? `
+<div class="section">
+  <div class="section-title">▶ サポート業務（${supportTasks.length}件）</div>
+  <table>
+    <thead><tr><th>チーム</th><th>業務内容</th><th>責任者</th></tr></thead>
+    <tbody>${supportTasks.map(t => `<tr><td>${t.team || t.dept || '—'}</td><td>${t.task || ''}</td><td>${t.owner || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+${tasksList.length > 0 ? `
+<div class="section">
+  <div class="section-title">▶ JD業務タスク（${tasksList.length}件）</div>
+  <table>
+    <thead><tr><th>カテゴリ</th><th>タスク</th><th>ステータス</th></tr></thead>
+    <tbody>${tasksList.map(t => `<tr><td>${t.cat || '—'}</td><td>${t.task || ''}</td><td>${t.status === 'new' ? '🆕 新規' : t.status === 'same' ? '継続' : t.status || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+${versions.length > 1 ? `
+<div class="section">
+  <div class="section-title">▶ 役職推移（${versions.length}バージョン）</div>
+  <table>
+    <thead><tr><th>Ver</th><th>期間</th><th>役職</th><th>雇用形態</th><th>稼働</th></tr></thead>
+    <tbody>${versions.map((v, i) => `<tr style="${i === effectiveVerIdx ? 'background:#f0faf5;font-weight:700' : ''}"><td>V${i + 1}</td><td>${v.period || '—'}</td><td>${v.role || '—'}</td><td>${v.emp || '—'}</td><td>${v.working || '—'}</td></tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+<div class="footer">Job Description — ${name} — 出力日: ${new Date().toLocaleDateString('ja-JP')}</div>
+</body></html>`
+
+    const w = window.open('', '_blank')
+    if (!w) { alert('ポップアップがブロックされました。ブラウザの設定を確認してください。'); return }
+    w.document.write(html)
+    w.document.close()
+    w.onload = () => { w.print() }
+  }
+
   const box = { background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 10, padding: 16 }
   const ta = { width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 6, padding: '8px 10px', color: T().inputText, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }
 
@@ -1762,6 +1977,11 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
         {isAdmin && !editing && versions.length === 0 && (
           <button onClick={startCreateJD} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
             ＋ JDを作成する
+          </button>
+        )}
+        {!editing && versions.length > 0 && (
+          <button onClick={exportPDF} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
+            📄 PDF出力
           </button>
         )}
         {isAdmin && !editing && versions.length > 0 && (
@@ -2059,12 +2279,53 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
             const memberName = memberRow?.name
             const ownerTasks = (tasks || []).filter(t => t.owner === memberName)
             const supportTasks = (tasks || []).filter(t => t.support && t.support.includes(memberName) && t.owner !== memberName)
-            // チームごとにグループ化
+            // levels階層を使ってタスクをマッチ（TaskListのmatchTaskと同じロジック）
+            const matchTaskLocal = (t) => {
+              if (!levels || levels.length === 0) return { dept: t.dept, team: t.team || t.dept || '—' }
+              const roots = levels.filter(l => !l.parent_id)
+              const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
+              const hier = {}
+              roots.forEach(root => {
+                getChildren(root.id).forEach(dept => {
+                  hier[dept.name] = {}
+                  const teams = getChildren(dept.id)
+                  if (teams.length === 0) { hier[dept.name][dept.name] = dept.id }
+                  else { teams.forEach(team => { hier[dept.name][team.name] = team.id }) }
+                })
+              })
+              if (t.level_id) {
+                for (const [deptName, teams] of Object.entries(hier)) {
+                  for (const [teamName, levelId] of Object.entries(teams)) {
+                    if (Number(t.level_id) === Number(levelId)) return { dept: deptName, team: teamName }
+                  }
+                }
+              }
+              for (const [deptName, teams] of Object.entries(hier)) {
+                for (const teamName of Object.keys(teams)) {
+                  if (t.team === teamName) return { dept: deptName, team: teamName }
+                }
+              }
+              for (const [deptName, teams] of Object.entries(hier)) {
+                for (const teamName of Object.keys(teams)) {
+                  if (t.team && teamName && (t.team.includes(teamName) || teamName.includes(t.team)))
+                    return { dept: deptName, team: teamName }
+                }
+              }
+              for (const [deptName, teams] of Object.entries(hier)) {
+                if (t.dept === deptName || (t.dept && (t.dept.includes(deptName) || deptName.includes(t.dept)))) {
+                  const firstTeam = Object.keys(teams)[0]
+                  if (firstTeam) return { dept: deptName, team: firstTeam }
+                }
+              }
+              return { dept: t.dept, team: t.team || t.dept || '—' }
+            }
+            // チームごとにグループ化（levels階層にマッチ）
             const grouped = {}
             ownerTasks.forEach(t => {
-              const key = t.team || t.dept || '—'
-              if (!grouped[key]) grouped[key] = []
-              grouped[key].push(t)
+              const m = matchTaskLocal(t)
+              const key = m.team
+              if (!grouped[key]) grouped[key] = { tasks: [], dept: m.dept }
+              grouped[key].tasks.push(t)
             })
             return (
               <div style={{ ...box, marginBottom: 16 }}>
@@ -2080,8 +2341,9 @@ function MemberDetail({ memberRow, jdBase, jdRows, setJdRows, verIdx, setVerIdx,
                     業務一覧タブでこのメンバーを責任者に設定すると、ここに反映されます
                   </div>
                 ) : (
-                  Object.entries(grouped).map(([team, teamTasks]) => {
-                    const color = getDeptColor(teamTasks[0]?.dept || '')
+                  Object.entries(grouped).map(([team, group]) => {
+                    const teamTasks = group.tasks
+                    const color = getDeptColor(group.dept || '')
                     return (
                       <div key={team} style={{ marginBottom: 14 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2293,7 +2555,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
+  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, orgTableError, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -2358,7 +2620,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
         )}
         {activeTab === 'tasks' && (
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
-            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} />
+            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} orgTableError={orgTableError} />
         )}
         {activeTab === 'members' && (
           <MemberJDTab
