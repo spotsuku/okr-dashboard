@@ -9,6 +9,7 @@ import MyOKRPageNew from './MyOKRPage'
 import BulkRegisterPage from './BulkRegisterPage'
 import CompanySummaryPage from './CompanySummaryPage'
 import OrgPage from './OrgPage'
+import MilestonePage from './MilestonePage'
 import OwnerOKRView from './OwnerOKRView'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -1355,6 +1356,7 @@ export default function Dashboard({ user, onSignOut }) {
               {key:'weekly',     label:'週次MTG'},
               {key:'bulk',       label:'一括登録'},
               {key:'csv',        label:'CSV登録'},
+              {key:'milestone',  label:'マイルストーン'},
               {key:'orgjd',      label:'組織'},
             ].map(pg => (
               <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
@@ -1431,6 +1433,11 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'summary' && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'milestone' && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} />
+        </div>
+      )}
       {activePage === 'orgjd' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <OrgPage themeKey={themeKey} user={user} />
@@ -1448,6 +1455,7 @@ export default function Dashboard({ user, onSignOut }) {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <AnnualView
             levels={levels}
+            members={members}
             refreshKey={annualRefreshKey}
             fiscalYear={fiscalYear}
             themeKey={themeKey}

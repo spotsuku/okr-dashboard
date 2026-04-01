@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
+import { buildQuarterMap } from '../lib/objectiveMatching'
 
 const DARK_T = {
   bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -864,13 +865,16 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   const selectedObj    = activeObjId ? objectives.find(o => o.id===Number(activeObjId)) : null
   const [rightPeriod, setRightPeriod] = useState('annual')
-  // 右パネル：期間タブに応じたOKRを表示
-  const rightPeriodKey = fiscalYear === '2026' ? rightPeriod : `${fiscalYear}_${rightPeriod}`
+  // 右パネル：期間タブに応じたOKRを表示（buildQuarterMapで通期→四半期の正確なマッピングを使用）
+  const annualObjsForMap = useMemo(() =>
+    objectives.filter(o => o.period === annualPeriodKey), [objectives, annualPeriodKey])
+  const quarterObjsForMap = useMemo(() =>
+    objectives.filter(o => ['q1','q2','q3','q4'].some(q => o.period?.endsWith(q))), [objectives])
+  const quarterMap = useMemo(() =>
+    buildQuarterMap(annualObjsForMap, quarterObjsForMap), [annualObjsForMap, quarterObjsForMap])
   const rightObj = !selectedObj ? null
     : rightPeriod === 'annual' ? selectedObj
-    : objectives.find(o => Number(o.parent_objective_id) === Number(selectedObj.id) && o.period === rightPeriodKey)
-      || objectives.find(o => Number(o.level_id) === Number(selectedObj.level_id) && o.period === rightPeriodKey)
-      || null
+    : (quarterMap[selectedObj.id]?.[rightPeriod] || [])[0] || null
   const selectedObjKRs = rightObj ? keyResults.filter(kr => Number(kr.objective_id)===Number(rightObj.id)) : []
   const depth          = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
   const objColor       = LAYER_COLORS[depth] || '#a0a8be'
