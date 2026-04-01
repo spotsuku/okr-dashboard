@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { buildQuarterMap } from '../lib/objectiveMatching'
 
 // ─── themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -71,6 +72,26 @@ function getAbsoluteDepth(levelId, levels) {
   return depth
 }
 
+// ─── Avatar helpers ─────────────────────────────────────────────────────────
+const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
+function avatarColor(name) {
+  if (!name) return '#606880'
+  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+function Avatar({ name, avatarUrl, size = 20 }) {
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt={name} style={{ width:size, height:size, borderRadius:'50%', objectFit:'cover', flexShrink:0, border:`1.5px solid ${avatarColor(name)}60` }} />
+  }
+  if (!name) return null
+  const c = avatarColor(name)
+  return (
+    <div style={{ width:size, height:size, borderRadius:'50%', background:`${c}25`, border:`1.5px solid ${c}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:size*0.36, fontWeight:700, color:c, flexShrink:0 }}>
+      {name.slice(0,2)}
+    </div>
+  )
+}
+
 const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
 const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
@@ -92,7 +113,7 @@ function getDescendantIds(levelId, levels) {
 }
 
 // ─── AnnualView ─────────────────────────────────────────────────────────────
-export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey, fiscalYear = '2026', themeKey = 'dark', activeLevelId }) {
+export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey, fiscalYear = '2026', themeKey = 'dark', activeLevelId, members = [] }) {
   _theme = THEMES[themeKey] || THEMES.dark
 
   const [annualObjs, setAnnualObjs] = useState([])
@@ -151,23 +172,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     })
     const fullQObjs = qObjs.map(o => ({ ...o, key_results: qKRMap[o.id] || [] }))
 
-    const qMap = {}
-    fullAnnObjs.forEach(ann => { qMap[ann.id] = { q1: [], q2: [], q3: [], q4: [] } })
-
-    fullQObjs.forEach(qObj => {
-      const baseQ = qObj.period.includes('_') ? qObj.period.split('_').pop() : qObj.period
-      if (qObj.parent_objective_id && qMap[qObj.parent_objective_id]) {
-        // parent_objective_idが通期OKRを指している場合
-        qMap[qObj.parent_objective_id][baseQ]?.push(qObj)
-      } else {
-        // parent_objective_idがないか、通期OKR以外を指している場合 → level_idで紐付け
-        // 同じlevel_idの通期OKRが複数ある場合は最初のものに紐付ける
-        const matchingAnns = fullAnnObjs.filter(a => Number(a.level_id) === Number(qObj.level_id))
-        if (matchingAnns.length > 0) {
-          qMap[matchingAnns[0].id][baseQ]?.push(qObj)
-        }
-      }
-    })
+    const qMap = buildQuarterMap(fullAnnObjs, fullQObjs)
 
     setQuarterMap(qMap)
     setLoading(false)
@@ -234,7 +239,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                   {r && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${r.color}18`, color: r.color, fontWeight: 700 }}>{r.label}</span>}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: T().textSub, lineHeight: 1.4, marginBottom: ann.owner ? 6 : 10 }}>{ann.title}</div>
-                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8 }}>担当：{ann.owner}</div>}
+                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={18} />
+                  <span>担当：{ann.owner}</span>
+                </div>}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
@@ -289,7 +297,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                                 <div style={{ flex: 1 }}>
                                   <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${qr.color}18`, color: qr.color, fontWeight: 700, display: 'inline-block', marginBottom: 6 }}>{qr.label}</span>
                                   <div style={{ fontSize: 13, fontWeight: 700, color: T().textSub, lineHeight: 1.4 }}>{qObj.title}</div>
-                                  {qObj.owner && <div style={{ fontSize: 11, color: T().textMuted, marginTop: 4 }}>担当：{qObj.owner}</div>}
+                                  {qObj.owner && <div style={{ fontSize: 11, color: T().textMuted, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <Avatar name={qObj.owner} avatarUrl={members.find(m=>m.name===qObj.owner)?.avatar_url} size={16} />
+                                    <span>担当：{qObj.owner}</span>
+                                  </div>}
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
                                   <div style={{ fontSize: 24, fontWeight: 800, color: qr.color }}>{qProg}%</div>
@@ -310,7 +321,9 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                                     const kr_r = getRating(kp)
                                     return (
                                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, background: T().bgKr, borderRadius: 7, padding: '7px 10px' }}>
+                                        <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
                                         <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>{kr.title}</span>
+                                        {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
                                         <div style={{ width: 80, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
                                           <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
                                         </div>
@@ -332,7 +345,9 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                             const kr_r = getRating(kp)
                             return (
                               <div key={i} style={{ background: T().bgKrOuter, border: `1px solid ${T().borderKr}`, borderRadius: 8, padding: '10px 12px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
                                 <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>{kr.title}</span>
+                                {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
                                 <div style={{ width: 100, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
                                   <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
                                 </div>
