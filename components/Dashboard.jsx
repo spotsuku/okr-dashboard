@@ -1435,7 +1435,15 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'summary' && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
       {activePage === 'milestone' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-          <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} />
+          <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} onLevelsChanged={async () => {
+            const { data: lvls } = await supabase.from('levels').select('*').order('id')
+            const validLvls = (lvls || []).filter(l =>
+              fiscalYear === '2026'
+                ? (!l.fiscal_year || l.fiscal_year === '2026')
+                : l.fiscal_year === fiscalYear
+            )
+            setLevels(validLvls.length ? validLvls : [])
+          }} />
         </div>
       )}
       {activePage === 'orgjd' && (
