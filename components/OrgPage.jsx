@@ -247,9 +247,18 @@ function useOrgData(fiscalYear) {
     const orgErrors = results.slice(3).filter(r => r.error)
     if (orgErrors.length > 0) { setOrgTableError(true) } else { setOrgTableError(false) }
 
-    const validLvls = (lvls || []).filter(l =>
-      fiscalYear === '2026' ? (!l.fiscal_year || l.fiscal_year === '2026') : l.fiscal_year === fiscalYear
-    )
+    // rootノード（parent_id=NULL）が複数ある場合、最新（最大id）のroot配下だけを使う
+    const allLvls = lvls || []
+    const roots = allLvls.filter(l => !l.parent_id)
+    const latestRoot = roots.reduce((a, b) => (a.id > b.id ? a : b), roots[0] || { id: 0 })
+    // latestRootの配下を全て再帰的に収集
+    const collectUnder = (parentId) => {
+      const children = allLvls.filter(l => Number(l.parent_id) === Number(parentId))
+      return [allLvls.find(l => l.id === parentId), ...children.flatMap(c => collectUnder(c.id))].filter(Boolean)
+    }
+    const validLvls = latestRoot.id
+      ? collectUnder(latestRoot.id)
+      : allLvls.filter(l => fiscalYear === '2026' ? (!l.fiscal_year || l.fiscal_year === '2026') : l.fiscal_year === fiscalYear)
     setLevels(validLvls)
     const metaMap = {}
     ;(meta || []).forEach(m => { metaMap[m.level_id] = m })
