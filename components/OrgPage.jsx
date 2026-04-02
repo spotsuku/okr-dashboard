@@ -693,236 +693,656 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
 // ══════════════════════════════════════════════════
 // タブ3: 業務マニュアル（ManualTab）
 // ══════════════════════════════════════════════════
-function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, currentUser }) {
-  const [filterDept, setFilterDept] = useState('')
-  const [filterTask, setFilterTask] = useState(null)
-  const [query, setQuery] = useState('')
-  const [editingId, setEditingId] = useState(null)
-  const [editBuf, setEditBuf] = useState({})
-  const [addingTaskId, setAddingTaskId] = useState(null)
-  const [newBuf, setNewBuf] = useState({ title: '', content: '', category: '' })
-  const [saving, setSaving] = useState(false)
-  const [expandedManual, setExpandedManual] = useState(null)
+function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, currentUser, teamMeta }) {
+  // ── state ─────────────────────────────────────────────────
+  const [selectedId,  setSelectedId]  = useState(null)
+  const [phases,      setPhases]      = useState([])   // org_manual_phases rows
+  const [steps,       setSteps]       = useState({})   // phaseId → steps[]
+  const [loadingDB,   setLoadingDB]   = useState(false)
+  const [dbError,     setDbError]     = useState(null)
+  const [editMode,    setEditMode]    = useState(false)
+  const [dirty,       setDirty]       = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const [savedFlash,  setSavedFlash]  = useState(false)
+  const [expandedStep,setExpandedStep]= useState(null)  // "pi-si"
+  const [query,       setQuery]       = useState('')
 
-  const levelHierarchy = useMemo(() => {
-    if (!levels || levels.length === 0) return null
-    const roots = levels.filter(l => !l.parent_id)
-    const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
-    const result = {}
+  // ── team hierarchy ─────────────────────────────────────────
+  const roots = levels.filter(l => !l.parent_id)
+  const getKids = id => levels.filter(l => Number(l.parent_id) === Number(id))
+
+  const allTeams = useMemo(() => {
+    const list = []
     roots.forEach(root => {
-      getChildren(root.id).forEach(dept => {
-        result[dept.name] = {}
-        const teams = getChildren(dept.id)
-        if (teams.length === 0) { result[dept.name][dept.name] = dept.id }
-        else { teams.forEach(team => { result[dept.name][team.name] = team.id }) }
+      getKids(root.id).forEach(dept => {
+        const teams = getKids(dept.id)
+        if (teams.length > 0) teams.forEach(t => list.push({ dept, team: t }))
+        else list.push({ dept, team: dept })
       })
     })
-    return result
+    return list
   }, [levels])
 
-  const matchTask = useCallback((t) => {
-    if (!levelHierarchy) return { dept: t.dept, team: t.team }
-    if (t.level_id) {
-      for (const [deptName, teams] of Object.entries(levelHierarchy)) {
-        for (const [teamName, levelId] of Object.entries(teams)) {
-          if (Number(t.level_id) === Number(levelId)) return { dept: deptName, team: teamName }
+  const filteredTeams = useMemo(() => {
+    if (!query) return allTeams
+    return allTeams.filter(({ dept, team }) =>
+      dept.name.includes(query) || team.name.includes(query)
+    )
+  }, [allTeams, query])
+
+  const groupedTeams = useMemo(() => {
+    const g = {}
+    filteredTeams.forEach(({ dept, team }) => {
+      if (!g[dept.id]) g[dept.id] = { dept, teams: [] }
+      g[dept.id].teams.push(team)
+    })
+    return Object.values(g)
+  }, [filteredTeams])
+
+  const selLevel = selectedId ? levels.find(l => Number(l.id) === Number(selectedId)) : null
+  const selItem  = selectedId ? allTeams.find(i => Number(i.team.id) === Number(selectedId)) : null
+  const deptAccent = selItem ? getDeptColor(selItem.dept.name) : T().accent
+
+  // ── DB load ────────────────────────────────────────────────
+  const loadManual = useCallback(async (levelId) => {
+    setLoadingDB(true); setDbError(null)
+    try {
+      const { data: phData, error: pe } = await supabase
+        .from('org_manual_phases')
+        .select('*')
+        .eq('level_id', levelId)
+        .order('sort_order')
+      if (pe) throw new Error(pe.message)
+
+      const phRows = phData || []
+      setPhases(phRows)
+
+      if (phRows.length > 0) {
+        const { data: stData, error: se } = await supabase
+          .from('org_manual_steps')
+          .select('*')
+          .in('phase_id', phRows.map(p => p.id))
+          .order('sort_order')
+        if (se) throw new Error(se.message)
+        const map = {}
+        phRows.forEach(p => { map[p.id] = [] })
+        ;(stData || []).forEach(s => { if (map[s.phase_id]) map[s.phase_id].push(s) })
+        setSteps(map)
+      } else {
+        setSteps({})
+      }
+    } catch(e) { setDbError(e.message) }
+    setLoadingDB(false)
+  }, [])
+
+  useEffect(() => {
+    if (selectedId) { setEditMode(false); setDirty(false); setExpandedStep(null); loadManual(selectedId) }
+  }, [selectedId])
+
+  // ── concept steps (from phase titles) ──────────────────────
+  const conceptSteps = useMemo(() => phases.flatMap(ph =>
+    (steps[ph.id] || []).map(s => ({ title: s.title, badgeClass: ph.badge_class }))
+  ), [phases, steps])
+
+  // ── save all ───────────────────────────────────────────────
+  const saveAll = async () => {
+    if (!selectedId) return
+    setSaving(true); setDbError(null)
+    try {
+      // delete old
+      const oldIds = phases.map(p => p.id)
+      if (oldIds.length > 0) {
+        await supabase.from('org_manual_phases').delete().in('id', oldIds)
+      }
+      // re-insert phases + steps
+      for (let pi = 0; pi < phases.length; pi++) {
+        const ph = phases[pi]
+        const { data: ins, error: pe } = await supabase
+          .from('org_manual_phases')
+          .insert({ level_id: selectedId, sort_order: pi, badge: ph.badge, badge_class: ph.badge_class, title: ph.title })
+          .select('id').single()
+        if (pe) throw new Error(pe.message)
+        const phSteps = steps[ph.id] || []
+        if (phSteps.length > 0) {
+          const rows = phSteps.map((s, si) => ({
+            phase_id: ins.id, sort_order: si,
+            title: s.title||'', owner: s.owner||'', tool: s.tool||'',
+            urls: s.urls||[], condition: s.condition||'', caution: s.caution||''
+          }))
+          const { error: se } = await supabase.from('org_manual_steps').insert(rows)
+          if (se) throw new Error(se.message)
         }
       }
-    }
-    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
-      for (const teamName of Object.keys(teams)) {
-        if (t.team === teamName) return { dept: deptName, team: teamName }
-      }
-    }
-    return { dept: t.dept, team: t.team }
-  }, [levelHierarchy])
+      await loadManual(selectedId)
+      setDirty(false); setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 2500)
+    } catch(e) { setDbError(e.message) }
+    setSaving(false)
+  }
 
-  const allDepts = levelHierarchy ? Object.keys(levelHierarchy) : [...new Set(tasks.map(t => t.dept))]
-  const activeTasks = tasks.filter(t => !t.is_archived)
-  const manualCountByTask = useMemo(() => {
-    const counts = {}
-    manuals.forEach(m => { counts[m.task_id] = (counts[m.task_id] || 0) + 1 })
-    return counts
-  }, [manuals])
+  // ── mutations ──────────────────────────────────────────────
+  const mut = (fn) => { fn(); setDirty(true) }
 
-  const filteredTasks = activeTasks.filter(t => {
-    const m = matchTask(t)
-    return (!filterDept || m.dept === filterDept) && (!query || t.task.includes(query) || m.team.includes(query) || (t.owner && t.owner.includes(query)))
-  })
+  const updatePhase = (pi, field, val) =>
+    mut(() => setPhases(prev => prev.map((p, i) => i === pi ? { ...p, [field]: val } : p)))
 
-  const grouped = {}
-  if (levelHierarchy && !query) {
-    Object.entries(levelHierarchy).forEach(([deptName, teams]) => {
-      if (filterDept && deptName !== filterDept) return
-      grouped[deptName] = {}
-      Object.keys(teams).forEach(teamName => { grouped[deptName][teamName] = [] })
+  const addPhase = () =>
+    mut(() => setPhases(prev => [...prev, { id: `new_${Date.now()}`, level_id: selectedId, sort_order: prev.length, badge: '新フェーズ', badge_class: 'operate', title: 'フェーズ名を入力' }]))
+
+  const deletePhase = (pi) => {
+    if (!confirm(`「${phases[pi].badge}」を削除しますか？`)) return
+    const pid = phases[pi].id
+    mut(() => {
+      setPhases(prev => prev.filter((_, i) => i !== pi))
+      setSteps(prev => { const n = {...prev}; delete n[pid]; return n })
     })
   }
-  filteredTasks.forEach(t => {
-    const m = matchTask(t)
-    if (!grouped[m.dept]) grouped[m.dept] = {}
-    if (!grouped[m.dept][m.team]) grouped[m.dept][m.team] = []
-    grouped[m.dept][m.team].push(t)
-  })
 
-  const taskManuals = filterTask ? manuals.filter(m => m.task_id === filterTask.id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) : []
-  const CATEGORIES = ['手順書', 'ルール', 'テンプレート', 'FAQ', 'その他']
+  const updateStep = (phaseId, si, field, val) =>
+    mut(() => setSteps(prev => ({
+      ...prev,
+      [phaseId]: (prev[phaseId]||[]).map((s, i) => i === si ? {...s, [field]: val} : s)
+    })))
 
-  const saveManual = async () => {
-    if (!editingId) return
-    setSaving(true)
-    const { error } = await supabase.from('org_task_manuals').update({ ...editBuf, updated_by: currentUser || '', updated_at: new Date().toISOString() }).eq('id', editingId)
-    if (error) { alert('保存に失敗しました: ' + error.message); setSaving(false); return }
-    setManuals(prev => prev.map(m => m.id === editingId ? { ...m, ...editBuf, updated_by: currentUser || '', updated_at: new Date().toISOString() } : m))
-    setEditingId(null); setEditBuf({}); setSaving(false)
+  const addStep = (phaseId) =>
+    mut(() => setSteps(prev => ({
+      ...prev,
+      [phaseId]: [...(prev[phaseId]||[]), { id: `ns_${Date.now()}`, phase_id: phaseId, sort_order: (prev[phaseId]||[]).length, title: '新しいステップ', owner: '', tool: '', urls: [], condition: '', caution: '' }]
+    })))
+
+  const deleteStep = (phaseId, si) => {
+    const title = (steps[phaseId]||[])[si]?.title || ''
+    if (!confirm(`「${title}」を削除しますか？`)) return
+    mut(() => setSteps(prev => ({
+      ...prev,
+      [phaseId]: (prev[phaseId]||[]).filter((_, i) => i !== si)
+    })))
   }
 
-  const addManual = async () => {
-    if (!addingTaskId || !newBuf.title.trim()) return
-    setSaving(true)
-    const maxOrder = Math.max(0, ...taskManuals.map(m => m.sort_order ?? 0))
-    const row = { task_id: addingTaskId, ...newBuf, sort_order: maxOrder + 1, updated_by: currentUser || '' }
-    const { data, error } = await supabase.from('org_task_manuals').insert(row).select().single()
-    if (error) { alert('追加に失敗しました: ' + error.message); setSaving(false); return }
-    setManuals(prev => [...prev, data])
-    setNewBuf({ title: '', content: '', category: '' }); setAddingTaskId(null); setSaving(false)
+  const updateUrl = (phaseId, si, ui, field, val) =>
+    mut(() => {
+      const phSteps = [...(steps[phaseId]||[])]
+      const s = {...phSteps[si]}; const urls = [...(s.urls||[])]
+      urls[ui] = {...urls[ui], [field]: val}
+      s.urls = urls; phSteps[si] = s
+      setSteps(prev => ({...prev, [phaseId]: phSteps}))
+    })
+
+  const addUrl = (phaseId, si) =>
+    mut(() => {
+      const phSteps = [...(steps[phaseId]||[])]
+      const s = {...phSteps[si]}
+      s.urls = [...(s.urls||[]), {label:'', href:''}]
+      phSteps[si] = s
+      setSteps(prev => ({...prev, [phaseId]: phSteps}))
+    })
+
+  const deleteUrl = (phaseId, si, ui) =>
+    mut(() => {
+      const phSteps = [...(steps[phaseId]||[])]
+      const s = {...phSteps[si]}
+      s.urls = (s.urls||[]).filter((_,i) => i !== ui)
+      phSteps[si] = s
+      setSteps(prev => ({...prev, [phaseId]: phSteps}))
+    })
+
+  // ── styles ─────────────────────────────────────────────────
+  const S = {
+    // sidebar
+    sidebar: {
+      width: 220, flexShrink: 0, background: '#17150E',
+      borderRight: `1px solid rgba(255,255,255,0.08)`,
+      overflowY: 'auto', display: 'flex', flexDirection: 'column',
+    },
+    searchWrap: { padding: '12px 12px 8px' },
+    searchInput: {
+      width: '100%', boxSizing: 'border-box',
+      background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
+      borderRadius: 7, padding: '6px 10px 6px 28px', color: '#fff',
+      fontSize: 11, outline: 'none', fontFamily: 'inherit',
+    },
+    deptLabel: (color) => ({
+      display: 'flex', alignItems: 'center', gap: 7,
+      padding: '8px 14px 4px', fontSize: 10, fontWeight: 700,
+      letterSpacing: '0.1em', textTransform: 'uppercase', color,
+    }),
+    teamLink: (active) => ({
+      display: 'block', padding: '7px 14px 7px 26px',
+      fontSize: 12, cursor: 'pointer',
+      color: active ? '#fff' : 'rgba(255,255,255,0.45)',
+      fontWeight: active ? 700 : 400,
+      background: active ? 'rgba(255,255,255,0.07)' : 'transparent',
+      borderLeft: `3px solid ${active ? '#B89240' : 'transparent'}`,
+      transition: 'all 0.15s', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+    }),
+    // main
+    main: { flex: 1, overflowY: 'auto', background: T().bg },
+    wrap: { maxWidth: 820, margin: '0 auto', padding: '32px 28px 80px' },
+    // hero
+    hero: (accent, accentBg) => ({
+      borderLeft: `5px solid ${accent}`,
+      background: accentBg, borderRadius: 12,
+      padding: '24px 28px', marginBottom: 28,
+    }),
+    heroTag: (color) => ({
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+      textTransform: 'uppercase', color, marginBottom: 6,
+    }),
+    heroTitle: { fontFamily: 'inherit', fontSize: 22, fontWeight: 800, marginBottom: 8, color: T().text },
+    heroDesc: { fontSize: 13, color: T().textSub, lineHeight: 1.8 },
+    // section label
+    secLabel: {
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+      textTransform: 'uppercase', color: T().textMuted,
+      marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10,
+    },
+    secLabelLine: { flex: 1, height: 1, background: T().border },
+    // concept flow
+    conceptFlow: {
+      background: T().bgCard, border: `1px solid ${T().border}`,
+      borderRadius: 12, padding: '18px 22px', marginBottom: 28, overflowX: 'auto',
+    },
+    conceptRow: { display: 'flex', alignItems: 'center', minWidth: 'max-content' },
+    conceptStep: { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: 92, padding: '4px 2px' },
+    conceptNum: (color) => ({ width: 28, height: 28, borderRadius: '50%', background: color, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6, flexShrink: 0 }),
+    conceptName: { fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: T().textSub },
+    conceptArrow: { fontSize: 15, color: T().textFaint, padding: '0 2px', paddingBottom: 16 },
+    // phase
+    phaseBlock: { marginBottom: 32 },
+    phaseHeader: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' },
+    badge: (cls) => {
+      const isOnboard = cls === 'onboard'
+      return {
+        fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+        padding: '4px 13px', borderRadius: 20, whiteSpace: 'nowrap',
+        background: isOnboard ? '#EAF3EF' : '#FBF0E6',
+        color: isOnboard ? '#3D7A6A' : '#B86B30',
+      }
+    },
+    phaseTitle: { fontSize: 16, fontWeight: 700, color: T().text },
+    // step card
+    stepCard: (expanded) => ({
+      background: T().bgCard, border: `1px solid ${expanded ? deptAccent + '40' : T().border}`,
+      borderRadius: 10, marginBottom: 8, overflow: 'hidden',
+      boxShadow: expanded ? '0 4px 14px rgba(0,0,0,0.07)' : 'none',
+      transition: 'border-color 0.2s, box-shadow 0.2s', position: 'relative',
+    }),
+    stepHead: { display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer', userSelect: 'none' },
+    stepNum: (accent) => ({ width: 24, height: 24, borderRadius: 7, background: accent, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }),
+    stepTitle: { fontSize: 13, fontWeight: 700, color: T().text, flex: 1 },
+    stepArrow: (open) => ({ fontSize: 10, color: T().textFaint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }),
+    // detail
+    stepDetail: { padding: '0 16px 16px 52px', borderTop: `1px solid ${T().border}`, paddingTop: 14 },
+    detailGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 11, marginBottom: 12 },
+    detailLabel: { fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T().textMuted, marginBottom: 4 },
+    detailValue: { fontSize: 12, color: T().text, background: T().bgCard2, borderRadius: 6, padding: '6px 9px', minHeight: 30 },
+    conditionBox: { background: '#EAF3EF', border: '1px solid #3D7A6A', borderRadius: 8, padding: '9px 12px', marginBottom: 8 },
+    conditionLabel: { fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3D7A6A', marginBottom: 3 },
+    cautionBox: { background: '#FFF8F0', border: '1px solid #E8C49A', borderRadius: 8, padding: '9px 12px' },
+    cautionLabel: { fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B86B30', marginBottom: 3 },
+    // url chip
+    urlChip: { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '3px 9px', fontSize: 11, color: '#2563EB', textDecoration: 'none', fontWeight: 500 },
+    // edit inline input
+    editInp: (multiline) => ({
+      width: '100%', boxSizing: 'border-box',
+      background: T().bgInput, border: `1px solid ${T().editRing}55`,
+      borderRadius: 5, padding: '5px 8px', color: T().text,
+      fontSize: 12, outline: 'none', fontFamily: 'inherit',
+      resize: multiline ? 'vertical' : 'none',
+      ...(multiline ? { minHeight: 50, lineHeight: 1.6 } : {})
+    }),
+    editBadgeSel: { background: T().bgInput, border: `1px solid ${T().borderMid}`, borderRadius: 5, padding: '4px 7px', color: T().text, fontSize: 11, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' },
+    addDashedBtn: { width: '100%', padding: '8px', marginTop: 4, background: 'none', border: `1.5px dashed ${T().border}`, borderRadius: 9, cursor: 'pointer', color: T().textMuted, fontSize: 12, fontFamily: 'inherit', transition: '0.2s', display: 'block' },
+    delBtn: { padding: '3px 8px', borderRadius: 5, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' },
   }
 
-  const deleteManual = async (id) => {
-    if (!window.confirm('このマニュアルを削除しますか？')) return
-    const { error } = await supabase.from('org_task_manuals').delete().eq('id', id)
-    if (error) { alert('削除に失敗しました: ' + error.message); return }
-    setManuals(prev => prev.filter(m => m.id !== id))
-    if (expandedManual === id) setExpandedManual(null)
+  // ── empty state ────────────────────────────────────────────
+  const renderEmpty = () => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12, color: T().textFaint, padding: 40 }}>
+      <div style={{ fontSize: 48 }}>📖</div>
+      <div style={{ fontSize: 15, color: T().textMuted }}>左のチームを選んでください</div>
+      <div style={{ fontSize: 12 }}>チームごとの業務フロー・マニュアルが確認できます</div>
+    </div>
+  )
+
+  // ── step card renderer ─────────────────────────────────────
+  const renderStepCard = (ph, pi, step, si) => {
+    const key = `${pi}-${si}`
+    const expanded = expandedStep === key
+    const phaseAccent = ph.badge_class === 'onboard' ? '#3D7A6A' : deptAccent
+
+    return (
+      <div key={si} style={S.stepCard(expanded)}>
+        {/* header */}
+        <div style={S.stepHead} onClick={() => setExpandedStep(expanded ? null : key)}>
+          <div style={S.stepNum(phaseAccent)}>{si + 1}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {editMode
+              ? <input value={step.title} onChange={e => updateStep(ph.id, si, 'title', e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  style={{...S.editInp(false), fontSize: 13, fontWeight: 700}} />
+              : <span style={S.stepTitle}>{step.title || '（タイトル未入力）'}</span>
+            }
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {!expanded && (step.urls||[]).filter(u=>u.href).length > 0 && (
+              <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: '#EFF6FF', color: '#2563EB', fontWeight: 700, border: '1px solid #BFDBFE' }}>🔗{(step.urls||[]).filter(u=>u.href).length}</span>
+            )}
+            {editMode && (
+              <button onClick={e => { e.stopPropagation(); deleteStep(ph.id, si) }}
+                style={{ ...S.delBtn, fontSize: 9 }}>✕</button>
+            )}
+            <span style={S.stepArrow(expanded)}>▼</span>
+          </div>
+        </div>
+
+        {/* detail */}
+        {expanded && (
+          <div style={S.stepDetail}>
+            <div style={S.detailGrid}>
+              {/* 担当者 */}
+              <div>
+                <div style={S.detailLabel}>担当者</div>
+                {editMode
+                  ? <input value={step.owner} onChange={e => updateStep(ph.id, si, 'owner', e.target.value)} style={S.editInp(false)} />
+                  : <div style={S.detailValue}>{step.owner || <span style={{color:T().textFaint,fontStyle:'italic'}}>未設定</span>}</div>
+                }
+              </div>
+              {/* ツール + URL */}
+              <div>
+                <div style={S.detailLabel}>使用ツール・場所</div>
+                {editMode
+                  ? <input value={step.tool} onChange={e => updateStep(ph.id, si, 'tool', e.target.value)} style={S.editInp(false)} />
+                  : <div style={S.detailValue}>{step.tool || <span style={{color:T().textFaint,fontStyle:'italic'}}>未設定</span>}</div>
+                }
+                {/* URL chips */}
+                {!editMode && (step.urls||[]).filter(u=>u.href).length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                    {(step.urls||[]).filter(u=>u.href).map((u, ui) => (
+                      <a key={ui} href={u.href} target="_blank" rel="noopener noreferrer" style={S.urlChip} onClick={e=>e.stopPropagation()}>
+                        <span style={{fontSize:9}}>🔗</span>
+                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:220}}>{u.label||u.href}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {/* URL edit */}
+                {editMode && (
+                  <div style={{ marginTop: 6 }}>
+                    {(step.urls||[]).map((u, ui) => (
+                      <div key={ui} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 7, padding: '5px 8px', marginTop: 4 }}>
+                        <input type="text" value={u.label} placeholder="表示名" onChange={e => updateUrl(ph.id, si, ui, 'label', e.target.value)}
+                          style={{ width: 80, flexShrink: 0, background: 'transparent', border: 'none', borderBottom: '1px dashed #BFDBFE', color: '#2563EB', fontSize: 11, fontWeight: 600, outline: 'none', fontFamily: 'inherit' }} />
+                        <span style={{color:T().textMuted,fontSize:9,flexShrink:0}}>→</span>
+                        <input type="url" value={u.href} placeholder="https://..." onChange={e => updateUrl(ph.id, si, ui, 'href', e.target.value)}
+                          style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', borderBottom: '1px dashed #BFDBFE', color: T().textSub, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
+                        <button onClick={() => deleteUrl(ph.id, si, ui)}
+                          style={{ background: 'none', border: 'none', color: T().textFaint, cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>✕</button>
+                      </div>
+                    ))}
+                    <button onClick={() => addUrl(ph.id, si)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 5, background: 'none', border: `1px dashed ${T().borderMid}`, borderRadius: 5, padding: '3px 9px', cursor: 'pointer', color: T().textMuted, fontSize: 11, fontFamily: 'inherit' }}>
+                      ＋ URLを追加
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 完了条件 */}
+            <div style={S.conditionBox}>
+              <div style={S.conditionLabel}>✅ 完了条件</div>
+              {editMode
+                ? <textarea value={step.condition} onChange={e => updateStep(ph.id, si, 'condition', e.target.value)} rows={2}
+                    style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: '#17150E', fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.65 }} />
+                : <div style={{ fontSize: 12, color: '#17150E', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{step.condition || <span style={{color:'#999',fontStyle:'italic'}}>未入力</span>}</div>
+              }
+            </div>
+
+            {/* 注意点 */}
+            {(step.caution || editMode) && (
+              <div style={S.cautionBox}>
+                <div style={S.cautionLabel}>⚠️ 注意点</div>
+                {editMode
+                  ? <textarea value={step.caution} onChange={e => updateStep(ph.id, si, 'caution', e.target.value)} rows={2} placeholder="（任意）特記事項"
+                      style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: '#57524A', fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.65 }} />
+                  : <div style={{ fontSize: 12, color: '#57524A', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{step.caution}</div>
+                }
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
   }
 
-  const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
-  const catColor = (cat) => {
-    const colors = { '手順書': '#5DCAA5', 'ルール': '#4d9fff', 'テンプレート': '#ffd166', 'FAQ': '#ff6b6b', 'その他': '#B0BAC8' }
-    return colors[cat] || T().textMuted
-  }
+  // ── main render ────────────────────────────────────────────
+  const metaDesc = selLevel ? (teamMeta?.[selectedId]?.desc_text || '') : ''
+  const accentBg = selItem ? (selItem.dept.name.includes('コミュニティ') ? '#EAF3EF' : selItem.dept.name.includes('ユース') ? '#EFEBF8' : selItem.dept.name.includes('パートナー') ? '#FBF0E6' : '#E6EFF8') : T().bgCard
+
+  // tasks for this team
+  const teamTasks = useMemo(() => {
+    if (!selectedId || !levels.length) return []
+    return tasks.filter(t => {
+      if (t.is_archived) return false
+      if (t.level_id && Number(t.level_id) === Number(selectedId)) return true
+      const lv = levels.find(l => Number(l.id) === Number(selectedId))
+      return lv && t.team === lv.name
+    })
+  }, [selectedId, tasks, levels])
 
   return (
-    <div style={{ display: 'flex', gap: 20, minHeight: 500 }}>
-      {/* 左ペイン: 業務一覧 */}
-      <div style={{ width: filterTask ? 340 : '100%', flexShrink: 0, transition: 'width 0.2s' }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={sel}><option value="">全部署</option>{allDepts.map(d => <option key={d} value={d}>{d}</option>)}</select>
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 業務名・チーム名で検索..." style={{ ...sel, flex: 1, minWidth: 160, background: T().bgInput }} onFocus={e => e.target.style.borderColor = T().accent} onBlur={e => e.target.style.borderColor = T().border} />
+    <div style={{ display: 'flex', height: '100%', background: T().bg, fontFamily: '-apple-system, BlinkMacSystemFont, "Noto Sans JP", sans-serif' }}>
+
+      {/* ── SIDEBAR ── */}
+      <div style={S.sidebar}>
+        {/* search */}
+        <div style={S.searchWrap}>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'rgba(255,255,255,0.3)', pointerEvents: 'none' }}>🔍</span>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="チームを検索..."
+              style={S.searchInput} />
+          </div>
         </div>
-        {Object.entries(grouped).map(([dept, teams]) => (
-          <div key={dept} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T().accent, padding: '6px 10px', background: T().navActiveBg, borderRadius: 8, marginBottom: 6 }}>{dept}</div>
-            {Object.entries(teams).map(([team, teamTasks]) => (
-              <div key={team} style={{ marginLeft: 8, marginBottom: 8 }}>
-                {team !== dept && <div style={{ fontSize: 11, color: T().textMuted, fontWeight: 600, padding: '3px 8px', marginBottom: 4 }}>{team}</div>}
-                {teamTasks.map(t => {
-                  const isSelected = filterTask?.id === t.id
-                  const count = manualCountByTask[t.id] || 0
+
+        {/* team list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 20px' }}>
+          {groupedTeams.map(({ dept, teams }) => {
+            const dc = getDeptColor(dept.name)
+            return (
+              <div key={dept.id} style={{ marginBottom: 4 }}>
+                <div style={S.deptLabel(dc)}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: dc, flexShrink: 0 }} />
+                  {dept.name}
+                </div>
+                {teams.map(team => {
+                  const isAct = Number(selectedId) === Number(team.id)
                   return (
-                    <div key={t.id} onClick={() => setFilterTask(isSelected ? null : t)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: isSelected ? T().navActiveBg : 'transparent', border: isSelected ? `1px solid ${T().badgeBorder}` : '1px solid transparent', transition: 'all 0.15s' }}
-                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = T().bgHover }}
-                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: isSelected ? 700 : 500, color: isSelected ? T().accent : T().text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.task}</div>
-                        <div style={{ fontSize: 11, color: T().textMuted, marginTop: 2 }}>{t.owner || '未定'}</div>
-                      </div>
-                      {count > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>{count}件</span>}
-                      <span style={{ fontSize: 14, color: T().textFaint }}>›</span>
+                    <div key={team.id} onClick={() => setSelectedId(team.id)}
+                      style={S.teamLink(isAct)}
+                      onMouseEnter={e => { if (!isAct) { e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}}
+                      onMouseLeave={e => { if (!isAct) { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.background = 'transparent' }}}>
+                      {team.icon} {team.name}
                     </div>
                   )
                 })}
               </div>
-            ))}
-          </div>
-        ))}
-        {Object.keys(grouped).length === 0 && <div style={{ textAlign: 'center', padding: '40px 20px', color: T().textMuted, fontSize: 13 }}>業務が見つかりません</div>}
+            )
+          })}
+          {groupedTeams.length === 0 && (
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', padding: '20px 14px', fontStyle: 'italic' }}>チームが見つかりません</div>
+          )}
+        </div>
       </div>
 
-      {/* 右ペイン: マニュアル詳細 */}
-      {filterTask && (
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ background: T().bgCard, borderRadius: 12, border: `1px solid ${T().border}`, padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: T().text }}>{filterTask.task}</div>
-                <div style={{ fontSize: 12, color: T().textMuted, marginTop: 2 }}>担当: {filterTask.owner || '未定'}{filterTask.support ? ` ／ サポート: ${filterTask.support}` : ''}</div>
-              </div>
-              <button onClick={() => setFilterTask(null)} style={{ background: 'none', border: 'none', color: T().textMuted, cursor: 'pointer', fontSize: 18, fontFamily: 'inherit' }}>✕</button>
+      {/* ── MAIN ── */}
+      <div style={S.main}>
+        {!selLevel && !loadingDB && renderEmpty()}
+        {loadingDB && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: T().accent, fontSize: 14 }}>読み込み中...</div>
+        )}
+
+        {dbError && (
+          <div style={{ margin: 24, padding: '14px 18px', background: T().warnBg, border: `1px solid ${T().warn}`, borderRadius: 10, color: T().warn, fontSize: 12 }}>
+            <b>DBエラー:</b> {dbError}
+            <button onClick={() => loadManual(selectedId)} style={{ marginLeft: 10, padding: '3px 10px', borderRadius: 5, background: T().accent, border: 'none', color: '#fff', fontSize: 11, cursor: 'pointer' }}>再読み込み</button>
+          </div>
+        )}
+
+        {selLevel && !loadingDB && !dbError && (
+          <div style={S.wrap}>
+
+            {/* ─ ヘッダー ─ */}
+            <div style={S.hero(deptAccent, accentBg)}>
+              <div style={S.heroTag(deptAccent)}>{selItem?.dept?.name}</div>
+              <h1 style={S.heroTitle}>{selLevel.icon} {selLevel.name}</h1>
+              {metaDesc && <p style={S.heroDesc}>{metaDesc}</p>}
             </div>
-            {taskManuals.length === 0 && !addingTaskId && <div style={{ textAlign: 'center', padding: '30px 20px', color: T().textMuted, fontSize: 13, background: T().bgHover, borderRadius: 10 }}>📄 まだマニュアルがありません</div>}
-            {taskManuals.map(m => {
-              const isEditing = editingId === m.id
-              const isExpanded = expandedManual === m.id
-              return (
-                <div key={m.id} style={{ marginBottom: 10, borderRadius: 10, border: `1px solid ${T().border}`, overflow: 'hidden', background: T().bgCard2 }}>
-                  <div onClick={() => { if (!isEditing) setExpandedManual(isExpanded ? null : m.id) }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', background: isExpanded ? T().bgHover : 'transparent', transition: 'background 0.15s' }}
-                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = T().bgHover }}
-                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent' }}>
-                    <span style={{ fontSize: 12, color: T().textFaint, transition: 'transform 0.15s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-                    {m.category && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${catColor(m.category)}22`, color: catColor(m.category), border: `1px solid ${catColor(m.category)}44` }}>{m.category}</span>}
-                    <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: T().text }}>{m.title}</div>
-                    {m.updated_at && <span style={{ fontSize: 10, color: T().textFaint }}>{new Date(m.updated_at).toLocaleDateString('ja-JP')}</span>}
-                  </div>
-                  {isExpanded && !isEditing && (
-                    <div style={{ padding: '12px 14px', borderTop: `1px solid ${T().border}` }}>
-                      <div style={{ fontSize: 13, color: T().text, whiteSpace: 'pre-wrap', lineHeight: 1.7, minHeight: 40 }}>{m.content || '（内容なし）'}</div>
-                      {m.updated_by && <div style={{ fontSize: 10, color: T().textFaint, marginTop: 10, textAlign: 'right' }}>最終更新: {m.updated_by}</div>}
-                      {isAdmin && (
-                        <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'flex-end' }}>
-                          <button onClick={() => { setEditingId(m.id); setEditBuf({ title: m.title, content: m.content, category: m.category || '' }) }} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}`, cursor: 'pointer', fontFamily: 'inherit' }}>✏️ 編集</button>
-                          <button onClick={() => deleteManual(m.id)} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, cursor: 'pointer', fontFamily: 'inherit' }}>🗑 削除</button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {isExpanded && isEditing && (
-                    <div style={{ padding: '12px 14px', borderTop: `1px solid ${T().border}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input value={editBuf.title || ''} onChange={e => setEditBuf(b => ({ ...b, title: e.target.value }))} placeholder="タイトル" style={{ ...sel, flex: 1, background: T().bgInput, fontWeight: 600 }} />
-                        <select value={editBuf.category || ''} onChange={e => setEditBuf(b => ({ ...b, category: e.target.value }))} style={{ ...sel, width: 120 }}><option value="">カテゴリ</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                      </div>
-                      <textarea value={editBuf.content || ''} onChange={e => setEditBuf(b => ({ ...b, content: e.target.value }))} placeholder="マニュアルの内容を入力..." rows={10} style={{ ...sel, background: T().bgInput, resize: 'vertical', lineHeight: 1.7, minHeight: 160 }} />
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button onClick={() => { setEditingId(null); setEditBuf({}) }} style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: 'transparent', color: T().textMuted, border: `1px solid ${T().border}`, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-                        <button onClick={saveManual} disabled={saving} style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: T().accent, color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', opacity: saving ? 0.5 : 1 }}>{saving ? '保存中...' : '💾 保存'}</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            {addingTaskId === filterTask.id
-              ? (
-                <div style={{ marginTop: 12, padding: 14, borderRadius: 10, border: `1px dashed ${T().badgeBorder}`, background: T().bgHover }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T().accent, marginBottom: 10 }}>📝 新しいマニュアルを追加</div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <input value={newBuf.title} onChange={e => setNewBuf(b => ({ ...b, title: e.target.value }))} placeholder="タイトル" style={{ ...sel, flex: 1, background: T().bgInput, fontWeight: 600 }} />
-                    <select value={newBuf.category} onChange={e => setNewBuf(b => ({ ...b, category: e.target.value }))} style={{ ...sel, width: 120 }}><option value="">カテゴリ</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                  </div>
-                  <textarea value={newBuf.content} onChange={e => setNewBuf(b => ({ ...b, content: e.target.value }))} placeholder="マニュアルの内容を入力..." rows={8} style={{ ...sel, width: '100%', boxSizing: 'border-box', background: T().bgInput, resize: 'vertical', lineHeight: 1.7, minHeight: 120, marginBottom: 8 }} />
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <button onClick={() => { setAddingTaskId(null); setNewBuf({ title: '', content: '', category: '' }) }} style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: 'transparent', color: T().textMuted, border: `1px solid ${T().border}`, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-                    <button onClick={addManual} disabled={saving || !newBuf.title.trim()} style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: T().accent, color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', opacity: (saving || !newBuf.title.trim()) ? 0.5 : 1 }}>{saving ? '追加中...' : '＋ 追加'}</button>
-                  </div>
-                </div>
-              )
-              : isAdmin && (
-                <button onClick={() => setAddingTaskId(filterTask.id)}
-                  style={{ marginTop: 12, width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px dashed ${T().badgeBorder}`, background: T().bgHover, color: T().accent, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = T().badgeBg}
-                  onMouseLeave={e => e.currentTarget.style.background = T().bgHover}>
-                  ＋ マニュアルを追加
+
+            {/* ─ 編集バー ─ */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+              {isAdmin && (
+                <button onClick={() => setEditMode(p => !p)}
+                  style={{ padding: '6px 14px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: editMode ? T().editRing : T().bgCard, border: `1px solid ${editMode ? T().editRing : T().borderMid}`, color: editMode ? '#fff' : T().textSub, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: editMode ? '#fff' : T().textFaint }} />
+                  {editMode ? '編集中...' : '✎ 編集モード'}
                 </button>
               )}
+              {dirty && (
+                <>
+                  <button onClick={saveAll} disabled={saving}
+                    style={{ padding: '6px 16px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: T().accentSolid, border: 'none', color: '#fff', opacity: saving ? 0.6 : 1 }}>
+                    {saving ? '保存中...' : '保存する'}
+                  </button>
+                  <button onClick={() => { if (confirm('変更を破棄しますか？')) loadManual(selectedId) }}
+                    style={{ padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted }}>
+                    元に戻す
+                  </button>
+                </>
+              )}
+              {editMode && (
+                <span style={{ fontSize: 11, color: T().editRing, marginLeft: 4 }}>テキストを直接編集できます</span>
+              )}
+            </div>
+
+            {/* ─ 概念フロー ─ */}
+            {conceptSteps.length > 0 && (
+              <>
+                <div style={S.secLabel}><span>全体の流れ（概念）</span><span style={S.secLabelLine} /></div>
+                <div style={S.conceptFlow}>
+                  <div style={S.conceptRow}>
+                    {conceptSteps.map((cs, i) => (
+                      <React.Fragment key={i}>
+                        <div style={S.conceptStep}>
+                          <div style={S.conceptNum(cs.badgeClass === 'onboard' ? '#3D7A6A' : deptAccent)}>{i + 1}</div>
+                          <span style={S.conceptName}>{cs.title}</span>
+                        </div>
+                        {i < conceptSteps.length - 1 && <span style={S.conceptArrow}>→</span>}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ─ フェーズ ─ */}
+            {phases.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={S.secLabel}><span>業務フロー</span><span style={S.secLabelLine} /></div>
+                {phases.map((ph, pi) => {
+                  const phSteps = steps[ph.id] || []
+                  return (
+                    <div key={ph.id} style={S.phaseBlock}>
+                      {/* phase header */}
+                      <div style={S.phaseHeader}>
+                        {editMode ? (
+                          <>
+                            <select value={ph.badge_class} onChange={e => updatePhase(pi, 'badge_class', e.target.value)} style={S.editBadgeSel}>
+                              <option value="onboard">入会フェーズ（緑）</option>
+                              <option value="operate">運用フェーズ（オレンジ）</option>
+                            </select>
+                            <input value={ph.badge} onChange={e => updatePhase(pi, 'badge', e.target.value)}
+                              style={{ ...S.editInp(false), width: 120, flexShrink: 0 }} placeholder="バッジ名" />
+                            <input value={ph.title} onChange={e => updatePhase(pi, 'title', e.target.value)}
+                              style={{ ...S.editInp(false), flex: 1, fontSize: 15, fontWeight: 700 }} placeholder="フェーズタイトル" />
+                            <button onClick={() => deletePhase(pi)} style={{ ...S.delBtn, marginLeft: 'auto', whiteSpace: 'nowrap' }}>✕ フェーズ削除</button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={S.badge(ph.badge_class)}>{ph.badge}</span>
+                            <span style={S.phaseTitle}>{ph.title}</span>
+                          </>
+                        )}
+                      </div>
+                      {/* steps */}
+                      {phSteps.map((step, si) => renderStepCard(ph, pi, step, si))}
+                      {editMode && (
+                        <button style={S.addDashedBtn} onClick={() => addStep(ph.id)}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = T().editRing; e.currentTarget.style.color = T().editRing }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = T().border; e.currentTarget.style.color = T().textMuted }}>
+                          ＋ ステップを追加
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* ─ フェーズ追加ボタン ─ */}
+            {editMode && (
+              <button style={{ ...S.addDashedBtn, marginBottom: 32 }} onClick={addPhase}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = T().editRing; e.currentTarget.style.color = T().editRing }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = T().border; e.currentTarget.style.color = T().textMuted }}>
+                ＋ フェーズを追加
+              </button>
+            )}
+
+            {/* ─ フェーズ0件 ─ */}
+            {phases.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 20px', border: `1px dashed ${T().border}`, borderRadius: 12, marginBottom: 28, color: T().textFaint }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                <div style={{ fontSize: 14, color: T().textMuted, marginBottom: 6 }}>業務フローがまだ登録されていません</div>
+                {isAdmin && <div style={{ fontSize: 12 }}>編集モードをオンにして「＋ フェーズを追加」から始めてください</div>}
+              </div>
+            )}
+
+            {/* ─ 業務一覧 ─ */}
+            {teamTasks.length > 0 && (
+              <>
+                <div style={S.secLabel}><span>業務一覧</span><span style={S.secLabelLine} /></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 32 }}>
+                  {teamTasks.map((t, i) => (
+                    <div key={t.id} style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 9, padding: '11px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: 6, background: deptAccent, color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: T().text, lineHeight: 1.5 }}>{t.task}</div>
+                        {(t.owner || t.support) && (
+                          <div style={{ fontSize: 11, color: T().textMuted, marginTop: 3 }}>
+                            {t.owner && `実責：${t.owner}`}{t.owner && t.support ? ' / ' : ''}{t.support && `サポート：${t.support}`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
           </div>
+        )}
+      </div>
+
+      {/* ─ 保存フラッシュ ─ */}
+      {savedFlash && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#3D7A6A', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 700, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', zIndex: 500, pointerEvents: 'none' }}>
+          ✓ 保存しました
         </div>
       )}
     </div>
   )
 }
+
 
 // ══════════════════════════════════════════════════
 // タブ4: メンバーJD（MemberJDTab / MemberDetail）
@@ -1341,7 +1761,7 @@ export default function OrgPage({ user, isAdmin, themeKey = 'dark', fiscalYear =
       </div>
 
       {/* メインコンテンツ */}
-      <div style={{ padding: activeTab === 'taskflow' ? 0 : '28px 28px', maxWidth: activeTab === 'taskflow' ? '100%' : 1100, margin: '0 auto' }}>
+      <div style={{ padding: (activeTab === 'taskflow' || activeTab === 'manual') ? 0 : '28px 28px', maxWidth: (activeTab === 'taskflow' || activeTab === 'manual') ? '100%' : 1100, margin: '0 auto' }}>
         {activeTab === 'chart' && (
           <OrgChart
             levels={levels}
@@ -1367,15 +1787,18 @@ export default function OrgPage({ user, isAdmin, themeKey = 'dark', fiscalYear =
           />
         )}
         {activeTab === 'manual' && (
-          <ManualTab
-            tasks={tasks}
-            manuals={manuals}
-            setManuals={setManuals}
-            members={members}
-            levels={levels}
-            isAdmin={isAdmin}
-            currentUser={user?.email || user?.name || ''}
-          />
+          <div style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
+            <ManualTab
+              tasks={tasks}
+              manuals={manuals}
+              setManuals={setManuals}
+              members={members}
+              levels={levels}
+              teamMeta={teamMeta}
+              isAdmin={isAdmin}
+              currentUser={user?.email || user?.name || ''}
+            />
+          </div>
         )}
         {activeTab === 'members' && (
           <MemberJDTab
