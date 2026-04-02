@@ -158,6 +158,65 @@ function SaveBtn({ saving, saved, onClick, label = '保存' }) {
   )
 }
 
+
+// ══════════════════════════════════════════════════
+// 期間入力コンポーネント
+// ══════════════════════════════════════════════════
+function periodToDateInput(str) {
+  if (!str) return ''
+  const m = str.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/)
+  if (!m) return ''
+  return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`
+}
+function dateInputToJa(val) {
+  if (!val) return ''
+  const [y, m, d] = val.split('-')
+  return `${y}年${parseInt(m)}月${parseInt(d)}日`
+}
+function parsePeriod(period) {
+  if (!period) return { start: '', end: '' }
+  const parts = period.split(/[〜~～]/)
+  const startJa = (parts[0] || '').trim()
+  const endJa   = (parts[1] || '').trim()
+  return {
+    start: periodToDateInput(startJa) || startJa,
+    end:   periodToDateInput(endJa)   || (endJa === '現在' || endJa === '' ? endJa : endJa),
+  }
+}
+function buildPeriod(start, end) {
+  const startJa = start ? dateInputToJa(start) || start : ''
+  const endJa   = end   ? (end === '現在' ? '現在' : dateInputToJa(end) || end) : '現在'
+  if (!startJa) return ''
+  return `${startJa} 〜 ${endJa}`
+}
+
+function PeriodInput({ value, onChange }) {
+  const { start, end } = parsePeriod(value)
+  const [ongoing, setOngoing] = React.useState(end === '現在' || end === '')
+  const handleStart   = (v) => { onChange(buildPeriod(v, ongoing ? '現在' : end)) }
+  const handleEnd     = (v) => { onChange(buildPeriod(start, v)) }
+  const handleOngoing = (checked) => { setOngoing(checked); onChange(buildPeriod(start, checked ? '現在' : '')) }
+  const inputStyle = { background: T().bgInput, border: `1px solid ${T().borderMid}`, borderRadius: 5, padding: '4px 8px', color: T().text, fontSize: 11, outline: 'none', fontFamily: 'inherit' }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: T().textMuted, minWidth: 24 }}>開始</span>
+        <input type="date" value={start} onChange={e => handleStart(e.target.value)} style={inputStyle} />
+        <span style={{ fontSize: 10, color: T().textMuted }}>〜</span>
+        {ongoing
+          ? <span style={{ fontSize: 11, color: T().textSub, padding: '4px 8px', background: T().border, borderRadius: 5 }}>現在</span>
+          : <input type="date" value={end !== '現在' ? end : ''} onChange={e => handleEnd(e.target.value)} style={inputStyle} />
+        }
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11, color: T().textSub }}>
+          <input type="checkbox" checked={ongoing} onChange={e => handleOngoing(e.target.checked)} style={{ accentColor: T().accent }} />
+          現在も継続中
+        </label>
+      </div>
+      {value && <div style={{ fontSize: 10, color: T().textMuted, paddingLeft: 30 }}>表示: {value}</div>}
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════════
 // データ取得フック
 // ══════════════════════════════════════════════════
@@ -706,6 +765,8 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
   const [savedFlash,  setSavedFlash]  = useState(false)
   const [expandedStep,setExpandedStep]= useState(null)  // "pi-si"
   const [query,       setQuery]       = useState('')
+  const [mindsets,    setMindsets]    = useState([])
+  const [conceptDB,   setConceptDB]   = useState([])
 
   // ── team hierarchy ─────────────────────────────────────────
   const roots = levels.filter(l => !l.parent_id)
@@ -771,6 +832,20 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
       } else {
         setSteps({})
       }
+      // マインドセット取得
+      const { data: msData } = await supabase
+        .from('org_manual_mindsets')
+        .select('*')
+        .eq('level_id', levelId)
+        .order('sort_order')
+      setMindsets(msData || [])
+      // 概念フロー取得
+      const { data: csData } = await supabase
+        .from('org_manual_concept_steps')
+        .select('*')
+        .eq('level_id', levelId)
+        .order('sort_order')
+      setConceptDB(csData || [])
     } catch(e) { setDbError(e.message) }
     setLoadingDB(false)
   }, [])
@@ -780,9 +855,13 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
   }, [selectedId])
 
   // ── concept steps (from phase titles) ──────────────────────
-  const conceptSteps = useMemo(() => phases.flatMap(ph =>
-    (steps[ph.id] || []).map(s => ({ title: s.title, badgeClass: ph.badge_class }))
-  ), [phases, steps])
+  // 概念フロー: DBにデータがあればそれを使い、なければフェーズのステップから自動生成
+  const conceptSteps = useMemo(() => {
+    if (conceptDB.length > 0) return conceptDB.map(c => ({ title: c.title, badgeClass: 'auto' }))
+    return phases.flatMap(ph =>
+      (steps[ph.id] || []).map(s => ({ title: s.title, badgeClass: ph.badge_class }))
+    )
+  }, [conceptDB, phases, steps])
 
   // ── save all ───────────────────────────────────────────────
   const saveAll = async () => {
@@ -1307,6 +1386,22 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
               </div>
             )}
 
+            {/* ─ マインドセット ─ */}
+            {mindsets.length > 0 && (
+              <>
+                <div style={S.secLabel}><span>考え方・マインドセット</span><span style={S.secLabelLine} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 11, marginBottom: 28 }}>
+                  {mindsets.map((m, i) => (
+                    <div key={i} style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 12, padding: '16px', position: 'relative' }}>
+                      <div style={{ fontSize: 19, marginBottom: 7 }}>{m.icon}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T().text, marginBottom: 4 }}>{m.title}</div>
+                      <div style={{ fontSize: 12.5, color: T().textSub, lineHeight: 1.7 }}>{m.body}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
             {/* ─ 業務一覧 ─ */}
             {teamTasks.length > 0 && (
               <>
@@ -1761,7 +1856,7 @@ export default function OrgPage({ user, isAdmin, themeKey = 'dark', fiscalYear =
       </div>
 
       {/* メインコンテンツ */}
-      <div style={{ padding: (activeTab === 'taskflow' || activeTab === 'manual') ? 0 : '28px 28px', maxWidth: (activeTab === 'taskflow' || activeTab === 'manual') ? '100%' : 1100, margin: '0 auto' }}>
+      <div style={{ padding: (activeTab === 'taskflow' || activeTab === 'manual') ? 0 : '28px 28px', maxWidth: '100%', margin: '0 auto' }}>
         {activeTab === 'chart' && (
           <OrgChart
             levels={levels}
