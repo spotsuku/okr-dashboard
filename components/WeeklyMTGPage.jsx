@@ -723,7 +723,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [slackSending,  setSlackSending]  = useState(false)
 
   useEffect(() => {
-    supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').then(({data})=>setObjectives(data||[]))
+    supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').order('id').then(({data})=>setObjectives(data||[]))
     supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
     supabase.from('members').select('*').order('name').then(({data, error})=>{ if(error) console.error('members load error:', error); setMembers(data||[]) })
   }, [])
@@ -868,8 +868,10 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   // 右パネル：期間タブに応じたOKRを表示（buildQuarterMapで通期→四半期の正確なマッピングを使用）
   const annualObjsForMap = useMemo(() =>
     objectives.filter(o => o.period === annualPeriodKey), [objectives, annualPeriodKey])
-  const quarterObjsForMap = useMemo(() =>
-    objectives.filter(o => ['q1','q2','q3','q4'].some(q => o.period?.endsWith(q))), [objectives])
+  const quarterObjsForMap = useMemo(() => {
+    const qKeys = ['q1','q2','q3','q4'].map(q => fiscalYear === '2026' ? q : `${fiscalYear}_${q}`)
+    return objectives.filter(o => qKeys.includes(o.period))
+  }, [objectives, fiscalYear])
   const quarterMap = useMemo(() =>
     buildQuarterMap(annualObjsForMap, quarterObjsForMap), [annualObjsForMap, quarterObjsForMap])
   const rightObj = !selectedObj ? null
