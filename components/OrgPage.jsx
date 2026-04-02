@@ -1640,16 +1640,23 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
 // タブ4: メンバーJD（MemberJDTab / MemberDetail）
 // ══════════════════════════════════════════════════
 const JD_DEFAULT = {
-  '加藤翼':   { role: 'ゼネラルマネージャー', emp: '正社員', period: '2022年4月1日 〜 現在', bio: 'NEO福岡の立ち上げから参画。全体マネジメントと対外連携を担当。', skills: 'マネジメント・採用・対外連携・事業企画' },
-  '森朝香':   { role: 'コミュニティマネージャー', emp: '業務委託', period: '2022年6月1日 〜 現在', bio: 'コミュニティ運営のコアメンバー。メンバー体験の向上を推進。', skills: 'コミュニティ設計・イベント運営・広報' },
-  '面川文香': { role: 'ユースディレクター', emp: '業務委託', period: '2023年1月1日 〜 現在', bio: '若者向けプログラムの企画・運営を担当。', skills: '教育設計・ファシリテーション・採用' },
-  '古野絢太': { role: 'パートナーセールス', emp: '業務委託', period: '2023年4月1日 〜 現在', bio: 'パートナー企業との連携・営業活動を担当。', skills: '営業・法人開拓・提案資料作成' },
-  '鬼木良輔': { role: 'クラブ連携マネージャー', emp: '業務委託', period: '2022年10月1日 〜 現在', bio: 'スポーツクラブとの連携強化と共同プロジェクトを推進。', skills: 'クラブ連携・プロジェクト管理・渉外' },
-  '増田雄太朗': { role: 'マーケティングマネージャー', emp: '業務委託', period: '2023年7月1日 〜 現在', bio: 'デジタルマーケティングとブランディングを担当。', skills: 'SNS運用・コンテンツ制作・データ分析' },
-  '菅雅也':   { role: 'オペレーションマネージャー', emp: '業務委託', period: '2023年4月1日 〜 現在', bio: '社内オペレーション・ツール整備・効率化を推進。', skills: '業務設計・ツール開発・データ管理' },
-  '中島啓太': { role: 'ユースコーチ', emp: '業務委託', period: '2024年1月1日 〜 現在', bio: 'ユース育成プログラムの実施とコーチング。', skills: 'コーチング・育成プログラム設計・分析' },
-  '中道稔':   { role: 'アドバイザー', emp: '業務委託', period: '2022年4月1日 〜 現在', bio: '経営・財務面でのアドバイスを提供。', skills: '経営戦略・財務・法務' },
-  '元美和':   { role: 'コミュニティスタッフ', emp: '業務委託', period: '2024年4月1日 〜 現在', bio: 'コミュニティイベントのサポートと運営補助。', skills: 'イベント運営・コミュニケーション・広報' },
+  '三木智弘':   { role: '代表理事 / 事業統括',              emp: '正社員',   period: '2022年4月1日 〜 現在',   working: 'フルタイム', role_desc: 'NEO福岡・NEO ACADEMIA福岡の代表として全体統括。', responsibility: 'プログラム設計・財務・採用・組織運営', meetings: '全体MTG・採用面談・パートナーMTG', tasks: 'MVV策定・PL管理・カリキュラム企画・パートナーCS' },
+  '加藤翼':     { role: 'ゼネラルマネージャー',              emp: '正社員',   period: '2022年4月1日 〜 現在',   working: 'フルタイム', role_desc: 'NEO福岡の立ち上げから参画。全体マネジメントと対外連携を担当。', responsibility: '全体マネジメント・採用・対外連携・事業企画', meetings: '全体MTG・採用面談・研修セールスMTG', tasks: '会員制度設計・コミュマネ研修セールス・制度設計アドバイザリー' },
+  '森朝香':     { role: 'コミュニティマネージャー',          emp: '業務委託', period: '2022年6月1日 〜 現在',   working: 'パートタイム', role_desc: 'コミュニティ運営のコアメンバー。メンバー体験の向上を推進。', responsibility: 'オンボーディング・コーチング・カルテ管理・研修', meetings: '週次進捗MTG・コーチングセッション', tasks: '入会退会手続き・コミュニケーション計画・コミュマネ研修運営' },
+  '面川文香':   { role: 'ユースディレクター / 総務',         emp: '業務委託', period: '2023年1月1日 〜 現在',   working: 'パートタイム', role_desc: '若者向けプログラムの企画・運営と総務全般を担当。', responsibility: 'プログラム企画・総務・イベント運営', meetings: '総務MTG・イベント準備MTG', tasks: '総務全般・備品管理・スライド作成・オンボーディング設計' },
+  '古野絢太':   { role: 'パートナーサクセス / 事務局長補佐', emp: '業務委託', period: '2023年4月1日 〜 現在',   working: 'フルタイム', role_desc: 'パートナー企業へのCS業務とダッシュボード開発・AI研修を担当。', responsibility: 'CS・ダッシュボード開発・AI研修・Notion管理', meetings: '週次進捗MTG・パートナーMTG', tasks: 'CS業務・企業カルテ管理・ダッシュボード開発・AI研修企画' },
+  '鬼木良輔':   { role: 'クラブ連携マネージャー',            emp: '業務委託', period: '2022年10月1日 〜 現在',  working: 'パートタイム', role_desc: 'スポーツクラブとの連携強化と共同プロジェクトを推進。', responsibility: 'クラブ連携・プロジェクト管理・渉外・WBS設計', meetings: 'クラブ連携定例MTG・戦略合意MTG', tasks: '連携業務・提携内容設計・資料作成・WBS進捗管理' },
+  '増田雄太朗': { role: 'マーケティングマネージャー',        emp: '業務委託', period: '2023年7月1日 〜 現在',   working: 'パートタイム', role_desc: 'デジタルマーケティングとブランディングを担当。', responsibility: 'SNS運用・LP制作・LINE運用・集客戦略', meetings: 'マーケMTG・週次進捗MTG', tasks: 'LP企画・LINE運用・SNS効果分析・集客戦略・KPIレポーティング' },
+  '菅雅也':     { role: 'コンテンツ・オペレーションマネージャー', emp: '業務委託', period: '2023年4月1日 〜 現在', working: 'パートタイム', role_desc: '動画制作・Instagram運用・イベント撮影を担当。', responsibility: '動画制作・Instagram運用・撮影・ブランド管理', meetings: 'コンテンツMTG・撮影準備MTG', tasks: '動画制作・年間動画企画・Instagram運用ディレクション・イベント撮影' },
+  '中島啓太':   { role: 'アドバイザー / ユースコーチ',       emp: '業務委託', period: '2024年1月1日 〜 現在',   working: 'パートタイム', role_desc: 'コミュニティ事業部のメンバー育成・伴走とアドバイザリーを担当。', responsibility: 'コーチング・育成プログラム設計・アドバイザリー', meetings: 'アドバイザリーMTG・育成面談', tasks: 'コミュニティ事業部メンバー育成と伴走・アドバイザリー連携' },
+  '中道稔':     { role: 'アドバイザー / イベント統括',       emp: '業務委託', period: '2022年4月1日 〜 現在',   working: 'パートタイム', role_desc: '経営・財務アドバイスとイベント・研修の企画・運営統括を担当。', responsibility: '経営戦略・財務・法務・イベント統括・ロジ管理', meetings: 'アドバイザリーMTG・イベント準備MTG', tasks: '年間スケジュール管理・ロジ作成・司会台本作成・会場手配' },
+  '元美和':     { role: 'パートナー・評議会マネージャー',     emp: '業務委託', period: '2024年4月1日 〜 現在',   working: 'パートタイム', role_desc: '評議会の運営・管理と新規会員営業・団体連携を担当。', responsibility: 'イベント運営・評議会管理・営業・会費管理・団体連携', meetings: '評議会MTG・営業MTG', tasks: '評議会当日運営・台本作成・参加企業フォロー・会費管理・候補リスト作成' },
+  '國武麻友子': { role: '広報・教育スタッフ',                emp: '業務委託', period: '2023年10月1日 〜 現在',  working: 'パートタイム', role_desc: '広報業務と教育チームの出席管理・集客を担当。', responsibility: '広報・記事執筆・HP更新・メディア対応・出席管理', meetings: '広報MTG・教育チームMTG', tasks: '会員企業インタビュー・記事執筆・HP更新・プレスリリース・出席率管理' },
+  '三木浩江':   { role: 'ユース・集客ディレクター',           emp: '業務委託', period: '2022年6月1日 〜 現在',   working: 'パートタイム', role_desc: '集客戦略・告知クリエイティブ設計・団体連携・採用を担当。', responsibility: '集客戦略・クリエイティブ設計・コラボ企画・団体連携・採用', meetings: '集客MTG・採用面談・団体連携MTG', tasks: '集客戦略立案・告知クリエイティブ設計・コラボキャンペーン・採用カジュアル面談' },
+  '藤本太一':   { role: 'イベント演出・コンテンツスタッフ',   emp: '業務委託', period: '2023年4月1日 〜 現在',   working: 'パートタイム', role_desc: 'イベント演出・運営管理とスライド制作・発注管理を担当。', responsibility: 'イベント演出・スライド制作・運営管理・発注管理・予算管理', meetings: 'イベント準備MTG・制作物MTG', tasks: 'イベント演出管理・スライド作成・製作物企画・発注管理・予算管理' },
+  '藤林尚斗':   { role: 'PM育成・アドバイザリー',             emp: '業務委託', period: '2023年10月1日 〜 現在',  working: 'パートタイム', role_desc: '社内PM人材の育成・伴走と採用ワークサンプルを担当。', responsibility: 'PM育成・採用・ワークサンプル設計・アドバイザリー', meetings: 'PM育成面談・アドバイザリーMTG', tasks: '社内PM人材育成と伴走・ワークサンプル実施・研修チームアドバイザリー' },
+  '成末蒼':     { role: '教育スタッフ',                      emp: '業務委託', period: '2024年4月1日 〜 現在',   working: 'パートタイム', role_desc: '教育チームの出席管理・エンゲージメント向上・集客を担当。', responsibility: '出席管理・集客・コミュニティサポート', meetings: '教育チームMTG', tasks: '出席率向上・管理・エンゲージメント向上・コミュニティイベント集客' },
+  '松口健司':   { role: 'イベント運営・会場担当',             emp: '業務委託', period: '2023年4月1日 〜 現在',   working: 'パートタイム', role_desc: 'イベント・研修の運営進捗管理・会場手配・予算管理を担当。', responsibility: 'イベント運営・会場交渉・予算管理・発注管理・進捗管理', meetings: 'イベント準備MTG・会場交渉MTG', tasks: '運営進捗管理・会場手配と交渉・予算管理・製作物企画・発注管理' },
 }
 
 function MemberDetail({ member, jdRows, setJdRows, isAdmin, currentUser, onClose }) {
@@ -1657,17 +1664,20 @@ function MemberDetail({ member, jdRows, setJdRows, isAdmin, currentUser, onClose
   const [editingId, setEditingId] = useState(null)
   const [editBuf, setEditBuf] = useState({})
   const [addingRow, setAddingRow] = useState(false)
-  const [newBuf, setNewBuf] = useState({ role: '', emp: '業務委託', period: '', bio: '', skills: '', is_current: true })
+  const EMPTY_ROW = { role: '', emp: '業務委託', period: '', working: '', role_desc: '', responsibility: '', meetings: '', tasks: '' }
+  const [newBuf, setNewBuf] = useState(EMPTY_ROW)
   const [saving, setSaving] = useState(false)
   const [profileEdit, setProfileEdit] = useState(false)
   const [profileBuf, setProfileBuf] = useState({ name: member.name, email: member.email || '', avatar_url: member.avatar_url || '' })
   const defaultJd = JD_DEFAULT[member.name] || {}
 
   const color = avatarColor(member.name)
-  const currentRow = rows.find(r => r.is_current) || rows[rows.length - 1] || null
+  const currentRow = rows[rows.length - 1] || null
+  const empBadge = getEmpBadge(currentRow?.emp || defaultJd.emp || '')
 
-  const inpSt = (extra = {}) => ({ background: T().bgInput, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '5px 8px', color: T().text, fontSize: 12, outline: 'none', fontFamily: 'inherit', ...extra })
+  const inpSt = (extra = {}) => ({ background: T().bgInput, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '5px 8px', color: T().text, fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box', ...extra })
   const lbl = { fontSize: 9, fontWeight: 700, color: T().textFaint, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }
+  const textareaSt = (rows = 2) => ({ ...inpSt(), resize: 'vertical', lineHeight: 1.65, minHeight: rows * 24 })
 
   const saveRow = async (rowId) => {
     setSaving(true)
@@ -1683,17 +1693,16 @@ function MemberDetail({ member, jdRows, setJdRows, isAdmin, currentUser, onClose
   const addRow = async () => {
     setSaving(true)
     const maxIdx = Math.max(-1, ...rows.map(r => r.version_idx))
-    const row = { member_id: member.id, version_idx: maxIdx + 1, ...newBuf }
+    const row = { member_id: String(member.id), version_idx: maxIdx + 1, ...newBuf }
     const { data, error } = await supabase.from('org_member_jd').insert(row).select().single()
     if (error) { alert('追加に失敗しました: ' + error.message); setSaving(false); return }
     setJdRows(prev => {
       const next = { ...prev }
-      const existing = next[member.id] || []
-      const merged = [...existing, data].sort((a, b) => a.version_idx - b.version_idx)
+      const merged = [...(next[member.id] || []), data].sort((a, b) => a.version_idx - b.version_idx)
       next[member.id] = merged
       return next
     })
-    setAddingRow(false); setNewBuf({ role: '', emp: '業務委託', period: '', bio: '', skills: '', is_current: true }); setSaving(false)
+    setAddingRow(false); setNewBuf(EMPTY_ROW); setSaving(false)
   }
 
   const deleteRow = async (rowId) => {
@@ -1708,34 +1717,47 @@ function MemberDetail({ member, jdRows, setJdRows, isAdmin, currentUser, onClose
     setProfileEdit(false); setSaving(false)
   }
 
-  const empBadge = getEmpBadge(currentRow?.emp || defaultJd.emp || '')
+  const JdForm = ({ buf, setBuf }) => (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div><div style={lbl}>役職</div><input value={buf.role || ''} onChange={e => setBuf(b => ({ ...b, role: e.target.value }))} style={inpSt()} placeholder="例: コミュニティマネージャー" /></div>
+      <div><div style={lbl}>雇用形態</div><select value={buf.emp || '業務委託'} onChange={e => setBuf(b => ({ ...b, emp: e.target.value }))} style={{ ...inpSt(), cursor: 'pointer' }}>{EMP_OPTS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+      <div style={{ gridColumn: '1/-1' }}><div style={lbl}>期間</div><PeriodInput value={buf.period || ''} onChange={v => setBuf(b => ({ ...b, period: v }))} /></div>
+      <div><div style={lbl}>稼働形態</div><input value={buf.working || ''} onChange={e => setBuf(b => ({ ...b, working: e.target.value }))} style={inpSt()} placeholder="例: フルタイム / パートタイム" /></div>
+      <div><div style={lbl}>責任範囲</div><input value={buf.responsibility || ''} onChange={e => setBuf(b => ({ ...b, responsibility: e.target.value }))} style={inpSt()} placeholder="例: CS・開発・営業" /></div>
+      <div style={{ gridColumn: '1/-1' }}><div style={lbl}>役割・ミッション</div><textarea value={buf.role_desc || ''} onChange={e => setBuf(b => ({ ...b, role_desc: e.target.value }))} style={textareaSt(2)} placeholder="この役職でのミッション・担当業務の概要" /></div>
+      <div style={{ gridColumn: '1/-1' }}><div style={lbl}>参加ミーティング</div><input value={buf.meetings || ''} onChange={e => setBuf(b => ({ ...b, meetings: e.target.value }))} style={inpSt()} placeholder="例: 全体MTG・週次進捗MTG" /></div>
+      <div style={{ gridColumn: '1/-1' }}><div style={lbl}>主要タスク</div><textarea value={buf.tasks || ''} onChange={e => setBuf(b => ({ ...b, tasks: e.target.value }))} style={textareaSt(2)} placeholder="具体的な担当タスク一覧" /></div>
+    </div>
+  )
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 16, width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto', position: 'relative' }}>
-        {/* ヘッダー */}
+      <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 16, width: '100%', maxWidth: 680, maxHeight: '92vh', overflowY: 'auto', position: 'relative' }}>
+
+        {/* ── ヘッダー ── */}
         <div style={{ background: `${color}18`, borderBottom: `1px solid ${T().border}`, padding: '22px 24px', display: 'flex', alignItems: 'center', gap: 18 }}>
           <Avatar name={member.name} size={60} avatar_url={member.avatar_url} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: T().text, marginBottom: 4 }}>{member.name}</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               {(currentRow?.role || defaultJd.role) && <span style={{ fontSize: 12, color: T().textSub, fontWeight: 600 }}>{currentRow?.role || defaultJd.role}</span>}
-              {(currentRow?.emp || defaultJd.emp) && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: `${empBadge.bg}`, color: empBadge.color }}>{currentRow?.emp || defaultJd.emp}</span>}
+              {(currentRow?.emp || defaultJd.emp) && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: empBadge.bg, color: empBadge.color }}>{currentRow?.emp || defaultJd.emp}</span>}
+              {(currentRow?.working || defaultJd.working) && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: T().bgInput, color: T().textMuted }}>{currentRow?.working || defaultJd.working}</span>}
               {member.email && <span style={{ fontSize: 11, color: T().accent }}>✉ {member.email}</span>}
             </div>
           </div>
           {isAdmin && <button onClick={() => setProfileEdit(p => !p)} style={{ background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', fontWeight: 600 }}>✎ プロフィール編集</button>}
-          <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 16, background: T().bgInput, border: 'none', color: T().textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 15, flexShrink: 0 }}>✕</button>
+          <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 16, background: T().bgInput, border: 'none', color: T().textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 15 }}>✕</button>
         </div>
 
-        {/* プロフィール編集 */}
+        {/* ── プロフィール編集 ── */}
         {profileEdit && (
           <div style={{ padding: '16px 24px', borderBottom: `1px solid ${T().border}`, background: T().bgHover }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T().accent, marginBottom: 12 }}>プロフィール情報を編集</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div><div style={lbl}>名前</div><input value={profileBuf.name} onChange={e => setProfileBuf(p => ({ ...p, name: e.target.value }))} style={inpSt({ width: '100%', boxSizing: 'border-box' })} /></div>
-              <div><div style={lbl}>メールアドレス</div><input type="email" value={profileBuf.email} onChange={e => setProfileBuf(p => ({ ...p, email: e.target.value }))} style={inpSt({ width: '100%', boxSizing: 'border-box' })} /></div>
-              <div style={{ gridColumn: '1/-1' }}><div style={lbl}>アバター画像URL</div><input value={profileBuf.avatar_url} onChange={e => setProfileBuf(p => ({ ...p, avatar_url: e.target.value }))} placeholder="https://..." style={inpSt({ width: '100%', boxSizing: 'border-box' })} /></div>
+              <div><div style={lbl}>名前</div><input value={profileBuf.name} onChange={e => setProfileBuf(p => ({ ...p, name: e.target.value }))} style={inpSt()} /></div>
+              <div><div style={lbl}>メールアドレス</div><input type="email" value={profileBuf.email} onChange={e => setProfileBuf(p => ({ ...p, email: e.target.value }))} style={inpSt()} /></div>
+              <div style={{ gridColumn: '1/-1' }}><div style={lbl}>アバター画像URL</div><input value={profileBuf.avatar_url} onChange={e => setProfileBuf(p => ({ ...p, avatar_url: e.target.value }))} placeholder="https://..." style={inpSt()} /></div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
               <button onClick={() => setProfileEdit(false)} style={{ padding: '5px 14px', borderRadius: 7, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>キャンセル</button>
@@ -1744,7 +1766,7 @@ function MemberDetail({ member, jdRows, setJdRows, isAdmin, currentUser, onClose
           </div>
         )}
 
-        {/* JD一覧 */}
+        {/* ── JD一覧 ── */}
         <div style={{ padding: '20px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T().textSub }}>JD履歴 ({rows.length}件)</div>
@@ -1755,64 +1777,78 @@ function MemberDetail({ member, jdRows, setJdRows, isAdmin, currentUser, onClose
             <div style={{ padding: '28px 20px', textAlign: 'center', color: T().textFaint, border: `1px dashed ${T().border}`, borderRadius: 10, marginBottom: 12 }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
               <div style={{ fontSize: 13 }}>JDがまだ登録されていません</div>
-              {defaultJd.role && <div style={{ fontSize: 11, marginTop: 8, color: T().textMuted }}>デフォルト情報：{defaultJd.role} / {defaultJd.emp}</div>}
+              {defaultJd.role && <div style={{ fontSize: 11, marginTop: 8, color: T().textMuted }}>{defaultJd.role} / {defaultJd.emp}</div>}
             </div>
           )}
 
-          {rows.map((row, idx) => {
+          {rows.map((row) => {
             const isEditing = editingId === row.id
             const empB = getEmpBadge(row.emp || '')
             return (
-              <div key={row.id} style={{ marginBottom: 12, border: `1px solid ${row.is_current ? T().badgeBorder : T().border}`, borderRadius: 10, padding: '14px 16px', background: row.is_current ? T().navActiveBg : T().bgCard2, position: 'relative' }}>
-                {row.is_current && <div style={{ position: 'absolute', top: 8, right: 12, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T().accent, color: '#fff' }}>現在</div>}
-                {isEditing ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div><div style={lbl}>役職</div><input value={editBuf.role ?? row.role} onChange={e => setEditBuf(b => ({ ...b, role: e.target.value }))} style={inpSt({ width: '100%', boxSizing: 'border-box' })} /></div>
-                    <div><div style={lbl}>雇用形態</div><select value={editBuf.emp ?? row.emp} onChange={e => setEditBuf(b => ({ ...b, emp: e.target.value }))} style={{ ...inpSt(), width: '100%', boxSizing: 'border-box' }}>{EMP_OPTS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-                    <div style={{ gridColumn: '1/-1' }}><div style={lbl}>期間</div><PeriodInput value={editBuf.period ?? row.period ?? ''} onChange={v => setEditBuf(b => ({ ...b, period: v }))} /></div>
-                    <div style={{ gridColumn: '1/-1' }}><div style={lbl}>スキル・強み</div><input value={editBuf.skills ?? row.skills ?? ''} onChange={e => setEditBuf(b => ({ ...b, skills: e.target.value }))} style={inpSt({ width: '100%', boxSizing: 'border-box' })} /></div>
-                    <div style={{ gridColumn: '1/-1' }}><div style={lbl}>自己紹介・背景</div><textarea value={editBuf.bio ?? row.bio ?? ''} onChange={e => setEditBuf(b => ({ ...b, bio: e.target.value }))} rows={3} style={{ ...inpSt(), width: '100%', boxSizing: 'border-box', resize: 'vertical' }} /></div>
-                    <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: T().textSub, cursor: 'pointer', marginRight: 'auto' }}><input type="checkbox" checked={editBuf.is_current ?? row.is_current} onChange={e => setEditBuf(b => ({ ...b, is_current: e.target.checked }))} style={{ accentColor: T().accent }} />現在の役職として設定</label>
+              <div key={row.id} style={{ marginBottom: 12, border: `1px solid ${T().badgeBorder}`, borderRadius: 10, overflow: 'hidden' }}>
+                {/* ヘッダー行 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: T().navActiveBg, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: T().text }}>{row.role || '役職未設定'}</span>
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: empB.bg, color: empB.color }}>{row.emp}</span>
+                  {row.working && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: T().bgInput, color: T().textMuted }}>{row.working}</span>}
+                  {row.period && <span style={{ fontSize: 11, color: T().textFaint }}>📅 {row.period}</span>}
+                  {isAdmin && !isEditing && (
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                      <button onClick={() => { setEditingId(row.id); setEditBuf({ role: row.role||'', emp: row.emp||'業務委託', period: row.period||'', working: row.working||'', role_desc: row.role_desc||'', responsibility: row.responsibility||'', meetings: row.meetings||'', tasks: row.tasks||'' }) }} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, cursor: 'pointer', fontFamily: 'inherit' }}>✎ 編集</button>
+                      {rows.length > 1 && <button onClick={() => deleteRow(row.id)} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, cursor: 'pointer', fontFamily: 'inherit' }}>✕ 削除</button>}
+                    </div>
+                  )}
+                </div>
+                {/* 詳細 */}
+                {!isEditing && (
+                  <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {row.role_desc && (
+                      <div style={{ gridColumn: '1/-1' }}>
+                        <div style={lbl}>役割・ミッション</div>
+                        <div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{row.role_desc}</div>
+                      </div>
+                    )}
+                    {row.responsibility && (
+                      <div>
+                        <div style={lbl}>責任範囲</div>
+                        <div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.6 }}>{row.responsibility}</div>
+                      </div>
+                    )}
+                    {row.meetings && (
+                      <div>
+                        <div style={lbl}>参加ミーティング</div>
+                        <div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.6 }}>{row.meetings}</div>
+                      </div>
+                    )}
+                    {row.tasks && (
+                      <div style={{ gridColumn: '1/-1' }}>
+                        <div style={lbl}>主要タスク</div>
+                        <div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{row.tasks}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isEditing && (
+                  <div style={{ padding: '14px 16px' }}>
+                    <JdForm buf={editBuf} setBuf={setEditBuf} />
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
                       <button onClick={() => { setEditingId(null); setEditBuf({}) }} style={{ padding: '5px 14px', borderRadius: 7, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>キャンセル</button>
                       <button onClick={() => saveRow(row.id)} disabled={saving} style={{ padding: '5px 14px', borderRadius: 7, background: T().accentSolid, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>{saving ? '保存中...' : '保存'}</button>
                     </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: T().text }}>{row.role || '役職未設定'}</span>
-                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: `${empB.bg}`, color: empB.color }}>{row.emp}</span>
-                      {row.period && <span style={{ fontSize: 11, color: T().textFaint }}>📅 {row.period}</span>}
-                    </div>
-                    {row.skills && <div style={{ fontSize: 12, color: T().textSub, marginBottom: 6 }}>🔧 {row.skills}</div>}
-                    {row.bio && <div style={{ fontSize: 12, color: T().textFaint, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{row.bio}</div>}
-                    {isAdmin && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                        <button onClick={() => { setEditingId(row.id); setEditBuf({}) }} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, cursor: 'pointer', fontFamily: 'inherit' }}>✎ 編集</button>
-                        {rows.length > 1 && <button onClick={() => deleteRow(row.id)} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, cursor: 'pointer', fontFamily: 'inherit' }}>✕ 削除</button>}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
             )
           })}
 
+          {/* 追加フォーム */}
           {addingRow && (
             <div style={{ border: `1px dashed ${T().badgeBorder}`, borderRadius: 10, padding: '16px', background: T().bgHover, marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T().accent, marginBottom: 12 }}>＋ 新しいJDバージョン</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div><div style={lbl}>役職</div><input value={newBuf.role} onChange={e => setNewBuf(b => ({ ...b, role: e.target.value }))} style={inpSt({ width: '100%', boxSizing: 'border-box' })} /></div>
-                <div><div style={lbl}>雇用形態</div><select value={newBuf.emp} onChange={e => setNewBuf(b => ({ ...b, emp: e.target.value }))} style={{ ...inpSt(), width: '100%', boxSizing: 'border-box' }}>{EMP_OPTS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-                <div style={{ gridColumn: '1/-1' }}><div style={lbl}>期間</div><PeriodInput value={newBuf.period} onChange={v => setNewBuf(b => ({ ...b, period: v }))} /></div>
-                <div style={{ gridColumn: '1/-1' }}><div style={lbl}>スキル・強み</div><input value={newBuf.skills} onChange={e => setNewBuf(b => ({ ...b, skills: e.target.value }))} style={inpSt({ width: '100%', boxSizing: 'border-box' })} /></div>
-                <div style={{ gridColumn: '1/-1' }}><div style={lbl}>自己紹介・背景</div><textarea value={newBuf.bio} onChange={e => setNewBuf(b => ({ ...b, bio: e.target.value }))} rows={3} style={{ ...inpSt(), width: '100%', boxSizing: 'border-box', resize: 'vertical' }} /></div>
-                <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: T().textSub, cursor: 'pointer', marginRight: 'auto' }}><input type="checkbox" checked={newBuf.is_current} onChange={e => setNewBuf(b => ({ ...b, is_current: e.target.checked }))} style={{ accentColor: T().accent }} />現在の役職として設定</label>
-                  <button onClick={() => setAddingRow(false)} style={{ padding: '5px 14px', borderRadius: 7, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>キャンセル</button>
-                  <button onClick={addRow} disabled={saving} style={{ padding: '5px 14px', borderRadius: 7, background: T().accentSolid, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>{saving ? '追加中...' : '追加'}</button>
-                </div>
+              <JdForm buf={newBuf} setBuf={setNewBuf} />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button onClick={() => { setAddingRow(false); setNewBuf(EMPTY_ROW) }} style={{ padding: '5px 14px', borderRadius: 7, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>キャンセル</button>
+                <button onClick={addRow} disabled={saving} style={{ padding: '5px 14px', borderRadius: 7, background: T().accentSolid, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>{saving ? '追加中...' : '追加'}</button>
               </div>
             </div>
           )}
@@ -1855,6 +1891,7 @@ function MemberJDTab({ members, jdRows, setJdRows, isAdmin, currentUser, tasks, 
           const def = JD_DEFAULT[m.name] || {}
           const role = cur?.role || def.role || '役職未設定'
           const emp = cur?.emp || def.emp || ''
+          const working = cur?.working || def.working || ''
           const hasJd = rows.length > 0
           const empB = getEmpBadge(emp)
           const color = avatarColor(m.name)
@@ -1873,6 +1910,7 @@ function MemberJDTab({ members, jdRows, setJdRows, isAdmin, currentUser, tasks, 
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {emp && <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 700, background: empB.bg, color: empB.color }}>{emp}</span>}
+                {working && <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: T().bgInput, color: T().textMuted }}>{working}</span>}
                 {hasJd ? <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>JD {rows.length}件</span> : <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: T().bgInput, color: T().textFaint }}>JD未登録</span>}
                 {memberTasks.length > 0 && <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${color}15`, color, border: `1px solid ${color}30` }}>業務 {memberTasks.length}件</span>}
               </div>
