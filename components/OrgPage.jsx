@@ -35,6 +35,45 @@ let _T = THEMES.dark
 const T = () => _T
 
 // ══════════════════════════════════════════════════
+// 定数・ユーティリティ
+// ══════════════════════════════════════════════════
+const STATUS_OPTS = [
+  { value: 'active',    label: '🔵 現役',     bg: 'rgba(93,202,165,0.15)',  color: '#5DCAA5', border: 'rgba(93,202,165,0.3)' },
+  { value: 'expanding', label: '🟡 拡充中',   bg: 'rgba(240,153,123,0.15)', color: '#F0997B', border: 'rgba(240,153,123,0.3)' },
+  { value: 'future',    label: '🟣 追加予定', bg: 'rgba(176,186,200,0.15)', color: '#B0BAC8', border: 'rgba(176,186,200,0.3)' },
+]
+const EMP_BADGE = {
+  '業務委託':        { bg: 'rgba(93,202,165,0.15)',  color: '#5DCAA5' },
+  '正社員':          { bg: 'rgba(61,107,94,0.15)',   color: '#3D6B5E' },
+  '業務委託→正社員': { bg: 'rgba(240,153,123,0.15)', color: '#F0997B' },
+  '正社員予定':      { bg: 'rgba(240,153,123,0.15)', color: '#F0997B' },
+}
+const EMP_OPTS = ['業務委託', '正社員', '業務委託→正社員', '正社員予定']
+const AVATAR_COLORS = ['#5A8A7A','#3D6B5E','#5DCAA5','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
+const DEPT_COLOR_RULES = [
+  { match: 'コミュニティ', color: '#5A8A7A' },
+  { match: 'ユース',       color: '#3D6B5E' },
+  { match: 'クラブ連携',   color: '#0F6E56' },
+  { match: '経営',         color: '#E8875A' },
+]
+const ROLES = ['管理者', 'ディレクター', 'マネージャー', 'メンバー', 'その他']
+
+function getDeptColor(name) {
+  const rule = DEPT_COLOR_RULES.find(r => name && name.includes(r.match))
+  return rule ? rule.color : '#5A8A7A'
+}
+function getStatusBadge(status) { return STATUS_OPTS.find(s => s.value === status) || STATUS_OPTS[0] }
+function getEmpBadge(emp) {
+  const key = Object.keys(EMP_BADGE).find(k => emp && emp.includes(k)) || '業務委託'
+  return EMP_BADGE[key]
+}
+function avatarColor(name) {
+  if (!name) return '#7a8599'
+  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+
+// ══════════════════════════════════════════════════
 // 共通UIパーツ
 // ══════════════════════════════════════════════════
 function Avatar({ name, size = 36, avatar_url }) {
