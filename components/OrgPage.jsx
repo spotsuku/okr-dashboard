@@ -2955,4 +2955,99 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
   )
 }
 
+export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }) {
+  // グローバルテーマを更新
+  _T = THEMES[themeKey] || THEMES.dark
+
+  const [activeTab, setActiveTab] = useState('chart')
+  const [jumpMemberName, setJumpMemberName] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user?.email) return
+      const { data } = await supabase.from('members').select('is_admin').eq('email', user.email).single()
+      if (data?.is_admin) setIsAdmin(true)
+    }
+    checkAdmin()
+  }, [user])
+
+  const handleMemberClick = name => { setJumpMemberName(name); setActiveTab('members') }
+  const handleTeamMetaUpdate = (levelId, meta) => setTeamMeta(prev => ({ ...prev, [levelId]: { ...(prev[levelId] || {}), ...meta } }))
+
+  const tabs = [
+    { id: 'chart',   icon: '🏗', label: '組織図' },
+    { id: 'tasks',   icon: '📋', label: '業務一覧' },
+    { id: 'manual',  icon: '📖', label: '業務マニュアル' },
+    { id: 'members', icon: '👤', label: 'メンバーJD' },
+    { id: 'users',   icon: '👥', label: 'ユーザー管理' },
+  ]
+
+
+  if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T().bg, color: T().textMuted, fontSize: 14 }}>読み込み中...</div>
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 28px' }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, color: T().accent, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T().text }}>🏢 組織</div>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? T().badgeBg : T().warnBg, color: fiscalYear === '2026' ? T().accent : T().warn, border: `1px solid ${fiscalYear === '2026' ? T().badgeBorder : T().warn}` }}>{fiscalYear}年度</span>
+            {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>👑 管理者</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: T().textFaint }}>NEO福岡の組織図・業務一覧・業務マニュアル・メンバー別JDを確認できます</div>
+            <span style={{
+              fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
+              background: syncStatus === 'synced' ? T().badgeBg : syncStatus === 'error' ? T().warnBg : T().warnBg,
+              color: syncStatus === 'synced' ? T().accent : syncStatus === 'error' ? T().warn : T().warn,
+              border: `1px solid ${syncStatus === 'synced' ? T().badgeBorder : T().warn}`,
+            }}>
+              {syncStatus === 'synced' ? '🟢 リアルタイム同期中' : syncStatus === 'error' ? '🔴 同期エラー' : '🟡 接続中...'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${T().border}`, marginBottom: 24 }}>
+          {tabs.map(t => {
+            const isA = activeTab === t.id
+            return (
+              <button key={t.id}
+                onClick={() => { setActiveTab(t.id); if (t.id !== 'members') setJumpMemberName(null) }}
+                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? T().accent : T().textFaint, borderBottom: `3px solid ${isA ? T().accent : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? T().navActiveBg : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
+                {t.icon} {t.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {activeTab === 'chart' && (
+          <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate} />
+        )}
+        {activeTab === 'tasks' && (
+          <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
+            taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} orgTableError={orgTableError} />
+        )}
+        {activeTab === 'manual' && (
+          <ManualTab tasks={tasks} manuals={manuals} setManuals={setManuals} members={members} levels={levels} isAdmin={isAdmin} currentUser={user?.email} />
+        )}
+        {activeTab === 'members' && (
+          <MemberJDTab
+            members={members} setMembers={setMembers}
+            levels={levels}
+            tasks={tasks}
+            taskHistory={taskHistory}
+            jdRows={jdRows} setJdRows={setJdRows}
+            isAdmin={isAdmin}
+            initialName={jumpMemberName}
+            onClearJump={() => setJumpMemberName(null)}
+          />
+        )}
+        {activeTab === 'users' && <UserListTab members={members} currentUser={user} isAdmin={isAdmin} />}
+      </div>
+    </div>
+  )
 }
