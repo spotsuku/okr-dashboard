@@ -1004,8 +1004,8 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
       transition: 'all 0.15s', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
     }),
     // main
-    main: { flex: 1, overflowY: 'auto', background: T().bg },
-    wrap: { maxWidth: 820, margin: '0 auto', padding: '32px 28px 80px' },
+    main: { flex: 1, overflowY: 'auto', minWidth: 0, background: T().bg },
+    wrap: { maxWidth: 860, margin: '0 auto', padding: '32px 28px 80px', width: '100%', boxSizing: 'border-box' },
     // hero
     hero: (accent, accentBg) => ({
       borderLeft: `5px solid ${accent}`,
@@ -1220,7 +1220,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
   }, [selectedId, tasks, levels])
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: T().bg, fontFamily: '-apple-system, BlinkMacSystemFont, "Noto Sans JP", sans-serif' }}>
+    <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden', background: T().bg, fontFamily: '-apple-system, BlinkMacSystemFont, "Noto Sans JP", sans-serif' }}>
 
       {/* ── SIDEBAR ── */}
       <div style={S.sidebar}>
@@ -1891,7 +1891,7 @@ export default function OrgPage({ user, isAdmin, themeKey = 'dark', fiscalYear =
           />
         )}
         {activeTab === 'manual' && (
-          <div style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
             <ManualTab
               tasks={tasks}
               manuals={manuals}
