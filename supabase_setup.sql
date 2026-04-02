@@ -157,6 +157,19 @@ CREATE TABLE IF NOT EXISTS org_member_jd (
   UNIQUE(member_id, version_idx)
 );
 
+-- 13. org_task_manuals テーブル（業務マニュアル）
+CREATE TABLE IF NOT EXISTS org_task_manuals (
+  id          BIGSERIAL PRIMARY KEY,
+  task_id     BIGINT NOT NULL,
+  title       TEXT DEFAULT '',
+  content     TEXT DEFAULT '',
+  category    TEXT DEFAULT '',
+  sort_order  INT DEFAULT 0,
+  updated_by  TEXT DEFAULT '',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============================================================
 -- 初期データ（組織階層のサンプル）
 -- 必要に応じて編集してください
@@ -249,6 +262,12 @@ ALTER TABLE org_member_jd ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "auth users can manage org_member_jd" ON org_member_jd;
 CREATE POLICY "auth users can manage org_member_jd"
   ON org_member_jd FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- org_task_manuals
+ALTER TABLE org_task_manuals ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth users can manage org_task_manuals" ON org_task_manuals;
+CREATE POLICY "auth users can manage org_task_manuals"
+  ON org_task_manuals FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================
 -- 既存DBマイグレーション用SQL

@@ -61,9 +61,74 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+// ─── MilestoneHoverTooltip ───────────────────────────────────────────────────
+function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
+  const { title, due_date, focus_level, status, owner, start_month, end_month } = milestone
+  const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
+  const isDone = status === 'done'
+  const isDelayed = status === 'delayed'
+  const statusLabel = isDone ? '完了' : isDelayed ? '遅延' : '進行中'
+  const statusColor = isDone ? '#22c55e' : isDelayed ? '#dc2626' : '#3b82f6'
+  const startLabel = MONTHS_SELECT.find(m => m.value === start_month)?.label || ''
+  const endLabel = MONTHS_SELECT.find(m => m.value === end_month)?.label || ''
+
+  return (
+    <div style={{
+      position: 'fixed', zIndex: 100,
+      left: position.x, top: position.y,
+      pointerEvents: 'none',
+    }}>
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.borderMid}`,
+        borderRadius: 10, padding: '14px 16px', minWidth: 220, maxWidth: 320,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 8, lineHeight: 1.4 }}>
+          {isDone ? '✓ ' : ''}{title}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <span style={{ color: T.textMuted, minWidth: 52 }}>期間</span>
+            <span style={{ color: T.textSub }}>{startLabel}〜{endLabel}</span>
+          </div>
+          {due_date && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+              <span style={{ color: T.textMuted, minWidth: 52 }}>期日</span>
+              <span style={{ color: T.textSub }}>{due_date}</span>
+              {daysText && !isDone && (
+                <span style={{ fontSize: 10, fontWeight: 600, ...daysStyle }}>{daysText}</span>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <span style={{ color: T.textMuted, minWidth: 52 }}>ステータス</span>
+            <span style={{
+              fontSize: 10, fontWeight: 500, color: statusColor,
+              backgroundColor: hexWithAlpha(statusColor, 0.1),
+              padding: '1px 6px', borderRadius: 4,
+            }}>{statusLabel}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <span style={{ color: T.textMuted, minWidth: 52 }}>注力</span>
+            <span style={{ color: T.textSub }}>{focus_level === 'focus' ? '最注力' : '進行中'}</span>
+          </div>
+          {owner && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+              <span style={{ color: T.textMuted, minWidth: 52 }}>責任者</span>
+              <span style={{ color: T.textSub }}>{owner}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MilestoneBar ────────────────────────────────────────────────────────────
 function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
-  const { title, due_date, focus_level, status } = milestone
+  const { title, due_date, focus_level, status, owner } = milestone
+  const [hovered, setHovered] = useState(false)
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
 
   const startCol = MONTH_ORDER.indexOf(milestone.start_month) + 2
   const endCol   = MONTH_ORDER.indexOf(milestone.end_month) + 3
@@ -83,25 +148,51 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
         border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
         outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
 
+  const handleMouseEnter = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const tooltipW = 280
+    const tooltipH = 180
+    let x = rect.left
+    let y = rect.bottom + 6
+    if (x + tooltipW > window.innerWidth) x = window.innerWidth - tooltipW - 12
+    if (x < 8) x = 8
+    if (y + tooltipH > window.innerHeight) y = rect.top - tooltipH - 6
+    setTooltipPos({ x, y })
+    setHovered(true)
+  }
+
   return (
-    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'hidden' }}>
+    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
       <div
         onClick={isAdmin ? () => onEdit(milestone) : undefined}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setHovered(false)}
         style={{
           ...barBg, borderRadius: 4, padding: '4px 7px',
           fontSize: isChild ? 9 : 10, fontWeight: 500, lineHeight: '1.3',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
+          display: 'flex', flexDirection: 'column', gap: 1,
           overflow: 'hidden', whiteSpace: 'nowrap',
           cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
+          position: 'relative',
         }}
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-          {isDone ? '✓ ' : ''}{title}
-        </span>
-        {daysText && !isDone && (
-          <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+            {isDone ? '✓ ' : ''}{title}
+          </span>
+          {daysText && !isDone && (
+            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
+          )}
+        </div>
+        {owner && (
+          <div style={{ fontSize: 8, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {owner}
+          </div>
         )}
       </div>
+      {hovered && (
+        <MilestoneHoverTooltip milestone={milestone} orgColor={orgColor} T={T} position={tooltipPos} />
+      )}
     </div>
   )
 }
@@ -114,7 +205,7 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
       display: 'grid',
       gridTemplateColumns: GRID_COLS,
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
-      minHeight: isChild ? 36 : 44, alignItems: 'center', position: 'relative',
+      minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 5,
@@ -160,6 +251,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
     due_date:    milestone.due_date || '',
     focus_level: milestone.focus_level || 'normal',
     status:      milestone.status || 'pending',
+    owner:       milestone.owner || '',
   })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -262,6 +354,9 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
           <option value="done">完了</option>
           <option value="delayed">遅延</option>
         </select>
+
+        <label style={labelSt}>責任者</label>
+        <input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} style={inputSt} placeholder="例：田中太郎" />
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           {!isNew && (
@@ -452,6 +547,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
       due_date: '',
       focus_level: 'normal',
       status: 'pending',
+      owner: '',
       sort_order: milestones.length,
     })
   }, [fiscalYear, milestones.length])

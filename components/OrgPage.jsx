@@ -601,6 +601,7 @@ function useOrgData(fiscalYear) {
   const [tasks, setTasks] = useState([])
   const [jdRows, setJdRows] = useState({})
   const [taskHistory, setTaskHistory] = useState([])
+  const [manuals, setManuals] = useState([])
   const [loading, setLoading] = useState(true)
   const [syncStatus, setSyncStatus] = useState('connecting')
   const [orgTableError, setOrgTableError] = useState(false)
@@ -614,8 +615,9 @@ function useOrgData(fiscalYear) {
       supabase.from('org_tasks').select('*').order('id'),
       supabase.from('org_member_jd').select('*').order('version_idx'),
       supabase.from('org_task_history').select('*').order('changed_at'),
+      supabase.from('org_task_manuals').select('*').order('sort_order'),
     ])
-    const [lvls, meta, mems, taskData, jdData, histData] = results.map(r => r.data)
+    const [lvls, meta, mems, taskData, jdData, histData, manualData] = results.map(r => r.data)
     const orgErrors = results.slice(3).filter(r => r.error)
     if (orgErrors.length > 0) {
       console.warn('org_* テーブルが未作成の可能性があります。supabase_setup.sql を実行してください。', orgErrors.map(r => r.error))
@@ -644,6 +646,7 @@ function useOrgData(fiscalYear) {
     Object.keys(rowMap).forEach(k => rowMap[k].sort((a, b) => a.version_idx - b.version_idx))
     setJdRows(rowMap)
     setTaskHistory(histData || [])
+    setManuals(manualData || [])
     setLoading(false)
   }, [fiscalYear])
 
@@ -696,6 +699,11 @@ function useOrgData(fiscalYear) {
           return next
         })
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'org_task_manuals' }, payload => {
+        if (payload.eventType === 'INSERT') setManuals(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
+        else if (payload.eventType === 'UPDATE') setManuals(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
+        else if (payload.eventType === 'DELETE') setManuals(prev => prev.filter(m => m.id !== payload.old.id))
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'levels' }, () => { reload() })
       .subscribe(status => {
         setSyncStatus(status === 'SUBSCRIBED' ? 'synced' : status === 'CHANNEL_ERROR' ? 'error' : 'connecting')
@@ -703,7 +711,7 @@ function useOrgData(fiscalYear) {
     return () => { supabase.removeChannel(channel) }
   }, [fiscalYear]) // eslint-disable-line
 
-  return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
+  return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
 }
 
 // ══════════════════════════════════════════════════
@@ -2545,6 +2553,339 @@ ${versions.length > 1 ? `
 }
 
 // ══════════════════════════════════════════════════
+// タブ5: 業務マニュアル
+// ══════════════════════════════════════════════════
+function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, currentUser }) {
+  const [filterDept, setFilterDept] = useState('')
+  const [filterTask, setFilterTask] = useState(null)
+  const [query, setQuery] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editBuf, setEditBuf] = useState({})
+  const [addingTaskId, setAddingTaskId] = useState(null)
+  const [newBuf, setNewBuf] = useState({ title: '', content: '', category: '' })
+  const [saving, setSaving] = useState(false)
+  const [expandedManual, setExpandedManual] = useState(null)
+
+  // levels階層を構築
+  const levelHierarchy = useMemo(() => {
+    if (!levels || levels.length === 0) return null
+    const roots = levels.filter(l => !l.parent_id)
+    const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
+    const result = {}
+    roots.forEach(root => {
+      getChildren(root.id).forEach(dept => {
+        result[dept.name] = {}
+        const teams = getChildren(dept.id)
+        if (teams.length === 0) {
+          result[dept.name][dept.name] = dept.id
+        } else {
+          teams.forEach(team => { result[dept.name][team.name] = team.id })
+        }
+      })
+    })
+    return result
+  }, [levels])
+
+  // タスクの部署マッチング
+  const matchTask = useCallback((t) => {
+    if (!levelHierarchy) return { dept: t.dept, team: t.team }
+    if (t.level_id) {
+      for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+        for (const [teamName, levelId] of Object.entries(teams)) {
+          if (Number(t.level_id) === Number(levelId)) return { dept: deptName, team: teamName }
+        }
+      }
+    }
+    for (const [deptName, teams] of Object.entries(levelHierarchy)) {
+      for (const teamName of Object.keys(teams)) {
+        if (t.team === teamName) return { dept: deptName, team: teamName }
+      }
+    }
+    return { dept: t.dept, team: t.team }
+  }, [levelHierarchy])
+
+  const allDepts = levelHierarchy ? Object.keys(levelHierarchy) : [...new Set(tasks.map(t => t.dept))]
+
+  // アクティブなタスクのみ
+  const activeTasks = tasks.filter(t => !t.is_archived)
+
+  // タスクごとのマニュアル数
+  const manualCountByTask = useMemo(() => {
+    const counts = {}
+    manuals.forEach(m => { counts[m.task_id] = (counts[m.task_id] || 0) + 1 })
+    return counts
+  }, [manuals])
+
+  // フィルタ適用
+  const filteredTasks = activeTasks.filter(t => {
+    const m = matchTask(t)
+    return (!filterDept || m.dept === filterDept) &&
+      (!query || t.task.includes(query) || m.team.includes(query) || t.owner.includes(query))
+  })
+
+  // グループ化
+  const grouped = {}
+  if (levelHierarchy && !query) {
+    Object.entries(levelHierarchy).forEach(([deptName, teams]) => {
+      if (filterDept && deptName !== filterDept) return
+      grouped[deptName] = {}
+      Object.keys(teams).forEach(teamName => { grouped[deptName][teamName] = [] })
+    })
+  }
+  filteredTasks.forEach(t => {
+    const m = matchTask(t)
+    if (!grouped[m.dept]) grouped[m.dept] = {}
+    if (!grouped[m.dept][m.team]) grouped[m.dept][m.team] = []
+    grouped[m.dept][m.team].push(t)
+  })
+
+  const taskManuals = filterTask ? manuals.filter(m => m.task_id === filterTask.id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) : []
+
+  const CATEGORIES = ['手順書', 'ルール', 'テンプレート', 'FAQ', 'その他']
+
+  const saveManual = async () => {
+    if (!editingId) return
+    setSaving(true)
+    const { error } = await supabase.from('org_task_manuals').update({ ...editBuf, updated_by: currentUser || '', updated_at: new Date().toISOString() }).eq('id', editingId)
+    if (error) { alert('保存に失敗しました: ' + error.message); setSaving(false); return }
+    setManuals(prev => prev.map(m => m.id === editingId ? { ...m, ...editBuf, updated_by: currentUser || '', updated_at: new Date().toISOString() } : m))
+    setEditingId(null); setEditBuf({}); setSaving(false)
+  }
+
+  const addManual = async () => {
+    if (!addingTaskId || !newBuf.title.trim()) return
+    setSaving(true)
+    const maxOrder = Math.max(0, ...taskManuals.map(m => m.sort_order ?? 0))
+    const row = { task_id: addingTaskId, ...newBuf, sort_order: maxOrder + 1, updated_by: currentUser || '' }
+    const { data, error } = await supabase.from('org_task_manuals').insert(row).select().single()
+    if (error) { alert('追加に失敗しました: ' + error.message); setSaving(false); return }
+    setManuals(prev => [...prev, data])
+    setNewBuf({ title: '', content: '', category: '' }); setAddingTaskId(null); setSaving(false)
+  }
+
+  const deleteManual = async (id) => {
+    if (!window.confirm('このマニュアルを削除しますか？')) return
+    const { error } = await supabase.from('org_task_manuals').delete().eq('id', id)
+    if (error) { alert('削除に失敗しました: ' + error.message); return }
+    setManuals(prev => prev.filter(m => m.id !== id))
+    if (expandedManual === id) setExpandedManual(null)
+  }
+
+  const sel = { background: T().selectBg, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T().text, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }
+  const catColor = (cat) => {
+    const colors = { '手順書': '#5DCAA5', 'ルール': '#4d9fff', 'テンプレート': '#ffd166', 'FAQ': '#ff6b6b', 'その他': '#B0BAC8' }
+    return colors[cat] || T().textMuted
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 20, minHeight: 500 }}>
+      {/* 左ペイン: 業務一覧 */}
+      <div style={{ width: filterTask ? 340 : '100%', flexShrink: 0, transition: 'width 0.2s' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <select value={filterDept} onChange={e => setFilterDept(e.target.value)} style={sel}>
+            <option value="">全部署</option>
+            {allDepts.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 業務名・チーム名で検索..."
+            style={{ ...sel, flex: 1, minWidth: 160, background: T().bgInput }} />
+        </div>
+
+        {Object.entries(grouped).map(([dept, teams]) => (
+          <div key={dept} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T().accent, padding: '6px 10px', background: T().navActiveBg, borderRadius: 8, marginBottom: 6 }}>
+              {dept}
+            </div>
+            {Object.entries(teams).map(([team, teamTasks]) => (
+              <div key={team} style={{ marginLeft: 8, marginBottom: 8 }}>
+                {team !== dept && <div style={{ fontSize: 11, color: T().textMuted, fontWeight: 600, padding: '3px 8px', marginBottom: 4 }}>{team}</div>}
+                {teamTasks.map(t => {
+                  const isSelected = filterTask?.id === t.id
+                  const count = manualCountByTask[t.id] || 0
+                  return (
+                    <div key={t.id}
+                      onClick={() => setFilterTask(isSelected ? null : t)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                        background: isSelected ? T().navActiveBg : 'transparent',
+                        border: isSelected ? `1px solid ${T().badgeBorder}` : '1px solid transparent',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = T().bgHover }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: isSelected ? 700 : 500, color: isSelected ? T().accent : T().text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {t.task}
+                        </div>
+                        <div style={{ fontSize: 11, color: T().textMuted, marginTop: 2 }}>
+                          {t.owner || '未定'}
+                        </div>
+                      </div>
+                      {count > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>
+                          {count}件
+                        </span>
+                      )}
+                      <span style={{ fontSize: 14, color: T().textFaint }}>›</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {Object.keys(grouped).length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: T().textMuted, fontSize: 13 }}>
+            業務が見つかりません
+          </div>
+        )}
+      </div>
+
+      {/* 右ペイン: マニュアル詳細 */}
+      {filterTask && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ background: T().bgCard, borderRadius: 12, border: `1px solid ${T().border}`, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T().text }}>{filterTask.task}</div>
+                <div style={{ fontSize: 12, color: T().textMuted, marginTop: 2 }}>
+                  担当: {filterTask.owner || '未定'}{filterTask.support ? ` ／ サポート: ${filterTask.support}` : ''}
+                </div>
+              </div>
+              <button onClick={() => setFilterTask(null)} style={{ background: 'none', border: 'none', color: T().textMuted, cursor: 'pointer', fontSize: 18, fontFamily: 'inherit' }}>✕</button>
+            </div>
+
+            {/* マニュアル一覧 */}
+            {taskManuals.length === 0 && !addingTaskId && (
+              <div style={{ textAlign: 'center', padding: '30px 20px', color: T().textMuted, fontSize: 13, background: T().bgHover, borderRadius: 10 }}>
+                📄 まだマニュアルがありません
+              </div>
+            )}
+
+            {taskManuals.map(m => {
+              const isEditing = editingId === m.id
+              const isExpanded = expandedManual === m.id
+              return (
+                <div key={m.id} style={{ marginBottom: 10, borderRadius: 10, border: `1px solid ${T().border}`, overflow: 'hidden', background: T().bgCard2 }}>
+                  {/* ヘッダー */}
+                  <div
+                    onClick={() => { if (!isEditing) setExpandedManual(isExpanded ? null : m.id) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer', background: isExpanded ? T().bgHover : 'transparent', transition: 'background 0.15s' }}
+                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = T().bgHover }}
+                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <span style={{ fontSize: 12, color: T().textFaint, transition: 'transform 0.15s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                    {m.category && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${catColor(m.category)}22`, color: catColor(m.category), border: `1px solid ${catColor(m.category)}44` }}>
+                        {m.category}
+                      </span>
+                    )}
+                    <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: T().text }}>{m.title}</div>
+                    {m.updated_at && (
+                      <span style={{ fontSize: 10, color: T().textFaint }}>
+                        {new Date(m.updated_at).toLocaleDateString('ja-JP')}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 展開コンテンツ */}
+                  {isExpanded && !isEditing && (
+                    <div style={{ padding: '12px 14px', borderTop: `1px solid ${T().border}` }}>
+                      <div style={{ fontSize: 13, color: T().text, whiteSpace: 'pre-wrap', lineHeight: 1.7, minHeight: 40 }}>
+                        {m.content || '（内容なし）'}
+                      </div>
+                      {m.updated_by && (
+                        <div style={{ fontSize: 10, color: T().textFaint, marginTop: 10, textAlign: 'right' }}>
+                          最終更新: {m.updated_by}
+                        </div>
+                      )}
+                      {isAdmin && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'flex-end' }}>
+                          <button onClick={() => { setEditingId(m.id); setEditBuf({ title: m.title, content: m.content, category: m.category || '' }) }}
+                            style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            ✏️ 編集
+                          </button>
+                          <button onClick={() => deleteManual(m.id)}
+                            style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            🗑 削除
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 編集モード */}
+                  {isExpanded && isEditing && (
+                    <div style={{ padding: '12px 14px', borderTop: `1px solid ${T().border}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input value={editBuf.title || ''} onChange={e => setEditBuf(b => ({ ...b, title: e.target.value }))} placeholder="タイトル"
+                          style={{ ...sel, flex: 1, background: T().bgInput, fontWeight: 600 }} />
+                        <select value={editBuf.category || ''} onChange={e => setEditBuf(b => ({ ...b, category: e.target.value }))} style={{ ...sel, width: 120 }}>
+                          <option value="">カテゴリ</option>
+                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <textarea value={editBuf.content || ''} onChange={e => setEditBuf(b => ({ ...b, content: e.target.value }))} placeholder="マニュアルの内容を入力..."
+                        rows={10} style={{ ...sel, background: T().bgInput, resize: 'vertical', lineHeight: 1.7, minHeight: 160 }} />
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button onClick={() => { setEditingId(null); setEditBuf({}) }}
+                          style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: 'transparent', color: T().textMuted, border: `1px solid ${T().border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          キャンセル
+                        </button>
+                        <button onClick={saveManual} disabled={saving}
+                          style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: T().accent, color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', opacity: saving ? 0.5 : 1 }}>
+                          {saving ? '保存中...' : '💾 保存'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* 新規追加フォーム */}
+            {addingTaskId === filterTask.id ? (
+              <div style={{ marginTop: 12, padding: 14, borderRadius: 10, border: `1px dashed ${T().badgeBorder}`, background: T().bgHover }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T().accent, marginBottom: 10 }}>📝 新しいマニュアルを追加</div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input value={newBuf.title} onChange={e => setNewBuf(b => ({ ...b, title: e.target.value }))} placeholder="タイトル"
+                    style={{ ...sel, flex: 1, background: T().bgInput, fontWeight: 600 }} />
+                  <select value={newBuf.category} onChange={e => setNewBuf(b => ({ ...b, category: e.target.value }))} style={{ ...sel, width: 120 }}>
+                    <option value="">カテゴリ</option>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <textarea value={newBuf.content} onChange={e => setNewBuf(b => ({ ...b, content: e.target.value }))} placeholder="マニュアルの内容を入力..."
+                  rows={8} style={{ ...sel, width: '100%', boxSizing: 'border-box', background: T().bgInput, resize: 'vertical', lineHeight: 1.7, minHeight: 120, marginBottom: 8 }} />
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setAddingTaskId(null); setNewBuf({ title: '', content: '', category: '' }) }}
+                    style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: 'transparent', color: T().textMuted, border: `1px solid ${T().border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    キャンセル
+                  </button>
+                  <button onClick={addManual} disabled={saving || !newBuf.title.trim()}
+                    style={{ fontSize: 11, padding: '5px 16px', borderRadius: 6, background: T().accent, color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', opacity: (saving || !newBuf.title.trim()) ? 0.5 : 1 }}>
+                    {saving ? '追加中...' : '＋ 追加'}
+                  </button>
+                </div>
+              </div>
+            ) : isAdmin && (
+              <button onClick={() => setAddingTaskId(filterTask.id)}
+                style={{ marginTop: 12, width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px dashed ${T().badgeBorder}`, background: T().bgHover, color: T().accent, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'background 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = T().badgeBg}
+                onMouseLeave={e => e.currentTarget.style.background = T().bgHover}
+              >
+                ＋ マニュアルを追加
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════
 // メインページ
 // ══════════════════════════════════════════════════
 export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }) {
@@ -2555,7 +2896,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, loading, syncStatus, orgTableError, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
+  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -2572,6 +2913,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const tabs = [
     { id: 'chart',   icon: '🏗', label: '組織図' },
     { id: 'tasks',   icon: '📋', label: '業務一覧' },
+    { id: 'manual',  icon: '📖', label: '業務マニュアル' },
     { id: 'members', icon: '👤', label: 'メンバーJD' },
     { id: 'users',   icon: '👥', label: 'ユーザー管理' },
   ]
@@ -2590,7 +2932,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>👑 管理者</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <div style={{ fontSize: 13, color: T().textFaint }}>NEO福岡の組織図・業務一覧・メンバー別JDを確認できます</div>
+            <div style={{ fontSize: 13, color: T().textFaint }}>NEO福岡の組織図・業務一覧・業務マニュアル・メンバー別JDを確認できます</div>
             <span style={{
               fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
               background: syncStatus === 'synced' ? T().badgeBg : syncStatus === 'error' ? T().warnBg : T().warnBg,
@@ -2621,6 +2963,9 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
         {activeTab === 'tasks' && (
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
             taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} orgTableError={orgTableError} />
+        )}
+        {activeTab === 'manual' && (
+          <ManualTab tasks={tasks} manuals={manuals} setManuals={setManuals} members={members} levels={levels} isAdmin={isAdmin} currentUser={user?.email} />
         )}
         {activeTab === 'members' && (
           <MemberJDTab
