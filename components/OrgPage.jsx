@@ -646,10 +646,8 @@ function useOrgData(fiscalYear) {
 
     const rowMap = {}
     ;(jdData || []).forEach(row => {
-      // member_idが名前文字列の場合はmembers.idに変換
-      let key = row.member_id
-      const byName = (mems || []).find(m => m.name === String(row.member_id))
-      if (byName) key = byName.id
+      // member_idは名前文字列のままキーにする（MemberDetailもMemberJDTabも名前で参照）
+      const key = String(row.member_id)
       if (!rowMap[key]) rowMap[key] = []
       rowMap[key].push(row)
     })
