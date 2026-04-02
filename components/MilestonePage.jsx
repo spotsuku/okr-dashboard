@@ -256,27 +256,32 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   async function handleSave() {
     if (!form.title.trim()) return
     setSaving(true)
+    setSaveError(null)
     try {
       if (isNew) {
-        const { error } = await supabase.from('milestones').insert({
+        const { data, error } = await supabase.from('milestones').insert({
           ...form,
           org_id: milestone.org_id,
           fiscal_year: milestone.fiscal_year,
           sort_order: milestone.sort_order || 0,
-        })
+        }).select()
         if (error) throw error
+        if (!data || data.length === 0) throw new Error('保存に失敗しました。管理者権限が必要です。')
       } else {
-        const { error } = await supabase.from('milestones').update(form).eq('id', milestone.id)
+        const { data, error } = await supabase.from('milestones').update(form).eq('id', milestone.id).select()
         if (error) throw error
+        if (!data || data.length === 0) throw new Error('更新に失敗しました。管理者権限が必要です。')
       }
       onSaved()
       onClose()
     } catch (e) {
       console.error(e)
+      setSaveError(e.message || '保存中にエラーが発生しました')
     } finally {
       setSaving(false)
     }
@@ -288,6 +293,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
       return
     }
     setDeleting(true)
+    setSaveError(null)
     try {
       const { error } = await supabase.from('milestones').delete().eq('id', milestone.id)
       if (error) throw error
@@ -295,6 +301,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
       onClose()
     } catch (e) {
       console.error(e)
+      setSaveError(e.message || '削除中にエラーが発生しました')
     } finally {
       setDeleting(false)
     }
@@ -357,6 +364,10 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
 
         <label style={labelSt}>責任者</label>
         <input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} style={inputSt} placeholder="例：田中太郎" />
+
+        {saveError && (
+          <p style={{ color: '#dc2626', fontSize: 12, margin: '8px 0 0', padding: '8px 10px', background: 'rgba(220,38,38,0.08)', borderRadius: 6 }}>{saveError}</p>
+        )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           {!isNew && (
@@ -538,6 +549,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   }, [isAdmin])
 
   const handleAddMilestone = useCallback((orgId) => {
+    const orgMilestoneCount = milestones.filter(m => m.org_id === orgId).length
     setEditTarget({
       org_id: orgId,
       fiscal_year: Number(fiscalYear) || 2026,
@@ -548,9 +560,9 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
       focus_level: 'normal',
       status: 'pending',
       owner: '',
-      sort_order: milestones.length,
+      sort_order: orgMilestoneCount,
     })
-  }, [fiscalYear, milestones.length])
+  }, [fiscalYear, milestones])
 
   const currentMonth = new Date().getMonth() + 1
   const currentColIndex = MONTH_ORDER.indexOf(currentMonth)
