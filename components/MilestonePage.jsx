@@ -125,13 +125,13 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
 }
 
 // ─── MilestoneBar ────────────────────────────────────────────────────────────
-function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
+function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
   const { title, due_date, focus_level, status, owner } = milestone
   const [hovered, setHovered] = useState(false)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
 
-  const startCol = MONTH_ORDER.indexOf(milestone.start_month) + 2
-  const endCol   = MONTH_ORDER.indexOf(milestone.end_month) + 3
+  const startCol = visibleMonthOrder.indexOf(milestone.start_month) + 2
+  const endCol   = visibleMonthOrder.indexOf(milestone.end_month) + 3
 
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
 
@@ -198,7 +198,7 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
 }
 
 // ─── OrgRow ──────────────────────────────────────────────────────────────────
-function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
+function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
   const { name, color, milestones } = org
   return (
     <div style={{
@@ -235,7 +235,7 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
         )}
       </div>
       {milestones.map(ms => (
-        <MilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} />
+        <MilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} visibleMonthOrder={visibleMonthOrder} />
       ))}
     </div>
   )
@@ -483,6 +483,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   const [editTarget, setEditTarget] = useState(null)
   const [showAddOrg, setShowAddOrg] = useState(false)
   const [showAllOrgs, setShowAllOrgs] = useState(false)
+  const [viewMode, setViewMode] = useState('annual') // 'annual' | 'q1' | 'q2' | 'q3' | 'q4'
 
   // admin判定
   useEffect(() => {
@@ -597,20 +598,64 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
         )}
       </div>
 
+      {/* ビュー切替タブ */}
+      <div style={{ display: 'flex', gap: 2, marginBottom: 16, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.borderMid}`, alignSelf: 'flex-start', width: 'fit-content' }}>
+        {[
+          { key: 'annual', label: '年間' },
+          { key: 'q1',     label: 'Q1（4〜6月）' },
+          { key: 'q2',     label: 'Q2（7〜9月）' },
+          { key: 'q3',     label: 'Q3（10〜12月）' },
+          { key: 'q4',     label: 'Q4（1〜3月）' },
+        ].map(v => (
+          <button key={v.key} onClick={() => setViewMode(v.key)} style={{
+            padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: viewMode === v.key ? '#4d9fff22' : 'transparent',
+            color: viewMode === v.key ? '#4d9fff' : T.textMuted,
+            fontSize: 12, fontWeight: viewMode === v.key ? 700 : 500,
+            fontFamily: 'inherit', whiteSpace: 'nowrap', transition: 'all 0.15s',
+            borderBottom: viewMode === v.key ? '2px solid #4d9fff' : '2px solid transparent',
+          }}>{v.label}</button>
+        ))}
+      </div>
+
       {/* ローディング / エラー */}
       {loading && <div style={{ color: T.textMuted, fontSize: 13 }}>読み込み中...</div>}
       {error && <div style={{ color: '#dc2626', fontSize: 13 }}>エラー: {error}</div>}
 
       {/* タイムライン本体 */}
-      {!loading && !error && (
+      {!loading && !error && (() => {
+        // 四半期フィルタ
+        const Q_MONTH_RANGES = {
+          q1: [4,5,6], q2: [7,8,9], q3: [10,11,12], q4: [1,2,3]
+        }
+        const qMonths = viewMode !== 'annual' ? Q_MONTH_RANGES[viewMode] : null
+        const visibleMonthOrder  = qMonths ? MONTH_ORDER.filter(m => qMonths.includes(m)) : MONTH_ORDER
+        const visibleMonthLabels = qMonths ? MONTH_LABELS.filter((_, i) => qMonths.includes(MONTH_ORDER[i])) : MONTH_LABELS
+        const visibleGridCols = `120px repeat(${visibleMonthOrder.length}, minmax(0, 1fr))`
+        // 四半期表示時はそのQ内のマイルストーンのみ表示
+        const filterMs = (ms) => {
+          if (!qMonths) return ms
+          return ms.filter(m => {
+            const sm = m.start_month || m.end_month
+            const em = m.end_month
+            return qMonths.some(mo => {
+              const idx = MONTH_ORDER.indexOf(mo)
+              const smIdx = MONTH_ORDER.indexOf(sm)
+              const emIdx = MONTH_ORDER.indexOf(em)
+              return idx >= smIdx && idx <= emIdx
+            })
+          })
+        }
+        return (
         <div style={{
           background: T.bgCard, border: `0.5px solid ${T.borderLight}`,
           borderRadius: 12, padding: 16, overflow: 'hidden', width: '100%',
           boxSizing: 'border-box',
         }}>
           <div style={{ width: '100%', minWidth: 0 }}>
-            {/* Q ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
+            {/* Q ヘッダー行（年間表示のみ） */}
+            {viewMode === 'annual' && (
+            <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
               <div />
               {QUARTERS.map((q, i) => (
                 <div key={q.label} style={{
@@ -625,6 +670,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
                 </div>
               ))}
             </div>
+            )}
 
             {/* 月ヘッダー行 */}
             <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
@@ -662,7 +708,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
               <div key={org.id} style={{ display: 'contents' }}>
                 <OrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
                 {org.children.map(child => (
-                  <OrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
+                  <OrgRow key={child.id} org={{ ...child, milestones: filterMs(child.milestones) }} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
                 ))}
               </div>
             ))}
@@ -713,7 +759,8 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             )}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* 編集/追加モーダル */}
       {editTarget && (
