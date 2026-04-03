@@ -626,17 +626,8 @@ function useOrgData(fiscalYear) {
       setOrgTableError(false)
     }
 
-    // rootノード（parent_id=NULL）が複数ある場合、最新（最大id）のroot配下だけを使う
     const allLvls = lvls || []
-    const roots = allLvls.filter(l => !l.parent_id)
-    const latestRoot = roots.reduce((a, b) => (a.id > b.id ? a : b), roots[0] || { id: 0 })
-    const collectUnder = (parentId) => {
-      const children = allLvls.filter(l => Number(l.parent_id) === Number(parentId))
-      return [allLvls.find(l => l.id === parentId), ...children.flatMap(c => collectUnder(c.id))].filter(Boolean)
-    }
-    const validLvls = latestRoot.id
-      ? collectUnder(latestRoot.id)
-      : allLvls.filter(l => fiscalYear === '2026' ? (!l.fiscal_year || l.fiscal_year === '2026') : l.fiscal_year === fiscalYear)
+    const validLvls = allLvls.filter(l => l.fiscal_year === fiscalYear)
     setLevels(validLvls)
     const metaMap = {}
     ;(meta || []).forEach(m => { metaMap[m.level_id] = m })
@@ -3030,7 +3021,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} orgTableError={orgTableError} />
         )}
         {activeTab === 'manual' && (
-          <ManualTab tasks={tasks} manuals={manuals} setManuals={setManuals} members={members} levels={levels} isAdmin={isAdmin} currentUser={user?.email} />
+          <ManualTab tasks={tasks} manuals={manuals} setManuals={setManuals} members={members} levels={levels} isAdmin={isAdmin} currentUser={user?.email} teamMeta={teamMeta} />
         )}
         {activeTab === 'members' && (
           <MemberJDTab
