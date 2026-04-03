@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEO福岡 業務マニュアル</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#F5F3EE;--surface:#FFFFFF;--surface2:#F0EDE6;
+  --border:#E3DDD4;--border2:#CEC8BE;
+  --text-1:#17150E;--text-2:#57524A;--text-3:#98928A;
+  --gold:#B89240;--danger:#C0392B;
+  --link:#2563EB;--link-bg:#EFF6FF;
+  --edit-ring:#3B82F6;
+  --header-h:56px;--sidebar-w:240px;
+}
+html{scroll-behavior:smooth;}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text-1);font-size:14px;line-height:1.75;}
+.top-bar{position:fixed;top:0;left:0;right:0;z-index:300;height:var(--header-h);background:var(--text-1);border-bottom:2px solid var(--gold);display:flex;align-items:center;padding:0 20px;gap:12px;}
+.logo{font-family:'Shippori Mincho',serif;font-size:16px;letter-spacing:.06em;color:#fff;white-space:nowrap;flex-shrink:0;}
+.logo em{color:var(--gold);font-style:normal;}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.45);margin-left:4px;flex:1;min-width:0;overflow:hidden;}
+.breadcrumb .sep{opacity:.4;flex-shrink:0;}
+.breadcrumb .cur{color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.edit-toggle{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:6px 12px;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;font-weight:700;font-family:'Noto Sans JP',sans-serif;transition:.2s;white-space:nowrap;flex-shrink:0;}
+.edit-toggle:hover{background:rgba(255,255,255,.15);color:#fff;}
+.edit-toggle.active{background:var(--edit-ring);border-color:var(--edit-ring);color:#fff;}
+.edit-toggle .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.4);}
+.edit-toggle.active .dot{background:#fff;}
+.hamburger{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:6px;flex-shrink:0;}
+.hamburger span{width:18px;height:2px;background:#fff;border-radius:2px;display:block;}
+.sidebar{position:fixed;top:var(--header-h);left:0;bottom:0;width:var(--sidebar-w);background:var(--text-1);overflow-y:auto;z-index:200;padding:12px 0 40px;}
+.sidebar::-webkit-scrollbar{width:3px;}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px;}
+.home-link{display:flex;align-items:center;gap:8px;padding:10px 16px;color:rgba(255,255,255,.5);font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;border-left:3px solid transparent;transition:.15s;}
+.home-link:hover,.home-link.active{color:#fff;background:rgba(255,255,255,.06);border-left-color:var(--gold);}
+.sidebar-divider{height:1px;background:rgba(255,255,255,.08);margin:8px 16px;}
+.dept-block{margin-bottom:2px;}
+.dept-btn{width:100%;text-align:left;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 16px;color:rgba(255,255,255,.6);font-size:12px;font-weight:700;letter-spacing:.04em;font-family:'Noto Sans JP',sans-serif;transition:.15s;border-left:3px solid transparent;}
+.dept-btn:hover,.dept-btn.open{color:#fff;background:rgba(255,255,255,.05);}
+.dept-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.chevron{margin-left:auto;font-size:9px;opacity:.5;transition:transform .2s;}
+.dept-btn.open .chevron{transform:rotate(90deg);}
+.team-list{display:none;}
+.team-list.open{display:block;}
+.team-link{display:block;padding:7px 16px 7px 36px;color:rgba(255,255,255,.45);font-size:12px;text-decoration:none;transition:.15s;border-left:3px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.team-link:hover{color:rgba(255,255,255,.8);background:rgba(255,255,255,.04);}
+.team-link.active{color:#fff;font-weight:700;}
+.main{margin-left:var(--sidebar-w);padding-top:var(--header-h);min-height:100vh;}
+.wrap{max-width:860px;margin:0 auto;padding:36px 28px 100px;}
+.edit-hint{display:none;font-size:11px;color:var(--edit-ring);background:rgba(59,130,246,.08);border-radius:6px;padding:6px 12px;margin-bottom:16px;text-align:center;}
+body.edit-mode .edit-hint{display:block;}
+.hero{border-left:5px solid;border-radius:14px;padding:28px 32px;margin-bottom:32px;}
+.hero-tag{font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:7px;}
+.hero h1{font-family:'Shippori Mincho',serif;font-size:24px;margin-bottom:10px;}
+.hero-desc{font-size:13.5px;color:var(--text-2);line-height:1.85;}
+.home-hero{background:var(--text-1);border-radius:14px;padding:48px 40px;margin-bottom:28px;position:relative;overflow:hidden;}
+.home-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 20% 60%,rgba(184,146,64,.14),transparent 55%),radial-gradient(ellipse at 80% 20%,rgba(61,122,106,.1),transparent 55%);}
+.home-hero-inner{position:relative;z-index:1;}
+.home-eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:500;margin-bottom:12px;}
+.home-hero h1{font-family:'Shippori Mincho',serif;font-size:28px;color:#fff;line-height:1.35;margin-bottom:10px;}
+.home-hero p{color:rgba(255,255,255,.55);font-size:13px;line-height:1.85;max-width:500px;}
+.dept-section-title{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;padding-left:2px;}
+.team-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:28px;}
+.team-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:box-shadow .2s,transform .2s;}
+.team-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-2px);}
+.team-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.team-card-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.team-card h3{font-size:14px;font-weight:700;}
+.team-card p{font-size:12px;color:var(--text-2);line-height:1.6;}
+.sec-label{font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+.concept-flow{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:32px;overflow-x:auto;}
+.concept-row{display:flex;align-items:center;min-width:max-content;}
+.c-step{display:flex;flex-direction:column;align-items:center;text-align:center;width:100px;padding:6px;}
+.c-num{width:30px;height:30px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:7px;flex-shrink:0;}
+.c-name{font-size:11.5px;font-weight:700;line-height:1.4;}
+.c-arrow{font-size:16px;color:var(--text-3);padding:0 2px;padding-bottom:18px;}
+.phase-block{margin-bottom:36px;}
+.phase-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.phase-badge{font-size:11px;font-weight:700;letter-spacing:.1em;padding:4px 13px;border-radius:20px;white-space:nowrap;}
+.phase-badge.onboard{background:var(--green-bg,#EAF3EF);color:var(--green,#3D7A6A);}
+.phase-badge.operate{background:var(--accent-bg,#FBF0E6);color:var(--accent,#B86B30);}
+.phase-title-text{font-family:'Shippori Mincho',serif;font-size:17px;}
+.step-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:9px;overflow:hidden;transition:box-shadow .2s;position:relative;}
+.step-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.07);}
+.step-head{display:flex;align-items:center;gap:13px;padding:15px 18px;cursor:pointer;user-select:none;}
+.step-num-badge{width:25px;height:25px;border-radius:7px;font-size:11px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-title-wrap{flex:1;min-width:0;}
+.step-title{font-size:13.5px;font-weight:700;line-height:1.4;}
+.step-expand-icon{font-size:10px;color:var(--text-3);transition:transform .25s;flex-shrink:0;}
+.step-card.expanded .step-expand-icon{transform:rotate(180deg);}
+.step-detail{display:none;padding:0 18px 18px 56px;border-top:1px solid var(--border);}
+.step-card.expanded .step-detail{display:block;padding-top:16px;}
+.detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:11px;margin-bottom:13px;}
+.detail-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;}
+.detail-value{font-size:13px;color:var(--text-1);background:var(--surface2);border-radius:6px;padding:7px 10px;min-height:32px;}
+.tool-block{display:flex;flex-direction:column;}
+.tool-name-row{margin-bottom:5px;}
+.url-list{display:flex;flex-direction:column;gap:5px;margin-top:5px;}
+.url-chip{display:inline-flex;align-items:center;gap:6px;background:var(--link-bg);border:1px solid #BFDBFE;border-radius:6px;padding:4px 10px;font-size:12px;width:fit-content;max-width:100%;}
+.url-chip a{color:var(--link);text-decoration:none;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;}
+.url-chip a:hover{text-decoration:underline;}
+.url-icon{font-size:10px;flex-shrink:0;}
+.url-edit-list{display:flex;flex-direction:column;gap:6px;margin-top:5px;}
+.url-edit-row{display:none;align-items:center;gap:6px;background:var(--link-bg);border:1px solid #BFDBFE;border-radius:8px;padding:6px 10px;}
+body.edit-mode .url-edit-row{display:flex;}
+.url-edit-label-input,.url-edit-url-input{border:none;background:transparent;outline:none;font-family:'Noto Sans JP',sans-serif;border-bottom:1px dashed var(--border2);padding-bottom:1px;}
+.url-edit-label-input{font-size:12px;font-weight:600;color:var(--link);width:90px;flex-shrink:0;}
+.url-edit-url-input{font-size:11.5px;color:var(--text-2);flex:1;min-width:0;}
+.url-edit-label-input:focus,.url-edit-url-input:focus{border-bottom-color:var(--edit-ring);}
+.url-sep{color:var(--text-3);font-size:10px;flex-shrink:0;}
+.url-del-btn{background:none;border:none;cursor:pointer;color:var(--text-3);font-size:13px;padding:0 2px;transition:color .15s;flex-shrink:0;line-height:1;}
+.url-del-btn:hover{color:var(--danger);}
+.url-add-btn{display:none;align-items:center;gap:5px;margin-top:4px;background:none;border:1px dashed var(--border2);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--text-3);font-size:11px;font-family:'Noto Sans JP',sans-serif;transition:.15s;width:fit-content;}
+.url-add-btn:hover{border-color:var(--link);color:var(--link);}
+body.edit-mode .url-add-btn{display:flex;}
+.condition-box{background:#EAF3EF;border:1px solid #3D7A6A;border-radius:8px;padding:10px 13px;margin-bottom:9px;}
+.condition-box .clabel{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3D7A6A;margin-bottom:3px;}
+.condition-box .cval{font-size:13px;}
+.caution-box{background:#FFF8F0;border:1px solid #E8C49A;border-radius:8px;padding:10px 13px;}
+.caution-box .clabel{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#B86B30;margin-bottom:3px;}
+.caution-box .cval{font-size:13px;color:var(--text-2);}
+.mindset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:11px;margin-bottom:32px;}
+.mindset-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;}
+.m-icon{font-size:19px;margin-bottom:7px;}
+.m-title{font-size:13px;font-weight:700;margin-bottom:4px;}
+.m-body{font-size:12.5px;color:var(--text-2);line-height:1.7;}
+.task-list{display:flex;flex-direction:column;gap:8px;margin-bottom:32px;}
+.task-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 16px;display:flex;align-items:flex-start;gap:11px;position:relative;}
+.task-idx{width:23px;height:23px;border-radius:6px;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.task-text{font-size:13.5px;font-weight:500;}
+.task-meta{font-size:11.5px;color:var(--text-3);margin-top:3px;}
+body.edit-mode [contenteditable]{outline:none;border-radius:4px;cursor:text;}
+body.edit-mode [contenteditable]:focus{box-shadow:0 0 0 2px var(--edit-ring);background:rgba(59,130,246,.04);}
+body.edit-mode [contenteditable]:hover:not(:focus){background:rgba(59,130,246,.05);}
+.edit-add-btn{display:none;width:100%;padding:8px;background:none;border:1.5px dashed var(--border2);border-radius:10px;cursor:pointer;color:var(--text-3);font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.2s;margin-top:6px;}
+.edit-add-btn:hover{border-color:var(--edit-ring);color:var(--edit-ring);}
+body.edit-mode .edit-add-btn{display:block;}
+.add-phase-btn{display:none;width:100%;padding:9px;background:none;border:1.5px dashed var(--border2);border-radius:12px;cursor:pointer;color:var(--text-3);font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.2s;margin-bottom:36px;}
+.add-phase-btn:hover{border-color:var(--edit-ring);color:var(--edit-ring);}
+body.edit-mode .add-phase-btn{display:block;}
+.del-btn{display:none;position:absolute;top:9px;right:9px;background:rgba(255,255,255,.9);border:1px solid var(--border);cursor:pointer;color:var(--text-3);font-size:12px;padding:3px 7px;border-radius:5px;transition:.15s;line-height:1;}
+.del-btn:hover{color:var(--danger);border-color:var(--danger);background:#fef2f2;}
+body.edit-mode .del-btn{display:block;}
+.phase-del-btn{display:none;background:rgba(255,255,255,.9);border:1px solid var(--border);cursor:pointer;color:var(--text-3);font-size:11px;padding:3px 9px;border-radius:5px;transition:.15s;margin-left:auto;white-space:nowrap;}
+.phase-del-btn:hover{color:var(--danger);border-color:var(--danger);background:#fef2f2;}
+body.edit-mode .phase-del-btn{display:block;}
+.save-banner{position:fixed;bottom:20px;right:20px;background:var(--text-1);color:#fff;border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 28px rgba(0,0,0,.25);transform:translateY(80px);opacity:0;transition:.3s cubic-bezier(.4,0,.2,1);z-index:400;font-size:13px;}
+.save-banner.show{transform:translateY(0);opacity:1;}
+.save-btn{background:var(--gold);color:#fff;border:none;border-radius:7px;padding:6px 15px;cursor:pointer;font-size:12px;font-weight:700;font-family:'Noto Sans JP',sans-serif;}
+.save-btn:hover{filter:brightness(1.1);}
+.discard-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.5);font-size:12px;font-family:'Noto Sans JP',sans-serif;}
+.discard-btn:hover{color:#fff;}
+.saved-flash{position:fixed;top:66px;left:50%;transform:translateX(-50%) translateY(-8px);background:#3D7A6A;color:#fff;border-radius:8px;padding:7px 18px;font-size:13px;font-weight:700;opacity:0;transition:.3s;z-index:500;pointer-events:none;}
+.saved-flash.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:150;}
+.overlay.show{display:block;}
+@media(max-width:900px){
+  .sidebar{transform:translateX(-100%);transition:transform .3s;}
+  .sidebar.open{transform:translateX(0);}
+  .main{margin-left:0;}
+  .hamburger{display:flex;}
+  .wrap{padding:24px 16px 80px;}
+  .home-hero{padding:32px 22px;}
+  .detail-grid{grid-template-columns:1fr;}
+  .step-detail{padding-left:18px;}
+}
+</style>
+</head>
+<body>
+
+<header class="top-bar">
+  <div class="hamburger" id="hamburger" onclick="toggleSidebar()">
+    <span></span><span></span><span></span>
+  </div>
+  <div class="logo">NEO<em>福岡</em> Manual</div>
+  <nav class="breadcrumb" id="breadcrumb"><span class="cur">トップ</span></nav>
+  <button class="edit-toggle" id="editToggle" onclick="toggleEditMode()">
+    <span class="dot"></span><span>編集モード</span>
+  </button>
+</header>
+
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<nav class="sidebar" id="sidebar">
+  <a class="home-link active" id="homeLink" href="#" onclick="showHome();return false;">🏠 トップ</a>
+  <div class="sidebar-divider"></div>
+  <div class="dept-block" data-dept="community">
+    <button class="dept-btn" onclick="toggleDept(this)">
+      <span class="dept-dot" style="background:#3D7A6A"></span>
+      コミュニティ事業部<span class="chevron">▶</span>
+    </button>
+    <div class="team-list">
+      <a class="team-link" href="#" onclick="showTeam('com-event');return false;" data-teamid="com-event">📋 イベントチーム</a>
+      <a class="team-link" href="#" onclick="showTeam('com-edu');return false;" data-teamid="com-edu">🎓 教育チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('com-proj');return false;" data-teamid="com-proj">🚀 プロジェクトチーム</a>
+    </div>
+  </div>
+  <div class="dept-block" data-dept="youth">
+    <button class="dept-btn" onclick="toggleDept(this)">
+      <span class="dept-dot" style="background:#5D4E8C"></span>
+      ユース事業部<span class="chevron">▶</span>
+    </button>
+    <div class="team-list">
+      <a class="team-link" href="#" onclick="showTeam('youth-content');return false;" data-teamid="youth-content">🎬 コンテンツチーム</a>
+      <a class="team-link" href="#" onclick="showTeam('youth-sales');return false;" data-teamid="youth-sales">📣 集客チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('youth-partner');return false;" data-teamid="youth-partner">🔗 団体連携チーム</a>
+    </div>
+  </div>
+  <div class="dept-block" data-dept="partner">
+    <button class="dept-btn" onclick="toggleDept(this)">
+      <span class="dept-dot" style="background:#B86B30"></span>
+      パートナー事業部<span class="chevron">▶</span>
+    </button>
+    <div class="team-list">
+      <a class="team-link" href="#" onclick="showTeam('par-council');return false;" data-teamid="par-council">🏛️ 評議会チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('par-cs');return false;" data-teamid="par-cs">💼 アカデミアCSチーム</a>
+      <a class="team-link" href="#" onclick="showTeam('par-training');return false;" data-teamid="par-training">📚 研修チーム</a>
+    </div>
+  </div>
+  <div class="dept-block" data-dept="mgmt">
+    <button class="dept-btn" onclick="toggleDept(this)">
+      <span class="dept-dot" style="background:#2F5F8C"></span>
+      経営企画部<span class="chevron">▶</span>
+    </button>
+    <div class="team-list">
+      <a class="team-link" href="#" onclick="showTeam('mgmt-pr');return false;" data-teamid="mgmt-pr">📰 広報チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('mgmt-prog');return false;" data-teamid="mgmt-prog">📐 プログラム企画チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('mgmt-fund');return false;" data-teamid="mgmt-fund">🌱 基金チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('mgmt-admin');return false;" data-teamid="mgmt-admin">🏠 総務チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('mgmt-hr');return false;" data-teamid="mgmt-hr">👥 採用・育成チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('mgmt-strat');return false;" data-teamid="mgmt-strat">📊 経営戦略チーム</a>
+      <a class="team-link" href="#" onclick="showTeam('mgmt-club');return false;" data-teamid="mgmt-club">⚽ クラブ連携チーム</a>
+    </div>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="wrap" id="mainWrap"></div>
+</main>
+
+<div class="save-banner" id="saveBanner">
+  <span>未保存の変更があります</span>
+  <button class="save-btn" onclick="saveData()">保存する</button>
+  <button class="discard-btn" onclick="discardChanges()">元に戻す</button>
+</div>
+<div class="saved-flash" id="savedFlash">✓ 保存しました</div>
+
+<script src="/manual-data.js"></script>
+<script src="/manual-app.js"></script>
+</body>
+</html>

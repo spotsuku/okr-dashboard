@@ -36,6 +36,13 @@ const MONTHS_SELECT = [
 ]
 
 const GRID_COLS = '120px repeat(12, minmax(0, 1fr))'
+const QUARTER_MONTHS = {
+  q1: [4, 5, 6],
+  q2: [7, 8, 9],
+  q3: [10, 11, 12],
+  q4: [1, 2, 3],
+}
+const Q_GRID_COLS = '120px repeat(3, minmax(0, 1fr))'
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────────
 function getDaysLeftInfo(dueDate) {
@@ -241,6 +248,131 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
   )
 }
 
+// ─── QuarterMilestoneBar ─────────────────────────────────────────────────────
+function QuarterMilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, quarterMonths }) {
+  const { title, due_date, focus_level, status, owner } = milestone
+  const [hovered, setHovered] = useState(false)
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+
+  const startIdx = quarterMonths.indexOf(milestone.start_month)
+  const endIdx   = quarterMonths.indexOf(milestone.end_month)
+  const clampStart = Math.max(startIdx, 0)
+  const clampEnd   = endIdx >= 0 ? endIdx : 2
+  const startCol = clampStart + 2
+  const endCol   = clampEnd + 3
+
+  const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
+  const isDone    = status === 'done'
+  const isDelayed = status === 'delayed'
+  const isFocus   = focus_level === 'focus' && !isDone
+
+  const barBg = isDone
+    ? { backgroundColor: T.textFaintest, color: T.textMuted, opacity: 0.7 }
+    : isFocus
+    ? { backgroundColor: orgColor, color: '#ffffff',
+        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
+    : { backgroundColor: hexWithAlpha(orgColor, 0.12), color: orgColor,
+        border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
+        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
+
+  const handleMouseEnter = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const tooltipW = 280
+    const tooltipH = 180
+    let x = rect.left
+    let y = rect.bottom + 6
+    if (x + tooltipW > window.innerWidth) x = window.innerWidth - tooltipW - 12
+    if (x < 8) x = 8
+    if (y + tooltipH > window.innerHeight) y = rect.top - tooltipH - 6
+    setTooltipPos({ x, y })
+    setHovered(true)
+  }
+
+  return (
+    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
+      <div
+        onClick={isAdmin ? () => onEdit(milestone) : undefined}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          ...barBg, borderRadius: 4, padding: '6px 10px',
+          fontSize: isChild ? 10 : 11, fontWeight: 500, lineHeight: '1.4',
+          display: 'flex', flexDirection: 'column', gap: 2,
+          overflow: 'hidden', whiteSpace: 'nowrap',
+          cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
+          position: 'relative',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+            {isDone ? '✓ ' : ''}{title}
+          </span>
+          {daysText && !isDone && (
+            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
+          )}
+        </div>
+        {owner && (
+          <div style={{ fontSize: 9, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {owner}
+          </div>
+        )}
+      </div>
+      {hovered && (
+        <MilestoneHoverTooltip milestone={milestone} orgColor={orgColor} T={T} position={tooltipPos} />
+      )}
+    </div>
+  )
+}
+
+// ─── QuarterOrgRow ──────────────────────────────────────────────────────────
+function QuarterOrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, quarterMonths }) {
+  const { name, color, milestones } = org
+  // Filter milestones that overlap with this quarter
+  const qMilestones = milestones.filter(ms => {
+    return quarterMonths.includes(ms.start_month) || quarterMonths.includes(ms.end_month)
+  })
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: Q_GRID_COLS,
+      gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
+      minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: isChild ? '4px 6px 4px 16px' : '4px 8px 4px 0',
+        fontSize: isChild ? 10 : 11, fontWeight: 500, color: T.textSub,
+        overflow: 'hidden', minWidth: 0,
+      }}>
+        <span style={{
+          width: isChild ? 5 : 7, height: isChild ? 5 : 7,
+          borderRadius: '50%', backgroundColor: color || '#888', flexShrink: 0,
+        }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{name}</span>
+        {isAdmin && (
+          <button
+            onClick={() => onAddMilestone(org.id)}
+            title="マイルストーンを追加"
+            style={{
+              flexShrink: 0, width: 16, height: 16, borderRadius: '50%',
+              border: `1px solid ${T.borderMid}`, background: 'transparent',
+              color: T.textMuted, fontSize: 11, lineHeight: '14px',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0, opacity: 0.5, transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = 1}
+            onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
+          >+</button>
+        )}
+      </div>
+      {qMilestones.map(ms => (
+        <QuarterMilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} quarterMonths={quarterMonths} />
+      ))}
+    </div>
+  )
+}
+
 // ─── MilestoneEditModal ──────────────────────────────────────────────────────
 function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
   const isNew = !milestone.id
@@ -256,27 +388,37 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   async function handleSave() {
     if (!form.title.trim()) return
     setSaving(true)
+    setSaveError(null)
     try {
+      const payload = {
+        ...form,
+        due_date: form.due_date || null,
+        owner: form.owner || null,
+      }
       if (isNew) {
-        const { error } = await supabase.from('milestones').insert({
-          ...form,
+        const { data, error } = await supabase.from('milestones').insert({
+          ...payload,
           org_id: milestone.org_id,
           fiscal_year: milestone.fiscal_year,
           sort_order: milestone.sort_order || 0,
-        })
+        }).select()
         if (error) throw error
+        if (!data || data.length === 0) throw new Error('保存に失敗しました。管理者権限が必要です。')
       } else {
-        const { error } = await supabase.from('milestones').update(form).eq('id', milestone.id)
+        const { data, error } = await supabase.from('milestones').update(payload).eq('id', milestone.id).select()
         if (error) throw error
+        if (!data || data.length === 0) throw new Error('更新に失敗しました。管理者権限が必要です。')
       }
       onSaved()
       onClose()
     } catch (e) {
       console.error(e)
+      setSaveError(e.message || '保存中にエラーが発生しました')
     } finally {
       setSaving(false)
     }
@@ -288,6 +430,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
       return
     }
     setDeleting(true)
+    setSaveError(null)
     try {
       const { error } = await supabase.from('milestones').delete().eq('id', milestone.id)
       if (error) throw error
@@ -295,6 +438,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
       onClose()
     } catch (e) {
       console.error(e)
+      setSaveError(e.message || '削除中にエラーが発生しました')
     } finally {
       setDeleting(false)
     }
@@ -357,6 +501,10 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
 
         <label style={labelSt}>責任者</label>
         <input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} style={inputSt} placeholder="例：田中太郎" />
+
+        {saveError && (
+          <p style={{ color: '#dc2626', fontSize: 12, margin: '8px 0 0', padding: '8px 10px', background: 'rgba(220,38,38,0.08)', borderRadius: 6 }}>{saveError}</p>
+        )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           {!isNew && (
@@ -469,6 +617,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   const [editTarget, setEditTarget] = useState(null)
   const [showAddOrg, setShowAddOrg] = useState(false)
   const [showAllOrgs, setShowAllOrgs] = useState(false)
+  const [viewTab, setViewTab] = useState('annual') // 'annual' | 'q1' | 'q2' | 'q3' | 'q4'
 
   // admin判定
   useEffect(() => {
@@ -538,6 +687,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   }, [isAdmin])
 
   const handleAddMilestone = useCallback((orgId) => {
+    const orgMilestoneCount = milestones.filter(m => m.org_id === orgId).length
     setEditTarget({
       org_id: orgId,
       fiscal_year: Number(fiscalYear) || 2026,
@@ -548,9 +698,9 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
       focus_level: 'normal',
       status: 'pending',
       owner: '',
-      sort_order: milestones.length,
+      sort_order: orgMilestoneCount,
     })
-  }, [fiscalYear, milestones.length])
+  }, [fiscalYear, milestones])
 
   const currentMonth = new Date().getMonth() + 1
   const currentColIndex = MONTH_ORDER.indexOf(currentMonth)
@@ -558,9 +708,9 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
       {/* ヘッダー */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 18, fontWeight: 500, color: T.text, margin: 0 }}>年間マイルストーン</h1>
-        <span style={{ fontSize: 12, color: T.textMuted }}>{fiscalYear}年度（4月〜翌3月）</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <h1 style={{ fontSize: 18, fontWeight: 500, color: T.text, margin: 0 }}>マイルストーン</h1>
+        <span style={{ fontSize: 12, color: T.textMuted }}>{fiscalYear}年度</span>
         {isAdmin && (
           <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
             <button
@@ -583,12 +733,38 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
         )}
       </div>
 
+      {/* タブ切り替え */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: `1px solid ${T.borderLight}` }}>
+        {[
+          { key: 'annual', label: '年間' },
+          { key: 'q1', label: 'Q1（4〜6月）' },
+          { key: 'q2', label: 'Q2（7〜9月）' },
+          { key: 'q3', label: 'Q3（10〜12月）' },
+          { key: 'q4', label: 'Q4（1〜3月）' },
+        ].map(tab => {
+          const isActive = viewTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setViewTab(tab.key)}
+              style={{
+                padding: '8px 16px', border: 'none', borderBottom: isActive ? `2px solid ${T.text}` : '2px solid transparent',
+                cursor: 'pointer', background: 'transparent',
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                color: isActive ? T.text : T.textMuted, fontFamily: 'inherit',
+                transition: 'all 0.15s',
+              }}
+            >{tab.label}</button>
+          )
+        })}
+      </div>
+
       {/* ローディング / エラー */}
       {loading && <div style={{ color: T.textMuted, fontSize: 13 }}>読み込み中...</div>}
       {error && <div style={{ color: '#dc2626', fontSize: 13 }}>エラー: {error}</div>}
 
       {/* タイムライン本体 */}
-      {!loading && !error && (
+      {!loading && !error && viewTab === 'annual' && (
         <div style={{
           background: T.bgCard, border: `0.5px solid ${T.borderLight}`,
           borderRadius: 12, padding: 16, overflow: 'hidden', width: '100%',
@@ -700,6 +876,107 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
           </div>
         </div>
       )}
+
+      {/* 四半期ビュー */}
+      {!loading && !error && viewTab !== 'annual' && (() => {
+        const qMonths = QUARTER_MONTHS[viewTab]
+        const qLabels = qMonths.map(m => MONTHS_SELECT.find(ms => ms.value === m)?.label || '')
+        const qCurrentIdx = qMonths.indexOf(currentMonth)
+
+        return (
+          <div style={{
+            background: T.bgCard, border: `0.5px solid ${T.borderLight}`,
+            borderRadius: 12, padding: 16, overflow: 'hidden', width: '100%',
+            boxSizing: 'border-box',
+          }}>
+            <div style={{ width: '100%', minWidth: 0 }}>
+              {/* 月ヘッダー行 */}
+              <div style={{ display: 'grid', gridTemplateColumns: Q_GRID_COLS, gap: 0 }}>
+                <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
+                {qLabels.map((label, i) => {
+                  const isCurrent = i === qCurrentIdx
+                  return (
+                    <div key={label} style={{
+                      textAlign: 'center', fontSize: 11, fontWeight: isCurrent ? 600 : 400,
+                      color: isCurrent ? T.text : T.textMuted,
+                      padding: '6px 2px 8px',
+                      borderBottom: `0.5px solid ${T.borderLight}`,
+                      borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
+                      backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
+                      position: 'relative', overflow: 'hidden',
+                    }}>
+                      {label}
+                      {isCurrent && (
+                        <div style={{
+                          position: 'absolute', bottom: 0, left: '50%',
+                          transform: 'translateX(-50%)',
+                          width: 4, height: 4, borderRadius: '50%',
+                          backgroundColor: '#dc2626', opacity: 0.6,
+                        }} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* 事業部行 */}
+              {filteredTree.map(org => (
+                <div key={org.id} style={{ display: 'contents' }}>
+                  <QuarterOrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} quarterMonths={qMonths} />
+                  {org.children.map(child => (
+                    <QuarterOrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} quarterMonths={qMonths} />
+                  ))}
+                </div>
+              ))}
+
+              {filteredTree.length === 0 && (
+                <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>
+                  この四半期にマイルストーンがありません
+                  {isAdmin && (
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        onClick={() => setShowAllOrgs(true)}
+                        style={{
+                          padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: 6,
+                          cursor: 'pointer', background: 'transparent',
+                          fontSize: 12, color: T.textSub, fontFamily: 'inherit',
+                        }}
+                      >全組織を表示してマイルストーンを追加</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 凡例 */}
+            <div style={{
+              display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16,
+              paddingTop: 12, borderTop: `0.5px solid ${T.borderLight}`,
+              fontSize: 11, color: T.textMuted, alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 20, height: 8, borderRadius: 3, backgroundColor: '#1A5C3A' }} />
+                <span>濃色 = 最注力</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 20, height: 8, borderRadius: 3, backgroundColor: 'rgba(26,92,58,0.15)', border: '0.5px solid rgba(26,92,58,0.3)' }} />
+                <span>薄色 = 進行中</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ color: '#ea580c', fontWeight: 600 }}>残14日</span>
+                <span>= 期日が近い</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ color: '#dc2626', fontWeight: 600 }}>3日超過</span>
+                <span>= 期日超過</span>
+              </div>
+              {isAdmin && (
+                <span style={{ marginLeft: 'auto' }}>バーをクリックして編集 ・ 組織名の＋で追加</span>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 編集/追加モーダル */}
       {editTarget && (
