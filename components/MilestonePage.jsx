@@ -203,7 +203,7 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonth
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: GRID_COLS,
+      gridTemplateColumns: `120px repeat(${visibleMonthOrder.length}, minmax(0, 1fr))`,
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
       minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
     }}>
@@ -673,20 +673,22 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             )}
 
             {/* 月ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
               <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
-              {MONTH_LABELS.map((label, i) => {
-                const isCurrent = i === currentColIndex
-                const isQStart = i % 3 === 0
+              {visibleMonthLabels.map((label, i) => {
+                const monthVal = visibleMonthOrder[i]
+                const isCurrent = monthVal === currentMonth
+                const isQStart = viewMode === 'annual' ? i % 3 === 0 : i === 0
                 return (
                   <div key={label} style={{
-                    textAlign: 'center', fontSize: 10,
+                    textAlign: 'center',
+                    fontSize: viewMode === 'annual' ? 10 : 14,
                     color: isCurrent ? T.text : T.textMuted,
-                    fontWeight: isCurrent ? 600 : 400,
-                    padding: '3px 2px 6px',
+                    fontWeight: isCurrent ? 700 : 400,
+                    padding: viewMode === 'annual' ? '3px 2px 6px' : '8px 2px 10px',
                     borderBottom: `0.5px solid ${T.borderLight}`,
                     borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
-                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
+                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.06)' : 'transparent',
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {label}
