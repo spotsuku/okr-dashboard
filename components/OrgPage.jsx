@@ -2694,8 +2694,8 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
   // ── styles ─────────────────────────────────────────────────
   const S = {
     wrap:      { display: 'flex', height: '100%', width: '100%', overflow: 'hidden', background: T().bg, fontFamily: '-apple-system, BlinkMacSystemFont, "Noto Sans JP", sans-serif' },
-    sidebar:   { width: 220, flexShrink: 0, background: T().sidebarBg || '#1a1a1a', overflowY: 'auto', borderRight: `1px solid ${T().border}`, display: 'flex', flexDirection: 'column' },
-    sideHead:  { padding: '14px 14px 6px', fontSize: 10, fontWeight: 700, color: '#888', letterSpacing: '0.1em', textTransform: 'uppercase' },
+    sidebar:   { width: 220, flexShrink: 0, background: T().bgCard, overflowY: 'auto', borderRight: `1px solid ${T().border}`, display: 'flex', flexDirection: 'column' },
+    sideHead:  { padding: '14px 14px 6px', fontSize: 10, fontWeight: 700, color: T().textMuted, letterSpacing: '0.1em', textTransform: 'uppercase' },
     deptLabel: { padding: '10px 14px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' },
     teamRow:   (active) => ({ padding: '8px 14px 8px 22px', fontSize: 13, cursor: 'pointer', borderRadius: 6, margin: '1px 6px', background: active ? T().navActiveBg : 'transparent', color: active ? T().accent : T().textSub, fontWeight: active ? 700 : 400, transition: 'all 0.15s' }),
     main:      { flex: 1, overflowY: 'auto', minWidth: 0, background: T().bg },
@@ -2746,7 +2746,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
       <div style={S.sidebar}>
         <div style={{ padding: '12px 10px 6px' }}>
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 チームを検索..."
-            style={{ width: '100%', boxSizing: 'border-box', background: '#2a2a2a', border: '1px solid #444', borderRadius: 6, padding: '6px 10px', color: '#ccc', fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+            style={{ width: '100%', boxSizing: 'border-box', background: T().bgInput, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', color: T().text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
         </div>
         {depts.map(dept => {
           const teams = getChildren(dept.id)
@@ -2761,7 +2761,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
                 <div key={team.id}
                   style={S.teamRow(selectedId === team.id)}
                   onClick={() => setSelectedId(team.id)}
-                  onMouseEnter={e => { if (selectedId !== team.id) e.currentTarget.style.background = '#ffffff12' }}
+                  onMouseEnter={e => { if (selectedId !== team.id) e.currentTarget.style.background = T().bgHover }}
                   onMouseLeave={e => { if (selectedId !== team.id) e.currentTarget.style.background = 'transparent' }}>
                   {team.icon && <span style={{ marginRight: 5 }}>{team.icon}</span>}{team.name}
                 </div>
