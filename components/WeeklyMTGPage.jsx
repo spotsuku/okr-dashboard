@@ -872,10 +872,28 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     objectives.filter(o => ['q1','q2','q3','q4'].some(q => o.period?.endsWith(q))), [objectives])
   const quarterMap = useMemo(() =>
     buildQuarterMap(annualObjsForMap, quarterObjsForMap), [annualObjsForMap, quarterObjsForMap])
-  const rightObj = !selectedObj ? null
-    : rightPeriod === 'annual' ? selectedObj
-    : (quarterMap[selectedObj.id]?.[rightPeriod] || [])[0] || null
-  const selectedObjKRs = rightObj ? keyResults.filter(kr => Number(kr.objective_id)===Number(rightObj.id)) : []
+  const rightObj = useMemo(() => {
+    if (!selectedObj) return null
+    if (rightPeriod === 'annual') return selectedObj
+    // まずquarterMapで検索
+    const fromMap = (quarterMap[selectedObj.id]?.[rightPeriod] || [])[0]
+    if (fromMap) return fromMap
+    // フォールバック：objectives全体からperiodとlevel_idでマッチング
+    return objectives.find(o =>
+      o.period === rightPeriod &&
+      (Number(o.parent_objective_id) === Number(selectedObj.id) ||
+       Number(o.level_id) === Number(selectedObj.level_id))
+    ) || null
+  }, [selectedObj, rightPeriod, quarterMap, objectives])
+  const selectedObjKRs = useMemo(() => {
+    if (!rightObj && rightPeriod !== 'annual' && selectedObj) {
+      // Q期OBJが存在しない場合、通期OBJのKRをperiodでフィルタ
+      const annKRs = keyResults.filter(kr => Number(kr.objective_id) === Number(selectedObj.id))
+      const filtered = annKRs.filter(kr => kr.period === rightPeriod)
+      return filtered.length > 0 ? filtered : []
+    }
+    return rightObj ? keyResults.filter(kr => Number(kr.objective_id)===Number(rightObj.id)) : []
+  }, [rightObj, rightPeriod, selectedObj, keyResults])
   const depth          = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
   const objColor       = LAYER_COLORS[depth] || '#a0a8be'
 
@@ -1085,8 +1103,16 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   <div style={{ fontSize:13, fontWeight:600, color: isObjDone(rightObj)?'#00d68f':wT().text, lineHeight:1.4 }}>{rightObj.title}</div>
                 </div>
               )}
-              {!rightObj && rightPeriod !== 'annual' && (
+              {!rightObj && rightPeriod !== 'annual' && selectedObjKRs.length === 0 && (
                 <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>この期間のOKRはまだ設定されていません</div>
+              )}
+              {!rightObj && rightPeriod !== 'annual' && selectedObjKRs.length > 0 && (
+                <div style={{ padding:'10px 14px', background: wT().bgCard, border: `1px solid ${wT().border}`, borderRadius:8, marginBottom:14 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:wT().textSub, marginBottom:4 }}>
+                    {rightPeriod.toUpperCase()} ― 通期OKRのKR
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.4 }}>{selectedObj?.title}</div>
+                </div>
               )}
 
               {rightObj && selectedObjKRs.length===0 && <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>KRが登録されていません。OKRページからKRを追加してください。</div>}
