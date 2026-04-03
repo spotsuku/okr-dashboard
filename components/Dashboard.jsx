@@ -955,11 +955,8 @@ export default function Dashboard({ user, onSignOut }) {
         supabase.from('members').select('*').order('id'),
       ])
       if (error) console.error('levels error:', error)
-      const validLvls = (lvls || []).filter(l =>
-        fiscalYear === '2026'
-          ? (!l.fiscal_year || l.fiscal_year === '2026')
-          : l.fiscal_year === fiscalYear
-      )
+      // fiscal_yearで厳密に一致するlevelsのみを使用（全ページ統一）
+      const validLvls = (lvls || []).filter(l => l.fiscal_year === fiscalYear)
       if (validLvls.length) { setLevels(validLvls); setActiveLevelId(validLvls[0].id) }
       else { setLevels([]); setActiveLevelId(null) }
       if (mems) setMembers(mems)
@@ -1437,11 +1434,7 @@ export default function Dashboard({ user, onSignOut }) {
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} onLevelsChanged={async () => {
             const { data: lvls } = await supabase.from('levels').select('*').order('id')
-            const validLvls = (lvls || []).filter(l =>
-              fiscalYear === '2026'
-                ? (!l.fiscal_year || l.fiscal_year === '2026')
-                : l.fiscal_year === fiscalYear
-            )
+            const validLvls = (lvls || []).filter(l => l.fiscal_year === fiscalYear)
             setLevels(validLvls.length ? validLvls : [])
           }} />
         </div>
