@@ -125,71 +125,61 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
 }
 
 // ─── MilestoneBar ────────────────────────────────────────────────────────────
-function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
+// MilestoneDot: due_dateの月列に点を表示する新実装
+function MilestoneDot({ milestone, orgColor, isChild, onEdit, isAdmin, T, colIndex }) {
   const { title, due_date, focus_level, status, owner } = milestone
   const [hovered, setHovered] = useState(false)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
 
-  const startCol = visibleMonthOrder.indexOf(milestone.start_month) + 2
-  const endCol   = visibleMonthOrder.indexOf(milestone.end_month) + 3
-
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
-
   const isDone    = status === 'done'
   const isDelayed = status === 'delayed'
   const isFocus   = focus_level === 'focus' && !isDone
 
-  const barBg = isDone
-    ? { backgroundColor: T.textFaintest, color: T.textMuted, opacity: 0.7 }
+  const dotSize = isChild ? 10 : 14
+  const dotColor = isDone
+    ? '#22c55e'
+    : isDelayed
+    ? '#dc2626'
     : isFocus
-    ? { backgroundColor: orgColor, color: '#ffffff',
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
-    : { backgroundColor: hexWithAlpha(orgColor, 0.12), color: orgColor,
-        border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
+    ? orgColor
+    : hexWithAlpha(orgColor, 0.6)
 
   const handleMouseEnter = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const tooltipW = 280
-    const tooltipH = 180
-    let x = rect.left
-    let y = rect.bottom + 6
+    let x = rect.left - tooltipW / 2
+    let y = rect.bottom + 8
     if (x + tooltipW > window.innerWidth) x = window.innerWidth - tooltipW - 12
     if (x < 8) x = 8
-    if (y + tooltipH > window.innerHeight) y = rect.top - tooltipH - 6
+    if (y + 200 > window.innerHeight) y = rect.top - 200 - 8
     setTooltipPos({ x, y })
     setHovered(true)
   }
 
   return (
-    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
-      <div
-        onClick={isAdmin ? () => onEdit(milestone) : undefined}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          ...barBg, borderRadius: 4, padding: '4px 7px',
-          fontSize: isChild ? 9 : 10, fontWeight: 500, lineHeight: '1.3',
-          display: 'flex', flexDirection: 'column', gap: 1,
-          overflow: 'hidden', whiteSpace: 'nowrap',
-          cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
-          position: 'relative',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-            {isDone ? '✓ ' : ''}{title}
-          </span>
-          {daysText && !isDone && (
-            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
-          )}
-        </div>
-        {owner && (
-          <div style={{ fontSize: 8, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {owner}
-          </div>
-        )}
-      </div>
+    <div
+      onClick={isAdmin ? () => onEdit(milestone) : undefined}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setHovered(false)}
+      title={title}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: `${colIndex * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        width: dotSize, height: dotSize,
+        borderRadius: '50%',
+        backgroundColor: dotColor,
+        border: isDone ? `2px solid #22c55e` : isFocus ? `2px solid ${orgColor}` : `2px solid ${hexWithAlpha(orgColor, 0.4)}`,
+        boxShadow: isFocus && !isDone ? `0 0 0 3px ${hexWithAlpha(orgColor, 0.2)}` : 'none',
+        cursor: isAdmin ? 'pointer' : 'default',
+        zIndex: 10,
+        transition: 'transform 0.15s, box-shadow 0.15s',
+      }}
+      onMouseOver={e => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.3)' }}
+      onMouseOut={e => { e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)'; setHovered(false) }}
+    >
       {hovered && (
         <MilestoneHoverTooltip milestone={milestone} orgColor={orgColor} T={T} position={tooltipPos} />
       )}
@@ -197,16 +187,42 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
   )
 }
 
+// MilestoneBar は後方互換のため残す（未使用）
+function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
+  return null
+}
+
 // ─── OrgRow ──────────────────────────────────────────────────────────────────
 function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
   const { name, color, milestones } = org
+  const n = visibleMonthOrder.length
+
+  // due_dateから月を取得しcolIndex（0〜n-1）に変換
+  const getColIndex = (ms) => {
+    if (ms.due_date) {
+      const m = parseInt(ms.due_date.split('-')[1])
+      const idx = visibleMonthOrder.indexOf(m)
+      if (idx !== -1) return idx / n + 1 / (n * 2)
+    }
+    // due_dateがない場合はend_monthを使用
+    const idx = visibleMonthOrder.indexOf(ms.end_month)
+    return idx !== -1 ? idx / n + 1 / (n * 2) : null
+  }
+
+  // sort: 左から右に並べる
+  const sorted = [...milestones].sort((a, b) => {
+    const ai = getColIndex(a), bi = getColIndex(b)
+    return (ai ?? 99) - (bi ?? 99)
+  })
+
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: `120px repeat(${visibleMonthOrder.length}, minmax(0, 1fr))`,
+      gridTemplateColumns: `120px repeat(${n}, minmax(0, 1fr))`,
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
-      minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
+      minHeight: isChild ? 48 : 56, alignItems: 'center',
     }}>
+      {/* ラベル列 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 5,
         padding: isChild ? '4px 6px 4px 16px' : '4px 8px 4px 0',
@@ -234,9 +250,48 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonth
           >+</button>
         )}
       </div>
-      {milestones.map(ms => (
-        <MilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} visibleMonthOrder={visibleMonthOrder} />
-      ))}
+
+      {/* タイムライン列（全12列を1つのrelativeコンテナで覆う） */}
+      <div style={{
+        gridColumn: `2 / ${n + 2}`,
+        position: 'relative',
+        height: '100%',
+        display: 'flex', alignItems: 'center',
+      }}>
+        {/* 連結ライン（点と点を結ぶ） */}
+        {sorted.length >= 2 && sorted.map((ms, i) => {
+          if (i === sorted.length - 1) return null
+          const x1 = (getColIndex(ms) ?? 0) * 100
+          const x2 = (getColIndex(sorted[i+1]) ?? 0) * 100
+          return (
+            <div key={`line-${ms.id}`} style={{
+              position: 'absolute',
+              left: `${x1}%`, width: `${x2 - x1}%`,
+              top: '50%', height: 1,
+              background: hexWithAlpha(color || '#888', 0.3),
+              pointerEvents: 'none',
+            }} />
+          )
+        })}
+
+        {/* 各マイルストーンの点 */}
+        {sorted.map(ms => {
+          const ci = getColIndex(ms)
+          if (ci === null) return null
+          return (
+            <MilestoneDot
+              key={ms.id}
+              milestone={ms}
+              orgColor={color || '#888'}
+              isChild={isChild}
+              onEdit={onEdit}
+              isAdmin={isAdmin}
+              T={T}
+              colIndex={ci}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
