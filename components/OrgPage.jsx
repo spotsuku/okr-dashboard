@@ -1,4 +1,4 @@
-'use client'
+'use client' // build: 2026-04-03
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 
@@ -626,17 +626,8 @@ function useOrgData(fiscalYear) {
       setOrgTableError(false)
     }
 
-    // rootノード（parent_id=NULL）が複数ある場合、最新（最大id）のroot配下だけを使う
-    const allLvls = lvls || []
-    const roots = allLvls.filter(l => !l.parent_id)
-    const latestRoot = roots.reduce((a, b) => (a.id > b.id ? a : b), roots[0] || { id: 0 })
-    const collectUnder = (parentId) => {
-      const children = allLvls.filter(l => Number(l.parent_id) === Number(parentId))
-      return [allLvls.find(l => l.id === parentId), ...children.flatMap(c => collectUnder(c.id))].filter(Boolean)
-    }
-    const validLvls = latestRoot.id
-      ? collectUnder(latestRoot.id)
-      : allLvls.filter(l => fiscalYear === '2026' ? (!l.fiscal_year || l.fiscal_year === '2026') : l.fiscal_year === fiscalYear)
+    // fiscal_yearで厳密に一致するlevelsのみを使用（全ページ統一）
+    const validLvls = (lvls || []).filter(l => l.fiscal_year === fiscalYear)
     setLevels(validLvls)
     const metaMap = {}
     ;(meta || []).forEach(m => { metaMap[m.level_id] = m })
