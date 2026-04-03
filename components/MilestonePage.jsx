@@ -242,12 +242,13 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
 }
 
 // ─── MilestoneEditModal ──────────────────────────────────────────────────────
-function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
+function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members = [] }) {
   const isNew = !milestone.id
   const [form, setForm] = useState({
     title:       milestone.title || '',
     start_month: milestone.start_month || 4,
     end_month:   milestone.end_month || 6,
+    start_date:  milestone.start_date || '',
     due_date:    milestone.due_date || '',
     focus_level: milestone.focus_level || 'normal',
     status:      milestone.status || 'pending',
@@ -339,10 +340,18 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
           </div>
         </div>
 
-        <label style={labelSt}>期日（残日数カウントダウン用）</label>
-        <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={inputSt} />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelSt}>開始日</label>
+            <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} style={{ ...inputSt, marginBottom: 0 }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelSt}>期日（カウントダウン用）</label>
+            <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={{ ...inputSt, marginBottom: 0 }} />
+          </div>
+        </div>
 
-        <label style={labelSt}>注力レベル</label>
+        <label style={{ ...labelSt, marginTop: 12 }}>注力レベル</label>
         <select value={form.focus_level} onChange={e => setForm(f => ({ ...f, focus_level: e.target.value }))} style={inputSt}>
           <option value="focus">focus（濃色・最注力）</option>
           <option value="normal">normal（薄色・進行中）</option>
@@ -356,7 +365,12 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
         </select>
 
         <label style={labelSt}>責任者</label>
-        <input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} style={inputSt} placeholder="例：田中太郎" />
+        <select value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} style={inputSt}>
+          <option value="">（未設定）</option>
+          {members.map(m => (
+            <option key={m.id} value={m.name}>{m.name}</option>
+          ))}
+        </select>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           {!isNew && (
@@ -459,7 +473,7 @@ function AddOrgModal({ levels, fiscalYear, onClose, onSaved, T }) {
 }
 
 // ─── MilestonePage（メインコンポーネント）────────────────────────────────────
-export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLevelsChanged }) {
+export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLevelsChanged, members = [] }) {
   const T = W_THEMES[themeKey] || DARK_T
 
   const [milestones, setMilestones] = useState([])
@@ -709,6 +723,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
           onSaved={loadMilestones}
           onDeleted={loadMilestones}
           T={T}
+          members={members}
         />
       )}
 
