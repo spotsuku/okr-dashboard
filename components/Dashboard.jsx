@@ -305,9 +305,10 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 
   const save = async () => {
     if (!title.trim()) return
-    // Q期OBJはparent_objective_idが必須
+    // Q期OBJは新規作成時のみparent_objective_idが必須（編集時はスキップ）
     const isQ = ['q1','q2','q3','q4'].includes(period)
-    if (isQ && !initial?.parent_objective_id) {
+    const isNew = !initial?.id
+    if (isQ && isNew && !initial?.parent_objective_id) {
       alert('Q期OBJは通期OBJのQ期タブから追加してください。')
       return
     }
