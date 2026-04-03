@@ -305,6 +305,12 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 
   const save = async () => {
     if (!title.trim()) return
+    // Q期OBJはparent_objective_idが必須
+    const isQ = ['q1','q2','q3','q4'].includes(period)
+    if (isQ && !initial?.parent_objective_id) {
+      alert('Q期OBJは通期OBJのQ期タブから追加してください。')
+      return
+    }
     setSaving(true)
     await onSave({
       obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: initial?.parent_objective_id || null },
@@ -314,11 +320,18 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
     onClose()
   }
 
-  const periodOpts = [
-    { value: 'annual', label: '通期' },
-    { value: 'q1', label: 'Q1' }, { value: 'q2', label: 'Q2' },
-    { value: 'q3', label: 'Q3' }, { value: 'q4', label: 'Q4' },
-  ]
+  // ＋追加ボタンからはQ期OBJを作成不可（通期OBJから紐付けが必要なため）
+  // AnnualViewのQ期タブから追加する場合（parent_objective_idあり）のみQ期を選択可
+  const isFromAnnual = !!initial?.parent_objective_id
+  const periodOpts = isFromAnnual
+    ? [
+        { value: 'annual', label: '通期' },
+        { value: 'q1', label: 'Q1' }, { value: 'q2', label: 'Q2' },
+        { value: 'q3', label: 'Q3' }, { value: 'q4', label: 'Q4' },
+      ]
+    : [
+        { value: 'annual', label: '通期' },
+      ]
 
   return (
     <>
@@ -955,7 +968,6 @@ export default function Dashboard({ user, onSignOut }) {
         supabase.from('members').select('*').order('id'),
       ])
       if (error) console.error('levels error:', error)
-      // fiscal_yearで厳密に一致するlevelsのみを使用（全ページ統一）
       const validLvls = (lvls || []).filter(l => l.fiscal_year === fiscalYear)
       if (validLvls.length) { setLevels(validLvls); setActiveLevelId(validLvls[0].id) }
       else { setLevels([]); setActiveLevelId(null) }
@@ -1386,7 +1398,7 @@ export default function Dashboard({ user, onSignOut }) {
             {!isMobile && (
               <button onClick={onSignOut} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: getT().textSub, borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>ログアウト</button>
             )}
-            <button onClick={() => setModal({ type: 'add' })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
+            <button onClick={() => setModal({ type: 'add', obj: { period: 'annual' } })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
             <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
             <span style={{
               fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default',
