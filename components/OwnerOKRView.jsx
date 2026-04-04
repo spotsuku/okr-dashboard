@@ -166,8 +166,16 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     // 期間順にソート
     fullObjs.sort((a, b) => (PERIOD_ORDER[rawPeriod(a.period)] ?? 9) - (PERIOD_ORDER[rawPeriod(b.period)] ?? 9))
 
+    // 4. 表示する全ObjectiveのKAを取得（担当者本人のKA + Objective配下の全KA）
+    const allObjIds = fullObjs.map(o => o.id)
+    let allKAs = [...(myKAs || [])]
+    if (allObjIds.length > 0) {
+      const { data: objKAsData } = await supabase.from('weekly_reports').select('*').in('objective_id', allObjIds).neq('status', 'done')
+      allKAs = [...allKAs, ...(objKAsData || [])].filter((r, i, arr) => arr.findIndex(x => x.id === r.id) === i)
+    }
+
     setObjectives(fullObjs)
-    setKaReports((myKAs || []).sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)))
+    setKaReports(allKAs.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)))
     setLoading(false)
   }
 
