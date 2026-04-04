@@ -674,13 +674,21 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
     }))
   })()
 
-  // マイルストーンを持つ組織のみ表示（showAllOrgs時は全表示）
-  const filteredTree = showAllOrgs ? orgTree : orgTree.filter(org =>
-    org.milestones.length > 0 || org.children.some(c => c.milestones.length > 0)
-  ).map(org => ({
-    ...org,
-    children: showAllOrgs ? org.children : org.children.filter(c => c.milestones.length > 0),
-  }))
+  // マイルストーンを持つ組織のみ表示（showAllOrgs時は全表示、四半期タブ時はその四半期のマイルストーンのみ対象）
+  const filteredTree = (() => {
+    if (showAllOrgs) return orgTree
+    const qMonths = viewTab !== 'annual' ? QUARTER_MONTHS[viewTab] : null
+    const hasMilestones = (ms) => {
+      if (!qMonths) return ms.length > 0
+      return ms.some(m => qMonths.includes(m.start_month) || qMonths.includes(m.end_month))
+    }
+    return orgTree.filter(org =>
+      hasMilestones(org.milestones) || org.children.some(c => hasMilestones(c.milestones))
+    ).map(org => ({
+      ...org,
+      children: org.children.filter(c => hasMilestones(c.milestones)),
+    }))
+  })()
 
   const handleEdit = useCallback((ms) => {
     if (isAdmin) setEditTarget(ms)
