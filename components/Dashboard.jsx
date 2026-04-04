@@ -1332,7 +1332,7 @@ export default function Dashboard({ user, onSignOut }) {
       {/* Header */}
       <div style={{ borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50 }}>
         {/* 1行目 */}
-        <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, overflow: 'visible' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <button onClick={() => setShowSidebar(p => !p)} style={{
               background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
@@ -1348,29 +1348,27 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
 
           {/* ページナビ */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-            {[
-              {key:'summary',    label:'全社サマリー'},
-              {key:'okr',        label:'OKR'},
-              {key:'myokr',      label:'マイOKR'},
-              {key:'weekly',     label:'週次MTG'},
-              {key:'bulk',       label:'一括登録'},
-              {key:'csv',        label:'CSV登録'},
-              {key:'milestone',  label:'マイルストーン'},
-              {key:'orgjd',      label:'組織'},
-            ].map(pg => (
-              <button key={pg.key} onClick={() => setActivePage(pg.key)} style={{
-                padding: isMobile ? '5px 6px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                background: activePage === pg.key ? T.navActiveBg : 'transparent',
-                color: activePage === pg.key ? T.navActiveText : T.textMuted,
-                fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-                whiteSpace: 'nowrap',
-                borderLeft: activePage === pg.key ? '3px solid ' + T.navActiveBorder : '3px solid transparent',
-              }}>{pg.label}</button>
-            ))}
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
+            {/* マイルストーン */}
+            <button onClick={() => setActivePage('milestone')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'milestone' ? T.navActiveBg : 'transparent', color: activePage === 'milestone' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイルストーン</button>
+            {/* OKR ドロップダウン */}
+            <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.okr-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.okr-dropdown').style.display='none'}>
+              <button style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: ['summary','okr'].includes(activePage) ? T.navActiveBg : 'transparent', color: ['summary','okr'].includes(activePage) ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR ▾</button>
+              <div className="okr-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', left: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 140, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+                <button onClick={() => setActivePage('summary')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'summary' ? T.navActiveBg : 'transparent', color: activePage === 'summary' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>全体サマリー</button>
+                <button onClick={() => setActivePage('okr')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>OKR詳細</button>
+              </div>
+            </div>
+            {/* マイOKR */}
+            <button onClick={() => setActivePage('myokr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'myokr' ? T.navActiveBg : 'transparent', color: activePage === 'myokr' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイOKR</button>
+            {/* 週次MTG */}
+            <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
+            {/* 組織 */}
+            <button onClick={() => setActivePage('orgjd')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'orgjd' ? T.navActiveBg : 'transparent', color: activePage === 'orgjd' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>組織</button>
           </div>
-          {/* 年度切り替え（全ページ共通） */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
+
+          {/* 年度切り替え */}
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
             {['2025', '2026'].map(yr => (
               <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accentSolid : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
             ))}
@@ -1378,28 +1376,28 @@ export default function Dashboard({ user, onSignOut }) {
 
           {/* 右側 */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            {!isMobile && <span style={{ fontSize: 12, color: getT().textMuted }}>{user.email}</span>}
-            {!isMobile && hasGoogle && <span style={{ fontSize: 11, color: T.accent }}>✅ Google連携済み</span>}
-            {!isMobile && !hasGoogle && (
-              <button onClick={handleLinkGoogle} style={{ background: 'rgba(255,255,255,0.9)', border: 'none', color: '#333', borderRadius: 8, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <svg width="13" height="13" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                Google連携
-              </button>
-            )}
-            {!isMobile && (
-              <button onClick={onSignOut} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: getT().textSub, borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>ログアウト</button>
-            )}
-            <button onClick={() => setModal({ type: 'add' })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
+            <button onClick={() => setModal({ type: 'add', obj: { period: 'annual' } })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>＋ 追加</button>
             <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
-            <span style={{
-              fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default',
-              background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)',
-              color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn,
-              border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}`,
-              title: syncStatus === 'synced' ? 'リアルタイム同期中' : 'Realtimeへ接続中...',
-            }}>
+            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
               {syncStatus === 'synced' ? '🟢' : syncStatus === 'error' ? '🔴' : '🟡'}
             </span>
+            {/* ユーザーメニュー */}
+            <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
+              <button style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+                👤 <span style={{ fontSize: 11 }}>▾</span>
+              </button>
+              <div className="user-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+                <div style={{ padding: '8px 12px', fontSize: 12, color: T.textMuted, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>{user.email}</div>
+                <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
+                <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
+                {hasGoogle
+                  ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent }}>✅ Google連携済み</div>
+                  : <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
+                }
+                <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
+                <button onClick={onSignOut} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.warn, fontSize: 12, fontFamily: 'inherit' }}>ログアウト</button>
+              </div>
+            </div>
             <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
           </div>
         </div>
