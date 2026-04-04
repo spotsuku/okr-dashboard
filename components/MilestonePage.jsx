@@ -35,14 +35,12 @@ const MONTHS_SELECT = [
   { value: 2,  label: '2月' }, { value: 3,  label: '3月' },
 ]
 
-const GRID_COLS = '120px repeat(12, minmax(0, 1fr))'
 const QUARTER_MONTHS = {
   q1: [4, 5, 6],
   q2: [7, 8, 9],
   q3: [10, 11, 12],
   q4: [1, 2, 3],
 }
-const Q_GRID_COLS = '120px repeat(3, minmax(0, 1fr))'
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────────
 function getDaysLeftInfo(dueDate) {
@@ -68,16 +66,81 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+// ─── 日単位バー配置ユーティリティ ────────────────────────────────────────────
+function getFYStart(fy) { return new Date(fy, 3, 1) }  // 4月1日
+function getFYEnd(fy)   { return new Date(fy + 1, 2, 31) } // 翌3月31日
+
+function getQuarterRange(fy, qKey) {
+  const ranges = {
+    q1: [new Date(fy, 3, 1),     new Date(fy, 5, 30)],     // 4/1 - 6/30
+    q2: [new Date(fy, 6, 1),     new Date(fy, 8, 30)],     // 7/1 - 9/30
+    q3: [new Date(fy, 9, 1),     new Date(fy, 11, 31)],    // 10/1 - 12/31
+    q4: [new Date(fy + 1, 0, 1), new Date(fy + 1, 2, 31)], // 1/1 - 3/31
+  }
+  return ranges[qKey]
+}
+
+function parseDate(d) { return d ? new Date(d + 'T00:00:00') : null }
+
+// start_date / due_date がない場合に start_month / end_month から日付を導出
+function getMilestoneDates(ms, fy) {
+  const sDate = ms.start_date
+    ? parseDate(ms.start_date)
+    : new Date(ms.start_month >= 4 ? fy : fy + 1, ms.start_month - 1, 1)
+  const eDate = ms.due_date
+    ? parseDate(ms.due_date)
+    : (() => {
+        const y = ms.end_month >= 4 ? fy : fy + 1
+        // end_month の末日
+        return new Date(y, ms.end_month, 0)
+      })()
+  return { startDate: sDate, endDate: eDate }
+}
+
+function dateToPct(date, periodStart, periodEnd) {
+  const total = periodEnd.getTime() - periodStart.getTime()
+  if (total <= 0) return 0
+  const offset = date.getTime() - periodStart.getTime()
+  return Math.max(0, Math.min(100, (offset / total) * 100))
+}
+
+// マイルストーンをレーンに割り当て（重なりを避ける）
+function assignLanes(milestones, fy, periodStart, periodEnd) {
+  const withDates = milestones.map(ms => {
+    const { startDate, endDate } = getMilestoneDates(ms, fy)
+    return { ...ms, _start: startDate, _end: endDate }
+  }).sort((a, b) => a._start - b._start)
+
+  const lanes = [] // 各レーンの終了日
+  const result = []
+  for (const ms of withDates) {
+    let laneIdx = lanes.findIndex(end => end < ms._start)
+    if (laneIdx === -1) {
+      laneIdx = lanes.length
+      lanes.push(ms._end)
+    } else {
+      lanes[laneIdx] = ms._end
+    }
+    const leftPct = dateToPct(ms._start, periodStart, periodEnd)
+    const rightPct = dateToPct(ms._end, periodStart, periodEnd)
+    result.push({ ...ms, _lane: laneIdx, _leftPct: leftPct, _widthPct: Math.max(rightPct - leftPct, 0.5) })
+  }
+  return { items: result, laneCount: Math.max(lanes.length, 1) }
+}
+
+const BAR_ROW_H = 32 // バー1レーンの高さ
+const BAR_PAD = 2     // バー間パディング
+
 // ─── MilestoneHoverTooltip ───────────────────────────────────────────────────
 function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
-  const { title, due_date, focus_level, status, owner, start_month, end_month } = milestone
+  const { title, due_date, start_date, focus_level, status, owner } = milestone
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
   const isDone = status === 'done'
   const isDelayed = status === 'delayed'
   const statusLabel = isDone ? '完了' : isDelayed ? '遅延' : '進行中'
   const statusColor = isDone ? '#22c55e' : isDelayed ? '#dc2626' : '#3b82f6'
-  const startLabel = MONTHS_SELECT.find(m => m.value === start_month)?.label || ''
-  const endLabel = MONTHS_SELECT.find(m => m.value === end_month)?.label || ''
+  const startLabel = start_date || ''
+  const endLabel = due_date || ''
 
   return (
     <div style={{
@@ -96,17 +159,13 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
             <span style={{ color: T.textMuted, minWidth: 52 }}>期間</span>
-            <span style={{ color: T.textSub }}>{startLabel}〜{endLabel}</span>
+            <span style={{ color: T.textSub }}>
+              {startLabel}{startLabel && endLabel ? ' 〜 ' : ''}{endLabel}
+            </span>
+            {daysText && !isDone && (
+              <span style={{ fontSize: 10, fontWeight: 600, ...daysStyle }}>{daysText}</span>
+            )}
           </div>
-          {due_date && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-              <span style={{ color: T.textMuted, minWidth: 52 }}>期日</span>
-              <span style={{ color: T.textSub }}>{due_date}</span>
-              {daysText && !isDone && (
-                <span style={{ fontSize: 10, fontWeight: 600, ...daysStyle }}>{daysText}</span>
-              )}
-            </div>
-          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
             <span style={{ color: T.textMuted, minWidth: 52 }}>ステータス</span>
             <span style={{
@@ -131,17 +190,13 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
   )
 }
 
-// ─── MilestoneBar ────────────────────────────────────────────────────────────
-function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
+// ─── MilestoneBarInner（共通バー内部）────────────────────────────────────────
+function MilestoneBarInner({ milestone, orgColor, isChild, onEdit, isAdmin, T, fontSize }) {
   const { title, due_date, focus_level, status, owner } = milestone
   const [hovered, setHovered] = useState(false)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
 
-  const startCol = MONTH_ORDER.indexOf(milestone.start_month) + 2
-  const endCol   = MONTH_ORDER.indexOf(milestone.end_month) + 3
-
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
-
   const isDone    = status === 'done'
   const isDelayed = status === 'delayed'
   const isFocus   = focus_level === 'focus' && !isDone
@@ -157,10 +212,8 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
 
   const handleMouseEnter = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
-    const tooltipW = 280
-    const tooltipH = 180
-    let x = rect.left
-    let y = rect.bottom + 6
+    const tooltipW = 280, tooltipH = 180
+    let x = rect.left, y = rect.bottom + 6
     if (x + tooltipW > window.innerWidth) x = window.innerWidth - tooltipW - 12
     if (x < 8) x = 8
     if (y + tooltipH > window.innerHeight) y = rect.top - tooltipH - 6
@@ -168,19 +221,21 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
     setHovered(true)
   }
 
+  const fs = fontSize || (isChild ? 9 : 10)
   return (
-    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
+    <>
       <div
         onClick={isAdmin ? () => onEdit(milestone) : undefined}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setHovered(false)}
         style={{
           ...barBg, borderRadius: 4, padding: '4px 7px',
-          fontSize: isChild ? 9 : 10, fontWeight: 500, lineHeight: '1.3',
+          fontSize: fs, fontWeight: 500, lineHeight: '1.3',
           display: 'flex', flexDirection: 'column', gap: 1,
           overflow: 'hidden', whiteSpace: 'nowrap',
           cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
-          position: 'relative',
+          position: 'relative', height: '100%', boxSizing: 'border-box',
+          justifyContent: 'center',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
@@ -188,11 +243,11 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
             {isDone ? '✓ ' : ''}{title}
           </span>
           {daysText && !isDone && (
-            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
+            <span style={{ flexShrink: 0, fontSize: fs - 1, ...daysStyle }}>{daysText}</span>
           )}
         </div>
         {owner && (
-          <div style={{ fontSize: 8, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: fs - 1, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {owner}
           </div>
         )}
@@ -200,19 +255,23 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
       {hovered && (
         <MilestoneHoverTooltip milestone={milestone} orgColor={orgColor} T={T} position={tooltipPos} />
       )}
-    </div>
+    </>
   )
 }
 
-// ─── OrgRow ──────────────────────────────────────────────────────────────────
-function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
+// ─── OrgRow（年間・日単位配置）───────────────────────────────────────────────
+function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, fiscalYear }) {
   const { name, color, milestones } = org
+  const fy = Number(fiscalYear) || 2026
+  const periodStart = getFYStart(fy)
+  const periodEnd = getFYEnd(fy)
+  const { items, laneCount } = assignLanes(milestones, fy, periodStart, periodEnd)
+
   return (
     <div style={{
-      display: 'grid',
-      gridTemplateColumns: GRID_COLS,
+      display: 'grid', gridTemplateColumns: '120px 1fr',
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
-      minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
+      minHeight: isChild ? 48 : 56, alignItems: 'stretch',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 5,
@@ -241,103 +300,51 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
           >+</button>
         )}
       </div>
-      {milestones.map(ms => (
-        <MilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} />
-      ))}
-    </div>
-  )
-}
-
-// ─── QuarterMilestoneBar ─────────────────────────────────────────────────────
-function QuarterMilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, quarterMonths }) {
-  const { title, due_date, focus_level, status, owner } = milestone
-  const [hovered, setHovered] = useState(false)
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
-
-  const startIdx = quarterMonths.indexOf(milestone.start_month)
-  const endIdx   = quarterMonths.indexOf(milestone.end_month)
-  const clampStart = Math.max(startIdx, 0)
-  const clampEnd   = endIdx >= 0 ? endIdx : 2
-  const startCol = clampStart + 2
-  const endCol   = clampEnd + 3
-
-  const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
-  const isDone    = status === 'done'
-  const isDelayed = status === 'delayed'
-  const isFocus   = focus_level === 'focus' && !isDone
-
-  const barBg = isDone
-    ? { backgroundColor: T.textFaintest, color: T.textMuted, opacity: 0.7 }
-    : isFocus
-    ? { backgroundColor: orgColor, color: '#ffffff',
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
-    : { backgroundColor: hexWithAlpha(orgColor, 0.12), color: orgColor,
-        border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
-
-  const handleMouseEnter = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const tooltipW = 280
-    const tooltipH = 180
-    let x = rect.left
-    let y = rect.bottom + 6
-    if (x + tooltipW > window.innerWidth) x = window.innerWidth - tooltipW - 12
-    if (x < 8) x = 8
-    if (y + tooltipH > window.innerHeight) y = rect.top - tooltipH - 6
-    setTooltipPos({ x, y })
-    setHovered(true)
-  }
-
-  return (
-    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
-      <div
-        onClick={isAdmin ? () => onEdit(milestone) : undefined}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          ...barBg, borderRadius: 4, padding: '6px 10px',
-          fontSize: isChild ? 10 : 11, fontWeight: 500, lineHeight: '1.4',
-          display: 'flex', flexDirection: 'column', gap: 2,
-          overflow: 'hidden', whiteSpace: 'nowrap',
-          cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
-          position: 'relative',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-            {isDone ? '✓ ' : ''}{title}
-          </span>
-          {daysText && !isDone && (
-            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
-          )}
-        </div>
-        {owner && (
-          <div style={{ fontSize: 9, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {owner}
+      <div style={{ position: 'relative', minHeight: laneCount * BAR_ROW_H }}>
+        {/* 月境界線 */}
+        {MONTH_ORDER.slice(1).map((_, i) => (
+          <div key={i} style={{
+            position: 'absolute', left: `${((i + 1) / 12) * 100}%`, top: 0, bottom: 0,
+            borderLeft: (i + 1) % 3 === 0 ? `0.5px solid ${T.borderLight}` : `0.5px solid ${T.borderLight}`,
+            opacity: (i + 1) % 3 === 0 ? 0.8 : 0.4,
+          }} />
+        ))}
+        {items.map(ms => (
+          <div key={ms.id} style={{
+            position: 'absolute',
+            left: `${ms._leftPct}%`, width: `${ms._widthPct}%`,
+            top: ms._lane * BAR_ROW_H + BAR_PAD,
+            height: BAR_ROW_H - BAR_PAD * 2,
+            minWidth: 0, overflow: 'visible',
+          }}>
+            <MilestoneBarInner milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} />
           </div>
-        )}
+        ))}
       </div>
-      {hovered && (
-        <MilestoneHoverTooltip milestone={milestone} orgColor={orgColor} T={T} position={tooltipPos} />
-      )}
     </div>
   )
 }
 
-// ─── QuarterOrgRow ──────────────────────────────────────────────────────────
-function QuarterOrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, quarterMonths }) {
+// ─── QuarterOrgRow（四半期・日単位配置）──────────────────────────────────────
+function QuarterOrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, quarterMonths, fiscalYear }) {
   const { name, color, milestones } = org
-  // Filter milestones that overlap with this quarter
+  const fy = Number(fiscalYear) || 2026
+  const qKey = Object.entries(QUARTER_MONTHS).find(([, ms]) => ms === quarterMonths)?.[0] || 'q1'
+  const [periodStart, periodEnd] = getQuarterRange(fy, qKey)
+
+  // この四半期に重なるマイルストーンをフィルタ
   const qMilestones = milestones.filter(ms => {
-    return quarterMonths.includes(ms.start_month) || quarterMonths.includes(ms.end_month)
+    const { startDate, endDate } = getMilestoneDates(ms, fy)
+    return startDate <= periodEnd && endDate >= periodStart
   })
 
+  const { items, laneCount } = assignLanes(qMilestones, fy, periodStart, periodEnd)
+
   return (
     <div style={{
-      display: 'grid',
-      gridTemplateColumns: Q_GRID_COLS,
+      display: 'grid', gridTemplateColumns: '120px 1fr',
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
-      minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
+      minHeight: isChild ? 48 : 56, alignItems: 'stretch',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 5,
@@ -366,9 +373,26 @@ function QuarterOrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, quart
           >+</button>
         )}
       </div>
-      {qMilestones.map(ms => (
-        <QuarterMilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} quarterMonths={quarterMonths} />
-      ))}
+      <div style={{ position: 'relative', minHeight: laneCount * BAR_ROW_H }}>
+        {/* 月境界線 */}
+        {[1, 2].map(i => (
+          <div key={i} style={{
+            position: 'absolute', left: `${(i / 3) * 100}%`, top: 0, bottom: 0,
+            borderLeft: `0.5px solid ${T.borderLight}`, opacity: 0.6,
+          }} />
+        ))}
+        {items.map(ms => (
+          <div key={ms.id} style={{
+            position: 'absolute',
+            left: `${ms._leftPct}%`, width: `${ms._widthPct}%`,
+            top: ms._lane * BAR_ROW_H + BAR_PAD,
+            height: BAR_ROW_H - BAR_PAD * 2,
+            minWidth: 0, overflow: 'visible',
+          }}>
+            <MilestoneBarInner milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} fontSize={isChild ? 10 : 11} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -378,8 +402,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
   const isNew = !milestone.id
   const [form, setForm] = useState({
     title:       milestone.title || '',
-    start_month: milestone.start_month || 4,
-    end_month:   milestone.end_month || 6,
+    start_date:  milestone.start_date || '',
     due_date:    milestone.due_date || '',
     focus_level: milestone.focus_level || 'normal',
     status:      milestone.status || 'pending',
@@ -395,9 +418,17 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
     setSaving(true)
     setSaveError(null)
     try {
+      // 日付から start_month / end_month を自動導出
+      const startD = form.start_date ? new Date(form.start_date + 'T00:00:00') : null
+      const endD   = form.due_date   ? new Date(form.due_date + 'T00:00:00')   : null
       const payload = {
-        ...form,
+        title: form.title,
+        start_date: form.start_date || null,
         due_date: form.due_date || null,
+        start_month: startD ? startD.getMonth() + 1 : 4,
+        end_month: endD ? endD.getMonth() + 1 : 6,
+        focus_level: form.focus_level,
+        status: form.status,
         owner: form.owner || null,
       }
       if (isNew) {
@@ -470,21 +501,14 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={labelSt}>開始月</label>
-            <select value={form.start_month} onChange={e => setForm(f => ({ ...f, start_month: Number(e.target.value) }))} style={inputSt}>
-              {MONTHS_SELECT.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
+            <label style={labelSt}>開始日</label>
+            <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} style={inputSt} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={labelSt}>終了月</label>
-            <select value={form.end_month} onChange={e => setForm(f => ({ ...f, end_month: Number(e.target.value) }))} style={inputSt}>
-              {MONTHS_SELECT.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
+            <label style={labelSt}>期日</label>
+            <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={inputSt} />
           </div>
         </div>
-
-        <label style={labelSt}>期日（残日数カウントダウン用）</label>
-        <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={inputSt} />
 
         <label style={labelSt}>注力レベル</label>
         <select value={form.focus_level} onChange={e => setForm(f => ({ ...f, focus_level: e.target.value }))} style={inputSt}>
@@ -675,12 +699,16 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   })()
 
   // マイルストーンを持つ組織のみ表示（showAllOrgs時は全表示、四半期タブ時はその四半期のマイルストーンのみ対象）
+  const fy = Number(fiscalYear) || 2026
   const filteredTree = (() => {
     if (showAllOrgs) return orgTree
-    const qMonths = viewTab !== 'annual' ? QUARTER_MONTHS[viewTab] : null
-    const hasMilestones = (ms) => {
-      if (!qMonths) return ms.length > 0
-      return ms.some(m => qMonths.includes(m.start_month) || qMonths.includes(m.end_month))
+    const hasMilestones = (msList) => {
+      if (viewTab === 'annual') return msList.length > 0
+      const [pStart, pEnd] = getQuarterRange(fy, viewTab)
+      return msList.some(m => {
+        const { startDate, endDate } = getMilestoneDates(m, fy)
+        return startDate <= pEnd && endDate >= pStart
+      })
     }
     return orgTree.filter(org =>
       hasMilestones(org.milestones) || org.children.some(c => hasMilestones(c.milestones))
@@ -696,13 +724,13 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
 
   const handleAddMilestone = useCallback((orgId) => {
     const orgMilestoneCount = milestones.filter(m => m.org_id === orgId).length
+    const fy = Number(fiscalYear) || 2026
     setEditTarget({
       org_id: orgId,
-      fiscal_year: Number(fiscalYear) || 2026,
+      fiscal_year: fy,
       title: '',
-      start_month: 4,
-      end_month: 6,
-      due_date: '',
+      start_date: `${fy}-04-01`,
+      due_date: `${fy}-06-30`,
       focus_level: 'normal',
       status: 'pending',
       owner: '',
@@ -780,59 +808,63 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
         }}>
           <div style={{ width: '100%', minWidth: 0 }}>
             {/* Q ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0 }}>
               <div />
-              {QUARTERS.map((q, i) => (
-                <div key={q.label} style={{
-                  gridColumn: `span ${q.span}`, textAlign: 'center',
-                  fontSize: 11, fontWeight: 500, color: T.textSub,
-                  padding: '4px 2px 2px', borderBottom: `0.5px solid ${T.borderLight}`,
-                  borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
-                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                }}>
-                  {q.label}
-                  <span style={{ fontWeight: 400, color: T.textMuted, marginLeft: 4 }}>{q.months}</span>
-                </div>
-              ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0 }}>
+                {QUARTERS.map((q, i) => (
+                  <div key={q.label} style={{
+                    textAlign: 'center',
+                    fontSize: 11, fontWeight: 500, color: T.textSub,
+                    padding: '4px 2px 2px', borderBottom: `0.5px solid ${T.borderLight}`,
+                    borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
+                    overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                  }}>
+                    {q.label}
+                    <span style={{ fontWeight: 400, color: T.textMuted, marginLeft: 4 }}>{q.months}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* 月ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0 }}>
               <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
-              {MONTH_LABELS.map((label, i) => {
-                const isCurrent = i === currentColIndex
-                const isQStart = i % 3 === 0
-                return (
-                  <div key={label} style={{
-                    textAlign: 'center', fontSize: 10,
-                    color: isCurrent ? T.text : T.textMuted,
-                    fontWeight: isCurrent ? 600 : 400,
-                    padding: '3px 2px 6px',
-                    borderBottom: `0.5px solid ${T.borderLight}`,
-                    borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
-                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
-                    position: 'relative', overflow: 'hidden',
-                  }}>
-                    {label}
-                    {isCurrent && (
-                      <div style={{
-                        position: 'absolute', bottom: 0, left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 4, height: 4, borderRadius: '50%',
-                        backgroundColor: '#dc2626', opacity: 0.6,
-                      }} />
-                    )}
-                  </div>
-                )
-              })}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 0 }}>
+                {MONTH_LABELS.map((label, i) => {
+                  const isCurrent = i === currentColIndex
+                  const isQStart = i % 3 === 0
+                  return (
+                    <div key={label} style={{
+                      textAlign: 'center', fontSize: 10,
+                      color: isCurrent ? T.text : T.textMuted,
+                      fontWeight: isCurrent ? 600 : 400,
+                      padding: '3px 2px 6px',
+                      borderBottom: `0.5px solid ${T.borderLight}`,
+                      borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
+                      backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
+                      position: 'relative', overflow: 'hidden',
+                    }}>
+                      {label}
+                      {isCurrent && (
+                        <div style={{
+                          position: 'absolute', bottom: 0, left: '50%',
+                          transform: 'translateX(-50%)',
+                          width: 4, height: 4, borderRadius: '50%',
+                          backgroundColor: '#dc2626', opacity: 0.6,
+                        }} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             {/* 事業部行 */}
             {filteredTree.map(org => (
-              <div key={org.id} style={{ display: 'contents' }}>
-                <OrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
+              <div key={org.id}>
+                <OrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} fiscalYear={fiscalYear} />
                 {org.children.map(child => (
-                  <OrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
+                  <OrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} fiscalYear={fiscalYear} />
                 ))}
               </div>
             ))}
@@ -899,40 +931,42 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
           }}>
             <div style={{ width: '100%', minWidth: 0 }}>
               {/* 月ヘッダー行 */}
-              <div style={{ display: 'grid', gridTemplateColumns: Q_GRID_COLS, gap: 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0 }}>
                 <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
-                {qLabels.map((label, i) => {
-                  const isCurrent = i === qCurrentIdx
-                  return (
-                    <div key={label} style={{
-                      textAlign: 'center', fontSize: 11, fontWeight: isCurrent ? 600 : 400,
-                      color: isCurrent ? T.text : T.textMuted,
-                      padding: '6px 2px 8px',
-                      borderBottom: `0.5px solid ${T.borderLight}`,
-                      borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
-                      backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
-                      position: 'relative', overflow: 'hidden',
-                    }}>
-                      {label}
-                      {isCurrent && (
-                        <div style={{
-                          position: 'absolute', bottom: 0, left: '50%',
-                          transform: 'translateX(-50%)',
-                          width: 4, height: 4, borderRadius: '50%',
-                          backgroundColor: '#dc2626', opacity: 0.6,
-                        }} />
-                      )}
-                    </div>
-                  )
-                })}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0 }}>
+                  {qLabels.map((label, i) => {
+                    const isCurrent = i === qCurrentIdx
+                    return (
+                      <div key={label} style={{
+                        textAlign: 'center', fontSize: 11, fontWeight: isCurrent ? 600 : 400,
+                        color: isCurrent ? T.text : T.textMuted,
+                        padding: '6px 2px 8px',
+                        borderBottom: `0.5px solid ${T.borderLight}`,
+                        borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
+                        backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
+                        position: 'relative', overflow: 'hidden',
+                      }}>
+                        {label}
+                        {isCurrent && (
+                          <div style={{
+                            position: 'absolute', bottom: 0, left: '50%',
+                            transform: 'translateX(-50%)',
+                            width: 4, height: 4, borderRadius: '50%',
+                            backgroundColor: '#dc2626', opacity: 0.6,
+                          }} />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
               {/* 事業部行 */}
               {filteredTree.map(org => (
-                <div key={org.id} style={{ display: 'contents' }}>
-                  <QuarterOrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} quarterMonths={qMonths} />
+                <div key={org.id}>
+                  <QuarterOrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} quarterMonths={qMonths} fiscalYear={fiscalYear} />
                   {org.children.map(child => (
-                    <QuarterOrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} quarterMonths={qMonths} />
+                    <QuarterOrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} quarterMonths={qMonths} fiscalYear={fiscalYear} />
                   ))}
                 </div>
               ))}
