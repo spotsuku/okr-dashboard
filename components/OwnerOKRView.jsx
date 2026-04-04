@@ -174,8 +174,18 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
       allKAs = [...allKAs, ...(objKAsData || [])].filter((r, i, arr) => arr.findIndex(x => x.id === r.id) === i)
     }
 
+    // ★ 週コピーで同じKAが複数週に存在する場合、最新週のもの1つだけ残す
+    const kaByKey = {}
+    for (const ka of allKAs) {
+      const key = `${ka.kr_id}_${ka.ka_title}_${ka.owner}_${ka.objective_id}`
+      if (!kaByKey[key] || (ka.week_start || '') > (kaByKey[key].week_start || '')) {
+        kaByKey[key] = ka
+      }
+    }
+    const dedupedKAs = Object.values(kaByKey)
+
     setObjectives(fullObjs)
-    setKaReports(allKAs.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)))
+    setKaReports(dedupedKAs.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)))
     setLoading(false)
   }
 

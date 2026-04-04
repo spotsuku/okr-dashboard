@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
@@ -41,33 +41,88 @@ const THEMES = {
   },
 }
 
+// ─── 確認ダイアログ ──────────────────────────────────
+function ConfirmDialog({ message, onConfirm, onCancel, T }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 28px', minWidth: 320, maxWidth: 420, boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 18, lineHeight: 1.6 }}>{message}</div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '7px 18px', borderRadius: 7, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+          <button onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: 7, border: 'none', background: '#00d68f', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>完了にする</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── TaskList: 共通タスク表示コンポーネント ───────────
-function TaskList({ tasks, kaMap, objMap, T, onToggleDone }) {
+function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, myName }) {
   const today = toDateStr(new Date())
   const thisMonday = getMondayOf(new Date())
   const thisSunday = toDateStr(new Date(new Date(thisMonday + 'T00:00:00').getTime() + 6 * 86400000))
   const [showDone, setShowDone] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDue, setEditDue] = useState('')
+  const [confirm, setConfirm] = useState(null) // { taskId, done, assignee }
+  const editRef = useRef(null)
 
-  const overdue = tasks.filter(t => !t.done && t.due_date && t.due_date < today)
-  const thisWeek = tasks.filter(t => !t.done && t.due_date && t.due_date >= today && t.due_date <= thisSunday)
-  const upcoming = tasks.filter(t => !t.done && t.due_date && t.due_date > thisSunday)
+  // 期日が早い順にソート（null期日は最後）
+  const sortByDue = (a, b) => {
+    if (!a.due_date && !b.due_date) return 0
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return a.due_date.localeCompare(b.due_date)
+  }
+
+  const overdue = tasks.filter(t => !t.done && t.due_date && t.due_date < today).sort(sortByDue)
+  const thisWeek = tasks.filter(t => !t.done && t.due_date && t.due_date >= today && t.due_date <= thisSunday).sort(sortByDue)
+  const upcoming = tasks.filter(t => !t.done && t.due_date && t.due_date > thisSunday).sort(sortByDue)
   const noDue = tasks.filter(t => !t.done && !t.due_date)
   const done = tasks.filter(t => t.done)
   const totalIncomplete = overdue.length + thisWeek.length + upcoming.length + noDue.length
+
+  const startEdit = (task) => {
+    setEditingId(task.id)
+    setEditTitle(task.title || '')
+    setEditDue(task.due_date || '')
+  }
+  const saveEdit = async () => {
+    if (!editingId) return
+    await onUpdateTask(editingId, { title: editTitle, due_date: editDue || null })
+    setEditingId(null)
+  }
+  const cancelEdit = () => setEditingId(null)
+
+  const handleToggle = (taskId, currentDone, assignee) => {
+    // 他人のタスクを完了にする場合は確認ダイアログ
+    if (!currentDone && assignee && assignee !== myName) {
+      setConfirm({ taskId, done: currentDone, assignee })
+    } else {
+      onToggleDone(taskId, currentDone)
+    }
+  }
+
+  useEffect(() => {
+    if (editingId && editRef.current) editRef.current.focus()
+  }, [editingId])
 
   const renderTask = (task) => {
     const ka = kaMap[task.report_id]
     const obj = ka ? objMap[ka.objective_id] : null
     const isOverdue = !task.done && task.due_date && task.due_date < today
+    const isEditing = editingId === task.id
+
     return (
       <div key={task.id} style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px',
         background: task.done ? T.doneBg : isOverdue ? T.overdueBg : T.bgCard,
         border: `1px solid ${task.done ? T.doneBorder : isOverdue ? T.overdueBorder : T.border}`,
         borderRadius: 10, marginBottom: 6, opacity: task.done ? 0.7 : 1,
       }}>
-        <div onClick={() => onToggleDone(task.id, task.done)} style={{
-          width: 20, height: 20, borderRadius: 5, flexShrink: 0, cursor: 'pointer',
+        <div onClick={() => handleToggle(task.id, task.done, task.assignee)} style={{
+          width: 20, height: 20, borderRadius: 5, flexShrink: 0, cursor: 'pointer', marginTop: 2,
           border: `2px solid ${task.done ? '#00d68f' : T.borderMid}`,
           background: task.done ? '#00d68f' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -75,42 +130,66 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone }) {
           {task.done && <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>✓</span>}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: task.done ? T.textMuted : T.text, textDecoration: task.done ? 'line-through' : 'none', lineHeight: 1.4 }}>
-              {task.title || '(未入力)'}
-            </span>
-            {task.assignee && (
-              <span style={{ fontSize: 10, color: avatarColor(task.assignee), fontWeight: 600 }}>
-                @{task.assignee}
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-            {ka && (
-              <span style={{ fontSize: 10, color: T.textMuted, background: T.sectionBg, padding: '1px 6px', borderRadius: 4, border: `1px solid ${T.border}` }}>
-                KA: {ka.ka_title || '(無題)'}
-              </span>
-            )}
-            {obj && (
-              <span style={{ fontSize: 10, color: T.textFaint }}>
-                OKR: {obj.title}
-              </span>
-            )}
-          </div>
-        </div>
-        <div style={{ flexShrink: 0, textAlign: 'right' }}>
-          {task.due_date ? (
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-              color: isOverdue ? '#ff6b6b' : task.due_date <= thisSunday ? '#ffd166' : T.textMuted,
-              background: isOverdue ? 'rgba(255,107,107,0.12)' : 'transparent',
-            }}>
-              {isOverdue && '⚠ '}{formatDate(task.due_date)}
-            </span>
+          {isEditing ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input ref={editRef} value={editTitle} onChange={e => setEditTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.accent}`, background: T.bg, color: T.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: T.textMuted }}>期日:</span>
+                <input type="date" value={editDue} onChange={e => setEditDue(e.target.value)}
+                  style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
+                />
+                <button onClick={saveEdit} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#00d68f', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>保存</button>
+                <button onClick={cancelEdit} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>取消</button>
+              </div>
+            </div>
           ) : (
-            <span style={{ fontSize: 11, color: T.textFaint }}>期限なし</span>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span onClick={() => !task.done && startEdit(task)} style={{ fontSize: 13, fontWeight: 600, color: task.done ? T.textMuted : T.text, textDecoration: task.done ? 'line-through' : 'none', lineHeight: 1.4, cursor: task.done ? 'default' : 'pointer' }} title={task.done ? '' : 'クリックして編集'}>
+                  {task.title || '(未入力)'}
+                </span>
+                {task.assignee && (
+                  <span style={{ fontSize: 10, color: avatarColor(task.assignee), fontWeight: 600 }}>
+                    @{task.assignee}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
+                {ka && (
+                  <span style={{ fontSize: 10, color: T.textMuted, background: T.sectionBg, padding: '1px 6px', borderRadius: 4, border: `1px solid ${T.border}` }}>
+                    KA: {ka.ka_title || '(無題)'}
+                  </span>
+                )}
+                {obj && (
+                  <span style={{ fontSize: 10, color: T.textFaint }}>
+                    OKR: {obj.title}
+                  </span>
+                )}
+              </div>
+            </>
           )}
         </div>
+        {!isEditing && (
+          <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {!task.done && (
+              <span onClick={() => startEdit(task)} style={{ fontSize: 11, color: T.textFaint, cursor: 'pointer', padding: '2px 4px' }} title="編集">✏️</span>
+            )}
+            {task.due_date ? (
+              <span style={{
+                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                color: isOverdue ? '#ff6b6b' : task.due_date <= thisSunday ? '#ffd166' : T.textMuted,
+                background: isOverdue ? 'rgba(255,107,107,0.12)' : 'transparent',
+              }}>
+                {isOverdue && '⚠ '}{formatDate(task.due_date)}
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, color: T.textFaint }}>期限なし</span>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -131,6 +210,16 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone }) {
 
   return (
     <>
+      {/* 確認ダイアログ */}
+      {confirm && (
+        <ConfirmDialog
+          T={T}
+          message={`「${confirm.assignee}」さんのタスクを完了にしますか？`}
+          onConfirm={() => { onToggleDone(confirm.taskId, confirm.done); setConfirm(null) }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+
       {/* サマリーバー */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <div style={{ padding: '8px 16px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}`, fontSize: 12 }}>
@@ -200,9 +289,15 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
     ])
 
     const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || [])]
-    // 重複排除（同じIDのタスクが複数ある場合）
-    const seen = new Set()
-    const uniqueTasks = tasks.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true })
+    // 重複排除: IDで重複排除 + 同じtitle+assigneeの組み合わせは最新のものだけ残す
+    const seenId = new Set()
+    const byId = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
+    const byKey = {}
+    for (const t of byId) {
+      const key = `${t.title}_${t.assignee}_${t.done}`
+      if (!byKey[key] || t.id > byKey[key].id) byKey[key] = t
+    }
+    const uniqueTasks = Object.values(byKey)
 
     if (uniqueTasks.length === 0) { setAllTasks([]); setKaMap({}); setObjMap({}); setLoading(false); return }
 
@@ -245,6 +340,11 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
         body: JSON.stringify({ taskId, taskTitle: task?.title, kaTitle: ka?.ka_title, objectiveTitle: obj?.title, completedBy: task?.assignee || myName }),
       }).catch(() => {})
     }
+  }
+
+  const updateTask = async (taskId, fields) => {
+    await supabase.from('ka_tasks').update(fields).eq('id', taskId)
+    setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...fields } : t))
   }
 
   // メンバーリスト（タスクがあるメンバーのみ + 全員）
@@ -354,7 +454,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
             </div>
           </div>
 
-          <TaskList tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onToggleDone={toggleDone} />
+          <TaskList tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onToggleDone={toggleDone} onUpdateTask={updateTask} myName={myName} />
         </div>
       </div>
     </div>
