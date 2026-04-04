@@ -130,21 +130,11 @@ function MilestoneDot({ milestone, orgColor, isChild, onEdit, isAdmin, T, colInd
   const { title, theme, due_date, focus_level, status, owner, start_month, end_month } = milestone
   const [hovered, setHovered] = useState(false)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
-  const dotRef = React.useRef(null)
-
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
   const isDone    = status === 'done'
   const isDelayed = status === 'delayed'
   const isStar    = focus_level === 'star' && !isDone
   const isFocus   = focus_level === 'focus' && !isDone
-
-  // バーの開始・終了colIndex
-  const n = visibleMonthOrder ? visibleMonthOrder.length : 12
-  const mo = visibleMonthOrder || MONTH_ORDER
-  const barStartIdx = mo.indexOf(start_month)
-  const barEndIdx   = mo.indexOf(end_month)
-  const barLeft  = barStartIdx !== -1 ? barStartIdx / n * 100 : null
-  const barRight = barEndIdx   !== -1 ? (barEndIdx + 1) / n * 100 : null
 
   const dotSize = isStar ? (isChild ? 14 : 18) : (isChild ? 10 : 14)
   const dotColor = isDone ? '#22c55e' : isDelayed ? '#dc2626' : isStar ? '#f59e0b' : isFocus ? orgColor : hexWithAlpha(orgColor, 0.65)
@@ -170,35 +160,10 @@ function MilestoneDot({ milestone, orgColor, isChild, onEdit, isAdmin, T, colInd
       zIndex: 10,
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
-      {/* バー背景（start_month〜end_month） */}
-      {barLeft !== null && barRight !== null && (
-        <div style={{
-          position: 'absolute',
-          top: '50%', transform: 'translateY(-50%)',
-          left: `${(barLeft - colIndex * 100)}%`,
-          width: `${barRight - barLeft}%`,
-          height: isChild ? 20 : 24,
-          background: hexWithAlpha(dotColor, isDone ? 0.08 : 0.12),
-          border: `1px solid ${hexWithAlpha(dotColor, 0.25)}`,
-          borderRadius: 4,
-          zIndex: -1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden', whiteSpace: 'nowrap',
-          pointerEvents: 'none',
-        }}>
-          {theme && (
-            <span style={{
-              fontSize: 9, color: dotColor, fontWeight: 600,
-              padding: '0 6px', opacity: 0.85,
-              overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>{theme}</span>
-          )}
-        </div>
-      )}
+
 
       {/* 点（または⭐） */}
       <div
-        ref={dotRef}
         onClick={isAdmin ? () => onEdit(milestone) : undefined}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setHovered(false)}
@@ -352,6 +317,39 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonth
         height: '100%',
         display: 'flex', alignItems: 'center',
       }}>
+        {/* バー背景（各マイルストーンのstart_month〜end_month） */}
+        {sorted.map(ms => {
+          const isDone    = ms.status === 'done'
+          const isDelayed = ms.status === 'delayed'
+          const isStar    = ms.focus_level === 'star' && !isDone
+          const isFocus   = ms.focus_level === 'focus' && !isDone
+          const dc = isDone ? '#22c55e' : isDelayed ? '#dc2626' : isStar ? '#f59e0b' : isFocus ? (color || '#888') : hexWithAlpha(color || '#888', 0.65)
+          const bi = visibleMonthOrder.indexOf(ms.start_month)
+          const ei = visibleMonthOrder.indexOf(ms.end_month)
+          if (bi === -1 || ei === -1) return null
+          const bLeft = bi / n * 100
+          const bWidth = (ei - bi + 1) / n * 100
+          return (
+            <div key={`bar-${ms.id}`} style={{
+              position: 'absolute',
+              left: `${bLeft}%`, width: `${bWidth}%`,
+              top: '50%', transform: 'translateY(-50%)',
+              height: isChild ? 20 : 24,
+              background: hexWithAlpha(dc, 0.1),
+              border: `1px solid ${hexWithAlpha(dc, 0.22)}`,
+              borderRadius: 4,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden', pointerEvents: 'none',
+            }}>
+              {ms.theme && (
+                <span style={{ fontSize: 9, color: dc, fontWeight: 600, padding: '0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.9 }}>
+                  {ms.theme}
+                </span>
+              )}
+            </div>
+          )
+        })}
+
         {/* 連結ライン（点と点を結ぶ） */}
         {sorted.length >= 2 && sorted.map((ms, i) => {
           if (i === sorted.length - 1) return null
