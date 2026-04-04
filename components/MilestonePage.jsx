@@ -125,163 +125,88 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
 }
 
 // ─── MilestoneBar ────────────────────────────────────────────────────────────
-// MilestoneDot: due_dateの月列に点を表示する新実装
-function MilestoneDot({ milestone, orgColor, isChild, onEdit, isAdmin, T, colIndex, allMilestones, visibleMonthOrder }) {
-  const { title, theme, due_date, focus_level, status, owner, start_month, end_month } = milestone
+function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
+  const { title, due_date, focus_level, status, owner } = milestone
   const [hovered, setHovered] = useState(false)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+
+  const startCol = visibleMonthOrder.indexOf(milestone.start_month) + 2
+  const endCol   = visibleMonthOrder.indexOf(milestone.end_month) + 3
+
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
+
   const isDone    = status === 'done'
   const isDelayed = status === 'delayed'
-  const isStar    = focus_level === 'star' && !isDone
   const isFocus   = focus_level === 'focus' && !isDone
 
-  const dotSize = isStar ? (isChild ? 14 : 18) : (isChild ? 10 : 14)
-  const dotColor = isDone ? '#22c55e' : isDelayed ? '#dc2626' : isStar ? '#f59e0b' : isFocus ? orgColor : hexWithAlpha(orgColor, 0.65)
+  const barBg = isDone
+    ? { backgroundColor: T.textFaintest, color: T.textMuted, opacity: 0.7 }
+    : isFocus
+    ? { backgroundColor: orgColor, color: '#ffffff',
+        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
+    : { backgroundColor: hexWithAlpha(orgColor, 0.12), color: orgColor,
+        border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
+        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
 
   const handleMouseEnter = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
-    const tooltipW = 300
-    let x = rect.left + rect.width / 2 - tooltipW / 2
-    let y = rect.bottom + 10
-    if (x + tooltipW > window.innerWidth - 8) x = window.innerWidth - tooltipW - 8
+    const tooltipW = 280
+    const tooltipH = 180
+    let x = rect.left
+    let y = rect.bottom + 6
+    if (x + tooltipW > window.innerWidth) x = window.innerWidth - tooltipW - 12
     if (x < 8) x = 8
-    if (y + 220 > window.innerHeight) y = rect.top - 220 - 6
+    if (y + tooltipH > window.innerHeight) y = rect.top - tooltipH - 6
     setTooltipPos({ x, y })
     setHovered(true)
   }
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: '50%',
-      left: `${colIndex * 100}%`,
-      transform: 'translate(-50%, -50%)',
-      zIndex: 10,
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-    }}>
-
-
-      {/* 点（または⭐） */}
+    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
       <div
         onClick={isAdmin ? () => onEdit(milestone) : undefined}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setHovered(false)}
         style={{
-          width: dotSize, height: dotSize,
-          borderRadius: isStar ? '0' : '50%',
-          backgroundColor: isStar ? 'transparent' : dotColor,
-          fontSize: isStar ? dotSize + 2 : undefined,
-          lineHeight: isStar ? '1' : undefined,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: isStar ? 'none' : isDone ? '2px solid #22c55e' : `2px solid ${hexWithAlpha(dotColor, 0.5)}`,
-          boxShadow: (isFocus || isStar) && !isDone ? `0 0 0 3px ${hexWithAlpha(dotColor, 0.25)}` : 'none',
-          cursor: isAdmin ? 'pointer' : 'default',
-          transition: 'transform 0.15s, box-shadow 0.15s',
-          userSelect: 'none',
+          ...barBg, borderRadius: 4, padding: '4px 7px',
+          fontSize: isChild ? 9 : 10, fontWeight: 500, lineHeight: '1.3',
+          display: 'flex', flexDirection: 'column', gap: 1,
+          overflow: 'hidden', whiteSpace: 'nowrap',
+          cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
+          position: 'relative',
         }}
-        onMouseOver={e => e.currentTarget.style.transform = 'scale(1.35)'}
-        onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
       >
-        {isStar ? '⭐' : isDone ? '✓' : ''}
-      </div>
-
-      {/* ツールチップ（position:fixed で確実に表示） */}
-      {hovered && (
-        <div style={{
-          position: 'fixed',
-          left: tooltipPos.x, top: tooltipPos.y,
-          zIndex: 9999,
-          pointerEvents: 'none',
-          background: T.bgCard,
-          border: `1px solid ${T.borderMid}`,
-          borderRadius: 10, padding: '14px 16px',
-          minWidth: 220, maxWidth: 300,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8, lineHeight: 1.4 }}>
-            {isStar ? '⭐ ' : isDone ? '✓ ' : ''}{title}
-          </div>
-          {theme && (
-            <div style={{ fontSize: 11, color: dotColor, fontWeight: 600, marginBottom: 8, padding: '2px 8px', background: hexWithAlpha(dotColor, 0.1), borderRadius: 4, display: 'inline-block' }}>
-              {theme}
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+            {isDone ? '✓ ' : ''}{title}
+          </span>
+          {daysText && !isDone && (
+            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {due_date && (
-              <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
-                <span style={{ color: T.textMuted, minWidth: 48 }}>期日</span>
-                <span style={{ color: T.textSub }}>{due_date}</span>
-                {daysText && !isDone && <span style={{ fontSize: 10, fontWeight: 700, ...daysStyle }}>{daysText}</span>}
-              </div>
-            )}
-            {(start_month || end_month) && (
-              <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
-                <span style={{ color: T.textMuted, minWidth: 48 }}>期間</span>
-                <span style={{ color: T.textSub }}>
-                  {MONTHS_SELECT.find(m => m.value === start_month)?.label || ''}〜{MONTHS_SELECT.find(m => m.value === end_month)?.label || ''}
-                </span>
-              </div>
-            )}
-            {owner && (
-              <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
-                <span style={{ color: T.textMuted, minWidth: 48 }}>責任者</span>
-                <span style={{ color: T.textSub }}>{owner}</span>
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
-              <span style={{ color: T.textMuted, minWidth: 48 }}>状態</span>
-              <span style={{
-                fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 4,
-                color: isDone ? '#22c55e' : isDelayed ? '#dc2626' : '#3b82f6',
-                background: isDone ? '#22c55e18' : isDelayed ? '#dc262618' : '#3b82f618',
-              }}>
-                {isDone ? '完了' : isDelayed ? '遅延' : '進行中'}
-              </span>
-            </div>
-          </div>
         </div>
+        {owner && (
+          <div style={{ fontSize: 8, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {owner}
+          </div>
+        )}
+      </div>
+      {hovered && (
+        <MilestoneHoverTooltip milestone={milestone} orgColor={orgColor} T={T} position={tooltipPos} />
       )}
     </div>
   )
 }
 
-// MilestoneBar は後方互換のため残す（未使用）
-function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
-  return null
-}
-
 // ─── OrgRow ──────────────────────────────────────────────────────────────────
 function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
   const { name, color, milestones } = org
-  const n = visibleMonthOrder.length
-
-  // due_dateから月を取得しcolIndex（0〜n-1）に変換
-  const getColIndex = (ms) => {
-    if (ms.due_date) {
-      const m = parseInt(ms.due_date.split('-')[1])
-      const idx = visibleMonthOrder.indexOf(m)
-      if (idx !== -1) return idx / n + 1 / (n * 2)
-    }
-    // due_dateがない場合はend_monthを使用
-    const idx = visibleMonthOrder.indexOf(ms.end_month)
-    return idx !== -1 ? idx / n + 1 / (n * 2) : null
-  }
-
-  // sort: 左から右に並べる
-  const sorted = [...milestones].sort((a, b) => {
-    const ai = getColIndex(a), bi = getColIndex(b)
-    return (ai ?? 99) - (bi ?? 99)
-  })
-
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: `120px repeat(${n}, minmax(0, 1fr))`,
+      gridTemplateColumns: GRID_COLS,
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
-      minHeight: isChild ? 48 : 56, alignItems: 'center',
+      minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
     }}>
-      {/* ラベル列 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 5,
         padding: isChild ? '4px 6px 4px 16px' : '4px 8px 4px 0',
@@ -309,82 +234,9 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonth
           >+</button>
         )}
       </div>
-
-      {/* タイムライン列（全12列を1つのrelativeコンテナで覆う） */}
-      <div style={{
-        gridColumn: `2 / ${n + 2}`,
-        position: 'relative',
-        height: '100%',
-        display: 'flex', alignItems: 'center',
-      }}>
-        {/* バー背景（各マイルストーンのstart_month〜end_month） */}
-        {sorted.map(ms => {
-          const isDone    = ms.status === 'done'
-          const isDelayed = ms.status === 'delayed'
-          const isStar    = ms.focus_level === 'star' && !isDone
-          const isFocus   = ms.focus_level === 'focus' && !isDone
-          const dc = isDone ? '#22c55e' : isDelayed ? '#dc2626' : isStar ? '#f59e0b' : isFocus ? (color || '#888') : hexWithAlpha(color || '#888', 0.65)
-          const bi = visibleMonthOrder.indexOf(ms.start_month)
-          const ei = visibleMonthOrder.indexOf(ms.end_month)
-          if (bi === -1 || ei === -1) return null
-          const bLeft = bi / n * 100
-          const bWidth = (ei - bi + 1) / n * 100
-          return (
-            <div key={`bar-${ms.id}`} style={{
-              position: 'absolute',
-              left: `${bLeft}%`, width: `${bWidth}%`,
-              top: '50%', transform: 'translateY(-50%)',
-              height: isChild ? 20 : 24,
-              background: hexWithAlpha(dc, 0.1),
-              border: `1px solid ${hexWithAlpha(dc, 0.22)}`,
-              borderRadius: 4,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              overflow: 'hidden', pointerEvents: 'none',
-            }}>
-              {ms.theme && (
-                <span style={{ fontSize: 9, color: dc, fontWeight: 600, padding: '0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.9 }}>
-                  {ms.theme}
-                </span>
-              )}
-            </div>
-          )
-        })}
-
-        {/* 連結ライン（点と点を結ぶ） */}
-        {sorted.length >= 2 && sorted.map((ms, i) => {
-          if (i === sorted.length - 1) return null
-          const x1 = (getColIndex(ms) ?? 0) * 100
-          const x2 = (getColIndex(sorted[i+1]) ?? 0) * 100
-          return (
-            <div key={`line-${ms.id}`} style={{
-              position: 'absolute',
-              left: `${x1}%`, width: `${x2 - x1}%`,
-              top: '50%', height: 1,
-              background: hexWithAlpha(color || '#888', 0.3),
-              pointerEvents: 'none',
-            }} />
-          )
-        })}
-
-        {/* 各マイルストーンの点 */}
-        {sorted.map(ms => {
-          const ci = getColIndex(ms)
-          if (ci === null) return null
-          return (
-            <MilestoneDot
-              key={ms.id}
-              milestone={ms}
-              orgColor={color || '#888'}
-              isChild={isChild}
-              onEdit={onEdit}
-              isAdmin={isAdmin}
-              T={T}
-              colIndex={ci}
-              visibleMonthOrder={visibleMonthOrder}
-            />
-          )
-        })}
-      </div>
+      {milestones.map(ms => (
+        <MilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} visibleMonthOrder={visibleMonthOrder} />
+      ))}
     </div>
   )
 }
@@ -394,7 +246,6 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
   const isNew = !milestone.id
   const [form, setForm] = useState({
     title:       milestone.title || '',
-    theme:       milestone.theme || '',
     start_month: milestone.start_month || 4,
     end_month:   milestone.end_month || 6,
     start_date:  milestone.start_date || '',
@@ -502,13 +353,9 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
 
         <label style={{ ...labelSt, marginTop: 12 }}>注力レベル</label>
         <select value={form.focus_level} onChange={e => setForm(f => ({ ...f, focus_level: e.target.value }))} style={inputSt}>
-          <option value="star">⭐ 最重要（星マーク）</option>
           <option value="focus">focus（濃色・最注力）</option>
           <option value="normal">normal（薄色・進行中）</option>
         </select>
-
-        <label style={labelSt}>テーマ（取り組み内容）</label>
-        <input value={form.theme} onChange={e => setForm(f => ({ ...f, theme: e.target.value }))} style={inputSt} placeholder="例：二期生集客、AI研修販売" />
 
         <label style={labelSt}>ステータス</label>
         <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={inputSt}>
@@ -826,22 +673,20 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             )}
 
             {/* 月ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
               <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
-              {visibleMonthLabels.map((label, i) => {
-                const monthVal = visibleMonthOrder[i]
-                const isCurrent = monthVal === currentMonth
-                const isQStart = viewMode === 'annual' ? i % 3 === 0 : i === 0
+              {MONTH_LABELS.map((label, i) => {
+                const isCurrent = i === currentColIndex
+                const isQStart = i % 3 === 0
                 return (
                   <div key={label} style={{
-                    textAlign: 'center',
-                    fontSize: viewMode === 'annual' ? 10 : 14,
+                    textAlign: 'center', fontSize: 10,
                     color: isCurrent ? T.text : T.textMuted,
-                    fontWeight: isCurrent ? 700 : 400,
-                    padding: viewMode === 'annual' ? '3px 2px 6px' : '8px 2px 10px',
+                    fontWeight: isCurrent ? 600 : 400,
+                    padding: '3px 2px 6px',
                     borderBottom: `0.5px solid ${T.borderLight}`,
                     borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
-                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.06)' : 'transparent',
+                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {label}
