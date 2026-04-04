@@ -239,7 +239,7 @@ function KRCard({ kr, myName, members, wT }) {
 }
 
 // ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
+function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
   const ref = useRef(null)
@@ -274,6 +274,12 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
     const nd = !t.done
     if (t?.id) await supabase.from('ka_tasks').update({ done:nd }).eq('id', t.id)
     setTasks(p => p.map(x => (x.id||x._tmp)===key ? {...x,done:nd} : x))
+    if (nd && t?.id) {
+      fetch('/api/slack-task-done', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: t.id, taskTitle: t.title, kaTitle, objectiveTitle, completedBy }),
+      }).catch(() => {})
+    }
   }
   const saveTask = async (key) => {
     const t = tasks.find(x => (x.id||x._tmp)===key)
@@ -285,12 +291,12 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
       if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
     }
   }
-  const done = tasks.filter(t=>t.done).length
+  const doneCount = tasks.filter(t=>t.done).length
 
   return (
     <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:380, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {done}/{tasks.length}</span>
+        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {doneCount}/{tasks.length}</span>
         <button onClick={addTask} style={{ marginLeft:4, background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', borderRadius:4, color:'#a855f7', fontSize:10, padding:'2px 6px', cursor:'pointer', fontFamily:'inherit' }}>＋</button>
         <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
       </div>
@@ -317,7 +323,7 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
 }
 
 // ─── KAインライン行 ──────────────────────────────────────────────────────────
-function MyKARow({ report, onSave, onDelete, wT, members }) {
+function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, objectiveTitle }) {
   const [good,         setGood]         = useState(report.good || '')
   const [more,         setMore]         = useState(report.more || '')
   const [focusOutput,  setFocusOutput]  = useState(report.focus_output || '')
@@ -472,7 +478,7 @@ function MyKARow({ report, onSave, onDelete, wT, members }) {
           </span>
           <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
         </div>
-        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} />}
+        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
       <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
@@ -772,7 +778,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                               <KATableHeader wT={wT} />
                               <tbody>
                                 {krKAs.map(r => (
-                                  <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                                  <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
                                 ))}
                               </tbody>
                             </table>
@@ -798,7 +804,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                       <KATableHeader wT={wT} />
                       <tbody>
                         {unlinkedKAs.map(r => (
-                          <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                          <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
                         ))}
                       </tbody>
                     </table>

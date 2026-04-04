@@ -88,22 +88,31 @@ function groupByOwner(data, levelId) {
     tasksByReport[t.report_id].push(t)
   }
 
-  // KRをobjective_idでグループ化
-  const krsByObj = {}
-  for (const kr of keyResults) {
-    if (!krsByObj[kr.objective_id]) krsByObj[kr.objective_id] = []
-    krsByObj[kr.objective_id].push(kr)
-  }
-
-  // 部署でフィルタしたObjective/KA
-  const filteredObjs = visibleLevelIds
-    ? objectives.filter(o => visibleLevelIds.includes(Number(o.level_id)))
-    : objectives
-  const filteredObjIds = new Set(filteredObjs.map(o => o.id))
-  const filteredKRs = keyResults.filter(kr => filteredObjIds.has(kr.objective_id))
+  // 部署でフィルタしたKA
   const filteredKAs = visibleLevelIds
     ? weeklyReports.filter(r => visibleLevelIds.includes(Number(r.level_id)))
     : weeklyReports
+
+  // ★ 該当週のKAに紐づくObjective/KRのみに限定
+  const kaObjIds = new Set(filteredKAs.map(r => r.objective_id).filter(Boolean))
+  const kaKrIds = new Set(filteredKAs.map(r => r.kr_id).filter(Boolean))
+
+  // KAに紐づくObjectiveのみ
+  const filteredObjs = (visibleLevelIds
+    ? objectives.filter(o => visibleLevelIds.includes(Number(o.level_id)))
+    : objectives
+  ).filter(o => kaObjIds.has(o.id))
+  const filteredObjIds = new Set(filteredObjs.map(o => o.id))
+
+  // KAに紐づくKRのみ
+  const filteredKRs = keyResults.filter(kr => kaKrIds.has(kr.id) || filteredObjIds.has(kr.objective_id))
+
+  // KRをobjective_idでグループ化
+  const krsByObj = {}
+  for (const kr of filteredKRs) {
+    if (!krsByObj[kr.objective_id]) krsByObj[kr.objective_id] = []
+    krsByObj[kr.objective_id].push(kr)
+  }
 
   // メンバーごとにデータ集約
   for (const m of members) {

@@ -154,7 +154,7 @@ function WeatherPicker({ value, onChange, wT }) {
 }
 
 // ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
+function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
   const ref = useRef(null)
@@ -189,6 +189,12 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
     const nd = !t.done
     if (t?.id) await supabase.from('ka_tasks').update({ done:nd }).eq('id', t.id)
     setTasks(p => p.map(x => (x.id||x._tmp)===key ? {...x,done:nd} : x))
+    if (nd && t?.id) {
+      fetch('/api/slack-task-done', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: t.id, taskTitle: t.title, kaTitle, objectiveTitle, completedBy }),
+      }).catch(() => {})
+    }
   }
   const saveTask = async (key) => {
     const t = tasks.find(x => (x.id||x._tmp)===key)
@@ -200,12 +206,12 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
       if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
     }
   }
-  const done = tasks.filter(t=>t.done).length
+  const doneCount = tasks.filter(t=>t.done).length
 
   return (
     <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:380, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {done}/{tasks.length}</span>
+        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {doneCount}/{tasks.length}</span>
         <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
       </div>
       {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
@@ -234,7 +240,7 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
 }
 
 // ─── KAテーブル行 ──────────────────────────────────────────────────────────────
-function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps, dragIdx, overIdx, rowIdx, onDragOver, onDrop }) {
+function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps, dragIdx, overIdx, rowIdx, onDragOver, onDrop, objectiveTitle, completedBy }) {
   const [good,         setGood]         = useState(report.good || '')
   const [more,         setMore]         = useState(report.more || '')
   const [focusOutput,  setFocusOutput]  = useState(report.focus_output || '')
@@ -404,7 +410,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
           </span>
           <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
         </div>
-        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} />}
+        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
       <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
@@ -416,7 +422,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder, objectiveTitle, completedBy, weeksList }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
     .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
@@ -504,6 +510,15 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       const { sort_order, ...payloadNoSort } = payload
       const res = await supabase.from('weekly_reports').insert(payloadNoSort)
       if (res.error) { console.error('KA追加エラー:', res.error); alert('KAの追加に失敗しました: ' + res.error.message); return }
+    }
+    // ★ 翌週以降の既存週にも自動コピー
+    const futureWeeks = (weeksList || []).filter(w => w > weekStart)
+    if (futureWeeks.length > 0) {
+      const copies = futureWeeks.map(w => ({
+        week_start: w, level_id: levelId, objective_id: objId,
+        kr_id: kr.id, kr_title: kr.title, ka_title: '新しいKA', status: 'normal',
+      }))
+      supabase.from('weekly_reports').insert(copies).then(() => {}).catch(() => {})
     }
     onAddKA()
   }
@@ -669,7 +684,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
                 dragIdx={dragIdx} overIdx={overIdx} rowIdx={idx}
                 dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx), onDragEnd:handleDragEnd }}
                 onDragOver={e => handleDragOver(e, idx)}
-                onDrop={() => handleDrop(idx)} />
+                onDrop={() => handleDrop(idx)}
+                objectiveTitle={objectiveTitle} completedBy={completedBy} />
             ))}
           </tbody>
         </table>
@@ -699,7 +715,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             <tbody>
               {doneReports.map(r => (
                 <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                  canEdit={canEditKA(r.owner, objOwner)} />
+                  canEdit={canEditKA(r.owner, objOwner)} objectiveTitle={objectiveTitle} completedBy={completedBy} />
               ))}
             </tbody>
           </table>
@@ -1142,6 +1158,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   onKRUpdate={handleKRUpdate}
                   activeWeek={activeWeek}
                   onReorder={reload}
+                  objectiveTitle={rightObj.title}
+                  completedBy={myName}
+                  weeksList={weeksList}
                 />
               ))}
             </>
