@@ -511,15 +511,6 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       const res = await supabase.from('weekly_reports').insert(payloadNoSort)
       if (res.error) { console.error('KA追加エラー:', res.error); alert('KAの追加に失敗しました: ' + res.error.message); return }
     }
-    // ★ 翌週以降の既存週にも自動コピー
-    const futureWeeks = (weeksList || []).filter(w => w > weekStart)
-    if (futureWeeks.length > 0) {
-      const copies = futureWeeks.map(w => ({
-        week_start: w, level_id: levelId, objective_id: objId,
-        kr_id: kr.id, kr_title: kr.title, ka_title: '新しいKA', status: 'normal',
-      }))
-      supabase.from('weekly_reports').insert(copies).then(() => {}).catch(() => {})
-    }
     onAddKA()
   }
 
@@ -811,49 +802,39 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   }, [])
 
   // ★ 手動で週を作成（前週のKAをKR単位でコピー、既存KRはスキップ）
+  const copyingRef = useRef(new Set())
   const createWeek = async (targetMonday) => {
-    // 直近の既存週からコピー
-    const prevWeeks = weeksList.filter(w => w < targetMonday)
-    const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
-    if (!srcWeek) return
+    // 多重実行防止
+    if (copyingRef.current.has(targetMonday)) return
+    copyingRef.current.add(targetMonday)
+    try {
+      // 直近の既存週からコピー
+      const prevWeeks = weeksList.filter(w => w < targetMonday)
+      const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
+      if (!srcWeek) return
 
-    const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
-    if (srcKAs.length === 0) return
+      const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
+      if (srcKAs.length === 0) return
 
-    // 対象週に既にあるKR+KAタイトルの組み合わせを取得（重複防止）
-    const existingKeys = new Set(
-      reports.filter(r => r.week_start === targetMonday)
-        .map(r => `${r.kr_id}_${r.ka_title}`)
-    )
+      // DB上の対象週データを直接取得（stateとのズレを防止）
+      const { data: existingData } = await supabase.from('weekly_reports').select('kr_id,ka_title').eq('week_start', targetMonday)
+      const existingKeys = new Set((existingData || []).map(r => `${r.kr_id}_${r.ka_title}`))
 
-    // 未コピーのKAのみ抽出
-    const toCopy = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
-    if (toCopy.length === 0) return
+      // 未コピーのKAのみ抽出
+      const toCopy = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
+      if (toCopy.length === 0) return
 
-    const copies = toCopy.map(r => ({
-      week_start: targetMonday, level_id: r.level_id, objective_id: r.objective_id,
-      kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
-      owner: r.owner, status: 'normal',
-    }))
-    const { data: inserted } = await supabase.from('weekly_reports').insert(copies).select()
-    // タスクもコピー（未完了のみ）
-    if (inserted && inserted.length > 0) {
-      for (let i = 0; i < toCopy.length; i++) {
-        const srcId = toCopy[i].id
-        const newId = inserted[i]?.id
-        if (!srcId || !newId) continue
-        const { data: srcTasks } = await supabase.from('ka_tasks').select('*').eq('report_id', srcId).eq('done', false)
-        if (srcTasks && srcTasks.length > 0) {
-          const taskCopies = srcTasks.map(t => ({
-            report_id: newId, title: t.title, assignee: t.assignee,
-            due_date: t.due_date, done: false,
-          }))
-          await supabase.from('ka_tasks').insert(taskCopies)
-        }
-      }
+      const copies = toCopy.map(r => ({
+        week_start: targetMonday, level_id: r.level_id, objective_id: r.objective_id,
+        kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
+        owner: r.owner, status: 'normal',
+      }))
+      await supabase.from('weekly_reports').insert(copies)
+      await reload()
+      setActiveWeek(targetMonday)
+    } finally {
+      copyingRef.current.delete(targetMonday)
     }
-    await reload()
-    setActiveWeek(targetMonday)
   }
 
   // ★ 週を開いた時に前週から未コピーKAを自動補完

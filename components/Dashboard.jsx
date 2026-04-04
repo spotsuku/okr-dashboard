@@ -1372,8 +1372,8 @@ export default function Dashboard({ user, onSignOut }) {
             </div>
             {/* マイOKR */}
             <button onClick={() => setActivePage('myokr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'myokr' ? T.navActiveBg : 'transparent', color: activePage === 'myokr' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイOKR</button>
-            {/* マイタスク */}
-            <button onClick={() => setActivePage('mytasks')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイタスク</button>
+            {/* タスク */}
+            <button onClick={() => setActivePage('mytasks')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>タスク</button>
             {/* 週次MTG */}
             <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
             {/* 組織 */}
