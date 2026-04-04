@@ -269,76 +269,102 @@ function ThemeRow({ theme, color, isChild, onEdit, onEditDot, onAddDot, isAdmin,
   const bWidth = (bi !== -1 && ei !== -1) ? (ei - bi + 1) / n * 100 : null
 
   return (
-    <div style={{
-      gridColumn: `2 / ${n + 2}`,
-      position: 'relative',
-      height: isChild ? 28 : 32,
-      borderBottom: isLast ? 'none' : `0.5px solid ${hexWithAlpha(color || '#888', 0.08)}`,
-    }}>
-      {/* バー */}
-      {bLeft !== null && bWidth !== null && (
-        <div
-          onClick={() => isAdmin && onAddDot && onAddDot(theme.id)}
-          style={{
-            position: 'absolute',
-            left: `${bLeft}%`, width: `${Math.max(bWidth, 2)}%`,
-            top: '50%', transform: 'translateY(-50%)',
-            height: isChild ? 18 : 22,
-            background: hexWithAlpha(dc, 0.1),
-            border: `1px solid ${hexWithAlpha(dc, 0.25)}`,
-            borderRadius: 4,
-            display: 'flex', alignItems: 'center',
-            overflow: 'hidden', pointerEvents: 'auto',
-            cursor: isAdmin ? 'pointer' : 'default',
-            title: isAdmin ? '達成点を追加' : '',
-          }}>
-          <div style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '0 5px', overflow: 'hidden', gap: 4 }}>
-            <span
-              onClick={e => { e.stopPropagation(); isAdmin && onEdit(theme) }}
-              style={{ fontSize: 9, color: dc, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, opacity: 0.9 }}
-              title={isAdmin ? 'クリックしてテーマを編集' : ''}
-            >
+    <>
+      {/* タイムライン列 */}
+      <div style={{
+        gridColumn: `2 / ${n + 2}`,
+        position: 'relative',
+        height: isChild ? 28 : 32,
+        borderBottom: isLast ? 'none' : `0.5px solid ${hexWithAlpha(color || '#888', 0.08)}`,
+      }}>
+        {/* バー（クリックでテーマ編集） */}
+        {bLeft !== null && bWidth !== null && (
+          <div
+            onClick={() => isAdmin && onEdit(theme)}
+            style={{
+              position: 'absolute',
+              left: `${bLeft}%`, width: `${Math.max(bWidth, 2)}%`,
+              top: '50%', transform: 'translateY(-50%)',
+              height: isChild ? 18 : 22,
+              background: hexWithAlpha(dc, 0.1),
+              border: `1px solid ${hexWithAlpha(dc, 0.25)}`,
+              borderRadius: 4,
+              display: 'flex', alignItems: 'center',
+              overflow: 'hidden',
+              cursor: isAdmin ? 'pointer' : 'default',
+            }}>
+            <span style={{
+              fontSize: 9, color: dc, fontWeight: 600,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              padding: '0 6px', opacity: 0.9, flex: 1,
+            }}>
               {isStar ? '⭐ ' : ''}{theme.title}
             </span>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 連結ライン */}
-      {sorted.length >= 2 && sorted.map((dot, i) => {
-        if (i === sorted.length - 1) return null
-        const x1 = (getColIndex(dot) ?? 0) * 100
-        const x2 = (getColIndex(sorted[i+1]) ?? 0) * 100
-        return (
-          <div key={`line-${dot.id}`} style={{
-            position: 'absolute',
-            left: `${x1}%`, width: `${x2 - x1}%`,
-            top: '50%', height: 1,
-            background: hexWithAlpha(color || '#888', 0.25),
-            pointerEvents: 'none',
-          }} />
-        )
-      })}
+        {/* 連結ライン */}
+        {sorted.length >= 2 && sorted.map((dot, i) => {
+          if (i === sorted.length - 1) return null
+          const x1 = (getColIndex(dot) ?? 0) * 100
+          const x2 = (getColIndex(sorted[i+1]) ?? 0) * 100
+          return (
+            <div key={`line-${dot.id}`} style={{
+              position: 'absolute',
+              left: `${x1}%`, width: `${x2 - x1}%`,
+              top: '50%', height: 1,
+              background: hexWithAlpha(color || '#888', 0.25),
+              pointerEvents: 'none',
+            }} />
+          )
+        })}
 
-      {/* 達成点 */}
-      {sorted.map(dot => {
-        const ci = getColIndex(dot)
-        if (ci === null) return null
-        return (
-          <MilestoneDot
-            key={dot.id}
-            milestone={dot}
-            orgColor={color || '#888'}
-            isChild={isChild}
-            onEdit={onEditDot}
-            isAdmin={isAdmin}
-            T={T}
-            colIndex={ci}
-            visibleMonthOrder={visibleMonthOrder}
-          />
-        )
-      })}
-    </div>
+        {/* 達成点 */}
+        {sorted.map(dot => {
+          const ci = getColIndex(dot)
+          if (ci === null) return null
+          return (
+            <MilestoneDot
+              key={dot.id}
+              milestone={dot}
+              orgColor={color || '#888'}
+              isChild={isChild}
+              onEdit={onEditDot}
+              isAdmin={isAdmin}
+              T={T}
+              colIndex={ci}
+              visibleMonthOrder={visibleMonthOrder}
+            />
+          )
+        })}
+      </div>
+
+      {/* ボタン列（最終列） */}
+      <div style={{
+        gridColumn: `${n + 2} / ${n + 3}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderBottom: isLast ? 'none' : `0.5px solid ${hexWithAlpha(color || '#888', 0.08)}`,
+        padding: '0 4px',
+      }}>
+        {isAdmin && (
+          <button
+            onClick={() => onAddDot && onAddDot(theme.id)}
+            title="達成点を追加"
+            style={{
+              width: 20, height: 20, borderRadius: '50%',
+              border: `1px solid ${dc}`,
+              background: hexWithAlpha(dc, 0.08),
+              color: dc, fontSize: 13, fontWeight: 700,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0, opacity: 0.7, transition: 'opacity 0.15s, transform 0.15s',
+              lineHeight: 1,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.transform = 'scale(1.15)' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = 0.7; e.currentTarget.style.transform = 'scale(1)' }}
+          >＋</button>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -351,7 +377,7 @@ function OrgRow({ org, isChild, onEdit, onEditDot, onAddMilestone, onAddDot, isA
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: `120px repeat(${n}, minmax(0, 1fr))`,
+      gridTemplateColumns: `120px repeat(${n}, minmax(0, 1fr)) 32px`,
       gridTemplateRows: `repeat(${rowCount}, auto)`,
       borderBottom: `0.5px solid ${T.borderLight}`,
       overflow: 'visible',
@@ -945,7 +971,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
         const qMonths = viewMode !== 'annual' ? Q_MONTH_RANGES[viewMode] : null
         const visibleMonthOrder  = qMonths ? MONTH_ORDER.filter(m => qMonths.includes(m)) : MONTH_ORDER
         const visibleMonthLabels = qMonths ? MONTH_LABELS.filter((_, i) => qMonths.includes(MONTH_ORDER[i])) : MONTH_LABELS
-        const visibleGridCols = `120px repeat(${visibleMonthOrder.length}, minmax(0, 1fr))`
+        const visibleGridCols = `120px repeat(${visibleMonthOrder.length}, minmax(0, 1fr)) 32px`
         // 四半期表示時はそのQ内のマイルストーンのみ表示
         const filterMs = (ms) => {
           if (!qMonths) return ms
