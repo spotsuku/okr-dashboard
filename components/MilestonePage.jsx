@@ -514,11 +514,8 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
   const isNew = !milestone.id
   const [form, setForm] = useState({
     title:       milestone.title || '',
-    theme:       milestone.theme || '',
     start_month: milestone.start_month || 4,
     end_month:   milestone.end_month || 6,
-    start_date:  milestone.start_date || '',
-    due_date:    milestone.due_date || '',
     focus_level: milestone.focus_level || 'normal',
     status:      milestone.status || 'pending',
     owner:       milestone.owner || '',
@@ -547,6 +544,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
       onClose()
     } catch (e) {
       console.error(e)
+      alert('保存に失敗しました: ' + e.message)
     } finally {
       setSaving(false)
     }
@@ -588,11 +586,11 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
         borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw',
       }}>
         <p style={{ fontWeight: 500, marginBottom: 16, fontSize: 14, color: T.text }}>
-          {isNew ? 'マイルストーンを追加' : 'マイルストーンを編集'}
+          {isNew ? 'テーマを追加' : 'テーマを編集'}
         </p>
 
-        <label style={labelSt}>タイトル</label>
-        <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={inputSt} placeholder="マイルストーン名を入力" autoFocus />
+        <label style={labelSt}>テーマ名</label>
+        <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={inputSt} placeholder="例：二期生集客、AI研修販売" autoFocus />
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
@@ -609,26 +607,12 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <div style={{ flex: 1 }}>
-            <label style={labelSt}>開始日</label>
-            <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} style={{ ...inputSt, marginBottom: 0 }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={labelSt}>期日（カウントダウン用）</label>
-            <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={{ ...inputSt, marginBottom: 0 }} />
-          </div>
-        </div>
-
-        <label style={{ ...labelSt, marginTop: 12 }}>注力レベル</label>
+        <label style={labelSt}>注力レベル</label>
         <select value={form.focus_level} onChange={e => setForm(f => ({ ...f, focus_level: e.target.value }))} style={inputSt}>
           <option value="star">⭐ 最重要（星マーク）</option>
           <option value="focus">focus（濃色・最注力）</option>
           <option value="normal">normal（薄色・進行中）</option>
         </select>
-
-        <label style={labelSt}>テーマ（取り組み内容）</label>
-        <input value={form.theme} onChange={e => setForm(f => ({ ...f, theme: e.target.value }))} style={inputSt} placeholder="例：二期生集客、AI研修販売" />
 
         <label style={labelSt}>ステータス</label>
         <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={inputSt}>
@@ -860,7 +844,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
       focus_level: 'normal',
       status: 'pending',
       owner: '',
-      sort_order: themes.length,
+      sort_order: themes.filter(t => Number(t.org_id) === Number(orgId)).length,
     })
   }, [fiscalYear, themes.length])
 
