@@ -71,6 +71,13 @@ const NEW_PHASE = () => ({ badge: '新フェーズ', badgeClass: 'operate', titl
 // Supabase CRUD（DB必須・エラー時は例外を投げる）
 // ─────────────────────────────────────────────────
 async function dbFetch(levelId) {
+  // メタ（役割・スタンス）取得
+  const { data: metaRow } = await supabase
+    .from('org_manual_meta')
+    .select('role, stance')
+    .eq('level_id', levelId)
+    .maybeSingle()
+
   const { data: phases, error: e1 } = await supabase
     .from('org_manual_phases')
     .select('id, sort_order, badge, badge_class, title')
@@ -99,6 +106,8 @@ async function dbFetch(levelId) {
   })
 
   return {
+    role:   metaRow?.role   || '',
+    stance: Array.isArray(metaRow?.stance) ? metaRow.stance : [],
     phases: phases.map(p => ({
       _dbId: p.id,
       badge: p.badge, badgeClass: p.badge_class, title: p.title,
@@ -108,6 +117,12 @@ async function dbFetch(levelId) {
 }
 
 async function dbSave(levelId, data) {
+  // 0. メタ（役割・スタンス）保存
+  const { error: me } = await supabase
+    .from('org_manual_meta')
+    .upsert({ level_id: levelId, role: data.role || '', stance: data.stance || [] }, { onConflict: 'level_id' })
+  if (me) throw new Error(`メタ保存エラー: ${me.message}`)
+
   // 1. 旧データ全削除（CASCADE で steps も消える）
   const { data: old } = await supabase
     .from('org_manual_phases')
@@ -385,6 +400,109 @@ function ConceptFlow({ phases, deptColor, T }) {
   )
 }
 
+
+// ─────────────────────────────────────────────────
+// RoleBlock（チームの役割）
+// ─────────────────────────────────────────────────
+function RoleBlock({ role, deptColor, editMode, onUpdate, T }) {
+  if (!role && !editMode) return null
+  return (
+    <div style={{
+      background: `${deptColor}0d`,
+      border: `1px solid ${deptColor}30`,
+      borderLeft: `4px solid ${deptColor}`,
+      borderRadius: 10, padding: '16px 20px', marginBottom: 20,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: deptColor, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 8 }}>
+        🎯 チームの役割
+      </div>
+      {editMode ? (
+        <textarea
+          value={role}
+          onChange={e => onUpdate(e.target.value)}
+          rows={3}
+          placeholder="このチームの役割・ミッションを入力"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: T.bgInput, border: `1px solid ${T.editRing}55`,
+            borderRadius: 6, padding: '8px 10px', color: T.text,
+            fontSize: 13, lineHeight: 1.75, outline: 'none',
+            fontFamily: 'inherit', resize: 'vertical',
+          }}
+        />
+      ) : (
+        <p style={{ fontSize: 13, color: T.textSub, lineHeight: 1.85, margin: 0 }}>{role}</p>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────
+// StanceBlock（考え方・スタンス）
+// ─────────────────────────────────────────────────
+function StanceBlock({ stance, deptColor, editMode, onUpdate, T }) {
+  if ((!stance || stance.length === 0) && !editMode) return null
+
+  const addItem = () => onUpdate([...(stance || []), { icon: '💡', title: '新しいスタンス', body: '内容を入力' }])
+  const delItem = (i) => { const n = [...stance]; n.splice(i, 1); onUpdate(n) }
+  const updItem = (i, field, val) => { const n = [...stance]; n[i] = { ...n[i], [field]: val }; onUpdate(n) }
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.textMuted }}>
+          💡 考え方・スタンス
+        </span>
+        <div style={{ flex: 1, height: 1, background: T.border }} />
+        {editMode && (
+          <button onClick={addItem} style={{
+            background: 'none', border: `1px dashed ${T.borderMid}`,
+            borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
+            color: T.textMuted, fontSize: 11, fontFamily: 'inherit',
+          }}>＋ 追加</button>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 11 }}>
+        {(stance || []).map((item, i) => (
+          <div key={i} style={{
+            background: T.bgCard, border: `1px solid ${T.border}`,
+            borderRadius: 12, padding: '16px', position: 'relative',
+          }}>
+            {editMode && (
+              <button onClick={() => delItem(i)} style={{
+                position: 'absolute', top: 8, right: 8,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: T.textFaint, fontSize: 13, padding: '0 2px',
+              }}
+                onMouseEnter={e => e.currentTarget.style.color = T.warn}
+                onMouseLeave={e => e.currentTarget.style.color = T.textFaint}
+              >✕</button>
+            )}
+            {editMode ? (
+              <>
+                <input value={item.icon} onChange={e => updItem(i, 'icon', e.target.value)}
+                  style={{ width: 36, background: 'transparent', border: 'none', fontSize: 19, outline: 'none', marginBottom: 7, display: 'block', cursor: 'text' }} />
+                <input value={item.title} onChange={e => updItem(i, 'title', e.target.value)}
+                  placeholder="タイトル"
+                  style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: 5, padding: '4px 7px', color: T.text, fontSize: 13, fontWeight: 700, outline: 'none', fontFamily: 'inherit', marginBottom: 6 }} />
+                <textarea value={item.body} onChange={e => updItem(i, 'body', e.target.value)}
+                  rows={3} placeholder="内容"
+                  style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: 5, padding: '4px 7px', color: T.textSub, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.65 }} />
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 19, marginBottom: 7 }}>{item.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>{item.title}</div>
+                <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.7 }}>{item.body}</div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─────────────────────────────────────────────────
 // サイドバー
 // ─────────────────────────────────────────────────
@@ -462,7 +580,7 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
 
   const [selectedId,  setSelectedId]  = useState(null)
   const [editMode,    setEditMode]    = useState(false)
-  const [data,        setData]        = useState({})   // levelId → {phases:[...]}
+  const [data,        setData]        = useState({})   // levelId → {role, stance, phases:[...]}
   const [loading,     setLoading]     = useState(false)
   const [saving,      setSaving]      = useState(false)
   const [savedFlash,  setSavedFlash]  = useState(false)
@@ -529,6 +647,16 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
 
   // ── データ操作 ────────────────────────────────────
   const markDirty = () => setDirty(true)
+
+  const updateRole = (val) => {
+    setData(prev => ({ ...prev, [selectedId]: { ...(prev[selectedId] || {}), role: val } }))
+    markDirty()
+  }
+  const updateStance = (stances) => {
+    setData(prev => ({ ...prev, [selectedId]: { ...(prev[selectedId] || {}), stance: stances } }))
+    markDirty()
+  }
+
   const mutData   = (fn) => {
     setData(prev => {
       const cur  = prev[selectedId] || { phases: [] }
@@ -650,6 +778,22 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
                 ✎ 編集モード中 — テキストをクリックして直接編集できます。保存するまで変更はDBに反映されません。
               </div>
             )}
+
+            {/* 役割・スタンス */}
+            <RoleBlock
+              role={cur.role || ''}
+              deptColor={deptColor}
+              editMode={editMode}
+              onUpdate={updateRole}
+              T={T}
+            />
+            <StanceBlock
+              stance={cur.stance || []}
+              deptColor={deptColor}
+              editMode={editMode}
+              onUpdate={updateStance}
+              T={T}
+            />
 
             {/* 概念フロー図 */}
             {cur.phases.length > 0 && <ConceptFlow phases={cur.phases} deptColor={deptColor} T={T} />}
