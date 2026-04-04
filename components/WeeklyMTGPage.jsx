@@ -154,7 +154,7 @@ function WeatherPicker({ value, onChange, wT }) {
 }
 
 // ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ reportId, members, wT, onClose }) {
+function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange }) {
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
   const ref = useRef(null)
@@ -163,6 +163,13 @@ function TaskPopover({ reportId, members, wT, onClose }) {
     supabase.from('ka_tasks').select('*').eq('report_id', reportId).order('id')
       .then(({data}) => { setTasks(data||[]); setLoaded(true) })
   }, [reportId])
+
+  useEffect(() => {
+    if (loaded && onTaskCountChange) {
+      const saved = tasks.filter(t => t.id || t.title?.trim())
+      onTaskCountChange({ done: saved.filter(t => t.done).length, total: saved.length })
+    }
+  }, [tasks, loaded]) // eslint-disable-line
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose() }
@@ -392,12 +399,12 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       {/* Tasks + Delete */}
       <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4, justifyContent:'center' }}>
-          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:taskCount.total>0?'#a855f7':wT().textFaint, cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
-            {taskCount.total>0 ? `${taskCount.done}/${taskCount.total}` : '—'}
+          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:'#a855f7', cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
+            {`${taskCount.done}/${taskCount.total}`}
           </span>
           <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
         </div>
-        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} />}
+        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} />}
       </td>
       {/* 自動保存インジケーター */}
       <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
