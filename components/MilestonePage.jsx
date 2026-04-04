@@ -142,11 +142,15 @@ function MilestoneDot({ milestone, orgColor, isChild, onEdit, isAdmin, T, colInd
   const handleMouseEnter = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const tooltipW = 300
+    const tooltipH = 220
+    // 点の真上に表示
     let x = rect.left + rect.width / 2 - tooltipW / 2
-    let y = rect.bottom + 10
+    let y = rect.top - tooltipH - 8
+    // 上に出ない場合は点の下に表示
+    if (y < 8) y = rect.bottom + 8
+    // 左右のはみ出し補正
     if (x + tooltipW > window.innerWidth - 8) x = window.innerWidth - tooltipW - 8
     if (x < 8) x = 8
-    if (y + 220 > window.innerHeight) y = rect.top - 220 - 6
     setTooltipPos({ x, y })
     setHovered(true)
   }
