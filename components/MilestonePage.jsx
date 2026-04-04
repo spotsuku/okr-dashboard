@@ -562,8 +562,8 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
   const isNew = !milestone.id
   const [form, setForm] = useState({
     title:       milestone.title || '',
-    start_month: milestone.start_month || 4,
-    end_month:   milestone.end_month || 6,
+    start_month: Number(milestone.start_month) || 4,
+    end_month:   Number(milestone.end_month)   || 6,
     focus_level: milestone.focus_level || 'normal',
     status:      milestone.status || 'pending',
     owner:       milestone.owner || '',
