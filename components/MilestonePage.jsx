@@ -125,88 +125,162 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
 }
 
 // ─── MilestoneBar ────────────────────────────────────────────────────────────
-function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T }) {
-  const { title, due_date, focus_level, status, owner } = milestone
+// MilestoneDot: due_dateの月列に点を表示する新実装
+function MilestoneDot({ milestone, orgColor, isChild, onEdit, isAdmin, T, colIndex, allMilestones, visibleMonthOrder }) {
+  const { title, theme, due_date, focus_level, status, owner, start_month, end_month } = milestone
   const [hovered, setHovered] = useState(false)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
-
-  const startCol = MONTH_ORDER.indexOf(milestone.start_month) + 2
-  const endCol   = MONTH_ORDER.indexOf(milestone.end_month) + 3
-
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
-
   const isDone    = status === 'done'
   const isDelayed = status === 'delayed'
+  const isStar    = focus_level === 'star' && !isDone
   const isFocus   = focus_level === 'focus' && !isDone
 
-  const barBg = isDone
-    ? { backgroundColor: T.textFaintest, color: T.textMuted, opacity: 0.7 }
-    : isFocus
-    ? { backgroundColor: orgColor, color: '#ffffff',
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
-    : { backgroundColor: hexWithAlpha(orgColor, 0.12), color: orgColor,
-        border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
+  const dotSize = isStar ? (isChild ? 14 : 18) : (isChild ? 10 : 14)
+  const dotColor = isDone ? '#22c55e' : isDelayed ? '#dc2626' : isStar ? '#f59e0b' : isFocus ? orgColor : hexWithAlpha(orgColor, 0.65)
 
   const handleMouseEnter = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
-    const tooltipW = 280
-    const tooltipH = 180
-    let x = rect.left
-    let y = rect.bottom + 6
-    if (x + tooltipW > window.innerWidth) x = window.innerWidth - tooltipW - 12
+    const tooltipW = 300
+    let x = rect.left + rect.width / 2 - tooltipW / 2
+    let y = rect.bottom + 10
+    if (x + tooltipW > window.innerWidth - 8) x = window.innerWidth - tooltipW - 8
     if (x < 8) x = 8
-    if (y + tooltipH > window.innerHeight) y = rect.top - tooltipH - 6
+    if (y + 220 > window.innerHeight) y = rect.top - 220 - 6
     setTooltipPos({ x, y })
     setHovered(true)
   }
 
   return (
-    <div style={{ gridColumn: `${startCol} / ${endCol}`, padding: isChild ? '2px 4px' : '4px', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
+    <div
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: `${colIndex * 100}%`,
+        transform: 'translate(-50%, -50%)',
+        zIndex: hovered ? 100 : 10,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        cursor: isAdmin ? 'pointer' : 'default',
+      }}
+      onClick={isAdmin ? () => onEdit(milestone) : undefined}
+    >
+      {/* 点（または⭐） */}
       <div
-        onClick={isAdmin ? () => onEdit(milestone) : undefined}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={() => setHovered(false)}
         style={{
-          ...barBg, borderRadius: 4, padding: '4px 7px',
-          fontSize: isChild ? 9 : 10, fontWeight: 500, lineHeight: '1.3',
-          display: 'flex', flexDirection: 'column', gap: 1,
-          overflow: 'hidden', whiteSpace: 'nowrap',
-          cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
-          position: 'relative',
+          width: dotSize, height: dotSize,
+          borderRadius: isStar ? '0' : '50%',
+          backgroundColor: isStar ? 'transparent' : dotColor,
+          fontSize: isStar ? dotSize + 4 : undefined,
+          lineHeight: isStar ? '1' : undefined,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: isStar ? 'none' : isDone ? '2px solid #22c55e' : `2px solid ${hexWithAlpha(dotColor, 0.5)}`,
+          boxShadow: (isFocus || isStar) && !isDone ? `0 0 0 3px ${hexWithAlpha(dotColor, 0.25)}` : 'none',
+          transform: hovered ? 'scale(1.35)' : 'scale(1)',
+          transition: 'transform 0.15s, box-shadow 0.15s',
+          userSelect: 'none',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-            {isDone ? '✓ ' : ''}{title}
-          </span>
-          {daysText && !isDone && (
-            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
-          )}
-        </div>
-        {owner && (
-          <div style={{ fontSize: 8, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {owner}
-          </div>
-        )}
+        {isStar ? '⭐' : isDone ? '✓' : ''}
       </div>
+
+      {/* ツールチップ（position:fixed で確実に表示） */}
       {hovered && (
-        <MilestoneHoverTooltip milestone={milestone} orgColor={orgColor} T={T} position={tooltipPos} />
+        <div style={{
+          position: 'fixed',
+          left: tooltipPos.x, top: tooltipPos.y,
+          zIndex: 9999,
+          pointerEvents: 'none',
+          background: T.bgCard,
+          border: `1px solid ${T.borderMid}`,
+          borderRadius: 10, padding: '14px 16px',
+          minWidth: 220, maxWidth: 300,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8, lineHeight: 1.4 }}>
+            {isStar ? '⭐ ' : isDone ? '✓ ' : ''}{title}
+          </div>
+          {theme && (
+            <div style={{ fontSize: 11, color: dotColor, fontWeight: 600, marginBottom: 8, padding: '2px 8px', background: hexWithAlpha(dotColor, 0.1), borderRadius: 4, display: 'inline-block' }}>
+              {theme}
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {due_date && (
+              <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
+                <span style={{ color: T.textMuted, minWidth: 48 }}>期日</span>
+                <span style={{ color: T.textSub }}>{due_date}</span>
+                {daysText && !isDone && <span style={{ fontSize: 10, fontWeight: 700, ...daysStyle }}>{daysText}</span>}
+              </div>
+            )}
+            {(start_month || end_month) && (
+              <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
+                <span style={{ color: T.textMuted, minWidth: 48 }}>期間</span>
+                <span style={{ color: T.textSub }}>
+                  {MONTHS_SELECT.find(m => m.value === start_month)?.label || ''}〜{MONTHS_SELECT.find(m => m.value === end_month)?.label || ''}
+                </span>
+              </div>
+            )}
+            {owner && (
+              <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
+                <span style={{ color: T.textMuted, minWidth: 48 }}>責任者</span>
+                <span style={{ color: T.textSub }}>{owner}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
+              <span style={{ color: T.textMuted, minWidth: 48 }}>状態</span>
+              <span style={{
+                fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 4,
+                color: isDone ? '#22c55e' : isDelayed ? '#dc2626' : '#3b82f6',
+                background: isDone ? '#22c55e18' : isDelayed ? '#dc262618' : '#3b82f618',
+              }}>
+                {isDone ? '完了' : isDelayed ? '遅延' : '進行中'}
+              </span>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
 }
 
+// MilestoneBar は後方互換のため残す（未使用）
+function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
+  return null
+}
+
 // ─── OrgRow ──────────────────────────────────────────────────────────────────
-function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
+function OrgRow({ org, isChild, onEdit, onEditDot, onAddMilestone, onAddDot, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
   const { name, color, milestones } = org
+  const n = visibleMonthOrder.length
+
+  // due_dateから月を取得しcolIndex（0〜1）に変換
+  const getColIndex = (dot) => {
+    if (dot.due_date) {
+      const m = parseInt(dot.due_date.split('-')[1])
+      const idx = visibleMonthOrder.indexOf(m)
+      if (idx !== -1) return idx / n + 1 / (n * 2)
+    }
+    return null
+  }
+
+  // テーマのdotsを全て集めてcolIndexでソート
+  const allDots = milestones.flatMap(theme => (theme.dots || []))
+  const sorted = [...allDots].sort((a, b) => {
+    const ai = getColIndex(a), bi = getColIndex(b)
+    return (ai ?? 99) - (bi ?? 99)
+  })
+
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: GRID_COLS,
+      gridTemplateColumns: `120px repeat(${n}, minmax(0, 1fr))`,
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
-      minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
+      minHeight: isChild ? 48 : 56, alignItems: 'center',
+      overflow: 'visible',
     }}>
+      {/* ラベル列 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 5,
         padding: isChild ? '4px 6px 4px 16px' : '4px 8px 4px 0',
@@ -234,20 +308,212 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T }) {
           >+</button>
         )}
       </div>
-      {milestones.map(ms => (
-        <MilestoneBar key={ms.id} milestone={ms} orgColor={color || '#888'} isChild={isChild} onEdit={onEdit} isAdmin={isAdmin} T={T} />
-      ))}
+
+      {/* タイムライン列（全12列を1つのrelativeコンテナで覆う） */}
+      <div style={{
+        gridColumn: `2 / ${n + 2}`,
+        position: 'relative',
+        height: '100%',
+        display: 'flex', alignItems: 'center',
+        overflow: 'visible',
+      }}>
+        {/* バー背景（テーマのstart_month〜end_month） */}
+        {milestones.map(ms => {
+          const isDone    = ms.status === 'done'
+          const isDelayed = ms.status === 'delayed'
+          const isStar    = ms.focus_level === 'star' && !isDone
+          const isFocus   = ms.focus_level === 'focus' && !isDone
+          const dc = isDone ? '#22c55e' : isDelayed ? '#dc2626' : isStar ? '#f59e0b' : isFocus ? (color || '#888') : hexWithAlpha(color || '#888', 0.65)
+          const bi = visibleMonthOrder.indexOf(ms.start_month)
+          const ei = visibleMonthOrder.indexOf(ms.end_month)
+          if (bi === -1 || ei === -1) return null
+          const bLeft = bi / n * 100
+          const bWidth = (ei - bi + 1) / n * 100
+          return (
+            <div key={`bar-${ms.id}`} style={{
+              position: 'absolute',
+              left: `${bLeft}%`, width: `${bWidth}%`,
+              top: '50%', transform: 'translateY(-50%)',
+              height: isChild ? 20 : 24,
+              background: hexWithAlpha(dc, 0.1),
+              border: `1px solid ${hexWithAlpha(dc, 0.22)}`,
+              borderRadius: 4,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden', pointerEvents: 'auto',
+              cursor: isAdmin ? 'pointer' : 'default',
+              minWidth: 30,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '0 6px', overflow: 'hidden' }}>
+                <span style={{ fontSize: 9, color: dc, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, opacity: 0.9 }} onClick={() => isAdmin && onEdit(ms)}>
+                  {ms.title}
+                </span>
+                {isAdmin && (
+                  <span onClick={() => onAddDot && onAddDot(ms.id)} style={{ fontSize: 10, color: dc, opacity: 0.7, cursor: 'pointer', flexShrink: 0, fontWeight: 700 }} title="達成点を追加">＋●</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+
+        {/* 連結ライン（点と点を結ぶ） */}
+        {sorted.length >= 2 && sorted.map((ms, i) => {
+          if (i === sorted.length - 1) return null
+          const x1 = (getColIndex(ms) ?? 0) * 100
+          const x2 = (getColIndex(sorted[i+1]) ?? 0) * 100
+          return (
+            <div key={`line-${ms.id}`} style={{
+              position: 'absolute',
+              left: `${x1}%`, width: `${x2 - x1}%`,
+              top: '50%', height: 1,
+              background: hexWithAlpha(color || '#888', 0.3),
+              pointerEvents: 'none',
+            }} />
+          )
+        })}
+
+        {/* 各マイルストーンの点 */}
+        {sorted.map(ms => {
+          const ci = getColIndex(ms)
+          if (ci === null) return null
+          return (
+            <MilestoneDot
+              key={ms.id}
+              milestone={ms}
+              orgColor={color || '#888'}
+              isChild={isChild}
+              onEdit={onEditDot}
+              isAdmin={isAdmin}
+              T={T}
+              colIndex={ci}
+              visibleMonthOrder={visibleMonthOrder}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
+// ─── DotEditModal（達成点の追加・編集）──────────────────────────────────────
+function DotEditModal({ dot, onClose, onSaved, onDeleted, T }) {
+  const isNew = !dot.id
+  const [form, setForm] = useState({
+    title:      dot.title || '',
+    due_date:   dot.due_date || '',
+    status:     dot.status || 'pending',
+    sort_order: dot.sort_order || 0,
+  })
+  const [saving, setSaving]   = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  async function handleSave() {
+    if (!form.title.trim()) return
+    setSaving(true)
+    try {
+      if (isNew) {
+        const { error } = await supabase.from('milestones').insert({
+          ...form,
+          theme_id: dot.theme_id,
+        })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('milestones').update(form).eq('id', dot.id)
+        if (error) throw error
+      }
+      onSaved()
+      onClose()
+    } catch (e) {
+      console.error(e)
+      alert('保存に失敗しました: ' + e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    setDeleting(true)
+    try {
+      const { error } = await supabase.from('milestones').delete().eq('id', dot.id)
+      if (error) throw error
+      if (onDeleted) onDeleted()
+      onClose()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const labelSt = { display: 'block', fontSize: 11, color: T.textSub, marginBottom: 4 }
+  const inputSt = {
+    width: '100%', marginBottom: 12, fontSize: 13, padding: '6px 8px',
+    border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
+    background: T.bgCard, color: T.text, fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.bgCard, border: `0.5px solid ${T.borderMid}`,
+        borderRadius: 12, padding: 24, width: 380, maxWidth: '90vw',
+      }}>
+        <p style={{ fontWeight: 500, marginBottom: 16, fontSize: 14, color: T.text }}>
+          {isNew ? '● 達成点を追加' : '● 達成点を編集'}
+        </p>
+
+        <label style={labelSt}>達成目標</label>
+        <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={inputSt} placeholder="例：応募100件達成" autoFocus />
+
+        <label style={labelSt}>期日</label>
+        <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={inputSt} />
+
+        <label style={labelSt}>ステータス</label>
+        <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={inputSt}>
+          <option value="pending">進行中</option>
+          <option value="done">完了</option>
+          <option value="delayed">遅延</option>
+        </select>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          {!isNew && (
+            <button onClick={handleDelete} disabled={deleting} style={{
+              padding: '8px 12px', border: `1px solid ${confirmDelete ? '#dc2626' : T.borderMid}`, borderRadius: 6,
+              cursor: 'pointer', background: confirmDelete ? '#dc2626' : 'transparent',
+              fontSize: 12, color: confirmDelete ? '#fff' : '#dc2626', fontFamily: 'inherit',
+            }}>{deleting ? '削除中...' : confirmDelete ? '本当に削除' : '削除'}</button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={{
+            padding: '8px 16px', border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
+            cursor: 'pointer', background: 'transparent', fontSize: 13, color: T.textSub, fontFamily: 'inherit',
+          }}>キャンセル</button>
+          <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
+            padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer',
+            background: T.text, color: T.bgCard, fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
+            opacity: !form.title.trim() ? 0.5 : 1,
+          }}>{saving ? '保存中...' : isNew ? '追加' : '保存'}</button>
+        </div>
+      </div>
     </div>
   )
 }
 
 // ─── MilestoneEditModal ──────────────────────────────────────────────────────
-function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
+function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members = [] }) {
   const isNew = !milestone.id
   const [form, setForm] = useState({
     title:       milestone.title || '',
+    theme:       milestone.theme || '',
     start_month: milestone.start_month || 4,
     end_month:   milestone.end_month || 6,
+    start_date:  milestone.start_date || '',
     due_date:    milestone.due_date || '',
     focus_level: milestone.focus_level || 'normal',
     status:      milestone.status || 'pending',
@@ -262,7 +528,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
     setSaving(true)
     try {
       if (isNew) {
-        const { error } = await supabase.from('milestones').insert({
+        const { error } = await supabase.from('milestone_themes').insert({
           ...form,
           org_id: milestone.org_id,
           fiscal_year: milestone.fiscal_year,
@@ -270,7 +536,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
         })
         if (error) throw error
       } else {
-        const { error } = await supabase.from('milestones').update(form).eq('id', milestone.id)
+        const { error } = await supabase.from('milestone_themes').update(form).eq('id', milestone.id)
         if (error) throw error
       }
       onSaved()
@@ -289,7 +555,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
     }
     setDeleting(true)
     try {
-      const { error } = await supabase.from('milestones').delete().eq('id', milestone.id)
+      const { error } = await supabase.from('milestone_themes').delete().eq('id', milestone.id)
       if (error) throw error
       if (onDeleted) onDeleted()
       onClose()
@@ -339,14 +605,26 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
           </div>
         </div>
 
-        <label style={labelSt}>期日（残日数カウントダウン用）</label>
-        <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={inputSt} />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelSt}>開始日</label>
+            <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} style={{ ...inputSt, marginBottom: 0 }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelSt}>期日（カウントダウン用）</label>
+            <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={{ ...inputSt, marginBottom: 0 }} />
+          </div>
+        </div>
 
-        <label style={labelSt}>注力レベル</label>
+        <label style={{ ...labelSt, marginTop: 12 }}>注力レベル</label>
         <select value={form.focus_level} onChange={e => setForm(f => ({ ...f, focus_level: e.target.value }))} style={inputSt}>
+          <option value="star">⭐ 最重要（星マーク）</option>
           <option value="focus">focus（濃色・最注力）</option>
           <option value="normal">normal（薄色・進行中）</option>
         </select>
+
+        <label style={labelSt}>テーマ（取り組み内容）</label>
+        <input value={form.theme} onChange={e => setForm(f => ({ ...f, theme: e.target.value }))} style={inputSt} placeholder="例：二期生集客、AI研修販売" />
 
         <label style={labelSt}>ステータス</label>
         <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={inputSt}>
@@ -356,7 +634,12 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T }) {
         </select>
 
         <label style={labelSt}>責任者</label>
-        <input value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} style={inputSt} placeholder="例：田中太郎" />
+        <select value={form.owner} onChange={e => setForm(f => ({ ...f, owner: e.target.value }))} style={inputSt}>
+          <option value="">（未設定）</option>
+          {members.map(m => (
+            <option key={m.id} value={m.name}>{m.name}</option>
+          ))}
+        </select>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           {!isNew && (
@@ -459,16 +742,20 @@ function AddOrgModal({ levels, fiscalYear, onClose, onSaved, T }) {
 }
 
 // ─── MilestonePage（メインコンポーネント）────────────────────────────────────
-export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLevelsChanged }) {
+export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLevelsChanged, members = [] }) {
   const T = W_THEMES[themeKey] || DARK_T
 
-  const [milestones, setMilestones] = useState([])
+  const [themes, setThemes] = useState([])        // milestone_themes
+  const [dots, setDots] = useState([])            // milestones（達成点）
+  const [milestones, setMilestones] = useState([]) // 後方互換（削除予定）
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [editDot, setEditDot] = useState(null)    // 達成点の編集対象
   const [isAdmin, setIsAdmin] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [showAddOrg, setShowAddOrg] = useState(false)
   const [showAllOrgs, setShowAllOrgs] = useState(false)
+  const [viewMode, setViewMode] = useState('annual') // 'annual' | 'q1' | 'q2' | 'q3' | 'q4'
 
   // admin判定
   useEffect(() => {
@@ -486,13 +773,29 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
     setError(null)
     try {
       const fy = Number(fiscalYear) || 2026
-      const { data, error: err } = await supabase
-        .from('milestones')
+      // テーマ取得
+      const { data: themeData, error: te } = await supabase
+        .from('milestone_themes')
         .select('*')
         .eq('fiscal_year', fy)
         .order('sort_order', { ascending: true })
-      if (err) throw err
-      setMilestones(data || [])
+      if (te) throw te
+      setThemes(themeData || [])
+      setMilestones(themeData || []) // 後方互換
+
+      // 達成点取得（theme_idでjoin）
+      if (themeData && themeData.length > 0) {
+        const themeIds = themeData.map(t => t.id)
+        const { data: dotData, error: de } = await supabase
+          .from('milestones')
+          .select('*')
+          .in('theme_id', themeIds)
+          .order('sort_order', { ascending: true })
+        if (de) throw de
+        setDots(dotData || [])
+      } else {
+        setDots([])
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -508,18 +811,24 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
     const parentLevels = levels.filter(l => !l.parent_id)
     const childLevels  = levels.filter(l => l.parent_id)
 
+    // テーマにdotsを紐付け
+    const themesWithDots = themes.map(t => ({
+      ...t,
+      dots: dots.filter(d => Number(d.theme_id) === Number(t.id))
+    }))
+
     return parentLevels.map(parent => ({
       id: parent.id,
       name: parent.name,
       color: parent.color || '#888888',
-      milestones: milestones.filter(m => Number(m.org_id) === Number(parent.id)),
+      milestones: themesWithDots.filter(m => Number(m.org_id) === Number(parent.id)),
       children: childLevels
         .filter(c => Number(c.parent_id) === Number(parent.id))
         .map(child => ({
           id: child.id,
           name: child.name,
           color: child.color || '#888888',
-          milestones: milestones.filter(m => Number(m.org_id) === Number(child.id)),
+          milestones: themesWithDots.filter(m => Number(m.org_id) === Number(child.id)),
           children: [],
         })),
     }))
@@ -544,13 +853,23 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
       title: '',
       start_month: 4,
       end_month: 6,
-      due_date: '',
       focus_level: 'normal',
       status: 'pending',
       owner: '',
-      sort_order: milestones.length,
+      sort_order: themes.length,
     })
-  }, [fiscalYear, milestones.length])
+  }, [fiscalYear, themes.length])
+
+  // 達成点の追加
+  const handleAddDot = useCallback((themeId) => {
+    setEditDot({
+      theme_id: themeId,
+      title: '',
+      due_date: '',
+      status: 'pending',
+      sort_order: dots.filter(d => d.theme_id === themeId).length,
+    })
+  }, [dots])
 
   const currentMonth = new Date().getMonth() + 1
   const currentColIndex = MONTH_ORDER.indexOf(currentMonth)
@@ -583,20 +902,64 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
         )}
       </div>
 
+      {/* ビュー切替タブ */}
+      <div style={{ display: 'flex', gap: 2, marginBottom: 16, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.borderMid}`, alignSelf: 'flex-start', width: 'fit-content' }}>
+        {[
+          { key: 'annual', label: '年間' },
+          { key: 'q1',     label: 'Q1（4〜6月）' },
+          { key: 'q2',     label: 'Q2（7〜9月）' },
+          { key: 'q3',     label: 'Q3（10〜12月）' },
+          { key: 'q4',     label: 'Q4（1〜3月）' },
+        ].map(v => (
+          <button key={v.key} onClick={() => setViewMode(v.key)} style={{
+            padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: viewMode === v.key ? '#4d9fff22' : 'transparent',
+            color: viewMode === v.key ? '#4d9fff' : T.textMuted,
+            fontSize: 12, fontWeight: viewMode === v.key ? 700 : 500,
+            fontFamily: 'inherit', whiteSpace: 'nowrap', transition: 'all 0.15s',
+            borderBottom: viewMode === v.key ? '2px solid #4d9fff' : '2px solid transparent',
+          }}>{v.label}</button>
+        ))}
+      </div>
+
       {/* ローディング / エラー */}
       {loading && <div style={{ color: T.textMuted, fontSize: 13 }}>読み込み中...</div>}
       {error && <div style={{ color: '#dc2626', fontSize: 13 }}>エラー: {error}</div>}
 
       {/* タイムライン本体 */}
-      {!loading && !error && (
+      {!loading && !error && (() => {
+        // 四半期フィルタ
+        const Q_MONTH_RANGES = {
+          q1: [4,5,6], q2: [7,8,9], q3: [10,11,12], q4: [1,2,3]
+        }
+        const qMonths = viewMode !== 'annual' ? Q_MONTH_RANGES[viewMode] : null
+        const visibleMonthOrder  = qMonths ? MONTH_ORDER.filter(m => qMonths.includes(m)) : MONTH_ORDER
+        const visibleMonthLabels = qMonths ? MONTH_LABELS.filter((_, i) => qMonths.includes(MONTH_ORDER[i])) : MONTH_LABELS
+        const visibleGridCols = `120px repeat(${visibleMonthOrder.length}, minmax(0, 1fr))`
+        // 四半期表示時はそのQ内のマイルストーンのみ表示
+        const filterMs = (ms) => {
+          if (!qMonths) return ms
+          return ms.filter(m => {
+            const sm = m.start_month || m.end_month
+            const em = m.end_month
+            return qMonths.some(mo => {
+              const idx = MONTH_ORDER.indexOf(mo)
+              const smIdx = MONTH_ORDER.indexOf(sm)
+              const emIdx = MONTH_ORDER.indexOf(em)
+              return idx >= smIdx && idx <= emIdx
+            })
+          })
+        }
+        return (
         <div style={{
           background: T.bgCard, border: `0.5px solid ${T.borderLight}`,
-          borderRadius: 12, padding: 16, overflow: 'hidden', width: '100%',
+          borderRadius: 12, padding: 16, overflow: 'visible', width: '100%',
           boxSizing: 'border-box',
         }}>
           <div style={{ width: '100%', minWidth: 0 }}>
-            {/* Q ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
+            {/* Q ヘッダー行（年間表示のみ） */}
+            {viewMode === 'annual' && (
+            <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
               <div />
               {QUARTERS.map((q, i) => (
                 <div key={q.label} style={{
@@ -611,22 +974,25 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
                 </div>
               ))}
             </div>
+            )}
 
             {/* 月ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
               <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
-              {MONTH_LABELS.map((label, i) => {
-                const isCurrent = i === currentColIndex
-                const isQStart = i % 3 === 0
+              {visibleMonthLabels.map((label, i) => {
+                const monthVal = visibleMonthOrder[i]
+                const isCurrent = monthVal === currentMonth
+                const isQStart = viewMode === 'annual' ? i % 3 === 0 : i === 0
                 return (
                   <div key={label} style={{
-                    textAlign: 'center', fontSize: 10,
+                    textAlign: 'center',
+                    fontSize: viewMode === 'annual' ? 10 : 14,
                     color: isCurrent ? T.text : T.textMuted,
-                    fontWeight: isCurrent ? 600 : 400,
-                    padding: '3px 2px 6px',
+                    fontWeight: isCurrent ? 700 : 400,
+                    padding: viewMode === 'annual' ? '3px 2px 6px' : '8px 2px 10px',
                     borderBottom: `0.5px solid ${T.borderLight}`,
                     borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
-                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
+                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.06)' : 'transparent',
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {label}
@@ -646,9 +1012,9 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             {/* 事業部行 */}
             {filteredTree.map(org => (
               <div key={org.id} style={{ display: 'contents' }}>
-                <OrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
+                <OrgRow org={{ ...org, milestones: filterMs(org.milestones) }} isChild={false} onEdit={handleEdit} onEditDot={ms => setEditDot(ms)} onAddMilestone={handleAddMilestone} onAddDot={handleAddDot} isAdmin={isAdmin} T={T} visibleMonthOrder={visibleMonthOrder} />
                 {org.children.map(child => (
-                  <OrgRow key={child.id} org={child} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
+                  <OrgRow key={child.id} org={{ ...child, milestones: filterMs(child.milestones) }} isChild={true} onEdit={handleEdit} onEditDot={ms => setEditDot(ms)} onAddMilestone={handleAddMilestone} onAddDot={handleAddDot} isAdmin={isAdmin} T={T} visibleMonthOrder={visibleMonthOrder} />
                 ))}
               </div>
             ))}
@@ -699,13 +1065,26 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             )}
           </div>
         </div>
-      )}
+        )
+      })()}
 
-      {/* 編集/追加モーダル */}
+      {/* テーマ編集モーダル */}
       {editTarget && (
         <MilestoneEditModal
           milestone={editTarget}
           onClose={() => setEditTarget(null)}
+          onSaved={loadMilestones}
+          onDeleted={loadMilestones}
+          T={T}
+          members={members}
+        />
+      )}
+
+      {/* 達成点編集モーダル */}
+      {editDot && (
+        <DotEditModal
+          dot={editDot}
+          onClose={() => setEditDot(null)}
           onSaved={loadMilestones}
           onDeleted={loadMilestones}
           T={T}
