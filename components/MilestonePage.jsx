@@ -560,10 +560,15 @@ function DotEditModal({ dot, onClose, onSaved, onDeleted, T }) {
 // ─── MilestoneEditModal ──────────────────────────────────────────────────────
 function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members = [] }) {
   const isNew = !milestone.id
+  // start_date/end_dateをstart_month/end_monthに変換するユーティリティ
+  const monthFromDate = (d) => d ? Number(d.split('-')[1]) : null
+
   const [form, setForm] = useState({
     title:       milestone.title || '',
     start_month: Number(milestone.start_month) || 4,
     end_month:   Number(milestone.end_month)   || 6,
+    start_date:  milestone.start_date || '',
+    end_date:    milestone.end_date   || '',
     focus_level: milestone.focus_level || 'normal',
     status:      milestone.status || 'pending',
     owner:       milestone.owner || '',
@@ -642,16 +647,30 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={labelSt}>開始月</label>
-            <select value={form.start_month} onChange={e => setForm(f => ({ ...f, start_month: Number(e.target.value) }))} style={inputSt}>
-              {MONTHS_SELECT.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
+            <label style={labelSt}>開始日</label>
+            <input
+              type="date"
+              value={form.start_date}
+              onChange={e => {
+                const d = e.target.value
+                const m = monthFromDate(d)
+                setForm(f => ({ ...f, start_date: d, ...(m ? { start_month: m } : {}) }))
+              }}
+              style={{ ...inputSt, marginBottom: 0 }}
+            />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={labelSt}>終了月</label>
-            <select value={form.end_month} onChange={e => setForm(f => ({ ...f, end_month: Number(e.target.value) }))} style={inputSt}>
-              {MONTHS_SELECT.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
+            <label style={labelSt}>終了日</label>
+            <input
+              type="date"
+              value={form.end_date}
+              onChange={e => {
+                const d = e.target.value
+                const m = monthFromDate(d)
+                setForm(f => ({ ...f, end_date: d, ...(m ? { end_month: m } : {}) }))
+              }}
+              style={{ ...inputSt, marginBottom: 0 }}
+            />
           </div>
         </div>
 
