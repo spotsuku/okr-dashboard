@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import TaskManualPage from './TaskManualPage'
 
 // ══════════════════════════════════════════════════
 // テーマ定義
@@ -2967,11 +2968,11 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const handleTeamMetaUpdate = (levelId, meta) => setTeamMeta(prev => ({ ...prev, [levelId]: { ...(prev[levelId] || {}), ...meta } }))
 
   const tabs = [
-    { id: 'chart',   icon: '🏗', label: '組織図' },
-    { id: 'tasks',   icon: '📋', label: '業務一覧' },
-    { id: 'manual',  icon: '📖', label: '業務マニュアル' },
-    { id: 'members', icon: '👤', label: 'メンバーJD' },
-    { id: 'users',   icon: '👥', label: 'ユーザー管理' },
+    { id: 'chart',    icon: '🏗', label: '組織図' },
+    { id: 'tasks',    icon: '📋', label: '業務一覧' },
+    { id: 'taskflow', icon: '🔄', label: '業務マニュアル' },
+    { id: 'members',  icon: '👤', label: 'メンバーJD' },
+    { id: 'users',    icon: '👥', label: 'ユーザー管理' },
   ]
 
 
@@ -3020,8 +3021,8 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
             taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} orgTableError={orgTableError} />
         )}
-        {activeTab === 'manual' && (
-          <ManualTab tasks={tasks} manuals={manuals} setManuals={setManuals} members={members} levels={levels} isAdmin={isAdmin} currentUser={user?.email} teamMeta={teamMeta} />
+        {activeTab === 'taskflow' && (
+          <TaskManualPage levels={levels} isAdmin={isAdmin} themeKey={themeKey} />
         )}
         {activeTab === 'members' && (
           <MemberJDTab
