@@ -38,6 +38,27 @@ const RATINGS = [
 ]
 const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >= r.min) || RATINGS[RATINGS.length - 1])
 
+const KA_STATUS = {
+  focus:  { label: '注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)' },
+  good:   { label: 'Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)' },
+  more:   { label: 'More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)' },
+  normal: { label: '−',    color: '#606880', bg: 'rgba(255,255,255,0.04)' },
+}
+
+function ReadOnlyKARow({ ka }) {
+  const cfg = KA_STATUS[ka.status] || KA_STATUS.normal
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', fontSize: 11 }}>
+      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: cfg.bg, color: cfg.color, fontWeight: 700, whiteSpace: 'nowrap' }}>
+        {cfg.label}
+      </span>
+      <span style={{ color: T().textSub, flex: 1, minWidth: 0 }}>
+        {ka.ka_title || '(無題)'}
+      </span>
+    </div>
+  )
+}
+
 function calcObjProgress(krs) {
   if (!krs?.length) return 0
   const valid = krs.filter(k => k.target > 0)
@@ -71,54 +92,60 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   _t = THEMES[themeKey] || THEMES.dark
 
   const [objectives, setObjectives] = useState([])
+  const [kaReports, setKaReports] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!ownerName) { setObjectives([]); setLoading(false); return }
+    if (!ownerName) { setObjectives([]); setKaReports([]); setLoading(false); return }
     loadData()
   }, [ownerName, fiscalYear, refreshKey]) // eslint-disable-line
 
   const loadData = async () => {
     setLoading(true)
 
-    // 1. ownerNameが担当のObjectivesを取得
-    const { data: objs } = await supabase
-      .from('objectives')
-      .select('id,level_id,period,title,owner,parent_objective_id')
-      .eq('owner', ownerName)
-      .order('period,id')
-
-    // 年度フィルタ
-    const filtered = (objs || []).filter(o => {
+    const filterByFY = (arr) => (arr || []).filter(o => {
       if (fiscalYear === '2026') return !o.period.includes('_')
       return o.period.startsWith(`${fiscalYear}_`)
     })
 
-    if (!filtered.length) { setObjectives([]); setLoading(false); return }
-
-    // 2. KR取得（自分がObjective担当 + 自分がKR担当）
-    const objIds = filtered.map(o => o.id)
-    const [{ data: objKRs }, { data: myKRs }] = await Promise.all([
-      supabase.from('key_results').select('*').in('objective_id', objIds),
+    // 1. ownerNameが担当のObjectives + KAを並行取得
+    const [{ data: objs }, { data: myKAs }, { data: myKRs }] = await Promise.all([
+      supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').eq('owner', ownerName).order('period,id'),
+      supabase.from('weekly_reports').select('*').eq('owner', ownerName).neq('status', 'done'),
       supabase.from('key_results').select('*').eq('owner', ownerName),
     ])
 
-    // KR担当のObjectiveも追加取得
+    // 年度フィルタ
+    const filtered = filterByFY(objs)
+    const objIds = filtered.map(o => o.id)
+
+    // KAのみ担当の場合も含め、早期returnはOKR・KR・KA全て空の場合のみ
+    if (!filtered.length && !(myKRs || []).length && !(myKAs || []).length) {
+      setObjectives([]); setKaReports([]); setLoading(false); return
+    }
+
+    // 2. KR取得（自分がObjective担当のもの）
+    let objKRs = []
+    if (objIds.length > 0) {
+      const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds)
+      objKRs = data || []
+    }
+
+    // 3. KR担当・KA担当のObjectiveも追加取得
     const krObjIds = (myKRs || []).map(kr => kr.objective_id).filter(id => !objIds.includes(id))
+    const kaObjIds = (myKAs || []).map(r => r.objective_id).filter(Boolean).filter(id => !objIds.includes(id) && !krObjIds.includes(id))
+    const missingObjIds = [...new Set([...krObjIds, ...kaObjIds])]
     let extraObjs = []
-    if (krObjIds.length > 0) {
-      const { data } = await supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').in('id', krObjIds)
-      extraObjs = (data || []).filter(o => {
-        if (fiscalYear === '2026') return !o.period.includes('_')
-        return o.period.startsWith(`${fiscalYear}_`)
-      })
+    if (missingObjIds.length > 0) {
+      const { data } = await supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').in('id', missingObjIds)
+      extraObjs = filterByFY(data)
     }
 
     // 全Objectiveを統合
     const allObjs = [...filtered, ...extraObjs].filter((o, i, arr) => arr.findIndex(x => x.id === o.id) === i)
 
     // KRマップ作成
-    const allKRs = [...(objKRs || []), ...(myKRs || [])].filter((kr, i, arr) => arr.findIndex(k => k.id === kr.id) === i)
+    const allKRs = [...objKRs, ...(myKRs || [])].filter((kr, i, arr) => arr.findIndex(k => k.id === kr.id) === i)
     const krMap = {}
     allKRs.forEach(kr => {
       if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
@@ -140,6 +167,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     fullObjs.sort((a, b) => (PERIOD_ORDER[rawPeriod(a.period)] ?? 9) - (PERIOD_ORDER[rawPeriod(b.period)] ?? 9))
 
     setObjectives(fullObjs)
+    setKaReports((myKAs || []).sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)))
     setLoading(false)
   }
 
@@ -196,6 +224,10 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
             const lColor = LAYER_COLORS[depth] || '#a0a8be'
             const levelName = levels.find(l => Number(l.id) === Number(obj.level_id))?.name || ''
             const levelIcon = levels.find(l => Number(l.id) === Number(obj.level_id))?.icon || ''
+            const objKAs = kaReports.filter(r => Number(r.objective_id) === Number(obj.id))
+            const isObjOwner = obj.owner === ownerName
+            const isKROwner = obj.key_results.some(kr => kr.owner === ownerName)
+            const isKAOnly = !isObjOwner && !isKROwner && objKAs.length > 0
 
             return (
               <div key={obj.id} style={{ marginBottom: 12, background: T().bgCard, border: `1px solid ${lColor}18`, borderRadius: 14, overflow: 'hidden' }}>
@@ -203,8 +235,11 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${lColor}15`, color: lColor, fontWeight: 600 }}>{levelIcon} {levelName}</span>
-                      {obj.owner !== ownerName && (
+                      {!isObjOwner && isKROwner && (
                         <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().sectionBg, color: T().textMuted, border: `1px solid ${T().border}` }}>KR担当</span>
+                      )}
+                      {isKAOnly && (
+                        <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().sectionBg, color: T().textMuted, border: `1px solid ${T().border}` }}>KA担当</span>
                       )}
                       {r && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${r.color}18`, color: r.color, fontWeight: 700 }}>{r.label}</span>}
                     </div>
@@ -219,21 +254,41 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                           const kp = kr.target > 0 ? Math.round((kr.lower_is_better ? Math.max(0, ((kr.target * 2 - kr.current) / kr.target) * 100) : (kr.current / kr.target) * 100)) : 0
                           const kr_r = getRating(kp)
                           const isMyKR = kr.owner === ownerName
+                          const krKAs = objKAs.filter(ka => Number(ka.kr_id) === Number(kr.id))
                           return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5, padding: '6px 10px', background: T().bgKr, borderRadius: 7, border: isMyKR ? `1px solid ${T().btnEditColor}20` : 'none' }}>
-                              <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>
-                                {isMyKR && <span style={{ color: T().btnEditColor, fontWeight: 600, marginRight: 4 }}>★</span>}
-                                {kr.title}
-                              </span>
-                              <div style={{ width: 60, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                                <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                            <div key={i} style={{ marginBottom: 5 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: T().bgKr, borderRadius: 7, border: isMyKR ? `1px solid ${T().btnEditColor}20` : 'none' }}>
+                                <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>
+                                  {isMyKR && <span style={{ color: T().btnEditColor, fontWeight: 600, marginRight: 4 }}>★</span>}
+                                  {kr.title}
+                                </span>
+                                <div style={{ width: 60, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                                  <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                                </div>
+                                <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kp}%</span>
                               </div>
-                              <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kp}%</span>
+                              {krKAs.length > 0 && (
+                                <div style={{ marginLeft: 16, borderLeft: `2px solid ${T().border}`, paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
+                                  {krKAs.map(ka => <ReadOnlyKARow key={ka.id} ka={ka} />)}
+                                </div>
+                              )}
                             </div>
                           )
                         })}
                       </div>
                     )}
+
+                    {(() => {
+                      const krIds = new Set(obj.key_results.map(kr => Number(kr.id)))
+                      const unlinked = objKAs.filter(ka => !ka.kr_id || !krIds.has(Number(ka.kr_id)))
+                      if (!unlinked.length) return null
+                      return (
+                        <div style={{ marginTop: 6, paddingTop: 4, borderTop: `1px dashed ${T().borderDash}` }}>
+                          <div style={{ fontSize: 10, color: T().textMuted, fontWeight: 600, marginBottom: 2 }}>📋 その他のKA（{unlinked.length}件）</div>
+                          {unlinked.map(ka => <ReadOnlyKARow key={ka.id} ka={ka} />)}
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
