@@ -921,7 +921,7 @@ export default function Dashboard({ user, onSignOut }) {
     }
     return '2026'
   })
-  const [activePeriod, setActivePeriod]     = useState('annual')
+  const [activePeriod, setActivePeriod]     = useState(() => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' })
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
@@ -1247,9 +1247,9 @@ export default function Dashboard({ user, onSignOut }) {
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
-    { key: 'annual', label: '通期' },
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
     { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
+    { key: 'annual', label: '通期' },
   ]
 
   const roots = levels.filter(l => !l.parent_id)

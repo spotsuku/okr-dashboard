@@ -536,7 +536,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [activeObjId,setActiveObjId]= useState(null)
-  const [activePeriod,setActivePeriod]=useState('all')
+  // 現在のQを自動判定（4月=Q1, 7月=Q2, 10月=Q3, 1月=Q4）
+  const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
+  const [activePeriod,setActivePeriod]=useState(getCurrentQ())
 
   useEffect(() => {
     if (!myName) return
@@ -609,9 +611,19 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         }
       }
 
+      // ★ 週コピーで同じKAが複数週に存在する場合、最新週のもの1つだけ残す
+      const kaByKey = {}
+      for (const ka of allMyKAs) {
+        const key = `${ka.kr_id}_${ka.ka_title}_${ka.owner}_${ka.objective_id}`
+        if (!kaByKey[key] || (ka.week_start || '') > (kaByKey[key].week_start || '')) {
+          kaByKey[key] = ka
+        }
+      }
+      const dedupedKAs = Object.values(kaByKey)
+
       setObjectives(filteredObjs)
       setKeyResults(allMyKRs)
-      setKaReports(allMyKAs)
+      setKaReports(dedupedKAs)
       setKaTasks(allTasksMap)
       setReviews(revMap)
       setLoading(false)
@@ -631,7 +643,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     setKaReports(p=>p.filter(r=>r.id!==id))
   }
 
-  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
   if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
 

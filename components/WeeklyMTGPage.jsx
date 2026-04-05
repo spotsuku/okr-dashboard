@@ -722,7 +722,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod='all' }) {
+function getCurrentQ() { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
+export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
@@ -731,7 +732,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [loading,       setLoading]       = useState(false)
   const [activeLevelId, setActiveLevelId] = useState(null)
   const [activeObjId,   setActiveObjId]   = useState(null)
-  const [activePeriod,  setActivePeriod]  = useState(initialPeriod)
+  const [activePeriod,  setActivePeriod]  = useState(initialPeriod || getCurrentQ())
   const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
   const [slackPreview,  setSlackPreview]  = useState(null) // { text, type, memberCount, levelName, params }
   const [slackSending,  setSlackSending]  = useState(false)
@@ -902,7 +903,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   })
 
   const selectedObj    = activeObjId ? objectives.find(o => o.id===Number(activeObjId)) : null
-  const [rightPeriod, setRightPeriod] = useState('annual')
+  const [rightPeriod, setRightPeriod] = useState(getCurrentQ())
   // 右パネル：期間タブに応じたOKRを表示（buildQuarterMapで通期→四半期の正確なマッピングを使用）
   const annualObjsForMap = useMemo(() =>
     objectives.filter(o => o.period === annualPeriodKey), [objectives, annualPeriodKey])
@@ -969,7 +970,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     )
   }
 
-  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
@@ -1124,7 +1125,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
               {/* 期間切替タブ */}
               <div style={{ display:'flex', gap:4, marginBottom:14 }}>
-                {[['annual','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']].map(([key,lbl]) => (
+                {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => (
                   <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'5px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
                 ))}
               </div>
