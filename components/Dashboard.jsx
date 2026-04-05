@@ -767,182 +767,6 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
   )
 }
 
-// ─── Org Modal ────────────────────────────────────────────────────────────────
-function OrgModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear, onCopyFromYear }) {
-  const [name, setName] = useState('')
-  const [icon, setIcon] = useState('👥')
-  const [parentId, setParentId] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(null)
-  const [editingId, setEditingId] = useState(null)
-  const [editName, setEditName] = useState('')
-  const [editIcon, setEditIcon] = useState('')
-
-  const roots = levels.filter(l => !l.parent_id)
-  const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
-
-  const addableParents = levels.filter(l => {
-    const depth = (() => {
-      let d = 0, cur = l
-      while (cur && cur.parent_id) { d++; cur = levels.find(x => x.id === cur.parent_id) }
-      return d
-    })()
-    return depth < 2
-  })
-
-  const save = async () => {
-    if (!name.trim() || !parentId) return
-    setSaving(true)
-    await onAdd({ name: name.trim(), icon, parent_id: parseInt(parentId) })
-    setName(''); setSaving(false)
-  }
-
-  const confirmDelete = async (level) => {
-    const children = getChildren(level.id)
-    const msg = children.length
-      ? `「${level.name}」と配下の${children.length}件を削除しますか？\n関連するOKRもすべて削除されます。`
-      : `「${level.name}」を削除しますか？\n関連するOKRもすべて削除されます。`
-    if (!window.confirm(msg)) return
-    setDeleting(level.id)
-    await onDelete(level.id)
-    setDeleting(null)
-  }
-
-  const ICONS = ['🏢','🚀','⚙️','💼','👥','📊','🎯','💡','🌟','🔥','📈','🤝']
-
-  const startEdit = (level) => { setEditingId(level.id); setEditName(level.name); setEditIcon(level.icon || '📁') }
-  const cancelEdit = () => { setEditingId(null); setEditName(''); setEditIcon('') }
-  const saveEdit = async (level) => {
-    if (!editName.trim()) return
-    await onRename(level.id, editName.trim(), editIcon)
-    cancelEdit()
-  }
-
-  function LevelRow({ level, depth = 0 }) {
-    const children = getChildren(level.id)
-    const absD = (() => { let d=0,cur=level; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
-    const col = { 0: getT().warn, 1: getT().accent, 2: getT().accent }[absD] || getT().textMuted
-    const lbl = { 0:'経営', 1:'事業部', 2:'チーム' }[absD] || ''
-    const isRoot = absD === 0
-    const isEditing = editingId === level.id
-    return (
-      <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background: isEditing ? `${getT().accent}08` : getT().bgCard2, border:`1px solid ${isEditing ? getT().accentSolid+'40' : getT().border}` }}>
-          {isEditing ? (
-            <>
-              <div style={{ display:'flex', gap:3, flexWrap:'wrap', marginRight:4 }}>
-                {ICONS.map(ic => (
-                  <button key={ic} onClick={() => setEditIcon(ic)} style={{ width:26, height:26, borderRadius:5, border:`1px solid ${editIcon===ic ? getT().accentSolid : getT().border}`, background: editIcon===ic ? getT().badgeBg : 'transparent', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>{ic}</button>
-                ))}
-              </div>
-              <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
-                onKeyDown={e => { if (e.key === 'Enter') saveEdit(level); if (e.key === 'Escape') cancelEdit() }}
-                style={{ flex:1, background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:6, padding:'5px 8px', color:getT().text, fontSize:12, outline:'none', fontFamily:'inherit', minWidth:80 }} />
-              <button onClick={() => saveEdit(level)} style={{ background:getT().accentSolid, border:'none', color:'#fff', borderRadius:5, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>保存</button>
-              <button onClick={cancelEdit} style={{ background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted, borderRadius:5, padding:'4px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize:13 }}>{level.icon}</span>
-              <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
-              <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
-              {!isRoot && (
-                <button onClick={() => startEdit(level)} style={{
-                  background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted,
-                  borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
-                }}>編集</button>
-              )}
-              {!isRoot && (
-                <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
-                  background: getT().warnBg, border:`1px solid ${getT().warnBg}`, color: getT().warn,
-                  borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
-                  opacity: deleting === level.id ? 0.5 : 1,
-                }}>{deleting === level.id ? '削除中' : '削除'}</button>
-              )}
-            </>
-          )}
-        </div>
-        {children.map(c => <LevelRow key={c.id} level={c} depth={depth+1} />)}
-      </>
-    )
-  }
-
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.78)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:getT().bgCard, border:`1px solid ${getT().border}`, borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: getT().badgeBg, color: '#fff', border:`1px solid ${getT().badgeBorder}`}}>
-              {fiscalYear}年度
-            </span>
-          </div>
-          <button onClick={onClose} style={{ background:getT().border, border:'none', color:getT().textMuted, width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-        </div>
-
-        {onCopyFromYear && (
-          <div style={{ marginBottom:16, padding:'10px 12px', background:`${getT().accent}08`, border:`1px solid ${getT().accent}30`, borderRadius:10 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
-            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-              {['2025','2026'].filter(y=>y!==fiscalYear).map(y=>(
-                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:`1px solid ${getT().accent}40`, background:`${getT().accent}10`, color:getT().textMuted, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-                  {y}年度からコピー
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize:10, color:getT().textMuted, marginTop:6 }}>※ 現在の{fiscalYear}年度の組織に追加されます（重複は除外）</div>
-          </div>
-        )}
-
-        <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:10, color:getT().textMuted, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>
-            {fiscalYear}年度の現在の組織（{levels.length}件）
-          </div>
-          {levels.length === 0 ? (
-            <div style={{ fontSize:12, color:getT().textFaint, fontStyle:'italic', padding:'12px 8px', textAlign:'center' }}>
-              この年度の組織がまだありません。他年度からコピーするか、新規追加してください。
-            </div>
-          ) : (
-            roots.map(l => <LevelRow key={l.id} level={l} />)
-          )}
-        </div>
-
-        <div style={{ borderTop:`1px solid ${getT().border}`, paddingTop:18 }}>
-          <div style={{ fontSize:10, color:getT().textMuted, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>親組織</div>
-            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color: parentId ? getT().text : getT().textMuted, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
-              <option value=''>選択してください</option>
-              {addableParents.map(l => {
-                const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
-                const label = d===0 ? '事業部として追加' : 'チームとして追加'
-                return <option key={l.id} value={l.id}>{l.icon} {l.name}の下に（{label}）</option>
-              })}
-            </select>
-          </div>
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>組織名</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="例: 西日本営業チーム"
-              style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color:getT().text, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
-          </div>
-          <div style={{ marginBottom:16 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, marginBottom:8 }}>アイコン</div>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-              {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? getT().accentSolid : getT().border}`, background: icon===ic ? getT().badgeBg : getT().bgCard2, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
-            <button onClick={onClose} style={{ background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted, borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? getT().badgeBg : getT().accentSolid, border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ user, onSignOut }) {
@@ -961,7 +785,6 @@ export default function Dashboard({ user, onSignOut }) {
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
   const [initialAIMessage, setInitialAIMessage] = useState(null)
-  const [showOrgModal, setShowOrgModal]     = useState(false)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
   const [activePage, setActivePage]         = useState(() => {
@@ -1219,64 +1042,6 @@ export default function Dashboard({ user, onSignOut }) {
     setAnnualRefreshKey(k => k + 1)
   }
 
-  const handleAddLevel = async ({ name, icon, parent_id }) => {
-    const { data, error } = await supabase
-      .from('levels').insert({ name, icon, parent_id: parent_id || null, color: getT().accentSolid, fiscal_year: fiscalYear }).select().single()
-    if (error) { console.error('add level error:', error); return }
-    setLevels(p => [...p, data])
-  }
-
-  const handleDeleteLevel = async (levelId) => {
-    const subtree = getSubtree(levelId, levels)
-    for (const lid of subtree) {
-      const { data: objs } = await supabase.from('objectives').select('id').eq('level_id', lid)
-      if (objs?.length) {
-        const ids = objs.map(o => o.id)
-        await supabase.from('key_results').delete().in('objective_id', ids)
-        await supabase.from('objectives').delete().in('id', ids)
-      }
-      await supabase.from('levels').delete().eq('id', lid)
-    }
-    const newLevels = levels.filter(l => !subtree.includes(l.id))
-    setLevels(newLevels)
-    if (subtree.includes(activeLevelId)) {
-      const newRoot = newLevels.find(l => !l.parent_id)
-      setActiveLevelId(newRoot?.id || null)
-    }
-  }
-
-  const handleRenameLevel = async (levelId, newName, newIcon) => {
-    const { error } = await supabase.from('levels').update({ name: newName, icon: newIcon }).eq('id', levelId)
-    if (error) { console.error('rename level error:', error); return }
-    setLevels(p => p.map(l => l.id === levelId ? { ...l, name: newName, icon: newIcon } : l))
-  }
-
-  const handleCopyFromYear = async (fromYear) => {
-    const { data: srcLevels } = await supabase.from('levels').select('*').eq('fiscal_year', fromYear).order('id')
-    if (!srcLevels?.length) { alert(`${fromYear}年度の組織データがありません`); return }
-    if (!window.confirm(`${fromYear}年度の組織構成（${srcLevels.length}件）を${fiscalYear}年度にコピーしますか？`)) return
-
-    const idMap = {}
-    const sorted = []
-    const addSorted = (parentId) => {
-      srcLevels.filter(l => (parentId === null ? !l.parent_id : Number(l.parent_id) === Number(parentId))).forEach(l => { sorted.push(l); addSorted(l.id) })
-    }
-    addSorted(null)
-
-    for (const l of sorted) {
-      const newParentId = l.parent_id ? idMap[l.parent_id] : null
-      const { data: inserted } = await supabase.from('levels').insert({
-        name: l.name, icon: l.icon, color: l.color || getT().accentSolid,
-        parent_id: newParentId || null, fiscal_year: fiscalYear,
-      }).select().single()
-      if (inserted) idMap[l.id] = inserted.id
-    }
-
-    const { data: newLvls } = await supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id')
-    if (newLvls?.length) { setLevels(newLvls); setActiveLevelId(newLvls[0].id) }
-    alert(`${fromYear}年度の組織構成を${fiscalYear}年度にコピーしました！`)
-  }
-
   const handleLinkGoogle = async () => {
     const { error } = await supabase.auth.linkIdentity({
       provider: 'google',
@@ -1339,11 +1104,6 @@ export default function Dashboard({ user, onSignOut }) {
           {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
         </div>
         {roots.map(l => <LevelItem key={l.id} level={l} />)}
-        <button onClick={() => setShowOrgModal(true)} style={{
-          width:'100%', marginTop:10, background: getT().badgeBg, border:`1px dashed ${getT().badgeBorder}`,
-          color: getT().accent, borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
-          cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-        }}>🏗️ 組織を管理</button>
         <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
           <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
           {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
@@ -1616,17 +1376,6 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {showOrgModal && (
-        <OrgModal
-          levels={levels}
-          onClose={() => setShowOrgModal(false)}
-          onAdd={handleAddLevel}
-          onDelete={handleDeleteLevel}
-          onRename={handleRenameLevel}
-          fiscalYear={fiscalYear}
-          onCopyFromYear={handleCopyFromYear}
-        />
-      )}
       {showAI && (
         <AIPanel
           onClose={() => { setShowAI(false); setInitialAIMessage(null) }}

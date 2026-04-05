@@ -830,7 +830,24 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
         owner: r.owner, status: 'normal',
       }))
-      await supabase.from('weekly_reports').insert(copies)
+      const { data: newReports } = await supabase.from('weekly_reports').insert(copies).select()
+
+      // ★ コピー元KAに紐づくタスクも新しいreport_idでコピー
+      if (newReports?.length) {
+        const srcIds = toCopy.map(r => r.id)
+        const { data: srcTasks } = await supabase.from('ka_tasks').select('*').in('report_id', srcIds)
+        if (srcTasks?.length) {
+          // コピー元report_id → 新report_idのマッピング（ka_titleで対応付け）
+          const idMap = {}
+          toCopy.forEach((src, i) => { if (newReports[i]) idMap[src.id] = newReports[i].id })
+          const taskCopies = srcTasks.map(t => ({
+            report_id: idMap[t.report_id], title: t.title,
+            assignee: t.assignee, due_date: t.due_date, done: false,
+          })).filter(t => t.report_id)
+          if (taskCopies.length) await supabase.from('ka_tasks').insert(taskCopies)
+        }
+      }
+
       await reload()
       setActiveWeek(targetMonday)
     } finally {

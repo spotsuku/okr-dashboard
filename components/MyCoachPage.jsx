@@ -66,6 +66,8 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
   const [premises, setPremises] = useState([])
   const [showPremises, setShowPremises] = useState(false)
   const [premiseEdit, setPremiseEdit] = useState('')
+  const [proposedTasks, setProposedTasks] = useState([])
+  const [proposingTasks, setProposingTasks] = useState(false)
 
   // AI Chat state
   const [messages, setMessages] = useState([
@@ -269,6 +271,71 @@ More評価のKAがあれば打ち手の見直しも提案してください。�
     }
   }, [loading, myName, weeklyCoaching]) // eslint-disable-line
 
+  // KAステータス変更
+  const changeKAStatus = async (ka, newStatus) => {
+    const { error } = await supabase.from('weekly_reports').update({ status: newStatus }).eq('id', ka.id)
+    if (!error) setAllKAs(prev => prev.map(k => k.id === ka.id ? { ...k, status: newStatus } : k))
+  }
+
+  // AIタスク提案
+  const proposeTasksFromAI = async () => {
+    setProposingTasks(true)
+    const prompt = `${myName}さんのKAとKR進捗を踏まえて、今週取り組むべき具体的なタスクを5つ提案してください。
+
+【Focus KA】
+${focusKAs.map(ka => `- ${ka.ka_title}`).join('\n') || 'なし'}
+
+【More KA（見直し候補）】
+${moreKAs.map(ka => `- ${ka.ka_title}`).join('\n') || 'なし'}
+
+【KR進捗】
+${keyResults.map(kr => `- ${kr.title}: ${kr.target ? Math.round((kr.current/kr.target)*100) : 0}%`).join('\n') || 'なし'}
+
+【現在の未完了タスク】
+${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
+
+以下のJSON形式で回答してください（説明文不要、JSONのみ）:
+[{"title":"タスク名","due_days":7,"ka_index":0}]
+- title: 具体的なタスク名
+- due_days: 期限（今日から何日後か）
+- ka_index: 関連するFocus KAのインデックス（0始まり、なければnull）`
+
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], context: buildContext() }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      // JSONを抽出
+      const jsonMatch = data.content.match(/\[[\s\S]*?\]/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        setProposedTasks(parsed.map((t, i) => ({ ...t, id: i, accepted: false })))
+      }
+    } catch (e) {
+      console.error('AI task proposal error:', e)
+    } finally {
+      setProposingTasks(false)
+    }
+  }
+
+  // タスク採用
+  const acceptTask = async (task) => {
+    const dueDate = task.due_days ? toDateStr(new Date(Date.now() + task.due_days * 86400000)) : null
+    const relatedKA = task.ka_index != null ? focusKAs[task.ka_index] : null
+    const { error } = await supabase.from('ka_tasks').insert({
+      title: task.title, assignee: myName, due_date: dueDate,
+      report_id: relatedKA?.id || null, done: false,
+    })
+    if (!error) {
+      setProposedTasks(prev => prev.map(t => t.id === task.id ? { ...t, accepted: true } : t))
+      // タスクリストを更新
+      const { data: newTasks } = await supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).order('due_date').order('id')
+      if (newTasks) setTasks(newTasks)
+    }
+  }
+
   // Task groups
   const overdueTasks = tasks.filter(t => t.due_date && t.due_date < today)
   const thisWeekTasks = tasks.filter(t => t.due_date && t.due_date >= today && t.due_date <= thisSunday)
@@ -326,12 +393,12 @@ More評価のKAがあれば打ち手の見直しも提案してください。�
           </div>
         </div>
 
-        {/* スクロール可能コンテンツ - 2x2グリッド */}
+        {/* スクロール可能コンテンツ */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 
             {/* 左上: 今週のアクションプラン */}
-            <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)', maxHeight: 320 }}>
+            <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)', maxHeight: 260 }}>
               {sH('🎯', '今週のアクションプラン',
                 <button onClick={() => { coachingGenerated.current = false; generateWeeklyCoaching() }} disabled={coachingLoading}
                   style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,0.3)', background: 'transparent', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
@@ -349,8 +416,38 @@ More評価のKAがあれば打ち手の見直しも提案してください。�
               </div>
             </div>
 
-            {/* 右上: マイOKR */}
-            <div style={{ ...sectionStyle, maxHeight: 320 }}>
+            {/* 右上: KA一覧（ステータス選択付き） */}
+            <div style={{ ...sectionStyle, maxHeight: 260 }}>
+              {sH('📌', `KA一覧（${allKAs.length}件）`)}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {allKAs.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>KAなし</div>}
+                {allKAs.map(ka => {
+                  const st = ka.status || 'normal'
+                  const stColors = { focus: { bg: 'rgba(77,159,255,0.1)', border: 'rgba(77,159,255,0.3)', text: '#4d9fff' }, good: { bg: T.doneBg, border: T.doneBorder, text: '#00d68f' }, more: { bg: T.overdueBg, border: T.overdueBorder, text: '#ff6b6b' }, normal: { bg: T.sectionBg, border: T.border, text: T.textMuted } }
+                  const c = stColors[st] || stColors.normal
+                  return (
+                    <div key={ka.id} style={{ padding: '5px 8px', borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, marginBottom: 3 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ka.ka_title}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+                        {[['focus','Focus','#4d9fff'],['good','Good','#00d68f'],['more','More','#ff6b6b'],['normal','--',T.textFaint]].map(([key,lbl,col]) => (
+                          <button key={key} onClick={() => changeKAStatus(ka, key)} style={{
+                            fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
+                            background: st === key ? `${col}20` : 'transparent',
+                            border: `1px solid ${st === key ? col : T.border}`,
+                            color: st === key ? col : T.textFaint,
+                          }}>{lbl}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 左中: マイOKR */}
+            <div style={{ ...sectionStyle, maxHeight: 260 }}>
               {sH('📊', 'マイOKR')}
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {objectives.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>担当Objectiveなし</div>}
@@ -385,10 +482,32 @@ More評価のKAがあれば打ち手の見直しも提案してください。�
               </div>
             </div>
 
-            {/* 左下: タスク */}
-            <div style={{ ...sectionStyle, maxHeight: 280 }}>
-              {sH('📋', `タスク（${tasks.length}件）`)}
+            {/* 右中: タスク + AIタスク提案 */}
+            <div style={{ ...sectionStyle, maxHeight: 260 }}>
+              {sH('📋', `タスク（${tasks.length}件）`,
+                <button onClick={proposeTasksFromAI} disabled={proposingTasks}
+                  style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(77,159,255,0.3)', background: 'rgba(77,159,255,0.06)', color: '#4d9fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                  {proposingTasks ? '検討中...' : '🤖 AIでタスク検討'}
+                </button>
+              )}
               <div style={{ flex: 1, overflowY: 'auto' }}>
+                {/* AI提案タスク */}
+                {proposedTasks.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#a855f7', marginBottom: 3 }}>AI提案</div>
+                    {proposedTasks.map(t => (
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 5, background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)', marginBottom: 2, fontSize: 11 }}>
+                        <span style={{ color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                        {t.accepted ? (
+                          <span style={{ fontSize: 9, color: '#00d68f', fontWeight: 700, flexShrink: 0 }}>登録済</span>
+                        ) : (
+                          <button onClick={() => acceptTask(t)} style={{ fontSize: 9, padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(0,214,143,0.4)', background: T.doneBg, color: '#00d68f', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>採用</button>
+                        )}
+                      </div>
+                    ))}
+                    <button onClick={() => setProposedTasks([])} style={{ fontSize: 9, color: T.textFaint, background: 'none', border: 'none', cursor: 'pointer', marginTop: 2, fontFamily: 'inherit' }}>提案を閉じる</button>
+                  </div>
+                )}
                 {overdueTasks.length > 0 && (
                   <div style={{ marginBottom: 6 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#ff6b6b', marginBottom: 3 }}>期限超過 ({overdueTasks.length})</div>
@@ -425,32 +544,33 @@ More評価のKAがあれば打ち手の見直しも提案してください。�
                     {otherTasks.length > 3 && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>...他{otherTasks.length - 3}件</div>}
                   </div>
                 )}
-                {tasks.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>未完了タスクなし</div>}
+                {tasks.length === 0 && proposedTasks.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>未完了タスクなし</div>}
               </div>
             </div>
 
-            {/* 右下: 過去の努力 */}
-            <div style={sectionStyle}>
-              {sH('🏆', '過去の努力')}
-              <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</div>
-                  <div style={{ fontSize: 9, color: T.textMuted }}>完了タスク(4週)</div>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: T.accent }}>{doneKACount}</div>
-                  <div style={{ fontSize: 9, color: T.textMuted }}>完了KA</div>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#a855f7' }}>{focusKAs.length}</div>
-                  <div style={{ fontSize: 9, color: T.textMuted }}>Focus KA</div>
+            {/* 下段: 過去の努力（横幅いっぱい） */}
+            <div style={{ ...sectionStyle, gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                {sH('🏆', '過去の努力')}
+                <div style={{ display: 'flex', gap: 16, marginLeft: 'auto', marginBottom: 8 }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</span>
+                    <span style={{ fontSize: 9, color: T.textMuted, marginLeft: 4 }}>完了タスク(4週)</span>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{doneKACount}</span>
+                    <span style={{ fontSize: 9, color: T.textMuted, marginLeft: 4 }}>完了KA</span>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#a855f7' }}>{focusKAs.length}</span>
+                    <span style={{ fontSize: 9, color: T.textMuted, marginLeft: 4 }}>Focus KA</span>
+                  </div>
                 </div>
               </div>
-              {/* バーチャート */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 48, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 40 }}>
                 {weeks4.map(w => {
                   const count = doneTasksByWeek[w] || 0
-                  const h = Math.max(3, (count / maxDone) * 44)
+                  const h = Math.max(3, (count / maxDone) * 36)
                   return (
                     <div key={w} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: T.textMuted }}>{count}</div>
@@ -459,17 +579,11 @@ More評価のKAがあれば打ち手の見直しも提案してください。�
                   )
                 })}
               </div>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                 {weeks4.map(w => (
                   <div key={w} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: T.textFaint }}>{formatDate(w)}~</div>
                 ))}
               </div>
-              <button onClick={() => {
-                const total = Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)
-                sendToAI(`最近4週間で${total}件のタスクを完了し、${doneKACount}件のKAを達成しました。${focusKAs.length}件のKAにFocus中です。この頑張りを褒めて、さらにモチベーションを上げてください！`)
-              }} style={{ fontSize: 10, padding: '5px 12px', borderRadius: 5, border: `1px solid ${T.doneBorder}`, background: T.doneBg, color: '#00d68f', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, width: '100%' }}>
-                🎉 AIに褒めてもらう
-              </button>
             </div>
 
           </div>
