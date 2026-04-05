@@ -68,6 +68,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
   const [premiseEdit, setPremiseEdit] = useState('')
   const [proposedTasks, setProposedTasks] = useState([])
   const [proposingTasks, setProposingTasks] = useState(false)
+  const [kaTab, setKaTab] = useState('all')
 
   // AI Chat state
   const [messages, setMessages] = useState([
@@ -96,7 +97,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
       supabase.from('objectives').select('*').eq('owner', myName).in('period', validPeriods),
       supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).order('due_date').order('id'),
       supabase.from('ka_tasks').select('id,created_at,done').eq('assignee', myName).eq('done', true).gte('created_at', fourWeeksAgo),
-      supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done'),
+      supabase.from('weekly_reports').select('*').eq('owner', myName),
       supabase.from('weekly_reports').select('id').eq('owner', myName).eq('status', 'done'),
       supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)),
       supabase.from('org_member_jd').select('*').eq('member_id', myName).order('version_idx', { ascending: false }).limit(1),
@@ -416,33 +417,52 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
               </div>
             </div>
 
-            {/* 右上: KA一覧（ステータス選択付き） */}
+            {/* 右上: KA一覧（タブ切替 + ステータス選択） */}
             <div style={{ ...sectionStyle, maxHeight: 260 }}>
               {sH('📌', `KA一覧（${allKAs.length}件）`)}
+              {/* タブ */}
+              <div style={{ display: 'flex', gap: 2, marginBottom: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                {[
+                  ['all', '全体', allKAs.length, T.textMuted],
+                  ['focus', 'Focus', focusKAs.length, '#4d9fff'],
+                  ['good', 'Good', goodKAs.length, '#00d68f'],
+                  ['more', 'More', moreKAs.length, '#ff6b6b'],
+                  ['normal', '未着手', allKAs.filter(k => !k.status || k.status === 'normal').length, T.textFaint],
+                  ['done', '完了', allKAs.filter(k => k.status === 'done').length, '#7a8599'],
+                ].map(([key, lbl, cnt, col]) => (
+                  <button key={key} onClick={() => setKaTab(key)} style={{
+                    fontSize: 9, padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
+                    background: kaTab === key ? `${col}18` : 'transparent',
+                    border: `1px solid ${kaTab === key ? col : T.border}`,
+                    color: kaTab === key ? col : T.textFaint,
+                  }}>{lbl}{cnt > 0 ? ` ${cnt}` : ''}</button>
+                ))}
+              </div>
               <div style={{ flex: 1, overflowY: 'auto' }}>
-                {allKAs.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>KAなし</div>}
-                {allKAs.map(ka => {
-                  const st = ka.status || 'normal'
-                  const stColors = { focus: { bg: 'rgba(77,159,255,0.1)', border: 'rgba(77,159,255,0.3)', text: '#4d9fff' }, good: { bg: T.doneBg, border: T.doneBorder, text: '#00d68f' }, more: { bg: T.overdueBg, border: T.overdueBorder, text: '#ff6b6b' }, normal: { bg: T.sectionBg, border: T.border, text: T.textMuted } }
-                  const c = stColors[st] || stColors.normal
-                  return (
-                    <div key={ka.id} style={{ padding: '5px 8px', borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, marginBottom: 3 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 11, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ka.ka_title}</span>
+                {(() => {
+                  const filtered = kaTab === 'all' ? allKAs : allKAs.filter(ka => (ka.status || 'normal') === kaTab)
+                  if (filtered.length === 0) return <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>{kaTab === 'all' ? 'KAなし' : '該当KAなし'}</div>
+                  return filtered.map(ka => {
+                    const st = ka.status || 'normal'
+                    const stColors = { focus: { bg: 'rgba(77,159,255,0.1)', border: 'rgba(77,159,255,0.3)', text: '#4d9fff' }, good: { bg: T.doneBg, border: T.doneBorder, text: '#00d68f' }, more: { bg: T.overdueBg, border: T.overdueBorder, text: '#ff6b6b' }, done: { bg: T.sectionBg, border: T.border, text: '#7a8599' }, normal: { bg: T.sectionBg, border: T.border, text: T.textMuted } }
+                    const c = stColors[st] || stColors.normal
+                    return (
+                      <div key={ka.id} style={{ padding: '5px 8px', borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, marginBottom: 3, opacity: st === 'done' ? 0.6 : 1 }}>
+                        <div style={{ fontSize: 11, color: st === 'done' ? T.textFaint : T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: st === 'done' ? 'line-through' : 'none' }}>{ka.ka_title}</div>
+                        <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+                          {[['focus','Focus','#4d9fff'],['good','Good','#00d68f'],['more','More','#ff6b6b'],['normal','--',T.textFaint]].map(([key,lbl,col]) => (
+                            <button key={key} onClick={() => changeKAStatus(ka, key)} style={{
+                              fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
+                              background: st === key ? `${col}20` : 'transparent',
+                              border: `1px solid ${st === key ? col : T.border}`,
+                              color: st === key ? col : T.textFaint,
+                            }}>{lbl}</button>
+                          ))}
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
-                        {[['focus','Focus','#4d9fff'],['good','Good','#00d68f'],['more','More','#ff6b6b'],['normal','--',T.textFaint]].map(([key,lbl,col]) => (
-                          <button key={key} onClick={() => changeKAStatus(ka, key)} style={{
-                            fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
-                            background: st === key ? `${col}20` : 'transparent',
-                            border: `1px solid ${st === key ? col : T.border}`,
-                            color: st === key ? col : T.textFaint,
-                          }}>{lbl}</button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                })()}
               </div>
             </div>
 
