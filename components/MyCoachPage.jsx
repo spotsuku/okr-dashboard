@@ -13,6 +13,13 @@ function formatDate(ds) {
   const d = new Date(ds + 'T00:00:00')
   return `${d.getMonth()+1}/${d.getDate()}`
 }
+function getCurrentQ() { const m = new Date().getMonth(); return m>=3&&m<=5?'q1':m>=6&&m<=8?'q2':m>=9&&m<=11?'q3':'q4' }
+function toPeriodKey(p, yr) { return yr === '2026' ? p : `${yr}_${p}` }
+function rawPeriod(p) { return (p || '').replace(/^\d{4}_/, '') }
+const Q_MONTHS = { q1:[4,5,6], q2:[7,8,9], q3:[10,11,12], q4:[1,2,3] }
+function isMonthInRange(month, start, end) {
+  return start <= end ? month >= start && month <= end : month >= start || month <= end
+}
 
 const THEMES = {
   dark: {
@@ -40,19 +47,25 @@ const SUGGESTIONS = [
   'タスクの優先順位を整理して',
 ]
 
-export default function MyCoachPage({ user, members, themeKey = 'dark' }) {
+export default function MyCoachPage({ user, members, levels, themeKey = 'dark', fiscalYear = '2026' }) {
   const T = THEMES[themeKey] || THEMES.dark
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
 
   // Data state
   const [objectives, setObjectives] = useState([])
   const [keyResults, setKeyResults] = useState([])
-  const [weekKAs, setWeekKAs] = useState([])
+  const [allKAs, setAllKAs] = useState([])
   const [tasks, setTasks] = useState([])
   const [doneTasksByWeek, setDoneTasksByWeek] = useState({})
   const [doneKACount, setDoneKACount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [kaMap, setKaMap] = useState({})
+  const [milestones, setMilestones] = useState([])
+  const [myJd, setMyJd] = useState(null)
+  const [orgTasks, setOrgTasks] = useState([])
+  const [premises, setPremises] = useState([])
+  const [showPremises, setShowPremises] = useState(false)
+  const [premiseEdit, setPremiseEdit] = useState('')
 
   // AI Chat state
   const [messages, setMessages] = useState([
@@ -75,13 +88,19 @@ export default function MyCoachPage({ user, members, themeKey = 'dark' }) {
     setLoading(true)
 
     const fourWeeksAgo = toDateStr(new Date(Date.now() - 28 * 86400000))
+    const validPeriods = ['q1','q2','q3','q4','annual'].map(p => toPeriodKey(p, fiscalYear))
 
-    const [objRes, taskRes, doneRes, kaRes, doneKARes] = await Promise.all([
-      supabase.from('objectives').select('*').eq('owner', myName),
+    const [objRes, taskRes, doneRes, kaRes, doneKARes, msRes, jdRes, orgTaskRes, premRes, logRes] = await Promise.all([
+      supabase.from('objectives').select('*').eq('owner', myName).in('period', validPeriods),
       supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).order('due_date').order('id'),
       supabase.from('ka_tasks').select('id,created_at,done').eq('assignee', myName).eq('done', true).gte('created_at', fourWeeksAgo),
-      supabase.from('weekly_reports').select('*').eq('owner', myName).eq('week_start', thisMonday),
+      supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done'),
       supabase.from('weekly_reports').select('id').eq('owner', myName).eq('status', 'done'),
+      supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)),
+      supabase.from('org_member_jd').select('*').eq('member_id', myName).order('version_idx', { ascending: false }).limit(1),
+      supabase.from('org_tasks').select('*').eq('owner', myName).eq('is_archived', false),
+      supabase.from('ai_premises').select('*').eq('is_active', true).order('sort_order'),
+      supabase.from('coaching_logs').select('*').eq('owner', myName).eq('week_start', thisMonday).eq('log_type', 'action_plan').order('created_at', { ascending: false }).limit(1),
     ])
 
     const objs = objRes.data || []
@@ -95,7 +114,14 @@ export default function MyCoachPage({ user, members, themeKey = 'dark' }) {
       setKeyResults(krs || [])
     }
 
-    setWeekKAs(kaRes.data || [])
+    // KA重複排除（週コピー対応: 最新週のもの1つだけ残す）
+    const rawKAs = kaRes.data || []
+    const kaByKey = {}
+    for (const ka of rawKAs) {
+      const key = `${ka.kr_id}_${ka.ka_title}_${ka.owner}_${ka.objective_id}`
+      if (!kaByKey[key] || (ka.week_start || '') > (kaByKey[key].week_start || '')) kaByKey[key] = ka
+    }
+    setAllKAs(Object.values(kaByKey))
     setTasks(taskRes.data || [])
 
     // 親KA情報
@@ -114,24 +140,63 @@ export default function MyCoachPage({ user, members, themeKey = 'dark' }) {
     }
     setDoneTasksByWeek(byWeek)
 
+    // 追加データ
+    setMilestones(msRes.data || [])
+    setMyJd((jdRes.data || [])[0] || null)
+    setOrgTasks(orgTaskRes.data || [])
+    setPremises(premRes.data || [])
+
+    // 保存済みコーチングログがあればそれを表示
+    const savedLog = (logRes.data || [])[0]
+    if (savedLog) setWeeklyCoaching(savedLog.content)
+
     setLoading(false)
-  }, [myName, thisMonday])
+  }, [myName, thisMonday, fiscalYear])
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // KAステータス分類
+  const focusKAs = allKAs.filter(ka => ka.status === 'focus')
+  const moreKAs = allKAs.filter(ka => ka.status === 'more')
+  const goodKAs = allKAs.filter(ka => ka.status === 'good')
+
   // AI context
-  const buildContext = () => ({
-    user: myName,
-    objectives: objectives.map(o => ({ title: o.title, period: o.period })),
-    keyResults: keyResults.map(kr => ({
-      title: kr.title, current: kr.current, target: kr.target, unit: kr.unit,
-      pct: kr.target ? Math.round((kr.current / kr.target) * 100) : 0,
-    })),
-    thisWeekKAs: weekKAs.map(ka => ({ title: ka.ka_title, status: ka.status, good: ka.good, more: ka.more })),
-    incompleteTasks: tasks.slice(0, 20).map(t => ({ title: t.title, due: t.due_date })),
-    stats: { doneKAs: doneKACount, totalIncompleteTasks: tasks.length },
-  })
+  const buildContext = () => {
+    const currentQ = getCurrentQ()
+    const currentQKey = toPeriodKey(currentQ, fiscalYear)
+    const currentQMonths = Q_MONTHS[currentQ]
+    const levelMap = {}; (levels||[]).forEach(l => { levelMap[l.id] = l.name })
+    const qMilestones = milestones.filter(ms =>
+      currentQMonths.some(m => isMonthInRange(m, ms.start_month, ms.end_month))
+    )
+    return {
+      user: myName,
+      fiscalYear, currentQuarter: currentQ.toUpperCase(),
+      today: toDateStr(new Date()),
+      isMonthEnd: new Date().getDate() >= 25,
+      currentQObjectives: objectives.filter(o => o.period === currentQKey).map(o => ({ title: o.title })),
+      annualObjectives: objectives.filter(o => rawPeriod(o.period) === 'annual').map(o => ({ title: o.title })),
+      keyResults: keyResults.map(kr => ({
+        title: kr.title, current: kr.current, target: kr.target, unit: kr.unit,
+        pct: kr.target ? Math.round((kr.current / kr.target) * 100) : 0,
+      })),
+      focusKAs: focusKAs.map(ka => ({ title: ka.ka_title, good: ka.good, more: ka.more })),
+      moreKAs: moreKAs.map(ka => ({ title: ka.ka_title, more: ka.more })),
+      goodKAs: goodKAs.map(ka => ({ title: ka.ka_title, good: ka.good })),
+      totalKACount: allKAs.length,
+      incompleteTasks: tasks.slice(0, 20).map(t => ({ title: t.title, due: t.due_date })),
+      stats: { doneKAs: doneKACount, totalIncompleteTasks: tasks.length },
+      milestones: qMilestones.map(ms => ({
+        title: ms.title, org: levelMap[ms.org_id] || '',
+        months: `${ms.start_month}月〜${ms.end_month}月`,
+        dueDate: ms.due_date, status: ms.status,
+      })),
+      jobDescription: myJd ? { role: myJd.role, roleDesc: myJd.role_desc, responsibility: myJd.responsibility, tasks: myJd.tasks } : null,
+      orgTasks: orgTasks.slice(0, 20).map(t => ({ dept: t.dept, team: t.team, task: t.task })),
+      premises: premises.map(p => p.content),
+    }
+  }
 
   // Send to AI
   const sendToAI = async (text) => {
@@ -156,17 +221,26 @@ export default function MyCoachPage({ user, members, themeKey = 'dark' }) {
     }
   }
 
-  // Weekly coaching auto-generate
+  // Weekly coaching generate (with save)
   const generateWeeklyCoaching = useCallback(async () => {
-    if (loading || tasks.length === 0 && weekKAs.length === 0 && keyResults.length === 0) return
+    if (loading || (tasks.length === 0 && allKAs.length === 0 && keyResults.length === 0)) return
     setCoachingLoading(true)
-    const prompt = `${myName}さんの今週のアクションプランを作成してください。
+    const prompt = `${myName}さんの今週の優先アクションを提案してください。
 
-今週のKA: ${weekKAs.map(ka => ka.ka_title).join(', ') || 'なし'}
-未完了タスク: ${tasks.slice(0, 10).map(t => `${t.title}${t.due_date ? '(期限:'+formatDate(t.due_date)+')' : ''}`).join(', ') || 'なし'}
-KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.current/kr.target)*100) : 0}%`).join(', ') || 'なし'}
+【今週Focus中のKA（${focusKAs.length}件）】
+${focusKAs.map(ka => `- ${ka.ka_title}${ka.more ? ` ※改善点: ${ka.more}` : ''}`).join('\n') || 'なし'}
 
-優先順位をつけて、具体的な行動を3-5つ提案してください。簡潔にお願いします。`
+【More評価のKA（見直し候補, ${moreKAs.length}件）】
+${moreKAs.map(ka => `- ${ka.ka_title}: ${ka.more}`).join('\n') || 'なし'}
+
+【未完了タスク（${tasks.length}件）】
+${tasks.slice(0, 10).map(t => `- ${t.title}${t.due_date ? ' (期限:'+formatDate(t.due_date)+')' : ''}`).join('\n') || 'なし'}
+
+【KR進捗】
+${keyResults.map(kr => `- ${kr.title}: ${kr.target ? Math.round((kr.current/kr.target)*100) : 0}%`).join('\n') || 'なし'}
+
+Focus中のKAに基づいて、今週の具体的な行動を3-5つ提案してください。
+More評価のKAがあれば打ち手の見直しも提案してください。簡潔にお願いします。`
 
     try {
       const res = await fetch('/api/ai', {
@@ -174,20 +248,26 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
         body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], context: buildContext() }),
       })
       const data = await res.json()
-      setWeeklyCoaching(data.error ? `エラー: ${data.error}` : data.content)
+      const content = data.error ? `エラー: ${data.error}` : data.content
+      setWeeklyCoaching(content)
+      // DBに保存
+      if (!data.error) {
+        await supabase.from('coaching_logs').insert({ owner: myName, week_start: thisMonday, content, log_type: 'action_plan' })
+      }
     } catch (e) {
       setWeeklyCoaching(`エラー: ${e.message}`)
     } finally {
       setCoachingLoading(false)
     }
-  }, [loading, myName, tasks, weekKAs, keyResults]) // eslint-disable-line
+  }, [loading, myName, tasks, allKAs, keyResults, focusKAs, moreKAs]) // eslint-disable-line
 
+  // 保存済みログがなければ自動生成
   useEffect(() => {
-    if (!loading && !coachingGenerated.current && myName) {
+    if (!loading && !coachingGenerated.current && myName && !weeklyCoaching) {
       coachingGenerated.current = true
       generateWeeklyCoaching()
     }
-  }, [loading, myName]) // eslint-disable-line
+  }, [loading, myName, weeklyCoaching]) // eslint-disable-line
 
   // Task groups
   const overdueTasks = tasks.filter(t => t.due_date && t.due_date < today)
@@ -224,7 +304,11 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
             <div style={{ fontSize: 11, color: T.textMuted }}>{myName} さんのOKRコーチング</div>
           </div>
           {/* サマリーバッジ */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button onClick={() => setShowPremises(true)} title="AI前提設定"
+              style={{ padding: '6px 10px', borderRadius: 7, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
+              ⚙
+            </button>
             <div style={{ textAlign: 'center', padding: '4px 14px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}` }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{tasks.length}</div>
               <div style={{ fontSize: 9, color: T.textMuted }}>未完了</div>
@@ -358,8 +442,8 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
                   <div style={{ fontSize: 9, color: T.textMuted }}>完了KA</div>
                 </div>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#a855f7' }}>{weekKAs.length}</div>
-                  <div style={{ fontSize: 9, color: T.textMuted }}>今週KA</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#a855f7' }}>{focusKAs.length}</div>
+                  <div style={{ fontSize: 9, color: T.textMuted }}>Focus KA</div>
                 </div>
               </div>
               {/* バーチャート */}
@@ -382,7 +466,7 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
               </div>
               <button onClick={() => {
                 const total = Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)
-                sendToAI(`最近4週間で${total}件のタスクを完了し、${doneKACount}件のKAを達成しました。${weekKAs.length}件のKAに今週取り組んでいます。この頑張りを褒めて、さらにモチベーションを上げてください！`)
+                sendToAI(`最近4週間で${total}件のタスクを完了し、${doneKACount}件のKAを達成しました。${focusKAs.length}件のKAにFocus中です。この頑張りを褒めて、さらにモチベーションを上げてください！`)
               }} style={{ fontSize: 10, padding: '5px 12px', borderRadius: 5, border: `1px solid ${T.doneBorder}`, background: T.doneBg, color: '#00d68f', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, width: '100%' }}>
                 🎉 AIに褒めてもらう
               </button>
@@ -463,6 +547,37 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
         </div>
         <style>{`@keyframes coachBounce { 0%,60%,100% { transform:translateY(0) } 30% { transform:translateY(-5px) } }`}</style>
       </div>
+
+      {/* AI前提設定モーダル */}
+      {showPremises && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPremises(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, width: 500, maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 14 }}>AI前提設定</div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 12 }}>AIコーチが守るべきルール・前提知識を設定できます</div>
+            {premises.map(p => (
+              <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+                <div style={{ flex: 1, fontSize: 12, color: T.textSub, padding: '6px 10px', background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 6, lineHeight: 1.5 }}>{p.content}</div>
+                <button onClick={async () => {
+                  await supabase.from('ai_premises').delete().eq('id', p.id)
+                  setPremises(prev => prev.filter(x => x.id !== p.id))
+                }} style={{ padding: '4px 8px', borderRadius: 5, border: `1px solid ${T.overdueBorder}`, background: T.overdueBg, color: '#ff6b6b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', flexShrink: 0 }}>削除</button>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <textarea value={premiseEdit} onChange={e => setPremiseEdit(e.target.value)} placeholder="新しい前提を入力..." rows={2}
+                style={{ flex: 1, background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', resize: 'none', outline: 'none' }}
+              />
+              <button onClick={async () => {
+                if (!premiseEdit.trim()) return
+                const { data } = await supabase.from('ai_premises').insert({ content: premiseEdit.trim(), sort_order: premises.length, created_by: myName }).select()
+                if (data?.[0]) setPremises(prev => [...prev, data[0]])
+                setPremiseEdit('')
+              }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: T.accent, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', flexShrink: 0, alignSelf: 'flex-end' }}>追加</button>
+            </div>
+            <button onClick={() => setShowPremises(false)} style={{ marginTop: 14, padding: '6px 16px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', width: '100%' }}>閉じる</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
