@@ -961,11 +961,10 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     // まずquarterMapで検索
     const fromMap = (quarterMap[selectedObj.id]?.[rightPeriod] || [])[0]
     if (fromMap) return fromMap
-    // フォールバック：objectives全体からperiodとlevel_idでマッチング
+    // フォールバック：parent_objective_idでのみマッチ（level_idフォールバック削除）
     return objectives.find(o =>
       o.period === rightPeriod &&
-      (Number(o.parent_objective_id) === Number(selectedObj.id) ||
-       Number(o.level_id) === Number(selectedObj.level_id))
+      Number(o.parent_objective_id) === Number(selectedObj.id)
     ) || null
   }, [selectedObj, rightPeriod, quarterMap, objectives])
   const selectedObjKRs = useMemo(() => {
