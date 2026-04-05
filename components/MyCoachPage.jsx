@@ -361,7 +361,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
   if (loading) return <div style={{ padding: 40, color: T.accent, fontSize: 14, background: T.bg, height: '100%' }}>読み込み中...</div>
 
   return (
-    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif' }}>
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', height: '100%' }}>
       {/* Left: Main Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 固定ヘッダー */}
@@ -591,7 +591,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
       </div>
 
       {/* Right: AI Chat */}
-      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', background: T.chatBg, borderLeft: `1px solid ${T.chatBorder}` }}>
+      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', background: T.chatBg, borderLeft: `1px solid ${T.chatBorder}`, overflow: 'hidden', height: '100%' }}>
         {/* Chat Header */}
         <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.chatBorder}`, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(77,159,255,0.04)', flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🤖</div>
