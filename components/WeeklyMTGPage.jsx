@@ -422,7 +422,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder, objectiveTitle, completedBy, weeksList }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
     .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
@@ -430,8 +430,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [showDone, setShowDone] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [overIdx, setOverIdx] = useState(null)
+  const [dropHighlight, setDropHighlight] = useState(false)
 
-  const handleDragStart = (idx) => setDragIdx(idx)
+  const handleDragStart = (idx, reportId) => {
+    setDragIdx(idx)
+    // cross-KR drag用にdataTransferにreportIdとsource kr_idをセット
+    window.__dragKA = { reportId, sourceKrId: kr.id }
+  }
   const handleDragOver = (e, idx) => { e.preventDefault(); setOverIdx(idx) }
   const handleDrop = async (idx) => {
     if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setOverIdx(null); return }
@@ -445,7 +450,25 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
     }
     if (onReorder) onReorder()
   }
-  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null) }
+  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null); setDropHighlight(false); window.__dragKA = null }
+
+  // Cross-KR drop handler
+  const handleKRDragOver = (e) => {
+    e.preventDefault()
+    if (window.__dragKA && window.__dragKA.sourceKrId !== kr.id) {
+      setDropHighlight(true)
+    }
+  }
+  const handleKRDragLeave = () => setDropHighlight(false)
+  const handleKRDrop = async (e) => {
+    e.preventDefault()
+    setDropHighlight(false)
+    const drag = window.__dragKA
+    if (!drag || drag.sourceKrId === kr.id) return
+    window.__dragKA = null
+    // KAを別のKRに移動
+    if (onMoveKA) await onMoveKA(drag.reportId, kr.id)
+  }
 
   const pct = kr.target ? Math.min(Math.round((kr.current/kr.target)*100), 150) : 0
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
@@ -518,7 +541,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const hasReview = weather > 0 || good || more || focus
 
   return (
-    <div style={{ marginBottom:16 }}>
+    <div style={{ marginBottom:16, border: dropHighlight ? '2px dashed #4d9fff' : '2px solid transparent', borderRadius:12, transition:'border-color 0.15s' }}
+      onDragOver={handleKRDragOver} onDragLeave={handleKRDragLeave} onDrop={handleKRDrop}>
       {/* KRヘッダー */}
       <div onClick={() => setReviewOpen(p=>!p)} style={{ padding:'10px 14px', background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none', borderRadius:'10px 10px 0 0', border:`1px solid ${wT().border}`, borderBottom: reviewOpen ? `1px solid ${wT().border}` : 'none' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
@@ -673,7 +697,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
               <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
                 canEdit={canEditKA(r.owner, objOwner)}
                 dragIdx={dragIdx} overIdx={overIdx} rowIdx={idx}
-                dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx), onDragEnd:handleDragEnd }}
+                dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx, r.id), onDragEnd:handleDragEnd }}
                 onDragOver={e => handleDragOver(e, idx)}
                 onDrop={() => handleDrop(idx)}
                 objectiveTitle={objectiveTitle} completedBy={completedBy} />
@@ -1194,6 +1218,10 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   objectiveTitle={rightObj.title}
                   completedBy={myName}
                   weeksList={weeksList}
+                  onMoveKA={async (reportId, targetKrId) => {
+                    await supabase.from('weekly_reports').update({ kr_id: targetKrId }).eq('id', reportId)
+                    reload()
+                  }}
                 />
               ))}
             </>
