@@ -265,7 +265,7 @@ function Btn({ children, onClick, color = getT().accentSolid, variant = 'filled'
 function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod, fiscalYear, members }) {
   const [title, setTitle]     = useState(initial?.title || '')
   const [owner, setOwner]     = useState(initial?.owner || '')
-  const [levelId, setLevelId] = useState(String(activeLevelId || levels[0]?.id))
+  const [levelId, setLevelId] = useState(String(initial?.level_id || activeLevelId || levels[0]?.id))
   const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
@@ -351,8 +351,11 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           📅 {fiscalYear}年度
         </div>
       </div>
-      <FSelect label="所属レベル" value={levelId} onChange={setLevelId}
-        options={levels.map(l => ({ value: String(l.id), label: `${l.icon} ${l.name}` }))} />
+      <FSelect label="所属組織" value={levelId} onChange={setLevelId}
+        options={levels.map(l => {
+          const depth = (() => { let d=0,cur=l; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
+          return { value: String(l.id), label: `${'　'.repeat(depth)}${l.icon} ${l.name}` }
+        })} />
       <FSelect label="期間" value={period} onChange={setPeriod} options={periodOpts} />
       <FInput label="目標タイトル" value={title} onChange={setTitle} placeholder="例: 市場シェアを拡大する" />
       <div style={{ marginBottom: 13 }}>
@@ -984,6 +987,9 @@ export default function Dashboard({ user, onSignOut }) {
     if (objToSave.id) {
       const { error: updErr } = await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
       if (updErr) { console.error('objective update error:', updErr); alert('目標の更新に失敗しました: ' + updErr.message); return }
+
+      // 所属組織変更時、紐づくKA(weekly_reports)のlevel_idも更新
+      await supabase.from('weekly_reports').update({ level_id: objToSave.level_id }).eq('objective_id', objToSave.id)
 
       // KRを選択的に更新（全削除→再作成ではなく、個別にupsert/delete）
       const validKRs = krs.filter(k => k.title?.trim())
