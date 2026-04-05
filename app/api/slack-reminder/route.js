@@ -243,6 +243,135 @@ function buildTasksMessage(ownerMap, weekStart, levelName) {
   return { text }
 }
 
+// ─── 金曜振り返りアナウンス（friday-review） ──────────────────────────────────
+function buildFridayReviewMessage(ownerMap, weekStart, levelName) {
+  const friday = new Date(weekStart)
+  friday.setDate(friday.getDate() + 4)
+  const scope = levelName ? ` [${levelName}]` : ''
+  const nextMonday = new Date(weekStart)
+  nextMonday.setDate(nextMonday.getDate() + 7)
+
+  let text = `<!channel>\n`
+  text += `📝 *今週の振り返り＆翌週の記入をお願いします${scope}*\n`
+  text += `（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）\n\n`
+  text += `今週もお疲れ様でした！以下の記入をお願いします：\n`
+  text += `✅ 各KAの *Good*（うまくいったこと）と *More*（改善点）を記入\n`
+  text += `✅ タスクの完了チェック\n`
+  text += `✅ 翌週（${formatDate(toDateStr(nextMonday))}〜）の *Focus KA* を選択\n\n`
+
+  const today = toDateStr(new Date())
+  let hasContent = false
+
+  for (const [name, data] of Object.entries(ownerMap)) {
+    if (data.kas.length === 0) continue
+    hasContent = true
+    text += `━━━━━━━━━━━━━━━━\n`
+    text += `🎯 *${name}*\n`
+
+    // KA一覧（ステータス付き）
+    for (const ka of data.kas) {
+      const statusLabel = STATUS_LABELS[ka.status]
+      const statusIcon = ka.status === 'focus' ? '🔵' : ka.status === 'good' ? '🟢' : ka.status === 'more' ? '🔴' : '⚪'
+      const goodMore = (ka.good || ka.more) ? ' ✅' : ' ⚠️未記入'
+      text += `  ${statusIcon} ${ka.ka_title}${statusLabel ? ` [${statusLabel}]` : ''}${goodMore}\n`
+    }
+
+    // 未完了タスク
+    const allTasks = data.kas.flatMap(ka => ka.tasks)
+    const incomplete = allTasks.filter(t => !t.done)
+    const overdue = incomplete.filter(t => t.due_date && t.due_date < today)
+    if (overdue.length > 0) {
+      text += `  🔴 期限超過: ${overdue.length}件\n`
+    }
+    if (incomplete.length > 0) {
+      text += `  📌 未完了タスク: ${incomplete.length}件\n`
+    }
+  }
+
+  if (!hasContent) {
+    text += `（該当するKAがありません）\n`
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://okr-dashboard-taupe.vercel.app'
+  text += `\n→ 記入はこちら: ${appUrl}/?page=weekly`
+
+  return { text }
+}
+
+// ─── 月曜アナウンス（monday-announce） ─────────────────────────────────────────
+function buildMondayAnnounceMessage(ownerMap, weekStart, levelName) {
+  const friday = new Date(weekStart)
+  friday.setDate(friday.getDate() + 4)
+  const scope = levelName ? ` [${levelName}]` : ''
+
+  let text = `<!channel>\n`
+  text += `🚀 *今週のKA・タスク確認${scope}*\n`
+  text += `（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）\n\n`
+  text += `おはようございます！今週もよろしくお願いします。\n`
+  text += `📌 Focus KAの確認と、タスクの期限を確認してください。\n\n`
+
+  const today = toDateStr(new Date())
+  let hasContent = false
+
+  for (const [name, data] of Object.entries(ownerMap)) {
+    if (data.kas.length === 0) continue
+    hasContent = true
+    text += `━━━━━━━━━━━━━━━━\n`
+    text += `🎯 *${name}*\n`
+
+    // Focus KA
+    const focusKAs = data.kas.filter(ka => ka.status === 'focus')
+    if (focusKAs.length > 0) {
+      text += `  🔵 *Focus KA:*\n`
+      for (const ka of focusKAs) {
+        text += `    • ${ka.ka_title}\n`
+      }
+    }
+
+    // その他のKA（compact）
+    const otherKAs = data.kas.filter(ka => ka.status !== 'focus')
+    if (otherKAs.length > 0) {
+      text += `  📋 その他KA: ${otherKAs.length}件\n`
+    }
+
+    // 今週のタスク
+    const allTasks = data.kas.flatMap(ka => ka.tasks)
+    const incomplete = allTasks.filter(t => !t.done)
+    const thisWeekTasks = incomplete.filter(t => t.due_date && t.due_date >= weekStart && t.due_date <= toDateStr(friday))
+    const overdue = incomplete.filter(t => t.due_date && t.due_date < today)
+
+    if (overdue.length > 0) {
+      text += `  🔴 *期限超過タスク:*\n`
+      for (const t of overdue.slice(0, 3)) {
+        text += `    ⚠️ ${t.title || '(未入力)'}（期限: ${formatDate(t.due_date)}）\n`
+      }
+      if (overdue.length > 3) text += `    ...他${overdue.length - 3}件\n`
+    }
+
+    if (thisWeekTasks.length > 0) {
+      text += `  📅 *今週のタスク:*\n`
+      for (const t of thisWeekTasks.slice(0, 5)) {
+        text += `    ☐ ${t.title || '(未入力)'}（期限: ${formatDate(t.due_date)}）\n`
+      }
+      if (thisWeekTasks.length > 5) text += `    ...他${thisWeekTasks.length - 5}件\n`
+    }
+
+    const noDueTasks = incomplete.filter(t => !t.due_date)
+    if (noDueTasks.length > 0) {
+      text += `  📌 期限未設定タスク: ${noDueTasks.length}件\n`
+    }
+  }
+
+  if (!hasContent) {
+    text += `（該当するKAがありません）\n`
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://okr-dashboard-taupe.vercel.app'
+  text += `\n→ 確認はこちら: ${appUrl}/?page=mycoach`
+
+  return { text }
+}
+
 async function sendToSlack(payload, webhookUrl) {
   if (!webhookUrl) {
     throw new Error('Webhook URL が設定されていません')
@@ -292,6 +421,15 @@ function groupMembersByTopLevel(ownerMap, members, levels) {
   return groups
 }
 
+function getBuildFn(type) {
+  switch (type) {
+    case 'tasks': return buildTasksMessage
+    case 'friday-review': return buildFridayReviewMessage
+    case 'monday-announce': return buildMondayAnnounceMessage
+    default: return buildPreMeetingMessage
+  }
+}
+
 async function handleReminder(request) {
   const url = new URL(request.url)
   const type = url.searchParams.get('type') || 'pre-meeting'
@@ -319,7 +457,7 @@ async function handleReminder(request) {
     const results = []
     for (const [key, group] of Object.entries(groups)) {
       if (!group.webhookUrl) continue
-      const buildFn = type === 'tasks' ? buildTasksMessage : buildPreMeetingMessage
+      const buildFn = getBuildFn(type)
       const payload = buildFn(group.ownerMap, weekStart, '')
       await sendToSlack(payload, group.webhookUrl)
       results.push({ memberCount: Object.keys(group.ownerMap).length })
@@ -329,7 +467,7 @@ async function handleReminder(request) {
     if (defaultGroup) {
       const defaultUrl = process.env.SLACK_WEBHOOK_URL
       if (defaultUrl) {
-        const buildFn = type === 'tasks' ? buildTasksMessage : buildPreMeetingMessage
+        const buildFn = getBuildFn(type)
         const payload = buildFn(defaultGroup[1].ownerMap, weekStart, '')
         await sendToSlack(payload, defaultUrl)
       }
@@ -344,12 +482,7 @@ async function handleReminder(request) {
     })
   }
 
-  let payload
-  if (type === 'tasks') {
-    payload = buildTasksMessage(ownerMap, weekStart, levelName)
-  } else {
-    payload = buildPreMeetingMessage(ownerMap, weekStart, levelName)
-  }
+  const payload = getBuildFn(type)(ownerMap, weekStart, levelName)
 
   // プレビューモード: 送信せずメッセージだけ返す
   if (preview) {
