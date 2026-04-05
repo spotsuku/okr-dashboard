@@ -57,7 +57,7 @@ function ConfirmDialog({ message, onConfirm, onCancel, T }) {
 }
 
 // ─── TaskList: 共通タスク表示コンポーネント ───────────
-function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, myName }) {
+function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, onDeleteTask, myName }) {
   const today = toDateStr(new Date())
   const thisMonday = getMondayOf(new Date())
   const thisSunday = toDateStr(new Date(new Date(thisMonday + 'T00:00:00').getTime() + 6 * 86400000))
@@ -177,6 +177,7 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, myName 
             {!task.done && (
               <span onClick={() => startEdit(task)} style={{ fontSize: 11, color: T.textFaint, cursor: 'pointer', padding: '2px 4px' }} title="編集">✏️</span>
             )}
+            <span onClick={() => { if (window.confirm(`「${task.title}」を削除しますか？`)) onDeleteTask(task.id) }} style={{ fontSize: 11, color: '#ff6b6b', cursor: 'pointer', padding: '2px 4px', opacity: 0.6 }} title="削除">🗑</span>
             {task.due_date ? (
               <span style={{
                 fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
@@ -454,7 +455,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
             </div>
           </div>
 
-          <TaskList tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onToggleDone={toggleDone} onUpdateTask={updateTask} myName={myName} />
+          <TaskList tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onToggleDone={toggleDone} onUpdateTask={updateTask} onDeleteTask={async (id) => { await supabase.from('ka_tasks').delete().eq('id', id); load() }} myName={myName} />
         </div>
       </div>
     </div>

@@ -337,6 +337,24 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
     }
   }
 
+  // タスク操作
+  const reloadTasks = async () => {
+    const { data } = await supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).order('due_date').order('id')
+    if (data) setTasks(data)
+  }
+  const toggleTaskDone = async (task) => {
+    await supabase.from('ka_tasks').update({ done: !task.done }).eq('id', task.id)
+    reloadTasks()
+  }
+  const deleteTask = async (taskId) => {
+    await supabase.from('ka_tasks').delete().eq('id', taskId)
+    reloadTasks()
+  }
+  const updateTaskField = async (taskId, field, value) => {
+    await supabase.from('ka_tasks').update({ [field]: value || null }).eq('id', taskId)
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value || null } : t))
+  }
+
   // Task groups
   const overdueTasks = tasks.filter(t => t.due_date && t.due_date < today)
   const thisWeekTasks = tasks.filter(t => t.due_date && t.due_date >= today && t.due_date <= thisSunday)
@@ -528,43 +546,42 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
                     <button onClick={() => setProposedTasks([])} style={{ fontSize: 9, color: T.textFaint, background: 'none', border: 'none', cursor: 'pointer', marginTop: 2, fontFamily: 'inherit' }}>提案を閉じる</button>
                   </div>
                 )}
-                {overdueTasks.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#ff6b6b', marginBottom: 3 }}>期限超過 ({overdueTasks.length})</div>
-                    {overdueTasks.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 5, background: T.overdueBg, border: `1px solid ${T.overdueBorder}`, marginBottom: 2, fontSize: 11 }}>
-                        <span style={{ color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{t.title}</span>
-                        <span style={{ color: '#ff6b6b', fontWeight: 600, flexShrink: 0, marginLeft: 6, fontSize: 10 }}>⚠{formatDate(t.due_date)}</span>
-                      </div>
-                    ))}
-                    {overdueTasks.length > 4 && <div style={{ fontSize: 10, color: '#ff6b6b', marginTop: 2 }}>...他{overdueTasks.length - 4}件</div>}
-                  </div>
-                )}
-                {thisWeekTasks.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#ffd166', marginBottom: 3 }}>今週 ({thisWeekTasks.length})</div>
-                    {thisWeekTasks.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 5, background: T.sectionBg, border: `1px solid ${T.border}`, marginBottom: 2, fontSize: 11 }}>
-                        <span style={{ color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{t.title}</span>
-                        <span style={{ color: T.textMuted, flexShrink: 0, marginLeft: 6, fontSize: 10 }}>{formatDate(t.due_date)}</span>
-                      </div>
-                    ))}
-                    {thisWeekTasks.length > 4 && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>...他{thisWeekTasks.length - 4}件</div>}
-                  </div>
-                )}
-                {otherTasks.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, marginBottom: 3 }}>その他 ({otherTasks.length})</div>
-                    {otherTasks.slice(0, 3).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 5, background: T.sectionBg, border: `1px solid ${T.border}`, marginBottom: 2, fontSize: 11 }}>
-                        <span style={{ color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{t.title}</span>
-                        <span style={{ color: T.textFaint, flexShrink: 0, marginLeft: 6, fontSize: 10 }}>{t.due_date ? formatDate(t.due_date) : '期限なし'}</span>
-                      </div>
-                    ))}
-                    {otherTasks.length > 3 && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>...他{otherTasks.length - 3}件</div>}
-                  </div>
-                )}
-                {tasks.length === 0 && proposedTasks.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>未完了タスクなし</div>}
+                {(() => {
+                  const taskRow = (t, bgStyle) => (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', borderRadius: 5, ...bgStyle, marginBottom: 2 }}>
+                      <input type="checkbox" checked={!!t.done} onChange={() => toggleTaskDone(t)} style={{ margin: 0, cursor: 'pointer', flexShrink: 0 }} />
+                      <input value={t.title} onChange={e => setTasks(prev => prev.map(x => x.id === t.id ? { ...x, title: e.target.value } : x))}
+                        onBlur={e => updateTaskField(t.id, 'title', e.target.value)}
+                        style={{ flex: 1, background: 'transparent', border: 'none', color: T.text, fontSize: 11, outline: 'none', fontFamily: 'inherit', padding: '1px 2px', minWidth: 0 }} />
+                      <input type="date" value={t.due_date || ''} onChange={e => updateTaskField(t.id, 'due_date', e.target.value)}
+                        style={{ width: 85, background: 'transparent', border: 'none', color: t.due_date && t.due_date < today ? '#ff6b6b' : T.textMuted, fontSize: 9, outline: 'none', fontFamily: 'inherit', flexShrink: 0 }} />
+                      <button onClick={() => deleteTask(t.id)} title="削除" style={{ width: 16, height: 16, borderRadius: 3, border: 'none', background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.6 }}>✕</button>
+                    </div>
+                  )
+                  return (
+                    <>
+                      {overdueTasks.length > 0 && (
+                        <div style={{ marginBottom: 6 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#ff6b6b', marginBottom: 3 }}>期限超過 ({overdueTasks.length})</div>
+                          {overdueTasks.map(t => taskRow(t, { background: T.overdueBg, border: `1px solid ${T.overdueBorder}` }))}
+                        </div>
+                      )}
+                      {thisWeekTasks.length > 0 && (
+                        <div style={{ marginBottom: 6 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#ffd166', marginBottom: 3 }}>今週 ({thisWeekTasks.length})</div>
+                          {thisWeekTasks.map(t => taskRow(t, { background: T.sectionBg, border: `1px solid ${T.border}` }))}
+                        </div>
+                      )}
+                      {otherTasks.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, marginBottom: 3 }}>その他 ({otherTasks.length})</div>
+                          {otherTasks.map(t => taskRow(t, { background: T.sectionBg, border: `1px solid ${T.border}` }))}
+                        </div>
+                      )}
+                      {tasks.length === 0 && proposedTasks.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>未完了タスクなし</div>}
+                    </>
+                  )
+                })()}
               </div>
             </div>
 
