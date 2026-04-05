@@ -1192,9 +1192,9 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
 
           {/* ページナビ */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
             {/* マイルストーン */}
-            <button onClick={() => setActivePage('milestone')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'milestone' ? T.navActiveBg : 'transparent', color: activePage === 'milestone' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイルストーン</button>
+            <button onClick={() => setActivePage('milestone')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'milestone' ? T.navActiveBg : 'transparent', color: activePage === 'milestone' ? T.navActiveText : T.textMuted, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイルストーン</button>
             {/* OKR ドロップダウン */}
             <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.okr-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.okr-dropdown').style.display='none'}>
               <button style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: ['summary','okr'].includes(activePage) ? T.navActiveBg : 'transparent', color: ['summary','okr'].includes(activePage) ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR ▾</button>

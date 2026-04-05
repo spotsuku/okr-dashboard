@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
@@ -510,6 +511,7 @@ function KATableHeader({ wT }) {
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
+  const { isMobile, isTablet } = useResponsive()
   const W_THEMES = {
     dark: {
       bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -686,7 +688,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* 左：Objective一覧 */}
-        <div style={{ width:260, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', padding:10, background:wT().bg }}>
+        <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
             <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
@@ -722,11 +724,14 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         </div>
 
         {/* 右：KR + KA詳細 */}
-        <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', background:wT().bgCard2 }}>
+        <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && !activeObjId ? 'none' : 'block' }}>
+          {isMobile && activeObjId && (
+            <button onClick={() => setActiveObjId(null)} style={{ marginBottom: 8, padding: '6px 12px', borderRadius: 7, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>← Objective一覧に戻る</button>
+          )}
           {!selectedObj ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
               <div style={{ fontSize:36 }}>🎯</div>
-              <div style={{ fontSize:13 }}>左のObjectiveをクリックしてください</div>
+              <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
             <>

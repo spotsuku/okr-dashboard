@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 
 function toDateStr(d) { return d.toISOString().split('T')[0] }
 function getMonday(d) {
@@ -49,6 +50,8 @@ const SUGGESTIONS = [
 
 export default function MyCoachPage({ user, members, levels, themeKey = 'dark', fiscalYear = '2026' }) {
   const T = THEMES[themeKey] || THEMES.dark
+  const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
+  const [showChat, setShowChat] = useState(false)
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
 
   // Data state
@@ -380,32 +383,38 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
   if (loading) return <div style={{ padding: 40, color: T.accent, fontSize: 14, background: T.bg, height: '100%' }}>読み込み中...</div>
 
   return (
-    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', height: '100%' }}>
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', height: '100%', position: 'relative' }}>
       {/* Left: Main Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 固定ヘッダー */}
-        <div style={{ padding: '14px 20px 10px', borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>マイページ</div>
-            <div style={{ fontSize: 11, color: T.textMuted }}>{myName} さんのOKRコーチング</div>
+        <div style={{ padding: isMobile ? '10px 12px 8px' : '14px 20px 10px', borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700 }}>マイページ</div>
+            {!isMobile && <div style={{ fontSize: 11, color: T.textMuted }}>{myName} さんのOKRコーチング</div>}
           </div>
           {/* サマリーバッジ */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: isMobile ? 6 : 10, alignItems: 'center', flexShrink: 0 }}>
+            {isMobileOrTablet && (
+              <button onClick={() => setShowChat(p => !p)} title="AIチャット"
+                style={{ padding: '6px 10px', borderRadius: 7, border: `1px solid rgba(77,159,255,0.3)`, background: showChat ? 'rgba(77,159,255,0.15)' : 'transparent', color: '#4d9fff', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
+                🤖
+              </button>
+            )}
             <button onClick={() => setShowPremises(true)} title="AI前提設定"
               style={{ padding: '6px 10px', borderRadius: 7, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
               ⚙
             </button>
-            <div style={{ textAlign: 'center', padding: '4px 14px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}` }}>
+            <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}` }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{tasks.length}</div>
               <div style={{ fontSize: 9, color: T.textMuted }}>未完了</div>
             </div>
             {overdueTasks.length > 0 && (
-              <div style={{ textAlign: 'center', padding: '4px 14px', borderRadius: 8, background: T.overdueBg, border: `1px solid ${T.overdueBorder}` }}>
+              <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: 8, background: T.overdueBg, border: `1px solid ${T.overdueBorder}` }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#ff6b6b' }}>{overdueTasks.length}</div>
                 <div style={{ fontSize: 9, color: '#ff6b6b' }}>期限超過</div>
               </div>
             )}
-            <div style={{ textAlign: 'center', padding: '4px 14px', borderRadius: 8, background: T.doneBg, border: `1px solid ${T.doneBorder}` }}>
+            <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: 8, background: T.doneBg, border: `1px solid ${T.doneBorder}` }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</div>
               <div style={{ fontSize: 9, color: T.textMuted }}>完了(4週)</div>
             </div>
@@ -413,11 +422,11 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
         </div>
 
         {/* スクロール可能コンテンツ */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '10px' : '14px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 10 : 12 }}>
 
             {/* 左上: 今週のアクションプラン */}
-            <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)', maxHeight: 260 }}>
+            <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)', maxHeight: isMobile ? 'none' : 260 }}>
               {sH('🎯', '今週のアクションプラン',
                 <button onClick={() => { coachingGenerated.current = false; generateWeeklyCoaching() }} disabled={coachingLoading}
                   style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,0.3)', background: 'transparent', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
@@ -436,7 +445,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             </div>
 
             {/* 右上: KA一覧（タブ切替 + ステータス選択） */}
-            <div style={{ ...sectionStyle, maxHeight: 260 }}>
+            <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
               {sH('📌', `KA一覧（${allKAs.length}件）`)}
               {/* タブ */}
               <div style={{ display: 'flex', gap: 2, marginBottom: 6, flexShrink: 0, flexWrap: 'wrap' }}>
@@ -485,7 +494,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             </div>
 
             {/* 左中: マイOKR */}
-            <div style={{ ...sectionStyle, maxHeight: 260 }}>
+            <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
               {sH('📊', 'マイOKR')}
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {objectives.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>担当Objectiveなし</div>}
@@ -521,7 +530,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             </div>
 
             {/* 右中: タスク + AIタスク提案 */}
-            <div style={{ ...sectionStyle, maxHeight: 260 }}>
+            <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
               {sH('📋', `タスク（${tasks.length}件）`,
                 <button onClick={proposeTasksFromAI} disabled={proposingTasks}
                   style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(77,159,255,0.3)', background: 'rgba(77,159,255,0.06)', color: '#4d9fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
@@ -628,7 +637,12 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
       </div>
 
       {/* Right: AI Chat */}
-      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', background: T.chatBg, borderLeft: `1px solid ${T.chatBorder}`, overflow: 'hidden', height: '100%' }}>
+      <div style={{
+        width: isMobile ? '100%' : isTablet ? 340 : 380,
+        flexShrink: 0, display: isMobileOrTablet && !showChat ? 'none' : 'flex', flexDirection: 'column',
+        background: T.chatBg, borderLeft: isMobileOrTablet ? 'none' : `1px solid ${T.chatBorder}`, overflow: 'hidden', height: '100%',
+        ...(isMobileOrTablet ? { position: 'absolute', top: 0, right: 0, bottom: 0, zIndex: 100, boxShadow: '-4px 0 20px rgba(0,0,0,0.3)' } : {}),
+      }}>
         {/* Chat Header */}
         <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.chatBorder}`, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(77,159,255,0.04)', flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🤖</div>
@@ -636,6 +650,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>OKR AIコーチ</div>
             <div style={{ fontSize: 9, color: '#4d9fff' }}>パーソナルコーチング</div>
           </div>
+          {isMobileOrTablet && <button onClick={() => setShowChat(false)} style={{ marginLeft: 'auto', background: 'transparent', border: `1px solid ${T.chatBorder}`, color: T.textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>}
         </div>
 
         {/* Messages */}

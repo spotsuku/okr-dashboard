@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
@@ -270,6 +271,7 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, onDelet
 // ─── メイン ─────────────────────────────────────────
 export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
   const T = THEMES[themeKey] || THEMES.dark
+  const { isMobile } = useResponsive()
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
   const [viewMode, setViewMode] = useState('my') // 'my' | 'all'
   const [selectedMember, setSelectedMember] = useState(null) // 全社タスク用
@@ -420,7 +422,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
 
       {/* メインコンテンツ */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 24px' }}>
+        <div style={{ maxWidth: 800, margin: '0 auto', padding: isMobile ? '12px' : '24px 24px' }}>
           {/* ヘッダー */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>

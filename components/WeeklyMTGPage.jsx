@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 
@@ -666,8 +667,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       )}
 
       {/* KAテーブル */}
-      <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'visible' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
+      <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'auto', WebkitOverflowScrolling:'touch' }}>
+        <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
           <colgroup>
             <col style={{ width:28 }} />
             <col style={{ width:90 }} />
@@ -715,7 +716,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </div>
         )}
         {showDone && doneReports.length > 0 && (
-          <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
+          <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
             <colgroup>
               <col style={{ width:28 }} />
               <col style={{ width:90 }} />
@@ -749,6 +750,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 function getCurrentQ() { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
 export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
+  const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
+  const [mobilePanel, setMobilePanel] = useState('list') // 'list' | 'detail'
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
   const [keyResults,    setKeyResults]    = useState([])
@@ -1038,7 +1041,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       </div>
 
       {/* 週タブ */}
-      <div style={{ display:'flex', gap:4, padding:'7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto' }}>
+      <div style={{ display:'flex', gap:4, padding: isMobile ? '5px 8px' : '7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
         <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>週：</span>
         {weeksList.map(w => {
           const isActive = activeWeek === w
@@ -1082,7 +1085,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* 部署サイドバー */}
-        <div style={{ width:155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
+        <div style={{ width: isMobile ? 0 : isTablet ? 120 : 155, flexShrink:0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, padding: isMobile ? 0 : '10px 8px', overflowY:'auto', background:wT().bgSidebar, display: isMobile ? 'none' : 'block' }}>
           <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
           <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?'rgba(77,159,255,0.3)':'transparent'}`, background:!activeLevelId?'rgba(77,159,255,0.12)':'transparent' }}>
             <span>🏢</span><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?'#4d9fff':wT().textSub }}>全部署</span>
@@ -1091,7 +1094,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
 
         {/* Objective一覧 */}
-        <div style={{ width:260, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', padding:10, background:wT().bg }}>
+        <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && mobilePanel !== 'list' ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 Objective（{activeObjs.length}件）</div>
           {visibleObjs.length===0 && <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>}
 
@@ -1104,7 +1107,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             const krs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const kaCount = weekReports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
             return (
-              <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ())}} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
+              <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
                   <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{getPeriodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
@@ -1131,7 +1134,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 const color = LAYER_COLORS[d] || '#a0a8be'
                 const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
                 return (
-                  <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ())}} style={{ padding:'9px 12px', borderRadius:9, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?'rgba(0,214,143,0.5)':'rgba(0,214,143,0.15)'}`, background:isActive?'rgba(0,214,143,0.1)':'rgba(0,214,143,0.04)', transition:'all 0.12s', opacity:0.8 }}>
+                  <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:'9px 12px', borderRadius:9, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?'rgba(0,214,143,0.5)':'rgba(0,214,143,0.15)'}`, background:isActive?'rgba(0,214,143,0.1)':'rgba(0,214,143,0.04)', transition:'all 0.12s', opacity:0.8 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       <span style={{ fontSize:11 }}>🏆</span>
                       <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>{getPeriodLabel(obj.period)}</span>
@@ -1146,11 +1149,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
 
         {/* 右：KR + KA詳細 */}
-        <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', background:wT().bgCard2 }}>
+        <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && mobilePanel !== 'detail' ? 'none' : 'block' }}>
+          {isMobile && mobilePanel === 'detail' && (
+            <button onClick={() => setMobilePanel('list')} style={{ marginBottom: 8, padding: '6px 12px', borderRadius: 7, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>← Objective一覧に戻る</button>
+          )}
           {!selectedObj ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
               <div style={{ fontSize:36 }}>🎯</div>
-              <div style={{ fontSize:13 }}>左のObjectiveをクリックしてください</div>
+              <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
             <>
