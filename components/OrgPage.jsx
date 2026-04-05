@@ -2986,9 +2986,10 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
   const ICONS = ['🏢','🚀','⚙️','💼','👥','📊','🎯','💡','🌟','🔥','📈','🤝']
   const startEdit = (level) => { setEditingId(level.id); setEditName(level.name); setEditIcon(level.icon || '📁') }
   const cancelEdit = () => { setEditingId(null); setEditName(''); setEditIcon('') }
-  const saveEdit = async (level) => {
-    if (!editName.trim()) return
-    await onRename(level.id, editName.trim(), editIcon)
+  const saveEdit = async (level, nameOverride) => {
+    const finalName = nameOverride || editName
+    if (!finalName.trim()) return
+    await onRename(level.id, finalName.trim(), editIcon)
     cancelEdit()
   }
 
@@ -3006,12 +3007,13 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
                 <span style={{ fontSize:13 }}>{editIcon}</span>
-                <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
+                <input defaultValue={editName} ref={el => { if (el && !el._inited) { el._inited = true; el.focus() } }}
                   onCompositionStart={() => { composingRef.current = true }}
-                  onCompositionEnd={e => { composingRef.current = false; setEditName(e.target.value) }}
-                  onKeyDown={e => { if (composingRef.current) return; if (e.key === 'Enter') saveEdit(level); if (e.key === 'Escape') cancelEdit() }}
+                  onCompositionEnd={() => { composingRef.current = false }}
+                  onKeyDown={e => { if (composingRef.current) return; if (e.key === 'Enter') saveEdit(level, e.target.value); if (e.key === 'Escape') cancelEdit() }}
+                  onBlur={e => setEditName(e.target.value)}
                   style={{ flex:1, background:T().sectionBg, border:`1px solid ${T().border}`, borderRadius:6, padding:'5px 8px', color:T().text, fontSize:12, outline:'none', fontFamily:'inherit', minWidth:80 }} />
-                <button onClick={() => saveEdit(level)} style={{ background:T().accent, border:'none', color:'#fff', borderRadius:5, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>保存</button>
+                <button onClick={e => { const input = e.target.closest('div').querySelector('input'); saveEdit(level, input?.value) }} style={{ background:T().accent, border:'none', color:'#fff', borderRadius:5, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>保存</button>
                 <button onClick={cancelEdit} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:5, padding:'4px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
               </div>
               <div style={{ display:'flex', gap:3, flexWrap:'wrap' }}>
