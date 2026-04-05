@@ -202,11 +202,12 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
   }
   const maxDone = Math.max(1, ...weeks4.map(w => doneTasksByWeek[w] || 0))
 
-  const sectionStyle = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }
-  const sectionTitle = (icon, text) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{text}</span>
+  const sectionStyle = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
+  const sH = (icon, text, extra) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexShrink: 0 }}>
+      <span style={{ fontSize: 14 }}>{icon}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{text}</span>
+      {extra}
     </div>
   )
 
@@ -215,189 +216,214 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif' }}>
       {/* Left: Main Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto' }}>
-          {/* Header */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>マイページ</div>
-            <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>{myName} さんのOKRコーチング</div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* 固定ヘッダー */}
+        <div style={{ padding: '14px 20px 10px', borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>マイページ</div>
+            <div style={{ fontSize: 11, color: T.textMuted }}>{myName} さんのOKRコーチング</div>
           </div>
-
-          {/* Section 3: Weekly Coaching */}
-          <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16 }}>🎯</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#a855f7' }}>今週のアクションプラン</span>
+          {/* サマリーバッジ */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ textAlign: 'center', padding: '4px 14px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{tasks.length}</div>
+              <div style={{ fontSize: 9, color: T.textMuted }}>未完了</div>
+            </div>
+            {overdueTasks.length > 0 && (
+              <div style={{ textAlign: 'center', padding: '4px 14px', borderRadius: 8, background: T.overdueBg, border: `1px solid ${T.overdueBorder}` }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#ff6b6b' }}>{overdueTasks.length}</div>
+                <div style={{ fontSize: 9, color: '#ff6b6b' }}>期限超過</div>
               </div>
-              <button onClick={() => { coachingGenerated.current = false; generateWeeklyCoaching() }} disabled={coachingLoading}
-                style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, border: `1px solid rgba(168,85,247,0.3)`, background: 'transparent', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                {coachingLoading ? '生成中...' : '更新'}
+            )}
+            <div style={{ textAlign: 'center', padding: '4px 14px', borderRadius: 8, background: T.doneBg, border: `1px solid ${T.doneBorder}` }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</div>
+              <div style={{ fontSize: 9, color: T.textMuted }}>完了(4週)</div>
+            </div>
+          </div>
+        </div>
+
+        {/* スクロール可能コンテンツ - 2x2グリッド */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+            {/* 左上: 今週のアクションプラン */}
+            <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)', maxHeight: 320 }}>
+              {sH('🎯', '今週のアクションプラン',
+                <button onClick={() => { coachingGenerated.current = false; generateWeeklyCoaching() }} disabled={coachingLoading}
+                  style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,0.3)', background: 'transparent', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                  {coachingLoading ? '生成中...' : '更新'}
+                </button>
+              )}
+              <div style={{ flex: 1, overflowY: 'auto', fontSize: 12, lineHeight: 1.65, color: T.textSub }}>
+                {coachingLoading ? (
+                  <div style={{ color: T.textMuted, padding: '16px 0', textAlign: 'center' }}>AIが今週のプランを生成中...</div>
+                ) : weeklyCoaching ? (
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{weeklyCoaching}</div>
+                ) : (
+                  <div style={{ color: T.textFaint, padding: '10px 0' }}>データを読み込んでいます...</div>
+                )}
+              </div>
+            </div>
+
+            {/* 右上: マイOKR */}
+            <div style={{ ...sectionStyle, maxHeight: 320 }}>
+              {sH('📊', 'マイOKR')}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {objectives.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>担当Objectiveなし</div>}
+                {objectives.map(obj => {
+                  const krs = keyResults.filter(kr => kr.objective_id === obj.id)
+                  return (
+                    <div key={obj.id} style={{ marginBottom: 10, padding: 10, borderRadius: 7, background: T.sectionBg, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 6, lineHeight: 1.3 }}>{obj.title}</div>
+                      {krs.map(kr => {
+                        const pct = kr.target ? Math.round((kr.current / kr.target) * 100) : 0
+                        return (
+                          <div key={kr.id} style={{ marginBottom: 5 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 2 }}>
+                              <span style={{ color: T.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{kr.title}</span>
+                              <span style={{ fontWeight: 700, color: pct >= 70 ? '#00d68f' : pct >= 40 ? '#ffd166' : '#ff6b6b', flexShrink: 0 }}>{pct}%</span>
+                            </div>
+                            <div style={{ height: 3, borderRadius: 2, background: T.border }}>
+                              <div style={{ height: '100%', borderRadius: 2, width: `${Math.min(100, pct)}%`, background: pct >= 70 ? '#00d68f' : pct >= 40 ? '#ffd166' : '#ff6b6b' }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                      <button onClick={() => {
+                        const krInfo = krs.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.current/kr.target)*100) : 0}% (${kr.current}${kr.unit}/${kr.target}${kr.unit})`).join('\n')
+                        sendToAI(`以下のOKRについて具体的なアドバイスをください。\n\nObjective: ${obj.title}\n${krInfo}\n\n達成率を上げるための具体的なアクションを提案してください。`)
+                      }} style={{ marginTop: 6, fontSize: 10, padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                        🤖 AIアドバイス
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 左下: タスク */}
+            <div style={{ ...sectionStyle, maxHeight: 280 }}>
+              {sH('📋', `タスク（${tasks.length}件）`)}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {overdueTasks.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#ff6b6b', marginBottom: 3 }}>期限超過 ({overdueTasks.length})</div>
+                    {overdueTasks.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 5, background: T.overdueBg, border: `1px solid ${T.overdueBorder}`, marginBottom: 2, fontSize: 11 }}>
+                        <span style={{ color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{t.title}</span>
+                        <span style={{ color: '#ff6b6b', fontWeight: 600, flexShrink: 0, marginLeft: 6, fontSize: 10 }}>⚠{formatDate(t.due_date)}</span>
+                      </div>
+                    ))}
+                    {overdueTasks.length > 4 && <div style={{ fontSize: 10, color: '#ff6b6b', marginTop: 2 }}>...他{overdueTasks.length - 4}件</div>}
+                  </div>
+                )}
+                {thisWeekTasks.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#ffd166', marginBottom: 3 }}>今週 ({thisWeekTasks.length})</div>
+                    {thisWeekTasks.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 5, background: T.sectionBg, border: `1px solid ${T.border}`, marginBottom: 2, fontSize: 11 }}>
+                        <span style={{ color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{t.title}</span>
+                        <span style={{ color: T.textMuted, flexShrink: 0, marginLeft: 6, fontSize: 10 }}>{formatDate(t.due_date)}</span>
+                      </div>
+                    ))}
+                    {thisWeekTasks.length > 4 && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>...他{thisWeekTasks.length - 4}件</div>}
+                  </div>
+                )}
+                {otherTasks.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, marginBottom: 3 }}>その他 ({otherTasks.length})</div>
+                    {otherTasks.slice(0, 3).map(t => (
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: 5, background: T.sectionBg, border: `1px solid ${T.border}`, marginBottom: 2, fontSize: 11 }}>
+                        <span style={{ color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{t.title}</span>
+                        <span style={{ color: T.textFaint, flexShrink: 0, marginLeft: 6, fontSize: 10 }}>{t.due_date ? formatDate(t.due_date) : '期限なし'}</span>
+                      </div>
+                    ))}
+                    {otherTasks.length > 3 && <div style={{ fontSize: 10, color: T.textFaint, marginTop: 2 }}>...他{otherTasks.length - 3}件</div>}
+                  </div>
+                )}
+                {tasks.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>未完了タスクなし</div>}
+              </div>
+            </div>
+
+            {/* 右下: 過去の努力 */}
+            <div style={sectionStyle}>
+              {sH('🏆', '過去の努力')}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</div>
+                  <div style={{ fontSize: 9, color: T.textMuted }}>完了タスク(4週)</div>
+                </div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: T.accent }}>{doneKACount}</div>
+                  <div style={{ fontSize: 9, color: T.textMuted }}>完了KA</div>
+                </div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#a855f7' }}>{weekKAs.length}</div>
+                  <div style={{ fontSize: 9, color: T.textMuted }}>今週KA</div>
+                </div>
+              </div>
+              {/* バーチャート */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 48, marginBottom: 4 }}>
+                {weeks4.map(w => {
+                  const count = doneTasksByWeek[w] || 0
+                  const h = Math.max(3, (count / maxDone) * 44)
+                  return (
+                    <div key={w} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: T.textMuted }}>{count}</div>
+                      <div style={{ width: '100%', height: h, borderRadius: 3, background: 'linear-gradient(180deg, #4d9fff, #a855f7)', opacity: w === thisMonday ? 1 : 0.5 }} />
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                {weeks4.map(w => (
+                  <div key={w} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: T.textFaint }}>{formatDate(w)}~</div>
+                ))}
+              </div>
+              <button onClick={() => {
+                const total = Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)
+                sendToAI(`最近4週間で${total}件のタスクを完了し、${doneKACount}件のKAを達成しました。${weekKAs.length}件のKAに今週取り組んでいます。この頑張りを褒めて、さらにモチベーションを上げてください！`)
+              }} style={{ fontSize: 10, padding: '5px 12px', borderRadius: 5, border: `1px solid ${T.doneBorder}`, background: T.doneBg, color: '#00d68f', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, width: '100%' }}>
+                🎉 AIに褒めてもらう
               </button>
             </div>
-            {coachingLoading ? (
-              <div style={{ fontSize: 13, color: T.textMuted, padding: '20px 0', textAlign: 'center' }}>AIが今週のプランを生成中...</div>
-            ) : weeklyCoaching ? (
-              <div style={{ fontSize: 13, lineHeight: 1.7, color: T.textSub, whiteSpace: 'pre-wrap' }}>{weeklyCoaching}</div>
-            ) : (
-              <div style={{ fontSize: 13, color: T.textFaint, padding: '10px 0' }}>データを読み込んでいます...</div>
-            )}
-          </div>
 
-          {/* Section 1: Tasks */}
-          <div style={sectionStyle}>
-            {sectionTitle('📋', `タスク（${tasks.length}件未完了）`)}
-            {overdueTasks.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#ff6b6b', marginBottom: 4 }}>期限超過 ({overdueTasks.length})</div>
-                {overdueTasks.map(t => (
-                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: T.overdueBg, border: `1px solid ${T.overdueBorder}`, marginBottom: 3, fontSize: 12 }}>
-                    <span style={{ color: T.text }}>{t.title}</span>
-                    <span style={{ color: '#ff6b6b', fontWeight: 600, flexShrink: 0, marginLeft: 8 }}>⚠ {formatDate(t.due_date)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {thisWeekTasks.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd166', marginBottom: 4 }}>今週 ({thisWeekTasks.length})</div>
-                {thisWeekTasks.map(t => (
-                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: T.sectionBg, border: `1px solid ${T.border}`, marginBottom: 3, fontSize: 12 }}>
-                    <div>
-                      <span style={{ color: T.text }}>{t.title}</span>
-                      {kaMap[t.report_id] && <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 6 }}>KA: {kaMap[t.report_id].ka_title}</span>}
-                    </div>
-                    <span style={{ color: T.textMuted, flexShrink: 0, marginLeft: 8 }}>{formatDate(t.due_date)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {otherTasks.length > 0 && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 4 }}>その他 ({otherTasks.length})</div>
-                {otherTasks.slice(0, 5).map(t => (
-                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: T.sectionBg, border: `1px solid ${T.border}`, marginBottom: 3, fontSize: 12 }}>
-                    <span style={{ color: T.text }}>{t.title}</span>
-                    <span style={{ color: T.textFaint, flexShrink: 0, marginLeft: 8 }}>{t.due_date ? formatDate(t.due_date) : '期限なし'}</span>
-                  </div>
-                ))}
-                {otherTasks.length > 5 && <div style={{ fontSize: 11, color: T.textFaint, marginTop: 4 }}>...他 {otherTasks.length - 5}件</div>}
-              </div>
-            )}
-            {tasks.length === 0 && <div style={{ fontSize: 13, color: T.textFaint, padding: '10px 0', textAlign: 'center' }}>未完了タスクなし</div>}
-          </div>
-
-          {/* Section 2: My OKR Advice */}
-          <div style={sectionStyle}>
-            {sectionTitle('📊', 'マイOKR')}
-            {objectives.length === 0 && <div style={{ fontSize: 13, color: T.textFaint }}>担当Objectiveがありません</div>}
-            {objectives.map(obj => {
-              const krs = keyResults.filter(kr => kr.objective_id === obj.id)
-              return (
-                <div key={obj.id} style={{ marginBottom: 14, padding: 12, borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 8 }}>{obj.title}</div>
-                  {krs.map(kr => {
-                    const pct = kr.target ? Math.round((kr.current / kr.target) * 100) : 0
-                    return (
-                      <div key={kr.id} style={{ marginBottom: 6 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
-                          <span style={{ color: T.textSub }}>{kr.title}</span>
-                          <span style={{ fontWeight: 700, color: pct >= 70 ? '#00d68f' : pct >= 40 ? '#ffd166' : '#ff6b6b' }}>{pct}%</span>
-                        </div>
-                        <div style={{ height: 4, borderRadius: 2, background: T.border }}>
-                          <div style={{ height: '100%', borderRadius: 2, width: `${Math.min(100, pct)}%`, background: pct >= 70 ? '#00d68f' : pct >= 40 ? '#ffd166' : '#ff6b6b', transition: 'width 0.3s' }} />
-                        </div>
-                      </div>
-                    )
-                  })}
-                  <button onClick={() => {
-                    const krInfo = krs.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.current/kr.target)*100) : 0}% (${kr.current}${kr.unit}/${kr.target}${kr.unit})`).join('\n')
-                    sendToAI(`以下のOKRについて具体的なアドバイスをください。\n\nObjective: ${obj.title}\n${krInfo}\n\n達成率を上げるための具体的なアクションを提案してください。`)
-                  }} style={{ marginTop: 8, fontSize: 11, padding: '5px 12px', borderRadius: 6, border: `1px solid rgba(168,85,247,0.3)`, background: 'rgba(168,85,247,0.06)', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                    🤖 AIにアドバイスをもらう
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Section 4: Effort Visualization */}
-          <div style={sectionStyle}>
-            {sectionTitle('🏆', '過去の努力')}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</div>
-                <div style={{ fontSize: 10, color: T.textMuted }}>完了タスク (4週)</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: T.accent }}>{doneKACount}</div>
-                <div style={{ fontSize: 10, color: T.textMuted }}>完了KA (累計)</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#a855f7' }}>{weekKAs.length}</div>
-                <div style={{ fontSize: 10, color: T.textMuted }}>今週のKA</div>
-              </div>
-            </div>
-            {/* Bar chart */}
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 60, marginBottom: 8 }}>
-              {weeks4.map(w => {
-                const count = doneTasksByWeek[w] || 0
-                const h = Math.max(4, (count / maxDone) * 56)
-                return (
-                  <div key={w} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted }}>{count}</div>
-                    <div style={{ width: '100%', height: h, borderRadius: 4, background: `linear-gradient(180deg, #4d9fff, #a855f7)`, opacity: w === thisMonday ? 1 : 0.5 }} />
-                  </div>
-                )
-              })}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {weeks4.map(w => (
-                <div key={w} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: T.textFaint }}>{formatDate(w)}~</div>
-              ))}
-            </div>
-            <button onClick={() => {
-              const total = Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)
-              sendToAI(`最近4週間で${total}件のタスクを完了し、${doneKACount}件のKAを達成しました。${weekKAs.length}件のKAに今週取り組んでいます。この頑張りを褒めて、さらにモチベーションを上げてください！`)
-            }} style={{ marginTop: 12, fontSize: 11, padding: '6px 14px', borderRadius: 6, border: `1px solid ${T.doneBorder}`, background: T.doneBg, color: '#00d68f', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, width: '100%' }}>
-              🎉 AIに褒めてもらう
-            </button>
           </div>
         </div>
       </div>
 
       {/* Right: AI Chat */}
-      <div style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', background: T.chatBg, borderLeft: `1px solid ${T.chatBorder}` }}>
+      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', background: T.chatBg, borderLeft: `1px solid ${T.chatBorder}` }}>
         {/* Chat Header */}
-        <div style={{ padding: '14px 16px', borderBottom: `1px solid ${T.chatBorder}`, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(77,159,255,0.04)' }}>
-          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🤖</div>
+        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.chatBorder}`, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(77,159,255,0.04)', flexShrink: 0 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🤖</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>OKR AIコーチ</div>
-            <div style={{ fontSize: 10, color: '#4d9fff' }}>パーソナルコーチング</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>OKR AIコーチ</div>
+            <div style={{ fontSize: 9, color: '#4d9fff' }}>パーソナルコーチング</div>
           </div>
         </div>
 
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 6px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 4px' }}>
           {messages.map((m, i) => (
-            <div key={i} style={{ marginBottom: 12, display: 'flex', flexDirection: m.role === 'user' ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-start' }}>
+            <div key={i} style={{ marginBottom: 10, display: 'flex', flexDirection: m.role === 'user' ? 'row-reverse' : 'row', gap: 6, alignItems: 'flex-start' }}>
               {m.role === 'assistant' && (
-                <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>🤖</div>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>🤖</div>
               )}
               <div style={{
-                maxWidth: '82%',
+                maxWidth: '84%',
                 background: m.role === 'user' ? '#4d9fff' : themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg,
                 border: m.role === 'user' ? 'none' : `1px solid ${T.chatBorder}`,
-                borderRadius: m.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-                padding: '9px 12px', fontSize: 12, lineHeight: 1.65,
+                borderRadius: m.role === 'user' ? '11px 11px 3px 11px' : '11px 11px 11px 3px',
+                padding: '8px 11px', fontSize: 11.5, lineHeight: 1.6,
                 color: m.role === 'user' ? '#fff' : T.textSub, whiteSpace: 'pre-wrap',
               }}>{m.content}</div>
             </div>
           ))}
           {chatLoading && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 12 }}>
-              <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>🤖</div>
-              <div style={{ background: themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: '12px 12px 12px 4px', padding: '10px 14px', display: 'flex', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 10 }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>🤖</div>
+              <div style={{ background: themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: '11px 11px 11px 3px', padding: '9px 13px', display: 'flex', gap: 4 }}>
                 {[0,1,2].map(i => (<div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#4d9fff', animation: 'coachBounce 1.2s infinite', animationDelay: `${i*0.2}s` }} />))}
               </div>
             </div>
@@ -407,14 +433,14 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
 
         {/* Suggestions */}
         {messages.length <= 1 && (
-          <div style={{ padding: '0 14px 8px' }}>
-            <div style={{ fontSize: 9, color: T.textFaint, marginBottom: 6, letterSpacing: '0.1em' }}>おすすめ</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ padding: '0 12px 6px' }}>
+            <div style={{ fontSize: 9, color: T.textFaint, marginBottom: 4, letterSpacing: '0.1em' }}>おすすめ</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {SUGGESTIONS.map((s, i) => (
                 <button key={i} onClick={() => sendToAI(s)} style={{
-                  background: 'rgba(77,159,255,0.06)', border: `1px solid rgba(77,159,255,0.2)`,
-                  borderRadius: 7, padding: '7px 10px', color: '#8ab4ff',
-                  fontSize: 11, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  background: 'rgba(77,159,255,0.06)', border: '1px solid rgba(77,159,255,0.2)',
+                  borderRadius: 6, padding: '6px 9px', color: '#8ab4ff',
+                  fontSize: 10.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 }}>{s}</button>
               ))}
             </div>
@@ -422,17 +448,17 @@ KR進捗: ${keyResults.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.curr
         )}
 
         {/* Input */}
-        <div style={{ padding: '8px 12px 12px', borderTop: `1px solid ${T.chatBorder}`, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div style={{ padding: '6px 10px 10px', borderTop: `1px solid ${T.chatBorder}`, display: 'flex', gap: 6, alignItems: 'flex-end', flexShrink: 0 }}>
           <textarea value={chatInput} onChange={e => setChatInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendToAI() } }}
             placeholder="何でも聞いてください..." rows={2}
-            style={{ flex: 1, background: themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'none', lineHeight: 1.5 }}
+            style={{ flex: 1, background: themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: 7, padding: '7px 9px', color: T.text, fontSize: 11.5, outline: 'none', fontFamily: 'inherit', resize: 'none', lineHeight: 1.4 }}
           />
           <button onClick={() => sendToAI()} disabled={!chatInput.trim() || chatLoading} style={{
-            width: 34, height: 34, borderRadius: 8, border: 'none',
+            width: 32, height: 32, borderRadius: 7, border: 'none',
             background: chatInput.trim() && !chatLoading ? 'linear-gradient(135deg, #4d9fff, #a855f7)' : themeKey === 'dark' ? 'rgba(255,255,255,0.08)' : T.border,
             color: '#fff', cursor: chatInput.trim() && !chatLoading ? 'pointer' : 'not-allowed',
-            fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>↑</button>
         </div>
         <style>{`@keyframes coachBounce { 0%,60%,100% { transform:translateY(0) } 30% { transform:translateY(-5px) } }`}</style>
