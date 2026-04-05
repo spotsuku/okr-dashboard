@@ -768,12 +768,15 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 }
 
 // ─── Org Modal ────────────────────────────────────────────────────────────────
-function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear }) {
+function OrgModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear, onCopyFromYear }) {
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('👥')
   const [parentId, setParentId] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editIcon, setEditIcon] = useState('')
 
   const roots = levels.filter(l => !l.parent_id)
   const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
@@ -807,24 +810,56 @@ function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear
 
   const ICONS = ['🏢','🚀','⚙️','💼','👥','📊','🎯','💡','🌟','🔥','📈','🤝']
 
+  const startEdit = (level) => { setEditingId(level.id); setEditName(level.name); setEditIcon(level.icon || '📁') }
+  const cancelEdit = () => { setEditingId(null); setEditName(''); setEditIcon('') }
+  const saveEdit = async (level) => {
+    if (!editName.trim()) return
+    await onRename(level.id, editName.trim(), editIcon)
+    cancelEdit()
+  }
+
   function LevelRow({ level, depth = 0 }) {
     const children = getChildren(level.id)
     const absD = (() => { let d=0,cur=level; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
     const col = { 0: getT().warn, 1: getT().accent, 2: getT().accent }[absD] || getT().textMuted
     const lbl = { 0:'経営', 1:'事業部', 2:'チーム' }[absD] || ''
     const isRoot = absD === 0
+    const isEditing = editingId === level.id
     return (
       <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:getT().bgCard2, border:`1px solid ${getT().border}` }}>
-          <span style={{ fontSize:13 }}>{level.icon}</span>
-          <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
-          <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
-          {!isRoot && (
-            <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
-              background: getT().warnBg, border:`1px solid ${getT().warnBg}`, color: getT().warn,
-              borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
-              opacity: deleting === level.id ? 0.5 : 1,
-            }}>{deleting === level.id ? '削除中' : '削除'}</button>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background: isEditing ? `${getT().accent}08` : getT().bgCard2, border:`1px solid ${isEditing ? getT().accentSolid+'40' : getT().border}` }}>
+          {isEditing ? (
+            <>
+              <div style={{ display:'flex', gap:3, flexWrap:'wrap', marginRight:4 }}>
+                {ICONS.map(ic => (
+                  <button key={ic} onClick={() => setEditIcon(ic)} style={{ width:26, height:26, borderRadius:5, border:`1px solid ${editIcon===ic ? getT().accentSolid : getT().border}`, background: editIcon===ic ? getT().badgeBg : 'transparent', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>{ic}</button>
+                ))}
+              </div>
+              <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') saveEdit(level); if (e.key === 'Escape') cancelEdit() }}
+                style={{ flex:1, background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:6, padding:'5px 8px', color:getT().text, fontSize:12, outline:'none', fontFamily:'inherit', minWidth:80 }} />
+              <button onClick={() => saveEdit(level)} style={{ background:getT().accentSolid, border:'none', color:'#fff', borderRadius:5, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>保存</button>
+              <button onClick={cancelEdit} style={{ background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted, borderRadius:5, padding:'4px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize:13 }}>{level.icon}</span>
+              <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
+              <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
+              {!isRoot && (
+                <button onClick={() => startEdit(level)} style={{
+                  background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted,
+                  borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
+                }}>編集</button>
+              )}
+              {!isRoot && (
+                <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
+                  background: getT().warnBg, border:`1px solid ${getT().warnBg}`, color: getT().warn,
+                  borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
+                  opacity: deleting === level.id ? 0.5 : 1,
+                }}>{deleting === level.id ? '削除中' : '削除'}</button>
+              )}
+            </>
           )}
         </div>
         {children.map(c => <LevelRow key={c.id} level={c} depth={depth+1} />)}
@@ -1210,6 +1245,12 @@ export default function Dashboard({ user, onSignOut }) {
     }
   }
 
+  const handleRenameLevel = async (levelId, newName, newIcon) => {
+    const { error } = await supabase.from('levels').update({ name: newName, icon: newIcon }).eq('id', levelId)
+    if (error) { console.error('rename level error:', error); return }
+    setLevels(p => p.map(l => l.id === levelId ? { ...l, name: newName, icon: newIcon } : l))
+  }
+
   const handleCopyFromYear = async (fromYear) => {
     const { data: srcLevels } = await supabase.from('levels').select('*').eq('fiscal_year', fromYear).order('id')
     if (!srcLevels?.length) { alert(`${fromYear}年度の組織データがありません`); return }
@@ -1581,6 +1622,7 @@ export default function Dashboard({ user, onSignOut }) {
           onClose={() => setShowOrgModal(false)}
           onAdd={handleAddLevel}
           onDelete={handleDeleteLevel}
+          onRename={handleRenameLevel}
           fiscalYear={fiscalYear}
           onCopyFromYear={handleCopyFromYear}
         />
