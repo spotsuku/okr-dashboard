@@ -978,8 +978,39 @@ export default function Dashboard({ user, onSignOut }) {
     if (objToSave.id) {
       const { error: updErr } = await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
       if (updErr) { console.error('objective update error:', updErr); alert('目標の更新に失敗しました: ' + updErr.message); return }
-      const { error: delErr } = await supabase.from('key_results').delete().eq('objective_id', objToSave.id)
-      if (delErr) console.error('KR delete error:', delErr)
+
+      // KRを選択的に更新（全削除→再作成ではなく、個別にupsert/delete）
+      const validKRs = krs.filter(k => k.title?.trim())
+      const existingKRIds = validKRs.filter(k => k.id && !String(k.id).startsWith('_tmp')).map(k => k.id)
+
+      // 削除されたKRのみ削除（フォームから消えたものだけ）
+      const { data: currentKRs } = await supabase.from('key_results').select('id').eq('objective_id', objToSave.id)
+      const currentIds = (currentKRs || []).map(k => k.id)
+      const idsToDelete = currentIds.filter(id => !existingKRIds.includes(id))
+      if (idsToDelete.length > 0) {
+        await supabase.from('key_results').delete().in('id', idsToDelete)
+      }
+
+      // 既存KRを更新
+      for (const kr of validKRs) {
+        if (kr.id && !String(kr.id).startsWith('_tmp')) {
+          await supabase.from('key_results').update({
+            title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+            lower_is_better: !!kr.lower_is_better, owner: kr.owner || ''
+          }).eq('id', kr.id)
+        }
+      }
+
+      // 新規KRのみ挿入
+      const newKRs = validKRs.filter(k => !k.id || String(k.id).startsWith('_tmp'))
+      if (newKRs.length > 0) {
+        const krPayloads = newKRs.map(kr => ({
+          title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+        }))
+        const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
+        if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+      }
     } else {
       const insertPayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
       if (objToSave.parent_objective_id) insertPayload.parent_objective_id = objToSave.parent_objective_id
@@ -989,15 +1020,15 @@ export default function Dashboard({ user, onSignOut }) {
         .select().single()
       if (error) { console.error('objective insert error:', error); alert('目標の保存に失敗しました: ' + error.message); return }
       objectiveId = data.id
-    }
-    const validKRs = krs.filter(k => k.title?.trim())
-    if (validKRs.length && objectiveId) {
-      const krPayloads = validKRs.map(kr => ({
-        title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
-        lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
-      }))
-      const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
-      if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+      const validKRs = krs.filter(k => k.title?.trim())
+      if (validKRs.length) {
+        const krPayloads = validKRs.map(kr => ({
+          title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+        }))
+        const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
+        if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+      }
     }
     setActiveLevelId(objToSave.level_id)
     await loadSubtree(objToSave.level_id, activePeriod, levels, fiscalYear)
