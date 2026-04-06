@@ -159,10 +159,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       .in('period', allQKeys)
       .order('id')
 
-    console.log('[OKR診断] 通期OKR:', fullAnnObjs.map(o => ({ id: o.id, level_id: o.level_id, title: o.title.slice(0, 30) })))
-    console.log('[OKR診断] Q期OKR検索キー:', allQKeys)
-    console.log('[OKR診断] Q期OKR取得結果:', (qObjs || []).map(o => ({ id: o.id, level_id: o.level_id, period: o.period, parent_objective_id: o.parent_objective_id, title: o.title.slice(0, 30) })))
-    if (!qObjs?.length) { console.warn('[OKR診断] Q期OKRが0件です！'); setQuarterMap({}); setLoading(false); return }
+    if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
 
     const qIds = qObjs.map(o => o.id)
     const { data: qKRs } = await supabase
@@ -181,15 +178,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       // 自動修復: parent_objective_id が未設定のQ期OKRを自動的にDBに書き込む
       supabase.from('objectives').update({ parent_objective_id: annualObjId }).eq('id', qObjId).then(() => {})
     })
-
-    // マッチング結果を診断ログ出力
-    const matchSummary = {}
-    Object.entries(qMap).forEach(([annId, qs]) => {
-      const ann = fullAnnObjs.find(o => o.id === Number(annId))
-      const counts = { q1: qs.q1.length, q2: qs.q2.length, q3: qs.q3.length, q4: qs.q4.length }
-      matchSummary[ann?.title?.slice(0, 30) || annId] = counts
-    })
-    console.log('[OKR診断] マッチング結果:', matchSummary)
 
     setQuarterMap(qMap)
     setLoading(false)
