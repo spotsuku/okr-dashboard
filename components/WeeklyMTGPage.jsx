@@ -869,19 +869,41 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       }))
       const { data: newReports } = await supabase.from('weekly_reports').insert(copies).select()
 
-      // ★ コピー元KAに紐づくタスクも新しいreport_idでコピー
+      // ★ コピー元KAに紐づく未完了タスクのタイトル・担当を新report_idにコピー
       if (newReports?.length) {
         const srcIds = toCopy.map(r => r.id)
-        const { data: srcTasks } = await supabase.from('ka_tasks').select('*').in('report_id', srcIds)
+        const { data: srcTasks } = await supabase.from('ka_tasks').select('*').in('report_id', srcIds).eq('done', false)
         if (srcTasks?.length) {
-          // コピー元report_id → 新report_idのマッピング（ka_titleで対応付け）
           const idMap = {}
           toCopy.forEach((src, i) => { if (newReports[i]) idMap[src.id] = newReports[i].id })
           const taskCopies = srcTasks.map(t => ({
             report_id: idMap[t.report_id], title: t.title,
-            assignee: t.assignee, due_date: t.due_date, done: false,
+            assignee: t.assignee, due_date: null, done: false,
           })).filter(t => t.report_id)
           if (taskCopies.length) await supabase.from('ka_tasks').insert(taskCopies)
+        }
+      }
+
+      // ★ 既存KA（自動補完済み）にも前週の未完了タスク内容を引き継ぎ
+      const { data: existingTargetKAs } = await supabase.from('weekly_reports')
+        .select('id,kr_id,ka_title').eq('week_start', targetMonday)
+      if (existingTargetKAs?.length && srcKAs.length) {
+        for (const targetKA of existingTargetKAs) {
+          // 対応する前週KAを探す
+          const srcKA = srcKAs.find(r => r.kr_id === targetKA.kr_id && r.ka_title === targetKA.ka_title)
+          if (!srcKA) continue
+          // 既にタスクがある場合はスキップ
+          const { data: existingTasks } = await supabase.from('ka_tasks').select('id').eq('report_id', targetKA.id).limit(1)
+          if (existingTasks?.length) continue
+          // 前週の未完了タスクの内容をコピー
+          const { data: prevTasks } = await supabase.from('ka_tasks').select('*').eq('report_id', srcKA.id).eq('done', false)
+          if (prevTasks?.length) {
+            const taskCopies = prevTasks.map(t => ({
+              report_id: targetKA.id, title: t.title,
+              assignee: t.assignee, due_date: null, done: false,
+            }))
+            await supabase.from('ka_tasks').insert(taskCopies)
+          }
         }
       }
 
