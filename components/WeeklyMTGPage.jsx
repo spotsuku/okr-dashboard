@@ -704,7 +704,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <tbody>
             {activeReports.map((r, idx) => (
               <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                canEdit={canEditKA(r.owner, objOwner)}
+                canEdit={canEditKA(r.owner, objOwner, kr.owner)}
                 dragIdx={dragIdx} overIdx={overIdx} rowIdx={idx}
                 dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx, r.id), onDragEnd:handleDragEnd }}
                 onDragOver={e => handleDragOver(e, idx)}
@@ -739,7 +739,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             <tbody>
               {doneReports.map(r => (
                 <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                  canEdit={canEditKA(r.owner, objOwner)} objectiveTitle={objectiveTitle} completedBy={completedBy} />
+                  canEdit={canEditKA(r.owner, objOwner, kr.owner)} objectiveTitle={objectiveTitle} completedBy={completedBy} />
               ))}
             </tbody>
           </table>
@@ -957,12 +957,13 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || ''
   const isAdmin  = myMember?.is_admin === true
-  const canEditKA = useCallback((kaOwner, objOwner) => {
+  const canEditKA = useCallback((kaOwner, objOwner, krOwner) => {
     if (isAdmin) return true                          // 管理者は全KA編集可
     if (!kaOwner || kaOwner==='') return true          // 未設定は誰でも編集可
     if (!myName) return false
     if (myName === kaOwner) return true                // KA担当者本人
     if (objOwner && myName === objOwner) return true   // Objective責任者
+    if (krOwner && myName === krOwner) return true     // KR担当者
     return false
   }, [myName, isAdmin])
 
@@ -1069,7 +1070,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           <div style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:99, background:`${avatarColor(myName)}12`, border:`1px solid ${avatarColor(myName)}30` }}>
             <Avatar name={myName} avatarUrl={myMember.avatar_url} size={18} />
             <span style={{ fontSize:11, color:avatarColor(myName), fontWeight:600 }}>{myName}</span>
-            <span style={{ fontSize:10, color:wT().textMuted }}>（自分のKAのみ編集可）</span>
+            <span style={{ fontSize:10, color:wT().textMuted }}>（自分・KR担当のKA編集可）</span>
           </div>
         )}
         {/* KAステータス凡例 */}
