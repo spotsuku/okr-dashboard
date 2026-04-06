@@ -400,18 +400,13 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
   const load = useCallback(async () => {
     setLoading(true)
+    // done boolean で取得（status カラムの有無に依存しない）
     const [{ data: incompleteTasks }, { data: recentDoneTasks }] = await Promise.all([
-      supabase.from('ka_tasks').select('*').neq('status', 'done').order('due_date').order('id'),
-      supabase.from('ka_tasks').select('*').eq('status', 'done').gte('created_at', oneWeekAgo).order('id', { ascending: false }),
+      supabase.from('ka_tasks').select('*').eq('done', false).order('due_date').order('id'),
+      supabase.from('ka_tasks').select('*').eq('done', true).gte('created_at', oneWeekAgo).order('id', { ascending: false }),
     ])
 
-    // status未設定のフォールバック: doneフラグも取得
-    const [{ data: legacyIncomplete }, { data: legacyDone }] = await Promise.all([
-      supabase.from('ka_tasks').select('*').eq('done', false).is('status', null).order('due_date').order('id'),
-      supabase.from('ka_tasks').select('*').eq('done', true).is('status', null).gte('created_at', oneWeekAgo).order('id', { ascending: false }),
-    ])
-
-    const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || []), ...(legacyIncomplete || []), ...(legacyDone || [])]
+    const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || [])]
     // 重複排除
     const seenId = new Set()
     const byId = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
