@@ -243,7 +243,10 @@ function KRCard({ kr, myName, members, wT }) {
 function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
+  const [dirty, setDirty] = useState({})
   const ref = useRef(null)
+  const tasksRef = useRef(tasks)
+  tasksRef.current = tasks
 
   useEffect(() => {
     supabase.from('ka_tasks').select('*').eq('report_id', reportId).order('id')
@@ -264,11 +267,15 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
   }, [onClose])
 
   const addTask = () => setTasks(p => [...p, { _tmp:Date.now(), title:'', assignee:'', due_date:'', done:false, report_id:reportId }])
-  const updateTask = (key, f, v) => setTasks(p => p.map(t => (t.id||t._tmp)===key ? {...t,[f]:v} : t))
+  const updateTask = (key, f, v) => {
+    setTasks(p => p.map(t => (t.id||t._tmp)===key ? {...t,[f]:v} : t))
+    setDirty(p => ({...p, [key]: true}))
+  }
   const removeTask = async (key) => {
     const t = tasks.find(x => (x.id||x._tmp)===key)
     if (t?.id) await supabase.from('ka_tasks').delete().eq('id', t.id)
     setTasks(p => p.filter(x => (x.id||x._tmp)!==key))
+    setDirty(p => { const n = {...p}; delete n[key]; return n })
   }
   const toggleDone = async (key) => {
     const t = tasks.find(x => (x.id||x._tmp)===key)
@@ -283,19 +290,21 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
     }
   }
   const saveTask = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
+    const t = tasksRef.current.find(x => (x.id||x._tmp)===key)
     if (!t) return
     const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:reportId }
-    if (t.id) { await supabase.from('ka_tasks').update(d).eq('id', t.id) }
-    else if (t.title?.trim()) {
+    if (t.id) {
+      await supabase.from('ka_tasks').update(d).eq('id', t.id)
+    } else if (t.title?.trim()) {
       const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
       if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
     }
+    setDirty(p => { const n = {...p}; delete n[key]; return n })
   }
   const doneCount = tasks.filter(t=>t.done).length
 
   return (
-    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:380, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
+    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:420, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
         <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {doneCount}/{tasks.length}</span>
         <button onClick={addTask} style={{ marginLeft:4, background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', borderRadius:4, color:'#a855f7', fontSize:10, padding:'2px 6px', cursor:'pointer', fontFamily:'inherit' }}>＋</button>
@@ -303,18 +312,19 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
       </div>
       {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
       {tasks.map(t => {
-        const key = t.id||t._tmp; const tc = avatarColor(t.assignee)
+        const key = t.id||t._tmp; const tc = avatarColor(t.assignee); const isDirty = dirty[key]
         return (
-          <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
+          <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${isDirty?'rgba(168,85,247,0.5)':t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
             <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${t.done?'#00d68f':wT().borderMid}`, background:t.done?'#00d68f':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
               {t.done && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
             </div>
-            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} onBlur={()=>saveTask(key)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
-            <select value={t.assignee||''} onChange={e=>{updateTask(key,'assignee',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
+            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
+            <select value={t.assignee||''} onChange={e=>updateTask(key,'assignee',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
               <option value="">担当</option>
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
-            <input type="date" value={t.due_date||''} onChange={e=>{updateTask(key,'due_date',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            <input type="date" value={t.due_date||''} onChange={e=>updateTask(key,'due_date',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            {isDirty && <button onClick={()=>saveTask(key)} style={{ padding:'2px 8px', borderRadius:4, border:'none', background:'#a855f7', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>保存</button>}
             <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:3, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>
           </div>
         )
