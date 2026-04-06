@@ -158,7 +158,7 @@ function WeatherPicker({ value, onChange, wT }) {
 function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
-  const [dirty, setDirty] = useState({}) // key → true で未保存
+  const [saving, setSaving] = useState({})
   const ref = useRef(null)
   const tasksRef = useRef(tasks)
   tasksRef.current = tasks
@@ -170,7 +170,7 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
 
   useEffect(() => {
     if (loaded && onTaskCountChange) {
-      const saved = tasks.filter(t => t.id || t.title?.trim())
+      const saved = tasks.filter(t => t.id)
       onTaskCountChange({ done: saved.filter(t => t.done).length, total: saved.length })
     }
   }, [tasks, loaded]) // eslint-disable-line
@@ -181,40 +181,38 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  const addTask = () => setTasks(p => [...p, { _tmp:Date.now(), title:'', assignee:'', due_date:'', done:false, report_id:reportId }])
+  // タスク追加時に即座にDBに挿入して実IDを取得
+  const addTask = async () => {
+    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId }
+    const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
+    if (ins) setTasks(p => [...p, ins])
+  }
   const updateTask = (key, f, v) => {
-    setTasks(p => p.map(t => (t.id||t._tmp)===key ? {...t,[f]:v} : t))
-    setDirty(p => ({...p, [key]: true}))
+    setTasks(p => p.map(t => t.id===key ? {...t,[f]:v} : t))
   }
   const removeTask = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
-    if (t?.id) await supabase.from('ka_tasks').delete().eq('id', t.id)
-    setTasks(p => p.filter(x => (x.id||x._tmp)!==key))
-    setDirty(p => { const n = {...p}; delete n[key]; return n })
+    await supabase.from('ka_tasks').delete().eq('id', key)
+    setTasks(p => p.filter(x => x.id!==key))
   }
   const toggleDone = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
+    const t = tasks.find(x => x.id===key)
     const nd = !t.done
-    if (t?.id) await supabase.from('ka_tasks').update({ done:nd }).eq('id', t.id)
-    setTasks(p => p.map(x => (x.id||x._tmp)===key ? {...x,done:nd} : x))
-    if (nd && t?.id) {
+    await supabase.from('ka_tasks').update({ done:nd }).eq('id', key)
+    setTasks(p => p.map(x => x.id===key ? {...x,done:nd} : x))
+    if (nd) {
       fetch('/api/slack-task-done', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: t.id, taskTitle: t.title, kaTitle, objectiveTitle, completedBy }),
+        body: JSON.stringify({ taskId: key, taskTitle: t.title, kaTitle, objectiveTitle, completedBy }),
       }).catch(() => {})
     }
   }
   const saveTask = async (key) => {
-    const t = tasksRef.current.find(x => (x.id||x._tmp)===key)
+    const t = tasksRef.current.find(x => x.id===key)
     if (!t) return
-    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:reportId }
-    if (t.id) {
-      await supabase.from('ka_tasks').update(d).eq('id', t.id)
-    } else if (t.title?.trim()) {
-      const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
-      if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
-    }
-    setDirty(p => { const n = {...p}; delete n[key]; return n })
+    setSaving(p => ({...p, [key]: true}))
+    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done }
+    await supabase.from('ka_tasks').update(d).eq('id', t.id)
+    setSaving(p => { const n = {...p}; delete n[key]; return n })
   }
   const doneCount = tasks.filter(t=>t.done).length
 
@@ -226,9 +224,9 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
       </div>
       {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
       {tasks.map(t => {
-        const key = t.id||t._tmp; const tc = avatarColor(t.assignee); const isDirty = dirty[key]
+        const key = t.id; const tc = avatarColor(t.assignee); const isSaving = saving[key]
         return (
-          <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${isDirty?'rgba(168,85,247,0.5)':t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
+          <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
             <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${t.done?'#00d68f':wT().borderMid}`, background:t.done?'#00d68f':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
               {t.done && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
             </div>
@@ -238,7 +236,7 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
             <input type="date" value={t.due_date||''} onChange={e=>updateTask(key,'due_date',e.target.value)} style={{ background:wT().bgCard2, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
-            {isDirty && <button onClick={()=>saveTask(key)} style={{ padding:'2px 8px', borderRadius:4, border:'none', background:'#a855f7', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>保存</button>}
+            <button onClick={()=>saveTask(key)} disabled={isSaving} style={{ padding:'2px 8px', borderRadius:4, border:'none', background:isSaving?'#666':'#a855f7', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>{isSaving?'...':'保存'}</button>
             <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:3, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>
           </div>
         )
