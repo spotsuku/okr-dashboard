@@ -954,19 +954,31 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const quarterObjsForMap = useMemo(() =>
     objectives.filter(o => ['q1','q2','q3','q4'].some(q => o.period?.endsWith(q))), [objectives])
   const quarterMap = useMemo(() =>
-    buildQuarterMap(annualObjsForMap, quarterObjsForMap), [annualObjsForMap, quarterObjsForMap])
+    buildQuarterMap(annualObjsForMap, quarterObjsForMap, (qObjId, annualObjId) => {
+      supabase.from('objectives').update({ parent_objective_id: annualObjId }).eq('id', qObjId).then(() => {})
+    }), [annualObjsForMap, quarterObjsForMap])
   const rightObj = useMemo(() => {
     if (!selectedObj) return null
     if (rightPeriod === 'annual') return selectedObj
     // まずquarterMapで検索
     const fromMap = (quarterMap[selectedObj.id]?.[rightPeriod] || [])[0]
     if (fromMap) return fromMap
-    // フォールバック：parent_objective_idでのみマッチ（level_idフォールバック削除）
-    return objectives.find(o =>
+    // フォールバック：parent_objective_idまたはlevel_id（1対1の場合のみ）でマッチ
+    const byParent = objectives.find(o =>
       o.period === rightPeriod &&
       Number(o.parent_objective_id) === Number(selectedObj.id)
-    ) || null
-  }, [selectedObj, rightPeriod, quarterMap, objectives])
+    )
+    if (byParent) return byParent
+    // level_idフォールバック（同level_idの通期OKRが1つだけの場合）
+    const sameLevel = annualObjsForMap.filter(a => Number(a.level_id) === Number(selectedObj.level_id))
+    if (sameLevel.length === 1) {
+      return objectives.find(o =>
+        o.period === rightPeriod &&
+        Number(o.level_id) === Number(selectedObj.level_id)
+      ) || null
+    }
+    return null
+  }, [selectedObj, rightPeriod, quarterMap, objectives, annualObjsForMap])
   const selectedObjKRs = useMemo(() => {
     if (!rightObj && rightPeriod !== 'annual' && selectedObj) {
       // Q期OBJが存在しない場合、通期OBJのKRをperiodでフィルタ

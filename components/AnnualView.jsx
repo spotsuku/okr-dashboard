@@ -172,7 +172,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     })
     const fullQObjs = qObjs.map(o => ({ ...o, key_results: qKRMap[o.id] || [] }))
 
-    const qMap = buildQuarterMap(fullAnnObjs, fullQObjs)
+    const qMap = buildQuarterMap(fullAnnObjs, fullQObjs, (qObjId, annualObjId) => {
+      // 自動修復: parent_objective_id が未設定のQ期OKRを自動的にDBに書き込む
+      supabase.from('objectives').update({ parent_objective_id: annualObjId }).eq('id', qObjId).then(() => {})
+    })
 
     setQuarterMap(qMap)
     setLoading(false)
