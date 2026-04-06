@@ -545,6 +545,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [activeObjId,setActiveObjId]= useState(null)
+  const [activeLevelId,setActiveLevelId]= useState(null)
   // 現在のQを自動判定（4月=Q1, 7月=Q2, 10月=Q3, 1月=Q4）
   const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
   const [activePeriod,setActivePeriod]=useState(getCurrentQ())
@@ -643,7 +644,11 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
-  const visibleObjs = objectives.filter(o => activePeriod === 'all' || rawPeriod(o.period) === activePeriod)
+  const visibleObjs = objectives.filter(o => {
+    if (activePeriod !== 'all' && rawPeriod(o.period) !== activePeriod) return false
+    if (activeLevelId && Number(o.level_id) !== Number(activeLevelId)) return false
+    return true
+  })
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
   const handleKADelete = async (id) => {
@@ -653,6 +658,28 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   }
 
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
+
+  // 組織図サイドバー
+  const roots = levels.filter(l => !l.parent_id)
+  // 自分のObjectiveがある組織のみハイライト
+  const myLevelIds = new Set(objectives.map(o => Number(o.level_id)))
+  function renderSb(level, indent=0) {
+    const d = getDepth(level.id, levels)
+    const color = LAYER_COLORS[d] || '#a0a8be'
+    const isActive = Number(activeLevelId)===Number(level.id)
+    const hasMyObj = myLevelIds.has(Number(level.id))
+    return (
+      <div key={level.id}>
+        <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
+          style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', paddingLeft:8+indent*14, borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent', opacity:hasMyObj?1:0.5 }}>
+          <span style={{ fontSize:13 }}>{level.icon}</span>
+          <span style={{ fontSize:11, flex:1, fontWeight:isActive?700:hasMyObj?600:400, color:isActive?color:hasMyObj?wT().textSub:wT().textFaint }}>{level.name}</span>
+          {hasMyObj && <span style={{ fontSize:8, color, lineHeight:1 }}>●</span>}
+        </div>
+        {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
+      </div>
+    )
+  }
 
   if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
 
@@ -694,7 +721,18 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* 左：Objective一覧 */}
+        {/* 組織図サイドバー */}
+        {!isMobile && (
+          <div style={{ width: isTablet ? 120 : 155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
+            <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
+            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?'rgba(77,159,255,0.3)':'transparent'}`, background:!activeLevelId?'rgba(77,159,255,0.12)':'transparent' }}>
+              <span>🏢</span><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?'#4d9fff':wT().textSub }}>全部署</span>
+            </div>
+            {roots.map(r=>renderSb(r,0))}
+          </div>
+        )}
+
+        {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
