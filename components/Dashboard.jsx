@@ -274,32 +274,30 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   )
   const [saving, setSaving] = useState(false)
   const [parentObj, setParentObj] = useState(null)
+  const [parentId, setParentId] = useState(initial?.parent_objective_id || null)
+  const [annualObjList, setAnnualObjList] = useState([]) // 同組織の通期OKR一覧
 
-  // 四半期OKRの場合、通期OKRを参照として取得
+  // 四半期OKRの場合、同組織の通期OKR一覧を取得
   useEffect(() => {
     const isQuarterly = ['q1','q2','q3','q4'].includes(period)
-    if (!isQuarterly) { setParentObj(null); return }
-    const parentId = initial?.parent_objective_id
-    if (parentId) {
-      // parent_objective_id がある場合は直接取得
-      ;(async () => {
-        const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
-        if (!obj) { setParentObj(null); return }
-        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
-        setParentObj({ ...obj, key_results: krData || [] })
-      })()
-    } else {
-      // level_id で通期OKRを検索
-      ;(async () => {
-        const annualKey = fiscalYear === '2026' ? 'annual' : `${fiscalYear}_annual`
-        const { data: objs } = await supabase.from('objectives').select('id,title,owner').eq('period', annualKey).eq('level_id', parseInt(levelId))
-        if (!objs?.length) { setParentObj(null); return }
-        const obj = objs[0]
-        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
-        setParentObj({ ...obj, key_results: krData || [] })
-      })()
-    }
-  }, [period, levelId]) // eslint-disable-line
+    if (!isQuarterly) { setAnnualObjList([]); setParentObj(null); return }
+    ;(async () => {
+      const annualKey = fiscalYear === '2026' ? 'annual' : `${fiscalYear}_annual`
+      const { data: objs } = await supabase.from('objectives').select('id,title,owner').eq('period', annualKey).eq('level_id', parseInt(levelId))
+      setAnnualObjList(objs || [])
+    })()
+  }, [period, levelId, fiscalYear])
+
+  // 選択中の通期OKRの詳細（KR含む）を取得
+  useEffect(() => {
+    if (!parentId) { setParentObj(null); return }
+    ;(async () => {
+      const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
+      if (!obj) { setParentObj(null); return }
+      const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+      setParentObj({ ...obj, key_results: krData || [] })
+    })()
+  }, [parentId])
 
   const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
@@ -307,34 +305,27 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 
   const save = async () => {
     if (!title.trim()) return
-    // Q期OBJは新規作成時のみparent_objective_idが必須（編集時はスキップ）
+    // Q期OBJはparent_objective_idが必須
     const isQ = ['q1','q2','q3','q4'].includes(period)
-    const isNew = !initial?.id
-    if (isQ && isNew && !initial?.parent_objective_id) {
-      alert('Q期OBJは通期OBJのQ期タブから追加してください。')
+    if (isQ && !parentId) {
+      alert('Q期OBJには紐付ける通期OKRを選択してください。')
       return
     }
     setSaving(true)
     await onSave({
-      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: initial?.parent_objective_id || null },
+      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: parentId || null },
       krs: krs.map(k => ({ ...k, target: parseFloat(k.target) || 0, current: parseFloat(k.current) || 0 })),
     })
     setSaving(false)
     onClose()
   }
 
-  // ＋追加ボタンからはQ期OBJを作成不可（通期OBJから紐付けが必要なため）
-  // AnnualViewのQ期タブから追加する場合（parent_objective_idあり）のみQ期を選択可
-  const isFromAnnual = !!initial?.parent_objective_id
-  const periodOpts = isFromAnnual
-    ? [
-        { value: 'annual', label: '通期' },
-        { value: 'q1', label: 'Q1' }, { value: 'q2', label: 'Q2' },
-        { value: 'q3', label: 'Q3' }, { value: 'q4', label: 'Q4' },
-      ]
-    : [
-        { value: 'annual', label: '通期' },
-      ]
+  // 通期・Q期どちらも選択可能（Q期選択時は通期OKR紐付けドロップダウンが表示される）
+  const periodOpts = [
+    { value: 'annual', label: '通期' },
+    { value: 'q1', label: 'Q1' }, { value: 'q2', label: 'Q2' },
+    { value: 'q3', label: 'Q3' }, { value: 'q4', label: 'Q4' },
+  ]
 
   return (
     <>
@@ -356,7 +347,23 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           const depth = (() => { let d=0,cur=l; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
           return { value: String(l.id), label: `${'　'.repeat(depth)}${l.icon} ${l.name}` }
         })} />
-      <FSelect label="期間" value={period} onChange={setPeriod} options={periodOpts} />
+      <FSelect label="期間" value={period} onChange={v => { setPeriod(v); if (v === 'annual') setParentId(null) }} options={periodOpts} />
+      {['q1','q2','q3','q4'].includes(period) && (
+        <div style={{ marginBottom: 13 }}>
+          <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>紐付け通期OKR <span style={{ color: '#ff6b6b' }}>*</span></div>
+          <select value={parentId || ''} onChange={e => setParentId(e.target.value ? parseInt(e.target.value) : null)} style={{
+            width: '100%', background: getT().bgCard2, border: `1px solid ${parentId ? 'rgba(255,255,255,0.1)' : 'rgba(255,107,107,0.4)'}`,
+            borderRadius: 8, padding: '9px 12px', color: parentId ? '#e8eaf0' : '#505878', fontSize: 13,
+            outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
+          }}>
+            <option value="">-- 通期OKRを選択 --</option>
+            {annualObjList.map(o => <option key={o.id} value={o.id}>{o.title}{o.owner ? ` (${o.owner})` : ''}</option>)}
+          </select>
+          {annualObjList.length === 0 && (
+            <div style={{ fontSize: 11, color: '#ff6b6b', marginTop: 4 }}>この組織に通期OKRがありません。先に通期OKRを作成してください。</div>
+          )}
+        </div>
+      )}
       <FInput label="目標タイトル" value={title} onChange={setTitle} placeholder="例: 市場シェアを拡大する" />
       <div style={{ marginBottom: 13 }}>
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>オーナー</div>
@@ -986,7 +993,9 @@ export default function Dashboard({ user, onSignOut }) {
 
     let objectiveId = objToSave.id
     if (objToSave.id) {
-      const { error: updErr } = await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
+      const updatePayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
+      if (objToSave.parent_objective_id !== undefined) updatePayload.parent_objective_id = objToSave.parent_objective_id
+      const { error: updErr } = await supabase.from('objectives').update(updatePayload).eq('id', objToSave.id)
       if (updErr) { console.error('objective update error:', updErr); alert('目標の更新に失敗しました: ' + updErr.message); return }
 
       // 所属組織変更時、紐づくKA(weekly_reports)のlevel_idも更新
