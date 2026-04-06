@@ -86,10 +86,12 @@ CREATE TABLE IF NOT EXISTS ka_tasks (
   report_id   BIGINT REFERENCES weekly_reports(id) ON DELETE CASCADE,
   title       TEXT DEFAULT '',
   done        BOOLEAN DEFAULT FALSE,
+  status      TEXT DEFAULT 'not_started',
   assignee    TEXT DEFAULT '',
   due_date    DATE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+-- status: 'not_started' (未着手), 'in_progress' (進行中), 'done' (完了)
 
 -- 8. kr_weekly_reviews テーブル
 CREATE TABLE IF NOT EXISTS kr_weekly_reviews (

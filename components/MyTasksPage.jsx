@@ -23,6 +23,14 @@ function formatDate(ds) {
   return `${d.getMonth()+1}/${d.getDate()}`
 }
 
+// ステータス定義
+const STATUS_CONFIG = {
+  not_started: { label: '未着手', color: '#7a8599', bg: 'rgba(122,133,153,0.08)', border: 'rgba(122,133,153,0.2)', icon: '○' },
+  in_progress: { label: '進行中', color: '#4d9fff', bg: 'rgba(77,159,255,0.08)', border: 'rgba(77,159,255,0.2)', icon: '◐' },
+  done:        { label: '完了',   color: '#00d68f', bg: 'rgba(0,214,143,0.08)', border: 'rgba(0,214,143,0.2)', icon: '●' },
+}
+const STATUS_ORDER = ['not_started', 'in_progress', 'done']
+
 const THEMES = {
   dark: {
     bg:'#0F1117', bgCard:'#1A1D27', border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
@@ -42,6 +50,53 @@ const THEMES = {
   },
 }
 
+// ─── ステータスバッジ ──────────────────────────────────
+function StatusBadge({ status, onChange, T }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.not_started
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(p => !p)} style={{
+        padding: '2px 8px', borderRadius: 4, border: `1px solid ${cfg.border}`,
+        background: cfg.bg, color: cfg.color, fontSize: 10, fontWeight: 700,
+        cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+      }}>
+        {cfg.icon} {cfg.label}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, zIndex: 100, marginTop: 4,
+          background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8,
+          padding: 4, minWidth: 120, boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+        }}>
+          {STATUS_ORDER.map(s => {
+            const c = STATUS_CONFIG[s]
+            return (
+              <button key={s} onClick={() => { onChange(s); setOpen(false) }} style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
+                borderRadius: 5, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                background: s === status ? c.bg : 'transparent',
+                color: s === status ? c.color : T.text, fontSize: 11, fontWeight: 600,
+              }}>
+                {c.icon} {c.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── 確認ダイアログ ──────────────────────────────────
 function ConfirmDialog({ message, onConfirm, onCancel, T }) {
   return (
@@ -57,38 +112,30 @@ function ConfirmDialog({ message, onConfirm, onCancel, T }) {
   )
 }
 
-// ─── TaskList: 共通タスク表示コンポーネント ───────────
-function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, onDeleteTask, myName }) {
+// ─── ヘルパー: タスクのステータスを取得 ───────────────
+function getTaskStatus(task) {
+  if (task.status && STATUS_CONFIG[task.status]) return task.status
+  return task.done ? 'done' : 'not_started'
+}
+
+// ─── タスクカード（リスト・ボード共通）─────────────────
+function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDeleteTask, myName, compact }) {
   const today = toDateStr(new Date())
   const thisMonday = getMondayOf(new Date())
   const thisSunday = toDateStr(new Date(new Date(thisMonday + 'T00:00:00').getTime() + 6 * 86400000))
-  const [showDone, setShowDone] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [editDue, setEditDue] = useState('')
-  const [confirm, setConfirm] = useState(null) // { taskId, done, assignee }
   const editRef = useRef(null)
 
-  // 期日が早い順にソート（null期日は最後）
-  const sortByDue = (a, b) => {
-    if (!a.due_date && !b.due_date) return 0
-    if (!a.due_date) return 1
-    if (!b.due_date) return -1
-    return a.due_date.localeCompare(b.due_date)
-  }
+  const status = getTaskStatus(task)
+  const isDone = status === 'done'
+  const ka = kaMap[task.report_id]
+  const obj = ka ? objMap[ka.objective_id] : null
+  const isOverdue = !isDone && task.due_date && task.due_date < today
+  const isEditing = editingId === task.id
 
-  const overdue = tasks.filter(t => !t.done && t.due_date && t.due_date < today).sort(sortByDue)
-  const thisWeek = tasks.filter(t => !t.done && t.due_date && t.due_date >= today && t.due_date <= thisSunday).sort(sortByDue)
-  const upcoming = tasks.filter(t => !t.done && t.due_date && t.due_date > thisSunday).sort(sortByDue)
-  const noDue = tasks.filter(t => !t.done && !t.due_date)
-  const done = tasks.filter(t => t.done)
-  const totalIncomplete = overdue.length + thisWeek.length + upcoming.length + noDue.length
-
-  const startEdit = (task) => {
-    setEditingId(task.id)
-    setEditTitle(task.title || '')
-    setEditDue(task.due_date || '')
-  }
+  const startEdit = () => { setEditingId(task.id); setEditTitle(task.title || ''); setEditDue(task.due_date || '') }
   const saveEdit = async () => {
     if (!editingId) return
     await onUpdateTask(editingId, { title: editTitle, due_date: editDue || null })
@@ -96,68 +143,45 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, onDelet
   }
   const cancelEdit = () => setEditingId(null)
 
-  const handleToggle = (taskId, currentDone, assignee) => {
-    // 他人のタスクを完了にする場合は確認ダイアログ
-    if (!currentDone && assignee && assignee !== myName) {
-      setConfirm({ taskId, done: currentDone, assignee })
-    } else {
-      onToggleDone(taskId, currentDone)
-    }
-  }
+  useEffect(() => { if (editingId && editRef.current) editRef.current.focus() }, [editingId])
 
-  useEffect(() => {
-    if (editingId && editRef.current) editRef.current.focus()
-  }, [editingId])
-
-  const renderTask = (task) => {
-    const ka = kaMap[task.report_id]
-    const obj = ka ? objMap[ka.objective_id] : null
-    const isOverdue = !task.done && task.due_date && task.due_date < today
-    const isEditing = editingId === task.id
-
-    return (
-      <div key={task.id} style={{
-        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px',
-        background: task.done ? T.doneBg : isOverdue ? T.overdueBg : T.bgCard,
-        border: `1px solid ${task.done ? T.doneBorder : isOverdue ? T.overdueBorder : T.border}`,
-        borderRadius: 10, marginBottom: 6, opacity: task.done ? 0.7 : 1,
-      }}>
-        <div onClick={() => handleToggle(task.id, task.done, task.assignee)} style={{
-          width: 20, height: 20, borderRadius: 5, flexShrink: 0, cursor: 'pointer', marginTop: 2,
-          border: `2px solid ${task.done ? '#00d68f' : T.borderMid}`,
-          background: task.done ? '#00d68f' : 'transparent',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          {task.done && <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>✓</span>}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {isEditing ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <input ref={editRef} value={editTitle} onChange={e => setEditTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
-                style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.accent}`, background: T.bg, color: T.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
+  return (
+    <div style={{
+      display: 'flex', alignItems: compact ? 'center' : 'flex-start', gap: 10,
+      padding: compact ? '8px 12px' : '10px 14px',
+      background: isDone ? T.doneBg : isOverdue ? T.overdueBg : T.bgCard,
+      border: `1px solid ${isDone ? T.doneBorder : isOverdue ? T.overdueBorder : T.border}`,
+      borderRadius: 10, marginBottom: 6, opacity: isDone ? 0.7 : 1,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {isEditing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <input ref={editRef} value={editTitle} onChange={e => setEditTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.accent}`, background: T.bg, color: T.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: T.textMuted }}>期日:</span>
+              <input type="date" value={editDue} onChange={e => setEditDue(e.target.value)}
+                style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: T.textMuted }}>期日:</span>
-                <input type="date" value={editDue} onChange={e => setEditDue(e.target.value)}
-                  style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
-                />
-                <button onClick={saveEdit} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#00d68f', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>保存</button>
-                <button onClick={cancelEdit} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>取消</button>
-              </div>
+              <button onClick={saveEdit} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#00d68f', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>保存</button>
+              <button onClick={cancelEdit} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>取消</button>
             </div>
-          ) : (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span onClick={() => !task.done && startEdit(task)} style={{ fontSize: 13, fontWeight: 600, color: task.done ? T.textMuted : T.text, textDecoration: task.done ? 'line-through' : 'none', lineHeight: 1.4, cursor: task.done ? 'default' : 'pointer' }} title={task.done ? '' : 'クリックして編集'}>
-                  {task.title || '(未入力)'}
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span onClick={() => !isDone && startEdit()} style={{ fontSize: 13, fontWeight: 600, color: isDone ? T.textMuted : T.text, textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4, cursor: isDone ? 'default' : 'pointer' }} title={isDone ? '' : 'クリックして編集'}>
+                {task.title || '(未入力)'}
+              </span>
+              {task.assignee && (
+                <span style={{ fontSize: 10, color: avatarColor(task.assignee), fontWeight: 600 }}>
+                  @{task.assignee}
                 </span>
-                {task.assignee && (
-                  <span style={{ fontSize: 10, color: avatarColor(task.assignee), fontWeight: 600 }}>
-                    @{task.assignee}
-                  </span>
-                )}
-              </div>
+              )}
+            </div>
+            {!compact && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
                 {ka && (
                   <span style={{ fontSize: 10, color: T.textMuted, background: T.sectionBg, padding: '1px 6px', borderRadius: 4, border: `1px solid ${T.border}` }}>
@@ -170,31 +194,55 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, onDelet
                   </span>
                 )}
               </div>
-            </>
-          )}
-        </div>
-        {!isEditing && (
-          <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 6 }}>
-            {!task.done && (
-              <span onClick={() => startEdit(task)} style={{ fontSize: 11, color: T.textFaint, cursor: 'pointer', padding: '2px 4px' }} title="編集">✏️</span>
             )}
-            <span onClick={() => { if (window.confirm(`「${task.title}」を削除しますか？`)) onDeleteTask(task.id) }} style={{ fontSize: 11, color: '#ff6b6b', cursor: 'pointer', padding: '2px 4px', opacity: 0.6 }} title="削除">🗑</span>
-            {task.due_date ? (
-              <span style={{
-                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                color: isOverdue ? '#ff6b6b' : task.due_date <= thisSunday ? '#ffd166' : T.textMuted,
-                background: isOverdue ? 'rgba(255,107,107,0.12)' : 'transparent',
-              }}>
-                {isOverdue && '⚠ '}{formatDate(task.due_date)}
-              </span>
-            ) : (
-              <span style={{ fontSize: 11, color: T.textFaint }}>期限なし</span>
-            )}
-          </div>
+          </>
         )}
       </div>
-    )
+      {!isEditing && (
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <StatusBadge status={status} onChange={(s) => onStatusChange(task.id, s)} T={T} />
+          {!isDone && (
+            <span onClick={startEdit} style={{ fontSize: 11, color: T.textFaint, cursor: 'pointer', padding: '2px 4px' }} title="編集">✏️</span>
+          )}
+          <span onClick={() => { if (window.confirm(`「${task.title}」を削除しますか？`)) onDeleteTask(task.id) }} style={{ fontSize: 11, color: '#ff6b6b', cursor: 'pointer', padding: '2px 4px', opacity: 0.6 }} title="削除">🗑</span>
+          {task.due_date ? (
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+              color: isOverdue ? '#ff6b6b' : task.due_date <= thisSunday ? '#ffd166' : T.textMuted,
+              background: isOverdue ? 'rgba(255,107,107,0.12)' : 'transparent',
+            }}>
+              {isOverdue && '⚠ '}{formatDate(task.due_date)}
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, color: T.textFaint }}>期限なし</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── リストビュー ──────────────────────────────────────
+function ListView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDeleteTask, myName }) {
+  const today = toDateStr(new Date())
+  const thisMonday = getMondayOf(new Date())
+  const thisSunday = toDateStr(new Date(new Date(thisMonday + 'T00:00:00').getTime() + 6 * 86400000))
+  const [showDone, setShowDone] = useState(false)
+
+  const sortByDue = (a, b) => {
+    if (!a.due_date && !b.due_date) return 0
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return a.due_date.localeCompare(b.due_date)
   }
+
+  const active = tasks.filter(t => getTaskStatus(t) !== 'done')
+  const overdue = active.filter(t => t.due_date && t.due_date < today).sort(sortByDue)
+  const thisWeek = active.filter(t => t.due_date && t.due_date >= today && t.due_date <= thisSunday).sort(sortByDue)
+  const upcoming = active.filter(t => t.due_date && t.due_date > thisSunday).sort(sortByDue)
+  const noDue = active.filter(t => !t.due_date)
+  const done = tasks.filter(t => getTaskStatus(t) === 'done')
+  const totalIncomplete = active.length
 
   const renderSection = (title, icon, items, color) => {
     if (items.length === 0) return null
@@ -205,39 +253,31 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, onDelet
           <span style={{ fontSize: 13, fontWeight: 700, color: color || T.text }}>{title}</span>
           <span style={{ fontSize: 11, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: 99, border: `1px solid ${T.border}` }}>{items.length}件</span>
         </div>
-        {items.map(renderTask)}
+        {items.map(t => <TaskCard key={t.id} task={t} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={onStatusChange} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} myName={myName} />)}
       </div>
     )
   }
 
   return (
     <>
-      {/* 確認ダイアログ */}
-      {confirm && (
-        <ConfirmDialog
-          T={T}
-          message={`「${confirm.assignee}」さんのタスクを完了にしますか？`}
-          onConfirm={() => { onToggleDone(confirm.taskId, confirm.done); setConfirm(null) }}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-
       {/* サマリーバー */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ padding: '8px 16px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}`, fontSize: 12 }}>
-          <span style={{ fontWeight: 700, fontSize: 18, color: T.accent }}>{totalIncomplete}</span>
-          <span style={{ color: T.textMuted, marginLeft: 6 }}>未完了</span>
-        </div>
+        {STATUS_ORDER.map(s => {
+          const cfg = STATUS_CONFIG[s]
+          const count = s === 'done' ? done.length : tasks.filter(t => getTaskStatus(t) === s).length
+          return (
+            <div key={s} style={{ padding: '8px 16px', borderRadius: 8, background: cfg.bg, border: `1px solid ${cfg.border}`, fontSize: 12 }}>
+              <span style={{ fontWeight: 700, fontSize: 18, color: cfg.color }}>{count}</span>
+              <span style={{ color: cfg.color, marginLeft: 6, opacity: 0.8 }}>{cfg.label}</span>
+            </div>
+          )
+        })}
         {overdue.length > 0 && (
           <div style={{ padding: '8px 16px', borderRadius: 8, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', fontSize: 12 }}>
             <span style={{ fontWeight: 700, fontSize: 18, color: '#ff6b6b' }}>{overdue.length}</span>
             <span style={{ color: '#ff6b6b', marginLeft: 6 }}>期限超過</span>
           </div>
         )}
-        <div style={{ padding: '8px 16px', borderRadius: 8, background: T.doneBg, border: `1px solid ${T.doneBorder}`, fontSize: 12 }}>
-          <span style={{ fontWeight: 700, fontSize: 18, color: '#00d68f' }}>{done.length}</span>
-          <span style={{ color: T.textMuted, marginLeft: 6 }}>完了済み（1週間）</span>
-        </div>
       </div>
 
       {totalIncomplete === 0 && done.length === 0 && (
@@ -261,20 +301,92 @@ function TaskList({ tasks, kaMap, objMap, T, onToggleDone, onUpdateTask, onDelet
             <span style={{ fontSize: 11, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: 99, border: `1px solid ${T.border}` }}>{done.length}件</span>
             <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 4 }}>{showDone ? '▼' : '▶'}</span>
           </div>
-          {showDone && done.map(renderTask)}
+          {showDone && done.map(t => <TaskCard key={t.id} task={t} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={onStatusChange} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} myName={myName} />)}
         </div>
       )}
     </>
   )
 }
 
+// ─── ボードビュー ──────────────────────────────────────
+function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDeleteTask, myName }) {
+  const [dragOverCol, setDragOverCol] = useState(null)
+  const dragTaskRef = useRef(null)
+
+  const handleDragStart = (e, taskId) => {
+    dragTaskRef.current = taskId
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const handleDragOver = (e, col) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverCol(col)
+  }
+  const handleDragLeave = () => setDragOverCol(null)
+  const handleDrop = (e, targetStatus) => {
+    e.preventDefault()
+    setDragOverCol(null)
+    if (dragTaskRef.current != null) {
+      onStatusChange(dragTaskRef.current, targetStatus)
+      dragTaskRef.current = null
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 16, minHeight: 400, overflowX: 'auto', paddingBottom: 8 }}>
+      {STATUS_ORDER.map(s => {
+        const cfg = STATUS_CONFIG[s]
+        const colTasks = tasks.filter(t => getTaskStatus(t) === s)
+        const isOver = dragOverCol === s
+        return (
+          <div key={s}
+            onDragOver={(e) => handleDragOver(e, s)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, s)}
+            style={{
+              flex: 1, minWidth: 240, maxWidth: 400, display: 'flex', flexDirection: 'column',
+              background: isOver ? cfg.bg : T.sectionBg,
+              border: `1px solid ${isOver ? cfg.border : T.border}`,
+              borderRadius: 12, padding: 12, transition: 'background 0.15s, border-color 0.15s',
+            }}
+          >
+            {/* カラムヘッダー */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${cfg.border}` }}>
+              <span style={{ fontSize: 14, color: cfg.color }}>{cfg.icon}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.textFaint, background: T.bgCard, padding: '1px 8px', borderRadius: 99, border: `1px solid ${T.border}` }}>
+                {colTasks.length}
+              </span>
+            </div>
+            {/* カード */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {colTasks.length === 0 && (
+                <div style={{ padding: '20px 8px', textAlign: 'center', color: T.textFaint, fontSize: 12 }}>
+                  ここにドラッグ
+                </div>
+              )}
+              {colTasks.map(t => (
+                <div key={t.id} draggable onDragStart={(e) => handleDragStart(e, t.id)}
+                  style={{ cursor: 'grab' }}>
+                  <TaskCard task={t} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={onStatusChange} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} myName={myName} compact />
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── メイン ─────────────────────────────────────────
-export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
+export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { isMobile } = useResponsive()
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
-  const [viewMode, setViewMode] = useState('my') // 'my' | 'all'
-  const [selectedMember, setSelectedMember] = useState(null) // 全社タスク用
+  const [viewMode, setViewMode] = useState(initialViewMode)
+  const [displayMode, setDisplayMode] = useState('list') // 'list' | 'board'
+  const [selectedMember, setSelectedMember] = useState(null)
 
   const [allTasks, setAllTasks] = useState([])
   const [kaMap, setKaMap] = useState({})
@@ -283,21 +395,29 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
 
   const oneWeekAgo = toDateStr(new Date(Date.now() - 7 * 86400000))
 
+  // ヘッダードロップダウンから viewMode が変わったら同期
+  useEffect(() => { setViewMode(initialViewMode) }, [initialViewMode])
+
   const load = useCallback(async () => {
     setLoading(true)
-    // 全タスクを取得（全社モード用にフィルタなし）
     const [{ data: incompleteTasks }, { data: recentDoneTasks }] = await Promise.all([
-      supabase.from('ka_tasks').select('*').eq('done', false).order('due_date').order('id'),
-      supabase.from('ka_tasks').select('*').eq('done', true).gte('created_at', oneWeekAgo).order('id', { ascending: false }),
+      supabase.from('ka_tasks').select('*').neq('status', 'done').order('due_date').order('id'),
+      supabase.from('ka_tasks').select('*').eq('status', 'done').gte('created_at', oneWeekAgo).order('id', { ascending: false }),
     ])
 
-    const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || [])]
-    // 重複排除: IDで重複排除 + 同じtitle+assigneeの組み合わせは最新のものだけ残す
+    // status未設定のフォールバック: doneフラグも取得
+    const [{ data: legacyIncomplete }, { data: legacyDone }] = await Promise.all([
+      supabase.from('ka_tasks').select('*').eq('done', false).is('status', null).order('due_date').order('id'),
+      supabase.from('ka_tasks').select('*').eq('done', true).is('status', null).gte('created_at', oneWeekAgo).order('id', { ascending: false }),
+    ])
+
+    const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || []), ...(legacyIncomplete || []), ...(legacyDone || [])]
+    // 重複排除
     const seenId = new Set()
     const byId = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
     const byKey = {}
     for (const t of byId) {
-      const key = `${t.title}_${t.assignee}_${t.done}`
+      const key = `${t.title}_${t.assignee}_${getTaskStatus(t)}`
       if (!byKey[key] || t.id > byKey[key].id) byKey[key] = t
     }
     const uniqueTasks = Object.values(byKey)
@@ -330,10 +450,10 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
 
   useEffect(() => { load() }, [load])
 
-  const toggleDone = async (taskId, currentDone) => {
-    const newDone = !currentDone
-    await supabase.from('ka_tasks').update({ done: newDone }).eq('id', taskId)
-    setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, done: newDone } : t))
+  const changeStatus = async (taskId, newStatus) => {
+    const newDone = newStatus === 'done'
+    await supabase.from('ka_tasks').update({ status: newStatus, done: newDone }).eq('id', taskId)
+    setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, done: newDone } : t))
     if (newDone) {
       const task = allTasks.find(t => t.id === taskId)
       const ka = task ? kaMap[task.report_id] : null
@@ -350,13 +470,17 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
     setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...fields } : t))
   }
 
-  // メンバーリスト（タスクがあるメンバーのみ + 全員）
+  const deleteTask = async (id) => {
+    await supabase.from('ka_tasks').delete().eq('id', id)
+    load()
+  }
+
+  // メンバーリスト
   const assigneeSet = new Set(allTasks.map(t => t.assignee).filter(Boolean))
   const membersWithTasks = (members || []).filter(m => assigneeSet.has(m.name))
-  // タスク数を計算
   const taskCountByMember = {}
   allTasks.forEach(t => {
-    if (t.assignee && !t.done) {
+    if (t.assignee && getTaskStatus(t) !== 'done') {
       taskCountByMember[t.assignee] = (taskCountByMember[t.assignee] || 0) + 1
     }
   })
@@ -371,6 +495,11 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
   const targetName = viewMode === 'my' ? myName : selectedMember
   const targetMember = members?.find(m => m.name === targetName)
 
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode)
+    if (onViewModeChange) onViewModeChange(mode)
+  }
+
   if (loading) return <div style={{ padding: 40, color: T.accent, fontSize: 14 }}>読み込み中...</div>
 
   return (
@@ -382,7 +511,6 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
           borderRight: `1px solid ${T.border}`, padding: '12px 0',
         }}>
           <div style={{ padding: '4px 12px 10px', fontSize: 10, fontWeight: 700, color: T.textFaint, letterSpacing: 1 }}>メンバー</div>
-          {/* 全員ボタン */}
           <div onClick={() => setSelectedMember(null)} style={{
             padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600,
             background: !selectedMember ? T.sidebarActive : 'transparent',
@@ -390,7 +518,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
             borderLeft: !selectedMember ? `3px solid ${T.accent}` : '3px solid transparent',
           }}>
             全員
-            <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 6 }}>{allTasks.filter(t => !t.done).length}</span>
+            <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 6 }}>{allTasks.filter(t => getTaskStatus(t) !== 'done').length}</span>
           </div>
           {membersWithTasks.map(m => {
             const isActive = selectedMember === m.name
@@ -422,7 +550,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
 
       {/* メインコンテンツ */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', padding: isMobile ? '12px' : '24px 24px' }}>
+        <div style={{ maxWidth: displayMode === 'board' ? 1200 : 800, margin: '0 auto', padding: isMobile ? '12px' : '24px 24px' }}>
           {/* ヘッダー */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -441,23 +569,40 @@ export default function MyTasksPage({ user, members, themeKey = 'dark' }) {
                   {viewMode === 'my' ? `${myName} さんに割り当てられたタスク` : selectedMember ? `${selectedMember} さんに割り当てられたタスク` : '全メンバーのタスク一覧'}
                 </div>
               </div>
-              {/* ビュー切替 */}
+              {/* マイ/全社 切替 */}
               <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-                <button onClick={() => setViewMode('my')} style={{
+                <button onClick={() => handleViewModeChange('my')} style={{
                   padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
                   background: viewMode === 'my' ? T.accent : 'transparent',
                   color: viewMode === 'my' ? '#fff' : T.textMuted,
                 }}>マイタスク</button>
-                <button onClick={() => setViewMode('all')} style={{
+                <button onClick={() => handleViewModeChange('all')} style={{
                   padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
                   background: viewMode === 'all' ? T.accent : 'transparent',
                   color: viewMode === 'all' ? '#fff' : T.textMuted,
                 }}>全社タスク</button>
               </div>
+              {/* リスト/ボード切替 */}
+              <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                <button onClick={() => setDisplayMode('list')} style={{
+                  padding: '6px 10px', border: 'none', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
+                  background: displayMode === 'list' ? T.accent : 'transparent',
+                  color: displayMode === 'list' ? '#fff' : T.textMuted,
+                }} title="リストビュー">☰</button>
+                <button onClick={() => setDisplayMode('board')} style={{
+                  padding: '6px 10px', border: 'none', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
+                  background: displayMode === 'board' ? T.accent : 'transparent',
+                  color: displayMode === 'board' ? '#fff' : T.textMuted,
+                }} title="ボードビュー">▦</button>
+              </div>
             </div>
           </div>
 
-          <TaskList tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onToggleDone={toggleDone} onUpdateTask={updateTask} onDeleteTask={async (id) => { await supabase.from('ka_tasks').delete().eq('id', id); load() }} myName={myName} />
+          {displayMode === 'list' ? (
+            <ListView tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={changeStatus} onUpdateTask={updateTask} onDeleteTask={deleteTask} myName={myName} />
+          ) : (
+            <BoardView tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={changeStatus} onUpdateTask={updateTask} onDeleteTask={deleteTask} myName={myName} />
+          )}
         </div>
       </div>
     </div>
