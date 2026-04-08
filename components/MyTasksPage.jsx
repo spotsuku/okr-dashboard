@@ -536,9 +536,10 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
   const load = useCallback(async () => {
     setLoading(true)
     // done boolean で取得（status カラムの有無に依存しない）
+    // 完了タスク: created_atではなく全完了タスクを直近制限なしで取得
     const [{ data: incompleteTasks }, { data: recentDoneTasks }] = await Promise.all([
       supabase.from('ka_tasks').select('*').eq('done', false).order('due_date').order('id'),
-      supabase.from('ka_tasks').select('*').eq('done', true).gte('created_at', oneWeekAgo).order('id', { ascending: false }),
+      supabase.from('ka_tasks').select('*').eq('done', true).order('id', { ascending: false }).limit(100),
     ])
 
     const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || [])]
