@@ -163,12 +163,14 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
   const save = async () => {
     if (!canSave) return
     setSaving(true)
-    await supabase.from('ka_tasks').insert({
+    const payload = {
       title: title.trim(), assignee: assignee || null,
-      due_date: dueDate || null, done: false, status: 'not_started',
+      due_date: dueDate || null, done: false,
       report_id: noKaLink ? null : parseInt(reportId),
-    })
+    }
+    const { error } = await supabase.from('ka_tasks').insert(payload)
     setSaving(false)
+    if (error) { alert('タスクの作成に失敗しました: ' + error.message); return }
     onCreated()
     onClose()
   }
@@ -580,7 +582,9 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
   const changeStatus = async (taskId, newStatus) => {
     const newDone = newStatus === 'done'
-    await supabase.from('ka_tasks').update({ status: newStatus, done: newDone }).eq('id', taskId)
+    // statusカラムがない場合はdoneのみ更新
+    const { error } = await supabase.from('ka_tasks').update({ status: newStatus, done: newDone }).eq('id', taskId)
+    if (error) await supabase.from('ka_tasks').update({ done: newDone }).eq('id', taskId)
     setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, done: newDone } : t))
     if (newDone) {
       const task = allTasks.find(t => t.id === taskId)
