@@ -724,7 +724,9 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
   const [webhookEdit, setWebhookEdit] = useState(null) // { levelId, url }
 
   const handleSaveWebhook = async (levelId, url) => {
-    await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
+    const { error } = await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
+    if (error) { alert('保存に失敗しました: ' + error.message); return }
+    setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, slack_webhook_url: url || null } : l))
     setWebhookEdit(null)
   }
 
