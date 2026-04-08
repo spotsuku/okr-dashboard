@@ -577,9 +577,11 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
   const changeStatus = async (taskId, newStatus) => {
     const newDone = newStatus === 'done'
-    // statusカラムがない場合はdoneのみ更新
-    const { error } = await supabase.from('ka_tasks').update({ status: newStatus, done: newDone }).eq('id', taskId)
-    if (error) await supabase.from('ka_tasks').update({ done: newDone }).eq('id', taskId)
+    // まずdoneのみ更新（確実に成功する）
+    const { error: doneErr } = await supabase.from('ka_tasks').update({ done: newDone }).eq('id', taskId)
+    if (doneErr) { alert('更新に失敗しました: ' + doneErr.message); return }
+    // statusカラムがあれば更新（エラーは無視）
+    await supabase.from('ka_tasks').update({ status: newStatus }).eq('id', taskId).then(() => {}).catch(() => {})
     setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, done: newDone } : t))
     if (newDone) {
       const task = allTasks.find(t => t.id === taskId)
