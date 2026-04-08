@@ -548,11 +548,11 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     const deduped = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
 
     // 週次コピーによる重複を排除: 同じtitle+assigneeのタスクは最新ID（最新週）のみ残す
-    // ただしreport_idがnull（スタンドアロンタスク）はそのまま残す
+    // タイトルが空、report_idがnullのタスクは重複排除しない
     const byContent = {}
     for (const t of deduped) {
-      if (!t.report_id) { byContent[`standalone_${t.id}`] = t; continue }
-      const key = `${t.title}_${t.assignee}_${t.done}`
+      if (!t.report_id || !t.title?.trim()) { byContent[`keep_${t.id}`] = t; continue }
+      const key = `${t.title}_${t.assignee}`
       if (!byContent[key] || t.id > byContent[key].id) byContent[key] = t
     }
     const uniqueTasks = Object.values(byContent)
