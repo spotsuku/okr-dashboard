@@ -543,15 +543,9 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     ])
 
     const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || [])]
-    // 重複排除
+    // ID重複排除のみ（title+assigneeでの排除は正当なタスクを消す可能性があるため廃止）
     const seenId = new Set()
-    const byId = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
-    const byKey = {}
-    for (const t of byId) {
-      const key = `${t.title}_${t.assignee}_${getTaskStatus(t)}`
-      if (!byKey[key] || t.id > byKey[key].id) byKey[key] = t
-    }
-    const uniqueTasks = Object.values(byKey)
+    const uniqueTasks = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
 
     if (uniqueTasks.length === 0) { setAllTasks([]); setKaMap({}); setObjMap({}); setLoading(false); return }
 
