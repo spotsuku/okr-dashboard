@@ -717,7 +717,7 @@ function useOrgData(fiscalYear) {
 // ══════════════════════════════════════════════════
 // タブ1: 組織図（levelsテーブルから動的生成）
 // ══════════════════════════════════════════════════
-function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMetaUpdate }) {
+function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMetaUpdate, onWebhookSave }) {
   const [editingMeta, setEditingMeta] = useState(null)
   const [metaBuf, setMetaBuf] = useState({})
   const [saving, setSaving] = useState(false)
@@ -726,7 +726,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
   const handleSaveWebhook = async (levelId, url) => {
     const { error } = await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
     if (error) { alert('保存に失敗しました: ' + error.message); return }
-    setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, slack_webhook_url: url || null } : l))
+    if (onWebhookSave) onWebhookSave(levelId, url || null)
     setWebhookEdit(null)
   }
 
@@ -3240,7 +3240,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
         </div>
 
         {activeTab === 'chart' && (
-          <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate} />
+          <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate} onWebhookSave={(levelId, url) => setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, slack_webhook_url: url } : l))} />
         )}
         {activeTab === 'tasks' && (
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
