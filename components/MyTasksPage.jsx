@@ -112,6 +112,123 @@ function ConfirmDialog({ message, onConfirm, onCancel, T }) {
   )
 }
 
+// ─── タスク作成モーダル ──────────────────────────────────
+function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
+  const [title, setTitle] = useState('')
+  const [assignee, setAssignee] = useState(myName)
+  const [dueDate, setDueDate] = useState('')
+  const [reportId, setReportId] = useState('')
+  const [noKaLink, setNoKaLink] = useState(false)
+  const [allKAs, setAllKAs] = useState([])
+  const [objMap, setObjMap] = useState({})
+  const [loadingKAs, setLoadingKAs] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    ;(async () => {
+      const { data: kas } = await supabase.from('weekly_reports')
+        .select('id,ka_title,objective_id,owner,status')
+        .neq('status', 'done').order('objective_id').order('ka_title')
+      setAllKAs(kas || [])
+      const objIds = [...new Set((kas || []).map(k => k.objective_id).filter(Boolean))]
+      if (objIds.length > 0) {
+        const { data: objs } = await supabase.from('objectives').select('id,title,owner,period').in('id', objIds)
+        const m = {}; (objs || []).forEach(o => { m[o.id] = o }); setObjMap(m)
+      }
+      setLoadingKAs(false)
+    })()
+  }, [])
+
+  // KAをObjective別にグループ化
+  const grouped = {}
+  allKAs.forEach(ka => {
+    const objId = ka.objective_id || 0
+    const obj = objMap[objId]
+    const label = obj ? obj.title : 'OKR未設定'
+    if (!grouped[objId]) grouped[objId] = { label, kas: [] }
+    grouped[objId].kas.push(ka)
+  })
+
+  const canSave = title.trim() && (noKaLink || reportId)
+
+  const save = async () => {
+    if (!canSave) return
+    setSaving(true)
+    await supabase.from('ka_tasks').insert({
+      title: title.trim(), assignee: assignee || null,
+      due_date: dueDate || null, done: false, status: 'not_started',
+      report_id: noKaLink ? null : parseInt(reportId),
+    })
+    setSaving(false)
+    onCreated()
+    onClose()
+  }
+
+  const inputSt = { width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 28px', minWidth: 420, maxWidth: 520, width: '90%', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 20 }}>タスクを追加</div>
+
+        {/* タイトル */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>タイトル <span style={{ color: '#ff6b6b' }}>*</span></div>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タスク内容を入力" style={inputSt} autoFocus />
+        </div>
+
+        {/* 担当者 */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>担当者</div>
+          <select value={assignee} onChange={e => setAssignee(e.target.value)} style={{ ...inputSt, cursor: 'pointer' }}>
+            <option value="">-- 未設定 --</option>
+            {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+          </select>
+        </div>
+
+        {/* 期日 */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>期日</div>
+          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inputSt} />
+        </div>
+
+        {/* KA紐付け */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>KA紐付け <span style={{ color: '#ff6b6b' }}>*</span></div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer', padding: '8px 12px', borderRadius: 8, background: noKaLink ? 'rgba(255,209,102,0.10)' : 'transparent', border: `1px solid ${noKaLink ? 'rgba(255,209,102,0.4)' : T.border}` }}>
+            <input type="checkbox" checked={noKaLink} onChange={e => { setNoKaLink(e.target.checked); if (e.target.checked) setReportId('') }} />
+            <span style={{ fontSize: 12, color: noKaLink ? '#ffd166' : T.textSub, fontWeight: 600 }}>⚠ KA紐付けなし（OKRに直結しないタスク）</span>
+          </label>
+          {!noKaLink && (
+            loadingKAs ? (
+              <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>KA一覧を読み込み中...</div>
+            ) : (
+              <select value={reportId} onChange={e => setReportId(e.target.value)} style={{ ...inputSt, cursor: 'pointer', borderColor: !reportId ? 'rgba(255,107,107,0.4)' : T.border }}>
+                <option value="">-- KAを選択してください --</option>
+                {Object.entries(grouped).map(([objId, group]) => (
+                  <optgroup key={objId} label={`OBJ: ${group.label}`}>
+                    {group.kas.map(ka => (
+                      <option key={ka.id} value={ka.id}>{ka.ka_title || '(無題)'}{ka.owner ? ` (${ka.owner})` : ''}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            )
+          )}
+        </div>
+
+        {/* ボタン */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+          <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 8, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+          <button onClick={save} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: canSave && !saving ? '#00d68f' : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 600, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+            {saving ? '保存中...' : '作成する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── ヘルパー: タスクのステータスを取得 ───────────────
 function getTaskStatus(task) {
   if (task.status && STATUS_CONFIG[task.status]) return task.status
@@ -183,14 +300,20 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
             </div>
             {!compact && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-                {ka && (
-                  <span style={{ fontSize: 10, color: T.textMuted, background: T.sectionBg, padding: '1px 6px', borderRadius: 4, border: `1px solid ${T.border}` }}>
-                    KA: {ka.ka_title || '(無題)'}
-                  </span>
-                )}
-                {obj && (
-                  <span style={{ fontSize: 10, color: T.textFaint }}>
-                    OKR: {obj.title}
+                {ka ? (
+                  <>
+                    <span style={{ fontSize: 10, color: T.textMuted, background: T.sectionBg, padding: '1px 6px', borderRadius: 4, border: `1px solid ${T.border}` }}>
+                      KA: {ka.ka_title || '(無題)'}
+                    </span>
+                    {obj && (
+                      <span style={{ fontSize: 10, color: T.textFaint }}>
+                        OKR: {obj.title}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ fontSize: 10, color: '#ffd166', fontWeight: 600, background: 'rgba(255,209,102,0.10)', padding: '1px 6px', borderRadius: 4, border: '1px solid rgba(255,209,102,0.25)' }}>
+                    ⚠ KA紐付けなし
                   </span>
                 )}
               </div>
@@ -387,6 +510,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
   const [viewMode, setViewMode] = useState(initialViewMode)
   const [displayMode, setDisplayMode] = useState('list') // 'list' | 'board'
   const [selectedMember, setSelectedMember] = useState(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const [allTasks, setAllTasks] = useState([])
   const [kaMap, setKaMap] = useState({})
@@ -564,6 +688,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                   {viewMode === 'my' ? `${myName} さんに割り当てられたタスク` : selectedMember ? `${selectedMember} さんに割り当てられたタスク` : '全メンバーのタスク一覧'}
                 </div>
               </div>
+              {/* タスク追加 */}
+              <button onClick={() => setShowCreateModal(true)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#00d68f', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>＋ タスク追加</button>
               {/* マイ/全社 切替 */}
               <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                 <button onClick={() => handleViewModeChange('my')} style={{
@@ -600,6 +726,9 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
           )}
         </div>
       </div>
+      {showCreateModal && (
+        <TaskCreateModal onClose={() => setShowCreateModal(false)} onCreated={load} members={members} myName={myName} T={T} />
+      )}
     </div>
   )
 }
