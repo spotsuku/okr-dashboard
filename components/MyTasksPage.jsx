@@ -126,11 +126,20 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
 
   useEffect(() => {
     ;(async () => {
+      // 最新週のKAのみ取得（同タイトルの重複を排除）
       const { data: kas } = await supabase.from('weekly_reports')
-        .select('id,ka_title,objective_id,owner,status')
-        .neq('status', 'done').order('objective_id').order('ka_title')
-      setAllKAs(kas || [])
-      const objIds = [...new Set((kas || []).map(k => k.objective_id).filter(Boolean))]
+        .select('id,ka_title,objective_id,owner,status,week_start')
+        .neq('status', 'done').order('week_start', { ascending: false }).order('ka_title')
+      // 同じka_title+owner+objective_idの組み合わせで最新のものだけ残す
+      const seen = new Set()
+      const uniqueKAs = (kas || []).filter(ka => {
+        const key = `${ka.ka_title}_${ka.owner}_${ka.objective_id}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      setAllKAs(uniqueKAs)
+      const objIds = [...new Set(uniqueKAs.map(k => k.objective_id).filter(Boolean))]
       if (objIds.length > 0) {
         const { data: objs } = await supabase.from('objectives').select('id,title,owner,period').in('id', objIds)
         const m = {}; (objs || []).forEach(o => { m[o.id] = o }); setObjMap(m)
