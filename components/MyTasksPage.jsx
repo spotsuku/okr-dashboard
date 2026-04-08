@@ -543,9 +543,19 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     ])
 
     const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || [])]
-    // ID重複排除のみ（title+assigneeでの排除は正当なタスクを消す可能性があるため廃止）
+    // ID重複排除
     const seenId = new Set()
-    const uniqueTasks = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
+    const deduped = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
+
+    // 週次コピーによる重複を排除: 同じtitle+assigneeのタスクは最新ID（最新週）のみ残す
+    // ただしreport_idがnull（スタンドアロンタスク）はそのまま残す
+    const byContent = {}
+    for (const t of deduped) {
+      if (!t.report_id) { byContent[`standalone_${t.id}`] = t; continue }
+      const key = `${t.title}_${t.assignee}_${t.done}`
+      if (!byContent[key] || t.id > byContent[key].id) byContent[key] = t
+    }
+    const uniqueTasks = Object.values(byContent)
 
     if (uniqueTasks.length === 0) { setAllTasks([]); setKaMap({}); setObjMap({}); setLoading(false); return }
 
