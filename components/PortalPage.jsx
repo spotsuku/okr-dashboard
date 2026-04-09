@@ -16,7 +16,7 @@ const DASHBOARDS = [
     description: '顧客対応・満足度管理',
     icon: '🤝',
     color: '#00d68f',
-    url: '', // URLを後で設定
+    url: 'https://neo-cs.vercel.app/',
   },
   {
     id: 'sales',
@@ -24,7 +24,7 @@ const DASHBOARDS = [
     description: '営業活動・商談管理',
     icon: '💰',
     color: '#ff9f43',
-    url: '',
+    url: 'https://sales-dashboard-jade-chi.vercel.app/',
   },
   {
     id: 'budget',
@@ -32,7 +32,7 @@ const DASHBOARDS = [
     description: '予算策定・実績管理',
     icon: '📊',
     color: '#a855f7',
-    url: '',
+    url: 'https://neobudget-liard.vercel.app/',
   },
   {
     id: 'community',
@@ -40,7 +40,7 @@ const DASHBOARDS = [
     description: 'NEOポータル',
     icon: '🏛',
     color: '#ff6b6b',
-    url: '',
+    url: 'https://community-dashboard-5abc3.web.app/events',
   },
   {
     id: 'youth',
@@ -48,7 +48,7 @@ const DASHBOARDS = [
     description: 'ユース活動管理',
     icon: '🌱',
     color: '#ffd166',
-    url: '',
+    url: 'https://neo-youth.vercel.app/dashboard',
   },
 ]
 
