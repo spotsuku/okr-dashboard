@@ -123,6 +123,7 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
   const [objMap, setObjMap] = useState({})
   const [loadingKAs, setLoadingKAs] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [kaSearch, setKaSearch] = useState('')
 
   useEffect(() => {
     ;(async () => {
@@ -148,9 +149,19 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
     })()
   }, [])
 
-  // KAをObjective別にグループ化
+  // KA検索フィルタ + 自分のKA優先 + Objective別グループ化
+  const q = kaSearch.toLowerCase()
+  const filteredKAs = allKAs.filter(ka => {
+    if (!q) return true
+    const obj = objMap[ka.objective_id]
+    return (ka.ka_title||'').toLowerCase().includes(q)
+      || (ka.owner||'').toLowerCase().includes(q)
+      || (obj?.title||'').toLowerCase().includes(q)
+  })
+  const myKAs = filteredKAs.filter(ka => ka.owner === myName)
+  const otherKAs = filteredKAs.filter(ka => ka.owner !== myName)
   const grouped = {}
-  allKAs.forEach(ka => {
+  otherKAs.forEach(ka => {
     const objId = ka.objective_id || 0
     const obj = objMap[objId]
     const label = obj ? obj.title : 'OKR未設定'
@@ -214,16 +225,28 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
             loadingKAs ? (
               <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>KA一覧を読み込み中...</div>
             ) : (
-              <select value={reportId} onChange={e => setReportId(e.target.value)} style={{ ...inputSt, cursor: 'pointer', borderColor: !reportId ? 'rgba(255,107,107,0.4)' : T.border }}>
-                <option value="">-- KAを選択してください --</option>
-                {Object.entries(grouped).map(([objId, group]) => (
-                  <optgroup key={objId} label={`OBJ: ${group.label}`}>
-                    {group.kas.map(ka => (
-                      <option key={ka.id} value={ka.id}>{ka.ka_title || '(無題)'}{ka.owner ? ` (${ka.owner})` : ''}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <>
+                <input value={kaSearch} onChange={e => setKaSearch(e.target.value)} placeholder="🔍 KAを検索（タイトル・担当者・OKR名）" style={{ ...inputSt, marginBottom: 6, fontSize: 12 }} />
+                {kaSearch && <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>{filteredKAs.length}件のKAが見つかりました</div>}
+                <select value={reportId} onChange={e => setReportId(e.target.value)} style={{ ...inputSt, cursor: 'pointer', borderColor: !reportId ? 'rgba(255,107,107,0.4)' : T.border }} size={Math.min(filteredKAs.length + 2, 10)}>
+                  <option value="">-- KAを選択してください --</option>
+                  {myKAs.length > 0 && (
+                    <optgroup label={`⭐ 自分のKA (${myKAs.length}件)`}>
+                      {myKAs.map(ka => {
+                        const obj = objMap[ka.objective_id]
+                        return <option key={ka.id} value={ka.id}>{ka.ka_title || '(無題)'}{obj ? ` [${obj.title.slice(0,20)}]` : ''}</option>
+                      })}
+                    </optgroup>
+                  )}
+                  {Object.entries(grouped).map(([objId, group]) => (
+                    <optgroup key={objId} label={`OBJ: ${group.label}`}>
+                      {group.kas.map(ka => (
+                        <option key={ka.id} value={ka.id}>{ka.ka_title || '(無題)'}{ka.owner ? ` (${ka.owner})` : ''}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </>
             )
           )}
         </div>
