@@ -32,7 +32,7 @@ const DASHBOARDS = [
     description: '予算策定・実績管理',
     icon: '📊',
     color: '#a855f7',
-    url: 'https://neobudget-liard.vercel.app/',
+    url: 'https://neobudget-liard.vercel.app/#',
   },
   {
     id: 'community',
