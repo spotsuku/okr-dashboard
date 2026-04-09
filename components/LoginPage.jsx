@@ -57,7 +57,7 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4d9fff', boxShadow: '0 0 12px #4d9fff' }} />
-            <span style={{ fontSize: 11, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</span>
+            <span style={{ fontSize: 11, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>NEO Management</span>
           </div>
           <h1 style={{ color: '#e8eaf0', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
             {isSignUp ? 'アカウント作成' : 'ログイン'}

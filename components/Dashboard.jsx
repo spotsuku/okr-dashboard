@@ -13,6 +13,7 @@ import MilestonePage from './MilestonePage'
 import OwnerOKRView from './OwnerOKRView'
 import MyTasksPage from './MyTasksPage'
 import MyCoachPage from './MyCoachPage'
+import PortalPage from './PortalPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -800,9 +801,9 @@ export default function Dashboard({ user, onSignOut }) {
   const [activePage, setActivePage]         = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
-      return params.get('page') || 'mycoach'
+      return params.get('page') || 'portal'
     }
-    return 'mycoach'
+    return 'portal'
   })
   const [viewMode, setViewMode]             = useState('annual')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
@@ -1207,14 +1208,16 @@ export default function Dashboard({ user, onSignOut }) {
             }}>☰</button>
             {!isMobile && (
               <div>
-                <div style={{ fontSize: 10, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>OKR ダッシュボード</div>
+                <div style={{ fontSize: 10, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase' }}>NEO Management</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>NEO 運営DB</div>
               </div>
             )}
           </div>
 
           {/* ページナビ */}
           <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+            {/* ホーム */}
+            <button onClick={() => setActivePage('portal')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'portal' ? T.navActiveBg : 'transparent', color: activePage === 'portal' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🏠 ホーム</button>
             {/* マイページ */}
             <button onClick={() => setActivePage('mycoach')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mycoach' ? T.navActiveBg : 'transparent', color: activePage === 'mycoach' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイページ</button>
             {/* マイルストーン */}
@@ -1302,6 +1305,7 @@ export default function Dashboard({ user, onSignOut }) {
       </div>
 
       {/* ─── ページ切替 ─── */}
+      {activePage === 'portal' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><PortalPage user={user} onNavigate={setActivePage} themeKey={themeKey} /></div>}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
