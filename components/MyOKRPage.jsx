@@ -90,9 +90,13 @@ function Avatar({ name, avatarUrl, size = 22, wT }) {
 }
 
 // ─── KRカード ─────────────────────────────────────────────────────────────────
-function KRCard({ kr, myName, members, wT }) {
+function KRCard({ kr, myName, members, wT, onKRUpdated }) {
   const [currentVal,  setCurrentVal]  = useState(String(kr.current ?? ''))
   const [editingVal,  setEditingVal]  = useState(false)
+  const [krEditing,   setKrEditing]   = useState(false)
+  const [krTitle,     setKrTitle]     = useState(kr.title || '')
+  const [krTarget,    setKrTarget]    = useState(String(kr.target ?? ''))
+  const [krUnit,      setKrUnit]      = useState(kr.unit || '')
   const [krSaving,    setKrSaving]    = useState(false)
   const [krSaved,     setKrSaved]     = useState(false)
   const [review,      setReview]      = useState(null)
@@ -121,6 +125,21 @@ function KRCard({ kr, myName, members, wT }) {
     setKrSaving(true)
     await supabase.from('key_results').update({ current: val }).eq('id', kr.id)
     setKrSaving(false); setKrSaved(true); setEditingVal(false)
+    setTimeout(() => setKrSaved(false), 1500)
+  }
+
+  const saveKRFull = async () => {
+    setKrSaving(true)
+    const payload = {
+      title: krTitle.trim() || kr.title,
+      current: parseFloat(currentVal) || 0,
+      target: parseFloat(krTarget) || 0,
+      unit: krUnit,
+    }
+    await supabase.from('key_results').update(payload).eq('id', kr.id)
+    setKrSaving(false); setKrSaved(true); setKrEditing(false)
+    setCurrentVal(String(payload.current))
+    if (onKRUpdated) onKRUpdated()
     setTimeout(() => setKrSaved(false), 1500)
   }
 
@@ -207,6 +226,51 @@ function KRCard({ kr, myName, members, wT }) {
                 })}
               </div>
             </div>
+          </div>
+          {/* KR編集セクション */}
+          <div style={{ marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${krEditing?'rgba(255,159,67,0.4)':wT().border}`, transition:'border-color 0.15s' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#ff9f43', textTransform:'uppercase', letterSpacing:'0.08em' }}>📝 KR設定</div>
+              {!krEditing && (
+                <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:'1px solid rgba(255,159,67,0.3)', background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
+              )}
+            </div>
+            {!krEditing ? (
+              <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:6, fontSize:12, color:wT().textSub, flexWrap:'wrap' }}>
+                <span>タイトル: <b style={{ color:wT().text }}>{kr.title}</b></span>
+                <span>現在値: <b style={{ color:pctColor }}>{parseFloat(currentVal)||0}{kr.unit}</b></span>
+                <span>目標: <b style={{ color:wT().text }}>{kr.target}{kr.unit}</b></span>
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom:6 }}>
+                  <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>タイトル</div>
+                  <input value={krTitle} onChange={e=>setKrTitle(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>現在値</div>
+                    <input type="number" value={currentVal} onChange={e=>setCurrentVal(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:pctColor, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>目標値</div>
+                    <input type="number" value={krTarget} onChange={e=>setKrTarget(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>単位</div>
+                    <input value={krUnit} onChange={e=>setKrUnit(e.target.value)} placeholder="件, %, 万円..." style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                </div>
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:6 }}>
+                  <button onClick={() => { setKrEditing(false); setKrTitle(kr.title||''); setCurrentVal(String(kr.current??'')); setKrTarget(String(kr.target??'')); setKrUnit(kr.unit||'') }}
+                    style={{ padding:'4px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>キャンセル</button>
+                  <button onClick={saveKRFull} disabled={krSaving}
+                    style={{ padding:'4px 14px', borderRadius:6, background:krSaved?'#00d68f':'#ff9f43', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                    {krSaved?'✓ 保存済み':krSaving?'保存中...':'KRを保存'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
             <div style={{ minWidth:0 }}>
@@ -832,7 +896,15 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
                     return (
                       <div key={kr.id} style={{ marginBottom:14 }}>
-                        <KRCard kr={kr} myName={myName} members={members} wT={wT} />
+                        <KRCard kr={kr} myName={myName} members={members} wT={wT} onKRUpdated={() => {
+                          // KR更新後にデータをリロード
+                          supabase.from('key_results').select('*').eq('objective_id', activeObjId).then(({ data }) => {
+                            if (data) setKeyResults(prev => {
+                              const otherKRs = prev.filter(k => Number(k.objective_id) !== Number(activeObjId))
+                              return [...otherKRs, ...data]
+                            })
+                          })
+                        }} />
                         {krKAs.length > 0 && (
                           <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
                             <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
