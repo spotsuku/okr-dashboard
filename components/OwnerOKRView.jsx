@@ -215,10 +215,10 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   const effectivePeriod = grouped[activePeriod]?.length ? activePeriod : (availablePeriods[0] || 'q1')
   const currentObjs = grouped[effectivePeriod] || []
 
-  // サマリー計算
-  const totalObj = currentObjs.length
-  const totalKR = currentObjs.reduce((s, o) => s + o.key_results.length, 0)
-  const totalKA = currentObjs.reduce((s, o) => s + kaReports.filter(r => Number(r.objective_id) === Number(o.id)).length, 0)
+  // サマリー計算（自分が担当しているもののみカウント）
+  const totalObj = currentObjs.filter(o => o.owner === ownerName).length
+  const totalKR = currentObjs.reduce((s, o) => s + o.key_results.filter(kr => kr.owner === ownerName).length, 0)
+  const totalKA = currentObjs.reduce((s, o) => s + kaReports.filter(r => Number(r.objective_id) === Number(o.id) && r.owner === ownerName).length, 0)
 
   // フィルター適用
   const filteredObjs = currentObjs.filter(obj => {
