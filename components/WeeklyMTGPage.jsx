@@ -431,7 +431,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, reviewVersion, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
     .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
@@ -494,31 +494,6 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [reviewSaved,  setReviewSaved]  = useState(false)
   const reviewRef = useRef(null) // review IDをrefで保持
   const autoSaveTimer = useRef(null)
-
-  // Realtime更新を受信した場合にローカルstateを更新
-  useEffect(() => {
-    const channel = supabase.channel(`kr_review_${kr.id}_${weekStart}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kr_weekly_reviews',
-        filter: `kr_id=eq.${kr.id}` }, payload => {
-        if (payload.eventType === 'UPDATE' && payload.new && payload.new.week_start === weekStart) {
-          setWeather(payload.new.weather || 0)
-          setGood(payload.new.good || '')
-          setMore(payload.new.more || '')
-          setFocus(payload.new.focus || '')
-          reviewRef.current = payload.new.id
-          setReview(payload.new)
-        } else if (payload.eventType === 'INSERT' && payload.new && payload.new.week_start === weekStart) {
-          setWeather(payload.new.weather || 0)
-          setGood(payload.new.good || '')
-          setMore(payload.new.more || '')
-          setFocus(payload.new.focus || '')
-          reviewRef.current = payload.new.id
-          setReview(payload.new)
-        }
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [kr.id, weekStart])
   const [krEditing,    setKrEditing]    = useState(false)
   const [krTitle,      setKrTitle]      = useState(kr.title || '')
   const [krCurrent,    setKrCurrent]    = useState(String(kr.current ?? ''))
@@ -534,7 +509,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
         if (data) { setReview(data); reviewRef.current = data.id; setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
         else { setReview(null); reviewRef.current = null; setWeather(0); setGood(''); setMore(''); setFocus('') }
       })
-  }, [kr.id, weekStart])
+  }, [kr.id, weekStart, reviewVersion])
 
   // 自動保存（デバウンス1秒）
   const doSaveReview = useCallback(async (w, g, m, f) => {
@@ -812,6 +787,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
   const [keyResults,    setKeyResults]    = useState([])
+  const [reviewVersion, setReviewVersion] = useState(0)
   const [members,       setMembers]       = useState([])
   const [loading,       setLoading]       = useState(false)
   const [activeLevelId, setActiveLevelId] = useState(null)
@@ -894,6 +870,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         } else if (payload.eventType === 'DELETE' && payload.old) {
           setKeyResults(prev => prev.filter(k => k.id !== payload.old.id))
         }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kr_weekly_reviews' }, () => {
+        setReviewVersion(v => v + 1)
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -1324,6 +1303,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   onKROwnerChange={handleKROwnerChange}
                   onKRUpdate={handleKRUpdate}
                   activeWeek={activeWeek}
+                  reviewVersion={reviewVersion}
                   onReorder={reload}
                   objectiveTitle={rightObj.title}
                   completedBy={myName}
