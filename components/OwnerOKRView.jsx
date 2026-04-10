@@ -96,6 +96,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   const [objectives, setObjectives] = useState([])
   const [kaReports, setKaReports] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activePeriod, setActivePeriod] = useState('q1')
 
   useEffect(() => {
     if (!ownerName) { setObjectives([]); setKaReports([]); setLoading(false); return }
@@ -210,8 +211,8 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   })
   const allPeriods = ['q1', 'q2', 'q3', 'q4', 'annual']
   const availablePeriods = allPeriods.filter(k => grouped[k]?.length)
-  const [activePeriod, setActivePeriod] = useState(availablePeriods[0] || 'q1')
-  const currentObjs = grouped[activePeriod] || []
+  const effectivePeriod = grouped[activePeriod]?.length ? activePeriod : (availablePeriods[0] || 'q1')
+  const currentObjs = grouped[effectivePeriod] || []
 
   // サマリー計算
   const totalObj = currentObjs.length
@@ -246,9 +247,9 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
           return (
             <button key={p} onClick={() => setActivePeriod(p)} style={{
               padding: '6px 16px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
-              fontSize: 13, fontWeight: 600, border: `1px solid ${isActive ? T().btnEditColor + '60' : T().border}`,
-              background: isActive ? `${T().btnEditColor}15` : 'transparent',
-              color: isActive ? T().btnEditColor : count ? T().textSub : T().textFaint,
+              fontSize: 13, fontWeight: 600, border: `1px solid ${effectivePeriod === p ? T().btnEditColor + '60' : T().border}`,
+              background: effectivePeriod === p ? `${T().btnEditColor}15` : 'transparent',
+              color: effectivePeriod === p ? T().btnEditColor : count ? T().textSub : T().textFaint,
               opacity: count ? 1 : 0.5,
             }}>
               {PERIOD_LABELS[p]} {count > 0 && <span style={{ fontSize: 10, marginLeft: 4 }}>({count})</span>}
