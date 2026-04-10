@@ -492,6 +492,33 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [reviewOpen,   setReviewOpen]   = useState(false)
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewSaved,  setReviewSaved]  = useState(false)
+  const reviewRef = useRef(null) // review IDをrefで保持
+  const autoSaveTimer = useRef(null)
+
+  // Realtime更新を受信した場合にローカルstateを更新
+  useEffect(() => {
+    const channel = supabase.channel(`kr_review_${kr.id}_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kr_weekly_reviews',
+        filter: `kr_id=eq.${kr.id}` }, payload => {
+        if (payload.eventType === 'UPDATE' && payload.new && payload.new.week_start === weekStart) {
+          setWeather(payload.new.weather || 0)
+          setGood(payload.new.good || '')
+          setMore(payload.new.more || '')
+          setFocus(payload.new.focus || '')
+          reviewRef.current = payload.new.id
+          setReview(payload.new)
+        } else if (payload.eventType === 'INSERT' && payload.new && payload.new.week_start === weekStart) {
+          setWeather(payload.new.weather || 0)
+          setGood(payload.new.good || '')
+          setMore(payload.new.more || '')
+          setFocus(payload.new.focus || '')
+          reviewRef.current = payload.new.id
+          setReview(payload.new)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [kr.id, weekStart])
   const [krEditing,    setKrEditing]    = useState(false)
   const [krTitle,      setKrTitle]      = useState(kr.title || '')
   const [krCurrent,    setKrCurrent]    = useState(String(kr.current ?? ''))
@@ -504,18 +531,36 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   useEffect(() => {
     supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
       .then(({data}) => {
-        if (data) { setReview(data); setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
-        else { setReview(null); setWeather(0); setGood(''); setMore(''); setFocus('') }
+        if (data) { setReview(data); reviewRef.current = data.id; setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
+        else { setReview(null); reviewRef.current = null; setWeather(0); setGood(''); setMore(''); setFocus('') }
       })
   }, [kr.id, weekStart])
 
-  const saveReview = async () => {
+  // 自動保存（デバウンス1秒）
+  const doSaveReview = useCallback(async (w, g, m, f) => {
     setReviewSaving(true)
-    const payload = { kr_id:kr.id, week_start:weekStart, weather, good, more, focus, updated_at:new Date().toISOString() }
-    if (review?.id) { await supabase.from('kr_weekly_reviews').update(payload).eq('id', review.id) }
-    else { const {data} = await supabase.from('kr_weekly_reviews').insert(payload).select().single(); if (data) setReview(data) }
+    const payload = { kr_id:kr.id, week_start:weekStart, weather:w, good:g, more:m, focus:f, updated_at:new Date().toISOString() }
+    if (reviewRef.current) {
+      await supabase.from('kr_weekly_reviews').update(payload).eq('id', reviewRef.current)
+    } else {
+      const {data} = await supabase.from('kr_weekly_reviews').insert(payload).select().single()
+      if (data) { reviewRef.current = data.id; setReview(data) }
+    }
     setReviewSaving(false); setReviewSaved(true); setTimeout(() => setReviewSaved(false), 1500)
+  }, [kr.id, weekStart])
+
+  const scheduleAutoSave = (w, g, m, f) => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => doSaveReview(w, g, m, f), 1000)
   }
+  useEffect(() => { return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) } }, [])
+
+  const updateGood = (v) => { setGood(v); scheduleAutoSave(weather, v, more, focus) }
+  const updateMore = (v) => { setMore(v); scheduleAutoSave(weather, good, v, focus) }
+  const updateFocus = (v) => { setFocus(v); scheduleAutoSave(weather, good, more, v) }
+  const updateWeather = (v) => { setWeather(v); doSaveReview(v, good, more, focus) } // 天気は即時保存
+
+  const saveReview = () => doSaveReview(weather, good, more, focus)
 
   const saveKR = async () => {
     if (!onKRUpdate) return
@@ -601,7 +646,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             </div>
             <div>
               <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の体感・主観</div>
-              <WeatherPicker value={weather} onChange={setWeather} wT={wT} />
+              <WeatherPicker value={weather} onChange={updateWeather} wT={wT} />
             </div>
           </div>
           {/* KR編集セクション */}
@@ -652,11 +697,11 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <div>
               <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good</div>
-              <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
+              <textarea value={good} onChange={e=>updateGood(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
             <div>
               <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🔺 More</div>
-              <textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
+              <textarea value={more} onChange={e=>updateMore(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
@@ -664,12 +709,15 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </div>
           <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 来週の注力アクション</div>
-            <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
+            <textarea value={focus} onChange={e=>updateFocus(e.target.value)} rows={2} style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+            <span style={{ fontSize:10, color: reviewSaved ? '#00d68f' : reviewSaving ? wT().textMuted : 'transparent', fontWeight:600, transition:'color 0.3s' }}>
+              {reviewSaved ? '✓ 自動保存済み' : reviewSaving ? '保存中...' : ''}
+            </span>
             <button onClick={()=>setReviewOpen(false)} style={{ padding:'5px 12px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
             <button onClick={saveReview} disabled={reviewSaving} style={{ padding:'5px 16px', borderRadius:6, background:reviewSaved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', transition:'background 0.3s' }}>
-              {reviewSaved?'✓ 保存済み':reviewSaving?'保存中...':'保存'}
+              {reviewSaved?'✓ 保存済み':reviewSaving?'保存中...':'保存して週次MTGに反映'}
             </button>
           </div>
         </div>
