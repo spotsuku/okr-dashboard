@@ -502,11 +502,12 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const weekStart = activeWeek || toDateStr(getMonday(new Date()))
 
   useEffect(() => {
-    supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).order('week_start', { ascending:false }).limit(1).maybeSingle()
+    supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
       .then(({data}) => {
         if (data) { setReview(data); setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
+        else { setReview(null); setWeather(0); setGood(''); setMore(''); setFocus('') }
       })
-  }, [kr.id])
+  }, [kr.id, weekStart])
 
   const saveReview = async () => {
     setReviewSaving(true)
