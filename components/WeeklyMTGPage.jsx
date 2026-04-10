@@ -820,7 +820,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     setReports(data||[])
   }
 
-  // ★ Supabase Realtime購読（weekly_reports変更を即時同期）
+  // ★ Supabase Realtime購読（weekly_reports + key_results 変更を即時同期）
   useEffect(() => {
     const channel = supabase
       .channel('weekly_mtg_realtime')
@@ -831,6 +831,19 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           setReports(prev => prev.some(r => r.id === payload.new.id) ? prev : [...prev, payload.new])
         } else if (payload.eventType === 'DELETE' && payload.old) {
           setReports(prev => prev.filter(r => r.id !== payload.old.id))
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'key_results' }, payload => {
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const kr = payload.new
+          const normalized = kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr
+          setKeyResults(prev => prev.map(k => k.id === normalized.id ? { ...k, ...normalized } : k))
+        } else if (payload.eventType === 'INSERT' && payload.new) {
+          const kr = payload.new
+          const normalized = kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr
+          setKeyResults(prev => prev.some(k => k.id === normalized.id) ? prev : [...prev, normalized])
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setKeyResults(prev => prev.filter(k => k.id !== payload.old.id))
         }
       })
       .subscribe()
