@@ -49,12 +49,14 @@ function ReadOnlyKARow({ ka }) {
   const cfg = KA_STATUS[ka.status] || KA_STATUS.normal
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', fontSize: 11 }}>
+      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'rgba(168,85,247,0.12)', color: '#a855f7', flexShrink: 0 }}>KA</span>
       <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: cfg.bg, color: cfg.color, fontWeight: 700, whiteSpace: 'nowrap' }}>
         {cfg.label}
       </span>
       <span style={{ color: T().textSub, flex: 1, minWidth: 0 }}>
         {ka.ka_title || '(無題)'}
       </span>
+      {ka.owner && <span style={{ fontSize: 10, color: T().textMuted, flexShrink: 0 }}>👤 {ka.owner}</span>}
     </div>
   )
 }
@@ -206,9 +208,17 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     if (!grouped[rp]) grouped[rp] = []
     grouped[rp].push(o)
   })
-  const sections = ['annual', 'q1', 'q2', 'q3', 'q4'].filter(k => grouped[k]?.length)
+  const allPeriods = ['q1', 'q2', 'q3', 'q4', 'annual']
+  const availablePeriods = allPeriods.filter(k => grouped[k]?.length)
+  const [activePeriod, setActivePeriod] = useState(availablePeriods[0] || 'q1')
+  const currentObjs = grouped[activePeriod] || []
 
-  if (!sections.length) return (
+  // サマリー計算
+  const totalObj = currentObjs.length
+  const totalKR = currentObjs.reduce((s, o) => s + o.key_results.length, 0)
+  const totalKA = currentObjs.reduce((s, o) => s + kaReports.filter(r => Number(r.objective_id) === Number(o.id)).length, 0)
+
+  if (!availablePeriods.length) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, maxWidth: 600, margin: '40px auto' }}>
       <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
       <div style={{ fontSize: 15, color: T().text }}>{ownerName} さんのOKRがありません</div>
@@ -218,7 +228,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
 
   return (
     <div style={{ padding: '24px 24px', maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: T().text }}>{ownerName}</div>
           <div style={{ fontSize: 13, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: `${T().btnEditColor}15`, color: T().btnEditColor, border: `1px solid ${T().btnEditColor}40` }}>
@@ -228,14 +238,44 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
         <div style={{ fontSize: 13, color: T().textMuted }}>担当するOKRの一覧と進捗状況</div>
       </div>
 
-      {sections.map(sectionKey => (
-        <div key={sectionKey} style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T().text, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ padding: '3px 10px', borderRadius: 6, background: T().sectionBg, border: `1px solid ${T().border}`, fontSize: 12 }}>{PERIOD_LABELS[sectionKey]}</span>
-            <span style={{ fontSize: 11, color: T().textFaint }}>{grouped[sectionKey].length}件</span>
-          </div>
+      {/* 期間タブ */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+        {allPeriods.map(p => {
+          const count = (grouped[p] || []).length
+          const isActive = activePeriod === p
+          return (
+            <button key={p} onClick={() => setActivePeriod(p)} style={{
+              padding: '6px 16px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 13, fontWeight: 600, border: `1px solid ${isActive ? T().btnEditColor + '60' : T().border}`,
+              background: isActive ? `${T().btnEditColor}15` : 'transparent',
+              color: isActive ? T().btnEditColor : count ? T().textSub : T().textFaint,
+              opacity: count ? 1 : 0.5,
+            }}>
+              {PERIOD_LABELS[p]} {count > 0 && <span style={{ fontSize: 10, marginLeft: 4 }}>({count})</span>}
+            </button>
+          )
+        })}
+      </div>
 
-          {grouped[sectionKey].map(obj => {
+      {/* サマリーカード */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div style={{ padding: '10px 18px', borderRadius: 10, background: T().sectionBg, border: `1px solid ${T().border}` }}>
+          <div style={{ fontSize: 10, color: T().textMuted, fontWeight: 600, marginBottom: 2 }}>Objective</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#4d9fff' }}>{totalObj}<span style={{ fontSize: 11, color: T().textMuted, marginLeft: 2 }}>件</span></div>
+        </div>
+        <div style={{ padding: '10px 18px', borderRadius: 10, background: T().sectionBg, border: `1px solid ${T().border}` }}>
+          <div style={{ fontSize: 10, color: T().textMuted, fontWeight: 600, marginBottom: 2 }}>Key Result</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#00d68f' }}>{totalKR}<span style={{ fontSize: 11, color: T().textMuted, marginLeft: 2 }}>件</span></div>
+        </div>
+        <div style={{ padding: '10px 18px', borderRadius: 10, background: T().sectionBg, border: `1px solid ${T().border}` }}>
+          <div style={{ fontSize: 10, color: T().textMuted, fontWeight: 600, marginBottom: 2 }}>Key Action</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#a855f7' }}>{totalKA}<span style={{ fontSize: 11, color: T().textMuted, marginLeft: 2 }}>件</span></div>
+        </div>
+      </div>
+
+      {/* Objective一覧 */}
+      <div>
+          {currentObjs.map(obj => {
             const prog = calcObjProgress(obj.key_results)
             const r = getRating(prog)
             const depth = getAbsoluteDepth(obj.level_id, levels)
@@ -276,10 +316,11 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                           return (
                             <div key={i} style={{ marginBottom: 5 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: T().bgKr, borderRadius: 7, border: isMyKR ? `1px solid ${T().btnEditColor}20` : 'none' }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'rgba(0,214,143,0.12)', color: '#00d68f', flexShrink: 0 }}>KR</span>
                                 <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>
-                                  {isMyKR && <span style={{ color: T().btnEditColor, fontWeight: 600, marginRight: 4 }}>★</span>}
                                   {kr.title}
                                 </span>
+                                {kr.owner && <span style={{ fontSize: 10, fontWeight: 600, color: isMyKR ? T().btnEditColor : T().textMuted, flexShrink: 0 }}>👤 {kr.owner}</span>}
                                 <div style={{ width: 60, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
                                   <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
                                 </div>
@@ -325,8 +366,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
               </div>
             )
           })}
-        </div>
-      ))}
+      </div>
     </div>
   )
 }
