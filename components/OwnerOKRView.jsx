@@ -97,6 +97,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   const [kaReports, setKaReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [activePeriod, setActivePeriod] = useState('q1')
+  const [filterMode, setFilterMode] = useState('all') // 'all' | 'obj' | 'kr' | 'ka'
 
   useEffect(() => {
     if (!ownerName) { setObjectives([]); setKaReports([]); setLoading(false); return }
@@ -219,6 +220,15 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   const totalKR = currentObjs.reduce((s, o) => s + o.key_results.length, 0)
   const totalKA = currentObjs.reduce((s, o) => s + kaReports.filter(r => Number(r.objective_id) === Number(o.id)).length, 0)
 
+  // フィルター適用
+  const filteredObjs = currentObjs.filter(obj => {
+    if (filterMode === 'all') return true
+    if (filterMode === 'obj') return obj.owner === ownerName
+    if (filterMode === 'kr') return obj.key_results.some(kr => kr.owner === ownerName)
+    if (filterMode === 'ka') return kaReports.some(r => Number(r.objective_id) === Number(obj.id) && r.owner === ownerName)
+    return true
+  })
+
   if (!availablePeriods.length) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, maxWidth: 600, margin: '40px auto' }}>
       <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
@@ -258,25 +268,31 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
         })}
       </div>
 
-      {/* サマリーカード */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ padding: '10px 18px', borderRadius: 10, background: T().sectionBg, border: `1px solid ${T().border}` }}>
-          <div style={{ fontSize: 10, color: T().textMuted, fontWeight: 600, marginBottom: 2 }}>Objective</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#4d9fff' }}>{totalObj}<span style={{ fontSize: 11, color: T().textMuted, marginLeft: 2 }}>件</span></div>
-        </div>
-        <div style={{ padding: '10px 18px', borderRadius: 10, background: T().sectionBg, border: `1px solid ${T().border}` }}>
-          <div style={{ fontSize: 10, color: T().textMuted, fontWeight: 600, marginBottom: 2 }}>Key Result</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#00d68f' }}>{totalKR}<span style={{ fontSize: 11, color: T().textMuted, marginLeft: 2 }}>件</span></div>
-        </div>
-        <div style={{ padding: '10px 18px', borderRadius: 10, background: T().sectionBg, border: `1px solid ${T().border}` }}>
-          <div style={{ fontSize: 10, color: T().textMuted, fontWeight: 600, marginBottom: 2 }}>Key Action</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#a855f7' }}>{totalKA}<span style={{ fontSize: 11, color: T().textMuted, marginLeft: 2 }}>件</span></div>
-        </div>
+      {/* サマリーカード（フィルター機能付き） */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        {[
+          { key: 'all', label: '全て', count: totalObj + totalKR + totalKA, color: T().textSub },
+          { key: 'obj', label: 'Objective', count: totalObj, color: '#4d9fff' },
+          { key: 'kr', label: 'Key Result', count: totalKR, color: '#00d68f' },
+          { key: 'ka', label: 'Key Action', count: totalKA, color: '#a855f7' },
+        ].map(f => (
+          <div key={f.key} onClick={() => setFilterMode(f.key)} style={{
+            padding: '10px 18px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
+            background: filterMode === f.key ? `${f.color}12` : T().sectionBg,
+            border: `2px solid ${filterMode === f.key ? f.color : T().border}`,
+          }}>
+            <div style={{ fontSize: 10, color: filterMode === f.key ? f.color : T().textMuted, fontWeight: 600, marginBottom: 2 }}>{f.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: f.color }}>{f.count}<span style={{ fontSize: 11, color: T().textMuted, marginLeft: 2 }}>件</span></div>
+          </div>
+        ))}
       </div>
 
       {/* Objective一覧 */}
+      {filteredObjs.length === 0 && (
+        <div style={{ padding: '30px 20px', textAlign: 'center', color: T().textFaint, fontSize: 13 }}>該当するOKRがありません</div>
+      )}
       <div>
-          {currentObjs.map(obj => {
+          {filteredObjs.map(obj => {
             const prog = calcObjProgress(obj.key_results)
             const r = getRating(prog)
             const depth = getAbsoluteDepth(obj.level_id, levels)
@@ -293,7 +309,11 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                 <div style={{ padding: '16px 18px', borderLeft: `4px solid ${lColor}`, display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: 'rgba(77,159,255,0.12)', color: '#4d9fff' }}>OBJ</span>
                       <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${lColor}15`, color: lColor, fontWeight: 600 }}>{levelIcon} {levelName}</span>
+                      {isObjOwner && (
+                        <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(77,159,255,0.1)', color: '#4d9fff', border: '1px solid rgba(77,159,255,0.3)', fontWeight: 600 }}>👤 責任者</span>
+                      )}
                       {!isObjOwner && isKROwner && (
                         <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().sectionBg, color: T().textMuted, border: `1px solid ${T().border}` }}>KR担当</span>
                       )}
@@ -303,8 +323,8 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                       {r && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${r.color}18`, color: r.color, fontWeight: 700 }}>{r.label}</span>}
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: T().textSub, lineHeight: 1.4, marginBottom: 4 }}>{obj.title}</div>
-                    {obj.owner && obj.owner !== ownerName && (
-                      <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 4 }}>Objective担当: {obj.owner}</div>
+                    {obj.owner && (
+                      <div style={{ fontSize: 11, color: isObjOwner ? '#4d9fff' : T().textMuted, marginBottom: 4 }}>👤 {obj.owner}{isObjOwner ? '' : '（Objective担当）'}</div>
                     )}
 
                     {obj.key_results.length > 0 && (
