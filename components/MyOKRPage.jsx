@@ -11,7 +11,16 @@ function getMondayOf(date) {
   d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
   return d.toISOString().split('T')[0]
 }
-const currentWeek = getMondayOf(new Date())
+function formatWeekLabel(mondayStr) {
+  const d = new Date(mondayStr)
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const sun = new Date(d)
+  sun.setDate(sun.getDate() + 6)
+  const m2 = sun.getMonth() + 1
+  const d2 = sun.getDate()
+  return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
+}
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
@@ -90,7 +99,7 @@ function Avatar({ name, avatarUrl, size = 22, wT }) {
 }
 
 // ─── KRカード ─────────────────────────────────────────────────────────────────
-function KRCard({ kr, myName, members, wT, onKRUpdated }) {
+function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const [currentVal,  setCurrentVal]  = useState(String(kr.current ?? ''))
   const [editingVal,  setEditingVal]  = useState(false)
   const [krEditing,   setKrEditing]   = useState(false)
@@ -114,11 +123,13 @@ function KRCard({ kr, myName, members, wT, onKRUpdated }) {
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
 
   useEffect(() => {
+    // 週が変わったら入力をリセットして新しい週のレビューを読み込む
+    setReview(null); setWeather(0); setGood(''); setMore(''); setFocus('')
     supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', currentWeek).maybeSingle()
       .then(({ data }) => {
         if (data) { setReview(data); setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
       })
-  }, [kr.id])
+  }, [kr.id, currentWeek])
 
   const saveKR = async () => {
     const val = parseFloat(currentVal); if (isNaN(val)) return
@@ -614,6 +625,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
   const [activePeriod,setActivePeriod]=useState(getCurrentQ())
 
+  // 現在の週（月曜日）を動的に保持。日付変更を検知して自動更新
+  const [currentWeek, setCurrentWeek] = useState(() => getMondayOf(new Date()))
+  useEffect(() => {
+    const id = setInterval(() => {
+      const w = getMondayOf(new Date())
+      setCurrentWeek(prev => prev === w ? prev : w)
+    }, 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
+
   useEffect(() => {
     if (!myName) return
     const load = async () => {
@@ -703,7 +724,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       setLoading(false)
     }
     load()
-  }, [myName, fiscalYear])
+  }, [myName, fiscalYear, currentWeek])
 
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
@@ -772,7 +793,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color: fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
             📅 {fiscalYear}年度
           </div>
-          <div style={{ fontSize:11, color:wT().textMuted }}>{currentWeek} 週</div>
+          <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f', border:'1px solid rgba(0,214,143,0.35)', display:'flex', alignItems:'center', gap:4 }}>
+            📝 今週を記入中 {formatWeekLabel(currentWeek)}
+          </div>
         </div>
       </div>
 
@@ -896,7 +919,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
                     return (
                       <div key={kr.id} style={{ marginBottom:14 }}>
-                        <KRCard kr={kr} myName={myName} members={members} wT={wT} onKRUpdated={() => {
+                        <KRCard kr={kr} myName={myName} members={members} wT={wT} currentWeek={currentWeek} onKRUpdated={() => {
                           // KR更新後にデータをリロード
                           supabase.from('key_results').select('*').eq('objective_id', activeObjId).then(({ data }) => {
                             if (data) setKeyResults(prev => {
