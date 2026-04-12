@@ -9,14 +9,22 @@ function getAdminClient() {
 }
 
 function getMonday(date) {
-  const d = new Date(date)
-  const day = d.getDay()
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
-  return d
+  // JST基準で月曜日を計算（Vercel Cron は UTC で実行されるため、
+  // JST月曜早朝の通知時にUTCでは日曜になり、前週を返してしまう問題を防ぐ）
+  const ts = date instanceof Date ? date.getTime() : new Date(date).getTime()
+  const jst = new Date(ts + 9 * 3600 * 1000)
+  const day = jst.getUTCDay()
+  jst.setUTCDate(jst.getUTCDate() - day + (day === 0 ? -6 : 1))
+  return jst
 }
 
 function toDateStr(d) {
   return d.toISOString().split('T')[0]
+}
+
+function todayJST() {
+  // 日本時間の「今日」を YYYY-MM-DD で返す
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().split('T')[0]
 }
 
 function formatDate(dateStr) {
@@ -157,7 +165,7 @@ function buildPreMeetingMessage(ownerMap, weekStart, levelName) {
   const header = `⏰ *会議前リマインド${scope}（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）*\nGood/Moreの記入をお願いします！`
 
   let text = header + '\n'
-  const today = toDateStr(new Date())
+  const today = todayJST()
 
   for (const [name, data] of Object.entries(ownerMap)) {
     text += '\n━━━━━━━━━━━━━━━━\n'
@@ -208,7 +216,7 @@ function buildTasksMessage(ownerMap, weekStart, levelName) {
   const header = `📋 *今週のタスク一覧${scope}（${formatDate(weekStart)}〜${formatDate(toDateStr(friday))}）*`
 
   let text = header + '\n'
-  const today = toDateStr(new Date())
+  const today = todayJST()
 
   for (const [name, data] of Object.entries(ownerMap)) {
     if (data.kas.length === 0) continue
@@ -259,7 +267,7 @@ function buildFridayReviewMessage(ownerMap, weekStart, levelName) {
   text += `✅ タスクの完了チェック\n`
   text += `✅ 翌週（${formatDate(toDateStr(nextMonday))}〜）の *Focus KA* を選択\n\n`
 
-  const today = toDateStr(new Date())
+  const today = todayJST()
   let hasContent = false
 
   for (const [name, data] of Object.entries(ownerMap)) {
@@ -310,7 +318,7 @@ function buildMondayAnnounceMessage(ownerMap, weekStart, levelName) {
   text += `おはようございます！今週もよろしくお願いします。\n`
   text += `📌 Focus KAの確認と、タスクの期限を確認してください。\n\n`
 
-  const today = toDateStr(new Date())
+  const today = todayJST()
   let hasContent = false
 
   for (const [name, data] of Object.entries(ownerMap)) {
