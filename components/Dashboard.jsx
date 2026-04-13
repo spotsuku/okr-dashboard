@@ -783,7 +783,16 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 export default function Dashboard({ user, onSignOut }) {
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
-  const [activeLevelId, setActiveLevelId]   = useState(null)
+  const [activeLevelId, setActiveLevelId]   = useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('dashboard_activeLevelId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeLevelId == null) localStorage.removeItem('dashboard_activeLevelId')
+    else localStorage.setItem('dashboard_activeLevelId', String(activeLevelId))
+  }, [activeLevelId])
   const [fiscalYear, setFiscalYear]         = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)

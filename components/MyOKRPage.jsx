@@ -624,7 +624,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
   const [activeObjId,setActiveObjId]= useState(null)
-  const [activeLevelId,setActiveLevelId]= useState(null)
+  const [activeLevelId,setActiveLevelId]= useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('myOKR_activeLevelId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeLevelId == null) localStorage.removeItem('myOKR_activeLevelId')
+    else localStorage.setItem('myOKR_activeLevelId', String(activeLevelId))
+  }, [activeLevelId])
   // 現在のQを自動判定（4月=Q1, 7月=Q2, 10月=Q3, 1月=Q4）
   const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
   const [activePeriod,setActivePeriod]=useState(getCurrentQ())
