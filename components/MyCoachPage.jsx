@@ -48,6 +48,13 @@ const SUGGESTIONS = [
   'タスクの優先順位を整理して',
 ]
 
+const TASK_STATUS_CONFIG = {
+  not_started: { label: '未着手', color: '#7a8599', bg: 'rgba(122,133,153,0.12)', border: 'rgba(122,133,153,0.35)', icon: '○' },
+  in_progress: { label: '進行中', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)', border: 'rgba(77,159,255,0.35)', icon: '◐' },
+  done:        { label: '完了',   color: '#00d68f', bg: 'rgba(0,214,143,0.12)', border: 'rgba(0,214,143,0.35)', icon: '●' },
+}
+const TASK_STATUS_ORDER = ['not_started', 'in_progress', 'done']
+
 export default function MyCoachPage({ user, members, levels, themeKey = 'dark', fiscalYear = '2026' }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
@@ -63,6 +70,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
   const [doneKACount, setDoneKACount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [kaMap, setKaMap] = useState({})
+  const [objMap, setObjMap] = useState({})
   const [milestones, setMilestones] = useState([])
   const [myJd, setMyJd] = useState(null)
   const [orgTasks, setOrgTasks] = useState([])
@@ -130,12 +138,17 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     setAllKAs(Object.values(kaByKey))
     setTasks(taskRes.data || [])
 
-    // 親KA情報
+    // 親KA情報 + Objective情報（Slack通知でOKRタイトルを参照するため）
     const reportIds = [...new Set((taskRes.data || []).map(t => t.report_id).filter(Boolean))]
     if (reportIds.length > 0) {
       const { data: kas } = await supabase.from('weekly_reports').select('id,ka_title,objective_id').in('id', reportIds)
       const km = {}; (kas || []).forEach(k => { km[k.id] = k })
       setKaMap(km)
+      const parentObjIds = [...new Set((kas || []).map(k => k.objective_id).filter(Boolean))]
+      if (parentObjIds.length > 0) {
+        const { data: parentObjs } = await supabase.from('objectives').select('id,title').in('id', parentObjIds)
+        const om = {}; (parentObjs || []).forEach(o => { om[o.id] = o }); setObjMap(om)
+      }
     }
 
     // 週ごとの完了タスク数
@@ -345,9 +358,33 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
     const { data } = await supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).order('due_date').order('id')
     if (data) setTasks(data)
   }
-  const toggleTaskDone = async (task) => {
-    await supabase.from('ka_tasks').update({ done: !task.done }).eq('id', task.id)
-    reloadTasks()
+  const changeTaskStatus = async (task, newStatus) => {
+    const newDone = newStatus === 'done'
+    const { error } = await supabase.from('ka_tasks').update({ done: newDone }).eq('id', task.id)
+    if (error) { alert('更新に失敗しました: ' + error.message); return }
+    // statusカラムが存在する場合のみ更新（エラーは無視）
+    await supabase.from('ka_tasks').update({ status: newStatus }).eq('id', task.id).then(() => {}).catch(() => {})
+    // ローカル状態を即座に更新（doneのタスクはリストから消す）
+    setTasks(prev => newDone
+      ? prev.filter(t => t.id !== task.id)
+      : prev.map(t => t.id === task.id ? { ...t, status: newStatus, done: false } : t)
+    )
+    // 完了時はSlack通知
+    if (newDone) {
+      const ka = kaMap[task.report_id]
+      const obj = ka ? objMap[ka.objective_id] : null
+      fetch('/api/slack-task-done', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id,
+          taskTitle: task.title,
+          kaTitle: ka?.ka_title,
+          objectiveTitle: obj?.title,
+          completedBy: task.assignee || myName,
+        }),
+      }).catch(() => {})
+    }
   }
   const deleteTask = async (taskId) => {
     await supabase.from('ka_tasks').delete().eq('id', taskId)
@@ -556,9 +593,16 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
                   </div>
                 )}
                 {(() => {
-                  const taskRow = (t, bgStyle) => (
+                  const taskRow = (t, bgStyle) => {
+                    const status = t.status || 'not_started'
+                    const cfg = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG.not_started
+                    const nextStatus = TASK_STATUS_ORDER[(TASK_STATUS_ORDER.indexOf(status) + 1) % TASK_STATUS_ORDER.length]
+                    return (
                     <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', borderRadius: 5, ...bgStyle, marginBottom: 2 }}>
-                      <input type="checkbox" checked={!!t.done} onChange={() => toggleTaskDone(t)} style={{ margin: 0, cursor: 'pointer', flexShrink: 0 }} />
+                      <button onClick={() => changeTaskStatus(t, nextStatus)} title={`クリックで「${TASK_STATUS_CONFIG[nextStatus].label}」に変更`}
+                        style={{ padding: '1px 6px', borderRadius: 4, border: `1px solid ${cfg.border}`, background: cfg.bg, color: cfg.color, fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+                        {cfg.icon} {cfg.label}
+                      </button>
                       <input value={t.title} onChange={e => setTasks(prev => prev.map(x => x.id === t.id ? { ...x, title: e.target.value } : x))}
                         onBlur={e => updateTaskField(t.id, 'title', e.target.value)}
                         style={{ flex: 1, background: 'transparent', border: 'none', color: T.text, fontSize: 11, outline: 'none', fontFamily: 'inherit', padding: '1px 2px', minWidth: 0 }} />
@@ -566,7 +610,8 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
                         style={{ width: 85, background: 'transparent', border: 'none', color: t.due_date && t.due_date < today ? '#ff6b6b' : T.textMuted, fontSize: 9, outline: 'none', fontFamily: 'inherit', flexShrink: 0 }} />
                       <button onClick={() => deleteTask(t.id)} title="削除" style={{ width: 16, height: 16, borderRadius: 3, border: 'none', background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.6 }}>✕</button>
                     </div>
-                  )
+                    )
+                  }
                   return (
                     <>
                       {overdueTasks.length > 0 && (
