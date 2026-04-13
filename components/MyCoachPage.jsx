@@ -148,20 +148,38 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
       if (!kaByKey[key] || (ka.week_start || '') > (kaByKey[key].week_start || '')) kaByKey[key] = ka
     }
     setAllKAs(Object.values(kaByKey))
-    setTasks(taskRes.data || [])
 
     // 親KA情報 + Objective情報（Slack通知でOKRタイトルを参照するため）
     const reportIds = [...new Set((taskRes.data || []).map(t => t.report_id).filter(Boolean))]
+    let kaMapLocal = {}
     if (reportIds.length > 0) {
-      const { data: kas } = await supabase.from('weekly_reports').select('id,ka_title,objective_id').in('id', reportIds)
-      const km = {}; (kas || []).forEach(k => { km[k.id] = k })
-      setKaMap(km)
+      const { data: kas } = await supabase.from('weekly_reports').select('id,ka_title,objective_id,week_start,kr_id').in('id', reportIds)
+      ;(kas || []).forEach(k => { kaMapLocal[k.id] = k })
+      setKaMap(kaMapLocal)
       const parentObjIds = [...new Set((kas || []).map(k => k.objective_id).filter(Boolean))]
       if (parentObjIds.length > 0) {
         const { data: parentObjs } = await supabase.from('objectives').select('id,title').in('id', parentObjIds)
         const om = {}; (parentObjs || []).forEach(o => { om[o.id] = o }); setObjMap(om)
       }
     }
+
+    // タスク重複排除: createWeek が翌週作成時に ka_tasks を複製するので、
+    // 同じ (親KA + title + assignee) のタスクが複数存在する。
+    // dedup 条件: parent_ka (kr_id + ka_title) + title + assignee
+    // 同一キー内では親 weekly_reports の week_start が新しい方を採用する。
+    const rawTasks = taskRes.data || []
+    const taskByKey = {}
+    for (const t of rawTasks) {
+      const parent = kaMapLocal[t.report_id] || {}
+      const key = `${parent.kr_id ?? ''}__${parent.ka_title ?? ''}__${(t.title || '').trim()}__${t.assignee || ''}`
+      const cur = taskByKey[key]
+      if (!cur) { taskByKey[key] = t; continue }
+      const curParent = kaMapLocal[cur.report_id] || {}
+      const curWs = curParent.week_start || ''
+      const newWs = parent.week_start || ''
+      if (newWs > curWs) taskByKey[key] = t
+    }
+    setTasks(Object.values(taskByKey))
 
     // 週ごとの完了タスク数
     const byWeek = {}
