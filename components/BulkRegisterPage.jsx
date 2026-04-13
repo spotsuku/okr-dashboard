@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { computeKAKey } from '../lib/kaKey'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -584,6 +585,7 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
           assignee: row.assignee || row.owner || null,
           due_date: row.dueDate || null,
           done: false,
+          ka_key: computeKAKey(ka),
         })
         if (!e2) taskOk++
       }

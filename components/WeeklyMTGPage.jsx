@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
+import { computeKAKey } from '../lib/kaKey'
 
 const DARK_T = {
   bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -171,7 +172,9 @@ function WeatherPicker({ value, onChange, wT }) {
 }
 
 // ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
+function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
+  const reportId = report?.id
+  const kaKey = computeKAKey(report)
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState({})
@@ -180,9 +183,11 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
   tasksRef.current = tasks
 
   useEffect(() => {
-    supabase.from('ka_tasks').select('*').eq('report_id', reportId).order('id')
+    if (!kaKey) return
+    // ka_keyが同じタスクを全て取得（週を跨いで同じKAの全タスク）
+    supabase.from('ka_tasks').select('*').eq('ka_key', kaKey).order('id')
       .then(({data}) => { setTasks(data||[]); setLoaded(true) })
-  }, [reportId])
+  }, [kaKey])
 
   useEffect(() => {
     if (loaded && onTaskCountChange) {
@@ -199,7 +204,7 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
 
   // タスク追加時に即座にDBに挿入して実IDを取得
   const addTask = async () => {
-    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId }
+    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId, ka_key:kaKey }
     const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
     if (ins) setTasks(p => [...p, ins])
   }
@@ -281,13 +286,15 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   const cfg = STATUS_CFG[status] || STATUS_CFG.normal
   const ownerMember = members.find(m => m.name === (ownerDraft||report.owner))
 
-  // タスクカウント取得
+  // タスクカウント取得（ka_keyで同じKAの全タスクをカウント）
+  const kaKey = computeKAKey(report)
   useEffect(() => {
-    supabase.from('ka_tasks').select('id,done').eq('report_id', report.id)
+    if (!kaKey) return
+    supabase.from('ka_tasks').select('id,done').eq('ka_key', kaKey)
       .then(({data}) => {
         if (data) setTaskCount({ done:data.filter(t=>t.done).length, total:data.length })
       })
-  }, [report.id])
+  }, [kaKey])
 
   // リモート更新をマージ（フォーカス中フィールドは上書きしない）
   useEffect(() => {
@@ -314,18 +321,32 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     onSave({ ...report, status: next })
   }
 
+  // KA のタイトル/オーナー変更時に、既存タスクの ka_key を追従更新する
+  // （同じKAの他週の行が更新される場合もあるので ka_key 単位で UPDATE）
+  const syncTaskKaKey = async (oldKey, newKey) => {
+    if (!oldKey || !newKey || oldKey === newKey) return
+    await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
+  }
+
   const handleOwnerChange = (val) => {
     setOwnerDraft(val)
     autoSave.save('owner', val)
     onSave({ ...report, owner: val })
+    const oldKey = computeKAKey(report)
+    const newKey = computeKAKey({ ...report, owner: val })
+    syncTaskKaKey(oldKey, newKey)
   }
 
   const handleTitleBlur = () => {
     setEditingTitle(false)
     autoSave.setFocusedField(null)
     if (kaTitle.trim() && kaTitle !== report.ka_title) {
-      autoSave.saveNow('ka_title', kaTitle.trim())
-      onSave({ ...report, ka_title: kaTitle.trim() })
+      const newTitle = kaTitle.trim()
+      autoSave.saveNow('ka_title', newTitle)
+      onSave({ ...report, ka_title: newTitle })
+      const oldKey = computeKAKey(report)
+      const newKey = computeKAKey({ ...report, ka_title: newTitle })
+      syncTaskKaKey(oldKey, newKey)
     }
   }
 
@@ -435,7 +456,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
           </span>
           <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
         </div>
-        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
+        {showTasks && <TaskPopover report={report} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
       <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
@@ -940,45 +961,11 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
         owner: r.owner, status: 'normal',
       }))
-      const { data: newReports } = await supabase.from('weekly_reports').insert(copies).select()
+      await supabase.from('weekly_reports').insert(copies).select()
 
-      // ★ コピー元KAに紐づく未完了タスクのタイトル・担当を新report_idにコピー
-      if (newReports?.length) {
-        const srcIds = toCopy.map(r => r.id)
-        const { data: srcTasks } = await supabase.from('ka_tasks').select('*').in('report_id', srcIds).eq('done', false)
-        if (srcTasks?.length) {
-          const idMap = {}
-          toCopy.forEach((src, i) => { if (newReports[i]) idMap[src.id] = newReports[i].id })
-          const taskCopies = srcTasks.map(t => ({
-            report_id: idMap[t.report_id], title: t.title,
-            assignee: t.assignee, due_date: null, done: false,
-          })).filter(t => t.report_id)
-          if (taskCopies.length) await supabase.from('ka_tasks').insert(taskCopies)
-        }
-      }
-
-      // ★ 既存KA（自動補完済み）にも前週の未完了タスク内容を引き継ぎ
-      const { data: existingTargetKAs } = await supabase.from('weekly_reports')
-        .select('id,kr_id,ka_title').eq('week_start', targetMonday)
-      if (existingTargetKAs?.length && srcKAs.length) {
-        for (const targetKA of existingTargetKAs) {
-          // 対応する前週KAを探す
-          const srcKA = srcKAs.find(r => r.kr_id === targetKA.kr_id && r.ka_title === targetKA.ka_title)
-          if (!srcKA) continue
-          // 既にタスクがある場合はスキップ
-          const { data: existingTasks } = await supabase.from('ka_tasks').select('id').eq('report_id', targetKA.id).limit(1)
-          if (existingTasks?.length) continue
-          // 前週の未完了タスクの内容をコピー
-          const { data: prevTasks } = await supabase.from('ka_tasks').select('*').eq('report_id', srcKA.id).eq('done', false)
-          if (prevTasks?.length) {
-            const taskCopies = prevTasks.map(t => ({
-              report_id: targetKA.id, title: t.title,
-              assignee: t.assignee, due_date: null, done: false,
-            }))
-            await supabase.from('ka_tasks').insert(taskCopies)
-          }
-        }
-      }
+      // ★ 旧実装では未完了タスクを複製していたが、ka_tasks は ka_key で
+      // 週を跨いで識別するようになったので、コピーは不要（同じKAなら
+      // 新しい週の行でも同じタスクが見える）
 
       await reload()
       setActiveWeek(targetMonday)

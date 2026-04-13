@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
+import { computeKAKey } from '../lib/kaKey'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -319,7 +320,9 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
 }
 
 // ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
+function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
+  const reportId = report?.id
+  const kaKey = computeKAKey(report)
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState({})
@@ -328,9 +331,10 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
   tasksRef.current = tasks
 
   useEffect(() => {
-    supabase.from('ka_tasks').select('*').eq('report_id', reportId).order('id')
+    if (!kaKey) return
+    supabase.from('ka_tasks').select('*').eq('ka_key', kaKey).order('id')
       .then(({data}) => { setTasks(data||[]); setLoaded(true) })
-  }, [reportId])
+  }, [kaKey])
 
   useEffect(() => {
     if (loaded && onTaskCountChange) {
@@ -346,7 +350,7 @@ function TaskPopover({ reportId, members, wT, onClose, onTaskCountChange, kaTitl
   }, [onClose])
 
   const addTask = async () => {
-    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId }
+    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId, ka_key:kaKey }
     const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
     if (ins) setTasks(p => [...p, ins])
   }
@@ -427,12 +431,14 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
   const ownerMember = members?.find(m => m.name === (ownerDraft||report.owner))
   const STATUS_ORDER = ['normal','focus','good','more']
 
+  const myKAKey = computeKAKey(report)
   useEffect(() => {
-    supabase.from('ka_tasks').select('id,done').eq('report_id', report.id)
+    if (!myKAKey) return
+    supabase.from('ka_tasks').select('id,done').eq('ka_key', myKAKey)
       .then(({data}) => {
         if (data) setTaskCount({ done:data.filter(t=>t.done).length, total:data.length })
       })
-  }, [report.id])
+  }, [myKAKey])
 
   useEffect(() => {
     const ff = autoSave.focusedField
@@ -458,18 +464,31 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
     onSave({ ...report, status: next })
   }
 
+  // KA のタイトル/オーナー変更時に既存タスクの ka_key を追従更新
+  const syncTaskKaKey = async (oldKey, newKey) => {
+    if (!oldKey || !newKey || oldKey === newKey) return
+    await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
+  }
+
   const handleOwnerChange = (val) => {
     setOwnerDraft(val)
     autoSave.save('owner', val)
     onSave({ ...report, owner: val })
+    const oldKey = computeKAKey(report)
+    const newKey = computeKAKey({ ...report, owner: val })
+    syncTaskKaKey(oldKey, newKey)
   }
 
   const handleTitleBlur = () => {
     setEditingTitle(false)
     autoSave.setFocusedField(null)
     if (kaTitle.trim() && kaTitle !== report.ka_title) {
-      autoSave.saveNow('ka_title', kaTitle.trim())
-      onSave({ ...report, ka_title: kaTitle.trim() })
+      const newTitle = kaTitle.trim()
+      autoSave.saveNow('ka_title', newTitle)
+      onSave({ ...report, ka_title: newTitle })
+      const oldKey = computeKAKey(report)
+      const newKey = computeKAKey({ ...report, ka_title: newTitle })
+      syncTaskKaKey(oldKey, newKey)
     }
   }
 
@@ -565,7 +584,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
           </span>
           <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
         </div>
-        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
+        {showTasks && <TaskPopover report={report} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
       <td style={{ ...cellS, width:20, padding:'6px 2px' }}>

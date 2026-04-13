@@ -93,38 +93,12 @@ async function handleCreate(targetWeek) {
     .select()
   if (errIns) return Response.json({ error: errIns.message }, { status: 500 })
 
-  // コピー元KAに紐づく未完了タスクを新report_idにコピー
-  let taskCopiesCount = 0
-  if (newReports?.length) {
-    const srcIds = toCopy.map(r => r.id)
-    const { data: srcTasks } = await supabase
-      .from('ka_tasks')
-      .select('*')
-      .in('report_id', srcIds)
-      .eq('done', false)
-    if (srcTasks?.length) {
-      const idMap = {}
-      toCopy.forEach((src, i) => { if (newReports[i]) idMap[src.id] = newReports[i].id })
-      const taskCopies = srcTasks
-        .map(t => ({
-          report_id: idMap[t.report_id],
-          title: t.title,
-          assignee: t.assignee,
-          due_date: null,
-          done: false,
-        }))
-        .filter(t => t.report_id)
-      if (taskCopies.length) {
-        const { error: errTask } = await supabase.from('ka_tasks').insert(taskCopies)
-        if (!errTask) taskCopiesCount = taskCopies.length
-      }
-    }
-  }
+  // ka_tasks は ka_key で週を跨いで識別するため、コピーは不要
+  // （同じKAであれば新しい週の weekly_reports 行でも同じタスクが見える）
 
   return Response.json({
     ok: true,
     created: copies.length,
-    tasksCreated: taskCopiesCount,
     week: targetMon,
     source: srcWeek,
   })

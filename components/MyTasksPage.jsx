@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { computeKAKey } from '../lib/kaKey'
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
@@ -141,7 +142,7 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
     ;(async () => {
       // 最新週のKAのみ取得（同タイトルの重複を排除）
       const { data: kas } = await supabase.from('weekly_reports')
-        .select('id,ka_title,objective_id,owner,status,week_start')
+        .select('id,ka_title,kr_id,objective_id,owner,status,week_start')
         .neq('status', 'done').order('week_start', { ascending: false }).order('ka_title')
       // 同じka_title+owner+objective_idの組み合わせで最新のものだけ残す
       const seen = new Set()
@@ -186,10 +187,12 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
   const save = async () => {
     if (!canSave) return
     setSaving(true)
+    const selectedKA = noKaLink ? null : allKAs.find(k => String(k.id) === String(reportId))
     const payload = {
       title: title.trim(), assignee: assignee || null,
       due_date: dueDate || null, done: false,
       report_id: noKaLink ? null : parseInt(reportId),
+      ka_key: computeKAKey(selectedKA),
     }
     const { error } = await supabase.from('ka_tasks').insert(payload)
     setSaving(false)
@@ -580,18 +583,9 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     const tasks = [...(incompleteTasks || []), ...(recentDoneTasks || [])]
     // ID重複排除
     const seenId = new Set()
-    const deduped = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
+    const uniqueTasks = tasks.filter(t => { if (seenId.has(t.id)) return false; seenId.add(t.id); return true })
 
-    // 週次コピーによる重複を排除: 同じtitle+assigneeのタスクは最新ID（最新週）のみ残す
-    // タイトルが空、report_idがnullのタスクは重複排除しない
-    const byContent = {}
-    for (const t of deduped) {
-      if (!t.report_id || !t.title?.trim()) { byContent[`keep_${t.id}`] = t; continue }
-      const key = `${t.title}_${t.assignee}`
-      if (!byContent[key] || t.id > byContent[key].id) byContent[key] = t
-    }
-    const uniqueTasks = Object.values(byContent)
-
+    // ka_tasks は ka_key で週を跨いで一意化されるため、表示層 dedup は不要
     if (uniqueTasks.length === 0) { setAllTasks([]); setKaMap({}); setObjMap({}); setLoading(false); return }
 
     const reportIds = [...new Set(uniqueTasks.map(t => t.report_id).filter(Boolean))]
