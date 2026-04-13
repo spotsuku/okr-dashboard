@@ -721,13 +721,30 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         }
       }
 
-      // ★ 週コピーで同じKAが複数週に存在する場合、最新週のもの1つだけ残す
+      // ★ 週コピーで同じKAが複数週に存在する場合の重複排除
+      //   優先順位:
+      //     1. 選択中の週 (selectedWeek = 今週 or 翌週) と一致する行
+      //     2. 次点: 選択中の週より未来は除外し、過去で最も新しい週
+      //     3. どれもなければ (まれ) 最新週の行
+      //   これにより、将来の空行に今週の内容が隠されるのを防ぐ
       const kaByKey = {}
       for (const ka of allMyKAs) {
         const key = `${ka.kr_id}_${ka.ka_title}_${ka.owner}_${ka.objective_id}`
-        if (!kaByKey[key] || (ka.week_start || '') > (kaByKey[key].week_start || '')) {
-          kaByKey[key] = ka
-        }
+        const cur = kaByKey[key]
+        if (!cur) { kaByKey[key] = ka; continue }
+        const curWs = cur.week_start || ''
+        const newWs = ka.week_start || ''
+        const curIsSelected = curWs === selectedWeek
+        const newIsSelected = newWs === selectedWeek
+        if (newIsSelected && !curIsSelected) { kaByKey[key] = ka; continue }
+        if (curIsSelected && !newIsSelected) { continue }
+        // どちらも選択週と一致しない場合: 選択週以前で最新を優先
+        const curIsFuture = curWs > selectedWeek
+        const newIsFuture = newWs > selectedWeek
+        if (!newIsFuture && curIsFuture) { kaByKey[key] = ka; continue }
+        if (newIsFuture && !curIsFuture) { continue }
+        // 両方過去 or 両方未来: より新しい方
+        if (newWs > curWs) { kaByKey[key] = ka }
       }
       const dedupedKAs = Object.values(kaByKey)
 
