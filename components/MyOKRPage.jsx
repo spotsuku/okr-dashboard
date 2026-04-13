@@ -5,20 +5,24 @@ import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
+// JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
 function getMondayOf(date) {
-  const d = new Date(date)
-  const day = d.getDay()
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
-  return d.toISOString().split('T')[0]
+  const dt = typeof date === 'string' ? new Date(date) : (date || new Date())
+  const jst = new Date(dt.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  const mon = new Date(Date.UTC(
+    jst.getUTCFullYear(),
+    jst.getUTCMonth(),
+    jst.getUTCDate() + diff
+  ))
+  return mon.toISOString().split('T')[0]
 }
 function formatWeekLabel(mondayStr) {
-  const d = new Date(mondayStr)
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const sun = new Date(d)
-  sun.setDate(sun.getDate() + 6)
-  const m2 = sun.getMonth() + 1
-  const d2 = sun.getDate()
+  const [y, m, day] = mondayStr.split('-').map(Number)
+  const sun = new Date(Date.UTC(y, m - 1, day + 6))
+  const m2 = sun.getUTCMonth() + 1
+  const d2 = sun.getUTCDate()
   return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
 }
 
@@ -635,6 +639,17 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     return () => clearInterval(id)
   }, [])
 
+  // 翌週の月曜日を計算（YYYY-MM-DD）
+  const nextWeek = (() => {
+    const [y, m, d] = currentWeek.split('-').map(Number)
+    const next = new Date(Date.UTC(y, m - 1, d + 7))
+    return next.toISOString().split('T')[0]
+  })()
+
+  // 「今週」or「翌週」の選択（前週の金曜日に翌週の Good/More を書きたいケース対応）
+  const [weekMode, setWeekMode] = useState('this') // 'this' | 'next'
+  const selectedWeek = weekMode === 'next' ? nextWeek : currentWeek
+
   useEffect(() => {
     if (!myName) return
     const load = async () => {
@@ -689,7 +704,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       const krIds = allMyKRs.map(k=>k.id)
       let revData = []
       if (krIds.length > 0) {
-        const { data } = await supabase.from('kr_weekly_reviews').select('*').in('kr_id', krIds).eq('week_start', currentWeek)
+        const { data } = await supabase.from('kr_weekly_reviews').select('*').in('kr_id', krIds).eq('week_start', selectedWeek)
         revData = data || []
       }
       const revMap = {}
@@ -724,7 +739,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       setLoading(false)
     }
     load()
-  }, [myName, fiscalYear, currentWeek])
+  }, [myName, fiscalYear, currentWeek, selectedWeek])
 
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
@@ -793,8 +808,32 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color: fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
             📅 {fiscalYear}年度
           </div>
-          <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f', border:'1px solid rgba(0,214,143,0.35)', display:'flex', alignItems:'center', gap:4 }}>
-            📝 今週を記入中 {formatWeekLabel(currentWeek)}
+          {/* 今週/翌週 切り替えトグル */}
+          <div style={{ display:'flex', gap:0, background:wT().bgCard2 || 'rgba(255,255,255,0.04)', borderRadius:99, padding:2, border:`1px solid ${wT().borderMid}` }}>
+            <button onClick={()=>setWeekMode('this')}
+              style={{
+                fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:99, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: weekMode==='this' ? '#00d68f' : 'transparent',
+                color: weekMode==='this' ? '#fff' : wT().textMuted,
+                transition:'all 0.15s',
+              }}>今週</button>
+            <button onClick={()=>setWeekMode('next')}
+              style={{
+                fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:99, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: weekMode==='next' ? '#ff9f43' : 'transparent',
+                color: weekMode==='next' ? '#fff' : wT().textMuted,
+                transition:'all 0.15s',
+              }}>翌週</button>
+          </div>
+          <div style={{
+            fontSize:12, fontWeight:800, padding:'5px 12px', borderRadius:99,
+            background: weekMode==='next' ? 'rgba(255,159,67,0.18)' : 'rgba(0,214,143,0.15)',
+            color: weekMode==='next' ? '#ff9f43' : '#00d68f',
+            border: `1px solid ${weekMode==='next' ? 'rgba(255,159,67,0.5)' : 'rgba(0,214,143,0.35)'}`,
+            display:'flex', alignItems:'center', gap:4,
+            boxShadow: weekMode==='next' ? '0 0 0 3px rgba(255,159,67,0.15)' : 'none',
+          }}>
+            📝 {weekMode==='next' ? '翌週を記入中' : '今週を記入中'} {formatWeekLabel(selectedWeek)}
           </div>
         </div>
       </div>
@@ -919,7 +958,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
                     return (
                       <div key={kr.id} style={{ marginBottom:14 }}>
-                        <KRCard kr={kr} myName={myName} members={members} wT={wT} currentWeek={currentWeek} onKRUpdated={() => {
+                        <KRCard kr={kr} myName={myName} members={members} wT={wT} currentWeek={selectedWeek} onKRUpdated={() => {
                           // KR更新後にデータをリロード
                           supabase.from('key_results').select('*').eq('objective_id', activeObjId).then(({ data }) => {
                             if (data) setKeyResults(prev => {

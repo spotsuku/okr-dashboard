@@ -3,11 +3,23 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 
-function toDateStr(d) { return d.toISOString().split('T')[0] }
+// JST基準のYYYY-MM-DDを返す
+function toDateStr(d) {
+  if (typeof d === 'string') return d
+  const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+  return jst.toISOString().split('T')[0]
+}
+// JST基準で「入力日時を含む週の月曜日」の Date(UTC midnight) を返す
 function getMonday(d) {
-  const dt = new Date(d); const day = dt.getDay()
-  dt.setDate(dt.getDate() - day + (day === 0 ? -6 : 1))
-  dt.setHours(0,0,0,0); return dt
+  const dt = typeof d === 'string' ? new Date(d) : (d || new Date())
+  const jst = new Date(dt.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  return new Date(Date.UTC(
+    jst.getUTCFullYear(),
+    jst.getUTCMonth(),
+    jst.getUTCDate() + diff
+  ))
 }
 function formatDate(ds) {
   if (!ds) return ''

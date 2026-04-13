@@ -3,11 +3,18 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
+// JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
 function getMondayOf(date) {
-  const d = new Date(date || new Date())
-  const day = d.getDay()
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
-  return d.toISOString().split('T')[0]
+  const dt = typeof date === 'string' ? new Date(date) : (date || new Date())
+  const jst = new Date(dt.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  const mon = new Date(Date.UTC(
+    jst.getUTCFullYear(),
+    jst.getUTCMonth(),
+    jst.getUTCDate() + diff
+  ))
+  return mon.toISOString().split('T')[0]
 }
 function getPastWeeks(n = 8) {
   const weeks = []

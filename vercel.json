@@ -7,6 +7,10 @@
     {
       "path": "/api/slack-reminder?type=monday-announce&perDept=true",
       "schedule": "0 23 * * 0"
+    },
+    {
+      "path": "/api/create-next-week",
+      "schedule": "0 23 * * 4"
     }
   ]
 }

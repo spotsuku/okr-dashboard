@@ -60,33 +60,49 @@ function calcObjProgress(krs) {
 }
 
 // ─── 週ヘルパー ──────────────────────────────────────────────────────────────
+// JST基準で「入力日時を含む週の月曜日(00:00 JST)」を Date(UTC midnight) として返す
+//   JST 月 4/13 00:30 → UTC 4/12 15:30 → +9h = UTC 4/13 00:30 → jstDay=1 → UTC 4/13 00:00
+//   JST 日 4/12 23:00 → UTC 4/12 14:00 → +9h = UTC 4/12 23:00 → jstDay=0 → UTC 4/6 00:00
+//   JST 金 4/10 08:39 → UTC 4/9 23:39  → +9h = UTC 4/10 08:39 → jstDay=5 → UTC 4/6 00:00
 function getMonday(d) {
-  const dt = new Date(d)
-  const day = dt.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  dt.setDate(dt.getDate() + diff)
-  dt.setHours(0, 0, 0, 0)
-  return dt
+  const dt = typeof d === 'string' ? new Date(d) : (d || new Date())
+  const jst = new Date(dt.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  return new Date(Date.UTC(
+    jst.getUTCFullYear(),
+    jst.getUTCMonth(),
+    jst.getUTCDate() + diff
+  ))
 }
 function toDateStr(d) {
-  const dt = typeof d === 'string' ? new Date(d) : d
-  return dt.toISOString().split('T')[0]
+  if (typeof d === 'string') return d
+  const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+  return jst.toISOString().split('T')[0]
 }
 function formatWeekLabel(mondayStr) {
-  const d = new Date(mondayStr)
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const sun = new Date(d)
-  sun.setDate(sun.getDate() + 6)
-  const m2 = sun.getMonth() + 1
-  const d2 = sun.getDate()
+  // mondayStrは "YYYY-MM-DD" を想定（JSTの月曜日）。曜日依存ロジックを避けてパース
+  const [y, m, day] = mondayStr.split('-').map(Number)
+  // 月曜日から +6 日を足してその週の日曜日を計算（JST曜日にズレがないようUTCで計算）
+  const sun = new Date(Date.UTC(y, m - 1, day + 6))
+  const m2 = sun.getUTCMonth() + 1
+  const d2 = sun.getUTCDate()
   return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
 }
-function isFriday() { return new Date().getDay() === 5 }
+function isFriday() {
+  // JST基準の曜日判定
+  const jst = new Date(Date.now() + 9 * 3600 * 1000)
+  return jst.getUTCDay() === 5
+}
 function getNextMonday() {
-  const d = getMonday(new Date())
-  d.setDate(d.getDate() + 7)
-  return toDateStr(d)
+  // 翌週の月曜日 = 今週の月曜日 + 7日
+  const thisMon = getMonday(new Date())
+  const nextMon = new Date(Date.UTC(
+    thisMon.getUTCFullYear(),
+    thisMon.getUTCMonth(),
+    thisMon.getUTCDate() + 7
+  ))
+  return toDateStr(nextMon)
 }
 
 // ─── アバター ─────────────────────────────────────────────────────────────────

@@ -10,12 +10,24 @@ function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
-function toDateStr(d) { return d.toISOString().split('T')[0] }
+// JST基準のYYYY-MM-DDを返す
+function toDateStr(d) {
+  if (typeof d === 'string') return d
+  const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+  return jst.toISOString().split('T')[0]
+}
+// JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DDを返す
 function getMondayOf(date) {
-  const d = new Date(date)
-  const day = d.getDay()
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
-  return toDateStr(d)
+  const dt = typeof date === 'string' ? new Date(date) : (date || new Date())
+  const jst = new Date(dt.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  const mon = new Date(Date.UTC(
+    jst.getUTCFullYear(),
+    jst.getUTCMonth(),
+    jst.getUTCDate() + diff
+  ))
+  return mon.toISOString().split('T')[0]
 }
 function formatDate(ds) {
   if (!ds) return ''
