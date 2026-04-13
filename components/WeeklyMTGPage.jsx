@@ -816,7 +816,16 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     if (activeLevelId == null) localStorage.removeItem('weeklyMTG_activeLevelId')
     else localStorage.setItem('weeklyMTG_activeLevelId', String(activeLevelId))
   }, [activeLevelId])
-  const [activeObjId,   setActiveObjId]   = useState(null)
+  const [activeObjId,   setActiveObjId]   = useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('weeklyMTG_activeObjId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeObjId == null) localStorage.removeItem('weeklyMTG_activeObjId')
+    else localStorage.setItem('weeklyMTG_activeObjId', String(activeObjId))
+  }, [activeObjId])
   const [activePeriod,  setActivePeriod]  = useState(initialPeriod || getCurrentQ())
   const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
   const [slackPreview,  setSlackPreview]  = useState(null) // { text, type, memberCount, levelName, params }

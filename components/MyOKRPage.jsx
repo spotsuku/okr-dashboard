@@ -623,7 +623,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] } - kept for potential future use
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
-  const [activeObjId,setActiveObjId]= useState(null)
+  const [activeObjId,setActiveObjId]= useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('myOKR_activeObjId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeObjId == null) localStorage.removeItem('myOKR_activeObjId')
+    else localStorage.setItem('myOKR_activeObjId', String(activeObjId))
+  }, [activeObjId])
   const [activeLevelId,setActiveLevelId]= useState(() => {
     if (typeof window === 'undefined') return null
     const saved = localStorage.getItem('myOKR_activeLevelId')
