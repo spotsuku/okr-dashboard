@@ -40,6 +40,8 @@ function nonEmpty(...vals) {
 }
 
 // GET: 診断モード（デフォルト）
+// GET ?search=キーワード: KAタイトルまたはownerで絞り込み検索
+// GET ?ka=KAタイトル完全一致: 特定のKAの全週の記入内容を表示
 // GET ?apply=true: 修正実行
 //
 // 修正内容:
@@ -52,14 +54,49 @@ export async function GET(req) {
   const supabase = getClient()
   const url = new URL(req.url)
   const apply = url.searchParams.get('apply') === 'true'
+  const search = url.searchParams.get('search')
+  const kaTitle = url.searchParams.get('ka')
+  const owner = url.searchParams.get('owner')
 
   const { data: allReports, error } = await supabase
     .from('weekly_reports')
-    .select('id,week_start,kr_id,ka_title,owner,good,more,focus_output,status,sort_order,level_id,objective_id,kr_title')
+    .select('id,week_start,kr_id,ka_title,owner,good,more,focus_output,status,sort_order,level_id,objective_id,kr_title,created_at')
     .order('week_start', { ascending: true })
     .order('id', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // 検索モード: キーワードでKAを絞り込み
+  if (search || kaTitle || owner) {
+    const q = (search || '').toLowerCase()
+    const matches = (allReports || []).filter(r => {
+      if (kaTitle && r.ka_title !== kaTitle) return false
+      if (owner && r.owner !== owner) return false
+      if (q) {
+        const hay = `${r.ka_title || ''} ${r.owner || ''} ${r.good || ''} ${r.more || ''} ${r.focus_output || ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+
+    return NextResponse.json({
+      mode: 'search',
+      query: { search, kaTitle, owner },
+      total_matched: matches.length,
+      rows: matches.map(r => ({
+        id: r.id,
+        week_start: r.week_start,
+        weekday: dayOfWeek(r.week_start),
+        ka_title: r.ka_title,
+        owner: r.owner,
+        status: r.status,
+        good: r.good,
+        more: r.more,
+        focus_output: r.focus_output,
+        created_at: r.created_at,
+      })),
+    })
+  }
 
   const total = allReports?.length || 0
 
