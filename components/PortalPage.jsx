@@ -1,4 +1,6 @@
 'use client'
+import { useState } from 'react'
+import MorningMeetingImport from './MorningMeetingImport'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
 const DASHBOARDS = [
@@ -65,8 +67,10 @@ const THEMES = {
   },
 }
 
-export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
+export default function PortalPage({ user, onNavigate, themeKey = 'dark', members = [], T: TOuter }) {
   const T = THEMES[themeKey] || THEMES.dark
+  const [showMorningImport, setShowMorningImport] = useState(false)
+  const morningMeetingUrl = process.env.NEXT_PUBLIC_MORNING_MEETING_URL
 
   const handleClick = (db) => {
     if (db.internal) {
@@ -82,13 +86,61 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg, fontFamily: 'system-ui,sans-serif' }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
         {/* ヘッダー */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 11, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 8 }}>NEO Management</div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: T.text, margin: 0, marginBottom: 8 }}>NEO 運営DB</h1>
           <p style={{ fontSize: 14, color: T.textMuted, margin: 0 }}>
             {user?.email && <span>{user.email} としてログイン中</span>}
           </p>
         </div>
+
+        {/* 朝会セクション */}
+        <div style={{
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+          padding: '18px 20px', marginBottom: 28, position: 'relative', overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: '#ff9f43' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, background: '#ff9f4315',
+              border: '1px solid #ff9f4330', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontSize: 22, flexShrink: 0,
+            }}>🌅</div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>朝会</div>
+              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+                Notion で朝会を進行し、終わったらタスクをワンクリックで取り込みます
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => morningMeetingUrl ? window.open(morningMeetingUrl, '_blank') : alert('NEXT_PUBLIC_MORNING_MEETING_URL を環境変数に設定してください')}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, border: `1px solid ${T.border}`,
+                  background: T.bg, color: T.text, fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                }}
+              >📝 Notionで朝会を開く ↗</button>
+              <button
+                onClick={() => setShowMorningImport(true)}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, border: 'none',
+                  background: '#ff9f43', color: '#fff', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 8px rgba(255,159,67,0.3)',
+                }}
+              >📋 朝会タスクを取り込む</button>
+            </div>
+          </div>
+        </div>
+
+        {/* タスク取り込みモーダル */}
+        <MorningMeetingImport
+          open={showMorningImport}
+          onClose={() => setShowMorningImport(false)}
+          members={members}
+          T={TOuter || { bgCard: T.bgCard, text: T.text, textMuted: T.textMuted, borderMid: T.border, borderLight: T.border }}
+        />
 
         {/* ダッシュボードグリッド */}
         <div style={{
