@@ -130,8 +130,15 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
   const [hovered, setHovered] = useState(false)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
 
-  const startCol = visibleMonthOrder.indexOf(milestone.start_month) + 2
-  const endCol   = visibleMonthOrder.indexOf(milestone.end_month) + 3
+  // 可視月範囲にクランプして grid column を計算
+  const firstVisibleIdx = MONTH_ORDER.indexOf(visibleMonthOrder[0])
+  const lastVisibleIdx  = MONTH_ORDER.indexOf(visibleMonthOrder[visibleMonthOrder.length - 1])
+  const msStartIdx = MONTH_ORDER.indexOf(milestone.start_month)
+  const msEndIdx   = MONTH_ORDER.indexOf(milestone.end_month)
+  const clampedStartIdx = Math.max(msStartIdx, firstVisibleIdx)
+  const clampedEndIdx   = Math.min(msEndIdx, lastVisibleIdx)
+  const startCol = (clampedStartIdx - firstVisibleIdx) + 2
+  const endCol   = (clampedEndIdx - firstVisibleIdx) + 3
 
   const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
 
@@ -198,12 +205,12 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
 }
 
 // ─── OrgRow ──────────────────────────────────────────────────────────────────
-function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonthOrder = MONTH_ORDER }) {
+function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonthOrder = MONTH_ORDER, visibleGridCols = GRID_COLS }) {
   const { name, color, milestones } = org
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: GRID_COLS,
+      gridTemplateColumns: visibleGridCols,
       gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
       minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
     }}>
@@ -673,11 +680,12 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             )}
 
             {/* 月ヘッダー行 */}
-            <div style={{ display: 'grid', gridTemplateColumns: GRID_COLS, gap: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
               <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
-              {MONTH_LABELS.map((label, i) => {
-                const isCurrent = i === currentColIndex
-                const isQStart = i % 3 === 0
+              {visibleMonthLabels.map((label, i) => {
+                const fullIdx = MONTH_LABELS.indexOf(label)
+                const isCurrent = fullIdx === currentColIndex
+                const isQStart = fullIdx % 3 === 0
                 return (
                   <div key={label} style={{
                     textAlign: 'center', fontSize: 10,
@@ -706,9 +714,9 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             {/* 事業部行 */}
             {filteredTree.map(org => (
               <div key={org.id} style={{ display: 'contents' }}>
-                <OrgRow org={org} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
+                <OrgRow org={{ ...org, milestones: filterMs(org.milestones) }} isChild={false} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} visibleMonthOrder={visibleMonthOrder} visibleGridCols={visibleGridCols} />
                 {org.children.map(child => (
-                  <OrgRow key={child.id} org={{ ...child, milestones: filterMs(child.milestones) }} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} />
+                  <OrgRow key={child.id} org={{ ...child, milestones: filterMs(child.milestones) }} isChild={true} onEdit={handleEdit} onAddMilestone={handleAddMilestone} isAdmin={isAdmin} T={T} visibleMonthOrder={visibleMonthOrder} visibleGridCols={visibleGridCols} />
                 ))}
               </div>
             ))}
