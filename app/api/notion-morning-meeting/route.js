@@ -20,9 +20,15 @@ function getPageDate(page) {
     }
   }
   if (page.created_time) {
-    // UTC を JST に変換してから日付を抽出
     const jst = new Date(new Date(page.created_time).getTime() + 9 * 3600 * 1000)
     return jst.toISOString().split('T')[0]
+  }
+  return null
+}
+
+function getDatePropertyName(page) {
+  for (const [name, prop] of Object.entries(page.properties || {})) {
+    if (prop.type === 'date') return name
   }
   return null
 }
@@ -39,11 +45,7 @@ function extractTodosFromBlocks(blocks) {
     if (block.type === 'to_do') {
       const text = extractRichText(block.to_do?.rich_text).trim()
       if (text) {
-        todos.push({
-          text,
-          checked: block.to_do?.checked || false,
-          fromActionSection: inActionItems,
-        })
+        todos.push({ text, checked: block.to_do?.checked || false, fromActionSection: inActionItems })
       }
     }
     if (block.children && block.children.length > 0) {
@@ -72,59 +74,87 @@ async function getAllBlocks(notion, blockId, depth = 0) {
   return blocks
 }
 
-export async function GET() {
+function initNotion() {
+  const apiKey = process.env.NOTION_API_KEY
+  const dbId = process.env.NOTION_MORNING_MEETING_DB_ID
+  if (!apiKey) throw { status: 500, message: 'NOTION_API_KEY is not configured' }
+  if (!dbId) throw { status: 500, message: 'NOTION_MORNING_MEETING_DB_ID is not configured' }
+  return { notion: new Client({ auth: apiKey }), dbId }
+}
+
+async function getDataSourceId(notion, dbId) {
+  const db = await notion.databases.retrieve({ database_id: dbId })
+  const dsId = db?.data_sources?.[0]?.id
+  if (!dsId) throw { status: 500, message: 'DBから data_source を取得できませんでした' }
+  return { dataSourceId: dsId, db }
+}
+
+// GET: ページ一覧を返す（?pageId=xxx の場合はそのページのアクションアイテムを返す）
+export async function GET(req) {
   try {
-    const apiKey = process.env.NOTION_API_KEY
-    const dbId = process.env.NOTION_MORNING_MEETING_DB_ID
-    if (!apiKey) return Response.json({ error: 'NOTION_API_KEY is not configured' }, { status: 500 })
-    if (!dbId)   return Response.json({ error: 'NOTION_MORNING_MEETING_DB_ID is not configured' }, { status: 500 })
+    const { notion, dbId } = initNotion()
+    const { searchParams } = new URL(req.url)
+    const pageId = searchParams.get('pageId')
 
-    const notion = new Client({ auth: apiKey })
+    const { dataSourceId } = await getDataSourceId(notion, dbId)
 
-    // v5 SDK ではデータベースを「data source」経由でクエリする
-    // 1) まずDBを取得して data_sources 配列を得る
-    const db = await notion.databases.retrieve({ database_id: dbId })
-    const dataSourceId = db?.data_sources?.[0]?.id
-    if (!dataSourceId) {
-      return Response.json({ error: 'DBから data_source を取得できませんでした' }, { status: 500 })
+    // ─── 特定ページのアクションアイテムを取得 ───
+    if (pageId) {
+      const page = await notion.pages.retrieve({ page_id: pageId })
+      const pageTitle = getPageTitle(page)
+      const meetingDate = getPageDate(page)
+      const pageUrl = page.url
+
+      const blocks = await getAllBlocks(notion, pageId)
+      const allTodos = extractTodosFromBlocks(blocks)
+      const fromSection = allTodos.filter(t => t.fromActionSection)
+      const actionItems = (fromSection.length > 0 ? fromSection : allTodos)
+        .filter(t => !t.checked)
+        .map(({ text }) => ({ text }))
+
+      return Response.json({ pageTitle, meetingDate, pageUrl, actionItems })
     }
 
-    // 2) data source をクエリして最新の朝会ページを取得
-    const dbQuery = await notion.dataSources.query({
+    // ─── ページ一覧を返す（最新20件） ───
+    // Date プロパティでソートを試みる（見つからなければ created_time）
+    let sorts = [{ timestamp: 'created_time', direction: 'descending' }]
+
+    // DB の最初のページから Date プロパティ名を探す
+    const probe = await notion.dataSources.query({
       data_source_id: dataSourceId,
-      sorts: [{ timestamp: 'created_time', direction: 'descending' }],
       page_size: 1,
     })
-    if (!dbQuery.results?.length) {
-      return Response.json({ error: '朝会DBにページが見つかりません' }, { status: 404 })
+    if (probe.results?.length) {
+      const datePropName = getDatePropertyName(probe.results[0])
+      if (datePropName) {
+        sorts = [{ property: datePropName, direction: 'descending' }]
+      }
     }
-    const page = dbQuery.results[0]
-    const pageTitle = getPageTitle(page)
-    const meetingDate = getPageDate(page)
-    const pageUrl = page.url
 
-    // ブロックからto_doを抽出
-    const blocks = await getAllBlocks(notion, page.id)
-    const allTodos = extractTodosFromBlocks(blocks)
+    const dbQuery = await notion.dataSources.query({
+      data_source_id: dataSourceId,
+      sorts,
+      page_size: 20,
+    })
 
-    // 「アクションアイテム」セクションを優先、なければすべてのto_do
-    const fromSection = allTodos.filter(t => t.fromActionSection)
-    const actionItems = (fromSection.length > 0 ? fromSection : allTodos)
-      .filter(t => !t.checked) // 未完了のみ
-      .map(({ text }) => ({ text }))
+    const pages = (dbQuery.results || []).map(page => ({
+      id: page.id,
+      title: getPageTitle(page),
+      date: getPageDate(page),
+      url: page.url,
+    }))
 
-    return Response.json({ pageTitle, meetingDate, pageUrl, actionItems })
+    return Response.json({ pages })
   } catch (err) {
     console.error('notion-morning-meeting error:', err)
+    if (err.status && err.message) {
+      return Response.json({ error: err.message }, { status: err.status })
+    }
     if (err.code === 'object_not_found') {
-      return Response.json({
-        error: 'Notion DB が見つかりません。NOTION_MORNING_MEETING_DB_ID を確認し、Integration が DB に接続されているか確認してください。',
-      }, { status: 404 })
+      return Response.json({ error: 'Notion DB が見つかりません。Integration が DB に接続されているか確認してください。' }, { status: 404 })
     }
     if (err.code === 'unauthorized') {
-      return Response.json({
-        error: 'Notion API の認証に失敗しました。NOTION_API_KEY を確認してください。',
-      }, { status: 401 })
+      return Response.json({ error: 'Notion API の認証に失敗しました。' }, { status: 401 })
     }
     return Response.json({ error: err.message || 'Notion APIエラー' }, { status: 500 })
   }
