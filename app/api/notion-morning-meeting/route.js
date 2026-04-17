@@ -20,7 +20,9 @@ function getPageDate(page) {
     }
   }
   if (page.created_time) {
-    return page.created_time.split('T')[0]
+    // UTC を JST に変換してから日付を抽出
+    const jst = new Date(new Date(page.created_time).getTime() + 9 * 3600 * 1000)
+    return jst.toISOString().split('T')[0]
   }
   return null
 }
