@@ -79,9 +79,17 @@ export async function GET() {
 
     const notion = new Client({ auth: apiKey })
 
-    // 最新の朝会ページを取得（created_time降順）
-    const dbQuery = await notion.databases.query({
-      database_id: dbId,
+    // v5 SDK ではデータベースを「data source」経由でクエリする
+    // 1) まずDBを取得して data_sources 配列を得る
+    const db = await notion.databases.retrieve({ database_id: dbId })
+    const dataSourceId = db?.data_sources?.[0]?.id
+    if (!dataSourceId) {
+      return Response.json({ error: 'DBから data_source を取得できませんでした' }, { status: 500 })
+    }
+
+    // 2) data source をクエリして最新の朝会ページを取得
+    const dbQuery = await notion.dataSources.query({
+      data_source_id: dataSourceId,
       sorts: [{ timestamp: 'created_time', direction: 'descending' }],
       page_size: 1,
     })
