@@ -1,4 +1,5 @@
 import { Client } from '@notionhq/client'
+import { getMeetingDbId, getMeeting } from '../../../lib/meetings'
 
 function extractRichText(richTextArray) {
   if (!richTextArray || !Array.isArray(richTextArray)) return ''
@@ -74,29 +75,29 @@ async function getAllBlocks(notion, blockId, depth = 0) {
   return blocks
 }
 
-function initNotion() {
-  const apiKey = process.env.NOTION_API_KEY
-  const dbId = process.env.NOTION_MORNING_MEETING_DB_ID
-  if (!apiKey) throw { status: 500, message: 'NOTION_API_KEY is not configured' }
-  if (!dbId) throw { status: 500, message: 'NOTION_MORNING_MEETING_DB_ID is not configured' }
-  return { notion: new Client({ auth: apiKey }), dbId }
-}
-
-async function getDataSourceId(notion, dbId) {
-  const db = await notion.databases.retrieve({ database_id: dbId })
-  const dsId = db?.data_sources?.[0]?.id
-  if (!dsId) throw { status: 500, message: 'DBから data_source を取得できませんでした' }
-  return { dataSourceId: dsId, db }
-}
-
-// GET: ページ一覧を返す（?pageId=xxx の場合はそのページのアクションアイテムを返す）
 export async function GET(req) {
   try {
-    const { notion, dbId } = initNotion()
+    const apiKey = process.env.NOTION_API_KEY
+    if (!apiKey) return Response.json({ error: 'NOTION_API_KEY is not configured' }, { status: 500 })
+
     const { searchParams } = new URL(req.url)
+    const meetingKey = searchParams.get('meetingKey') || 'morning'
     const pageId = searchParams.get('pageId')
 
-    const { dataSourceId } = await getDataSourceId(notion, dbId)
+    const meeting = getMeeting(meetingKey)
+    if (!meeting) return Response.json({ error: `Unknown meetingKey: ${meetingKey}` }, { status: 400 })
+
+    const dbId = getMeetingDbId(meetingKey)
+    if (!dbId) return Response.json({ error: `${meeting.title} の DB_ID が設定されていません (環境変数を確認してください)` }, { status: 500 })
+
+    const notion = new Client({ auth: apiKey })
+
+    // v5 SDK: databases.retrieve → dataSources.query
+    const db = await notion.databases.retrieve({ database_id: dbId })
+    const dataSourceId = db?.data_sources?.[0]?.id
+    if (!dataSourceId) {
+      return Response.json({ error: 'DBから data_source を取得できませんでした' }, { status: 500 })
+    }
 
     // ─── 特定ページのアクションアイテムを取得 ───
     if (pageId) {
@@ -115,11 +116,9 @@ export async function GET(req) {
       return Response.json({ pageTitle, meetingDate, pageUrl, actionItems })
     }
 
-    // ─── ページ一覧を返す（最新20件） ───
-    // Date プロパティでソートを試みる（見つからなければ created_time）
+    // ─── ページ一覧（最新20件） ───
+    // Date プロパティでソート、なければ created_time
     let sorts = [{ timestamp: 'created_time', direction: 'descending' }]
-
-    // DB の最初のページから Date プロパティ名を探す
     const probe = await notion.dataSources.query({
       data_source_id: dataSourceId,
       page_size: 1,
@@ -146,10 +145,7 @@ export async function GET(req) {
 
     return Response.json({ pages })
   } catch (err) {
-    console.error('notion-morning-meeting error:', err)
-    if (err.status && err.message) {
-      return Response.json({ error: err.message }, { status: err.status })
-    }
+    console.error('notion-meeting error:', err)
     if (err.code === 'object_not_found') {
       return Response.json({ error: 'Notion DB が見つかりません。Integration が DB に接続されているか確認してください。' }, { status: 404 })
     }

@@ -3,11 +3,19 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
 
-export default function MorningMeetingImport({ open, onClose, members = [], T }) {
+// 汎用: どの会議でも使える議事録タスク取り込みモーダル
+//   props:
+//     open: boolean
+//     onClose: () => void
+//     meetingKey: string (例: 'morning', 'weekly-kickoff' など - lib/meetings.js 参照)
+//     meetingTitle: string (表示用)
+//     members: Array<{name: string}>
+//     T: themeオブジェクト
+export default function MeetingImport({ open, onClose, meetingKey = 'morning', meetingTitle = '朝会', members = [], T }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [pages, setPages] = useState([]) // ページ一覧
-  const [selectedPage, setSelectedPage] = useState(null) // 選択中のページ
+  const [pages, setPages] = useState([])
+  const [selectedPage, setSelectedPage] = useState(null)
   const [meetingInfo, setMeetingInfo] = useState(null)
   const [items, setItems] = useState([])
   const [allKAs, setAllKAs] = useState([])
@@ -17,13 +25,12 @@ export default function MorningMeetingImport({ open, onClose, members = [], T })
   const [kaSearch, setKaSearch] = useState('')
   const [loadingItems, setLoadingItems] = useState(false)
 
-  // モーダルを開いたらページ一覧 + 候補KAを取得
   useEffect(() => {
     if (!open) return
     setError(null); setSaved(null); setMeetingInfo(null); setItems([]); setSelectedPage(null); setPages([])
     setLoading(true)
     Promise.all([
-      fetch('/api/notion-morning-meeting').then(r => r.json()),
+      fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}`).then(r => r.json()),
       supabase.from('weekly_reports').select('id,ka_title,kr_id,objective_id,owner,status,week_start')
         .neq('status','done').order('week_start', { ascending: false }).order('ka_title'),
       supabase.from('objectives').select('id,title'),
@@ -40,14 +47,13 @@ export default function MorningMeetingImport({ open, onClose, members = [], T })
       const om = {}; (objs?.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
       setPages(nt.pages || [])
     }).catch(e => { setLoading(false); setError(e.message || '取得エラー') })
-  }, [open])
+  }, [open, meetingKey])
 
-  // ページを選択してアクションアイテムを取得
   const selectPage = async (page) => {
     setSelectedPage(page)
     setLoadingItems(true); setError(null); setItems([])
     try {
-      const res = await fetch(`/api/notion-morning-meeting?pageId=${page.id}`)
+      const res = await fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&pageId=${page.id}`)
       const nt = await res.json()
       if (nt?.error) { setError(nt.error); setLoadingItems(false); return }
       setMeetingInfo({ pageTitle: nt.pageTitle, meetingDate: nt.meetingDate, pageUrl: nt.pageUrl })
@@ -100,9 +106,9 @@ export default function MorningMeetingImport({ open, onClose, members = [], T })
       }}>
         {/* ヘッダー */}
         <div style={{ padding:'14px 18px', borderBottom:`1px solid ${T?.borderMid || '#e5e5e5'}`, display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ fontSize:18 }}>🌅</div>
+          <div style={{ fontSize:18 }}>📋</div>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:15, fontWeight:700 }}>朝会タスクの取り込み</div>
+            <div style={{ fontSize:15, fontWeight:700 }}>{meetingTitle} タスクの取り込み</div>
             {selectedPage && meetingInfo && (
               <div style={{ fontSize:11, color: T?.textMuted || '#888', marginTop:2 }}>
                 {meetingInfo.meetingDate} ・ {meetingInfo.pageTitle || '(無題)'}
@@ -112,7 +118,7 @@ export default function MorningMeetingImport({ open, onClose, members = [], T })
               </div>
             )}
             {!selectedPage && (
-              <div style={{ fontSize:11, color: T?.textMuted || '#888', marginTop:2 }}>取り込む朝会の日付を選択してください</div>
+              <div style={{ fontSize:11, color: T?.textMuted || '#888', marginTop:2 }}>取り込む議事録の日付を選択してください</div>
             )}
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, color: T?.textMuted || '#888', cursor:'pointer' }}>×</button>
@@ -120,15 +126,15 @@ export default function MorningMeetingImport({ open, onClose, members = [], T })
 
         {/* ボディ */}
         <div style={{ flex:1, overflow:'auto', padding:16 }}>
-          {loading && <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>朝会ページを読み込み中…</div>}
+          {loading && <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>議事録ページを読み込み中…</div>}
           {error && <div style={{ color:'#dc2626', fontSize:13, padding:'10px 12px', background:'rgba(220,38,38,0.08)', borderRadius:8, marginBottom:12 }}>{error}</div>}
           {saved && <div style={{ color:'#10b981', fontSize:13, padding:'10px 12px', background:'rgba(16,185,129,0.08)', borderRadius:8 }}>{saved.count}件のタスクを取り込みました ✓</div>}
 
-          {/* ── ステップ1: ページ選択 ── */}
+          {/* ステップ1: ページ選択 */}
           {!loading && !saved && !selectedPage && pages.length > 0 && (
             <div>
               <div style={{ fontSize:12, color: T?.textMuted || '#888', marginBottom:10 }}>
-                最新{pages.length}件の朝会ページ（Date プロパティ降順）
+                最新{pages.length}件のページ（Date プロパティ降順）
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                 {pages.map(p => (
@@ -152,10 +158,10 @@ export default function MorningMeetingImport({ open, onClose, members = [], T })
             </div>
           )}
           {!loading && !saved && !selectedPage && pages.length === 0 && !error && (
-            <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>朝会DBにページが見つかりませんでした。</div>
+            <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>議事録DBにページが見つかりませんでした。</div>
           )}
 
-          {/* ── ステップ2: アクションアイテム確認 ── */}
+          {/* ステップ2: アクションアイテム確認 */}
           {loadingItems && <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>アクションアイテムを読み込み中…</div>}
           {selectedPage && !loadingItems && !saved && items.length === 0 && !error && (
             <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>

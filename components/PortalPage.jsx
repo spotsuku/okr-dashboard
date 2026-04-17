@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
-import MorningMeetingImport from './MorningMeetingImport'
+import MeetingImport from './MeetingImport'
+import { MEETINGS, MEETING_URLS } from '../lib/meetings'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
 const DASHBOARDS = [
@@ -10,7 +11,7 @@ const DASHBOARDS = [
     description: 'OKR・KA・タスク管理',
     icon: '🎯',
     color: '#4d9fff',
-    internal: true, // アプリ内遷移
+    internal: true,
   },
   {
     id: 'cs',
@@ -69,24 +70,32 @@ const THEMES = {
 
 export default function PortalPage({ user, onNavigate, themeKey = 'dark', members = [], T: TOuter }) {
   const T = THEMES[themeKey] || THEMES.dark
-  const [showMorningImport, setShowMorningImport] = useState(false)
-  const morningMeetingUrl = process.env.NEXT_PUBLIC_MORNING_MEETING_URL
+  const [importMeetingKey, setImportMeetingKey] = useState(null)
 
   const handleClick = (db) => {
     if (db.internal) {
       onNavigate('mycoach')
     } else if (db.url) {
       window.open(db.url, '_blank')
-    } else {
-      // URL未設定
     }
   }
 
+  const openMeetingNotion = (m) => {
+    const url = MEETING_URLS[m.key]
+    if (!url) {
+      alert(`${m.title} のURLが環境変数に設定されていません (NEXT_PUBLIC_${m.key.toUpperCase().replace(/-/g,'_')}_URL)`)
+      return
+    }
+    window.open(url, '_blank')
+  }
+
+  const currentMeeting = importMeetingKey ? MEETINGS.find(m => m.key === importMeetingKey) : null
+
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg, fontFamily: 'system-ui,sans-serif' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
         {/* ヘッダー */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 8 }}>NEO Management</div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: T.text, margin: 0, marginBottom: 8 }}>NEO 運営DB</h1>
           <p style={{ fontSize: 14, color: T.textMuted, margin: 0 }}>
@@ -94,55 +103,64 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
           </p>
         </div>
 
-        {/* 朝会セクション */}
-        <div style={{
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-          padding: '18px 20px', marginBottom: 28, position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: '#ff9f43' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: 12, background: '#ff9f4315',
-              border: '1px solid #ff9f4330', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: 22, flexShrink: 0,
-            }}>🌅</div>
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>朝会</div>
-              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-                Notion で朝会を進行し、終わったらタスクをワンクリックで取り込みます
+        {/* 会議グリッド */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, letterSpacing: '0.08em', marginBottom: 10, textTransform: 'uppercase' }}>📋 定例会議</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10 }}>
+            {MEETINGS.map(m => (
+              <div key={m.key} style={{
+                background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
+                padding: '12px 14px', position: 'relative', overflow: 'hidden',
+              }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: m.color }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, background: `${m.color}15`,
+                    border: `1px solid ${m.color}30`, display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 18, flexShrink: 0,
+                  }}>{m.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.title}</div>
+                    <div style={{ fontSize: 10, color: T.textMuted }}>{m.schedule}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={() => openMeetingNotion(m)}
+                    style={{
+                      flex: 1, padding: '6px 8px', borderRadius: 7, border: `1px solid ${T.border}`,
+                      background: T.bg, color: T.text, fontSize: 10.5, fontWeight: 600,
+                      cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    }}
+                  >📝 Notion ↗</button>
+                  <button
+                    onClick={() => setImportMeetingKey(m.key)}
+                    style={{
+                      flex: 1, padding: '6px 8px', borderRadius: 7, border: 'none',
+                      background: m.color, color: '#fff', fontSize: 10.5, fontWeight: 700,
+                      cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    }}
+                  >📋 取り込み</button>
+                </div>
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => morningMeetingUrl ? window.open(morningMeetingUrl, '_blank') : alert('NEXT_PUBLIC_MORNING_MEETING_URL を環境変数に設定してください')}
-                style={{
-                  padding: '8px 14px', borderRadius: 8, border: `1px solid ${T.border}`,
-                  background: T.bg, color: T.text, fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                }}
-              >📝 Notionで朝会を開く ↗</button>
-              <button
-                onClick={() => setShowMorningImport(true)}
-                style={{
-                  padding: '8px 14px', borderRadius: 8, border: 'none',
-                  background: '#ff9f43', color: '#fff', fontSize: 12, fontWeight: 700,
-                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                  boxShadow: '0 2px 8px rgba(255,159,67,0.3)',
-                }}
-              >📋 朝会タスクを取り込む</button>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* タスク取り込みモーダル */}
-        <MorningMeetingImport
-          open={showMorningImport}
-          onClose={() => setShowMorningImport(false)}
-          members={members}
-          T={TOuter || { bgCard: T.bgCard, text: T.text, textMuted: T.textMuted, borderMid: T.border, borderLight: T.border }}
-        />
+        {/* 取り込みモーダル */}
+        {currentMeeting && (
+          <MeetingImport
+            open={!!importMeetingKey}
+            onClose={() => setImportMeetingKey(null)}
+            meetingKey={currentMeeting.key}
+            meetingTitle={currentMeeting.title}
+            members={members}
+            T={TOuter || { bgCard: T.bgCard, text: T.text, textMuted: T.textMuted, borderMid: T.border, borderLight: T.border }}
+          />
+        )}
 
         {/* ダッシュボードグリッド */}
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, letterSpacing: '0.08em', marginBottom: 10, textTransform: 'uppercase' }}>📊 ダッシュボード</div>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -168,7 +186,6 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
                 onMouseEnter={e => { if (isAvailable) { e.currentTarget.style.borderColor = db.color + '60'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 24px ${db.color}15` } }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
               >
-                {/* アクセントライン */}
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: db.color }} />
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
