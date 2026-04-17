@@ -134,42 +134,65 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
   const [noKaLink, setNoKaLink] = useState(false)
   const [allKAs, setAllKAs] = useState([])
   const [objMap, setObjMap] = useState({})
+  const [levels, setLevels] = useState([])
   const [loadingKAs, setLoadingKAs] = useState(true)
   const [saving, setSaving] = useState(false)
   const [kaSearch, setKaSearch] = useState('')
+  const [selectedDept, setSelectedDept] = useState('')
+  const [selectedTeam, setSelectedTeam] = useState('')
 
   useEffect(() => {
     ;(async () => {
-      // 最新週のKAのみ取得（同タイトルの重複を排除）
-      const { data: kas } = await supabase.from('weekly_reports')
-        .select('id,ka_title,kr_id,objective_id,owner,status,week_start')
-        .neq('status', 'done').order('week_start', { ascending: false }).order('ka_title')
-      // 同じka_title+owner+objective_idの組み合わせで最新のものだけ残す
+      const [kasRes, levelsRes] = await Promise.all([
+        supabase.from('weekly_reports')
+          .select('id,ka_title,kr_id,objective_id,level_id,owner,status,week_start')
+          .neq('status', 'done').order('week_start', { ascending: false }).order('ka_title'),
+        supabase.from('levels').select('id,name,parent_id,icon,color'),
+      ])
       const seen = new Set()
-      const uniqueKAs = (kas || []).filter(ka => {
+      const uniqueKAs = (kasRes?.data || []).filter(ka => {
         const key = `${ka.ka_title}_${ka.owner}_${ka.objective_id}`
         if (seen.has(key)) return false
-        seen.add(key)
-        return true
+        seen.add(key); return true
       })
       setAllKAs(uniqueKAs)
+      setLevels(levelsRes?.data || [])
       const objIds = [...new Set(uniqueKAs.map(k => k.objective_id).filter(Boolean))]
       if (objIds.length > 0) {
-        const { data: objs } = await supabase.from('objectives').select('id,title,owner,period').in('id', objIds)
+        const { data: objs } = await supabase.from('objectives').select('id,title,owner,period,level_id').in('id', objIds)
         const m = {}; (objs || []).forEach(o => { m[o.id] = o }); setObjMap(m)
       }
       setLoadingKAs(false)
     })()
   }, [])
 
-  // KA検索フィルタ + 自分のKA優先 + Objective別グループ化
+  // 部署/チーム階層を構築
+  const topLevels = levels.filter(l => !l.parent_id)
+  const childLevels = selectedDept ? levels.filter(l => String(l.parent_id) === String(selectedDept)) : []
+
+  // KA検索フィルタ + 部署/チーム絞り込み
   const q = kaSearch.toLowerCase()
   const filteredKAs = allKAs.filter(ka => {
-    if (!q) return true
-    const obj = objMap[ka.objective_id]
-    return (ka.ka_title||'').toLowerCase().includes(q)
-      || (ka.owner||'').toLowerCase().includes(q)
-      || (obj?.title||'').toLowerCase().includes(q)
+    // テキスト検索
+    if (q) {
+      const obj = objMap[ka.objective_id]
+      const match = (ka.ka_title||'').toLowerCase().includes(q)
+        || (ka.owner||'').toLowerCase().includes(q)
+        || (obj?.title||'').toLowerCase().includes(q)
+      if (!match) return false
+    }
+    // 部署/チーム絞り込み
+    if (selectedDept || selectedTeam) {
+      const obj = objMap[ka.objective_id]
+      const kaLevelId = ka.level_id || obj?.level_id
+      if (selectedTeam) {
+        if (String(kaLevelId) !== String(selectedTeam)) return false
+      } else if (selectedDept) {
+        const deptAndChildren = [String(selectedDept), ...levels.filter(l => String(l.parent_id) === String(selectedDept)).map(l => String(l.id))]
+        if (!deptAndChildren.includes(String(kaLevelId))) return false
+      }
+    }
+    return true
   })
   const myKAs = filteredKAs.filter(ka => ka.owner === myName)
   const otherKAs = filteredKAs.filter(ka => ka.owner !== myName)
@@ -205,7 +228,7 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 28px', minWidth: 420, maxWidth: 520, width: '90%', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 28px', minWidth: 420, maxWidth: 560, width: '90%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 20 }}>タスクを追加</div>
 
         {/* タイトル */}
@@ -241,8 +264,25 @@ function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
               <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>KA一覧を読み込み中...</div>
             ) : (
               <>
+                {/* 部署・チーム絞り込み */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  <select value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setSelectedTeam(''); setReportId('') }} style={{ ...inputSt, fontSize: 12, flex: 1 }}>
+                    <option value="">全部署</option>
+                    {topLevels.map(l => (
+                      <option key={l.id} value={l.id}>{l.icon || '📁'} {l.name}</option>
+                    ))}
+                  </select>
+                  {childLevels.length > 0 && (
+                    <select value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); setReportId('') }} style={{ ...inputSt, fontSize: 12, flex: 1 }}>
+                      <option value="">全チーム</option>
+                      {childLevels.map(l => (
+                        <option key={l.id} value={l.id}>{l.icon || '📁'} {l.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <input value={kaSearch} onChange={e => setKaSearch(e.target.value)} placeholder="🔍 KAを検索（タイトル・担当者・OKR名）" style={{ ...inputSt, marginBottom: 6, fontSize: 12 }} />
-                {kaSearch && <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>{filteredKAs.length}件のKAが見つかりました</div>}
+                {(kaSearch || selectedDept) && <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>{filteredKAs.length}件のKAが見つかりました</div>}
                 <select value={reportId} onChange={e => setReportId(e.target.value)} style={{ ...inputSt, cursor: 'pointer', borderColor: !reportId ? 'rgba(255,107,107,0.4)' : T.border }} size={Math.min(filteredKAs.length + 2, 10)}>
                   <option value="">-- KAを選択してください --</option>
                   {myKAs.length > 0 && (
