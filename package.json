@@ -8,9 +8,10 @@
     "start": "next start"
   },
   "dependencies": {
+    "@notionhq/client": "^5.17.0",
+    "@supabase/supabase-js": "^2.43.1",
     "next": "14.2.3",
     "react": "^18",
-    "react-dom": "^18",
-    "@supabase/supabase-js": "^2.43.1"
+    "react-dom": "^18"
   }
 }

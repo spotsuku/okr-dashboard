@@ -11,6 +11,9 @@ import CompanySummaryPage from './CompanySummaryPage'
 import OrgPage from './OrgPage'
 import MilestonePage from './MilestonePage'
 import OwnerOKRView from './OwnerOKRView'
+import MyTasksPage from './MyTasksPage'
+import MyCoachPage from './MyCoachPage'
+import PortalPage from './PortalPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -263,7 +266,7 @@ function Btn({ children, onClick, color = getT().accentSolid, variant = 'filled'
 function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod, fiscalYear, members }) {
   const [title, setTitle]     = useState(initial?.title || '')
   const [owner, setOwner]     = useState(initial?.owner || '')
-  const [levelId, setLevelId] = useState(String(activeLevelId || levels[0]?.id))
+  const [levelId, setLevelId] = useState(String(initial?.level_id || activeLevelId || levels[0]?.id))
   const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
@@ -272,32 +275,30 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   )
   const [saving, setSaving] = useState(false)
   const [parentObj, setParentObj] = useState(null)
+  const [parentId, setParentId] = useState(initial?.parent_objective_id || null)
+  const [annualObjList, setAnnualObjList] = useState([]) // 同組織の通期OKR一覧
 
-  // 四半期OKRの場合、通期OKRを参照として取得
+  // 四半期OKRの場合、同組織の通期OKR一覧を取得
   useEffect(() => {
     const isQuarterly = ['q1','q2','q3','q4'].includes(period)
-    if (!isQuarterly) { setParentObj(null); return }
-    const parentId = initial?.parent_objective_id
-    if (parentId) {
-      // parent_objective_id がある場合は直接取得
-      ;(async () => {
-        const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
-        if (!obj) { setParentObj(null); return }
-        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
-        setParentObj({ ...obj, key_results: krData || [] })
-      })()
-    } else {
-      // level_id で通期OKRを検索
-      ;(async () => {
-        const annualKey = fiscalYear === '2026' ? 'annual' : `${fiscalYear}_annual`
-        const { data: objs } = await supabase.from('objectives').select('id,title,owner').eq('period', annualKey).eq('level_id', parseInt(levelId))
-        if (!objs?.length) { setParentObj(null); return }
-        const obj = objs[0]
-        const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
-        setParentObj({ ...obj, key_results: krData || [] })
-      })()
-    }
-  }, [period, levelId]) // eslint-disable-line
+    if (!isQuarterly) { setAnnualObjList([]); setParentObj(null); return }
+    ;(async () => {
+      const annualKey = fiscalYear === '2026' ? 'annual' : `${fiscalYear}_annual`
+      const { data: objs } = await supabase.from('objectives').select('id,title,owner').eq('period', annualKey).eq('level_id', parseInt(levelId))
+      setAnnualObjList(objs || [])
+    })()
+  }, [period, levelId, fiscalYear])
+
+  // 選択中の通期OKRの詳細（KR含む）を取得
+  useEffect(() => {
+    if (!parentId) { setParentObj(null); return }
+    ;(async () => {
+      const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
+      if (!obj) { setParentObj(null); return }
+      const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+      setParentObj({ ...obj, key_results: krData || [] })
+    })()
+  }, [parentId])
 
   const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
@@ -305,34 +306,27 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 
   const save = async () => {
     if (!title.trim()) return
-    // Q期OBJは新規作成時のみparent_objective_idが必須（編集時はスキップ）
+    // Q期OBJはparent_objective_idが必須
     const isQ = ['q1','q2','q3','q4'].includes(period)
-    const isNew = !initial?.id
-    if (isQ && isNew && !initial?.parent_objective_id) {
-      alert('Q期OBJは通期OBJのQ期タブから追加してください。')
+    if (isQ && !parentId) {
+      alert('Q期OBJには紐付ける通期OKRを選択してください。')
       return
     }
     setSaving(true)
     await onSave({
-      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: initial?.parent_objective_id || null },
+      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: parentId || null },
       krs: krs.map(k => ({ ...k, target: parseFloat(k.target) || 0, current: parseFloat(k.current) || 0 })),
     })
     setSaving(false)
     onClose()
   }
 
-  // ＋追加ボタンからはQ期OBJを作成不可（通期OBJから紐付けが必要なため）
-  // AnnualViewのQ期タブから追加する場合（parent_objective_idあり）のみQ期を選択可
-  const isFromAnnual = !!initial?.parent_objective_id
-  const periodOpts = isFromAnnual
-    ? [
-        { value: 'annual', label: '通期' },
-        { value: 'q1', label: 'Q1' }, { value: 'q2', label: 'Q2' },
-        { value: 'q3', label: 'Q3' }, { value: 'q4', label: 'Q4' },
-      ]
-    : [
-        { value: 'annual', label: '通期' },
-      ]
+  // 通期・Q期どちらも選択可能（Q期選択時は通期OKR紐付けドロップダウンが表示される）
+  const periodOpts = [
+    { value: 'annual', label: '通期' },
+    { value: 'q1', label: 'Q1' }, { value: 'q2', label: 'Q2' },
+    { value: 'q3', label: 'Q3' }, { value: 'q4', label: 'Q4' },
+  ]
 
   return (
     <>
@@ -349,9 +343,28 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           📅 {fiscalYear}年度
         </div>
       </div>
-      <FSelect label="所属レベル" value={levelId} onChange={setLevelId}
-        options={levels.map(l => ({ value: String(l.id), label: `${l.icon} ${l.name}` }))} />
-      <FSelect label="期間" value={period} onChange={setPeriod} options={periodOpts} />
+      <FSelect label="所属組織" value={levelId} onChange={setLevelId}
+        options={levels.map(l => {
+          const depth = (() => { let d=0,cur=l; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
+          return { value: String(l.id), label: `${'　'.repeat(depth)}${l.icon} ${l.name}` }
+        })} />
+      <FSelect label="期間" value={period} onChange={v => { setPeriod(v); if (v === 'annual') setParentId(null) }} options={periodOpts} />
+      {['q1','q2','q3','q4'].includes(period) && (
+        <div style={{ marginBottom: 13 }}>
+          <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>紐付け通期OKR <span style={{ color: '#ff6b6b' }}>*</span></div>
+          <select value={parentId || ''} onChange={e => setParentId(e.target.value ? parseInt(e.target.value) : null)} style={{
+            width: '100%', background: getT().bgCard2, border: `1px solid ${parentId ? 'rgba(255,255,255,0.1)' : 'rgba(255,107,107,0.4)'}`,
+            borderRadius: 8, padding: '9px 12px', color: parentId ? '#e8eaf0' : '#505878', fontSize: 13,
+            outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
+          }}>
+            <option value="">-- 通期OKRを選択 --</option>
+            {annualObjList.map(o => <option key={o.id} value={o.id}>{o.title}{o.owner ? ` (${o.owner})` : ''}</option>)}
+          </select>
+          {annualObjList.length === 0 && (
+            <div style={{ fontSize: 11, color: '#ff6b6b', marginTop: 4 }}>この組織に通期OKRがありません。先に通期OKRを作成してください。</div>
+          )}
+        </div>
+      )}
       <FInput label="目標タイトル" value={title} onChange={setTitle} placeholder="例: 市場シェアを拡大する" />
       <div style={{ marginBottom: 13 }}>
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>オーナー</div>
@@ -765,153 +778,21 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
   )
 }
 
-// ─── Org Modal ────────────────────────────────────────────────────────────────
-function OrgModal({ levels, onClose, onAdd, onDelete, fiscalYear, onCopyFromYear }) {
-  const [name, setName] = useState('')
-  const [icon, setIcon] = useState('👥')
-  const [parentId, setParentId] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(null)
-
-  const roots = levels.filter(l => !l.parent_id)
-  const getChildren = id => levels.filter(l => Number(l.parent_id) === id)
-
-  const addableParents = levels.filter(l => {
-    const depth = (() => {
-      let d = 0, cur = l
-      while (cur && cur.parent_id) { d++; cur = levels.find(x => x.id === cur.parent_id) }
-      return d
-    })()
-    return depth < 2
-  })
-
-  const save = async () => {
-    if (!name.trim() || !parentId) return
-    setSaving(true)
-    await onAdd({ name: name.trim(), icon, parent_id: parseInt(parentId) })
-    setName(''); setSaving(false)
-  }
-
-  const confirmDelete = async (level) => {
-    const children = getChildren(level.id)
-    const msg = children.length
-      ? `「${level.name}」と配下の${children.length}件を削除しますか？\n関連するOKRもすべて削除されます。`
-      : `「${level.name}」を削除しますか？\n関連するOKRもすべて削除されます。`
-    if (!window.confirm(msg)) return
-    setDeleting(level.id)
-    await onDelete(level.id)
-    setDeleting(null)
-  }
-
-  const ICONS = ['🏢','🚀','⚙️','💼','👥','📊','🎯','💡','🌟','🔥','📈','🤝']
-
-  function LevelRow({ level, depth = 0 }) {
-    const children = getChildren(level.id)
-    const absD = (() => { let d=0,cur=level; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
-    const col = { 0: getT().warn, 1: getT().accent, 2: getT().accent }[absD] || getT().textMuted
-    const lbl = { 0:'経営', 1:'事業部', 2:'チーム' }[absD] || ''
-    const isRoot = absD === 0
-    return (
-      <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:`8px 10px 8px ${10+depth*16}px`, borderRadius:7, marginBottom:3, background:getT().bgCard2, border:`1px solid ${getT().border}` }}>
-          <span style={{ fontSize:13 }}>{level.icon}</span>
-          <span style={{ flex:1, fontSize:12, fontWeight:500, color:getT().text }}>{level.name}</span>
-          <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
-          {!isRoot && (
-            <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
-              background: getT().warnBg, border:`1px solid ${getT().warnBg}`, color: getT().warn,
-              borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
-              opacity: deleting === level.id ? 0.5 : 1,
-            }}>{deleting === level.id ? '削除中' : '削除'}</button>
-          )}
-        </div>
-        {children.map(c => <LevelRow key={c.id} level={c} depth={depth+1} />)}
-      </>
-    )
-  }
-
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.78)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:getT().bgCard, border:`1px solid ${getT().border}`, borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
-            <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: getT().badgeBg, color: '#fff', border:`1px solid ${getT().badgeBorder}`}}>
-              {fiscalYear}年度
-            </span>
-          </div>
-          <button onClick={onClose} style={{ background:getT().border, border:'none', color:getT().textMuted, width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-        </div>
-
-        {onCopyFromYear && (
-          <div style={{ marginBottom:16, padding:'10px 12px', background:`${getT().accent}08`, border:`1px solid ${getT().accent}30`, borderRadius:10 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
-            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-              {['2025','2026'].filter(y=>y!==fiscalYear).map(y=>(
-                <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:`1px solid ${getT().accent}40`, background:`${getT().accent}10`, color:getT().textMuted, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-                  {y}年度からコピー
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize:10, color:getT().textMuted, marginTop:6 }}>※ 現在の{fiscalYear}年度の組織に追加されます（重複は除外）</div>
-          </div>
-        )}
-
-        <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:10, color:getT().textMuted, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>
-            {fiscalYear}年度の現在の組織（{levels.length}件）
-          </div>
-          {levels.length === 0 ? (
-            <div style={{ fontSize:12, color:getT().textFaint, fontStyle:'italic', padding:'12px 8px', textAlign:'center' }}>
-              この年度の組織がまだありません。他年度からコピーするか、新規追加してください。
-            </div>
-          ) : (
-            roots.map(l => <LevelRow key={l.id} level={l} />)
-          )}
-        </div>
-
-        <div style={{ borderTop:`1px solid ${getT().border}`, paddingTop:18 }}>
-          <div style={{ fontSize:10, color:getT().textMuted, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>新しい組織を追加</div>
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>親組織</div>
-            <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color: parentId ? getT().text : getT().textMuted, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
-              <option value=''>選択してください</option>
-              {addableParents.map(l => {
-                const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
-                const label = d===0 ? '事業部として追加' : 'チームとして追加'
-                return <option key={l.id} value={l.id}>{l.icon} {l.name}の下に（{label}）</option>
-              })}
-            </select>
-          </div>
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, marginBottom:5 }}>組織名</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="例: 西日本営業チーム"
-              style={{ width:'100%', background:getT().bgCard2, border:`1px solid ${getT().border}`, borderRadius:8, padding:'9px 12px', color:getT().text, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
-          </div>
-          <div style={{ marginBottom:16 }}>
-            <div style={{ fontSize:11, color:getT().textMuted, marginBottom:8 }}>アイコン</div>
-            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-              {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? getT().accentSolid : getT().border}`, background: icon===ic ? getT().badgeBg : getT().bgCard2, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
-            <button onClick={onClose} style={{ background:'transparent', border:`1px solid ${getT().border}`, color:getT().textMuted, borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? getT().badgeBg : getT().accentSolid, border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ user, onSignOut }) {
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
-  const [activeLevelId, setActiveLevelId]   = useState(null)
+  const [activeLevelId, setActiveLevelId]   = useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('dashboard_activeLevelId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeLevelId == null) localStorage.removeItem('dashboard_activeLevelId')
+    else localStorage.setItem('dashboard_activeLevelId', String(activeLevelId))
+  }, [activeLevelId])
   const [fiscalYear, setFiscalYear]         = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -919,26 +800,26 @@ export default function Dashboard({ user, onSignOut }) {
     }
     return '2026'
   })
-  const [activePeriod, setActivePeriod]     = useState('annual')
+  const [activePeriod, setActivePeriod]     = useState(() => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' })
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
   const [initialAIMessage, setInitialAIMessage] = useState(null)
-  const [showOrgModal, setShowOrgModal]     = useState(false)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
   const [activePage, setActivePage]         = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
-      return params.get('page') || 'summary'
+      return params.get('page') || 'portal'
     }
-    return 'summary'
+    return 'portal'
   })
   const [viewMode, setViewMode]             = useState('annual')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
   const [themeKey, setThemeKey]                 = useState('light')
   const [syncStatus, setSyncStatus]             = useState('connecting')
   const [selectedOwner, setSelectedOwner]       = useState(null)
+  const [taskViewMode, setTaskViewMode]         = useState('my') // 'my' | 'all'
   const T = THEMES[themeKey]
   _T = T
   if (typeof window !== 'undefined') window.__OKR_THEME__ = T
@@ -1023,6 +904,12 @@ export default function Dashboard({ user, onSignOut }) {
         if (payload.eventType === 'INSERT') setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
         else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
         else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
+      })
+      // levels 変更（組織名変更等）
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'levels' }, payload => {
+        if (payload.eventType === 'INSERT') setLevels(prev => prev.some(l => l.id === payload.new.id) ? prev : [...prev, payload.new])
+        else if (payload.eventType === 'UPDATE') setLevels(prev => prev.map(l => l.id === payload.new.id ? payload.new : l))
+        else if (payload.eventType === 'DELETE') setLevels(prev => prev.filter(l => l.id !== payload.old.id))
       })
       .subscribe(status => {
         setSyncStatus(status === 'SUBSCRIBED' ? 'synced' : status === 'CHANNEL_ERROR' ? 'error' : 'connecting')
@@ -1116,10 +1003,46 @@ export default function Dashboard({ user, onSignOut }) {
 
     let objectiveId = objToSave.id
     if (objToSave.id) {
-      const { error: updErr } = await supabase.from('objectives').update({ title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }).eq('id', objToSave.id)
+      const updatePayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
+      if (objToSave.parent_objective_id !== undefined) updatePayload.parent_objective_id = objToSave.parent_objective_id
+      const { error: updErr } = await supabase.from('objectives').update(updatePayload).eq('id', objToSave.id)
       if (updErr) { console.error('objective update error:', updErr); alert('目標の更新に失敗しました: ' + updErr.message); return }
-      const { error: delErr } = await supabase.from('key_results').delete().eq('objective_id', objToSave.id)
-      if (delErr) console.error('KR delete error:', delErr)
+
+      // 所属組織変更時、紐づくKA(weekly_reports)のlevel_idも更新
+      await supabase.from('weekly_reports').update({ level_id: objToSave.level_id }).eq('objective_id', objToSave.id)
+
+      // KRを選択的に更新（全削除→再作成ではなく、個別にupsert/delete）
+      const validKRs = krs.filter(k => k.title?.trim())
+      const existingKRIds = validKRs.filter(k => k.id && !String(k.id).startsWith('_tmp')).map(k => k.id)
+
+      // 削除されたKRのみ削除（フォームから消えたものだけ）
+      const { data: currentKRs } = await supabase.from('key_results').select('id').eq('objective_id', objToSave.id)
+      const currentIds = (currentKRs || []).map(k => k.id)
+      const idsToDelete = currentIds.filter(id => !existingKRIds.includes(id))
+      if (idsToDelete.length > 0) {
+        await supabase.from('key_results').delete().in('id', idsToDelete)
+      }
+
+      // 既存KRを更新
+      for (const kr of validKRs) {
+        if (kr.id && !String(kr.id).startsWith('_tmp')) {
+          await supabase.from('key_results').update({
+            title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+            lower_is_better: !!kr.lower_is_better, owner: kr.owner || ''
+          }).eq('id', kr.id)
+        }
+      }
+
+      // 新規KRのみ挿入
+      const newKRs = validKRs.filter(k => !k.id || String(k.id).startsWith('_tmp'))
+      if (newKRs.length > 0) {
+        const krPayloads = newKRs.map(kr => ({
+          title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+        }))
+        const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
+        if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+      }
     } else {
       const insertPayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
       if (objToSave.parent_objective_id) insertPayload.parent_objective_id = objToSave.parent_objective_id
@@ -1129,15 +1052,15 @@ export default function Dashboard({ user, onSignOut }) {
         .select().single()
       if (error) { console.error('objective insert error:', error); alert('目標の保存に失敗しました: ' + error.message); return }
       objectiveId = data.id
-    }
-    const validKRs = krs.filter(k => k.title?.trim())
-    if (validKRs.length && objectiveId) {
-      const krPayloads = validKRs.map(kr => ({
-        title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
-        lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
-      }))
-      const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
-      if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+      const validKRs = krs.filter(k => k.title?.trim())
+      if (validKRs.length) {
+        const krPayloads = validKRs.map(kr => ({
+          title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
+          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+        }))
+        const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
+        if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+      }
     }
     setActiveLevelId(objToSave.level_id)
     await loadSubtree(objToSave.level_id, activePeriod, levels, fiscalYear)
@@ -1182,58 +1105,6 @@ export default function Dashboard({ user, onSignOut }) {
     setAnnualRefreshKey(k => k + 1)
   }
 
-  const handleAddLevel = async ({ name, icon, parent_id }) => {
-    const { data, error } = await supabase
-      .from('levels').insert({ name, icon, parent_id: parent_id || null, color: getT().accentSolid, fiscal_year: fiscalYear }).select().single()
-    if (error) { console.error('add level error:', error); return }
-    setLevels(p => [...p, data])
-  }
-
-  const handleDeleteLevel = async (levelId) => {
-    const subtree = getSubtree(levelId, levels)
-    for (const lid of subtree) {
-      const { data: objs } = await supabase.from('objectives').select('id').eq('level_id', lid)
-      if (objs?.length) {
-        const ids = objs.map(o => o.id)
-        await supabase.from('key_results').delete().in('objective_id', ids)
-        await supabase.from('objectives').delete().in('id', ids)
-      }
-      await supabase.from('levels').delete().eq('id', lid)
-    }
-    const newLevels = levels.filter(l => !subtree.includes(l.id))
-    setLevels(newLevels)
-    if (subtree.includes(activeLevelId)) {
-      const newRoot = newLevels.find(l => !l.parent_id)
-      setActiveLevelId(newRoot?.id || null)
-    }
-  }
-
-  const handleCopyFromYear = async (fromYear) => {
-    const { data: srcLevels } = await supabase.from('levels').select('*').eq('fiscal_year', fromYear).order('id')
-    if (!srcLevels?.length) { alert(`${fromYear}年度の組織データがありません`); return }
-    if (!window.confirm(`${fromYear}年度の組織構成（${srcLevels.length}件）を${fiscalYear}年度にコピーしますか？`)) return
-
-    const idMap = {}
-    const sorted = []
-    const addSorted = (parentId) => {
-      srcLevels.filter(l => (parentId === null ? !l.parent_id : Number(l.parent_id) === Number(parentId))).forEach(l => { sorted.push(l); addSorted(l.id) })
-    }
-    addSorted(null)
-
-    for (const l of sorted) {
-      const newParentId = l.parent_id ? idMap[l.parent_id] : null
-      const { data: inserted } = await supabase.from('levels').insert({
-        name: l.name, icon: l.icon, color: l.color || getT().accentSolid,
-        parent_id: newParentId || null, fiscal_year: fiscalYear,
-      }).select().single()
-      if (inserted) idMap[l.id] = inserted.id
-    }
-
-    const { data: newLvls } = await supabase.from('levels').select('*').eq('fiscal_year', fiscalYear).order('id')
-    if (newLvls?.length) { setLevels(newLvls); setActiveLevelId(newLvls[0].id) }
-    alert(`${fromYear}年度の組織構成を${fiscalYear}年度にコピーしました！`)
-  }
-
   const handleLinkGoogle = async () => {
     const { error } = await supabase.auth.linkIdentity({
       provider: 'google',
@@ -1245,9 +1116,9 @@ export default function Dashboard({ user, onSignOut }) {
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
-    { key: 'annual', label: '通期' },
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
     { key: 'q3', label: 'Q3' }, { key: 'q4', label: 'Q4' },
+    { key: 'annual', label: '通期' },
   ]
 
   const roots = levels.filter(l => !l.parent_id)
@@ -1296,11 +1167,6 @@ export default function Dashboard({ user, onSignOut }) {
           {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
         </div>
         {roots.map(l => <LevelItem key={l.id} level={l} />)}
-        <button onClick={() => setShowOrgModal(true)} style={{
-          width:'100%', marginTop:10, background: getT().badgeBg, border:`1px dashed ${getT().badgeBorder}`,
-          color: getT().accent, borderRadius:7, padding:'7px 10px', fontSize:11, fontWeight:600,
-          cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-        }}>🏗️ 組織を管理</button>
         <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
           <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
           {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
@@ -1338,9 +1204,9 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
+    <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50 }}>
+      <div style={{ borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
         <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, overflow: 'visible' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -1351,30 +1217,42 @@ export default function Dashboard({ user, onSignOut }) {
             }}>☰</button>
             {!isMobile && (
               <div>
-                <div style={{ fontSize: 10, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase' }}>OKR Management</div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>OKR ダッシュボード</div>
+                <div style={{ fontSize: 10, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase' }}>NEO Management</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>NEO 運営DB</div>
               </div>
             )}
           </div>
 
           {/* ページナビ */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+            {/* ホーム */}
+            <button onClick={() => setActivePage('portal')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'portal' ? T.navActiveBg : 'transparent', color: activePage === 'portal' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🏠 ホーム</button>
+            {/* マイページ */}
+            <button onClick={() => setActivePage('mycoach')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mycoach' ? T.navActiveBg : 'transparent', color: activePage === 'mycoach' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイページ</button>
             {/* マイルストーン */}
-            <button onClick={() => setActivePage('milestone')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'milestone' ? T.navActiveBg : 'transparent', color: activePage === 'milestone' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイルストーン</button>
+            <button onClick={() => setActivePage('milestone')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'milestone' ? T.navActiveBg : 'transparent', color: activePage === 'milestone' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイルストーン</button>
             {/* OKR ドロップダウン */}
             <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.okr-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.okr-dropdown').style.display='none'}>
-              <button style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: ['summary','okr'].includes(activePage) ? T.navActiveBg : 'transparent', color: ['summary','okr'].includes(activePage) ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR ▾</button>
-              <div className="okr-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', left: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 140, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+              <button style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: ['summary','okr'].includes(activePage) ? T.navActiveBg : 'transparent', color: ['summary','okr'].includes(activePage) ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR ▾</button>
+              <div className="okr-dropdown" style={{ display: 'none', position: 'absolute', top: 'calc(100% - 2px)', left: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, paddingTop: 6, minWidth: 140, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
                 <button onClick={() => setActivePage('summary')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'summary' ? T.navActiveBg : 'transparent', color: activePage === 'summary' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>全体サマリー</button>
                 <button onClick={() => setActivePage('okr')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>OKR詳細</button>
               </div>
             </div>
             {/* マイOKR */}
-            <button onClick={() => setActivePage('myokr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'myokr' ? T.navActiveBg : 'transparent', color: activePage === 'myokr' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイOKR</button>
+            <button onClick={() => setActivePage('myokr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'myokr' ? T.navActiveBg : 'transparent', color: activePage === 'myokr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイOKR</button>
+            {/* タスク ドロップダウン */}
+            <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.task-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.task-dropdown').style.display='none'}>
+              <button style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>タスク ▾</button>
+              <div className="task-dropdown" style={{ display: 'none', position: 'absolute', top: 'calc(100% - 2px)', left: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, paddingTop: 6, minWidth: 140, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                <button onClick={() => { setActivePage('mytasks'); setTaskViewMode('my') }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' && taskViewMode === 'my' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' && taskViewMode === 'my' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>マイタスク</button>
+                <button onClick={() => { setActivePage('mytasks'); setTaskViewMode('all') }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>全社タスク</button>
+              </div>
+            </div>
             {/* 週次MTG */}
-            <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
+            <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
             {/* 組織 */}
-            <button onClick={() => setActivePage('orgjd')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'orgjd' ? T.navActiveBg : 'transparent', color: activePage === 'orgjd' ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>組織</button>
+            <button onClick={() => setActivePage('orgjd')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'orgjd' ? T.navActiveBg : 'transparent', color: activePage === 'orgjd' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>組織</button>
           </div>
 
           {/* 年度切り替え */}
@@ -1436,10 +1314,13 @@ export default function Dashboard({ user, onSignOut }) {
       </div>
 
       {/* ─── ページ切替 ─── */}
+      {activePage === 'portal' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><PortalPage user={user} onNavigate={setActivePage} themeKey={themeKey} members={members} T={T} /></div>}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
+      {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}
+      {activePage === 'mycoach' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyCoachPage user={user} members={members} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
       {activePage === 'summary' && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
       {activePage === 'milestone' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
@@ -1567,16 +1448,6 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {showOrgModal && (
-        <OrgModal
-          levels={levels}
-          onClose={() => setShowOrgModal(false)}
-          onAdd={handleAddLevel}
-          onDelete={handleDeleteLevel}
-          fiscalYear={fiscalYear}
-          onCopyFromYear={handleCopyFromYear}
-        />
-      )}
       {showAI && (
         <AIPanel
           onClose={() => { setShowAI(false); setInitialAIMessage(null) }}

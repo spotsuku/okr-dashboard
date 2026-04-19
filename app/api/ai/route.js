@@ -1,66 +1,102 @@
 export async function POST(request) {
-  const { csvText, departments } = await request.json()
-
-  const systemPrompt = `あなたはOKRデータのCSV解析AIです。
-与えられたCSVテキストを解析し、以下のJSONフォーマットのみで返してください。
-前後に説明文、バッククォート、コードブロック記号は一切含めないでください。
-必ず有効なJSONのみを返してください。
-
-出力フォーマット:
-{"rows":[{"title":"目標タイトル","owner":"担当者名","department":"部署名","period":"q1|q2|q3|q4|annual","krs":[{"title":"KRタイトル","target":数値,"current":数値,"unit":"単位"}],"fixes":["補正内容"]}],"summary":{"total":件数,"fixed":補正数,"warnings":警告数}}
-
-利用可能な部署名リスト: ${(departments || []).join(', ')}
-
-補正ルール:
-- 列名が異なっても意味から推測してマッピングする
-- 部署名はリストの中から最も近いものに補正する
-- 期間は q1/q2/q3/q4/annual に統一する（「第1四半期」「Q1」「1Q」→「q1」、「通期」「年間」→「annual」）
-- 全角数字は半角に変換する
-- target/currentが文字列の場合は数値に変換する（「2.4億円」→240000000など）
-- 補正した内容はfixesに日本語で記録する
-- OKRとして意味のある行のみ抽出する（ヘッダー行・メモ行・空行は無視）`
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-6',
-      max_tokens: 4000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: `以下のCSVを解析してください:\n\n${csvText}` }],
-    }),
-  })
-
-  const data = await response.json()
-
-  if (!response.ok) {
-    return Response.json({ error: data.error?.message || 'AI解析エラーが発生しました' }, { status: 500 })
-  }
-
   try {
-    const text = data.content[0].text
+    const { messages, context } = await request.json()
 
-    // バッククォート・コードブロック除去
-    let clean = text
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .trim()
-
-    // JSON部分だけ抽出（{から始まる部分を探す）
-    const start = clean.indexOf('{')
-    const end = clean.lastIndexOf('}')
-    if (start !== -1 && end !== -1) {
-      clean = clean.slice(start, end + 1)
+    if (!messages || !Array.isArray(messages)) {
+      return Response.json({ error: 'messages is required' }, { status: 400 })
     }
 
-    const parsed = JSON.parse(clean)
-    return Response.json(parsed)
+    // OKRコーチとしてのシステムプロンプト
+    const contextStr = context ? JSON.stringify(context, null, 0) : '(データなし)'
+    const premisesText = context?.premises?.length > 0
+      ? `\n【AI前提条件（管理者設定）】\n${context.premises.map((p,i) => `${i+1}. ${p}`).join('\n')}\n`
+      : ''
+    const systemPrompt = `あなたはNEO福岡の「OKR AIコーチ」です。メンバーのOKR目標達成を支援する専門コーチとして対応してください。
+
+【NEO福岡について】
+NEO福岡は、福岡を拠点に「挑戦する人が活躍できる土壌をオール九州で作り、各社の幹部が組織変革のノウハウを学び、実践できるか」を理念とする組織です。日本の未来を九州に広げ、新しい経済団体と若手人材育成のモデルとして信頼を確立することを目指しています。
+
+主な事業部:
+- パートナー事業部: パートナー企業数の拡大と成功支援を通じてNEOの信頼を確立し、お互いの成長関係を築く
+- ユース事業部: NEOアカデミアを福岡のユースの憧れの場所にする
+- コミュニティ事業部: 福岡を代表する次世代リーダーが継続的に生まれ続ける仕組みを確立する
+- 経営企画部: 広報・プログラム企画・基金・総務・採用育成
+- 評議会・アカデミア・研修などのチームが各事業部配下にあります
+
+【OKRの運用方針】
+- OKR = Objectives and Key Results（目標と主要な成果指標）
+- Objective: 定性的な目標。「どうすれば〜できるか」の形式で設定することが多い
+- KR（Key Results）: 定量的な成果指標。達成率で★0〜★5の5段階評価
+  ★5(奇跡): 150%以上 / ★4(変革): 120%以上 / ★3(順調以上): 100%以上 / ★2(順調): 80%以上 / ★1(最低限): 60%以上 / ★0(未達): 60%未満
+- OKRはストレッチ目標が推奨。70%達成が理想的なバランス
+- 期間: 通期(annual)またはQ1〜Q4の四半期単位
+
+【KA（Key Actions）の運用】
+- KAは四半期のKRを達成するための中期アクション（週次で変わるものではない）
+- 週次ではfocusするKAを3つ程度に絞り、上司と合意する
+- ステータスの意味:
+  - focus: 今週注力するKA
+  - good: うまくいっているKA（成功パターンを継続）
+  - more: 改善が必要なKA（打ち手が有効でない可能性 → 見直し提案が必要）
+  - done: 完了したKA
+- 通期KAとQ期KAは別物で重複しない。合算して負荷を判断しないこと
+
+【コンテキストの読み方】
+- currentQuarterが現在のQ期。このQのデータに基づいてアドバイスする
+- focusKAsが今週注力中のKA → これに基づいてアクションプランを作成
+- moreKAsは打ち手の見直しが必要 → 代替アクションを提案
+- goodKAsはうまくいっているKA → 成功パターンの継続を推奨
+- currentQObjectivesが今Q期のObjective、annualObjectivesが通期のObjective
+- milestonesは今Q期の組織マイルストーン（期日・進捗を参照）
+- jobDescriptionはユーザーの職務記述書（役割・責務を踏まえてアドバイス）
+- orgTasksはOKR外の定常業務
+- isMonthEndがtrueの場合、Q期のKAが通期OKRの達成にどうつながるか確認を促す
+
+【OKRフィードバックのポイント】
+- Good: 成功体験を具体的に記録し、再現性を高める
+- More: 打ち手が有効でない可能性。見直しと代替アクションの提案が必要
+- Focus: 今週特に注力すべきKA。リソースを集中させる
+- KR達成率が低い場合は、KAの見直しや新しいアプローチを提案する
+- チーム間の連携やリソース配分にも目を配る
+${premisesText}
+【回答ルール】
+- 必ず日本語で回答する
+- 簡潔かつ具体的に回答する（箇条書きを活用）
+- 抽象的なアドバイスではなく、明日からできる具体的なアクションを提案する
+- ユーザーの頑張りを認め、ポジティブなフィードバックを含める
+- 現在のfiscalYear・currentQuarterのデータのみに基づいて回答する（他の期のデータを混同しない）
+- ユーザーのJD（職務記述書）の内容を踏まえ、その役割・責務に即したアドバイスをする
+- マイルストーンの期日が近い場合は優先度を上げて提案する
+- NEOの事業内容や理念を踏まえたアドバイスをする
+
+【ユーザーのOKRデータ】
+${contextStr}`
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      return Response.json({ error: data.error?.message || 'AI APIエラーが発生しました' }, { status: 500 })
+    }
+
+    const content = data.content?.[0]?.text || 'レスポンスを取得できませんでした'
+    return Response.json({ content })
   } catch (e) {
-    console.error('Parse error:', e, 'Raw response:', data.content?.[0]?.text?.slice(0, 500))
-    return Response.json({ error: 'AIの応答をパースできませんでした。CSVの形式を確認してください。' }, { status: 500 })
+    console.error('AI chat error:', e)
+    return Response.json({ error: 'エラーが発生しました: ' + e.message }, { status: 500 })
   }
 }

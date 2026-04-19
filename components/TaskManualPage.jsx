@@ -326,7 +326,9 @@ function StepCard({ step, si, phaseColor, editMode, onChange, onDelete, T }) {
 // ─────────────────────────────────────────────────
 // フェーズブロック
 // ─────────────────────────────────────────────────
-function PhaseBlock({ phase, pi, deptColor, editMode, onUpdate, onDelete, onAddStep, onUpdateStep, onDeleteStep, T }) {
+function PhaseBlock({ phase, pi, deptColor, editMode, onUpdate, onDelete, onAddStep, onUpdateStep, onDeleteStep, onReorderStep, T }) {
+  const [dragIdx, setDragIdx] = useState(null)
+  const [overIdx, setOverIdx] = useState(null)
   const isOnboard  = phase.badgeClass === 'onboard'
   const phaseColor = isOnboard ? T.green : deptColor
   const badgeSt    = isOnboard
@@ -357,9 +359,17 @@ function PhaseBlock({ phase, pi, deptColor, editMode, onUpdate, onDelete, onAddS
         )}
       </div>
       {phase.steps.map((step, si) => (
-        <StepCard key={si} step={step} si={si} phaseColor={phaseColor} editMode={editMode}
-          onChange={(f, v) => onUpdateStep(pi, si, f, v)}
-          onDelete={() => onDeleteStep(pi, si)} T={T} />
+        <div key={si}
+          draggable={editMode}
+          onDragStart={() => setDragIdx(si)}
+          onDragEnd={() => { if (dragIdx !== null && overIdx !== null && dragIdx !== overIdx) onReorderStep(pi, dragIdx, overIdx); setDragIdx(null); setOverIdx(null) }}
+          onDragOver={e => { e.preventDefault(); setOverIdx(si) }}
+          style={{ opacity: dragIdx === si ? 0.4 : 1, borderTop: editMode && overIdx === si && dragIdx !== null && dragIdx !== si ? `2px solid ${phaseColor}` : '2px solid transparent', transition: 'opacity 0.15s', cursor: editMode ? 'grab' : 'default' }}
+        >
+          <StepCard step={step} si={si} phaseColor={phaseColor} editMode={editMode}
+            onChange={(f, v) => onUpdateStep(pi, si, f, v)}
+            onDelete={() => onDeleteStep(pi, si)} T={T} />
+        </div>
       ))}
       {editMode && (
         <button onClick={() => onAddStep(pi)}
@@ -681,6 +691,11 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
     mutData(ps => ps[pi].steps.splice(si, 1))
   }
   const onUpdateStep   = (pi, si, f, v) => mutData(ps => { ps[pi].steps[si][f] = v })
+  const onReorderStep  = (pi, fromIdx, toIdx) => mutData(ps => {
+    const steps = ps[pi].steps
+    const [moved] = steps.splice(fromIdx, 1)
+    steps.splice(toIdx, 0, moved)
+  })
 
   const cur        = selectedId ? (data[selectedId] || null) : null
   const totalSteps = cur ? cur.phases.reduce((s, p) => s + p.steps.length, 0) : 0
@@ -803,7 +818,7 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
               <PhaseBlock key={pi} phase={phase} pi={pi} deptColor={deptColor} editMode={editMode}
                 onUpdate={onUpdatePhase} onDelete={onDeletePhase}
                 onAddStep={onAddStep} onUpdateStep={onUpdateStep} onDeleteStep={onDeleteStep}
-                T={T} />
+                onReorderStep={onReorderStep} T={T} />
             ))}
 
             {/* フェーズ追加 */}

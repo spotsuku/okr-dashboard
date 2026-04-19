@@ -1,16 +1,31 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
+import { computeKAKey } from '../lib/kaKey'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
+// JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
 function getMondayOf(date) {
-  const d = new Date(date)
-  const day = d.getDay()
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
-  return d.toISOString().split('T')[0]
+  const dt = typeof date === 'string' ? new Date(date) : (date || new Date())
+  const jst = new Date(dt.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  const mon = new Date(Date.UTC(
+    jst.getUTCFullYear(),
+    jst.getUTCMonth(),
+    jst.getUTCDate() + diff
+  ))
+  return mon.toISOString().split('T')[0]
 }
-const currentWeek = getMondayOf(new Date())
+function formatWeekLabel(mondayStr) {
+  const [y, m, day] = mondayStr.split('-').map(Number)
+  const sun = new Date(Date.UTC(y, m - 1, day + 6))
+  const m2 = sun.getUTCMonth() + 1
+  const d2 = sun.getUTCDate()
+  return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
+}
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
@@ -89,9 +104,13 @@ function Avatar({ name, avatarUrl, size = 22, wT }) {
 }
 
 // ─── KRカード ─────────────────────────────────────────────────────────────────
-function KRCard({ kr, myName, members, wT }) {
+function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const [currentVal,  setCurrentVal]  = useState(String(kr.current ?? ''))
   const [editingVal,  setEditingVal]  = useState(false)
+  const [krEditing,   setKrEditing]   = useState(false)
+  const [krTitle,     setKrTitle]     = useState(kr.title || '')
+  const [krTarget,    setKrTarget]    = useState(String(kr.target ?? ''))
+  const [krUnit,      setKrUnit]      = useState(kr.unit || '')
   const [krSaving,    setKrSaving]    = useState(false)
   const [krSaved,     setKrSaved]     = useState(false)
   const [review,      setReview]      = useState(null)
@@ -109,17 +128,34 @@ function KRCard({ kr, myName, members, wT }) {
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
 
   useEffect(() => {
+    // 週が変わったら入力をリセットして新しい週のレビューを読み込む
+    setReview(null); setWeather(0); setGood(''); setMore(''); setFocus('')
     supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', currentWeek).maybeSingle()
       .then(({ data }) => {
         if (data) { setReview(data); setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
       })
-  }, [kr.id])
+  }, [kr.id, currentWeek])
 
   const saveKR = async () => {
     const val = parseFloat(currentVal); if (isNaN(val)) return
     setKrSaving(true)
     await supabase.from('key_results').update({ current: val }).eq('id', kr.id)
     setKrSaving(false); setKrSaved(true); setEditingVal(false)
+    setTimeout(() => setKrSaved(false), 1500)
+  }
+
+  const saveKRFull = async () => {
+    setKrSaving(true)
+    const payload = {
+      title: krTitle.trim() || kr.title,
+      current: parseFloat(currentVal) || 0,
+      target: parseFloat(krTarget) || 0,
+      unit: krUnit,
+    }
+    await supabase.from('key_results').update(payload).eq('id', kr.id)
+    setKrSaving(false); setKrSaved(true); setKrEditing(false)
+    setCurrentVal(String(payload.current))
+    if (onKRUpdated) onKRUpdated()
     setTimeout(() => setKrSaved(false), 1500)
   }
 
@@ -207,6 +243,51 @@ function KRCard({ kr, myName, members, wT }) {
               </div>
             </div>
           </div>
+          {/* KR編集セクション */}
+          <div style={{ marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${krEditing?'rgba(255,159,67,0.4)':wT().border}`, transition:'border-color 0.15s' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#ff9f43', textTransform:'uppercase', letterSpacing:'0.08em' }}>📝 KR設定</div>
+              {!krEditing && (
+                <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:'1px solid rgba(255,159,67,0.3)', background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
+              )}
+            </div>
+            {!krEditing ? (
+              <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:6, fontSize:12, color:wT().textSub, flexWrap:'wrap' }}>
+                <span>タイトル: <b style={{ color:wT().text }}>{kr.title}</b></span>
+                <span>現在値: <b style={{ color:pctColor }}>{parseFloat(currentVal)||0}{kr.unit}</b></span>
+                <span>目標: <b style={{ color:wT().text }}>{kr.target}{kr.unit}</b></span>
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom:6 }}>
+                  <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>タイトル</div>
+                  <input value={krTitle} onChange={e=>setKrTitle(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>現在値</div>
+                    <input type="number" value={currentVal} onChange={e=>setCurrentVal(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:pctColor, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>目標値</div>
+                    <input type="number" value={krTarget} onChange={e=>setKrTarget(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>単位</div>
+                    <input value={krUnit} onChange={e=>setKrUnit(e.target.value)} placeholder="件, %, 万円..." style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                  </div>
+                </div>
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:6 }}>
+                  <button onClick={() => { setKrEditing(false); setKrTitle(kr.title||''); setCurrentVal(String(kr.current??'')); setKrTarget(String(kr.target??'')); setKrUnit(kr.unit||'') }}
+                    style={{ padding:'4px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>キャンセル</button>
+                  <button onClick={saveKRFull} disabled={krSaving}
+                    style={{ padding:'4px 14px', borderRadius:6, background:krSaved?'#00d68f':'#ff9f43', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                    {krSaved?'✓ 保存済み':krSaving?'保存中...':'KRを保存'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
             <div style={{ minWidth:0 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good — うまくいったこと</div>
@@ -223,7 +304,7 @@ function KRCard({ kr, myName, members, wT }) {
             <div style={{ flex:1, height:1, background:wT().border }} />
           </div>
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 今週の注力アクション</div>
+            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 来週の注力アクション</div>
             <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか・何に力を入れるか" style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
@@ -239,15 +320,28 @@ function KRCard({ kr, myName, members, wT }) {
 }
 
 // ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ reportId, members, wT, onClose }) {
+function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
+  const reportId = report?.id
+  const kaKey = computeKAKey(report)
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState({})
   const ref = useRef(null)
+  const tasksRef = useRef(tasks)
+  tasksRef.current = tasks
 
   useEffect(() => {
-    supabase.from('ka_tasks').select('*').eq('report_id', reportId).order('id')
+    if (!kaKey) return
+    supabase.from('ka_tasks').select('*').eq('ka_key', kaKey).order('id')
       .then(({data}) => { setTasks(data||[]); setLoaded(true) })
-  }, [reportId])
+  }, [kaKey])
+
+  useEffect(() => {
+    if (loaded && onTaskCountChange) {
+      const saved = tasks.filter(t => t.id)
+      onTaskCountChange({ done: saved.filter(t => t.done).length, total: saved.length })
+    }
+  }, [tasks, loaded]) // eslint-disable-line
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose() }
@@ -255,52 +349,62 @@ function TaskPopover({ reportId, members, wT, onClose }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  const addTask = () => setTasks(p => [...p, { _tmp:Date.now(), title:'', assignee:'', due_date:'', done:false, report_id:reportId }])
-  const updateTask = (key, f, v) => setTasks(p => p.map(t => (t.id||t._tmp)===key ? {...t,[f]:v} : t))
+  const addTask = async () => {
+    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId, ka_key:kaKey }
+    const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
+    if (ins) setTasks(p => [...p, ins])
+  }
+  const updateTask = (key, f, v) => {
+    setTasks(p => p.map(t => t.id===key ? {...t,[f]:v} : t))
+  }
   const removeTask = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
-    if (t?.id) await supabase.from('ka_tasks').delete().eq('id', t.id)
-    setTasks(p => p.filter(x => (x.id||x._tmp)!==key))
+    await supabase.from('ka_tasks').delete().eq('id', key)
+    setTasks(p => p.filter(x => x.id!==key))
   }
   const toggleDone = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
+    const t = tasks.find(x => x.id===key)
     const nd = !t.done
-    if (t?.id) await supabase.from('ka_tasks').update({ done:nd }).eq('id', t.id)
-    setTasks(p => p.map(x => (x.id||x._tmp)===key ? {...x,done:nd} : x))
-  }
-  const saveTask = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
-    if (!t) return
-    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:reportId }
-    if (t.id) { await supabase.from('ka_tasks').update(d).eq('id', t.id) }
-    else if (t.title?.trim()) {
-      const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
-      if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
+    await supabase.from('ka_tasks').update({ done:nd }).eq('id', key)
+    setTasks(p => p.map(x => x.id===key ? {...x,done:nd} : x))
+    if (nd) {
+      fetch('/api/slack-task-done', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: key, taskTitle: t.title, kaTitle, objectiveTitle, completedBy }),
+      }).catch(() => {})
     }
   }
-  const done = tasks.filter(t=>t.done).length
+  const saveTask = async (key) => {
+    const t = tasksRef.current.find(x => x.id===key)
+    if (!t) return
+    setSaving(p => ({...p, [key]: true}))
+    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done }
+    await supabase.from('ka_tasks').update(d).eq('id', t.id)
+    setSaving(p => { const n = {...p}; delete n[key]; return n })
+  }
+  const doneCount = tasks.filter(t=>t.done).length
 
   return (
-    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:380, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
+    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:420, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {done}/{tasks.length}</span>
+        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {doneCount}/{tasks.length}</span>
         <button onClick={addTask} style={{ marginLeft:4, background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', borderRadius:4, color:'#a855f7', fontSize:10, padding:'2px 6px', cursor:'pointer', fontFamily:'inherit' }}>＋</button>
         <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
       </div>
       {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
       {tasks.map(t => {
-        const key = t.id||t._tmp; const tc = avatarColor(t.assignee)
+        const key = t.id; const tc = avatarColor(t.assignee); const isSaving = saving[key]
         return (
           <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
             <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${t.done?'#00d68f':wT().borderMid}`, background:t.done?'#00d68f':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
               {t.done && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
             </div>
-            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} onBlur={()=>saveTask(key)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
-            <select value={t.assignee||''} onChange={e=>{updateTask(key,'assignee',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
+            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
+            <select value={t.assignee||''} onChange={e=>updateTask(key,'assignee',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
               <option value="">担当</option>
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
-            <input type="date" value={t.due_date||''} onChange={e=>{updateTask(key,'due_date',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            <input type="date" value={t.due_date||''} onChange={e=>updateTask(key,'due_date',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            <button onClick={()=>saveTask(key)} disabled={isSaving} style={{ padding:'2px 8px', borderRadius:4, border:'none', background:isSaving?'#666':'#a855f7', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>{isSaving?'...':'保存'}</button>
             <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:3, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>
           </div>
         )
@@ -310,7 +414,7 @@ function TaskPopover({ reportId, members, wT, onClose }) {
 }
 
 // ─── KAインライン行 ──────────────────────────────────────────────────────────
-function MyKARow({ report, onSave, onDelete, wT, members }) {
+function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, objectiveTitle }) {
   const [good,         setGood]         = useState(report.good || '')
   const [more,         setMore]         = useState(report.more || '')
   const [focusOutput,  setFocusOutput]  = useState(report.focus_output || '')
@@ -327,12 +431,14 @@ function MyKARow({ report, onSave, onDelete, wT, members }) {
   const ownerMember = members?.find(m => m.name === (ownerDraft||report.owner))
   const STATUS_ORDER = ['normal','focus','good','more']
 
+  const myKAKey = computeKAKey(report)
   useEffect(() => {
-    supabase.from('ka_tasks').select('id,done').eq('report_id', report.id)
+    if (!myKAKey) return
+    supabase.from('ka_tasks').select('id,done').eq('ka_key', myKAKey)
       .then(({data}) => {
         if (data) setTaskCount({ done:data.filter(t=>t.done).length, total:data.length })
       })
-  }, [report.id])
+  }, [myKAKey])
 
   useEffect(() => {
     const ff = autoSave.focusedField
@@ -358,18 +464,31 @@ function MyKARow({ report, onSave, onDelete, wT, members }) {
     onSave({ ...report, status: next })
   }
 
+  // KA のタイトル/オーナー変更時に既存タスクの ka_key を追従更新
+  const syncTaskKaKey = async (oldKey, newKey) => {
+    if (!oldKey || !newKey || oldKey === newKey) return
+    await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
+  }
+
   const handleOwnerChange = (val) => {
     setOwnerDraft(val)
     autoSave.save('owner', val)
     onSave({ ...report, owner: val })
+    const oldKey = computeKAKey(report)
+    const newKey = computeKAKey({ ...report, owner: val })
+    syncTaskKaKey(oldKey, newKey)
   }
 
   const handleTitleBlur = () => {
     setEditingTitle(false)
     autoSave.setFocusedField(null)
     if (kaTitle.trim() && kaTitle !== report.ka_title) {
-      autoSave.saveNow('ka_title', kaTitle.trim())
-      onSave({ ...report, ka_title: kaTitle.trim() })
+      const newTitle = kaTitle.trim()
+      autoSave.saveNow('ka_title', newTitle)
+      onSave({ ...report, ka_title: newTitle })
+      const oldKey = computeKAKey(report)
+      const newKey = computeKAKey({ ...report, ka_title: newTitle })
+      syncTaskKaKey(oldKey, newKey)
     }
   }
 
@@ -460,12 +579,12 @@ function MyKARow({ report, onSave, onDelete, wT, members }) {
       {/* Tasks + Delete */}
       <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4, justifyContent:'center' }}>
-          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:taskCount.total>0?'#a855f7':wT().textFaint, cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
-            {taskCount.total>0 ? `${taskCount.done}/${taskCount.total}` : '—'}
+          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:'#a855f7', cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
+            {`${taskCount.done}/${taskCount.total}`}
           </span>
           <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
         </div>
-        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} />}
+        {showTasks && <TaskPopover report={report} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
       <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
@@ -497,6 +616,7 @@ function KATableHeader({ wT }) {
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
+  const { isMobile, isTablet } = useResponsive()
   const W_THEMES = {
     dark: {
       bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -522,8 +642,50 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] } - kept for potential future use
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
-  const [activeObjId,setActiveObjId]= useState(null)
-  const [activePeriod,setActivePeriod]=useState('all')
+  const [activeObjId,setActiveObjId]= useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('myOKR_activeObjId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeObjId == null) localStorage.removeItem('myOKR_activeObjId')
+    else localStorage.setItem('myOKR_activeObjId', String(activeObjId))
+  }, [activeObjId])
+  const [activeLevelId,setActiveLevelId]= useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('myOKR_activeLevelId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeLevelId == null) localStorage.removeItem('myOKR_activeLevelId')
+    else localStorage.setItem('myOKR_activeLevelId', String(activeLevelId))
+  }, [activeLevelId])
+  // 現在のQを自動判定（4月=Q1, 7月=Q2, 10月=Q3, 1月=Q4）
+  const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
+  const [activePeriod,setActivePeriod]=useState(getCurrentQ())
+
+  // 現在の週（月曜日）を動的に保持。日付変更を検知して自動更新
+  const [currentWeek, setCurrentWeek] = useState(() => getMondayOf(new Date()))
+  useEffect(() => {
+    const id = setInterval(() => {
+      const w = getMondayOf(new Date())
+      setCurrentWeek(prev => prev === w ? prev : w)
+    }, 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // 翌週の月曜日を計算（YYYY-MM-DD）
+  const nextWeek = (() => {
+    const [y, m, d] = currentWeek.split('-').map(Number)
+    const next = new Date(Date.UTC(y, m - 1, d + 7))
+    return next.toISOString().split('T')[0]
+  })()
+
+  // 「今週」or「翌週」の選択（前週の金曜日に翌週の Good/More を書きたいケース対応）
+  const [weekMode, setWeekMode] = useState('this') // 'this' | 'next'
+  const selectedWeek = weekMode === 'next' ? nextWeek : currentWeek
 
   useEffect(() => {
     if (!myName) return
@@ -579,7 +741,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       const krIds = allMyKRs.map(k=>k.id)
       let revData = []
       if (krIds.length > 0) {
-        const { data } = await supabase.from('kr_weekly_reviews').select('*').in('kr_id', krIds).eq('week_start', currentWeek)
+        const { data } = await supabase.from('kr_weekly_reviews').select('*').in('kr_id', krIds).eq('week_start', selectedWeek)
         revData = data || []
       }
       const revMap = {}
@@ -596,20 +758,51 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         }
       }
 
+      // ★ 週コピーで同じKAが複数週に存在する場合の重複排除
+      //   優先順位:
+      //     1. 選択中の週 (selectedWeek = 今週 or 翌週) と一致する行
+      //     2. 次点: 選択中の週より未来は除外し、過去で最も新しい週
+      //     3. どれもなければ (まれ) 最新週の行
+      //   これにより、将来の空行に今週の内容が隠されるのを防ぐ
+      const kaByKey = {}
+      for (const ka of allMyKAs) {
+        const key = `${ka.kr_id}_${ka.ka_title}_${ka.owner}_${ka.objective_id}`
+        const cur = kaByKey[key]
+        if (!cur) { kaByKey[key] = ka; continue }
+        const curWs = cur.week_start || ''
+        const newWs = ka.week_start || ''
+        const curIsSelected = curWs === selectedWeek
+        const newIsSelected = newWs === selectedWeek
+        if (newIsSelected && !curIsSelected) { kaByKey[key] = ka; continue }
+        if (curIsSelected && !newIsSelected) { continue }
+        // どちらも選択週と一致しない場合: 選択週以前で最新を優先
+        const curIsFuture = curWs > selectedWeek
+        const newIsFuture = newWs > selectedWeek
+        if (!newIsFuture && curIsFuture) { kaByKey[key] = ka; continue }
+        if (newIsFuture && !curIsFuture) { continue }
+        // 両方過去 or 両方未来: より新しい方
+        if (newWs > curWs) { kaByKey[key] = ka }
+      }
+      const dedupedKAs = Object.values(kaByKey)
+
       setObjectives(filteredObjs)
       setKeyResults(allMyKRs)
-      setKaReports(allMyKAs)
+      setKaReports(dedupedKAs)
       setKaTasks(allTasksMap)
       setReviews(revMap)
       setLoading(false)
     }
     load()
-  }, [myName, fiscalYear])
+  }, [myName, fiscalYear, currentWeek, selectedWeek])
 
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
-  const visibleObjs = objectives.filter(o => activePeriod === 'all' || rawPeriod(o.period) === activePeriod)
+  const visibleObjs = objectives.filter(o => {
+    if (activePeriod !== 'all' && rawPeriod(o.period) !== activePeriod) return false
+    if (activeLevelId && Number(o.level_id) !== Number(activeLevelId)) return false
+    return true
+  })
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
   const handleKADelete = async (id) => {
@@ -618,7 +811,29 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     setKaReports(p=>p.filter(r=>r.id!==id))
   }
 
-  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
+
+  // 組織図サイドバー
+  const roots = levels.filter(l => !l.parent_id)
+  // 自分のObjectiveがある組織のみハイライト
+  const myLevelIds = new Set(objectives.map(o => Number(o.level_id)))
+  function renderSb(level, indent=0) {
+    const d = getDepth(level.id, levels)
+    const color = LAYER_COLORS[d] || '#a0a8be'
+    const isActive = Number(activeLevelId)===Number(level.id)
+    const hasMyObj = myLevelIds.has(Number(level.id))
+    return (
+      <div key={level.id}>
+        <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
+          style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', paddingLeft:8+indent*14, borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent', opacity:hasMyObj?1:0.5 }}>
+          <span style={{ fontSize:13 }}>{level.icon}</span>
+          <span style={{ fontSize:11, flex:1, fontWeight:isActive?700:hasMyObj?600:400, color:isActive?color:hasMyObj?wT().textSub:wT().textFaint }}>{level.name}</span>
+          {hasMyObj && <span style={{ fontSize:8, color, lineHeight:1 }}>●</span>}
+        </div>
+        {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
+      </div>
+    )
+  }
 
   if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
 
@@ -647,7 +862,33 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color: fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
             📅 {fiscalYear}年度
           </div>
-          <div style={{ fontSize:11, color:wT().textMuted }}>{currentWeek} 週</div>
+          {/* 今週/翌週 切り替えトグル */}
+          <div style={{ display:'flex', gap:0, background:wT().bgCard2 || 'rgba(255,255,255,0.04)', borderRadius:99, padding:2, border:`1px solid ${wT().borderMid}` }}>
+            <button onClick={()=>setWeekMode('this')}
+              style={{
+                fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:99, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: weekMode==='this' ? '#00d68f' : 'transparent',
+                color: weekMode==='this' ? '#fff' : wT().textMuted,
+                transition:'all 0.15s',
+              }}>今週</button>
+            <button onClick={()=>setWeekMode('next')}
+              style={{
+                fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:99, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: weekMode==='next' ? '#ff9f43' : 'transparent',
+                color: weekMode==='next' ? '#fff' : wT().textMuted,
+                transition:'all 0.15s',
+              }}>翌週</button>
+          </div>
+          <div style={{
+            fontSize:12, fontWeight:800, padding:'5px 12px', borderRadius:99,
+            background: weekMode==='next' ? 'rgba(255,159,67,0.18)' : 'rgba(0,214,143,0.15)',
+            color: weekMode==='next' ? '#ff9f43' : '#00d68f',
+            border: `1px solid ${weekMode==='next' ? 'rgba(255,159,67,0.5)' : 'rgba(0,214,143,0.35)'}`,
+            display:'flex', alignItems:'center', gap:4,
+            boxShadow: weekMode==='next' ? '0 0 0 3px rgba(255,159,67,0.15)' : 'none',
+          }}>
+            📝 {weekMode==='next' ? '翌週を記入中' : '今週を記入中'} {formatWeekLabel(selectedWeek)}
+          </div>
         </div>
       </div>
 
@@ -660,8 +901,19 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* 左：Objective一覧 */}
-        <div style={{ width:260, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', padding:10, background:wT().bg }}>
+        {/* 組織図サイドバー */}
+        {!isMobile && (
+          <div style={{ width: isTablet ? 120 : 155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
+            <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
+            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?'rgba(77,159,255,0.3)':'transparent'}`, background:!activeLevelId?'rgba(77,159,255,0.12)':'transparent' }}>
+              <span>🏢</span><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?'#4d9fff':wT().textSub }}>全部署</span>
+            </div>
+            {roots.map(r=>renderSb(r,0))}
+          </div>
+        )}
+
+        {/* Objective一覧 */}
+        <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
             <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
@@ -697,11 +949,14 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         </div>
 
         {/* 右：KR + KA詳細 */}
-        <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', background:wT().bgCard2 }}>
+        <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && !activeObjId ? 'none' : 'block' }}>
+          {isMobile && activeObjId && (
+            <button onClick={() => setActiveObjId(null)} style={{ marginBottom: 8, padding: '6px 12px', borderRadius: 7, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>← Objective一覧に戻る</button>
+          )}
           {!selectedObj ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
               <div style={{ fontSize:36 }}>🎯</div>
-              <div style={{ fontSize:13 }}>左のObjectiveをクリックしてください</div>
+              <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
             <>
@@ -757,7 +1012,15 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
                     return (
                       <div key={kr.id} style={{ marginBottom:14 }}>
-                        <KRCard kr={kr} myName={myName} members={members} wT={wT} />
+                        <KRCard kr={kr} myName={myName} members={members} wT={wT} currentWeek={selectedWeek} onKRUpdated={() => {
+                          // KR更新後にデータをリロード
+                          supabase.from('key_results').select('*').eq('objective_id', activeObjId).then(({ data }) => {
+                            if (data) setKeyResults(prev => {
+                              const otherKRs = prev.filter(k => Number(k.objective_id) !== Number(activeObjId))
+                              return [...otherKRs, ...data]
+                            })
+                          })
+                        }} />
                         {krKAs.length > 0 && (
                           <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
                             <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
@@ -765,7 +1028,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                               <KATableHeader wT={wT} />
                               <tbody>
                                 {krKAs.map(r => (
-                                  <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                                  <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
                                 ))}
                               </tbody>
                             </table>
@@ -791,7 +1054,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                       <KATableHeader wT={wT} />
                       <tbody>
                         {unlinkedKAs.map(r => (
-                          <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} />
+                          <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
                         ))}
                       </tbody>
                     </table>

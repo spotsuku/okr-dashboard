@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
+import { computeKAKey } from '../lib/kaKey'
 
 const DARK_T = {
   bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -59,33 +61,49 @@ function calcObjProgress(krs) {
 }
 
 // ─── 週ヘルパー ──────────────────────────────────────────────────────────────
+// JST基準で「入力日時を含む週の月曜日(00:00 JST)」を Date(UTC midnight) として返す
+//   JST 月 4/13 00:30 → UTC 4/12 15:30 → +9h = UTC 4/13 00:30 → jstDay=1 → UTC 4/13 00:00
+//   JST 日 4/12 23:00 → UTC 4/12 14:00 → +9h = UTC 4/12 23:00 → jstDay=0 → UTC 4/6 00:00
+//   JST 金 4/10 08:39 → UTC 4/9 23:39  → +9h = UTC 4/10 08:39 → jstDay=5 → UTC 4/6 00:00
 function getMonday(d) {
-  const dt = new Date(d)
-  const day = dt.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  dt.setDate(dt.getDate() + diff)
-  dt.setHours(0, 0, 0, 0)
-  return dt
+  const dt = typeof d === 'string' ? new Date(d) : (d || new Date())
+  const jst = new Date(dt.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  return new Date(Date.UTC(
+    jst.getUTCFullYear(),
+    jst.getUTCMonth(),
+    jst.getUTCDate() + diff
+  ))
 }
 function toDateStr(d) {
-  const dt = typeof d === 'string' ? new Date(d) : d
-  return dt.toISOString().split('T')[0]
+  if (typeof d === 'string') return d
+  const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+  return jst.toISOString().split('T')[0]
 }
 function formatWeekLabel(mondayStr) {
-  const d = new Date(mondayStr)
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const sun = new Date(d)
-  sun.setDate(sun.getDate() + 6)
-  const m2 = sun.getMonth() + 1
-  const d2 = sun.getDate()
+  // mondayStrは "YYYY-MM-DD" を想定（JSTの月曜日）。曜日依存ロジックを避けてパース
+  const [y, m, day] = mondayStr.split('-').map(Number)
+  // 月曜日から +6 日を足してその週の日曜日を計算（JST曜日にズレがないようUTCで計算）
+  const sun = new Date(Date.UTC(y, m - 1, day + 6))
+  const m2 = sun.getUTCMonth() + 1
+  const d2 = sun.getUTCDate()
   return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
 }
-function isFriday() { return new Date().getDay() === 5 }
+function isFriday() {
+  // JST基準の曜日判定
+  const jst = new Date(Date.now() + 9 * 3600 * 1000)
+  return jst.getUTCDay() === 5
+}
 function getNextMonday() {
-  const d = getMonday(new Date())
-  d.setDate(d.getDate() + 7)
-  return toDateStr(d)
+  // 翌週の月曜日 = 今週の月曜日 + 7日
+  const thisMon = getMonday(new Date())
+  const nextMon = new Date(Date.UTC(
+    thisMon.getUTCFullYear(),
+    thisMon.getUTCMonth(),
+    thisMon.getUTCDate() + 7
+  ))
+  return toDateStr(nextMon)
 }
 
 // ─── アバター ─────────────────────────────────────────────────────────────────
@@ -154,15 +172,29 @@ function WeatherPicker({ value, onChange, wT }) {
 }
 
 // ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ reportId, members, wT, onClose }) {
+function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
+  const reportId = report?.id
+  const kaKey = computeKAKey(report)
   const [tasks, setTasks] = useState([])
   const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState({})
   const ref = useRef(null)
+  const tasksRef = useRef(tasks)
+  tasksRef.current = tasks
 
   useEffect(() => {
-    supabase.from('ka_tasks').select('*').eq('report_id', reportId).order('id')
+    if (!kaKey) return
+    // ka_keyが同じタスクを全て取得（週を跨いで同じKAの全タスク）
+    supabase.from('ka_tasks').select('*').eq('ka_key', kaKey).order('id')
       .then(({data}) => { setTasks(data||[]); setLoaded(true) })
-  }, [reportId])
+  }, [kaKey])
+
+  useEffect(() => {
+    if (loaded && onTaskCountChange) {
+      const saved = tasks.filter(t => t.id)
+      onTaskCountChange({ done: saved.filter(t => t.done).length, total: saved.length })
+    }
+  }, [tasks, loaded]) // eslint-disable-line
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose() }
@@ -170,51 +202,62 @@ function TaskPopover({ reportId, members, wT, onClose }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  const addTask = () => setTasks(p => [...p, { _tmp:Date.now(), title:'', assignee:'', due_date:'', done:false, report_id:reportId }])
-  const updateTask = (key, f, v) => setTasks(p => p.map(t => (t.id||t._tmp)===key ? {...t,[f]:v} : t))
+  // タスク追加時に即座にDBに挿入して実IDを取得
+  const addTask = async () => {
+    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId, ka_key:kaKey }
+    const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
+    if (ins) setTasks(p => [...p, ins])
+  }
+  const updateTask = (key, f, v) => {
+    setTasks(p => p.map(t => t.id===key ? {...t,[f]:v} : t))
+  }
   const removeTask = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
-    if (t?.id) await supabase.from('ka_tasks').delete().eq('id', t.id)
-    setTasks(p => p.filter(x => (x.id||x._tmp)!==key))
+    await supabase.from('ka_tasks').delete().eq('id', key)
+    setTasks(p => p.filter(x => x.id!==key))
   }
   const toggleDone = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
+    const t = tasks.find(x => x.id===key)
     const nd = !t.done
-    if (t?.id) await supabase.from('ka_tasks').update({ done:nd }).eq('id', t.id)
-    setTasks(p => p.map(x => (x.id||x._tmp)===key ? {...x,done:nd} : x))
-  }
-  const saveTask = async (key) => {
-    const t = tasks.find(x => (x.id||x._tmp)===key)
-    if (!t) return
-    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done, report_id:reportId }
-    if (t.id) { await supabase.from('ka_tasks').update(d).eq('id', t.id) }
-    else if (t.title?.trim()) {
-      const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
-      if (ins) setTasks(p => p.map(tk => tk._tmp===t._tmp ? ins : tk))
+    await supabase.from('ka_tasks').update({ done:nd }).eq('id', key)
+    setTasks(p => p.map(x => x.id===key ? {...x,done:nd} : x))
+    if (nd) {
+      fetch('/api/slack-task-done', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: key, taskTitle: t.title, kaTitle, objectiveTitle, completedBy }),
+      }).catch(() => {})
     }
   }
-  const done = tasks.filter(t=>t.done).length
+  const saveTask = async (key) => {
+    const t = tasksRef.current.find(x => x.id===key)
+    if (!t) return
+    setSaving(p => ({...p, [key]: true}))
+    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done }
+    await supabase.from('ka_tasks').update(d).eq('id', t.id)
+    setSaving(p => { const n = {...p}; delete n[key]; return n })
+  }
+  const doneCount = tasks.filter(t=>t.done).length
 
   return (
-    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:380, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
+    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:420, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {done}/{tasks.length}</span>
+        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {doneCount}/{tasks.length}</span>
         <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
       </div>
       {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
       {tasks.map(t => {
-        const key = t.id||t._tmp; const tc = avatarColor(t.assignee)
+        const key = t.id; const tc = avatarColor(t.assignee); const isSaving = saving[key]
         return (
           <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
             <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${t.done?'#00d68f':wT().borderMid}`, background:t.done?'#00d68f':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
               {t.done && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
             </div>
-            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} onBlur={()=>saveTask(key)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
-            <select value={t.assignee||''} onChange={e=>{updateTask(key,'assignee',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
+            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
+            <select value={t.assignee||''} onChange={e=>updateTask(key,'assignee',e.target.value)} style={{ background:wT().bgCard2, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
               <option value="">担当</option>
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
-            <input type="date" value={t.due_date||''} onChange={e=>{updateTask(key,'due_date',e.target.value); setTimeout(()=>saveTask(key),50)}} style={{ background:wT().bgCard2, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            <input type="date" value={t.due_date||''} onChange={e=>updateTask(key,'due_date',e.target.value)} style={{ background:wT().bgCard2, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            <button onClick={()=>saveTask(key)} disabled={isSaving} style={{ padding:'2px 8px', borderRadius:4, border:'none', background:isSaving?'#666':'#a855f7', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>{isSaving?'...':'保存'}</button>
             <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:3, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>
           </div>
         )
@@ -227,7 +270,7 @@ function TaskPopover({ reportId, members, wT, onClose }) {
 }
 
 // ─── KAテーブル行 ──────────────────────────────────────────────────────────────
-function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps, dragIdx, overIdx, rowIdx, onDragOver, onDrop }) {
+function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps, dragIdx, overIdx, rowIdx, onDragOver, onDrop, objectiveTitle, completedBy }) {
   const [good,         setGood]         = useState(report.good || '')
   const [more,         setMore]         = useState(report.more || '')
   const [focusOutput,  setFocusOutput]  = useState(report.focus_output || '')
@@ -243,13 +286,15 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   const cfg = STATUS_CFG[status] || STATUS_CFG.normal
   const ownerMember = members.find(m => m.name === (ownerDraft||report.owner))
 
-  // タスクカウント取得
+  // タスクカウント取得（ka_keyで同じKAの全タスクをカウント）
+  const kaKey = computeKAKey(report)
   useEffect(() => {
-    supabase.from('ka_tasks').select('id,done').eq('report_id', report.id)
+    if (!kaKey) return
+    supabase.from('ka_tasks').select('id,done').eq('ka_key', kaKey)
       .then(({data}) => {
         if (data) setTaskCount({ done:data.filter(t=>t.done).length, total:data.length })
       })
-  }, [report.id])
+  }, [kaKey])
 
   // リモート更新をマージ（フォーカス中フィールドは上書きしない）
   useEffect(() => {
@@ -276,18 +321,32 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     onSave({ ...report, status: next })
   }
 
+  // KA のタイトル/オーナー変更時に、既存タスクの ka_key を追従更新する
+  // （同じKAの他週の行が更新される場合もあるので ka_key 単位で UPDATE）
+  const syncTaskKaKey = async (oldKey, newKey) => {
+    if (!oldKey || !newKey || oldKey === newKey) return
+    await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
+  }
+
   const handleOwnerChange = (val) => {
     setOwnerDraft(val)
     autoSave.save('owner', val)
     onSave({ ...report, owner: val })
+    const oldKey = computeKAKey(report)
+    const newKey = computeKAKey({ ...report, owner: val })
+    syncTaskKaKey(oldKey, newKey)
   }
 
   const handleTitleBlur = () => {
     setEditingTitle(false)
     autoSave.setFocusedField(null)
     if (kaTitle.trim() && kaTitle !== report.ka_title) {
-      autoSave.saveNow('ka_title', kaTitle.trim())
-      onSave({ ...report, ka_title: kaTitle.trim() })
+      const newTitle = kaTitle.trim()
+      autoSave.saveNow('ka_title', newTitle)
+      onSave({ ...report, ka_title: newTitle })
+      const oldKey = computeKAKey(report)
+      const newKey = computeKAKey({ ...report, ka_title: newTitle })
+      syncTaskKaKey(oldKey, newKey)
     }
   }
 
@@ -392,12 +451,12 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       {/* Tasks + Delete */}
       <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4, justifyContent:'center' }}>
-          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:taskCount.total>0?'#a855f7':wT().textFaint, cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
-            {taskCount.total>0 ? `${taskCount.done}/${taskCount.total}` : '—'}
+          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:'#a855f7', cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
+            {`${taskCount.done}/${taskCount.total}`}
           </span>
           <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
         </div>
-        {showTasks && <TaskPopover reportId={report.id} members={members} wT={wT} onClose={()=>setShowTasks(false)} />}
+        {showTasks && <TaskPopover report={report} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
       <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
@@ -409,7 +468,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, onReorder }) {
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, reviewVersion, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA }) {
   // ★ doneを除いたKAのみ表示（doneは折りたたみ）
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
     .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
@@ -417,8 +476,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [showDone, setShowDone] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [overIdx, setOverIdx] = useState(null)
+  const [dropHighlight, setDropHighlight] = useState(false)
 
-  const handleDragStart = (idx) => setDragIdx(idx)
+  const handleDragStart = (idx, reportId) => {
+    setDragIdx(idx)
+    // cross-KR drag用にdataTransferにreportIdとsource kr_idをセット
+    window.__dragKA = { reportId, sourceKrId: kr.id }
+  }
   const handleDragOver = (e, idx) => { e.preventDefault(); setOverIdx(idx) }
   const handleDrop = async (idx) => {
     if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setOverIdx(null); return }
@@ -432,7 +496,25 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
     }
     if (onReorder) onReorder()
   }
-  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null) }
+  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null); setDropHighlight(false); window.__dragKA = null }
+
+  // Cross-KR drop handler
+  const handleKRDragOver = (e) => {
+    e.preventDefault()
+    if (window.__dragKA && window.__dragKA.sourceKrId !== kr.id) {
+      setDropHighlight(true)
+    }
+  }
+  const handleKRDragLeave = () => setDropHighlight(false)
+  const handleKRDrop = async (e) => {
+    e.preventDefault()
+    setDropHighlight(false)
+    const drag = window.__dragKA
+    if (!drag || drag.sourceKrId === kr.id) return
+    window.__dragKA = null
+    // KAを別のKRに移動
+    if (onMoveKA) await onMoveKA(drag.reportId, kr.id)
+  }
 
   const pct = kr.target ? Math.min(Math.round((kr.current/kr.target)*100), 150) : 0
   const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
@@ -447,6 +529,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [reviewOpen,   setReviewOpen]   = useState(false)
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewSaved,  setReviewSaved]  = useState(false)
+  const reviewRef = useRef(null) // review IDをrefで保持
+  const autoSaveTimer = useRef(null)
   const [krEditing,    setKrEditing]    = useState(false)
   const [krTitle,      setKrTitle]      = useState(kr.title || '')
   const [krCurrent,    setKrCurrent]    = useState(String(kr.current ?? ''))
@@ -457,19 +541,38 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const weekStart = activeWeek || toDateStr(getMonday(new Date()))
 
   useEffect(() => {
-    supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).order('week_start', { ascending:false }).limit(1).maybeSingle()
+    supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
       .then(({data}) => {
-        if (data) { setReview(data); setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
+        if (data) { setReview(data); reviewRef.current = data.id; setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
+        else { setReview(null); reviewRef.current = null; setWeather(0); setGood(''); setMore(''); setFocus('') }
       })
-  }, [kr.id])
+  }, [kr.id, weekStart, reviewVersion])
 
-  const saveReview = async () => {
+  // 自動保存（デバウンス1秒）
+  const doSaveReview = useCallback(async (w, g, m, f) => {
     setReviewSaving(true)
-    const payload = { kr_id:kr.id, week_start:weekStart, weather, good, more, focus, updated_at:new Date().toISOString() }
-    if (review?.id) { await supabase.from('kr_weekly_reviews').update(payload).eq('id', review.id) }
-    else { const {data} = await supabase.from('kr_weekly_reviews').insert(payload).select().single(); if (data) setReview(data) }
+    const payload = { kr_id:kr.id, week_start:weekStart, weather:w, good:g, more:m, focus:f, updated_at:new Date().toISOString() }
+    if (reviewRef.current) {
+      await supabase.from('kr_weekly_reviews').update(payload).eq('id', reviewRef.current)
+    } else {
+      const {data} = await supabase.from('kr_weekly_reviews').insert(payload).select().single()
+      if (data) { reviewRef.current = data.id; setReview(data) }
+    }
     setReviewSaving(false); setReviewSaved(true); setTimeout(() => setReviewSaved(false), 1500)
+  }, [kr.id, weekStart])
+
+  const scheduleAutoSave = (w, g, m, f) => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => doSaveReview(w, g, m, f), 1000)
   }
+  useEffect(() => { return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) } }, [])
+
+  const updateGood = (v) => { setGood(v); scheduleAutoSave(weather, v, more, focus) }
+  const updateMore = (v) => { setMore(v); scheduleAutoSave(weather, good, v, focus) }
+  const updateFocus = (v) => { setFocus(v); scheduleAutoSave(weather, good, more, v) }
+  const updateWeather = (v) => { setWeather(v); doSaveReview(v, good, more, focus) } // 天気は即時保存
+
+  const saveReview = () => doSaveReview(weather, good, more, focus)
 
   const saveKR = async () => {
     if (!onKRUpdate) return
@@ -505,7 +608,8 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const hasReview = weather > 0 || good || more || focus
 
   return (
-    <div style={{ marginBottom:16 }}>
+    <div style={{ marginBottom:16, border: dropHighlight ? '2px dashed #4d9fff' : '2px solid transparent', borderRadius:12, transition:'border-color 0.15s' }}
+      onDragOver={handleKRDragOver} onDragLeave={handleKRDragLeave} onDrop={handleKRDrop}>
       {/* KRヘッダー */}
       <div onClick={() => setReviewOpen(p=>!p)} style={{ padding:'10px 14px', background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none', borderRadius:'10px 10px 0 0', border:`1px solid ${wT().border}`, borderBottom: reviewOpen ? `1px solid ${wT().border}` : 'none' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
@@ -554,7 +658,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             </div>
             <div>
               <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の体感・主観</div>
-              <WeatherPicker value={weather} onChange={setWeather} wT={wT} />
+              <WeatherPicker value={weather} onChange={updateWeather} wT={wT} />
             </div>
           </div>
           {/* KR編集セクション */}
@@ -605,32 +709,35 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <div>
               <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good</div>
-              <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
+              <textarea value={good} onChange={e=>updateGood(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
             <div>
               <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🔺 More</div>
-              <textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
+              <textarea value={more} onChange={e=>updateMore(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
             <div style={{ flex:1, height:1, background:wT().border }}/><span style={{ fontSize:10, color:wT().textMuted }}>↓ Moreへの対応</span><div style={{ flex:1, height:1, background:wT().border }}/>
           </div>
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 今週の注力アクション</div>
-            <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
+            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 来週の注力アクション</div>
+            <textarea value={focus} onChange={e=>updateFocus(e.target.value)} rows={2} style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+            <span style={{ fontSize:10, color: reviewSaved ? '#00d68f' : reviewSaving ? wT().textMuted : 'transparent', fontWeight:600, transition:'color 0.3s' }}>
+              {reviewSaved ? '✓ 自動保存済み' : reviewSaving ? '保存中...' : ''}
+            </span>
             <button onClick={()=>setReviewOpen(false)} style={{ padding:'5px 12px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
             <button onClick={saveReview} disabled={reviewSaving} style={{ padding:'5px 16px', borderRadius:6, background:reviewSaved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', transition:'background 0.3s' }}>
-              {reviewSaved?'✓ 保存済み':reviewSaving?'保存中...':'保存'}
+              {reviewSaved?'✓ 保存済み':reviewSaving?'保存中...':'保存して週次MTGに反映'}
             </button>
           </div>
         </div>
       )}
 
       {/* KAテーブル */}
-      <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'visible' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
+      <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'auto', WebkitOverflowScrolling:'touch' }}>
+        <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
           <colgroup>
             <col style={{ width:28 }} />
             <col style={{ width:90 }} />
@@ -658,11 +765,12 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <tbody>
             {activeReports.map((r, idx) => (
               <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                canEdit={canEditKA(r.owner, objOwner)}
+                canEdit={canEditKA(r.owner, objOwner, kr.owner)}
                 dragIdx={dragIdx} overIdx={overIdx} rowIdx={idx}
-                dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx), onDragEnd:handleDragEnd }}
+                dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx, r.id), onDragEnd:handleDragEnd }}
                 onDragOver={e => handleDragOver(e, idx)}
-                onDrop={() => handleDrop(idx)} />
+                onDrop={() => handleDrop(idx)}
+                objectiveTitle={objectiveTitle} completedBy={completedBy} />
             ))}
           </tbody>
         </table>
@@ -677,7 +785,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </div>
         )}
         {showDone && doneReports.length > 0 && (
-          <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
+          <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
             <colgroup>
               <col style={{ width:28 }} />
               <col style={{ width:90 }} />
@@ -692,7 +800,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             <tbody>
               {doneReports.map(r => (
                 <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                  canEdit={canEditKA(r.owner, objOwner)} />
+                  canEdit={canEditKA(r.owner, objOwner, kr.owner)} objectiveTitle={objectiveTitle} completedBy={completedBy} />
               ))}
             </tbody>
           </table>
@@ -708,16 +816,38 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod='all' }) {
+function getCurrentQ() { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
+export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
+  const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
+  const [mobilePanel, setMobilePanel] = useState('list') // 'list' | 'detail'
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
   const [keyResults,    setKeyResults]    = useState([])
+  const [reviewVersion, setReviewVersion] = useState(0)
   const [members,       setMembers]       = useState([])
   const [loading,       setLoading]       = useState(false)
-  const [activeLevelId, setActiveLevelId] = useState(null)
-  const [activeObjId,   setActiveObjId]   = useState(null)
-  const [activePeriod,  setActivePeriod]  = useState(initialPeriod)
+  const [activeLevelId, setActiveLevelId] = useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('weeklyMTG_activeLevelId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeLevelId == null) localStorage.removeItem('weeklyMTG_activeLevelId')
+    else localStorage.setItem('weeklyMTG_activeLevelId', String(activeLevelId))
+  }, [activeLevelId])
+  const [activeObjId,   setActiveObjId]   = useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('weeklyMTG_activeObjId')
+    return saved && saved !== 'null' ? Number(saved) : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeObjId == null) localStorage.removeItem('weeklyMTG_activeObjId')
+    else localStorage.setItem('weeklyMTG_activeObjId', String(activeObjId))
+  }, [activeObjId])
+  const [activePeriod,  setActivePeriod]  = useState(initialPeriod || getCurrentQ())
   const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
   const [slackPreview,  setSlackPreview]  = useState(null) // { text, type, memberCount, levelName, params }
   const [slackSending,  setSlackSending]  = useState(false)
@@ -749,24 +879,17 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return [...set].sort()
   })()
 
-  // ★ 金曜日に翌週分を自動作成（未作成の場合のみ）
+  // ★ 金曜日に翌週分を自動作成（createWeekで重複チェック済み）
   useEffect(() => {
     if (!isFriday()) return
     if (reports.length === 0) return
     const nextMon = getNextMonday()
-    const hasNext = reports.some(r => r.week_start === nextMon)
-    if (hasNext) return
-    // 今週のKAを翌週にコピー（done以外）
     const thisMonday = toDateStr(getMonday(new Date()))
     const thisWeekKAs = reports.filter(r => r.week_start === thisMonday && r.status !== 'done')
     if (thisWeekKAs.length === 0) return
-    const copies = thisWeekKAs.map(r => ({
-      week_start: nextMon, level_id: r.level_id, objective_id: r.objective_id,
-      kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
-      owner: r.owner, status: 'normal',
-    }))
-    supabase.from('weekly_reports').insert(copies).then(() => reload())
-  }, [reports.length])
+    // 既にコピー済みのものはcreateWeek内でスキップされる
+    createWeek(nextMon)
+  }, [reports.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reload = async () => {
     let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id')
@@ -777,7 +900,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     setReports(data||[])
   }
 
-  // ★ Supabase Realtime購読（weekly_reports変更を即時同期）
+  // ★ Supabase Realtime購読（weekly_reports + key_results 変更を即時同期）
   useEffect(() => {
     const channel = supabase
       .channel('weekly_mtg_realtime')
@@ -790,31 +913,83 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           setReports(prev => prev.filter(r => r.id !== payload.old.id))
         }
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'key_results' }, payload => {
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const kr = payload.new
+          const normalized = kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr
+          setKeyResults(prev => prev.map(k => k.id === normalized.id ? { ...k, ...normalized } : k))
+        } else if (payload.eventType === 'INSERT' && payload.new) {
+          const kr = payload.new
+          const normalized = kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr
+          setKeyResults(prev => prev.some(k => k.id === normalized.id) ? prev : [...prev, normalized])
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setKeyResults(prev => prev.filter(k => k.id !== payload.old.id))
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kr_weekly_reviews' }, () => {
+        setReviewVersion(v => v + 1)
+      })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  // ★ 手動で週を作成（今週のKAをコピー）
+  // ★ 手動で週を作成（前週のKAをKR単位でコピー、既存KRはスキップ）
+  const copyingRef = useRef(new Set())
   const createWeek = async (targetMonday) => {
-    const hasData = reports.some(r => r.week_start === targetMonday)
-    if (hasData) return
-    // 直近の既存週からコピー
-    const prevWeeks = weeksList.filter(w => w < targetMonday)
-    const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
-    if (srcWeek) {
+    // 多重実行防止
+    if (copyingRef.current.has(targetMonday)) return
+    copyingRef.current.add(targetMonday)
+    try {
+      // 直近の既存週からコピー
+      const prevWeeks = weeksList.filter(w => w < targetMonday)
+      const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
+      if (!srcWeek) return
+
       const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
-      if (srcKAs.length > 0) {
-        const copies = srcKAs.map(r => ({
-          week_start: targetMonday, level_id: r.level_id, objective_id: r.objective_id,
-          kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
-          owner: r.owner, status: 'normal',
-        }))
-        await supabase.from('weekly_reports').insert(copies)
-      }
+      if (srcKAs.length === 0) return
+
+      // DB上の対象週データを直接取得（stateとのズレを防止）
+      const { data: existingData } = await supabase.from('weekly_reports').select('kr_id,ka_title').eq('week_start', targetMonday)
+      const existingKeys = new Set((existingData || []).map(r => `${r.kr_id}_${r.ka_title}`))
+
+      // 未コピーのKAのみ抽出
+      const toCopy = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
+      if (toCopy.length === 0) return
+
+      const copies = toCopy.map(r => ({
+        week_start: targetMonday, level_id: r.level_id, objective_id: r.objective_id,
+        kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
+        owner: r.owner, status: 'normal',
+      }))
+      await supabase.from('weekly_reports').insert(copies).select()
+
+      // ★ 旧実装では未完了タスクを複製していたが、ka_tasks は ka_key で
+      // 週を跨いで識別するようになったので、コピーは不要（同じKAなら
+      // 新しい週の行でも同じタスクが見える）
+
+      await reload()
+      setActiveWeek(targetMonday)
+    } finally {
+      copyingRef.current.delete(targetMonday)
     }
-    await reload()
-    setActiveWeek(targetMonday)
   }
+
+  // ★ 週を開いた時に前週から未コピーKAを自動補完
+  useEffect(() => {
+    if (!activeWeek || loading || reports.length === 0) return
+    const prevWeeks = weeksList.filter(w => w < activeWeek)
+    if (prevWeeks.length === 0) return
+    const srcWeek = prevWeeks[prevWeeks.length - 1]
+    const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
+    const existingKeys = new Set(
+      reports.filter(r => r.week_start === activeWeek)
+        .map(r => `${r.kr_id}_${r.ka_title}`)
+    )
+    const missing = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
+    if (missing.length > 0) {
+      createWeek(activeWeek)
+    }
+  }, [activeWeek, loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ★ 翌週分を手動作成
   const createNextWeek = () => {
@@ -844,12 +1019,13 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || ''
   const isAdmin  = myMember?.is_admin === true
-  const canEditKA = useCallback((kaOwner, objOwner) => {
+  const canEditKA = useCallback((kaOwner, objOwner, krOwner) => {
     if (isAdmin) return true                          // 管理者は全KA編集可
     if (!kaOwner || kaOwner==='') return true          // 未設定は誰でも編集可
     if (!myName) return false
     if (myName === kaOwner) return true                // KA担当者本人
     if (objOwner && myName === objOwner) return true   // Objective責任者
+    if (krOwner && myName === krOwner) return true     // KR担当者
     return false
   }, [myName, isAdmin])
 
@@ -864,27 +1040,38 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   })
 
   const selectedObj    = activeObjId ? objectives.find(o => o.id===Number(activeObjId)) : null
-  const [rightPeriod, setRightPeriod] = useState('annual')
+  const [rightPeriod, setRightPeriod] = useState(getCurrentQ())
   // 右パネル：期間タブに応じたOKRを表示（buildQuarterMapで通期→四半期の正確なマッピングを使用）
   const annualObjsForMap = useMemo(() =>
     objectives.filter(o => o.period === annualPeriodKey), [objectives, annualPeriodKey])
   const quarterObjsForMap = useMemo(() =>
     objectives.filter(o => ['q1','q2','q3','q4'].some(q => o.period?.endsWith(q))), [objectives])
   const quarterMap = useMemo(() =>
-    buildQuarterMap(annualObjsForMap, quarterObjsForMap), [annualObjsForMap, quarterObjsForMap])
+    buildQuarterMap(annualObjsForMap, quarterObjsForMap, (qObjId, annualObjId) => {
+      supabase.from('objectives').update({ parent_objective_id: annualObjId }).eq('id', qObjId).then(() => {})
+    }), [annualObjsForMap, quarterObjsForMap])
   const rightObj = useMemo(() => {
     if (!selectedObj) return null
     if (rightPeriod === 'annual') return selectedObj
     // まずquarterMapで検索
     const fromMap = (quarterMap[selectedObj.id]?.[rightPeriod] || [])[0]
     if (fromMap) return fromMap
-    // フォールバック：objectives全体からperiodとlevel_idでマッチング
-    return objectives.find(o =>
+    // フォールバック：parent_objective_idまたはlevel_id（1対1の場合のみ）でマッチ
+    const byParent = objectives.find(o =>
       o.period === rightPeriod &&
-      (Number(o.parent_objective_id) === Number(selectedObj.id) ||
-       Number(o.level_id) === Number(selectedObj.level_id))
-    ) || null
-  }, [selectedObj, rightPeriod, quarterMap, objectives])
+      Number(o.parent_objective_id) === Number(selectedObj.id)
+    )
+    if (byParent) return byParent
+    // level_idフォールバック（同level_idの通期OKRが1つだけの場合）
+    const sameLevel = annualObjsForMap.filter(a => Number(a.level_id) === Number(selectedObj.level_id))
+    if (sameLevel.length === 1) {
+      return objectives.find(o =>
+        o.period === rightPeriod &&
+        Number(o.level_id) === Number(selectedObj.level_id)
+      ) || null
+    }
+    return null
+  }, [selectedObj, rightPeriod, quarterMap, objectives, annualObjsForMap])
   const selectedObjKRs = useMemo(() => {
     if (!rightObj && rightPeriod !== 'annual' && selectedObj) {
       // Q期OBJが存在しない場合、通期OBJのKRをperiodでフィルタ
@@ -931,7 +1118,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     )
   }
 
-  const periodTabs = [['all','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']]
+  const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
@@ -945,7 +1132,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           <div style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:99, background:`${avatarColor(myName)}12`, border:`1px solid ${avatarColor(myName)}30` }}>
             <Avatar name={myName} avatarUrl={myMember.avatar_url} size={18} />
             <span style={{ fontSize:11, color:avatarColor(myName), fontWeight:600 }}>{myName}</span>
-            <span style={{ fontSize:10, color:wT().textMuted }}>（自分のKAのみ編集可）</span>
+            <span style={{ fontSize:10, color:wT().textMuted }}>（自分・KR担当のKA編集可）</span>
           </div>
         )}
         {/* KAステータス凡例 */}
@@ -958,7 +1145,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       </div>
 
       {/* 週タブ */}
-      <div style={{ display:'flex', gap:4, padding:'7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto' }}>
+      <div style={{ display:'flex', gap:4, padding: isMobile ? '5px 8px' : '7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
         <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>週：</span>
         {weeksList.map(w => {
           const isActive = activeWeek === w
@@ -1002,7 +1189,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* 部署サイドバー */}
-        <div style={{ width:155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
+        <div style={{ width: isMobile ? 0 : isTablet ? 120 : 155, flexShrink:0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, padding: isMobile ? 0 : '10px 8px', overflowY:'auto', background:wT().bgSidebar, display: isMobile ? 'none' : 'block' }}>
           <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
           <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?'rgba(77,159,255,0.3)':'transparent'}`, background:!activeLevelId?'rgba(77,159,255,0.12)':'transparent' }}>
             <span>🏢</span><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?'#4d9fff':wT().textSub }}>全部署</span>
@@ -1011,7 +1198,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
 
         {/* Objective一覧 */}
-        <div style={{ width:260, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', padding:10, background:wT().bg }}>
+        <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && mobilePanel !== 'list' ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 Objective（{activeObjs.length}件）</div>
           {visibleObjs.length===0 && <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>}
 
@@ -1024,7 +1211,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             const krs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const kaCount = weekReports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
             return (
-              <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod('annual')}} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
+              <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
                   <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{getPeriodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
@@ -1051,7 +1238,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 const color = LAYER_COLORS[d] || '#a0a8be'
                 const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
                 return (
-                  <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod('annual')}} style={{ padding:'9px 12px', borderRadius:9, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?'rgba(0,214,143,0.5)':'rgba(0,214,143,0.15)'}`, background:isActive?'rgba(0,214,143,0.1)':'rgba(0,214,143,0.04)', transition:'all 0.12s', opacity:0.8 }}>
+                  <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:'9px 12px', borderRadius:9, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?'rgba(0,214,143,0.5)':'rgba(0,214,143,0.15)'}`, background:isActive?'rgba(0,214,143,0.1)':'rgba(0,214,143,0.04)', transition:'all 0.12s', opacity:0.8 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       <span style={{ fontSize:11 }}>🏆</span>
                       <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>{getPeriodLabel(obj.period)}</span>
@@ -1066,11 +1253,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
 
         {/* 右：KR + KA詳細 */}
-        <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', background:wT().bgCard2 }}>
+        <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && mobilePanel !== 'detail' ? 'none' : 'block' }}>
+          {isMobile && mobilePanel === 'detail' && (
+            <button onClick={() => setMobilePanel('list')} style={{ marginBottom: 8, padding: '6px 12px', borderRadius: 7, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>← Objective一覧に戻る</button>
+          )}
           {!selectedObj ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
               <div style={{ fontSize:36 }}>🎯</div>
-              <div style={{ fontSize:13 }}>左のObjectiveをクリックしてください</div>
+              <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
             <>
@@ -1086,7 +1276,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
               {/* 期間切替タブ */}
               <div style={{ display:'flex', gap:4, marginBottom:14 }}>
-                {[['annual','通期'],['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4']].map(([key,lbl]) => (
+                {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => (
                   <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'5px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
                 ))}
               </div>
@@ -1134,7 +1324,15 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   onKROwnerChange={handleKROwnerChange}
                   onKRUpdate={handleKRUpdate}
                   activeWeek={activeWeek}
+                  reviewVersion={reviewVersion}
                   onReorder={reload}
+                  objectiveTitle={rightObj.title}
+                  completedBy={myName}
+                  weeksList={weeksList}
+                  onMoveKA={async (reportId, targetKrId) => {
+                    await supabase.from('weekly_reports').update({ kr_id: targetKrId }).eq('id', reportId)
+                    reload()
+                  }}
                 />
               ))}
             </>

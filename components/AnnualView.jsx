@@ -151,10 +151,12 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     setAnnualObjs(fullAnnObjs)
 
     const qKeys = Q_KEYS.map(q => toPeriodKey(q, fiscalYear))
+    // 年度プレフィックスの有無両方で検索（データ不整合対応）
+    const allQKeys = [...new Set([...qKeys, ...Q_KEYS, ...Q_KEYS.map(q => `${fiscalYear}_${q}`)])]
     const { data: qObjs } = await supabase
       .from('objectives')
       .select('id,level_id,period,title,owner,parent_objective_id')
-      .in('period', qKeys)
+      .in('period', allQKeys)
       .order('id')
 
     if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
@@ -172,7 +174,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     })
     const fullQObjs = qObjs.map(o => ({ ...o, key_results: qKRMap[o.id] || [] }))
 
-    const qMap = buildQuarterMap(fullAnnObjs, fullQObjs)
+    const qMap = buildQuarterMap(fullAnnObjs, fullQObjs, (qObjId, annualObjId) => {
+      // 自動修復: parent_objective_id が未設定のQ期OKRを自動的にDBに書き込む
+      supabase.from('objectives').update({ parent_objective_id: annualObjId }).eq('id', qObjId).then(() => {})
+    })
 
     setQuarterMap(qMap)
     setLoading(false)
