@@ -1087,6 +1087,13 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   const selectedObj    = activeObjId ? objectives.find(o => o.id===Number(activeObjId)) : null
   const [rightPeriod, setRightPeriod] = useState(getCurrentQ())
+
+  // 会議モードに入ったときに最初の Objective を自動選択 (空画面回避)
+  useEffect(() => {
+    if (!activeMeetingKey || activeObjId) return
+    if (!visibleObjs || visibleObjs.length === 0) return
+    setActiveObjId(visibleObjs[0].id)
+  }, [activeMeetingKey, activeLevelId, activeObjId, visibleObjs])
   // 右パネル：期間タブに応じたOKRを表示（buildQuarterMapで通期→四半期の正確なマッピングを使用）
   const annualObjsForMap = useMemo(() =>
     objectives.filter(o => o.period === annualPeriodKey), [objectives, annualPeriodKey])
@@ -1272,8 +1279,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,
         }}>{currentMeeting?.icon || '📋'}</div>
         <div style={{ fontSize:14, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
-        <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}>
-          {meetingViewMode === 'kr' ? 'KR重点' : meetingViewMode === 'ka' ? 'KA重点' : '両方'}
+        <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}
+          title={meetingViewMode === 'kr' ? 'KR詳細(天気/Good/More/Focus)が展開、KAテーブルは折り畳み表示' : meetingViewMode === 'ka' ? 'KAテーブルを常時表示、KR詳細は折り畳み' : 'KRとKA両方表示'}>
+          {meetingViewMode === 'kr' ? '🎯 KR重点' : meetingViewMode === 'ka' ? '📋 KA重点' : '📊 両方'}
+        </span>
+        <span style={{ fontSize:10, color:wT().textMuted, fontStyle:'italic', display:'inline-block', minWidth:0 }}>
+          {meetingViewMode === 'kr' ? 'KRレビュー中心・KAは折り畳み'
+            : meetingViewMode === 'ka' ? 'KA進捗中心・KR詳細は折り畳み'
+            : 'KR・KA両方表示'}
         </span>
         <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color:fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
           📅 {fiscalYear}年度
