@@ -469,12 +469,13 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, reviewVersion, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA }) {
-  // ★ doneを除いたKAのみ表示（doneは折りたたみ）
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, reviewVersion, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA, viewMode = 'both' }) {
+  // viewMode: 'kr' = KR重点 / 'ka' = KA重点 / 'both' = 両方表示
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
     .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
   const doneReports   = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status === 'done')
   const [showDone, setShowDone] = useState(false)
+  const [showKAInKRMode, setShowKAInKRMode] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [overIdx, setOverIdx] = useState(null)
   const [dropHighlight, setDropHighlight] = useState(false)
@@ -527,7 +528,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [good,         setGood]         = useState('')
   const [more,         setMore]         = useState('')
   const [focus,        setFocus]        = useState('')
-  const [reviewOpen,   setReviewOpen]   = useState(false)
+  const [reviewOpen,   setReviewOpen]   = useState(viewMode === 'kr')
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewSaved,  setReviewSaved]  = useState(false)
   const reviewRef = useRef(null) // review IDをrefで保持
@@ -736,7 +737,15 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
         </div>
       )}
 
-      {/* KAテーブル */}
+      {/* KAテーブル: KR重点モードでは折り畳み */}
+      {viewMode === 'kr' && !showKAInKRMode && (
+        <div style={{ padding:'8px 14px', background:wT().bgCard, borderRadius: '0 0 10px 10px', border:`1px solid ${wT().border}`, borderTop:'none', display:'flex', alignItems:'center', gap:8 }}>
+          <button onClick={() => setShowKAInKRMode(true)} style={{
+            fontSize:10, color:wT().textMuted, background:'transparent', border:`1px solid ${wT().border}`, borderRadius:5, padding:'3px 10px', cursor:'pointer', fontFamily:'inherit',
+          }}>📋 KA {activeReports.length}件{doneReports.length > 0 ? ` (完了${doneReports.length}件)` : ''} を表示</button>
+        </div>
+      )}
+      {(viewMode !== 'kr' || showKAInKRMode) && (
       <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'auto', WebkitOverflowScrolling:'touch' }}>
         <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
           <colgroup>
@@ -812,6 +821,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -854,16 +864,8 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [slackSending,  setSlackSending]  = useState(false)
 
   // 会議別ビュー: どの会議モードで表示するか (null = 会議選択画面)
-  const [activeMeetingKey, setActiveMeetingKey] = useState(() => {
-    if (typeof window === 'undefined') return null
-    const saved = localStorage.getItem('weeklyMTG_activeMeetingKey')
-    return saved && saved !== 'null' ? saved : null
-  })
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (activeMeetingKey == null) localStorage.removeItem('weeklyMTG_activeMeetingKey')
-    else localStorage.setItem('weeklyMTG_activeMeetingKey', activeMeetingKey)
-  }, [activeMeetingKey])
+  // 週次MTGに来るたびに必ず会議選択画面から始まる (localStorage保存しない)
+  const [activeMeetingKey, setActiveMeetingKey] = useState(null)
 
   // 会議名で levels から該当レベルを検索
   const findLevelByName = (name) => {
@@ -1251,15 +1253,28 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     )
   }
 
+  const meetingViewMode = currentMeeting?.weeklyMTG?.viewMode || 'both'
+  const meetingColor = currentMeeting?.color || '#4d9fff'
+
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
-      {/* ヘッダー */}
-      <div style={{ padding:'11px 16px', borderBottom:`1px solid ${wT().border}`, display:'flex', alignItems:'center', gap:8, flexShrink:0, flexWrap:'wrap' }}>
-        <button onClick={backToMeetingSelect} title="会議選択に戻る" style={{
-          padding:'5px 10px', borderRadius:7, border:`1px solid ${wT().borderMid}`,
-          background:'transparent', color:wT().text, cursor:'pointer', fontSize:11, fontFamily:'inherit',
-        }}>← 会議選択</button>
+      {/* 会議コンテキストバー */}
+      <div style={{
+        padding:'8px 16px', borderBottom:`2px solid ${meetingColor}`,
+        background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap',
+      }}>
+        <button onClick={backToMeetingSelect} style={{
+          padding:'5px 12px', borderRadius:7, border:`1px solid ${meetingColor}40`,
+          background:`${meetingColor}10`, color:meetingColor, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:'inherit',
+        }}>← 会議を変更</button>
+        <div style={{
+          width:28, height:28, borderRadius:8, background:`${meetingColor}15`,
+          display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,
+        }}>{currentMeeting?.icon || '📋'}</div>
         <div style={{ fontSize:14, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
+        <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}>
+          {meetingViewMode === 'kr' ? 'KR重点' : meetingViewMode === 'ka' ? 'KA重点' : '両方'}
+        </span>
         <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color:fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
           📅 {fiscalYear}年度
         </div>
@@ -1468,6 +1483,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     await supabase.from('weekly_reports').update({ kr_id: targetKrId }).eq('id', reportId)
                     reload()
                   }}
+                  viewMode={meetingViewMode}
                 />
               ))}
             </>
