@@ -5,6 +5,7 @@ import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { computeKAKey } from '../lib/kaKey'
+import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 
 const DARK_T = {
   bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -852,6 +853,49 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [slackPreview,  setSlackPreview]  = useState(null) // { text, type, memberCount, levelName, params }
   const [slackSending,  setSlackSending]  = useState(false)
 
+  // 会議別ビュー: どの会議モードで表示するか (null = 会議選択画面)
+  const [activeMeetingKey, setActiveMeetingKey] = useState(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('weeklyMTG_activeMeetingKey')
+    return saved && saved !== 'null' ? saved : null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activeMeetingKey == null) localStorage.removeItem('weeklyMTG_activeMeetingKey')
+    else localStorage.setItem('weeklyMTG_activeMeetingKey', activeMeetingKey)
+  }, [activeMeetingKey])
+
+  // 会議名で levels から該当レベルを検索
+  const findLevelByName = (name) => {
+    if (!name || !levels?.length) return null
+    return levels.find(l => l.name === name) || null
+  }
+
+  // 会議を選択 → フィルタを設定
+  const selectMeeting = (meetingKey) => {
+    const m = getMeeting(meetingKey)
+    if (!m?.weeklyMTG) return
+    setActiveMeetingKey(meetingKey)
+    setActiveObjId(null)
+    if (m.weeklyMTG.levelName) {
+      const lvl = findLevelByName(m.weeklyMTG.levelName)
+      setActiveLevelId(lvl?.id || null)
+    } else if (m.weeklyMTG.levelSelect === 'department') {
+      setActiveLevelId(null) // 事業部をユーザーに選ばせる
+    } else {
+      setActiveLevelId(null) // 全社
+    }
+  }
+
+  const backToMeetingSelect = () => {
+    setActiveMeetingKey(null)
+    setActiveObjId(null)
+  }
+
+  const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
+  // マネージャー定例などで事業部を選んでいない状態
+  const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
+
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').then(({data})=>setObjectives(data||[]))
     supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
@@ -1120,11 +1164,102 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
+  // ─── 会議選択画面（会議が未選択、または事業部選択待ち） ───────────
+  if (!activeMeetingKey || needsDeptSelect) {
+    const topDepts = (levels || []).filter(l => !l.parent_id)
+    return (
+      <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif', overflow:'auto' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing:'border-box' }}>
+          {needsDeptSelect ? (
+            // 事業部選択モード（マネージャー定例など）
+            <>
+              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+                <button onClick={backToMeetingSelect} style={{
+                  padding:'6px 12px', borderRadius:7, border:`1px solid ${wT().borderMid}`,
+                  background:'transparent', color:wT().text, cursor:'pointer', fontSize:12, fontFamily:'inherit',
+                }}>← 会議選択に戻る</button>
+                <div style={{ fontSize:16, fontWeight:700 }}>{currentMeeting?.title} ・ 事業部を選択</div>
+              </div>
+              <div style={{ fontSize:12, color:wT().textMuted, marginBottom:16 }}>
+                マネージャー定例で確認するチームの所属事業部を選んでください。
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:12 }}>
+                {topDepts.map(d => (
+                  <button key={d.id} onClick={() => setActiveLevelId(d.id)} style={{
+                    padding:'20px 16px', borderRadius:12, border:`1px solid ${wT().borderMid}`,
+                    background:wT().bgCard, color:wT().text, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                    display:'flex', alignItems:'center', gap:10, transition:'all 0.15s',
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = (d.color || '#4d9fff'); e.currentTarget.style.transform = 'translateY(-2px)' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = wT().borderMid; e.currentTarget.style.transform = 'none' }}
+                  >
+                    <span style={{ fontSize:22 }}>{d.icon || '📁'}</span>
+                    <span style={{ fontSize:14, fontWeight:700 }}>{d.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            // 会議選択モード
+            <>
+              <div style={{ textAlign:'center', marginBottom:24 }}>
+                <div style={{ fontSize:11, color:'#4d9fff', letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:6 }}>Weekly MTG</div>
+                <h1 style={{ fontSize:22, fontWeight:700, margin:0, marginBottom:6 }}>今週の会議を選択</h1>
+                <p style={{ fontSize:12, color:wT().textMuted, margin:0 }}>
+                  会議ごとに対象の部署・チーム・観点が自動で絞り込まれます
+                </p>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12 }}>
+                {WEEKLY_MTG_MEETINGS.map(m => {
+                  const viewBadge = m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
+                    : m.weeklyMTG.viewMode === 'ka' ? 'KA重点'
+                    : '両方'
+                  const scope = m.weeklyMTG.levelName || (m.weeklyMTG.levelSelect === 'department' ? '事業部選択' : '全社')
+                  return (
+                    <button key={m.key} onClick={() => selectMeeting(m.key)} style={{
+                      padding:'16px 18px', borderRadius:12, border:`1px solid ${wT().borderMid}`,
+                      background:wT().bgCard, color:wT().text, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                      position:'relative', overflow:'hidden', transition:'all 0.15s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = m.color; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${m.color}22` }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = wT().borderMid; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+                    >
+                      <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:m.color }} />
+                      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                        <div style={{
+                          width:36, height:36, borderRadius:10, background:`${m.color}15`,
+                          border:`1px solid ${m.color}30`, display:'flex', alignItems:'center',
+                          justifyContent:'center', fontSize:18, flexShrink:0,
+                        }}>{m.icon}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.title}</div>
+                          <div style={{ fontSize:10, color:wT().textMuted }}>{m.schedule}</div>
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', gap:6, fontSize:10 }}>
+                        <span style={{ padding:'2px 8px', borderRadius:99, background:`${m.color}15`, color:m.color, fontWeight:600 }}>{viewBadge}</span>
+                        <span style={{ padding:'2px 8px', borderRadius:99, background:wT().borderLight || 'rgba(128,128,128,0.1)', color:wT().textMuted, fontWeight:600 }}>{scope}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
       {/* ヘッダー */}
       <div style={{ padding:'11px 16px', borderBottom:`1px solid ${wT().border}`, display:'flex', alignItems:'center', gap:8, flexShrink:0, flexWrap:'wrap' }}>
-        <div style={{ fontSize:16, fontWeight:700 }}>KAレビュー</div>
+        <button onClick={backToMeetingSelect} title="会議選択に戻る" style={{
+          padding:'5px 10px', borderRadius:7, border:`1px solid ${wT().borderMid}`,
+          background:'transparent', color:wT().text, cursor:'pointer', fontSize:11, fontFamily:'inherit',
+        }}>← 会議選択</button>
+        <div style={{ fontSize:14, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
         <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color:fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
           📅 {fiscalYear}年度
         </div>
