@@ -112,7 +112,7 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
         // Google系: Supabase session の provider_token を取り出して user_integrations に保存
         if (integServiceKey === 'google_gmail' || integServiceKey === 'google_calendar') {
           try {
-            const { data: { session } } = await supabase.auth.getSession()
+            const { data: { session } } = await supabase.auth.refreshSession()
             if (session?.provider_token) {
               await supabase.from('user_integrations').upsert({
                 owner: myName,
