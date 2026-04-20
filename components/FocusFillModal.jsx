@@ -592,7 +592,7 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
       {isKR && (
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>
-            🌤️ 今週の体感・主観
+            🌤️ {goodMoreWk} の体感・主観
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
             {WEATHER_OPTIONS.slice(1).map(w => (
