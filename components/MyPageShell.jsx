@@ -51,6 +51,14 @@ function toJSTDateStr(d) {
   const jst = new Date(d.getTime() + 9 * 3600 * 1000)
   return jst.toISOString().split('T')[0]
 }
+// JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DDを返す
+function getMondayJSTStr(d = new Date()) {
+  const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+  const jstDay = jst.getUTCDay()
+  const diff = jstDay === 0 ? -6 : 1 - jstDay
+  const mon = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate() + diff))
+  return mon.toISOString().split('T')[0]
+}
 function jstHHMM(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -352,6 +360,49 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   const greet = jst.getUTCHours() < 11 ? 'おはようございます' : jst.getUTCHours() < 18 ? 'こんにちは' : 'こんばんは'
   const dateStr = `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
 
+  const [busy, setBusy] = useState(false)
+  const [kptOpen, setKptOpen] = useState(false)
+
+  async function handleStart() {
+    if (busy || !myName) return
+    setBusy(true)
+    const { error } = await supabase.from('coaching_logs').insert({
+      owner: myName,
+      log_type: 'work_log',
+      week_start: getMondayJSTStr(),
+      content: JSON.stringify({ start_at: new Date().toISOString() }),
+    })
+    setBusy(false)
+    if (error) { alert('始業の記録に失敗しました: ' + error.message); return }
+    await onWorkLogChange()
+  }
+
+  async function handleEnd({ keep, problem, tryNote }) {
+    if (busy || !workLog) return
+    setBusy(true)
+    // 1. work_log に end_at を追記
+    const oldContent = parseLogContent(workLog.content)
+    const newContent = { ...oldContent, end_at: new Date().toISOString() }
+    const { error: e1 } = await supabase
+      .from('coaching_logs')
+      .update({ content: JSON.stringify(newContent) })
+      .eq('id', workLog.id)
+    if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
+    // 2. KPT を別ログとして保存（何か記入があれば）
+    if ((keep || '').trim() || (problem || '').trim() || (tryNote || '').trim()) {
+      const { error: e2 } = await supabase.from('coaching_logs').insert({
+        owner: myName,
+        log_type: 'kpt',
+        week_start: getMondayJSTStr(),
+        content: JSON.stringify({ keep, problem, try: tryNote }),
+      })
+      if (e2) console.warn('KPT保存エラー', e2)
+    }
+    setBusy(false)
+    setKptOpen(false)
+    await onWorkLogChange()
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* 挨拶バー + 始業ボタン */}
@@ -379,24 +430,26 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
           <div style={{ display: 'flex', gap: 8 }}>
             {st === 'none' && (
               <button
-                disabled
+                onClick={handleStart}
+                disabled={busy || !myName}
                 style={{
                   background: T.success, color: '#fff', border: 'none', borderRadius: 8,
-                  padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'not-allowed',
-                  fontFamily: 'inherit', opacity: 0.8,
+                  padding: '8px 16px', fontSize: 13, fontWeight: 700,
+                  cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  opacity: busy ? 0.6 : 1, transition: 'opacity 0.15s',
                 }}
-                title="Phase 2で実装予定"
               >☀️ 始業する</button>
             )}
             {st === 'on' && (
               <button
-                disabled
+                onClick={() => setKptOpen(true)}
+                disabled={busy}
                 style={{
                   background: T.info, color: '#fff', border: 'none', borderRadius: 8,
-                  padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'not-allowed',
-                  fontFamily: 'inherit', opacity: 0.8,
+                  padding: '8px 16px', fontSize: 13, fontWeight: 700,
+                  cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  opacity: busy ? 0.6 : 1, transition: 'opacity 0.15s',
                 }}
-                title="Phase 2で実装予定 (KPT入力)"
               >🌙 終業する</button>
             )}
             {st === 'off' && (
@@ -460,6 +513,108 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
               '日付別の達成ログ',
             ]} />
           </Section>
+        </div>
+      </div>
+
+      {kptOpen && (
+        <KPTModal
+          T={T}
+          busy={busy}
+          onCancel={() => setKptOpen(false)}
+          onSave={handleEnd}
+          startedAt={content.start_at}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── KPT入力モーダル ───────────────────────────────────────────────────────
+function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
+  const [keep, setKeep] = useState('')
+  const [problem, setProblem] = useState('')
+  const [tryNote, setTryNote] = useState('')
+
+  const now = new Date()
+  const jst = new Date(now.getTime() + 9 * 3600 * 1000)
+  const dateStr = `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
+  const worked = startedAt ? (() => {
+    const mins = Math.floor((now - new Date(startedAt)) / 60000)
+    const h = Math.floor(mins / 60), m = mins % 60
+    return `${h}時間${m}分`
+  })() : ''
+
+  const fieldStyle = {
+    width: '100%', minHeight: 70, padding: 10,
+    background: T.sectionBg, border: `1px solid ${T.borderMid}`,
+    borderRadius: 6, color: T.text, fontSize: 13, fontFamily: 'inherit',
+    resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+  }
+  const labelStyle = { fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4, display: 'block' }
+  const hintStyle = { fontSize: 10, color: T.textMuted, marginTop: 2, marginBottom: 6 }
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 9999, padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
+          padding: 20, width: '100%', maxWidth: 520, maxHeight: '90vh',
+          overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>🌙 今日の振り返り</div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+              {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>🟢 Keep（良かったこと・続けたいこと）</label>
+          <div style={hintStyle}>成果・学び・上手くいったこと</div>
+          <textarea value={keep} onChange={e => setKeep(e.target.value)} style={fieldStyle} placeholder="例: やずや提案の構成が整理できた" />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>🟡 Problem（課題・うまくいかなかったこと）</label>
+          <div style={hintStyle}>詰まった点・改善したいこと</div>
+          <textarea value={problem} onChange={e => setProblem(e.target.value)} style={fieldStyle} placeholder="例: 午前中の集中が途切れやすかった" />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>🔵 Try（明日以降に試したいこと）</label>
+          <div style={hintStyle}>次のアクション</div>
+          <textarea value={tryNote} onChange={e => setTryNote(e.target.value)} style={fieldStyle} placeholder="例: 朝イチ90分はSlack off で提案書に集中する" />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            style={{
+              background: 'transparent', border: `1px solid ${T.borderMid}`, color: T.textSub,
+              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >キャンセル</button>
+          <button
+            onClick={() => onSave({ keep, problem, tryNote })}
+            disabled={busy}
+            style={{
+              background: T.info, color: '#fff', border: 'none', borderRadius: 8,
+              padding: '8px 18px', fontSize: 13, fontWeight: 700,
+              cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+              opacity: busy ? 0.6 : 1,
+            }}
+          >💾 保存して終業</button>
         </div>
       </div>
     </div>
