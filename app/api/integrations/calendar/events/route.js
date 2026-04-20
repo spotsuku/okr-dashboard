@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 // 今日のGoogleカレンダー予定を取得
 // GET /api/integrations/calendar/events?owner=<name>
 import { getIntegration, json } from '../../_shared'
