@@ -82,6 +82,85 @@ function toDateStr(d) {
   const jst = new Date(d.getTime() + 9 * 3600 * 1000)
   return jst.toISOString().split('T')[0]
 }
+// Objective 1行コンパクト表示 + ▾ で全文展開 (localStorage に状態保持)
+function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor, titleColor, isDone, storageKey, style }) {
+  const [expanded, setExpanded] = useState(false)
+  // 初期値をlocalStorageから読む
+  useEffect(() => {
+    if (typeof window === 'undefined' || !storageKey) return
+    try {
+      const v = localStorage.getItem(storageKey)
+      if (v === '1') setExpanded(true)
+    } catch {}
+  }, [storageKey])
+  const toggle = () => {
+    setExpanded(e => {
+      const next = !e
+      if (storageKey && typeof window !== 'undefined') {
+        try { localStorage.setItem(storageKey, next ? '1' : '0') } catch {}
+      }
+      return next
+    })
+  }
+  const bgBase = isDone ? 'rgba(0,214,143,0.08)' : `${labelColor}0e`
+  const borderBase = isDone ? 'rgba(0,214,143,0.3)' : `${labelColor}30`
+  return (
+    <div style={{
+      padding: expanded ? '10px 14px' : '7px 12px',
+      background: bgBase,
+      border: `1px solid ${borderBase}`,
+      borderLeft: `3px solid ${labelColor}`,
+      borderRadius: 8,
+      ...style,
+    }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${labelColor}22`, color:labelColor, flexShrink:0 }}>{label}</span>
+        {!expanded && (
+          <div style={{
+            flex: 1, minWidth: 0,
+            fontSize: 12, fontWeight: 700, color: titleColor,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            lineHeight: 1.4,
+          }} title={title}>{title}</div>
+        )}
+        {expanded && (
+          <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
+        )}
+        {isDone && expanded && (
+          <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>🏆 達成済み</span>
+        )}
+        {ownerName && <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
+          <OwnerBadge name={ownerName} members={members} size={20} />
+        </div>}
+        <button
+          onClick={toggle}
+          title={expanded ? '折りたたむ' : '全文表示'}
+          style={{
+            background: 'transparent', border: `1px solid ${wT().border}`,
+            borderRadius: 5, padding: '2px 7px', fontSize: 10,
+            cursor: 'pointer', fontFamily: 'inherit', color: wT().textMuted,
+            flexShrink: 0,
+          }}
+        >{expanded ? '▴' : '▾'}</button>
+      </div>
+      {expanded && (
+        <div style={{ fontSize:14, fontWeight:700, color:titleColor, lineHeight:1.5, marginTop:6 }}>
+          {title}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// textarea を内容に応じて自動拡張 (KA記入欄用)
+function autoGrowTextarea(el, minRows = 3) {
+  if (!el) return
+  el.style.height = 'auto'
+  // フォントサイズ13, lineHeight 1.6 → 1行 ≒ 21px。パディング込みで minRows * 21 + 12
+  const minH = minRows * 21 + 12
+  el.style.height = Math.max(el.scrollHeight, minH) + 'px'
+}
+
 function formatWeekLabel(mondayStr) {
   // mondayStrは "YYYY-MM-DD" を想定（JSTの月曜日）。曜日依存ロジックを避けてパース
   const [y, m, day] = mondayStr.split('-').map(Number)
@@ -391,7 +470,8 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   }
 
   const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:12 }
-  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.5, minHeight:36, transition:'border-color 0.15s' }
+  // KA記入欄: 会議中の可読性向上のためフォントと行間を大きく、最小高さを3行分に
+  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'5px 7px', color:wT().text, fontSize:13, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.6, overflow:'hidden', transition:'border-color 0.15s' }
   const isDone = status === 'done'
   const isDragging = dragIdx !== undefined && dragIdx === rowIdx
   const isDragOver = overIdx !== undefined && overIdx === rowIdx && dragIdx !== null && dragIdx !== rowIdx
@@ -444,28 +524,31 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       {/* Good */}
       <td style={cellS}>
         <textarea value={good} readOnly={!canEdit}
-          onChange={e=>handleFieldChange('good', e.target.value, setGood)}
-          onFocus={e=>{autoSave.setFocusedField('good');e.target.style.borderColor='rgba(0,214,143,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('good',good);e.target.style.borderColor='transparent';e.target.rows=2}}
-          rows={2} placeholder={canEdit?"先週良かったこと":""}
+          ref={el => { if (el) autoGrowTextarea(el, 3) }}
+          onChange={e=>{ handleFieldChange('good', e.target.value, setGood); autoGrowTextarea(e.target, 3) }}
+          onFocus={e=>{ autoSave.setFocusedField('good'); e.target.style.borderColor='rgba(0,214,143,0.4)'; autoGrowTextarea(e.target, 5) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('good',good); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          placeholder={canEdit?"先週良かったこと":""}
           style={{ ...taS, color:good?wT().text:wT().textFaint }} />
       </td>
       {/* More */}
       <td style={cellS}>
         <textarea value={more} readOnly={!canEdit}
-          onChange={e=>handleFieldChange('more', e.target.value, setMore)}
-          onFocus={e=>{autoSave.setFocusedField('more');e.target.style.borderColor='rgba(255,107,107,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('more',more);e.target.style.borderColor='transparent';e.target.rows=2}}
-          rows={2} placeholder={canEdit?"先週の課題・改善点":""}
+          ref={el => { if (el) autoGrowTextarea(el, 3) }}
+          onChange={e=>{ handleFieldChange('more', e.target.value, setMore); autoGrowTextarea(e.target, 3) }}
+          onFocus={e=>{ autoSave.setFocusedField('more'); e.target.style.borderColor='rgba(255,107,107,0.4)'; autoGrowTextarea(e.target, 5) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('more',more); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          placeholder={canEdit?"先週の課題・改善点":""}
           style={{ ...taS, color:more?wT().text:wT().textFaint }} />
       </td>
       {/* Focus */}
       <td style={cellS}>
         <textarea value={focusOutput} readOnly={!canEdit}
-          onChange={e=>handleFieldChange('focus_output', e.target.value, setFocusOutput)}
-          onFocus={e=>{autoSave.setFocusedField('focus_output');e.target.style.borderColor='rgba(77,159,255,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('focus_output',focusOutput);e.target.style.borderColor='transparent';e.target.rows=2}}
-          rows={2} placeholder={canEdit?"今週の重点アクション":""}
+          ref={el => { if (el) autoGrowTextarea(el, 3) }}
+          onChange={e=>{ handleFieldChange('focus_output', e.target.value, setFocusOutput); autoGrowTextarea(e.target, 3) }}
+          onFocus={e=>{ autoSave.setFocusedField('focus_output'); e.target.style.borderColor='rgba(77,159,255,0.4)'; autoGrowTextarea(e.target, 5) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('focus_output',focusOutput); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          placeholder={canEdit?"今週の重点アクション":""}
           style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
       </td>
       {/* Tasks + Delete */}
@@ -1459,34 +1542,40 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             </div>
           ) : (
             <>
-              {/* 通期Objectiveヘッダー */}
-              <div style={{ padding:'12px 14px', background:`${objColor}0e`, border:`1px solid ${objColor}30`, borderLeft:`4px solid ${objColor}`, borderRadius:10, marginBottom:12 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${objColor}20`, color:objColor }}>通期</span>
-                  <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
-                  {selectedObj.owner && <div style={{ marginLeft:'auto' }}><OwnerBadge name={selectedObj.owner} members={members} size={24} /></div>}
-                </div>
-                <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
-              </div>
+              {/* 通期Objectiveヘッダー (デフォルト折り畳み・▾で展開) */}
+              <ObjectiveCompactCard
+                title={selectedObj.title}
+                ownerName={selectedObj.owner}
+                members={members}
+                wT={wT}
+                label="通期"
+                labelColor={objColor}
+                titleColor={wT().text}
+                storageKey={`weeklymtg-obj-expand-${selectedObj.id}`}
+                style={{ marginBottom: 10 }}
+              />
 
-              {/* 期間切替タブ */}
-              <div style={{ display:'flex', gap:4, marginBottom:14 }}>
+              {/* 期間切替タブ (コンパクト) */}
+              <div style={{ display:'flex', gap:3, marginBottom:10 }}>
                 {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => (
-                  <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'5px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
+                  <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'3px 12px', borderRadius:6, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
                 ))}
               </div>
 
-              {/* 選択期間のObjective表示 */}
+              {/* 選択期間のObjective表示 (コンパクト) */}
               {rightObj && rightPeriod !== 'annual' && (
-                <div style={{ padding:'10px 14px', background: isObjDone(rightObj)?'rgba(0,214,143,0.08)':wT().bgCard, border:`1px solid ${isObjDone(rightObj)?'rgba(0,214,143,0.3)':wT().border}`, borderRadius:8, marginBottom:14 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:'rgba(77,159,255,0.15)', color:'#4d9fff' }}>{getPeriodLabel(rightObj.period)}</span>
-                    <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
-                    {isObjDone(rightObj) && <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>🏆 達成済み</span>}
-                    {rightObj.owner && <div style={{ marginLeft:'auto' }}><OwnerBadge name={rightObj.owner} members={members} size={22} /></div>}
-                  </div>
-                  <div style={{ fontSize:13, fontWeight:600, color: isObjDone(rightObj)?'#00d68f':wT().text, lineHeight:1.4 }}>{rightObj.title}</div>
-                </div>
+                <ObjectiveCompactCard
+                  title={rightObj.title}
+                  ownerName={rightObj.owner}
+                  members={members}
+                  wT={wT}
+                  label={getPeriodLabel(rightObj.period)}
+                  labelColor="#4d9fff"
+                  titleColor={isObjDone(rightObj) ? '#00d68f' : wT().text}
+                  isDone={isObjDone(rightObj)}
+                  storageKey={`weeklymtg-obj-expand-${rightObj.id}`}
+                  style={{ marginBottom: 10 }}
+                />
               )}
               {!rightObj && rightPeriod !== 'annual' && selectedObjKRs.length === 0 && (
                 <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>この期間のOKRはまだ設定されていません</div>
