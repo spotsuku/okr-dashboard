@@ -60,7 +60,7 @@ const MODE_CONFIG = {
   },
   ka: {
     title: '📋 KA記入モード',
-    cta: 'KAの今週の振り返りと来週の注力を確認しよう！',
+    cta: 'KAの振り返りと注力事項を確認しよう！',
     deadlineLabel: '金曜 00:00 JST まで',
     deadlineOffset: 4,  // 月曜+4 = 金曜
     accent: '#00d68f',
@@ -108,15 +108,9 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 
   // KR は今週金曜のレビュー会議に反映 → weekStart = 今週月曜
   const krWeekStart = useMemo(() => getMondayJSTStr(), [])
-  // KA は次のキックオフ(月曜)会議に反映 → 今日が月曜なら今日、それ以外は翌月曜
-  const kaWeekStart = useMemo(() => {
-    const todayMonStr = getMondayJSTStr()
-    const jstDay = new Date(Date.now() + 9 * 3600 * 1000).getUTCDay()  // 0=Sun, 1=Mon
-    if (jstDay === 1) return todayMonStr  // Monday
-    const [y, m, d] = todayMonStr.split('-').map(Number)
-    const next = new Date(Date.UTC(y, m - 1, d + 7))
-    return next.toISOString().split('T')[0]
-  }, [])
+  // KA は基本は翌月曜の週次キックオフに反映。ただし翌週レコードが未作成の場合は今週にフォールバック。
+  // kaWeekStart は load() 内で実データを見て動的に決定 (state)。
+  const [kaWeekStart, setKaWeekStart] = useState(() => getMondayJSTStr())
   const weekStartOf = (kind) => (kind === 'kr' ? krWeekStart : kaWeekStart)
   // 会議日 ラベル (反映先)
   const meetingLabel = useCallback((kind) => {
@@ -136,13 +130,33 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     if (!viewingName) return
     setLoading(true)
 
+    // KA 候補週: 今週と翌週
+    const currentMon = getMondayJSTStr()
+    const [cy, cm, cd] = currentMon.split('-').map(Number)
+    const nextMon = new Date(Date.UTC(cy, cm - 1, cd + 7)).toISOString().split('T')[0]
+
     const [krsRes, krReviewsRes, kasRes, objsRes] = await Promise.all([
       supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName),
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart),
       supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, objective_id, owner, status, good, more, focus_output, week_start')
-        .eq('owner', viewingName).eq('week_start', kaWeekStart).neq('status', 'done'),
+        .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done'),
       supabase.from('objectives').select('id, title, period, level_id'),
     ])
+
+    // KA の対象週を決定
+    // ・今日が月曜 & 今週分が存在 → 今週 (その日のキックオフ向け)
+    // ・翌週分が存在 → 翌週 (次のキックオフ向け)
+    // ・それ以外 → 今週 (フォールバック)
+    const jstDay = new Date(Date.now() + 9 * 3600 * 1000).getUTCDay()
+    const allKas = kasRes.data || []
+    const nextWeekKas = allKas.filter(k => k.week_start === nextMon)
+    const currentWeekKas = allKas.filter(k => k.week_start === currentMon)
+    let chosenKaWeek
+    if (jstDay === 1 && currentWeekKas.length > 0) chosenKaWeek = currentMon
+    else if (nextWeekKas.length > 0) chosenKaWeek = nextMon
+    else chosenKaWeek = currentMon
+    if (chosenKaWeek !== kaWeekStart) setKaWeekStart(chosenKaWeek)
+    const chosenKas = allKas.filter(k => k.week_start === chosenKaWeek)
 
     const krs = krsRes.data || []
     const krReviewsMap = Object.fromEntries((krReviewsRes.data || []).map(r => [r.kr_id, r]))
@@ -171,7 +185,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
       }))
 
     // KA キュー: 今Q、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
-    const kaQueue = (kasRes.data || [])
+    const kaQueue = chosenKas
       .filter(ka => inCurrentQ(ka.objective_id))
       .filter(ka => {
         if (showAll) return true
@@ -187,7 +201,8 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     setIndex({ kr: 0, ka: 0 })
     setCompleted({ kr: krQueue.length === 0, ka: kaQueue.length === 0 })
     setLoading(false)
-  }, [viewingName, krWeekStart, kaWeekStart, showAll])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingName, krWeekStart, showAll])  // kaWeekStart は load 内で動的決定するため依存から外す
 
   useEffect(() => { if (open) load() }, [open, load])
   useEffect(() => { if (open) setMode(initialMode) }, [open, initialMode])
