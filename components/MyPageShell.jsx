@@ -397,6 +397,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             viewingName={viewingName}
             myName={myName}
             initialMode={focusFillOpen}
+            levels={levels}
           />
         )}
       </div>

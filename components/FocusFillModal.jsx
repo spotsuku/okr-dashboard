@@ -14,6 +14,34 @@ function getMondayJSTStr(d = new Date()) {
   const mon = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate() + diff))
   return mon.toISOString().split('T')[0]
 }
+// week_start (YYYY-MM-DD) に offsetWeeks 足した週のラベル (例: "4/14週")
+function formatWeekLabel(weekStartStr, offsetWeeks = 0) {
+  const [y, m, d] = weekStartStr.split('-').map(Number)
+  const t = Date.UTC(y, m - 1, d + offsetWeeks * 7)
+  const dt = new Date(t)
+  return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}週`
+}
+// week_start の週と今週の相対ラベル ("先週"/"今週"/"来週"/"2週前" 等)
+function relativeWeekLabel(weekStartStr, offsetWeeks = 0) {
+  const [y, m, d] = weekStartStr.split('-').map(Number)
+  const target = Date.UTC(y, m - 1, d + offsetWeeks * 7)
+  const [ty, tm, td] = getMondayJSTStr().split('-').map(Number)
+  const todayMon = Date.UTC(ty, tm - 1, td)
+  const diffWeeks = Math.round((target - todayMon) / (7 * 86400000))
+  if (diffWeeks === 0) return '今週'
+  if (diffWeeks === -1) return '先週'
+  if (diffWeeks === 1) return '来週'
+  if (diffWeeks < 0) return `${-diffWeeks}週前`
+  return `${diffWeeks}週後`
+}
+// 現在のQ判定 (4-6月=q1 / 7-9=q2 / 10-12=q3 / 1-3=q4)
+function getCurrentQuarter() {
+  const m = new Date().getMonth()
+  if (m >= 3 && m <= 5) return 'q1'
+  if (m >= 6 && m <= 8) return 'q2'
+  if (m >= 9 && m <= 11) return 'q3'
+  return 'q4'
+}
 // 今週のMondayから offset日後のJST 00:00 のタイムスタンプ
 function weekdayDeadlineMs(offset) {
   const [y, m, d] = getMondayJSTStr().split('-').map(Number)
@@ -63,17 +91,31 @@ const WEATHER_OPTIONS = [
 ]
 
 // ─── メインコンポーネント ───────────────────────────
-export default function FocusFillModal({ open, onClose, T, viewingName, myName, initialMode = 'kr' }) {
+export default function FocusFillModal({ open, onClose, T, viewingName, myName, initialMode = 'kr', levels = [] }) {
   const isViewingSelf = viewingName === myName
   const [mode, setMode] = useState(initialMode)
   const [loading, setLoading] = useState(true)
   const [queue, setQueue] = useState({ kr: [], ka: [] })      // 未記入カード一覧
   const [index, setIndex] = useState({ kr: 0, ka: 0 })        // 各モードの現在位置
-  const [draft, setDraft] = useState({ good: '', more: '', focus: '', weather: 0 })
+  const [draft, setDraft] = useState({ good: '', more: '', focus: '', weather: 0, current: 0 })
   const [saving, setSaving] = useState(false)
   const [completed, setCompleted] = useState({ kr: false, ka: false })
   const [objMap, setObjMap] = useState({})
   const [swipeDelta, setSwipeDelta] = useState(0)  // D: スワイプ時のX移動量
+
+  // levels を id→level の map に
+  const levelMap = useMemo(() => {
+    const m = {}; (levels || []).forEach(l => { m[String(l.id)] = l }); return m
+  }, [levels])
+  // level_id → "部署 · チーム" ラベル
+  const deptLabelOf = useCallback((levelId) => {
+    if (!levelId) return ''
+    const lv = levelMap[String(levelId)]
+    if (!lv) return ''
+    const parent = lv.parent_id ? levelMap[String(lv.parent_id)] : null
+    if (parent) return `${parent.name} · ${lv.name}`
+    return lv.name
+  }, [levelMap])
 
   const weekStart = useMemo(() => getMondayJSTStr(), [])
   const krDeadline = useMemo(() => weekdayDeadlineMs(MODE_CONFIG.kr.deadlineOffset), [])
@@ -89,15 +131,20 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', weekStart),
       supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, objective_id, owner, status, good, more, focus_output')
         .eq('owner', viewingName).eq('week_start', weekStart).neq('status', 'done'),
-      supabase.from('objectives').select('id, title, period'),
+      supabase.from('objectives').select('id, title, period, level_id'),
     ])
 
     const krs = krsRes.data || []
     const krReviewsMap = Object.fromEntries((krReviewsRes.data || []).map(r => [r.kr_id, r]))
     const om = {}; (objsRes.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
 
-    // KR 未記入キュー (C対応): レコード未作成 or 全フィールド空 (weather=0 含む)
+    // 該当Q（通期と他Qは除外）
+    const curQ = getCurrentQuarter()
+    const inCurrentQ = (objId) => om[objId]?.period === curQ
+
+    // KR 未記入キュー: レコード未作成 or 全フィールド空 (weather=0 含む) かつ 今Qのみ
     const krQueue = krs
+      .filter(kr => inCurrentQ(kr.objective_id))
       .filter(kr => {
         const r = krReviewsMap[kr.id]
         if (!r) return true
@@ -112,8 +159,9 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         objective: om[kr.objective_id] || null,
       }))
 
-    // KA 未記入キュー: good/more/focus_output が全空
+    // KA 未記入キュー: good/more/focus_output が全空、かつ 今Qのみ
     const kaQueue = (kasRes.data || [])
+      .filter(ka => inCurrentQ(ka.objective_id))
       .filter(ka => !((ka.good || '').trim() || (ka.more || '').trim() || (ka.focus_output || '').trim()))
       .map(ka => ({
         kind: 'ka',
@@ -134,7 +182,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
   const currentCard = queue[mode]?.[index[mode]]
   useEffect(() => {
     if (!currentCard) {
-      setDraft({ good: '', more: '', focus: '', weather: 0 })
+      setDraft({ good: '', more: '', focus: '', weather: 0, current: 0 })
       return
     }
     if (currentCard.kind === 'kr') {
@@ -144,6 +192,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         more: r?.more || '',
         focus: r?.focus || '',
         weather: r?.weather || 0,
+        current: currentCard.kr.current ?? 0,
       })
     } else {
       const ka = currentCard.ka
@@ -152,6 +201,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         more: ka.more || '',
         focus: ka.focus_output || '',  // KA側では focus_output カラム
         weather: 0,  // KAには weather なし
+        current: 0,  // KA には current なし
       })
     }
   }, [currentCard?.kind, currentCard?.kr?.id, currentCard?.ka?.id])
@@ -161,7 +211,10 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     if (!currentCard) return
     if (!isViewingSelf) return   // E: 本人のみ保存可
     const filled = (draft.good || '').trim() || (draft.more || '').trim() || (draft.focus || '').trim()
-    if (!filled) {
+    // KR の進捗変更も「書いた」とみなす
+    const progressChanged = currentCard.kind === 'kr'
+      && Number(draft.current) !== Number(currentCard.kr.current ?? 0)
+    if (!filled && !progressChanged) {
       // 空のまま保存はスキップ扱い
       return moveNext()
     }
@@ -180,6 +233,15 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
       const { error } = await supabase.from('kr_weekly_reviews')
         .upsert(payload, { onConflict: 'kr_id,week_start' })
       if (error) { setSaving(false); alert('KR保存エラー: ' + error.message); return }
+      // KR の進捗 (current) 更新
+      const newCurrent = Number(draft.current)
+      const prevCurrent = Number(currentCard.kr.current ?? 0)
+      if (!isNaN(newCurrent) && newCurrent !== prevCurrent) {
+        const { error: e2 } = await supabase.from('key_results')
+          .update({ current: newCurrent }).eq('id', currentCard.kr.id)
+        if (e2) { setSaving(false); alert('KR進捗保存エラー: ' + e2.message); return }
+        currentCard.kr.current = newCurrent
+      }
     } else {
       const payload = {
         good: draft.good || '',
@@ -366,7 +428,8 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
           ) : completed[mode] || q.length === 0 ? (
             <CompletionScreen T={T} mode={mode} q={q} onClose={onClose} />
           ) : current ? (
-            <CardView T={T} card={current} draft={draft} setDraft={setDraft} cfg={cfg} readOnly={!isViewingSelf} />
+            <CardView T={T} card={current} draft={draft} setDraft={setDraft} cfg={cfg}
+              readOnly={!isViewingSelf} deptLabelOf={deptLabelOf} weekStart={weekStart} />
           ) : null}
         </div>
 
@@ -418,22 +481,47 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 }
 
 // ─── カード表示 ────────────────────────────────────────
-function CardView({ T, card, draft, setDraft, cfg, readOnly = false }) {
+function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart }) {
   const isKR = card.kind === 'kr'
   const kr = card.kr
   const ka = card.ka
   const obj = card.objective
   const title = isKR ? kr.title : (ka.ka_title || '(無題)')
+  const deptLabel = obj ? deptLabelOf?.(obj.level_id) : ''
+  const isAnnual = obj?.period === 'annual'
+  // 週ラベル (絶対 + 相対)
+  const reviewWkAbs = formatWeekLabel(weekStart, 0)
+  const reviewWkRel = relativeWeekLabel(weekStart, 0)
+  const focusWkAbs = formatWeekLabel(weekStart, 1)
+  const focusWkRel = relativeWeekLabel(weekStart, 1)
+
+  // 進捗更新の現在値 (UI表示用)
+  const curVal = isKR ? Number(draft.current) || 0 : 0
+  const tgtVal = isKR ? (Number(kr.target) || 0) : 0
+  const curPct = tgtVal ? Math.round((curVal / tgtVal) * 100) : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* コンテキスト: Objective → タイトル */}
+      {/* コンテキスト: 部署·チーム → Objective → タイトル */}
       <div>
-        {obj && (
-          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: 0.5, marginBottom: 4 }}>
-            {obj.period?.toUpperCase()} · OBJECTIVE {obj.title && <span style={{ color: T.textSub, fontWeight: 500, marginLeft: 4 }}>{obj.title}</span>}
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+          {deptLabel && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+              background: 'rgba(122,133,153,0.15)', color: T.textSub, letterSpacing: 0.3,
+            }}>🏢 {deptLabel}</span>
+          )}
+          {obj && !isAnnual && (
+            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: 0.5 }}>
+              {obj.period?.toUpperCase()} · OBJECTIVE {obj.title && <span style={{ color: T.textSub, fontWeight: 500, marginLeft: 4 }}>{obj.title}</span>}
+            </span>
+          )}
+          {obj && isAnnual && (
+            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: 0.5 }}>
+              OBJECTIVE {obj.title && <span style={{ color: T.textSub, fontWeight: 500, marginLeft: 4 }}>{obj.title}</span>}
+            </span>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
           <span style={{
             fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99,
@@ -443,9 +531,9 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false }) {
             {title}
           </div>
         </div>
-        {isKR && kr.target && (
+        {isKR && kr.target != null && kr.target !== '' && (
           <div style={{ fontSize: 11, color: T.textMuted }}>
-            目標 {kr.target}{kr.unit || ''} · 現在 {kr.current || 0}{kr.unit || ''} ({kr.target ? Math.round((kr.current || 0) / kr.target * 100) : 0}%)
+            目標 {kr.target}{kr.unit || ''} · 現在 {curVal}{kr.unit || ''} ({curPct}%)
           </div>
         )}
         {!isKR && ka.kr_title && (
@@ -454,6 +542,31 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false }) {
           </div>
         )}
       </div>
+
+      {/* KR のみ: 進捗更新 */}
+      {isKR && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>
+            📊 今週時点の進捗を更新
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="number"
+              value={draft.current}
+              onChange={e => !readOnly && setDraft(d => ({ ...d, current: e.target.value }))}
+              readOnly={readOnly}
+              style={{
+                width: 120, padding: '8px 10px', fontSize: 14,
+                background: T.sectionBg, border: `1px solid ${T.borderMid}`,
+                borderRadius: 8, color: T.text, outline: 'none', fontFamily: 'inherit',
+                fontWeight: 700,
+              }} />
+            <span style={{ fontSize: 13, color: T.textSub, fontWeight: 700 }}>{kr.unit || ''}</span>
+            <span style={{ fontSize: 11, color: T.textMuted }}>
+              / 目標 {kr.target || 0}{kr.unit || ''} ({curPct}%)
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* KR のみ: 天気 */}
       {isKR && (
@@ -482,16 +595,16 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false }) {
         </div>
       )}
 
-      {/* 3 フィールド */}
-      <FieldRow T={T} label="✅ 先週 good (良かったこと・続けたいこと)"
+      {/* 3 フィールド (絶対週 + 相対) */}
+      <FieldRow T={T} label={`✅ ${reviewWkAbs} (${reviewWkRel}) good — 良かったこと・続けたいこと`}
         color="#00d68f" readOnly={readOnly}
         value={draft.good} onChange={v => setDraft(d => ({ ...d, good: v }))}
         placeholder="例: 評議会で3社のクロージングが確定した" />
-      <FieldRow T={T} label="🔺 先週 more (課題・改善点)"
+      <FieldRow T={T} label={`🔺 ${reviewWkAbs} (${reviewWkRel}) more — 課題・改善点`}
         color="#ff6b6b" readOnly={readOnly}
         value={draft.more} onChange={v => setDraft(d => ({ ...d, more: v }))}
         placeholder="例: 午前中の集中が切れがちだった" />
-      <FieldRow T={T} label={isKR ? '🎯 今週の focus (注力アクション)' : '🎯 今週 focus (Moreへの対応策)'}
+      <FieldRow T={T} label={`🎯 ${focusWkAbs} (${focusWkRel}) focus — ${isKR ? '注力アクション' : 'Moreへの対応策'}`}
         color="#4d9fff" readOnly={readOnly}
         value={draft.focus} onChange={v => setDraft(d => ({ ...d, focus: v }))}
         placeholder="例: 月曜朝90分はSlack offで提案書作成に集中" />
