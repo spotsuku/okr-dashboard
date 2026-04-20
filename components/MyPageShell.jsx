@@ -316,6 +316,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               isViewingSelf={isViewingSelf} myName={myName}
               workLog={workLogs[viewingName]}
               onWorkLogChange={reloadWorkLogs}
+              onGoToIntegrations={() => setActiveTab('integrations')}
             />
           )}
           {activeTab === 'wbs' && (
@@ -360,7 +361,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToIntegrations }) {
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -540,10 +541,12 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   }
 
   // ─── ウィジェット表示/非表示 prefs (localStorage) ────
-  const PREFS_KEY = `mypage-widget-prefs-v1:${myName || 'guest'}`
+  // v2: 連携プレースホルダもデフォルト表示に (UI確認を優先)
+  const PREFS_KEY = `mypage-widget-prefs-v2:${myName || 'guest'}`
   const DEFAULT_PREFS = {
     today: true, week: true,
-    rem_okr: true, rem_task: true, rem_calendar: false, rem_gmail: false, rem_slack: false, rem_line: false,
+    rem_okr: true, rem_task: true,
+    rem_calendar: true, rem_gmail: true, rem_slack: true, rem_line: true,
     goal_month_main: true, goal_month_growth: true, goal_week: true, achievements: true,
   }
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
@@ -603,6 +606,48 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     setAchievements({ items, loading: false })
   }, [viewingName])
   useEffect(() => { loadAchievements() }, [loadAchievements])
+
+  // ─── 連携状態 & 外部データ取得 ─────────────────────
+  const [integData, setIntegData] = useState({
+    calendar: { connected: false, loading: false, items: [], error: '' },
+    gmail:    { connected: false, loading: false, items: [], error: '' },
+    slack:    { connected: false, loading: false, items: [], error: '' },
+    line:     { connected: false, loading: false, error: '' },
+  })
+
+  const loadIntegrations = useCallback(async () => {
+    if (!viewingName) return
+    const { data } = await supabase
+      .from('user_integrations')
+      .select('service, expires_at')
+      .eq('owner', viewingName)
+    const map = {}
+    ;(data || []).forEach(r => { map[r.service] = r })
+    const base = {
+      calendar: { connected: !!map.google_calendar, loading: false, items: [], error: '' },
+      gmail:    { connected: !!map.google_gmail,    loading: false, items: [], error: '' },
+      slack:    { connected: !!map.slack,           loading: false, items: [], error: '' },
+      line:     { connected: !!map.line,            loading: false, error: '' },
+    }
+    setIntegData(base)
+
+    // 接続済みのサービスに対してデータ取得(エラー時は silently fail → error を保持)
+    const fetchService = async (svc, url) => {
+      setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: true } }))
+      try {
+        const r = await fetch(`${url}?owner=${encodeURIComponent(viewingName)}`)
+        const j = await r.json()
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+        setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: false, items: j.items || [], error: '' } }))
+      } catch (e) {
+        setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: false, items: [], error: e.message || 'エラー' } }))
+      }
+    }
+    if (map.google_calendar) fetchService('calendar', '/api/integrations/calendar/events')
+    if (map.google_gmail)    fetchService('gmail',    '/api/integrations/gmail/threads')
+    if (map.slack)           fetchService('slack',    '/api/integrations/slack/unread')
+  }, [viewingName])
+  useEffect(() => { loadIntegrations() }, [loadIntegrations])
 
   async function handleStart() {
     if (busy || !myName) return
@@ -774,22 +819,37 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
           )}
           {showW('rem_calendar') && (
             <Section T={T} icon="📅" title="Googleカレンダー" flex={0}>
-              <Placeholder T={T} lines={['Google Calendar連携(OAuth設定後に有効化)']} />
+              <IntegrationStatus T={T} state={integData.calendar} isViewingSelf={isViewingSelf}
+                serviceLabel="Google Calendar" emptyText="✨ 今日の予定はありません"
+                onConnect={onGoToIntegrations} renderItem={ev => (
+                  <><span style={{ color: T.textMuted, fontWeight:600, minWidth:48, fontSize:10 }}>{ev.time || '--'}</span><span>{ev.title}</span></>
+                )} />
             </Section>
           )}
           {showW('rem_gmail') && (
             <Section T={T} icon="📧" title="Gmail" flex={0}>
-              <Placeholder T={T} lines={['Gmail連携 + AI返信草稿(OAuth設定後に有効化)']} />
+              <IntegrationStatus T={T} state={integData.gmail} isViewingSelf={isViewingSelf}
+                serviceLabel="Gmail" emptyText="✨ 要対応のメールはありません"
+                onConnect={onGoToIntegrations} renderItem={m => (
+                  <><span>📧</span><span style={{ flex:1 }}>{m.from}: {truncate(m.subject, 30)}</span></>
+                )} />
             </Section>
           )}
           {showW('rem_slack') && (
             <Section T={T} icon="💬" title="Slack" flex={0}>
-              <Placeholder T={T} lines={['未読メンション・DM(Slack連携で有効化)']} />
+              <IntegrationStatus T={T} state={integData.slack} isViewingSelf={isViewingSelf}
+                serviceLabel="Slack" emptyText="✨ 未読メンションはありません"
+                onConnect={onGoToIntegrations} renderItem={m => (
+                  <><span>#{m.channel}</span><span style={{ flex:1 }}>{truncate(m.text, 30)}</span></>
+                )} />
             </Section>
           )}
           {showW('rem_line') && (
             <Section T={T} icon="🟢" title="LINE" flex={0}>
-              <Placeholder T={T} lines={['LINE通知(LINE連携で有効化)']} />
+              <IntegrationStatus T={T} state={integData.line} isViewingSelf={isViewingSelf}
+                serviceLabel="LINE" emptyText="LINE連携済み (通知Bot APIは別途必要)"
+                onConnect={onGoToIntegrations} renderItem={null}
+              />
             </Section>
           )}
         </div>
@@ -1513,6 +1573,59 @@ function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// 連携サービスの状態表示 (未接続→CTA / 読込中 / データ表示 / エラー)
+function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isViewingSelf, onConnect }) {
+  if (!state.connected) {
+    return (
+      <div style={{
+        padding: 10, background: T.sectionBg, border: `1px dashed ${T.border}`,
+        borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 6,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5 }}>
+          {serviceLabel} と連携すると、ここに情報が表示されます。
+        </div>
+        {isViewingSelf && (
+          <button onClick={onConnect} style={{
+            alignSelf: 'flex-start', background: T.accentSolid, color: '#fff',
+            border: 'none', borderRadius: 6, padding: '4px 12px',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>🔌 連携設定へ</button>
+        )}
+      </div>
+    )
+  }
+  if (state.loading) {
+    return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>読み込み中...</div>
+  }
+  if (state.error) {
+    return (
+      <div style={{
+        padding: 8, background: T.dangerBg, border: `1px solid ${T.danger}30`,
+        borderRadius: 6, fontSize: 11, color: T.danger, lineHeight: 1.5,
+      }}>
+        ⚠️ {state.error}
+      </div>
+    )
+  }
+  if (!state.items || state.items.length === 0) {
+    return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>{emptyText}</div>
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {state.items.map((it, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '5px 8px', borderRadius: 6,
+          background: T.sectionBg, border: `1px solid ${T.border}`,
+          fontSize: 11, color: T.text, lineHeight: 1.5,
+        }}>
+          {renderItem ? renderItem(it) : <span style={{ flex:1 }}>{JSON.stringify(it)}</span>}
+        </div>
+      ))}
     </div>
   )
 }
