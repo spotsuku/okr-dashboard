@@ -21,19 +21,6 @@ function formatWeekLabel(weekStartStr, offsetWeeks = 0) {
   const dt = new Date(t)
   return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}週`
 }
-// week_start の週と今週の相対ラベル ("先週"/"今週"/"来週"/"2週前" 等)
-function relativeWeekLabel(weekStartStr, offsetWeeks = 0) {
-  const [y, m, d] = weekStartStr.split('-').map(Number)
-  const target = Date.UTC(y, m - 1, d + offsetWeeks * 7)
-  const [ty, tm, td] = getMondayJSTStr().split('-').map(Number)
-  const todayMon = Date.UTC(ty, tm - 1, td)
-  const diffWeeks = Math.round((target - todayMon) / (7 * 86400000))
-  if (diffWeeks === 0) return '今週'
-  if (diffWeeks === -1) return '先週'
-  if (diffWeeks === 1) return '来週'
-  if (diffWeeks < 0) return `${-diffWeeks}週前`
-  return `${diffWeeks}週後`
-}
 // 現在のQ判定 (4-6月=q1 / 7-9=q2 / 10-12=q3 / 1-3=q4)
 function getCurrentQuarter() {
   const m = new Date().getMonth()
@@ -117,7 +104,28 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     return lv.name
   }, [levelMap])
 
-  const weekStart = useMemo(() => getMondayJSTStr(), [])
+  // KR は今週金曜のレビュー会議に反映 → weekStart = 今週月曜
+  const krWeekStart = useMemo(() => getMondayJSTStr(), [])
+  // KA は次のキックオフ(月曜)会議に反映 → 今日が月曜なら今日、それ以外は翌月曜
+  const kaWeekStart = useMemo(() => {
+    const todayMonStr = getMondayJSTStr()
+    const jstDay = new Date(Date.now() + 9 * 3600 * 1000).getUTCDay()  // 0=Sun, 1=Mon
+    if (jstDay === 1) return todayMonStr  // Monday
+    const [y, m, d] = todayMonStr.split('-').map(Number)
+    const next = new Date(Date.UTC(y, m - 1, d + 7))
+    return next.toISOString().split('T')[0]
+  }, [])
+  const weekStartOf = (kind) => (kind === 'kr' ? krWeekStart : kaWeekStart)
+  // 会議日 ラベル (反映先)
+  const meetingLabel = useCallback((kind) => {
+    const [y, m, d] = (kind === 'kr' ? krWeekStart : kaWeekStart).split('-').map(Number)
+    // KR → weekStart+4(金), KA → weekStart+0(月)
+    const offset = kind === 'kr' ? 4 : 0
+    const dt = new Date(Date.UTC(y, m - 1, d + offset))
+    const wd = ['日', '月', '火', '水', '木', '金', '土'][dt.getUTCDay()]
+    const name = kind === 'kr' ? 'KRレビュー会議' : '週次キックオフ'
+    return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}(${wd}) の${name}`
+  }, [krWeekStart, kaWeekStart])
   const krDeadline = useMemo(() => weekdayDeadlineMs(MODE_CONFIG.kr.deadlineOffset), [])
   const kaDeadline = useMemo(() => weekdayDeadlineMs(MODE_CONFIG.ka.deadlineOffset), [])
 
@@ -128,9 +136,9 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 
     const [krsRes, krReviewsRes, kasRes, objsRes] = await Promise.all([
       supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName),
-      supabase.from('kr_weekly_reviews').select('*').eq('week_start', weekStart),
-      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, objective_id, owner, status, good, more, focus_output')
-        .eq('owner', viewingName).eq('week_start', weekStart).neq('status', 'done'),
+      supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart),
+      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, objective_id, owner, status, good, more, focus_output, week_start')
+        .eq('owner', viewingName).eq('week_start', kaWeekStart).neq('status', 'done'),
       supabase.from('objectives').select('id, title, period, level_id'),
     ])
 
@@ -173,7 +181,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     setIndex({ kr: 0, ka: 0 })
     setCompleted({ kr: krQueue.length === 0, ka: kaQueue.length === 0 })
     setLoading(false)
-  }, [viewingName, weekStart])
+  }, [viewingName, krWeekStart, kaWeekStart])
 
   useEffect(() => { if (open) load() }, [open, load])
   useEffect(() => { if (open) setMode(initialMode) }, [open, initialMode])
@@ -223,7 +231,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     if (currentCard.kind === 'kr') {
       const payload = {
         kr_id: currentCard.kr.id,
-        week_start: weekStart,
+        week_start: krWeekStart,
         weather: Number(draft.weather) || 0,
         good: draft.good || '',
         more: draft.more || '',
@@ -429,7 +437,9 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
             <CompletionScreen T={T} mode={mode} q={q} onClose={onClose} />
           ) : current ? (
             <CardView T={T} card={current} draft={draft} setDraft={setDraft} cfg={cfg}
-              readOnly={!isViewingSelf} deptLabelOf={deptLabelOf} weekStart={weekStart} />
+              readOnly={!isViewingSelf} deptLabelOf={deptLabelOf}
+              weekStart={weekStartOf(current.kind)}
+              meetingText={meetingLabel(current.kind)} />
           ) : null}
         </div>
 
@@ -481,7 +491,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 }
 
 // ─── カード表示 ────────────────────────────────────────
-function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart }) {
+function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart, meetingText }) {
   const isKR = card.kind === 'kr'
   const kr = card.kr
   const ka = card.ka
@@ -489,11 +499,13 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
   const title = isKR ? kr.title : (ka.ka_title || '(無題)')
   const deptLabel = obj ? deptLabelOf?.(obj.level_id) : ''
   const isAnnual = obj?.period === 'annual'
-  // 週ラベル (絶対 + 相対)
-  const reviewWkAbs = formatWeekLabel(weekStart, 0)
-  const reviewWkRel = relativeWeekLabel(weekStart, 0)
-  const focusWkAbs = formatWeekLabel(weekStart, 1)
-  const focusWkRel = relativeWeekLabel(weekStart, 1)
+  // 週ラベル (絶対日のみ)
+  // KR: good/more = weekStart週、focus = weekStart+1週
+  // KA: good/more = weekStart-1週、focus = weekStart週
+  const goodMoreOffset = isKR ? 0 : -1
+  const focusOffset = isKR ? 1 : 0
+  const goodMoreWk = formatWeekLabel(weekStart, goodMoreOffset)
+  const focusWk = formatWeekLabel(weekStart, focusOffset)
 
   // 進捗更新の現在値 (UI表示用)
   const curVal = isKR ? Number(draft.current) || 0 : 0
@@ -502,6 +514,14 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* 反映先会議 */}
+      {meetingText && (
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: cfg.accent,
+          background: cfg.accentBg, padding: '6px 10px',
+          borderRadius: 6, display: 'inline-block', alignSelf: 'flex-start',
+        }}>↪ {meetingText} に反映</div>
+      )}
       {/* コンテキスト: 部署·チーム → Objective → タイトル */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
@@ -595,16 +615,16 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
         </div>
       )}
 
-      {/* 3 フィールド (絶対週 + 相対) */}
-      <FieldRow T={T} label={`✅ ${reviewWkAbs} (${reviewWkRel}) good — 良かったこと・続けたいこと`}
+      {/* 3 フィールド (絶対日のみ) */}
+      <FieldRow T={T} label={`✅ ${goodMoreWk} good — 良かったこと・続けたいこと`}
         color="#00d68f" readOnly={readOnly}
         value={draft.good} onChange={v => setDraft(d => ({ ...d, good: v }))}
         placeholder="例: 評議会で3社のクロージングが確定した" />
-      <FieldRow T={T} label={`🔺 ${reviewWkAbs} (${reviewWkRel}) more — 課題・改善点`}
+      <FieldRow T={T} label={`🔺 ${goodMoreWk} more — 課題・改善点`}
         color="#ff6b6b" readOnly={readOnly}
         value={draft.more} onChange={v => setDraft(d => ({ ...d, more: v }))}
         placeholder="例: 午前中の集中が切れがちだった" />
-      <FieldRow T={T} label={`🎯 ${focusWkAbs} (${focusWkRel}) focus — ${isKR ? '注力アクション' : 'Moreへの対応策'}`}
+      <FieldRow T={T} label={`🎯 ${focusWk} focus — ${isKR ? '注力アクション' : 'Moreへの対応策'}`}
         color="#4d9fff" readOnly={readOnly}
         value={draft.focus} onChange={v => setDraft(d => ({ ...d, focus: v }))}
         placeholder="例: 月曜朝90分はSlack offで提案書作成に集中" />
