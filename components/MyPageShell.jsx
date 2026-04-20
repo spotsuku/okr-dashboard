@@ -317,6 +317,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               workLog={workLogs[viewingName]}
               onWorkLogChange={reloadWorkLogs}
               onGoToIntegrations={() => setActiveTab('integrations')}
+              onGoToTab={(key) => setActiveTab(key)}
             />
           )}
           {activeTab === 'wbs' && (
@@ -361,7 +362,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToIntegrations }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToIntegrations, onGoToTab }) {
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -786,64 +787,84 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
         {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
-          {/* 常に表示: OKR記入漏れ (prefsで非表示にしていた場合も強制表示) */}
+          {/* 常に表示: OKR記入漏れ */}
           <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
               borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
             }}>↻</button>
           }>
-            {reminders.loading ? <Loading T={T} /> : (
-              <ReminderList T={T} items={[
+            {reminders.loading ? <Loading T={T} /> : (() => {
+              const items = [
                 ...reminders.missingKRs.map(kr => ({ icon: '🎯', sev: 'warn',
-                  text: `KR「${truncate(kr.title, 32)}」のレビューが未記入` })),
+                  text: `KR「${truncate(kr.title, 28)}」未記入` })),
                 ...reminders.missingKAs.map(ka => ({ icon: '📋', sev: 'warn',
-                  text: `KA「${truncate(ka.ka_title || ka.kr_title, 32)}」のGood/More未記入` })),
-              ]} emptyText="✨ 今週分はすべて記入済みです" />
-            )}
+                  text: `KA「${truncate(ka.ka_title || ka.kr_title, 28)}」未記入` })),
+              ]
+              return <ReminderList T={T} items={items} maxVisible={3}
+                emptyText="✨ 今週分はすべて記入済みです"
+                detailLabel="📝 OKR記入で全て見る →"
+                onDetail={() => onGoToTab && onGoToTab('okr_edit')} />
+            })()}
           </Section>
 
           <Section T={T} icon="⚠️" title="タスク期限" flex={0}>
-            {reminders.loading ? <Loading T={T} /> : (
-              <ReminderList T={T} items={[
+            {reminders.loading ? <Loading T={T} /> : (() => {
+              const items = [
                 ...reminders.overdueTasks.map(t => ({ icon: '🚨', sev: 'danger',
-                  text: `期限超過: ${truncate(t.title, 36)} (${t.due_date})` })),
+                  text: `期限超過: ${truncate(t.title, 28)} (${t.due_date})` })),
                 ...reminders.todayTasks.map(t => ({ icon: '📅', sev: 'warn',
-                  text: `今日まで: ${truncate(t.title, 36)}` })),
+                  text: `今日: ${truncate(t.title, 32)}` })),
                 ...reminders.tomorrowTasks.map(t => ({ icon: '📆', sev: 'info',
-                  text: `明日まで: ${truncate(t.title, 36)}` })),
-              ]} emptyText="✨ 直近の期限タスクはありません" />
-            )}
+                  text: `明日: ${truncate(t.title, 32)}` })),
+              ]
+              return <ReminderList T={T} items={items} maxVisible={3}
+                emptyText="✨ 直近の期限タスクはありません"
+                detailLabel="📅 タスクWBSで全て見る →"
+                onDetail={() => onGoToTab && onGoToTab('wbs')} />
+            })()}
           </Section>
 
           <Section T={T} icon="📅" title="Googleカレンダー" flex={0}>
             <IntegrationStatus T={T} state={integData.calendar} isViewingSelf={isViewingSelf}
               serviceLabel="Google Calendar" emptyText="✨ 今日の予定はありません"
-              onConnect={onGoToIntegrations} renderItem={ev => (
-                <><span style={{ color: T.textMuted, fontWeight:600, minWidth:48, fontSize:10 }}>{ev.time || '--'}</span><span>{ev.title}</span></>
+              onConnect={onGoToIntegrations} maxVisible={3}
+              detailLabel="📅 Googleカレンダーを開く ↗"
+              detailUrl="https://calendar.google.com/"
+              renderItem={ev => (
+                <><span style={{ color: T.textMuted, fontWeight:600, minWidth:42, fontSize:10 }}>{ev.time || '--'}</span><span style={{ flex:1 }}>{truncate(ev.title, 28)}</span></>
               )} />
           </Section>
 
           <Section T={T} icon="📧" title="Gmail" flex={0}>
             <IntegrationStatus T={T} state={integData.gmail} isViewingSelf={isViewingSelf}
               serviceLabel="Gmail" emptyText="✨ 要対応のメールはありません"
-              onConnect={onGoToIntegrations} renderItem={m => (
-                <><span>📧</span><span style={{ flex:1 }}>{m.from}: {truncate(m.subject, 30)}</span></>
+              onConnect={onGoToIntegrations} maxVisible={3}
+              detailLabel="📧 Gmailを開く ↗"
+              detailUrl="https://mail.google.com/"
+              renderItem={m => (
+                <><span>📧</span><span style={{ flex:1 }}>{m.from}: {truncate(m.subject, 24)}</span></>
               )} />
           </Section>
 
           <Section T={T} icon="💬" title="Slack" flex={0}>
             <IntegrationStatus T={T} state={integData.slack} isViewingSelf={isViewingSelf}
               serviceLabel="Slack" emptyText="✨ 未読メンションはありません"
-              onConnect={onGoToIntegrations} renderItem={m => (
-                <><span>#{m.channel}</span><span style={{ flex:1 }}>{truncate(m.text, 30)}</span></>
+              onConnect={onGoToIntegrations} maxVisible={3}
+              detailLabel="💬 Slackを開く ↗"
+              detailUrl="https://app.slack.com/"
+              renderItem={m => (
+                <><span>#{truncate(m.channel, 12)}</span><span style={{ flex:1 }}>{truncate(m.text, 22)}</span></>
               )} />
           </Section>
 
           <Section T={T} icon="🟢" title="LINE" flex={0}>
             <IntegrationStatus T={T} state={integData.line} isViewingSelf={isViewingSelf}
               serviceLabel="LINE" emptyText="LINE連携済み (通知Bot APIは別途必要)"
-              onConnect={onGoToIntegrations} renderItem={null}
+              onConnect={onGoToIntegrations} maxVisible={3}
+              detailLabel="🟢 LINEを開く ↗"
+              detailUrl="https://line.me/"
+              renderItem={null}
             />
           </Section>
         </div>
@@ -1575,7 +1596,17 @@ function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
 }
 
 // 連携サービスの状態表示 (未接続→CTA / 読込中 / データ表示 / エラー)
-function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isViewingSelf, onConnect }) {
+function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isViewingSelf, onConnect,
+                             maxVisible = 3, detailLabel, detailUrl }) {
+  const DetailButton = () => detailLabel && detailUrl ? (
+    <a href={detailUrl} target="_blank" rel="noopener noreferrer" style={{
+      marginTop: 2, background: 'transparent', border: `1px dashed ${T.borderMid}`,
+      color: T.accent, borderRadius: 6, padding: '5px 8px',
+      fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+      textAlign: 'center', textDecoration: 'none', display: 'block',
+    }}>{detailLabel}</a>
+  ) : null
+
   if (!state.connected) {
     return (
       <div style={{
@@ -1609,11 +1640,18 @@ function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isVi
     )
   }
   if (!state.items || state.items.length === 0) {
-    return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>{emptyText}</div>
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>{emptyText}</div>
+        <DetailButton />
+      </div>
+    )
   }
+  const visible = state.items.slice(0, maxVisible)
+  const hidden = state.items.length - visible.length
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {state.items.map((it, i) => (
+      {visible.map((it, i) => (
         <div key={i} style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '5px 8px', borderRadius: 6,
@@ -1623,19 +1661,32 @@ function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isVi
           {renderItem ? renderItem(it) : <span style={{ flex:1 }}>{JSON.stringify(it)}</span>}
         </div>
       ))}
+      {detailLabel && detailUrl && (
+        <a href={detailUrl} target="_blank" rel="noopener noreferrer" style={{
+          marginTop: 2, background: 'transparent', border: `1px dashed ${T.borderMid}`,
+          color: T.accent, borderRadius: 6, padding: '5px 8px',
+          fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          textAlign: 'center', textDecoration: 'none', display: 'block',
+        }}>
+          {hidden > 0 ? `他 ${hidden} 件 · ` : ''}{detailLabel}
+        </a>
+      )}
     </div>
   )
 }
 
-function ReminderList({ T, items, emptyText }) {
+function ReminderList({ T, items, emptyText, maxVisible, detailLabel, onDetail }) {
   if (!items || items.length === 0) {
     return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>{emptyText}</div>
   }
   const sevColor = (sev) => sev === 'danger' ? T.danger : sev === 'warn' ? T.warn : T.info
   const sevBg    = (sev) => sev === 'danger' ? T.dangerBg : sev === 'warn' ? T.warnBg : T.infoBg
+  const limit = maxVisible || items.length
+  const visible = items.slice(0, limit)
+  const hidden = items.length - visible.length
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {items.map((it, i) => (
+      {visible.map((it, i) => (
         <div key={i} style={{
           display: 'flex', alignItems: 'flex-start', gap: 6,
           padding: '5px 8px', borderRadius: 6,
@@ -1647,6 +1698,16 @@ function ReminderList({ T, items, emptyText }) {
           <span style={{ flex: 1 }}>{it.text}</span>
         </div>
       ))}
+      {(hidden > 0 || (items.length > 0 && detailLabel)) && onDetail && (
+        <button onClick={onDetail} style={{
+          marginTop: 2, background: 'transparent', border: `1px dashed ${T.borderMid}`,
+          color: T.accent, borderRadius: 6, padding: '5px 8px',
+          fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          textAlign: 'center',
+        }}>
+          {hidden > 0 ? `他 ${hidden} 件 · ` : ''}{detailLabel}
+        </button>
+      )}
     </div>
   )
 }
