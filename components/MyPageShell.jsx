@@ -1210,11 +1210,21 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
 }
 
 function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
+  // flex=0 の場合は内容に合わせて自動サイズ (flex-basis:0 の罠を回避)
+  // flex>=1 の場合は grow して親の残りスペースを埋める
+  const isAutoSize = flex === 0 || flex === 'none'
+  const outerStyle = isAutoSize
+    ? { flex: '0 0 auto', display: 'flex', flexDirection: 'column',
+        background: T.bgCard, border: `1px solid ${T.border}`,
+        borderRadius: 10, overflow: 'hidden' }
+    : { flex, display: 'flex', flexDirection: 'column', minHeight: 0,
+        background: T.bgCard, border: `1px solid ${T.border}`,
+        borderRadius: 10, overflow: 'hidden' }
+  const innerStyle = isAutoSize
+    ? { padding: '8px 12px' }
+    : { flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }
   return (
-    <div style={{
-      flex, display: 'flex', flexDirection: 'column', minHeight: 0,
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden',
-    }}>
+    <div style={outerStyle}>
       <div style={{
         padding: '8px 12px', borderBottom: `1px solid ${T.border}`,
         fontSize: 12, fontWeight: 700, color: T.text, display: 'flex', alignItems: 'center', gap: 6,
@@ -1223,7 +1233,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
         <span>{icon}</span><span style={{ flex: 1 }}>{title}</span>
         {headerRight}
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }}>
+      <div style={innerStyle}>
         {children}
       </div>
     </div>
