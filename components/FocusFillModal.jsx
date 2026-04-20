@@ -138,23 +138,45 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const [krsRes, krReviewsRes, kasRes, objsRes] = await Promise.all([
       supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName),
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart),
-      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, objective_id, owner, status, good, more, focus_output, week_start')
+      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start')
         .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done'),
       supabase.from('objectives').select('id, title, period, level_id'),
     ])
 
     // KA の対象週を決定
     // ・今日が月曜 & 今週分が存在 → 今週 (その日のキックオフ向け)
-    // ・翌週分が存在 → 翌週 (次のキックオフ向け)
-    // ・それ以外 → 今週 (フォールバック)
+    // ・それ以外 → 翌週 (次のキックオフ向け)
+    //   翌週レコードが未作成なら今週からコピーして自動作成
     const jstDay = new Date(Date.now() + 9 * 3600 * 1000).getUTCDay()
-    const allKas = kasRes.data || []
-    const nextWeekKas = allKas.filter(k => k.week_start === nextMon)
+    let allKas = kasRes.data || []
+    let nextWeekKas = allKas.filter(k => k.week_start === nextMon)
     const currentWeekKas = allKas.filter(k => k.week_start === currentMon)
+
     let chosenKaWeek
-    if (jstDay === 1 && currentWeekKas.length > 0) chosenKaWeek = currentMon
-    else if (nextWeekKas.length > 0) chosenKaWeek = nextMon
-    else chosenKaWeek = currentMon
+    if (jstDay === 1 && currentWeekKas.length > 0) {
+      chosenKaWeek = currentMon
+    } else {
+      chosenKaWeek = nextMon
+      // 翌週レコードが無く、今週レコードがあれば編集権限者の場合自動コピー
+      if (nextWeekKas.length === 0 && currentWeekKas.length > 0 && canEdit) {
+        const copies = currentWeekKas.map(r => ({
+          week_start: nextMon, level_id: r.level_id, objective_id: r.objective_id,
+          kr_id: r.kr_id, kr_title: r.kr_title, ka_title: r.ka_title,
+          owner: r.owner, status: 'normal',
+        }))
+        const { data: inserted, error: insErr } = await supabase.from('weekly_reports').insert(copies).select()
+        if (!insErr && inserted) {
+          nextWeekKas = inserted
+          allKas = [...allKas, ...inserted]
+        } else if (insErr) {
+          // コピー失敗時は今週にフォールバック
+          chosenKaWeek = currentMon
+        }
+      } else if (nextWeekKas.length === 0 && currentWeekKas.length > 0 && !canEdit) {
+        // 閲覧のみユーザーは作成できないので今週を見せる
+        chosenKaWeek = currentMon
+      }
+    }
     if (chosenKaWeek !== kaWeekStart) setKaWeekStart(chosenKaWeek)
     const chosenKas = allKas.filter(k => k.week_start === chosenKaWeek)
 
