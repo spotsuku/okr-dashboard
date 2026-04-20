@@ -274,10 +274,11 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           background: T.bgCard, flexShrink: 0,
         }}>
           {[
-            { key: 'dashboard', icon: '📊', label: 'ダッシュボード' },
-            { key: 'wbs',       icon: '📅', label: 'タスクWBS'     },
-            { key: 'okr_edit',  icon: '🎯', label: 'OKR記入'       },
-            { key: 'okr_view',  icon: '📈', label: 'OKR詳細'       },
+            { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
+            { key: 'wbs',          icon: '📅', label: 'タスクWBS'     },
+            { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
+            { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
+            { key: 'retrospect',   icon: '💭', label: '振り返り'       },
           ].map(t => (
             <button
               key={t.key}
@@ -343,6 +344,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 themeKey={themeKey}
               />
             </div>
+          )}
+          {activeTab === 'retrospect' && (
+            <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
           )}
         </div>
       </div>
@@ -872,6 +876,187 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }}>
         {children}
+      </div>
+    </div>
+  )
+}
+
+// ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
+function RetrospectTab({ T, viewingName, viewingMember }) {
+  const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
+  const [data, setData] = useState({ days: [], loading: true })
+
+  const load = useCallback(async () => {
+    if (!viewingName) { setData({ days: [], loading: false }); return }
+    setData(d => ({ ...d, loading: true }))
+
+    const now = new Date()
+    const rangeStart = (() => {
+      if (range === 'all') return null
+      if (range === 'month') {
+        const jst = new Date(now.getTime() + 9 * 3600 * 1000)
+        const firstOfMonth = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), 1))
+        return firstOfMonth.toISOString()
+      }
+      // week
+      const monday = new Date(getMondayJSTStr() + 'T00:00:00Z')
+      return monday.toISOString()
+    })()
+
+    let q = supabase.from('coaching_logs')
+      .select('*')
+      .eq('owner', viewingName)
+      .in('log_type', ['kpt', 'work_log'])
+      .order('created_at', { ascending: false })
+    if (rangeStart) q = q.gte('created_at', rangeStart)
+
+    const { data: rows } = await q
+
+    // 日付ごとにまとめる (JST日付)
+    const byDate = {}
+    ;(rows || []).forEach(row => {
+      const dateKey = toJSTDateStr(new Date(row.created_at))
+      if (!byDate[dateKey]) byDate[dateKey] = { date: dateKey, workLog: null, kpts: [] }
+      const content = parseLogContent(row.content)
+      if (row.log_type === 'work_log') {
+        // 同日複数ある場合は最新を採用
+        if (!byDate[dateKey].workLog) byDate[dateKey].workLog = { ...content, id: row.id }
+      } else if (row.log_type === 'kpt') {
+        byDate[dateKey].kpts.push({ ...content, id: row.id, created_at: row.created_at })
+      }
+    })
+
+    const days = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date))
+    setData({ days, loading: false })
+  }, [viewingName, range])
+
+  useEffect(() => { load() }, [load])
+
+  const totalDays = data.days.length
+  const totalMinutes = data.days.reduce((sum, d) => {
+    if (d.workLog?.start_at && d.workLog?.end_at) {
+      return sum + Math.floor((new Date(d.workLog.end_at) - new Date(d.workLog.start_at)) / 60000)
+    }
+    return sum
+  }, 0)
+  const totalHrs = Math.floor(totalMinutes / 60), totalMins = totalMinutes % 60
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
+      {/* ヘッダー */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 16px', background: T.sectionBg,
+        borderBottom: `1px solid ${T.border}`, flexShrink: 0,
+      }}>
+        <Avatar member={viewingMember} size={28} />
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
+          {viewingName} さんの振り返り
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10 }}>
+          {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
+        </div>
+        <div style={{ display: 'flex', gap: 2, background: T.bgCard, padding: 3, borderRadius: 8, border: `1px solid ${T.border}` }}>
+          {[
+            { key: 'week',  label: '今週' },
+            { key: 'month', label: '今月' },
+            { key: 'all',   label: '全期間' },
+          ].map(r => (
+            <button key={r.key} onClick={() => setRange(r.key)} style={{
+              padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+              background: range === r.key ? T.navActiveBg : 'transparent',
+              color: range === r.key ? T.navActiveText : T.textMuted,
+              fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+            }}>{r.label}</button>
+          ))}
+        </div>
+        <button onClick={load} title="再読み込み" style={{
+          background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+          borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+        }}>↻</button>
+      </div>
+
+      {/* 本体 */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        {data.loading ? <Loading T={T} /> :
+          data.days.length === 0
+            ? (
+              <div style={{ textAlign: 'center', padding: 40, color: T.textMuted, fontSize: 12 }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>💭</div>
+                <div>この期間の振り返りはまだありません</div>
+                <div style={{ marginTop: 6, fontSize: 10 }}>
+                  ダッシュボードの「🌙 終業する」でKPTを記入すると、ここに蓄積されます
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 880, margin: '0 auto' }}>
+                {data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} />)}
+              </div>
+            )}
+      </div>
+    </div>
+  )
+}
+
+function RetrospectDay({ T, day }) {
+  const dt = new Date(day.date + 'T00:00:00Z')
+  const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
+  const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}(${wd})`
+
+  const { start_at, end_at } = day.workLog || {}
+  const worked = (start_at && end_at) ? (() => {
+    const mins = Math.floor((new Date(end_at) - new Date(start_at)) / 60000)
+    return `${Math.floor(mins / 60)}時間${mins % 60}分`
+  })() : ''
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 14px', background: T.sectionBg,
+        borderBottom: `1px solid ${T.border}`,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{dateLabel}</div>
+        <div style={{ flex: 1 }} />
+        {start_at && (
+          <div style={{ fontSize: 10, color: T.textMuted }}>
+            ⏰ {jstHHMM(start_at)}{end_at ? ` – ${jstHHMM(end_at)}` : ' 〜'}{worked && ` (${worked})`}
+          </div>
+        )}
+      </div>
+      {day.kpts.length === 0 ? (
+        <div style={{ padding: 12, fontSize: 11, color: T.textMuted, fontStyle: 'italic' }}>
+          KPTの記入はありません
+        </div>
+      ) : (
+        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {day.kpts.map(kpt => (
+            <div key={kpt.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              <KPTField T={T} color={T.success} label="🟢 Keep"     text={kpt.keep} />
+              <KPTField T={T} color={T.warn}    label="🟡 Problem" text={kpt.problem} />
+              <KPTField T={T} color={T.info}    label="🔵 Try"     text={kpt.try} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KPTField({ T, color, label, text }) {
+  return (
+    <div style={{
+      padding: 10, background: T.sectionBg, borderRadius: 6,
+      borderLeft: `3px solid ${color}`,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 4, letterSpacing: 0.3 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 12, color: T.text, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+        {(text || '').trim() || <span style={{ color: T.textFaint, fontStyle: 'italic' }}>—</span>}
       </div>
     </div>
   )
