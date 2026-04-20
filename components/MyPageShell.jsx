@@ -409,6 +409,58 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
   useEffect(() => { loadReminders() }, [loadReminders])
 
+  // ─── Phase 5: 今日/今週やること ─────────────────────
+  const [taskBoard, setTaskBoard] = useState({
+    today: [], byWeekday: { 1:[],2:[],3:[],4:[],5:[],6:[],0:[] },
+    loading: true,
+  })
+  const loadTasks = useCallback(async () => {
+    if (!viewingName) { setTaskBoard(b => ({ ...b, loading: false })); return }
+    setTaskBoard(b => ({ ...b, loading: true }))
+
+    const today = toJSTDateStr(new Date())
+    const monday = getMondayJSTStr()
+    const sundayD = new Date(monday + 'T00:00:00Z'); sundayD.setUTCDate(sundayD.getUTCDate() + 6)
+    const sunday = sundayD.toISOString().split('T')[0]
+
+    // 自分担当の未完了タスクを全件取得
+    const { data } = await supabase
+      .from('ka_tasks')
+      .select('*, weekly_reports(kr_title, ka_title, owner)')
+      .eq('assignee', viewingName)
+      .order('due_date', { ascending: true, nullsFirst: false })
+
+    const undone = (data || []).filter(t => t.status !== 'done' && !t.done)
+
+    // 今日やること: 期限超過 OR 今日期限 OR 進行中(期限未設定)
+    const todayList = undone.filter(t =>
+      (t.due_date && t.due_date <= today) ||
+      (!t.due_date && t.status === 'in_progress')
+    )
+
+    // 今週やること: 月〜日の範囲にある未完了タスクを曜日別
+    const byWeekday = { 1:[],2:[],3:[],4:[],5:[],6:[],0:[] }
+    undone.filter(t => t.due_date && t.due_date >= monday && t.due_date <= sunday)
+      .forEach(t => {
+        const d = new Date(t.due_date + 'T00:00:00Z')
+        byWeekday[d.getUTCDay()].push(t)
+      })
+
+    setTaskBoard({ today: todayList, byWeekday, loading: false })
+  }, [viewingName])
+  useEffect(() => { loadTasks() }, [loadTasks])
+
+  async function toggleTaskDone(task) {
+    if (!isViewingSelf) return
+    const newDone = !(task.done || task.status === 'done')
+    await supabase.from('ka_tasks').update({
+      done: newDone,
+      status: newDone ? 'done' : 'not_started',
+    }).eq('id', task.id)
+    loadTasks()
+    loadReminders()
+  }
+
   async function handleStart() {
     if (busy || !myName) return
     setBusy(true)
@@ -512,18 +564,21 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
       }}>
         {/* 左カラム：今日やること / 今週やること */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-          <Section T={T} icon="⚡" title="今日やること" flex={1}>
-            <Placeholder T={T} lines={[
-              '□ Phase 2で ka_tasks.due_date から抽出',
-              '□ 重要度・期限・完了トグル',
-              '□ 新規タスク追加',
-            ]} />
+          <Section T={T} icon="⚡" title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
+            <button onClick={loadTasks} title="再読み込み" style={{
+              background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+              borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+            }}>↻</button>
+          }>
+            {taskBoard.loading ? <Loading T={T} /> :
+              taskBoard.today.length === 0
+                ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>✨ 今日のタスクはありません</div>
+                : <TaskList T={T} tasks={taskBoard.today} canEdit={isViewingSelf} onToggle={toggleTaskDone} showDue />}
           </Section>
           <Section T={T} icon="📅" title="今週やること" flex={1}>
-            <Placeholder T={T} lines={[
-              '□ 月 〜 金 の曜日別表示',
-              '□ ドラッグで曜日変更',
-            ]} />
+            {taskBoard.loading ? <Loading T={T} /> : (
+              <WeekTasks T={T} byWeekday={taskBoard.byWeekday} canEdit={isViewingSelf} onToggle={toggleTaskDone} />
+            )}
           </Section>
         </div>
 
@@ -729,6 +784,90 @@ function truncate(s, n) {
 
 function Loading({ T }) {
   return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>読み込み中...</div>
+}
+
+function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
+  const today = toJSTDateStr(new Date())
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {tasks.map(t => {
+        const done = t.done || t.status === 'done'
+        const overdue = t.due_date && t.due_date < today && !done
+        const label = t.title || t.weekly_reports?.ka_title || '(無題)'
+        return (
+          <div key={t.id} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 7,
+            padding: '6px 8px', borderRadius: 6,
+            background: overdue ? T.dangerBg : T.sectionBg,
+            border: `1px solid ${overdue ? `${T.danger}33` : T.border}`,
+            opacity: done ? 0.55 : 1,
+          }}>
+            <button
+              onClick={() => canEdit && onToggle(t)}
+              disabled={!canEdit}
+              title={canEdit ? (done ? '未完了に戻す' : '完了にする') : '閲覧のみ'}
+              style={{
+                width: 16, height: 16, flexShrink: 0, marginTop: 1,
+                borderRadius: 4, border: `1.5px solid ${done ? T.success : T.borderMid}`,
+                background: done ? T.success : 'transparent',
+                color: '#fff', fontSize: 11, lineHeight: 1,
+                cursor: canEdit ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: 0, fontFamily: 'inherit',
+              }}
+            >{done ? '✓' : ''}</button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 12, color: T.text, fontWeight: 500,
+                textDecoration: done ? 'line-through' : 'none',
+                lineHeight: 1.4, wordBreak: 'break-word',
+              }}>{label}</div>
+              <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {showDue && t.due_date && (
+                  <span style={{ color: overdue ? T.danger : T.textMuted, fontWeight: overdue ? 700 : 500 }}>
+                    {overdue ? '🚨 ' : '📅 '}{t.due_date}
+                  </span>
+                )}
+                {t.status === 'in_progress' && <span style={{ color: T.info }}>◐ 進行中</span>}
+                {t.weekly_reports?.kr_title && <span>KR: {truncate(t.weekly_reports.kr_title, 20)}</span>}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
+  const days = [
+    { key: 1, label: '月' }, { key: 2, label: '火' }, { key: 3, label: '水' },
+    { key: 4, label: '木' }, { key: 5, label: '金' }, { key: 6, label: '土' }, { key: 0, label: '日' },
+  ]
+  const today = toJSTDateStr(new Date())
+  const todayWd = new Date(today + 'T00:00:00Z').getUTCDay()
+  const totalCount = Object.values(byWeekday).reduce((s, arr) => s + arr.length, 0)
+  if (totalCount === 0) return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>✨ 今週の期限タスクはありません</div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {days.map(d => {
+        const list = byWeekday[d.key] || []
+        if (list.length === 0) return null
+        const isToday = d.key === todayWd
+        return (
+          <div key={d.key}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: isToday ? T.accent : T.textMuted,
+              marginBottom: 3, letterSpacing: 0.3,
+            }}>
+              {d.label}曜{isToday ? ' (今日)' : ''} · {list.length}件
+            </div>
+            <TaskList T={T} tasks={list} canEdit={canEdit} onToggle={onToggle} showDue={false} />
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function ReminderList({ T, items, emptyText }) {
