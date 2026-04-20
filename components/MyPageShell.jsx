@@ -786,6 +786,25 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
         {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+          {/* 全リマインダー非表示時のフォールバック */}
+          {!showW('rem_okr') && !showW('rem_task') && !showW('rem_calendar') &&
+           !showW('rem_gmail') && !showW('rem_slack') && !showW('rem_line') && (
+            <div style={{
+              padding: 20, background: T.sectionBg, border: `1px dashed ${T.border}`,
+              borderRadius: 10, textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>🔔</div>
+              <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10, lineHeight: 1.6 }}>
+                全てのリマインダーが非表示になっています。<br />
+                右上の ⚙️ から表示設定 → ↻ リセット で初期表示に戻せます。
+              </div>
+              <button onClick={() => setSettingsOpen(true)} style={{
+                background: T.accentSolid, color: '#fff', border: 'none',
+                borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>⚙️ 表示設定を開く</button>
+            </div>
+          )}
           {showW('rem_okr') && (
             <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
               <button onClick={loadReminders} title="再読み込み" style={{
