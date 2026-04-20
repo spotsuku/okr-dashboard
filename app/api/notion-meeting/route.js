@@ -1,6 +1,10 @@
 import { Client } from '@notionhq/client'
 import { getMeetingDbId, getMeeting } from '../../../lib/meetings'
 
+// Notionは eventual consistency があるため毎回最新を取得 (Next.jsのキャッシュ無効化)
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 function extractRichText(richTextArray) {
   if (!richTextArray || !Array.isArray(richTextArray)) return ''
   return richTextArray.map(t => t.plain_text).join('')
@@ -113,7 +117,10 @@ export async function GET(req) {
         .filter(t => !t.checked)
         .map(({ text }) => ({ text }))
 
-      return Response.json({ pageTitle, meetingDate, pageUrl, actionItems })
+      return Response.json(
+        { pageTitle, meetingDate, pageUrl, actionItems },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      )
     }
 
     // ─── ページ一覧（最新20件） ───
@@ -143,7 +150,10 @@ export async function GET(req) {
       url: page.url,
     }))
 
-    return Response.json({ pages })
+    return Response.json(
+      { pages },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+    )
   } catch (err) {
     console.error('notion-meeting error:', err)
     if (err.code === 'object_not_found') {

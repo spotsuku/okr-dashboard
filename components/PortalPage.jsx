@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import MeetingImport from './MeetingImport'
 import { MEETINGS, MEETING_URLS } from '../lib/meetings'
+import { openNotionUrl } from '../lib/notionLink'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
 const DASHBOARDS = [
@@ -86,7 +87,8 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
       alert(`${m.title} のURLが環境変数に設定されていません (NEXT_PUBLIC_${m.key.toUpperCase().replace(/-/g,'_')}_URL)`)
       return
     }
-    window.open(url, '_blank')
+    // iOSではアプリの"ホーム"に飛ぶ問題があるため、notion://スキームで直接ページを開く
+    openNotionUrl(url)
   }
 
   const currentMeeting = importMeetingKey ? MEETINGS.find(m => m.key === importMeetingKey) : null
