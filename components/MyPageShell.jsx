@@ -786,91 +786,66 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
         {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
-          {/* 全リマインダー非表示時のフォールバック */}
-          {!showW('rem_okr') && !showW('rem_task') && !showW('rem_calendar') &&
-           !showW('rem_gmail') && !showW('rem_slack') && !showW('rem_line') && (
-            <div style={{
-              padding: 20, background: T.sectionBg, border: `1px dashed ${T.border}`,
-              borderRadius: 10, textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>🔔</div>
-              <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10, lineHeight: 1.6 }}>
-                全てのリマインダーが非表示になっています。<br />
-                右上の ⚙️ から表示設定 → ↻ リセット で初期表示に戻せます。
-              </div>
-              <button onClick={() => setSettingsOpen(true)} style={{
-                background: T.accentSolid, color: '#fff', border: 'none',
-                borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}>⚙️ 表示設定を開く</button>
-            </div>
-          )}
-          {showW('rem_okr') && (
-            <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
-              <button onClick={loadReminders} title="再読み込み" style={{
-                background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
-                borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-              }}>↻</button>
-            }>
-              {reminders.loading ? <Loading T={T} /> : (
-                <ReminderList T={T} items={[
-                  ...reminders.missingKRs.map(kr => ({ icon: '🎯', sev: 'warn',
-                    text: `KR「${truncate(kr.title, 32)}」のレビューが未記入` })),
-                  ...reminders.missingKAs.map(ka => ({ icon: '📋', sev: 'warn',
-                    text: `KA「${truncate(ka.ka_title || ka.kr_title, 32)}」のGood/More未記入` })),
-                ]} emptyText="✨ 今週分はすべて記入済みです" />
-              )}
-            </Section>
-          )}
-          {showW('rem_task') && (
-            <Section T={T} icon="⚠️" title="タスク期限" flex={0}>
-              {reminders.loading ? <Loading T={T} /> : (
-                <ReminderList T={T} items={[
-                  ...reminders.overdueTasks.map(t => ({ icon: '🚨', sev: 'danger',
-                    text: `期限超過: ${truncate(t.title, 36)} (${t.due_date})` })),
-                  ...reminders.todayTasks.map(t => ({ icon: '📅', sev: 'warn',
-                    text: `今日まで: ${truncate(t.title, 36)}` })),
-                  ...reminders.tomorrowTasks.map(t => ({ icon: '📆', sev: 'info',
-                    text: `明日まで: ${truncate(t.title, 36)}` })),
-                ]} emptyText="✨ 直近の期限タスクはありません" />
-              )}
-            </Section>
-          )}
-          {showW('rem_calendar') && (
-            <Section T={T} icon="📅" title="Googleカレンダー" flex={0}>
-              <IntegrationStatus T={T} state={integData.calendar} isViewingSelf={isViewingSelf}
-                serviceLabel="Google Calendar" emptyText="✨ 今日の予定はありません"
-                onConnect={onGoToIntegrations} renderItem={ev => (
-                  <><span style={{ color: T.textMuted, fontWeight:600, minWidth:48, fontSize:10 }}>{ev.time || '--'}</span><span>{ev.title}</span></>
-                )} />
-            </Section>
-          )}
-          {showW('rem_gmail') && (
-            <Section T={T} icon="📧" title="Gmail" flex={0}>
-              <IntegrationStatus T={T} state={integData.gmail} isViewingSelf={isViewingSelf}
-                serviceLabel="Gmail" emptyText="✨ 要対応のメールはありません"
-                onConnect={onGoToIntegrations} renderItem={m => (
-                  <><span>📧</span><span style={{ flex:1 }}>{m.from}: {truncate(m.subject, 30)}</span></>
-                )} />
-            </Section>
-          )}
-          {showW('rem_slack') && (
-            <Section T={T} icon="💬" title="Slack" flex={0}>
-              <IntegrationStatus T={T} state={integData.slack} isViewingSelf={isViewingSelf}
-                serviceLabel="Slack" emptyText="✨ 未読メンションはありません"
-                onConnect={onGoToIntegrations} renderItem={m => (
-                  <><span>#{m.channel}</span><span style={{ flex:1 }}>{truncate(m.text, 30)}</span></>
-                )} />
-            </Section>
-          )}
-          {showW('rem_line') && (
-            <Section T={T} icon="🟢" title="LINE" flex={0}>
-              <IntegrationStatus T={T} state={integData.line} isViewingSelf={isViewingSelf}
-                serviceLabel="LINE" emptyText="LINE連携済み (通知Bot APIは別途必要)"
-                onConnect={onGoToIntegrations} renderItem={null}
-              />
-            </Section>
-          )}
+          {/* 常に表示: OKR記入漏れ (prefsで非表示にしていた場合も強制表示) */}
+          <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
+            <button onClick={loadReminders} title="再読み込み" style={{
+              background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+              borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+            }}>↻</button>
+          }>
+            {reminders.loading ? <Loading T={T} /> : (
+              <ReminderList T={T} items={[
+                ...reminders.missingKRs.map(kr => ({ icon: '🎯', sev: 'warn',
+                  text: `KR「${truncate(kr.title, 32)}」のレビューが未記入` })),
+                ...reminders.missingKAs.map(ka => ({ icon: '📋', sev: 'warn',
+                  text: `KA「${truncate(ka.ka_title || ka.kr_title, 32)}」のGood/More未記入` })),
+              ]} emptyText="✨ 今週分はすべて記入済みです" />
+            )}
+          </Section>
+
+          <Section T={T} icon="⚠️" title="タスク期限" flex={0}>
+            {reminders.loading ? <Loading T={T} /> : (
+              <ReminderList T={T} items={[
+                ...reminders.overdueTasks.map(t => ({ icon: '🚨', sev: 'danger',
+                  text: `期限超過: ${truncate(t.title, 36)} (${t.due_date})` })),
+                ...reminders.todayTasks.map(t => ({ icon: '📅', sev: 'warn',
+                  text: `今日まで: ${truncate(t.title, 36)}` })),
+                ...reminders.tomorrowTasks.map(t => ({ icon: '📆', sev: 'info',
+                  text: `明日まで: ${truncate(t.title, 36)}` })),
+              ]} emptyText="✨ 直近の期限タスクはありません" />
+            )}
+          </Section>
+
+          <Section T={T} icon="📅" title="Googleカレンダー" flex={0}>
+            <IntegrationStatus T={T} state={integData.calendar} isViewingSelf={isViewingSelf}
+              serviceLabel="Google Calendar" emptyText="✨ 今日の予定はありません"
+              onConnect={onGoToIntegrations} renderItem={ev => (
+                <><span style={{ color: T.textMuted, fontWeight:600, minWidth:48, fontSize:10 }}>{ev.time || '--'}</span><span>{ev.title}</span></>
+              )} />
+          </Section>
+
+          <Section T={T} icon="📧" title="Gmail" flex={0}>
+            <IntegrationStatus T={T} state={integData.gmail} isViewingSelf={isViewingSelf}
+              serviceLabel="Gmail" emptyText="✨ 要対応のメールはありません"
+              onConnect={onGoToIntegrations} renderItem={m => (
+                <><span>📧</span><span style={{ flex:1 }}>{m.from}: {truncate(m.subject, 30)}</span></>
+              )} />
+          </Section>
+
+          <Section T={T} icon="💬" title="Slack" flex={0}>
+            <IntegrationStatus T={T} state={integData.slack} isViewingSelf={isViewingSelf}
+              serviceLabel="Slack" emptyText="✨ 未読メンションはありません"
+              onConnect={onGoToIntegrations} renderItem={m => (
+                <><span>#{m.channel}</span><span style={{ flex:1 }}>{truncate(m.text, 30)}</span></>
+              )} />
+          </Section>
+
+          <Section T={T} icon="🟢" title="LINE" flex={0}>
+            <IntegrationStatus T={T} state={integData.line} isViewingSelf={isViewingSelf}
+              serviceLabel="LINE" emptyText="LINE連携済み (通知Bot APIは別途必要)"
+              onConnect={onGoToIntegrations} renderItem={null}
+            />
+          </Section>
         </div>
 
         {/* ─── 右カラム：ポップなゴール3種 + コンパクト成果 ─── */}
@@ -1002,14 +977,6 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
       { key: 'today', label: '⚡ 今日やること' },
       { key: 'week',  label: '📅 今週やること' },
     ]},
-    { title: 'リマインダー', items: [
-      { key: 'rem_okr',      label: '📊 OKR・KA記入漏れ' },
-      { key: 'rem_task',     label: '⚠️ タスク期限' },
-      { key: 'rem_calendar', label: '📅 Googleカレンダー' },
-      { key: 'rem_gmail',    label: '📧 Gmail' },
-      { key: 'rem_slack',    label: '💬 Slack' },
-      { key: 'rem_line',     label: '🟢 LINE' },
-    ]},
     { title: 'ゴール / 成果', items: [
       { key: 'goal_month_main',   label: '🌟 今月のメインテーマ' },
       { key: 'goal_month_growth', label: '💪 今月の成長テーマ' },
@@ -1017,6 +984,7 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
       { key: 'achievements',      label: '🏆 今週の成果' },
     ]},
   ]
+  // ※ リマインダーBox (OKR/タスク/Googleカレンダー/Gmail/Slack/LINE) は常時表示
   return (
     <>
       <div onClick={onClose} style={{
