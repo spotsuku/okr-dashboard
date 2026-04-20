@@ -591,13 +591,357 @@ function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
   )
 }
 
+// ─── ガントビュー ────────────────────────────────────
+function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDeleteTask, myName }) {
+  // ───── 日付ユーティリティ ─────
+  const toYMD = (d) => {
+    const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+    return jst.toISOString().split('T')[0]
+  }
+  const parseYMD = (s) => {
+    if (!s) return null
+    const str = typeof s === 'string' ? s.split('T')[0] : ''
+    if (!str || !str.includes('-')) return null
+    const [y, m, d] = str.split('-').map(Number)
+    if (!y || !m || !d) return null
+    return new Date(Date.UTC(y, m - 1, d))
+  }
+  const addDays = (d, n) => { const r = new Date(d); r.setUTCDate(r.getUTCDate() + n); return r }
+  const diffDays = (a, b) => Math.round((b - a) / 86400000)
+
+  const today = parseYMD(toYMD(new Date()))
+
+  // ───── 表示密度 ─────
+  const [zoom, setZoom] = useState('day') // 'day' | 'week'
+  const dayWidth = zoom === 'day' ? 32 : 14
+
+  // ───── タスクのバー範囲を計算。due_date無しは分離 ─────
+  const taskBars = []
+  const tasksNoDue = []
+  tasks.forEach(t => {
+    const dueDate = parseYMD(t.due_date)
+    const createdDate = parseYMD(t.created_at)
+    if (!dueDate && !createdDate) {
+      tasksNoDue.push(t); return
+    }
+    if (!dueDate) {
+      taskBars.push({ task: t, start: createdDate, end: addDays(createdDate, 1), noDue: true })
+      return
+    }
+    let start
+    if (createdDate && createdDate < dueDate) start = createdDate
+    else start = addDays(dueDate, -2)
+    taskBars.push({ task: t, start, end: dueDate, noDue: false })
+  })
+
+  // ───── ビュー範囲 ─────
+  const allStarts = taskBars.map(b => b.start)
+  const allEnds = taskBars.map(b => b.end)
+  const rawMin = allStarts.length ? new Date(Math.min(...allStarts.map(d => d.getTime()))) : addDays(today, -14)
+  const rawMax = allEnds.length   ? new Date(Math.max(...allEnds.map(d => d.getTime())))   : addDays(today, 14)
+  const minForView = rawMin < addDays(today, -60) ? rawMin : addDays(today, -14)
+  const maxForView = rawMax > addDays(today, 60)  ? rawMax : addDays(today, 60)
+  const rangeStart = addDays(minForView, -3)
+  const rangeEnd = addDays(maxForView, 3)
+  const totalDays = Math.max(diffDays(rangeStart, rangeEnd) + 1, 30)
+
+  const sorted = [...taskBars].sort((a, b) => {
+    if (a.noDue && !b.noDue) return 1
+    if (!a.noDue && b.noDue) return -1
+    return a.end - b.end
+  })
+
+  const LABEL_W = 260
+  const ROW_H = 34
+  const HEADER_H = 52
+
+  const days = []
+  for (let i = 0; i < totalDays; i++) days.push(addDays(rangeStart, i))
+
+  const weekdayJa = ['日','月','火','水','木','金','土']
+  const todayLeft = Math.max(0, diffDays(rangeStart, today)) * dayWidth
+  const rightWidth = totalDays * dayWidth
+
+  // ───── 左右のスクロール同期 ─────
+  const leftScrollRef = useRef(null)
+  const rightScrollRef = useRef(null)
+  const syncing = useRef(false)
+  const onLeftScroll = () => {
+    if (syncing.current) return
+    syncing.current = true
+    if (rightScrollRef.current) rightScrollRef.current.scrollTop = leftScrollRef.current.scrollTop
+    syncing.current = false
+  }
+  const onRightScroll = () => {
+    if (syncing.current) return
+    syncing.current = true
+    if (leftScrollRef.current) leftScrollRef.current.scrollTop = rightScrollRef.current.scrollTop
+    syncing.current = false
+  }
+
+  // ───── 初期スクロール位置を「今日」に ─────
+  useEffect(() => {
+    if (rightScrollRef.current) {
+      rightScrollRef.current.scrollLeft = Math.max(0, todayLeft - 120)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom, sorted.length])
+
+  if (tasks.length === 0) {
+    return (
+      <div style={{
+        textAlign: 'center', padding: 60, color: T.textMuted, fontSize: 13,
+        background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+      }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
+        <div>タスクがありません</div>
+      </div>
+    )
+  }
+
+  const PANEL_HEIGHT = 520 // ガント本体の固定高さ
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* 操作バー */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 11, color: T.textMuted }}>表示密度</div>
+        <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 7, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+          {[
+            { key: 'day',  label: '日単位' },
+            { key: 'week', label: '週単位(圧縮)' },
+          ].map(z => (
+            <button key={z.key} onClick={() => setZoom(z.key)} style={{
+              padding: '4px 10px', border: 'none', cursor: 'pointer', fontSize: 11,
+              background: zoom === z.key ? T.accent : 'transparent',
+              color: zoom === z.key ? '#fff' : T.textMuted,
+              fontWeight: 600, fontFamily: 'inherit',
+            }}>{z.label}</button>
+          ))}
+        </div>
+        <button
+          onClick={() => {
+            if (rightScrollRef.current) {
+              rightScrollRef.current.scrollTo({ left: Math.max(0, todayLeft - 120), behavior: 'smooth' })
+            }
+          }}
+          style={{
+            padding: '4px 10px', border: `1px solid ${T.border}`, cursor: 'pointer',
+            background: T.sectionBg, color: T.textSub, fontSize: 11, fontWeight: 600,
+            borderRadius: 7, fontFamily: 'inherit',
+          }}
+        >📍 今日へ</button>
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 10, color: T.textMuted }}>
+          凡例: <span style={{ color: '#7a8599' }}>■未着手</span> <span style={{ color: '#4d9fff', marginLeft: 6 }}>■進行中</span> <span style={{ color: '#00d68f', marginLeft: 6 }}>■完了</span> <span style={{ color: '#ff6b6b', marginLeft: 6 }}>│今日</span>
+        </div>
+      </div>
+
+      {/* ガント本体：左右2パネル構成 */}
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
+        overflow: 'hidden', display: 'flex', height: PANEL_HEIGHT,
+      }}>
+        {/* ─── 左パネル：タスク名（縦スクロール連動） ─── */}
+        <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: `1px solid ${T.borderMid}`, background: T.bgCard }}>
+          {/* 左ヘッダー */}
+          <div style={{
+            height: HEADER_H, flexShrink: 0,
+            display: 'flex', alignItems: 'center', padding: '0 12px',
+            background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
+            fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.5,
+          }}>
+            タスク ({sorted.length})
+          </div>
+          {/* 左ボディ */}
+          <div
+            ref={leftScrollRef}
+            onScroll={onLeftScroll}
+            style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
+          >
+            {sorted.map(({ task }, idx) => {
+              const st = getTaskStatus(task)
+              const cfg = STATUS_CONFIG[st]
+              const ka = kaMap[task.report_id]
+              return (
+                <div key={task.id} style={{
+                  height: ROW_H, display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '0 12px', borderBottom: `1px solid ${T.border}`,
+                  background: idx % 2 === 0 ? T.bgCard : T.sectionBg,
+                  opacity: st === 'done' ? 0.6 : 1,
+                }}>
+                  <span style={{ color: cfg.color, fontSize: 12, flexShrink: 0 }}>{cfg.icon}</span>
+                  <div style={{
+                    flex: 1, minWidth: 0, fontSize: 12, color: T.text,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    textDecoration: st === 'done' ? 'line-through' : 'none',
+                  }} title={task.title || ka?.ka_title || ''}>
+                    {task.title || ka?.ka_title || '(無題)'}
+                  </div>
+                  {task.assignee && (
+                    <span style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>
+                      {task.assignee}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ─── 右パネル：時間軸（横・縦スクロール） ─── */}
+        <div
+          ref={rightScrollRef}
+          onScroll={onRightScroll}
+          style={{ flex: 1, overflow: 'auto', position: 'relative' }}
+        >
+          <div style={{ width: rightWidth, position: 'relative' }}>
+            {/* 右ヘッダー（sticky top） */}
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 3,
+              display: 'flex', height: HEADER_H,
+              background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
+            }}>
+              {days.map((d, i) => {
+                const ymd = toYMD(d)
+                const isToday = ymd === toYMD(today)
+                const wd = d.getUTCDay()
+                const isWeekend = wd === 0 || wd === 6
+                const isMonthStart = d.getUTCDate() === 1
+                return (
+                  <div key={ymd} style={{
+                    width: dayWidth, flexShrink: 0, textAlign: 'center',
+                    borderRight: isMonthStart ? `1px solid ${T.borderMid}` : `1px solid ${T.border}`,
+                    background: isToday ? 'rgba(255,107,107,0.08)' : isWeekend ? T.sectionBg : 'transparent',
+                    color: isToday ? '#ff6b6b' : isWeekend ? T.textFaint : T.textMuted,
+                    fontSize: 9, fontWeight: isToday ? 700 : 500,
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+                    padding: '4px 0',
+                  }}>
+                    {(isMonthStart || i === 0) && (
+                      <div style={{ fontSize: 9, color: T.text, fontWeight: 700 }}>
+                        {d.getUTCMonth() + 1}月
+                      </div>
+                    )}
+                    {zoom === 'day' && (
+                      <>
+                        <div>{d.getUTCDate()}</div>
+                        <div style={{ fontSize: 8 }}>{weekdayJa[wd]}</div>
+                      </>
+                    )}
+                    {zoom === 'week' && wd === 1 && (
+                      <div style={{ fontSize: 8 }}>{d.getUTCDate()}日</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* 今日の縦線 */}
+            <div style={{
+              position: 'absolute',
+              left: todayLeft + dayWidth / 2 - 1,
+              top: 0, bottom: 0, width: 2,
+              background: '#ff6b6b', opacity: 0.55,
+              pointerEvents: 'none', zIndex: 2,
+            }} />
+
+            {/* 右ボディ：タスクバー行 */}
+            {sorted.map(({ task, start, end, noDue }, idx) => {
+              const st = getTaskStatus(task)
+              const cfg = STATUS_CONFIG[st]
+              const startOffset = Math.max(0, diffDays(rangeStart, start))
+              const duration = Math.max(1, diffDays(start, end) + 1)
+              const left = startOffset * dayWidth
+              const width = duration * dayWidth - 4
+              const isOverdue = end < today && st !== 'done'
+              return (
+                <div key={task.id} style={{
+                  height: ROW_H, borderBottom: `1px solid ${T.border}`,
+                  position: 'relative',
+                  background: idx % 2 === 0 ? T.bgCard : T.sectionBg,
+                }}>
+                  {/* 背景: 週末セル */}
+                  {days.map((d, i) => {
+                    const wd = d.getUTCDay()
+                    if (wd !== 0 && wd !== 6) return null
+                    return (
+                      <div key={i} style={{
+                        position: 'absolute', left: i * dayWidth, top: 0, bottom: 0, width: dayWidth,
+                        background: T.sectionBg, opacity: 0.5, pointerEvents: 'none',
+                      }} />
+                    )
+                  })}
+                  {/* バー */}
+                  <div
+                    title={`${task.title || '(無題)'}\n${toYMD(start)} 〜 ${task.due_date || '期限未設定'} (${duration}日)\n状態: ${cfg.label}${isOverdue ? ' · 期限超過' : ''}${noDue ? ' · 期限未設定' : ''}`}
+                    style={{
+                      position: 'absolute',
+                      left: left + 2, top: 6,
+                      width: Math.max(width, 8),
+                      height: ROW_H - 12,
+                      background: isOverdue ? '#ff6b6b' : cfg.color,
+                      borderRadius: 5,
+                      opacity: st === 'done' ? 0.5 : noDue ? 0.4 : 0.85,
+                      border: isOverdue ? '2px solid #ff6b6b' : noDue ? `1px dashed ${cfg.color}` : `1px solid ${cfg.color}`,
+                      display: 'flex', alignItems: 'center',
+                      padding: '0 6px',
+                      fontSize: 10, fontWeight: 700, color: '#fff',
+                      overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                      zIndex: 2,
+                    }}
+                  >
+                    {width > 40 && <span>{task.title || ''}</span>}
+                    {isOverdue && <span style={{ marginLeft: 'auto' }}>🚨</span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 期限未設定タスク一覧（バーに出せないので下部リスト） */}
+      {tasksNoDue.length > 0 && (
+        <div style={{
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
+          padding: '10px 14px',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>
+            📝 期限未設定 ({tasksNoDue.length}件) — ガントに表示できないタスク
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {tasksNoDue.map(t => {
+              const st = getTaskStatus(t)
+              const cfg = STATUS_CONFIG[st]
+              return (
+                <div key={t.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', borderRadius: 6,
+                  background: T.sectionBg, border: `1px solid ${T.border}`,
+                  fontSize: 11, color: T.text,
+                  opacity: st === 'done' ? 0.5 : 1,
+                }}>
+                  <span style={{ color: cfg.color }}>{cfg.icon}</span>
+                  <span>{t.title || '(無題)'}</span>
+                  {t.assignee && <span style={{ color: T.textMuted, fontSize: 10 }}>· {t.assignee}</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── メイン ─────────────────────────────────────────
 export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { isMobile } = useResponsive()
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
   const [viewMode, setViewMode] = useState(initialViewMode)
-  const [displayMode, setDisplayMode] = useState('list') // 'list' | 'board'
+  const [displayMode, setDisplayMode] = useState('list') // 'list' | 'board' | 'gantt'
   const [selectedMember, setSelectedMember] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -758,7 +1102,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
       {/* メインコンテンツ */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: displayMode === 'board' ? 1200 : 800, margin: '0 auto', padding: isMobile ? '12px' : '24px 24px' }}>
+        <div style={{ maxWidth: displayMode === 'list' ? 800 : displayMode === 'board' ? 1200 : '100%', margin: '0 auto', padding: isMobile ? '12px' : '24px 24px' }}>
           {/* ヘッダー */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -792,26 +1136,41 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                   color: viewMode === 'all' ? '#fff' : T.textMuted,
                 }}>全社タスク</button>
               </div>
-              {/* リスト/ボード切替 */}
+              {/* リスト/カード/ガント切替 */}
               <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-                <button onClick={() => setDisplayMode('list')} style={{
-                  padding: '6px 10px', border: 'none', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
-                  background: displayMode === 'list' ? T.accent : 'transparent',
-                  color: displayMode === 'list' ? '#fff' : T.textMuted,
-                }} title="リストビュー">☰</button>
-                <button onClick={() => setDisplayMode('board')} style={{
-                  padding: '6px 10px', border: 'none', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
-                  background: displayMode === 'board' ? T.accent : 'transparent',
-                  color: displayMode === 'board' ? '#fff' : T.textMuted,
-                }} title="ボードビュー">▦</button>
+                {[
+                  { key: 'list',  icon: '📋', label: 'リスト', title: 'リスト: 期限でグルーピング' },
+                  { key: 'board', icon: '🗂',  label: 'カード', title: 'カード: ステータス別カンバン' },
+                  { key: 'gantt', icon: '📊', label: 'ガント', title: 'ガント: 時間軸で可視化' },
+                ].map(v => (
+                  <button
+                    key={v.key}
+                    onClick={() => setDisplayMode(v.key)}
+                    title={v.title}
+                    style={{
+                      padding: '6px 12px', border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontFamily: 'inherit', fontWeight: 600,
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      background: displayMode === v.key ? T.accent : 'transparent',
+                      color: displayMode === v.key ? '#fff' : T.textMuted,
+                    }}
+                  >
+                    <span>{v.icon}</span>
+                    <span>{v.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
-          {displayMode === 'list' ? (
+          {displayMode === 'list' && (
             <ListView tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={changeStatus} onUpdateTask={updateTask} onDeleteTask={deleteTask} myName={myName} />
-          ) : (
+          )}
+          {displayMode === 'board' && (
             <BoardView tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={changeStatus} onUpdateTask={updateTask} onDeleteTask={deleteTask} myName={myName} />
+          )}
+          {displayMode === 'gantt' && (
+            <GanttView tasks={filteredTasks} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={changeStatus} onUpdateTask={updateTask} onDeleteTask={deleteTask} myName={myName} />
           )}
         </div>
       </div>

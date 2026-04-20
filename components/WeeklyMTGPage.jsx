@@ -5,6 +5,7 @@ import { useResponsive } from '../lib/useResponsive'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { computeKAKey } from '../lib/kaKey'
+import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 
 const DARK_T = {
   bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -81,6 +82,85 @@ function toDateStr(d) {
   const jst = new Date(d.getTime() + 9 * 3600 * 1000)
   return jst.toISOString().split('T')[0]
 }
+// Objective 1行コンパクト表示 + ▾ で全文展開 (localStorage に状態保持)
+function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor, titleColor, isDone, storageKey, style }) {
+  const [expanded, setExpanded] = useState(false)
+  // 初期値をlocalStorageから読む
+  useEffect(() => {
+    if (typeof window === 'undefined' || !storageKey) return
+    try {
+      const v = localStorage.getItem(storageKey)
+      if (v === '1') setExpanded(true)
+    } catch {}
+  }, [storageKey])
+  const toggle = () => {
+    setExpanded(e => {
+      const next = !e
+      if (storageKey && typeof window !== 'undefined') {
+        try { localStorage.setItem(storageKey, next ? '1' : '0') } catch {}
+      }
+      return next
+    })
+  }
+  const bgBase = isDone ? 'rgba(0,214,143,0.08)' : `${labelColor}0e`
+  const borderBase = isDone ? 'rgba(0,214,143,0.3)' : `${labelColor}30`
+  return (
+    <div style={{
+      padding: expanded ? '10px 14px' : '7px 12px',
+      background: bgBase,
+      border: `1px solid ${borderBase}`,
+      borderLeft: `3px solid ${labelColor}`,
+      borderRadius: 8,
+      ...style,
+    }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${labelColor}22`, color:labelColor, flexShrink:0 }}>{label}</span>
+        {!expanded && (
+          <div style={{
+            flex: 1, minWidth: 0,
+            fontSize: 12, fontWeight: 700, color: titleColor,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            lineHeight: 1.4,
+          }} title={title}>{title}</div>
+        )}
+        {expanded && (
+          <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
+        )}
+        {isDone && expanded && (
+          <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>🏆 達成済み</span>
+        )}
+        {ownerName && <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
+          <OwnerBadge name={ownerName} members={members} size={20} />
+        </div>}
+        <button
+          onClick={toggle}
+          title={expanded ? '折りたたむ' : '全文表示'}
+          style={{
+            background: 'transparent', border: `1px solid ${wT().border}`,
+            borderRadius: 5, padding: '2px 7px', fontSize: 10,
+            cursor: 'pointer', fontFamily: 'inherit', color: wT().textMuted,
+            flexShrink: 0,
+          }}
+        >{expanded ? '▴' : '▾'}</button>
+      </div>
+      {expanded && (
+        <div style={{ fontSize:14, fontWeight:700, color:titleColor, lineHeight:1.5, marginTop:6 }}>
+          {title}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// textarea を内容に応じて自動拡張 (KA記入欄用)
+function autoGrowTextarea(el, minRows = 3) {
+  if (!el) return
+  el.style.height = 'auto'
+  // フォントサイズ11, lineHeight 1.55 → 1行 ≒ 17px。パディング込みで minRows * 17 + 12
+  const minH = minRows * 17 + 12
+  el.style.height = Math.max(el.scrollHeight, minH) + 'px'
+}
+
 function formatWeekLabel(mondayStr) {
   // mondayStrは "YYYY-MM-DD" を想定（JSTの月曜日）。曜日依存ロジックを避けてパース
   const [y, m, day] = mondayStr.split('-').map(Number)
@@ -89,6 +169,25 @@ function formatWeekLabel(mondayStr) {
   const m2 = sun.getUTCMonth() + 1
   const d2 = sun.getUTCDate()
   return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
+}
+// schedule文字列(月曜/火曜/...)から月曜起点の曜日offset(0-6)を返す
+function scheduleToOffset(schedule) {
+  const map = { '月曜':0, '火曜':1, '水曜':2, '木曜':3, '金曜':4, '土曜':5, '日曜':6 }
+  return map[schedule] ?? 0  // 不明・「平日毎日」は月曜扱い
+}
+// その週の会議日ラベル: "4/22(火) MTG" を返す
+function formatMeetingDayLabel(mondayStr, schedule) {
+  const [y, m, day] = mondayStr.split('-').map(Number)
+  const offset = scheduleToOffset(schedule)
+  const meetDate = new Date(Date.UTC(y, m - 1, day + offset))
+  const wd = ['日','月','火','水','木','金','土'][meetDate.getUTCDay()]
+  return `${meetDate.getUTCMonth()+1}/${meetDate.getUTCDate()}(${wd})`
+}
+// 「先週」の月曜日(週の月曜から-7日)
+function getPrevMondayStr(mondayStr) {
+  const [y, m, day] = mondayStr.split('-').map(Number)
+  const prev = new Date(Date.UTC(y, m - 1, day - 7))
+  return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth()+1).padStart(2,'0')}-${String(prev.getUTCDate()).padStart(2,'0')}`
 }
 function isFriday() {
   // JST基準の曜日判定
@@ -371,7 +470,8 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   }
 
   const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:12 }
-  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.5, minHeight:36, transition:'border-color 0.15s' }
+  // KA記入欄: 改行が気になりすぎないよう fontSize 11、lineHeight 1.55、自動拡張
+  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'5px 7px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, overflow:'hidden', transition:'border-color 0.15s' }
   const isDone = status === 'done'
   const isDragging = dragIdx !== undefined && dragIdx === rowIdx
   const isDragOver = overIdx !== undefined && overIdx === rowIdx && dragIdx !== null && dragIdx !== rowIdx
@@ -424,28 +524,31 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       {/* Good */}
       <td style={cellS}>
         <textarea value={good} readOnly={!canEdit}
-          onChange={e=>handleFieldChange('good', e.target.value, setGood)}
-          onFocus={e=>{autoSave.setFocusedField('good');e.target.style.borderColor='rgba(0,214,143,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('good',good);e.target.style.borderColor='transparent';e.target.rows=2}}
-          rows={2} placeholder={canEdit?"Good":""}
+          ref={el => { if (el) autoGrowTextarea(el, 3) }}
+          onChange={e=>{ handleFieldChange('good', e.target.value, setGood); autoGrowTextarea(e.target, 3) }}
+          onFocus={e=>{ autoSave.setFocusedField('good'); e.target.style.borderColor='rgba(0,214,143,0.4)'; autoGrowTextarea(e.target, 5) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('good',good); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          placeholder={canEdit?"先週良かったこと":""}
           style={{ ...taS, color:good?wT().text:wT().textFaint }} />
       </td>
       {/* More */}
       <td style={cellS}>
         <textarea value={more} readOnly={!canEdit}
-          onChange={e=>handleFieldChange('more', e.target.value, setMore)}
-          onFocus={e=>{autoSave.setFocusedField('more');e.target.style.borderColor='rgba(255,107,107,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('more',more);e.target.style.borderColor='transparent';e.target.rows=2}}
-          rows={2} placeholder={canEdit?"More":""}
+          ref={el => { if (el) autoGrowTextarea(el, 3) }}
+          onChange={e=>{ handleFieldChange('more', e.target.value, setMore); autoGrowTextarea(e.target, 3) }}
+          onFocus={e=>{ autoSave.setFocusedField('more'); e.target.style.borderColor='rgba(255,107,107,0.4)'; autoGrowTextarea(e.target, 5) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('more',more); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          placeholder={canEdit?"先週の課題・改善点":""}
           style={{ ...taS, color:more?wT().text:wT().textFaint }} />
       </td>
       {/* Focus */}
       <td style={cellS}>
         <textarea value={focusOutput} readOnly={!canEdit}
-          onChange={e=>handleFieldChange('focus_output', e.target.value, setFocusOutput)}
-          onFocus={e=>{autoSave.setFocusedField('focus_output');e.target.style.borderColor='rgba(77,159,255,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('focus_output',focusOutput);e.target.style.borderColor='transparent';e.target.rows=2}}
-          rows={2} placeholder={canEdit?"Focus":""}
+          ref={el => { if (el) autoGrowTextarea(el, 3) }}
+          onChange={e=>{ handleFieldChange('focus_output', e.target.value, setFocusOutput); autoGrowTextarea(e.target, 3) }}
+          onFocus={e=>{ autoSave.setFocusedField('focus_output'); e.target.style.borderColor='rgba(77,159,255,0.4)'; autoGrowTextarea(e.target, 5) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('focus_output',focusOutput); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          placeholder={canEdit?"今週の重点アクション":""}
           style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
       </td>
       {/* Tasks + Delete */}
@@ -468,12 +571,13 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
 }
 
 // ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, reviewVersion, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA }) {
-  // ★ doneを除いたKAのみ表示（doneは折りたたみ）
+function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, reviewVersion, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA, viewMode = 'both' }) {
+  // viewMode: 'kr' = KR重点 / 'ka' = KA重点 / 'both' = 両方表示
   const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
     .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
   const doneReports   = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status === 'done')
   const [showDone, setShowDone] = useState(false)
+  const [showKAInKRMode, setShowKAInKRMode] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [overIdx, setOverIdx] = useState(null)
   const [dropHighlight, setDropHighlight] = useState(false)
@@ -526,7 +630,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   const [good,         setGood]         = useState('')
   const [more,         setMore]         = useState('')
   const [focus,        setFocus]        = useState('')
-  const [reviewOpen,   setReviewOpen]   = useState(false)
+  const [reviewOpen,   setReviewOpen]   = useState(viewMode === 'kr')
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewSaved,  setReviewSaved]  = useState(false)
   const reviewRef = useRef(null) // review IDをrefで保持
@@ -708,11 +812,15 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <div>
-              <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good</div>
+              <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
+                ✅ 先週good<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
+              </div>
               <textarea value={good} onChange={e=>updateGood(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
             <div>
-              <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🔺 More</div>
+              <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
+                🔺 先週more<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
+              </div>
               <textarea value={more} onChange={e=>updateMore(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
           </div>
@@ -720,7 +828,9 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             <div style={{ flex:1, height:1, background:wT().border }}/><span style={{ fontSize:10, color:wT().textMuted }}>↓ Moreへの対応</span><div style={{ flex:1, height:1, background:wT().border }}/>
           </div>
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 来週の注力アクション</div>
+            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
+              🎯 今週focus<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(activeWeek)})` : ''}</span>
+            </div>
             <textarea value={focus} onChange={e=>updateFocus(e.target.value)} rows={2} style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
@@ -735,7 +845,15 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
         </div>
       )}
 
-      {/* KAテーブル */}
+      {/* KAテーブル: KR重点モードでは折り畳み */}
+      {viewMode === 'kr' && !showKAInKRMode && (
+        <div style={{ padding:'8px 14px', background:wT().bgCard, borderRadius: '0 0 10px 10px', border:`1px solid ${wT().border}`, borderTop:'none', display:'flex', alignItems:'center', gap:8 }}>
+          <button onClick={() => setShowKAInKRMode(true)} style={{
+            fontSize:10, color:wT().textMuted, background:'transparent', border:`1px solid ${wT().border}`, borderRadius:5, padding:'3px 10px', cursor:'pointer', fontFamily:'inherit',
+          }}>📋 KA {activeReports.length}件{doneReports.length > 0 ? ` (完了${doneReports.length}件)` : ''} を表示</button>
+        </div>
+      )}
+      {(viewMode !== 'kr' || showKAInKRMode) && (
       <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'auto', WebkitOverflowScrolling:'touch' }}>
         <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
           <colgroup>
@@ -755,9 +873,15 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
               <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>担当</th>
               <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>KAタイトル</th>
               <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>状態</th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:'#00d68f', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>✅ Good</th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:'#ff6b6b', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>🔺 More</th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:'#4d9fff', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>🎯 Focus</th>
+              <th style={{ padding:'6px 8px', fontSize:9, color:'#00d68f', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
+                ✅ 先週good<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
+              </th>
+              <th style={{ padding:'6px 8px', fontSize:9, color:'#ff6b6b', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
+                🔺 先週more<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
+              </th>
+              <th style={{ padding:'6px 8px', fontSize:9, color:'#4d9fff', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
+                🎯 今週focus<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(activeWeek) : ''}</div>
+              </th>
               <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>Tasks</th>
               <th style={{ padding:'6px 2px', borderBottom:`1px solid ${wT().border}` }}></th>
             </tr>
@@ -811,6 +935,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -851,6 +976,41 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
   const [slackPreview,  setSlackPreview]  = useState(null) // { text, type, memberCount, levelName, params }
   const [slackSending,  setSlackSending]  = useState(false)
+
+  // 会議別ビュー: どの会議モードで表示するか (null = 会議選択画面)
+  // 週次MTGに来るたびに必ず会議選択画面から始まる (localStorage保存しない)
+  const [activeMeetingKey, setActiveMeetingKey] = useState(null)
+
+  // 会議名で levels から該当レベルを検索
+  const findLevelByName = (name) => {
+    if (!name || !levels?.length) return null
+    return levels.find(l => l.name === name) || null
+  }
+
+  // 会議を選択 → フィルタを設定
+  const selectMeeting = (meetingKey) => {
+    const m = getMeeting(meetingKey)
+    if (!m?.weeklyMTG) return
+    setActiveMeetingKey(meetingKey)
+    setActiveObjId(null)
+    if (m.weeklyMTG.levelName) {
+      const lvl = findLevelByName(m.weeklyMTG.levelName)
+      setActiveLevelId(lvl?.id || null)
+    } else if (m.weeklyMTG.levelSelect === 'department') {
+      setActiveLevelId(null) // 事業部をユーザーに選ばせる
+    } else {
+      setActiveLevelId(null) // 全社
+    }
+  }
+
+  const backToMeetingSelect = () => {
+    setActiveMeetingKey(null)
+    setActiveObjId(null)
+  }
+
+  const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
+  // マネージャー定例などで事業部を選んでいない状態
+  const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
 
   useEffect(() => {
     supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').then(({data})=>setObjectives(data||[]))
@@ -1019,15 +1179,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || ''
   const isAdmin  = myMember?.is_admin === true
-  const canEditKA = useCallback((kaOwner, objOwner, krOwner) => {
-    if (isAdmin) return true                          // 管理者は全KA編集可
-    if (!kaOwner || kaOwner==='') return true          // 未設定は誰でも編集可
-    if (!myName) return false
-    if (myName === kaOwner) return true                // KA担当者本人
-    if (objOwner && myName === objOwner) return true   // Objective責任者
-    if (krOwner && myName === krOwner) return true     // KR担当者
-    return false
-  }, [myName, isAdmin])
+  // 週次MTG中の共同編集を許可: ログイン済みユーザー全員がKAを編集可能
+  // (旧: 管理者・KA担当・Obj責任者・KR担当のみだったが、会議中の不便さから解放)
+  const canEditKA = useCallback(() => !!myName, [myName])
 
   // 年度・部署フィルタ（左パネルは通期OKRのみ表示）
   const visibleLevelIds = activeLevelId ? [Number(activeLevelId)] : levels.map(l=>l.id)
@@ -1041,6 +1195,13 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   const selectedObj    = activeObjId ? objectives.find(o => o.id===Number(activeObjId)) : null
   const [rightPeriod, setRightPeriod] = useState(getCurrentQ())
+
+  // 会議モードに入ったときに最初の Objective を自動選択 (空画面回避)
+  useEffect(() => {
+    if (!activeMeetingKey || activeObjId) return
+    if (!visibleObjs || visibleObjs.length === 0) return
+    setActiveObjId(visibleObjs[0].id)
+  }, [activeMeetingKey, activeLevelId, activeObjId, visibleObjs])
   // 右パネル：期間タブに応じたOKRを表示（buildQuarterMapで通期→四半期の正確なマッピングを使用）
   const annualObjsForMap = useMemo(() =>
     objectives.filter(o => o.period === annualPeriodKey), [objectives, annualPeriodKey])
@@ -1120,11 +1281,121 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
+  // ─── 会議選択画面（会議が未選択、または事業部選択待ち） ───────────
+  if (!activeMeetingKey || needsDeptSelect) {
+    const topDepts = (levels || []).filter(l => !l.parent_id)
+    return (
+      <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif', overflow:'auto' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing:'border-box' }}>
+          {needsDeptSelect ? (
+            // 事業部選択モード（マネージャー定例など）
+            <>
+              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+                <button onClick={backToMeetingSelect} style={{
+                  padding:'6px 12px', borderRadius:7, border:`1px solid ${wT().borderMid}`,
+                  background:'transparent', color:wT().text, cursor:'pointer', fontSize:12, fontFamily:'inherit',
+                }}>← 会議選択に戻る</button>
+                <div style={{ fontSize:16, fontWeight:700 }}>{currentMeeting?.title} ・ 事業部を選択</div>
+              </div>
+              <div style={{ fontSize:12, color:wT().textMuted, marginBottom:16 }}>
+                マネージャー定例で確認するチームの所属事業部を選んでください。
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:12 }}>
+                {topDepts.map(d => (
+                  <button key={d.id} onClick={() => setActiveLevelId(d.id)} style={{
+                    padding:'20px 16px', borderRadius:12, border:`1px solid ${wT().borderMid}`,
+                    background:wT().bgCard, color:wT().text, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                    display:'flex', alignItems:'center', gap:10, transition:'all 0.15s',
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = (d.color || '#4d9fff'); e.currentTarget.style.transform = 'translateY(-2px)' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = wT().borderMid; e.currentTarget.style.transform = 'none' }}
+                  >
+                    <span style={{ fontSize:22 }}>{d.icon || '📁'}</span>
+                    <span style={{ fontSize:14, fontWeight:700 }}>{d.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            // 会議選択モード
+            <>
+              <div style={{ textAlign:'center', marginBottom:24 }}>
+                <div style={{ fontSize:11, color:'#4d9fff', letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:6 }}>Weekly MTG</div>
+                <h1 style={{ fontSize:22, fontWeight:700, margin:0, marginBottom:6 }}>今週の会議を選択</h1>
+                <p style={{ fontSize:12, color:wT().textMuted, margin:0 }}>
+                  会議ごとに対象の部署・チーム・観点が自動で絞り込まれます
+                </p>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12 }}>
+                {WEEKLY_MTG_MEETINGS.map(m => {
+                  const viewBadge = m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
+                    : m.weeklyMTG.viewMode === 'ka' ? 'KA重点'
+                    : '両方'
+                  const scope = m.weeklyMTG.levelName || (m.weeklyMTG.levelSelect === 'department' ? '事業部選択' : '全社')
+                  return (
+                    <button key={m.key} onClick={() => selectMeeting(m.key)} style={{
+                      padding:'16px 18px', borderRadius:12, border:`1px solid ${wT().borderMid}`,
+                      background:wT().bgCard, color:wT().text, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                      position:'relative', overflow:'hidden', transition:'all 0.15s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = m.color; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${m.color}22` }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = wT().borderMid; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+                    >
+                      <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:m.color }} />
+                      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                        <div style={{
+                          width:36, height:36, borderRadius:10, background:`${m.color}15`,
+                          border:`1px solid ${m.color}30`, display:'flex', alignItems:'center',
+                          justifyContent:'center', fontSize:18, flexShrink:0,
+                        }}>{m.icon}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.title}</div>
+                          <div style={{ fontSize:10, color:wT().textMuted }}>{m.schedule}</div>
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', gap:6, fontSize:10 }}>
+                        <span style={{ padding:'2px 8px', borderRadius:99, background:`${m.color}15`, color:m.color, fontWeight:600 }}>{viewBadge}</span>
+                        <span style={{ padding:'2px 8px', borderRadius:99, background:wT().borderLight || 'rgba(128,128,128,0.1)', color:wT().textMuted, fontWeight:600 }}>{scope}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const meetingViewMode = currentMeeting?.weeklyMTG?.viewMode || 'both'
+  const meetingColor = currentMeeting?.color || '#4d9fff'
+
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
-      {/* ヘッダー */}
-      <div style={{ padding:'11px 16px', borderBottom:`1px solid ${wT().border}`, display:'flex', alignItems:'center', gap:8, flexShrink:0, flexWrap:'wrap' }}>
-        <div style={{ fontSize:16, fontWeight:700 }}>KAレビュー</div>
+      {/* 会議コンテキストバー */}
+      <div style={{
+        padding:'8px 16px', borderBottom:`2px solid ${meetingColor}`,
+        background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap',
+      }}>
+        <button onClick={backToMeetingSelect} style={{
+          padding:'5px 12px', borderRadius:7, border:`1px solid ${meetingColor}40`,
+          background:`${meetingColor}10`, color:meetingColor, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:'inherit',
+        }}>← 会議を変更</button>
+        <div style={{
+          width:28, height:28, borderRadius:8, background:`${meetingColor}15`,
+          display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,
+        }}>{currentMeeting?.icon || '📋'}</div>
+        <div style={{ fontSize:14, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
+        <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}
+          title={meetingViewMode === 'kr' ? 'KR詳細(天気/Good/More/Focus)が展開、KAテーブルは折り畳み表示' : meetingViewMode === 'ka' ? 'KAテーブルを常時表示、KR詳細は折り畳み' : 'KRとKA両方表示'}>
+          {meetingViewMode === 'kr' ? '🎯 KR重点' : meetingViewMode === 'ka' ? '📋 KA重点' : '📊 両方'}
+        </span>
+        <span style={{ fontSize:10, color:wT().textMuted, fontStyle:'italic', display:'inline-block', minWidth:0 }}>
+          {meetingViewMode === 'kr' ? 'KRレビュー中心・KAは折り畳み'
+            : meetingViewMode === 'ka' ? 'KA進捗中心・KR詳細は折り畳み'
+            : 'KR・KA両方表示'}
+        </span>
         <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color:fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
           📅 {fiscalYear}年度
         </div>
@@ -1132,7 +1403,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           <div style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:99, background:`${avatarColor(myName)}12`, border:`1px solid ${avatarColor(myName)}30` }}>
             <Avatar name={myName} avatarUrl={myMember.avatar_url} size={18} />
             <span style={{ fontSize:11, color:avatarColor(myName), fontWeight:600 }}>{myName}</span>
-            <span style={{ fontSize:10, color:wT().textMuted }}>（自分・KR担当のKA編集可）</span>
+            <span style={{ fontSize:10, color:wT().textMuted }}>（会議中は全員KA編集可）</span>
           </div>
         )}
         {/* KAステータス凡例 */}
@@ -1144,21 +1415,28 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
       </div>
 
-      {/* 週タブ */}
+      {/* 週タブ：会議日を主表示 */}
       <div style={{ display:'flex', gap:4, padding: isMobile ? '5px 8px' : '7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
-        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>週：</span>
+        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>会議日：</span>
         {weeksList.map(w => {
           const isActive = activeWeek === w
           const thisMonday = toDateStr(getMonday(new Date()))
           const isThisWeek = w === thisMonday
+          const meetingDay = formatMeetingDayLabel(w, currentMeeting?.schedule)
           return (
             <button key={w} onClick={() => setActiveWeek(w)} style={{
-              padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, flexShrink:0,
+              padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', flexShrink:0,
               background: isActive ? 'rgba(77,159,255,0.15)' : 'transparent',
               border: `1px solid ${isActive ? 'rgba(77,159,255,0.4)' : wT().borderMid}`,
               color: isActive ? '#4d9fff' : wT().textMuted,
-            }}>
-              {formatWeekLabel(w)}{isThisWeek ? ' (今週)' : ''}
+              display:'flex', flexDirection:'column', alignItems:'center', gap:1,
+            }}
+              title={`${formatWeekLabel(w)}の週 (${currentMeeting?.title || 'MTG'}: ${currentMeeting?.schedule || ''})`}
+            >
+              <span style={{ fontSize:12, fontWeight:700 }}>{meetingDay}</span>
+              <span style={{ fontSize:9, fontWeight:500, opacity:0.75 }}>
+                {formatWeekLabel(w)}{isThisWeek ? ' · 今週' : ''}
+              </span>
             </button>
           )
         })}
@@ -1264,34 +1542,40 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             </div>
           ) : (
             <>
-              {/* 通期Objectiveヘッダー */}
-              <div style={{ padding:'12px 14px', background:`${objColor}0e`, border:`1px solid ${objColor}30`, borderLeft:`4px solid ${objColor}`, borderRadius:10, marginBottom:12 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${objColor}20`, color:objColor }}>通期</span>
-                  <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
-                  {selectedObj.owner && <div style={{ marginLeft:'auto' }}><OwnerBadge name={selectedObj.owner} members={members} size={24} /></div>}
-                </div>
-                <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
-              </div>
+              {/* 通期Objectiveヘッダー (デフォルト折り畳み・▾で展開) */}
+              <ObjectiveCompactCard
+                title={selectedObj.title}
+                ownerName={selectedObj.owner}
+                members={members}
+                wT={wT}
+                label="通期"
+                labelColor={objColor}
+                titleColor={wT().text}
+                storageKey={`weeklymtg-obj-expand-${selectedObj.id}`}
+                style={{ marginBottom: 10 }}
+              />
 
-              {/* 期間切替タブ */}
-              <div style={{ display:'flex', gap:4, marginBottom:14 }}>
+              {/* 期間切替タブ (コンパクト) */}
+              <div style={{ display:'flex', gap:3, marginBottom:10 }}>
                 {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => (
-                  <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'5px 14px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
+                  <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'3px 12px', borderRadius:6, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
                 ))}
               </div>
 
-              {/* 選択期間のObjective表示 */}
+              {/* 選択期間のObjective表示 (コンパクト) */}
               {rightObj && rightPeriod !== 'annual' && (
-                <div style={{ padding:'10px 14px', background: isObjDone(rightObj)?'rgba(0,214,143,0.08)':wT().bgCard, border:`1px solid ${isObjDone(rightObj)?'rgba(0,214,143,0.3)':wT().border}`, borderRadius:8, marginBottom:14 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:'rgba(77,159,255,0.15)', color:'#4d9fff' }}>{getPeriodLabel(rightObj.period)}</span>
-                    <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
-                    {isObjDone(rightObj) && <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>🏆 達成済み</span>}
-                    {rightObj.owner && <div style={{ marginLeft:'auto' }}><OwnerBadge name={rightObj.owner} members={members} size={22} /></div>}
-                  </div>
-                  <div style={{ fontSize:13, fontWeight:600, color: isObjDone(rightObj)?'#00d68f':wT().text, lineHeight:1.4 }}>{rightObj.title}</div>
-                </div>
+                <ObjectiveCompactCard
+                  title={rightObj.title}
+                  ownerName={rightObj.owner}
+                  members={members}
+                  wT={wT}
+                  label={getPeriodLabel(rightObj.period)}
+                  labelColor="#4d9fff"
+                  titleColor={isObjDone(rightObj) ? '#00d68f' : wT().text}
+                  isDone={isObjDone(rightObj)}
+                  storageKey={`weeklymtg-obj-expand-${rightObj.id}`}
+                  style={{ marginBottom: 10 }}
+                />
               )}
               {!rightObj && rightPeriod !== 'annual' && selectedObjKRs.length === 0 && (
                 <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>この期間のOKRはまだ設定されていません</div>
@@ -1333,6 +1617,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     await supabase.from('weekly_reports').update({ kr_id: targetKrId }).eq('id', reportId)
                     reload()
                   }}
+                  viewMode={meetingViewMode}
                 />
               ))}
             </>
