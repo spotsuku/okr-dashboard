@@ -122,6 +122,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [activeTab, setActiveTab] = useState('dashboard')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
+  // 集中記入モーダル (ダッシュボードからも OKR記入タブからも開ける)
+  const [focusFillOpen, setFocusFillOpen] = useState(null)  // null | 'kr' | 'ka'
 
   // 今日の work_log 一覧 (メンバー名 → log)
   const [workLogs, setWorkLogs] = useState({})
@@ -612,8 +614,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     try { localStorage.removeItem(PREFS_KEY) } catch {}
   }
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // 集中記入モーダル (ダッシュボードからも OKR記入タブからも開ける)
-  const [focusFillOpen, setFocusFillOpen] = useState(null)  // null | 'kr' | 'ka'
 
   // 今週の成果: 完了タスク + KR記入
   const [achievements, setAchievements] = useState({ items: [], loading: true })
