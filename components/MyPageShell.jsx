@@ -557,6 +557,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
       return next
     })
   }
+  const resetPrefs = () => {
+    setPrefs(DEFAULT_PREFS)
+    try { localStorage.removeItem(PREFS_KEY) } catch {}
+  }
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   // 今週の成果: 完了タスク + KR記入
@@ -696,7 +700,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
         {settingsOpen && (
           <SettingsPopover
-            T={T} prefs={prefs} togglePref={togglePref} onClose={() => setSettingsOpen(false)}
+            T={T} prefs={prefs} togglePref={togglePref} resetPrefs={resetPrefs} onClose={() => setSettingsOpen(false)}
           />
         )}
       </div>
@@ -908,7 +912,7 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
 }
 
 // ─── 設定ポップオーバー (ウィジェット表示/非表示) ──────────
-function SettingsPopover({ T, prefs, togglePref, onClose }) {
+function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
   const groups = [
     { title: 'タスク', items: [
       { key: 'today', label: '⚡ 今日やること' },
@@ -940,8 +944,19 @@ function SettingsPopover({ T, prefs, togglePref, onClose }) {
         boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
         zIndex: 101, padding: 12, minWidth: 240, maxHeight: '70vh', overflowY: 'auto',
       }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 8 }}>
-          ⚙️ 表示するウィジェット
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.text, flex: 1 }}>
+            ⚙️ 表示するウィジェット
+          </div>
+          <button
+            onClick={() => { if (window.confirm('初期状態に戻しますか?')) resetPrefs() }}
+            title="全ての表示/非表示設定を初期値に戻す"
+            style={{
+              background: 'transparent', border: `1px solid ${T.borderMid}`,
+              color: T.textMuted, borderRadius: 5, padding: '3px 8px',
+              fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+            }}
+          >↻ リセット</button>
         </div>
         {groups.map(g => (
           <div key={g.title} style={{ marginBottom: 10 }}>
