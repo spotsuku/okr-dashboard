@@ -363,6 +363,52 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   const [busy, setBusy] = useState(false)
   const [kptOpen, setKptOpen] = useState(false)
 
+  // ─── リマインダー用データ ──────────────────────────
+  const [reminders, setReminders] = useState({
+    missingKRs: [], missingKAs: [],
+    overdueTasks: [], todayTasks: [], tomorrowTasks: [],
+    loading: true,
+  })
+
+  const loadReminders = useCallback(async () => {
+    if (!viewingName) { setReminders(r => ({ ...r, loading: false })); return }
+    setReminders(r => ({ ...r, loading: true }))
+
+    const thisMonday = getMondayJSTStr()
+    const today = toJSTDateStr(new Date())
+    const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1)
+    const tomorrow = toJSTDateStr(tomorrowDate)
+
+    const [krsRes, krReviewsRes, kasRes, tasksRes] = await Promise.all([
+      supabase.from('key_results').select('id, title, owner').eq('owner', viewingName),
+      supabase.from('kr_weekly_reviews').select('*').eq('week_start', thisMonday),
+      supabase.from('weekly_reports').select('*').eq('owner', viewingName).eq('week_start', thisMonday),
+      supabase.from('ka_tasks').select('*').eq('assignee', viewingName).neq('status', 'done').lte('due_date', tomorrow),
+    ])
+
+    const krs = krsRes.data || []
+    const krReviewsMap = Object.fromEntries((krReviewsRes.data || []).map(r => [r.kr_id, r]))
+    const missingKRs = krs.filter(kr => {
+      const r = krReviewsMap[kr.id]
+      if (!r) return true
+      return !((r.good||'').trim() || (r.more||'').trim() || (r.focus_output||'').trim() || (r.focus||'').trim())
+    })
+
+    const kas = kasRes.data || []
+    const missingKAs = kas.filter(ka =>
+      !((ka.good||'').trim() || (ka.more||'').trim() || (ka.focus_output||'').trim())
+    )
+
+    const tasks = (tasksRes.data || []).filter(t => t.due_date)
+    const overdueTasks = tasks.filter(t => t.due_date < today)
+    const todayTasks   = tasks.filter(t => t.due_date === today)
+    const tomorrowTasks= tasks.filter(t => t.due_date === tomorrow)
+
+    setReminders({ missingKRs, missingKAs, overdueTasks, todayTasks, tomorrowTasks, loading: false })
+  }, [viewingName])
+
+  useEffect(() => { loadReminders() }, [loadReminders])
+
   async function handleStart() {
     if (busy || !myName) return
     setBusy(true)
@@ -483,18 +529,52 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
         {/* 中カラム：リマインダー */}
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Section T={T} icon="🔔" title="リマインダー" flex={1}>
-            <SubSection T={T} label="📧 メール">
-              <Placeholder T={T} lines={['Phase 4: Gmail MCP連携', '3日以上未返信・重要度高を抽出']} />
+          <Section T={T} icon="🔔" title="リマインダー" flex={1} headerRight={
+            <button onClick={loadReminders} title="再読み込み" style={{
+              background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+              borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+            }}>↻</button>
+          }>
+            <SubSection T={T} label="📊 OKR・KA 記入漏れ (今週分)">
+              {reminders.loading ? <Loading T={T} /> : (
+                <ReminderList T={T} items={[
+                  ...reminders.missingKRs.map(kr => ({
+                    icon: '🎯', sev: 'warn',
+                    text: `KR「${truncate(kr.title, 32)}」のレビューが未記入`,
+                  })),
+                  ...reminders.missingKAs.map(ka => ({
+                    icon: '📋', sev: 'warn',
+                    text: `KA「${truncate(ka.ka_title || ka.kr_title, 32)}」のGood/More未記入`,
+                  })),
+                ]} emptyText="✨ 今週分はすべて記入済みです" />
+              )}
             </SubSection>
-            <SubSection T={T} label="📊 OKR・KA 記入漏れ">
-              <Placeholder T={T} lines={['Phase 3: weekly_reports/kr_weekly_reviews の空欄検出']} />
-            </SubSection>
-            <SubSection T={T} label="📅 今日のカレンダー">
-              <Placeholder T={T} lines={['Phase 3: Google Calendar MCP連携']} />
-            </SubSection>
+
             <SubSection T={T} label="⚠️ タスク期限">
-              <Placeholder T={T} lines={['Phase 3: ka_tasks.due_date が今日/明日']} />
+              {reminders.loading ? <Loading T={T} /> : (
+                <ReminderList T={T} items={[
+                  ...reminders.overdueTasks.map(t => ({
+                    icon: '🚨', sev: 'danger',
+                    text: `期限超過: ${truncate(t.title, 36)} (${t.due_date})`,
+                  })),
+                  ...reminders.todayTasks.map(t => ({
+                    icon: '📅', sev: 'warn',
+                    text: `今日まで: ${truncate(t.title, 36)}`,
+                  })),
+                  ...reminders.tomorrowTasks.map(t => ({
+                    icon: '📆', sev: 'info',
+                    text: `明日まで: ${truncate(t.title, 36)}`,
+                  })),
+                ]} emptyText="✨ 直近の期限タスクはありません" />
+              )}
+            </SubSection>
+
+            <SubSection T={T} label="📅 今日のカレンダー">
+              <Placeholder T={T} lines={['Phase 5: Google Calendar MCP連携']} />
+            </SubSection>
+
+            <SubSection T={T} label="📧 メール">
+              <Placeholder T={T} lines={['Phase 4: Gmail MCP連携 (3日以上未返信・重要度高)']} />
             </SubSection>
           </Section>
         </div>
@@ -621,7 +701,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
   )
 }
 
-function Section({ T, icon, title, children, flex = 1 }) {
+function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
   return (
     <div style={{
       flex, display: 'flex', flexDirection: 'column', minHeight: 0,
@@ -632,11 +712,45 @@ function Section({ T, icon, title, children, flex = 1 }) {
         fontSize: 12, fontWeight: 700, color: T.text, display: 'flex', alignItems: 'center', gap: 6,
         flexShrink: 0, background: T.sectionBg,
       }}>
-        <span>{icon}</span><span>{title}</span>
+        <span>{icon}</span><span style={{ flex: 1 }}>{title}</span>
+        {headerRight}
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }}>
         {children}
       </div>
+    </div>
+  )
+}
+
+function truncate(s, n) {
+  if (!s) return ''
+  return s.length > n ? s.slice(0, n) + '…' : s
+}
+
+function Loading({ T }) {
+  return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>読み込み中...</div>
+}
+
+function ReminderList({ T, items, emptyText }) {
+  if (!items || items.length === 0) {
+    return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>{emptyText}</div>
+  }
+  const sevColor = (sev) => sev === 'danger' ? T.danger : sev === 'warn' ? T.warn : T.info
+  const sevBg    = (sev) => sev === 'danger' ? T.dangerBg : sev === 'warn' ? T.warnBg : T.infoBg
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {items.map((it, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'flex-start', gap: 6,
+          padding: '5px 8px', borderRadius: 6,
+          background: sevBg(it.sev),
+          border: `1px solid ${sevColor(it.sev)}33`,
+          fontSize: 11, color: T.text, lineHeight: 1.5,
+        }}>
+          <span style={{ flexShrink: 0 }}>{it.icon}</span>
+          <span style={{ flex: 1 }}>{it.text}</span>
+        </div>
+      ))}
     </div>
   )
 }
