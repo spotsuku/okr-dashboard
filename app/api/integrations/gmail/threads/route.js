@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 // Gmailで「3日以上前に受信して未返信」のスレッドを取得
 // GET /api/integrations/gmail/threads?owner=<name>
 import { getIntegration, json } from '../../_shared'
