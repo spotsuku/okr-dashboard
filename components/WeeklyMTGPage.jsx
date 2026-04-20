@@ -156,8 +156,8 @@ function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor
 function autoGrowTextarea(el, minRows = 3) {
   if (!el) return
   el.style.height = 'auto'
-  // フォントサイズ13, lineHeight 1.6 → 1行 ≒ 21px。パディング込みで minRows * 21 + 12
-  const minH = minRows * 21 + 12
+  // フォントサイズ11, lineHeight 1.55 → 1行 ≒ 17px。パディング込みで minRows * 17 + 12
+  const minH = minRows * 17 + 12
   el.style.height = Math.max(el.scrollHeight, minH) + 'px'
 }
 
@@ -470,8 +470,8 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   }
 
   const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:12 }
-  // KA記入欄: 会議中の可読性向上のためフォントと行間を大きく、最小高さを3行分に
-  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'5px 7px', color:wT().text, fontSize:13, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.6, overflow:'hidden', transition:'border-color 0.15s' }
+  // KA記入欄: 改行が気になりすぎないよう fontSize 11、lineHeight 1.55、自動拡張
+  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'5px 7px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, overflow:'hidden', transition:'border-color 0.15s' }
   const isDone = status === 'done'
   const isDragging = dragIdx !== undefined && dragIdx === rowIdx
   const isDragOver = overIdx !== undefined && overIdx === rowIdx && dragIdx !== null && dragIdx !== rowIdx
