@@ -664,9 +664,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
   const loadIntegrations = useCallback(async () => {
     if (!viewingName) return
+    // 公開ビュー経由: トークン以外の接続状態のみ取得可 (RLSバイパス)
     const { data } = await supabase
-      .from('user_integrations')
-      .select('service, expires_at')
+      .from('user_integrations_status')
+      .select('service, expires_at, is_active')
       .eq('owner', viewingName)
     const map = {}
     ;(data || []).forEach(r => { map[r.service] = r })

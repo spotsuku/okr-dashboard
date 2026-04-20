@@ -7,7 +7,11 @@ export async function GET(request) {
   const owner = url.searchParams.get('owner')
   const result = await getIntegration(owner, 'google_gmail')
   if (result.error) return json({ error: result.error }, { status: 400 })
-  if (result.expired) return json({ error: 'トークン期限切れ。再連携してください' }, { status: 401 })
+  if (result.expired) return json({
+    error: result.refreshError
+      ? `自動リフレッシュに失敗: ${result.refreshError} 再連携してください`
+      : 'トークン期限切れ。再連携してください',
+  }, { status: 401 })
 
   const token = result.integration.access_token
 
