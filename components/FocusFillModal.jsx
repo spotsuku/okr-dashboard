@@ -78,14 +78,16 @@ const WEATHER_OPTIONS = [
 ]
 
 // ─── メインコンポーネント ───────────────────────────
-export default function FocusFillModal({ open, onClose, T, viewingName, myName, initialMode = 'kr', levels = [] }) {
+export default function FocusFillModal({ open, onClose, T, viewingName, myName, isAdmin = false, initialMode = 'kr', levels = [] }) {
   const isViewingSelf = viewingName === myName
+  const canEdit = isViewingSelf || isAdmin   // 管理者は他メンバーも編集可
   const [mode, setMode] = useState(initialMode)
   const [loading, setLoading] = useState(true)
-  const [queue, setQueue] = useState({ kr: [], ka: [] })      // 未記入カード一覧
+  const [queue, setQueue] = useState({ kr: [], ka: [] })      // カード一覧
   const [index, setIndex] = useState({ kr: 0, ka: 0 })        // 各モードの現在位置
   const [draft, setDraft] = useState({ good: '', more: '', focus: '', weather: 0, current: 0 })
   const [saving, setSaving] = useState(false)
+  const [showAll, setShowAll] = useState(false)               // 記入済みも含めて表示
   const [completed, setCompleted] = useState({ kr: false, ka: false })
   const [objMap, setObjMap] = useState({})
   const [swipeDelta, setSwipeDelta] = useState(0)  // D: スワイプ時のX移動量
@@ -150,10 +152,11 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const curQ = getCurrentQuarter()
     const inCurrentQ = (objId) => om[objId]?.period === curQ
 
-    // KR 未記入キュー: レコード未作成 or 全フィールド空 (weather=0 含む) かつ 今Qのみ
+    // KR キュー: 今Q、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
     const krQueue = krs
       .filter(kr => inCurrentQ(kr.objective_id))
       .filter(kr => {
+        if (showAll) return true
         const r = krReviewsMap[kr.id]
         if (!r) return true
         const allTextEmpty = !((r.good || '').trim() || (r.more || '').trim() || (r.focus || '').trim() || (r.focus_output || '').trim())
@@ -167,10 +170,13 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         objective: om[kr.objective_id] || null,
       }))
 
-    // KA 未記入キュー: good/more/focus_output が全空、かつ 今Qのみ
+    // KA キュー: 今Q、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
     const kaQueue = (kasRes.data || [])
       .filter(ka => inCurrentQ(ka.objective_id))
-      .filter(ka => !((ka.good || '').trim() || (ka.more || '').trim() || (ka.focus_output || '').trim()))
+      .filter(ka => {
+        if (showAll) return true
+        return !((ka.good || '').trim() || (ka.more || '').trim() || (ka.focus_output || '').trim())
+      })
       .map(ka => ({
         kind: 'ka',
         ka,
@@ -181,7 +187,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     setIndex({ kr: 0, ka: 0 })
     setCompleted({ kr: krQueue.length === 0, ka: kaQueue.length === 0 })
     setLoading(false)
-  }, [viewingName, krWeekStart, kaWeekStart])
+  }, [viewingName, krWeekStart, kaWeekStart, showAll])
 
   useEffect(() => { if (open) load() }, [open, load])
   useEffect(() => { if (open) setMode(initialMode) }, [open, initialMode])
@@ -217,7 +223,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
   // ─── 保存 ───
   async function handleSaveNext() {
     if (!currentCard) return
-    if (!isViewingSelf) return   // E: 本人のみ保存可
+    if (!canEdit) return   // 本人 or 管理者のみ保存可
     const filled = (draft.good || '').trim() || (draft.more || '').trim() || (draft.focus || '').trim()
     // KR の進捗変更も「書いた」とみなす
     const progressChanged = currentCard.kind === 'kr'
@@ -312,8 +318,8 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     setSwipeDelta(0)
     if (Math.abs(delta) < THRESHOLD) return
     if (delta < -THRESHOLD) {
-      // 左スワイプ: 保存して次へ (本人のみ)
-      if (isViewingSelf && !saving) handleSaveNext()
+      // 左スワイプ: 保存して次へ (本人 or 管理者)
+      if (canEdit && !saving) handleSaveNext()
     } else if (delta > THRESHOLD) {
       // 右スワイプ: 戻る
       if (!saving) moveBack()
@@ -373,13 +379,25 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
             )
           })}
           <div style={{ flex: 1 }} />
-          {/* 閲覧中のユーザー + 権限バッジ (E対応) */}
+          {/* 全件表示 トグル */}
+          <button onClick={() => setShowAll(v => !v)} style={{
+            fontSize: 10, color: showAll ? '#fff' : T.textSub,
+            background: showAll ? cfg.accent : 'transparent',
+            border: `1px solid ${showAll ? cfg.accent : T.border}`,
+            borderRadius: 6, padding: '3px 10px', marginRight: 6, marginBottom: 6,
+            cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+          }} title="記入済みカードも含めて見直す">
+            {showAll ? '📋 全件表示 ON' : '📋 全件表示'}
+          </button>
+          {/* 閲覧中のユーザー + 権限バッジ */}
           <div style={{
             fontSize: 10, color: T.textMuted, padding: '4px 8px',
-            background: isViewingSelf ? 'rgba(77,159,255,0.12)' : 'rgba(122,133,153,0.12)',
+            background: canEdit ? (isViewingSelf ? 'rgba(77,159,255,0.12)' : 'rgba(255,209,102,0.15)') : 'rgba(122,133,153,0.12)',
             borderRadius: 6, marginRight: 8, marginBottom: 6,
           }}>
-            {isViewingSelf ? `✏️ ${viewingName} (自分)` : `👁 ${viewingName} (閲覧のみ)`}
+            {isViewingSelf ? `✏️ ${viewingName} (自分)`
+              : isAdmin ? `👑 ${viewingName} (管理者編集)`
+              : `👁 ${viewingName} (閲覧のみ)`}
           </div>
           <button onClick={onClose} style={{
             background: 'transparent', border: 'none', color: T.textMuted,
@@ -434,10 +452,11 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
           {loading ? (
             <div style={{ textAlign: 'center', padding: 60, color: T.textMuted }}>読み込み中...</div>
           ) : completed[mode] || q.length === 0 ? (
-            <CompletionScreen T={T} mode={mode} q={q} onClose={onClose} />
+            <CompletionScreen T={T} mode={mode} q={q} onClose={onClose}
+              showAll={showAll} onShowAll={() => setShowAll(true)} />
           ) : current ? (
             <CardView T={T} card={current} draft={draft} setDraft={setDraft} cfg={cfg}
-              readOnly={!isViewingSelf} deptLabelOf={deptLabelOf}
+              readOnly={!canEdit} deptLabelOf={deptLabelOf}
               weekStart={weekStartOf(current.kind)}
               meetingText={meetingLabel(current.kind)} />
           ) : null}
@@ -466,7 +485,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
               ← スワイプで戻る / 右スワイプで保存 →
             </div>
             <div style={{ flex: 1 }} />
-            {isViewingSelf ? (
+            {canEdit ? (
               <button onClick={handleSaveNext} disabled={saving} style={{
                 background: cfg.accent, border: 'none', color: '#fff',
                 borderRadius: 8, padding: '8px 20px',
@@ -658,7 +677,7 @@ function FieldRow({ T, label, color, value, onChange, placeholder, readOnly = fa
 }
 
 // ─── 完了画面 ────────────────────────────────────────
-function CompletionScreen({ T, mode, q, onClose }) {
+function CompletionScreen({ T, mode, q, onClose, showAll, onShowAll }) {
   const mc = MODE_CONFIG[mode]
   const isEmpty = q.length === 0
   return (
@@ -672,11 +691,20 @@ function CompletionScreen({ T, mode, q, onClose }) {
           ? `${mc.title.replace(/^[^ ]+ /, '')}の未記入項目はありません。`
           : `${q.length}件の ${mode === 'kr' ? 'KR' : 'KA'} レビューを完成しました。`}
       </div>
-      <button onClick={onClose} style={{
-        background: mc.accent, border: 'none', color: '#fff',
-        borderRadius: 8, padding: '10px 24px',
-        fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-      }}>閉じる</button>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {!showAll && onShowAll && (
+          <button onClick={onShowAll} style={{
+            background: 'transparent', border: `1px solid ${mc.accent}`,
+            color: mc.accent, borderRadius: 8, padding: '10px 20px',
+            fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>📋 記入済みも含めて見直す</button>
+        )}
+        <button onClick={onClose} style={{
+          background: mc.accent, border: 'none', color: '#fff',
+          borderRadius: 8, padding: '10px 24px',
+          fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+        }}>閉じる</button>
+      </div>
     </div>
   )
 }

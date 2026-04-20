@@ -115,6 +115,7 @@ function statusDot(status, T) {
 export default function MyPageShell({ user, members, levels, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
   const T = THEMES[themeKey] || THEMES.dark
   const myName = useMemo(() => members?.find(m => m.email === user?.email)?.name || '', [members, user])
+  const isAdmin = useMemo(() => members?.find(m => m.email === user?.email)?.is_admin === true, [members, user])
 
   const [viewingName, setViewingName] = useState(myName)
   useEffect(() => { if (myName && !viewingName) setViewingName(myName) }, [myName, viewingName])
@@ -396,6 +397,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             T={T}
             viewingName={viewingName}
             myName={myName}
+            isAdmin={isAdmin}
             initialMode={focusFillOpen}
             levels={levels}
           />
