@@ -505,6 +505,60 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     await loadMonthTheme()
   }
 
+  // ─── 今週のゴール (Phase: 追加機能) ──────────────
+  const weekStartStr = useMemo(() => getMondayJSTStr(), [])
+  const [weekGoal, setWeekGoal] = useState({ goal: '', logId: null, loading: true })
+  const loadWeekGoal = useCallback(async () => {
+    if (!viewingName) { setWeekGoal(g => ({ ...g, loading: false })); return }
+    setWeekGoal(g => ({ ...g, loading: true }))
+    const { data } = await supabase
+      .from('coaching_logs').select('*')
+      .eq('owner', viewingName).eq('log_type', 'weekly_goal').eq('week_start', weekStartStr)
+      .order('created_at', { ascending: false }).limit(1)
+    const row = (data || [])[0]
+    const c = parseLogContent(row?.content)
+    setWeekGoal({ goal: c.goal || '', logId: row?.id || null, loading: false })
+  }, [viewingName, weekStartStr])
+  useEffect(() => { loadWeekGoal() }, [loadWeekGoal])
+
+  async function saveWeekGoal(goal) {
+    if (!isViewingSelf) return
+    const content = JSON.stringify({ goal })
+    if (weekGoal.logId) {
+      await supabase.from('coaching_logs').update({ content }).eq('id', weekGoal.logId)
+    } else {
+      await supabase.from('coaching_logs').insert({
+        owner: myName, log_type: 'weekly_goal', week_start: weekStartStr, content,
+      })
+    }
+    await loadWeekGoal()
+  }
+
+  // ─── ウィジェット表示/非表示 prefs (localStorage) ────
+  const PREFS_KEY = `mypage-widget-prefs-v1:${myName || 'guest'}`
+  const DEFAULT_PREFS = {
+    today: true, week: true,
+    rem_okr: true, rem_task: true, rem_calendar: false, rem_gmail: false, rem_slack: false, rem_line: false,
+    goal_month_main: true, goal_month_growth: true, goal_week: true, achievements: true,
+  }
+  const [prefs, setPrefs] = useState(DEFAULT_PREFS)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')
+      setPrefs({ ...DEFAULT_PREFS, ...saved })
+    } catch { /* keep defaults */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [PREFS_KEY])
+  const togglePref = (key) => {
+    setPrefs(p => {
+      const next = { ...p, [key]: !p[key] }
+      try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
   // 今週の成果: 完了タスク + KR記入
   const [achievements, setAchievements] = useState({ items: [], loading: true })
   const loadAchievements = useCallback(async () => {
@@ -581,13 +635,28 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     await onWorkLogChange()
   }
 
+  // ─── A. 始業ゲーティング: 自分閲覧 & 未始業 → 始業画面のみ表示 ────
+  if (isViewingSelf && st === 'none') {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <StartWorkGate
+          T={T} viewingMember={viewingMember} viewingName={viewingName}
+          greet={greet} dateStr={dateStr} busy={busy} onStart={handleStart}
+        />
+      </div>
+    )
+  }
+
+  // ─── 表示判定ヘルパー ────
+  const showW = (key) => prefs[key] !== false  // デフォルト未設定はtrue扱い
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* 挨拶バー + 始業ボタン */}
+      {/* 挨拶バー + 始業/終業ボタン + 設定 */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         padding: '10px 16px', background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
-        flexShrink: 0,
+        flexShrink: 0, position: 'relative',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Avatar member={viewingMember} size={36} />
@@ -604,165 +673,378 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
           </div>
         </div>
 
-        {isViewingSelf && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            {st === 'none' && (
-              <button
-                onClick={handleStart}
-                disabled={busy || !myName}
-                style={{
-                  background: T.success, color: '#fff', border: 'none', borderRadius: 8,
-                  padding: '8px 16px', fontSize: 13, fontWeight: 700,
-                  cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-                  opacity: busy ? 0.6 : 1, transition: 'opacity 0.15s',
-                }}
-              >☀️ 始業する</button>
-            )}
-            {st === 'on' && (
-              <button
-                onClick={() => setKptOpen(true)}
-                disabled={busy}
-                style={{
-                  background: T.info, color: '#fff', border: 'none', borderRadius: 8,
-                  padding: '8px 16px', fontSize: 13, fontWeight: 700,
-                  cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-                  opacity: busy ? 0.6 : 1, transition: 'opacity 0.15s',
-                }}
-              >🌙 終業する</button>
-            )}
-            {st === 'off' && (
-              <div style={{ fontSize: 11, color: T.textMuted, padding: '8px 12px' }}>お疲れさまでした</div>
-            )}
-          </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isViewingSelf && st === 'on' && (
+            <button onClick={() => setKptOpen(true)} disabled={busy} style={{
+              background: T.info, color: '#fff', border: 'none', borderRadius: 8,
+              padding: '8px 16px', fontSize: 13, fontWeight: 700,
+              cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+              opacity: busy ? 0.6 : 1,
+            }}>🌙 終業する</button>
+          )}
+          {isViewingSelf && st === 'off' && (
+            <div style={{ fontSize: 11, color: T.textMuted, padding: '8px 12px' }}>お疲れさまでした</div>
+          )}
+          {/* 設定ボタン (ウィジェット表示切替) */}
+          <button onClick={() => setSettingsOpen(v => !v)} title="ウィジェットの表示設定" style={{
+            background: settingsOpen ? T.accentBg : 'transparent',
+            border: `1px solid ${T.border}`, color: T.textSub,
+            borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}>⚙️</button>
+        </div>
+
+        {settingsOpen && (
+          <SettingsPopover
+            T={T} prefs={prefs} togglePref={togglePref} onClose={() => setSettingsOpen(false)}
+          />
         )}
       </div>
 
-      {/* 3カラム本体（各内部スクロール、画面全体はスクロールしない） */}
+      {/* 3カラム本体 */}
       <div style={{
         flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
         gap: 10, padding: 10, minHeight: 0, overflow: 'hidden',
       }}>
-        {/* 左カラム：今日やること / 今週やること */}
+        {/* ─── 左カラム：今日やること / 今週やること ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-          <Section T={T} icon="⚡" title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
-            <button onClick={loadTasks} title="再読み込み" style={{
-              background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
-              borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-            }}>↻</button>
-          }>
-            {taskBoard.loading ? <Loading T={T} /> :
-              taskBoard.today.length === 0
-                ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>✨ 今日のタスクはありません</div>
-                : <TaskList T={T} tasks={taskBoard.today} canEdit={isViewingSelf} onToggle={toggleTaskDone} showDue />}
-          </Section>
-          <Section T={T} icon="📅" title="今週やること" flex={1}>
-            {taskBoard.loading ? <Loading T={T} /> : (
-              <WeekTasks T={T} byWeekday={taskBoard.byWeekday} canEdit={isViewingSelf} onToggle={toggleTaskDone} />
-            )}
-          </Section>
+          {showW('today') && (
+            <Section T={T} icon="⚡" title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
+              <button onClick={loadTasks} title="再読み込み" style={{
+                background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+                borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+              }}>↻</button>
+            }>
+              {taskBoard.loading ? <Loading T={T} /> :
+                taskBoard.today.length === 0
+                  ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>✨ 今日のタスクはありません</div>
+                  : <TaskList T={T} tasks={taskBoard.today} canEdit={isViewingSelf} onToggle={toggleTaskDone} showDue />}
+            </Section>
+          )}
+          {showW('week') && (
+            <Section T={T} icon="📅" title="今週やること" flex={1}>
+              {taskBoard.loading ? <Loading T={T} /> : (
+                <WeekTasks T={T} byWeekday={taskBoard.byWeekday} canEdit={isViewingSelf} onToggle={toggleTaskDone} />
+              )}
+            </Section>
+          )}
         </div>
 
-        {/* 中カラム：リマインダー */}
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Section T={T} icon="🔔" title="リマインダー" flex={1} headerRight={
-            <button onClick={loadReminders} title="再読み込み" style={{
-              background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
-              borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-            }}>↻</button>
-          }>
-            <SubSection T={T} label="📊 OKR・KA 記入漏れ (今週分)">
+        {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+          {showW('rem_okr') && (
+            <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
+              <button onClick={loadReminders} title="再読み込み" style={{
+                background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+                borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+              }}>↻</button>
+            }>
               {reminders.loading ? <Loading T={T} /> : (
                 <ReminderList T={T} items={[
-                  ...reminders.missingKRs.map(kr => ({
-                    icon: '🎯', sev: 'warn',
-                    text: `KR「${truncate(kr.title, 32)}」のレビューが未記入`,
-                  })),
-                  ...reminders.missingKAs.map(ka => ({
-                    icon: '📋', sev: 'warn',
-                    text: `KA「${truncate(ka.ka_title || ka.kr_title, 32)}」のGood/More未記入`,
-                  })),
+                  ...reminders.missingKRs.map(kr => ({ icon: '🎯', sev: 'warn',
+                    text: `KR「${truncate(kr.title, 32)}」のレビューが未記入` })),
+                  ...reminders.missingKAs.map(ka => ({ icon: '📋', sev: 'warn',
+                    text: `KA「${truncate(ka.ka_title || ka.kr_title, 32)}」のGood/More未記入` })),
                 ]} emptyText="✨ 今週分はすべて記入済みです" />
               )}
-            </SubSection>
-
-            <SubSection T={T} label="⚠️ タスク期限">
+            </Section>
+          )}
+          {showW('rem_task') && (
+            <Section T={T} icon="⚠️" title="タスク期限" flex={0}>
               {reminders.loading ? <Loading T={T} /> : (
                 <ReminderList T={T} items={[
-                  ...reminders.overdueTasks.map(t => ({
-                    icon: '🚨', sev: 'danger',
-                    text: `期限超過: ${truncate(t.title, 36)} (${t.due_date})`,
-                  })),
-                  ...reminders.todayTasks.map(t => ({
-                    icon: '📅', sev: 'warn',
-                    text: `今日まで: ${truncate(t.title, 36)}`,
-                  })),
-                  ...reminders.tomorrowTasks.map(t => ({
-                    icon: '📆', sev: 'info',
-                    text: `明日まで: ${truncate(t.title, 36)}`,
-                  })),
+                  ...reminders.overdueTasks.map(t => ({ icon: '🚨', sev: 'danger',
+                    text: `期限超過: ${truncate(t.title, 36)} (${t.due_date})` })),
+                  ...reminders.todayTasks.map(t => ({ icon: '📅', sev: 'warn',
+                    text: `今日まで: ${truncate(t.title, 36)}` })),
+                  ...reminders.tomorrowTasks.map(t => ({ icon: '📆', sev: 'info',
+                    text: `明日まで: ${truncate(t.title, 36)}` })),
                 ]} emptyText="✨ 直近の期限タスクはありません" />
               )}
-            </SubSection>
-
-            <SubSection T={T} label="📅 今日のカレンダー">
-              <Placeholder T={T} lines={['Phase 5: Google Calendar MCP連携']} />
-            </SubSection>
-
-            <SubSection T={T} label="📧 メール">
-              <Placeholder T={T} lines={['Phase 4: Gmail MCP連携 (3日以上未返信・重要度高)']} />
-            </SubSection>
-          </Section>
+            </Section>
+          )}
+          {showW('rem_calendar') && (
+            <Section T={T} icon="📅" title="Googleカレンダー" flex={0}>
+              <Placeholder T={T} lines={['Google Calendar連携(OAuth設定後に有効化)']} />
+            </Section>
+          )}
+          {showW('rem_gmail') && (
+            <Section T={T} icon="📧" title="Gmail" flex={0}>
+              <Placeholder T={T} lines={['Gmail連携 + AI返信草稿(OAuth設定後に有効化)']} />
+            </Section>
+          )}
+          {showW('rem_slack') && (
+            <Section T={T} icon="💬" title="Slack" flex={0}>
+              <Placeholder T={T} lines={['未読メンション・DM(Slack連携で有効化)']} />
+            </Section>
+          )}
+          {showW('rem_line') && (
+            <Section T={T} icon="🟢" title="LINE" flex={0}>
+              <Placeholder T={T} lines={['LINE通知(LINE連携で有効化)']} />
+            </Section>
+          )}
         </div>
 
-        {/* 右カラム：月テーマ + 成果 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-          <ThemeEditor T={T} icon="🌟" title="今月のメインテーマ" field="main"
-            value={monthTheme.main} loading={monthTheme.loading}
-            canEdit={isViewingSelf}
-            placeholder="例: 評議会24社のクロージング完了"
-            onSave={(v) => saveMonthTheme({ main: v, growth: monthTheme.growth })} />
-          <ThemeEditor T={T} icon="💪" title="今月の成長テーマ" field="growth"
-            value={monthTheme.growth} loading={monthTheme.loading}
-            canEdit={isViewingSelf}
-            placeholder="例: 1on1で相手の話を引き出す力"
-            onSave={(v) => saveMonthTheme({ main: monthTheme.main, growth: v })} />
-          <Section T={T} icon="🏆" title={`今週の成果${achievements.items.length ? ` (${achievements.items.length})` : ''}`} flex={1} headerRight={
-            <button onClick={loadAchievements} title="再読み込み" style={{
-              background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
-              borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-            }}>↻</button>
-          }>
-            {achievements.loading ? <Loading T={T} /> :
-              achievements.items.length === 0
-                ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>今週の成果はまだありません</div>
-                : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {achievements.items.map((it, i) => (
-                      <div key={i} style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 6,
-                        padding: '5px 8px', borderRadius: 6,
-                        background: T.successBg, border: `1px solid ${T.success}22`,
-                        fontSize: 11, color: T.text, lineHeight: 1.5,
-                      }}>
-                        <span>{it.icon}</span>
-                        <span style={{ color: T.textMuted, fontWeight: 600, minWidth: 48 }}>{it.date || '--'}</span>
-                        <span style={{ flex: 1 }}>{it.text}</span>
+        {/* ─── 右カラム：ポップなゴール3種 + コンパクト成果 ─── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+          {showW('goal_month_main') && (
+            <PopGoalCard
+              T={T} icon="🌟" title="今月のメインテーマ"
+              gradient="linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%)"
+              accent="#92400e"
+              value={monthTheme.main} loading={monthTheme.loading} canEdit={isViewingSelf}
+              placeholder="例: 評議会24社のクロージング完了"
+              onSave={(v) => saveMonthTheme({ main: v, growth: monthTheme.growth })}
+            />
+          )}
+          {showW('goal_month_growth') && (
+            <PopGoalCard
+              T={T} icon="💪" title="今月の成長テーマ"
+              gradient="linear-gradient(135deg, #fce7f3 0%, #c084fc 100%)"
+              accent="#7c2d8e"
+              value={monthTheme.growth} loading={monthTheme.loading} canEdit={isViewingSelf}
+              placeholder="例: 1on1で相手の話を引き出す力"
+              onSave={(v) => saveMonthTheme({ main: monthTheme.main, growth: v })}
+            />
+          )}
+          {showW('goal_week') && (
+            <PopGoalCard
+              T={T} icon="🚀" title="今週のゴール"
+              gradient="linear-gradient(135deg, #cffafe 0%, #38bdf8 100%)"
+              accent="#075985"
+              value={weekGoal.goal} loading={weekGoal.loading} canEdit={isViewingSelf}
+              placeholder="例: 提案書v2をクライアントに提出して承認をもらう"
+              onSave={(v) => saveWeekGoal(v)}
+            />
+          )}
+          {showW('achievements') && (
+            <Section T={T} icon="🏆" title={`今週の成果${achievements.items.length ? ` (${achievements.items.length})` : ''}`} flex={0} headerRight={
+              <button onClick={loadAchievements} title="再読み込み" style={{
+                background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+                borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+              }}>↻</button>
+            }>
+              <div style={{ maxHeight: 140, overflowY: 'auto' }}>
+                {achievements.loading ? <Loading T={T} /> :
+                  achievements.items.length === 0
+                    ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>今週の成果はまだありません</div>
+                    : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {achievements.items.map((it, i) => (
+                          <div key={i} style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 6,
+                            padding: '4px 6px', borderRadius: 5,
+                            background: T.successBg, border: `1px solid ${T.success}22`,
+                            fontSize: 10, color: T.text, lineHeight: 1.4,
+                          }}>
+                            <span>{it.icon}</span>
+                            <span style={{ color: T.textMuted, fontWeight: 600, minWidth: 40, fontSize: 9 }}>{it.date || '--'}</span>
+                            <span style={{ flex: 1 }}>{it.text}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-          </Section>
+                    )}
+              </div>
+            </Section>
+          )}
         </div>
       </div>
 
       {kptOpen && (
         <KPTModal
-          T={T}
-          busy={busy}
-          onCancel={() => setKptOpen(false)}
-          onSave={handleEnd}
+          T={T} busy={busy}
+          onCancel={() => setKptOpen(false)} onSave={handleEnd}
           startedAt={content.start_at}
         />
+      )}
+    </div>
+  )
+}
+
+// ─── 始業ゲート画面 ────────────────────────────────────────
+function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart }) {
+  return (
+    <div style={{
+      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: `linear-gradient(135deg, ${T.bg} 0%, ${T.bgCard} 100%)`,
+      padding: 30,
+    }}>
+      <div style={{
+        textAlign: 'center', padding: '40px 50px',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
+        boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+        maxWidth: 480, width: '100%',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+          <Avatar member={viewingMember} size={64} />
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+          {greet}、{viewingName}さん 👋
+        </div>
+        <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 30 }}>
+          {dateStr} · 良い1日を始めましょう
+        </div>
+        <button
+          onClick={onStart}
+          disabled={busy}
+          style={{
+            background: 'linear-gradient(135deg, #00d68f 0%, #4d9fff 100%)',
+            color: '#fff', border: 'none', borderRadius: 14,
+            padding: '16px 48px', fontSize: 18, fontWeight: 800,
+            cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+            opacity: busy ? 0.6 : 1, letterSpacing: 1,
+            boxShadow: '0 8px 24px rgba(0,214,143,0.35)',
+            transition: 'transform 0.1s',
+          }}
+          onMouseEnter={e => !busy && (e.currentTarget.style.transform = 'translateY(-2px)')}
+          onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
+        >☀️ 始業する</button>
+        <div style={{ marginTop: 20, fontSize: 10, color: T.textFaint }}>
+          ※ 翌日 04:00 JST に自動的にリセットされます
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── 設定ポップオーバー (ウィジェット表示/非表示) ──────────
+function SettingsPopover({ T, prefs, togglePref, onClose }) {
+  const groups = [
+    { title: 'タスク', items: [
+      { key: 'today', label: '⚡ 今日やること' },
+      { key: 'week',  label: '📅 今週やること' },
+    ]},
+    { title: 'リマインダー', items: [
+      { key: 'rem_okr',      label: '📊 OKR・KA記入漏れ' },
+      { key: 'rem_task',     label: '⚠️ タスク期限' },
+      { key: 'rem_calendar', label: '📅 Googleカレンダー' },
+      { key: 'rem_gmail',    label: '📧 Gmail' },
+      { key: 'rem_slack',    label: '💬 Slack' },
+      { key: 'rem_line',     label: '🟢 LINE' },
+    ]},
+    { title: 'ゴール / 成果', items: [
+      { key: 'goal_month_main',   label: '🌟 今月のメインテーマ' },
+      { key: 'goal_month_growth', label: '💪 今月の成長テーマ' },
+      { key: 'goal_week',         label: '🚀 今週のゴール' },
+      { key: 'achievements',      label: '🏆 今週の成果' },
+    ]},
+  ]
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, zIndex: 100, background: 'transparent',
+      }} />
+      <div style={{
+        position: 'absolute', right: 16, top: '100%', marginTop: 6,
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
+        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+        zIndex: 101, padding: 12, minWidth: 240, maxHeight: '70vh', overflowY: 'auto',
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 8 }}>
+          ⚙️ 表示するウィジェット
+        </div>
+        {groups.map(g => (
+          <div key={g.title} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, marginBottom: 4, letterSpacing: 0.5 }}>
+              {g.title}
+            </div>
+            {g.items.map(it => (
+              <label key={it.key} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px',
+                cursor: 'pointer', borderRadius: 5, fontSize: 12, color: T.text,
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = T.sectionBg}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <input
+                  type="checkbox"
+                  checked={prefs[it.key] !== false}
+                  onChange={() => togglePref(it.key)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>{it.label}</span>
+              </label>
+            ))}
+          </div>
+        ))}
+        <div style={{ fontSize: 9, color: T.textMuted, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
+          設定はこのブラウザに保存されます
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── ポップなゴールカード ─────────────────────────────────
+function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit, placeholder, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  function startEdit() { setDraft(value || ''); setEditing(true) }
+  async function commit() {
+    setSaving(true); await onSave(draft); setSaving(false); setEditing(false)
+  }
+  return (
+    <div style={{
+      background: gradient,
+      border: `1px solid rgba(255,255,255,0.5)`,
+      borderRadius: 14,
+      padding: 14,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+      flexShrink: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
+        <div style={{ fontSize: 12, fontWeight: 800, color: accent, flex: 1, letterSpacing: 0.3 }}>
+          {title}
+        </div>
+        {canEdit && !editing && (
+          <button onClick={startEdit} title="編集" style={{
+            background: 'rgba(255,255,255,0.6)', border: 'none', color: accent,
+            borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer',
+            fontFamily: 'inherit', fontWeight: 700,
+          }}>✏️ 編集</button>
+        )}
+      </div>
+      {loading ? (
+        <div style={{ fontSize: 11, color: accent, opacity: 0.7 }}>読み込み中...</div>
+      ) : editing ? (
+        <div>
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            rows={3}
+            placeholder={placeholder}
+            style={{
+              width: '100%', padding: 8, background: 'rgba(255,255,255,0.85)',
+              border: `1px solid ${accent}33`, borderRadius: 6, color: '#222',
+              fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+            <button onClick={() => setEditing(false)} disabled={saving} style={{
+              background: 'rgba(255,255,255,0.6)', border: 'none', color: accent,
+              borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+              fontFamily: 'inherit', fontWeight: 700,
+            }}>キャンセル</button>
+            <button onClick={commit} disabled={saving} style={{
+              background: accent, border: 'none', color: '#fff',
+              borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 800,
+              cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit',
+              opacity: saving ? 0.6 : 1,
+            }}>💾 保存</button>
+          </div>
+        </div>
+      ) : value ? (
+        <div style={{
+          fontSize: 13, color: '#1a1a1a', lineHeight: 1.55, whiteSpace: 'pre-wrap',
+          fontWeight: 600,
+        }}>{value}</div>
+      ) : (
+        <div style={{ fontSize: 11, color: accent, opacity: 0.65, fontStyle: 'italic' }}>
+          {canEdit ? `${placeholder} (✏️ 編集 で記入)` : '未設定'}
+        </div>
       )}
     </div>
   )
