@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
+import IntegrationsPanel from './IntegrationsPanel'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -279,6 +280,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
             { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
+            { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
             <button
               key={t.key}
@@ -347,6 +349,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
+          )}
+          {activeTab === 'integrations' && (
+            <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
           )}
         </div>
       </div>
