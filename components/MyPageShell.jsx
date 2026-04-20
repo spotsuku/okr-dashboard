@@ -5,6 +5,7 @@ import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
 import IntegrationsPanel from './IntegrationsPanel'
+import FocusFillModal from './FocusFillModal'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -318,6 +319,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onWorkLogChange={reloadWorkLogs}
               onGoToIntegrations={() => setActiveTab('integrations')}
               onGoToTab={(key) => setActiveTab(key)}
+              onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
             />
           )}
           {activeTab === 'wbs' && (
@@ -330,14 +332,41 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             />
           )}
           {activeTab === 'okr_edit' && (
-            <MyOKRPageNew
-              user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
-              levels={levels}
-              members={members}
-              themeKey={themeKey}
-              fiscalYear={fiscalYear}
-              onAIFeedback={onAIFeedback}
-            />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              {/* 記入モード / 一覧モード トグル */}
+              <div style={{
+                display: 'flex', gap: 6, padding: '8px 16px',
+                borderBottom: `1px solid ${T.border}`, background: T.sectionBg,
+                flexShrink: 0, alignItems: 'center',
+              }}>
+                <div style={{ fontSize: 11, color: T.textMuted, marginRight: 4 }}>入力スタイル:</div>
+                <button onClick={() => setFocusFillOpen('kr')} style={{
+                  padding: '5px 12px', borderRadius: 7, border: 'none',
+                  background: '#4d9fff', color: '#fff',
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>📝 KR記入モード</button>
+                <button onClick={() => setFocusFillOpen('ka')} style={{
+                  padding: '5px 12px', borderRadius: 7, border: 'none',
+                  background: '#00d68f', color: '#fff',
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>📝 KA記入モード</button>
+                <div style={{
+                  padding: '5px 12px', borderRadius: 7,
+                  background: T.navActiveBg, color: T.navActiveText,
+                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                }}>📋 一覧モード（表示中）</div>
+              </div>
+              <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+                <MyOKRPageNew
+                  user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
+                  levels={levels}
+                  members={members}
+                  themeKey={themeKey}
+                  fiscalYear={fiscalYear}
+                  onAIFeedback={onAIFeedback}
+                />
+              </div>
+            </div>
           )}
           {activeTab === 'okr_view' && (
             <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -356,13 +385,25 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
           )}
         </div>
+
+        {/* 集中記入モーダル (OKR記入タブ/ダッシュボードから共通で使用) */}
+        {focusFillOpen && (
+          <FocusFillModal
+            open={!!focusFillOpen}
+            onClose={() => setFocusFillOpen(null)}
+            T={T}
+            viewingName={viewingName}
+            myName={myName}
+            initialMode={focusFillOpen}
+          />
+        )}
       </div>
     </div>
   )
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToIntegrations, onGoToTab }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToIntegrations, onGoToTab, onOpenFocusFill }) {
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -571,6 +612,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     try { localStorage.removeItem(PREFS_KEY) } catch {}
   }
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 集中記入モーダル (ダッシュボードからも OKR記入タブからも開ける)
+  const [focusFillOpen, setFocusFillOpen] = useState(null)  // null | 'kr' | 'ka'
 
   // 今週の成果: 完了タスク + KR記入
   const [achievements, setAchievements] = useState({ items: [], loading: true })
@@ -787,7 +830,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
         {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
-          {/* 常に表示: OKR記入漏れ */}
+          {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
           <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
@@ -801,10 +844,43 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
                 ...reminders.missingKAs.map(ka => ({ icon: '📋', sev: 'warn',
                   text: `KA「${truncate(ka.ka_title || ka.kr_title, 28)}」未記入` })),
               ]
-              return <ReminderList T={T} items={items} maxVisible={3}
-                emptyText="✨ 今週分はすべて記入済みです"
-                detailLabel="📝 OKR記入で全て見る →"
-                onDetail={() => onGoToTab && onGoToTab('okr_edit')} />
+              const krCount = reminders.missingKRs.length
+              const kaCount = reminders.missingKAs.length
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <ReminderList T={T} items={items} maxVisible={3}
+                    emptyText="✨ 今週分はすべて記入済みです" />
+                  {/* 集中記入モーダル呼び出し: KR/KAそれぞれ */}
+                  {(krCount > 0 || kaCount > 0) && (
+                    <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                      {krCount > 0 && (
+                        <button onClick={() => onOpenFocusFill && onOpenFocusFill('kr')}
+                          style={{
+                            flex: 1, padding: '6px 10px', border: 'none',
+                            background: '#4d9fff', color: '#fff',
+                            borderRadius: 6, fontSize: 11, fontWeight: 700,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}>🎯 KR記入 ({krCount}) →</button>
+                      )}
+                      {kaCount > 0 && (
+                        <button onClick={() => onOpenFocusFill && onOpenFocusFill('ka')}
+                          style={{
+                            flex: 1, padding: '6px 10px', border: 'none',
+                            background: '#00d68f', color: '#fff',
+                            borderRadius: 6, fontSize: 11, fontWeight: 700,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}>📋 KA記入 ({kaCount}) →</button>
+                      )}
+                    </div>
+                  )}
+                  <button onClick={() => onGoToTab && onGoToTab('okr_edit')}
+                    style={{
+                      background: 'transparent', border: `1px dashed ${T.borderMid}`,
+                      color: T.textMuted, borderRadius: 6, padding: '4px 8px',
+                      fontSize: 10, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>一覧で見る →</button>
+                </div>
+              )
             })()}
           </Section>
 
