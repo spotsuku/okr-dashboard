@@ -608,56 +608,73 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
 
   const today = parseYMD(toYMD(new Date()))
 
-  // ───── タスクのバー範囲を計算 ─────
-  const taskBars = tasks.map(t => {
-    const dueDate = parseYMD(t.due_date)
-    const createdDate = t.created_at ? parseYMD(t.created_at.split('T')[0]) : null
-    let start, end
-    if (dueDate && createdDate) {
-      start = createdDate < dueDate ? createdDate : addDays(dueDate, -2)
-      end = dueDate
-    } else if (dueDate) {
-      start = addDays(dueDate, -2)
-      end = dueDate
-    } else if (createdDate) {
-      start = createdDate
-      end = addDays(createdDate, 2)
-    } else {
-      start = addDays(today, -1)
-      end = addDays(today, 1)
-    }
-    return { task: t, start, end }
-  })
-
-  // ───── ビュー範囲 ─────
+  // ───── 表示密度 ─────
   const [zoom, setZoom] = useState('day') // 'day' | 'week'
   const dayWidth = zoom === 'day' ? 32 : 14
 
-  const allStarts = taskBars.map(b => b.start).filter(Boolean)
-  const allEnds = taskBars.map(b => b.end).filter(Boolean)
-  const minDate = allStarts.length ? new Date(Math.min(...allStarts.map(d => d.getTime()))) : addDays(today, -14)
-  const maxDate = allEnds.length   ? new Date(Math.max(...allEnds.map(d => d.getTime())))   : addDays(today, 14)
-  // 前後に余白を追加
-  const rangeStart = addDays(minDate, -3)
-  const rangeEnd = addDays(maxDate, 3)
-  const totalDays = Math.max(diffDays(rangeStart, rangeEnd) + 1, 14)
+  // ───── タスクのバー範囲を計算。due_date無しは分離 ─────
+  const taskBars = []
+  const tasksNoDue = []
+  tasks.forEach(t => {
+    const dueDate = parseYMD(t.due_date)
+    const createdDate = t.created_at ? parseYMD(t.created_at.split('T')[0]) : null
+    if (!dueDate && !createdDate) {
+      tasksNoDue.push(t); return
+    }
+    if (!dueDate) {
+      // due_date無しだが created_at あり → 作成日に1日バー
+      taskBars.push({ task: t, start: createdDate, end: addDays(createdDate, 1), noDue: true })
+      return
+    }
+    // due_date あり
+    let start
+    if (createdDate && createdDate < dueDate) start = createdDate
+    else start = addDays(dueDate, -2) // 短いバーで視認性確保
+    taskBars.push({ task: t, start, end: dueDate, noDue: false })
+  })
 
-  // ───── 並び順: due_date 昇順 ─────
-  const sorted = [...taskBars].sort((a, b) => a.end - b.end)
+  // ───── ビュー範囲 ─────
+  // 今日中心にフォーカス: min/maxを使うが、今日の前後2ヶ月を必ず含める
+  const allStarts = taskBars.map(b => b.start)
+  const allEnds = taskBars.map(b => b.end)
+  const rawMin = allStarts.length ? new Date(Math.min(...allStarts.map(d => d.getTime()))) : addDays(today, -14)
+  const rawMax = allEnds.length   ? new Date(Math.max(...allEnds.map(d => d.getTime())))   : addDays(today, 14)
+  // 今日の前後60日を必ず含む
+  const minForView = rawMin < addDays(today, -60) ? rawMin : addDays(today, -14)
+  const maxForView = rawMax > addDays(today, 60)  ? rawMax : addDays(today, 60)
+  const rangeStart = addDays(minForView, -3)
+  const rangeEnd = addDays(maxForView, 3)
+  const totalDays = Math.max(diffDays(rangeStart, rangeEnd) + 1, 30)
 
-  // ───── レンダリング ─────
-  const LABEL_W = 240
+  // ───── 並び順: due_date 昇順、noDueは末尾 ─────
+  const sorted = [...taskBars].sort((a, b) => {
+    if (a.noDue && !b.noDue) return 1
+    if (!a.noDue && b.noDue) return -1
+    return a.end - b.end
+  })
+
+  // ───── レイアウト定数 ─────
+  const LABEL_W = 260
   const ROW_H = 34
   const HEADER_H = 52
 
   const days = []
   for (let i = 0; i < totalDays; i++) {
-    const d = addDays(rangeStart, i)
-    days.push(d)
+    days.push(addDays(rangeStart, i))
   }
 
   const weekdayJa = ['日','月','火','水','木','金','土']
   const todayLeft = Math.max(0, diffDays(rangeStart, today)) * dayWidth
+
+  // ───── 初期スクロール位置を「今日」に ─────
+  const scrollRef = useRef(null)
+  useEffect(() => {
+    if (scrollRef.current) {
+      const target = Math.max(0, todayLeft - 120) // 今日の120px左から
+      scrollRef.current.scrollLeft = target
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom, sorted.length])
 
   if (tasks.length === 0) {
     return (
@@ -673,8 +690,8 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* ズーム切替 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* 操作バー */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 11, color: T.textMuted }}>表示密度</div>
         <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 7, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
           {[
@@ -689,6 +706,18 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             }}>{z.label}</button>
           ))}
         </div>
+        <button
+          onClick={() => {
+            if (scrollRef.current) {
+              scrollRef.current.scrollTo({ left: Math.max(0, todayLeft - 120), behavior: 'smooth' })
+            }
+          }}
+          style={{
+            padding: '4px 10px', border: `1px solid ${T.border}`, cursor: 'pointer',
+            background: T.sectionBg, color: T.textSub, fontSize: 11, fontWeight: 600,
+            borderRadius: 7, fontFamily: 'inherit',
+          }}
+        >📍 今日へ</button>
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 10, color: T.textMuted }}>
           凡例: <span style={{ color: '#7a8599' }}>■未着手</span> <span style={{ color: '#4d9fff', marginLeft: 6 }}>■進行中</span> <span style={{ color: '#00d68f', marginLeft: 6 }}>■完了</span> <span style={{ color: '#ff6b6b', marginLeft: 6 }}>│今日</span>
@@ -700,53 +729,27 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
         background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
         overflow: 'hidden',
       }}>
-        <div style={{ display: 'flex', overflowX: 'auto' }}>
-          {/* 左:タスク名（固定）*/}
-          <div style={{ flexShrink: 0, width: LABEL_W, borderRight: `1px solid ${T.border}`, background: T.sectionBg }}>
-            {/* ヘッダー */}
+        {/* 横スクロールコンテナ */}
+        <div ref={scrollRef} style={{ overflowX: 'auto', position: 'relative' }}>
+          {/* ヘッダー行（sticky top） */}
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 4,
+            display: 'flex', height: HEADER_H,
+            background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
+          }}>
+            {/* 左:タスク列ヘッダー（sticky left） */}
             <div style={{
-              height: HEADER_H, display: 'flex', alignItems: 'center',
-              padding: '0 12px', borderBottom: `1px solid ${T.border}`,
+              position: 'sticky', left: 0, zIndex: 5,
+              width: LABEL_W, flexShrink: 0,
+              display: 'flex', alignItems: 'center', padding: '0 12px',
+              borderRight: `1px solid ${T.border}`,
+              background: T.sectionBg,
               fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.5,
             }}>
               タスク ({sorted.length})
             </div>
-            {/* タスク名行 */}
-            {sorted.map(({ task }) => {
-              const st = getTaskStatus(task)
-              const cfg = STATUS_CONFIG[st]
-              const ka = kaMap[task.report_id]
-              return (
-                <div key={task.id} style={{
-                  height: ROW_H, display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '0 12px', borderBottom: `1px solid ${T.border}`,
-                  opacity: st === 'done' ? 0.6 : 1,
-                }}>
-                  <span style={{ color: cfg.color, fontSize: 12 }}>{cfg.icon}</span>
-                  <div style={{
-                    flex: 1, minWidth: 0, fontSize: 12, color: T.text,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    textDecoration: st === 'done' ? 'line-through' : 'none',
-                  }} title={task.title || ka?.ka_title || ''}>
-                    {task.title || ka?.ka_title || '(無題)'}
-                  </div>
-                  {task.assignee && (
-                    <span style={{ fontSize: 9, color: T.textMuted, flexShrink: 0 }}>
-                      {task.assignee === myName ? '自' : task.assignee}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* 右:時間軸 */}
-          <div style={{ position: 'relative', width: totalDays * dayWidth, flexShrink: 0 }}>
-            {/* ヘッダー */}
-            <div style={{
-              height: HEADER_H, display: 'flex', borderBottom: `1px solid ${T.border}`,
-              background: T.sectionBg, position: 'relative',
-            }}>
+            {/* 右:日付ヘッダー */}
+            <div style={{ display: 'flex', position: 'relative', width: totalDays * dayWidth }}>
               {days.map((d, i) => {
                 const ymd = toYMD(d)
                 const isToday = ymd === toYMD(today)
@@ -781,68 +784,134 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                 )
               })}
             </div>
+          </div>
 
-            {/* 今日の縦線 */}
-            <div style={{
-              position: 'absolute',
-              left: todayLeft + dayWidth / 2 - 1,
-              top: 0, bottom: 0, width: 2,
-              background: '#ff6b6b', opacity: 0.7,
-              pointerEvents: 'none', zIndex: 2,
-            }} />
-
-            {/* タスクバー行 */}
-            {sorted.map(({ task, start, end }, idx) => {
-              const st = getTaskStatus(task)
-              const cfg = STATUS_CONFIG[st]
-              const startOffset = Math.max(0, diffDays(rangeStart, start))
-              const duration = Math.max(1, diffDays(start, end) + 1)
-              const left = startOffset * dayWidth
-              const width = duration * dayWidth - 4
-              const isOverdue = end < today && st !== 'done'
-              return (
-                <div key={task.id} style={{
-                  height: ROW_H, borderBottom: `1px solid ${T.border}`,
-                  position: 'relative', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+          {/* 本体：行ごとに「左(sticky) + 右(バー)」の2カラム */}
+          {sorted.map(({ task, start, end, noDue }, idx) => {
+            const st = getTaskStatus(task)
+            const cfg = STATUS_CONFIG[st]
+            const ka = kaMap[task.report_id]
+            const startOffset = Math.max(0, diffDays(rangeStart, start))
+            const duration = Math.max(1, diffDays(start, end) + 1)
+            const left = startOffset * dayWidth
+            const width = duration * dayWidth - 4
+            const isOverdue = end < today && st !== 'done'
+            const rowBg = idx % 2 === 0 ? T.bgCard : 'rgba(255,255,255,0.015)'
+            return (
+              <div key={task.id} style={{
+                display: 'flex', height: ROW_H,
+                borderBottom: `1px solid ${T.border}`,
+                background: rowBg,
+              }}>
+                {/* 左:タスク名 sticky */}
+                <div style={{
+                  position: 'sticky', left: 0, zIndex: 3,
+                  width: LABEL_W, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '0 12px',
+                  borderRight: `1px solid ${T.borderMid}`,
+                  background: rowBg,
+                  opacity: st === 'done' ? 0.6 : 1,
+                  boxShadow: '2px 0 4px rgba(0,0,0,0.08)',
                 }}>
-                  {/* 背景: 週末セル */}
+                  <span style={{ color: cfg.color, fontSize: 12, flexShrink: 0 }}>{cfg.icon}</span>
+                  <div style={{
+                    flex: 1, minWidth: 0, fontSize: 12, color: T.text,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    textDecoration: st === 'done' ? 'line-through' : 'none',
+                  }} title={task.title || ka?.ka_title || ''}>
+                    {task.title || ka?.ka_title || '(無題)'}
+                  </div>
+                  {task.assignee && (
+                    <span style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>
+                      {task.assignee}
+                    </span>
+                  )}
+                </div>
+
+                {/* 右:時間軸行 */}
+                <div style={{ position: 'relative', width: totalDays * dayWidth, flexShrink: 0 }}>
+                  {/* 背景：週末セル & 今日ハイライト */}
                   {days.map((d, i) => {
                     const wd = d.getUTCDay()
-                    if (wd !== 0 && wd !== 6) return null
+                    const isWeekend = wd === 0 || wd === 6
+                    const isToday = toYMD(d) === toYMD(today)
+                    if (!isWeekend && !isToday) return null
                     return (
                       <div key={i} style={{
                         position: 'absolute', left: i * dayWidth, top: 0, bottom: 0, width: dayWidth,
-                        background: T.sectionBg, opacity: 0.5, pointerEvents: 'none',
+                        background: isToday ? 'rgba(255,107,107,0.06)' : T.sectionBg,
+                        opacity: isToday ? 1 : 0.5,
+                        pointerEvents: 'none',
                       }} />
                     )
                   })}
-                  {/* バー */}
+                  {/* 今日の縦線 */}
+                  <div style={{
+                    position: 'absolute',
+                    left: todayLeft + dayWidth / 2 - 1,
+                    top: 0, bottom: 0, width: 2,
+                    background: '#ff6b6b', opacity: 0.55,
+                    pointerEvents: 'none', zIndex: 1,
+                  }} />
+                  {/* タスクバー */}
                   <div
-                    title={`${task.title || '(無題)'}\n${toYMD(start)} 〜 ${task.due_date || '-'} (${duration}日)\n状態: ${cfg.label}${isOverdue ? ' · 期限超過' : ''}`}
+                    title={`${task.title || '(無題)'}\n${toYMD(start)} 〜 ${task.due_date || '期限未設定'} (${duration}日)\n状態: ${cfg.label}${isOverdue ? ' · 期限超過' : ''}${noDue ? ' · 期限未設定' : ''}`}
                     style={{
                       position: 'absolute',
                       left: left + 2, top: 6,
                       width: Math.max(width, 8),
                       height: ROW_H - 12,
-                      background: st === 'done' ? cfg.color : isOverdue ? '#ff6b6b' : cfg.color,
+                      background: isOverdue ? '#ff6b6b' : cfg.color,
                       borderRadius: 5,
-                      opacity: st === 'done' ? 0.5 : 0.85,
-                      border: isOverdue ? '2px solid #ff6b6b' : `1px solid ${cfg.color}`,
-                      boxShadow: isOverdue ? '0 0 0 1px rgba(255,107,107,0.3)' : 'none',
+                      opacity: st === 'done' ? 0.5 : noDue ? 0.4 : 0.85,
+                      border: isOverdue ? '2px solid #ff6b6b' : noDue ? `1px dashed ${cfg.color}` : `1px solid ${cfg.color}`,
                       display: 'flex', alignItems: 'center',
                       padding: '0 6px',
                       fontSize: 10, fontWeight: 700, color: '#fff',
                       overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                      zIndex: 2,
                     }}
                   >
                     {width > 40 && <span>{task.title || ''}</span>}
                     {isOverdue && <span style={{ marginLeft: 'auto' }}>🚨</span>}
                   </div>
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )
+          })}
         </div>
+
+        {/* 期限未設定タスク一覧（バーに出せないので下部リスト） */}
+        {tasksNoDue.length > 0 && (
+          <div style={{
+            borderTop: `2px solid ${T.borderMid}`, padding: '10px 14px',
+            background: T.sectionBg,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>
+              📝 期限未設定 ({tasksNoDue.length}件) — ガントに表示できないタスク
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {tasksNoDue.map(t => {
+                const st = getTaskStatus(t)
+                const cfg = STATUS_CONFIG[st]
+                return (
+                  <div key={t.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 10px', borderRadius: 6,
+                    background: T.bgCard, border: `1px solid ${T.border}`,
+                    fontSize: 11, color: T.text,
+                    opacity: st === 'done' ? 0.5 : 1,
+                  }}>
+                    <span style={{ color: cfg.color }}>{cfg.icon}</span>
+                    <span>{t.title || '(無題)'}</span>
+                    {t.assignee && <span style={{ color: T.textMuted, fontSize: 10 }}>· {t.assignee}</span>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
