@@ -459,7 +459,83 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     }).eq('id', task.id)
     loadTasks()
     loadReminders()
+    loadAchievements()
   }
+
+  // ─── Phase 6: 月次テーマ + 今週の成果 ──────────────
+  const monthStartStr = useMemo(() => {
+    const jstNow = new Date(Date.now() + 9 * 3600 * 1000)
+    const firstOfMonth = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), 1))
+    return getMondayJSTStr(firstOfMonth)
+  }, [])
+
+  const [monthTheme, setMonthTheme] = useState({ main: '', growth: '', logId: null, loading: true })
+  const loadMonthTheme = useCallback(async () => {
+    if (!viewingName) { setMonthTheme(m => ({ ...m, loading: false })); return }
+    setMonthTheme(m => ({ ...m, loading: true }))
+    const { data } = await supabase
+      .from('coaching_logs')
+      .select('*')
+      .eq('owner', viewingName)
+      .eq('log_type', 'monthly_theme')
+      .eq('week_start', monthStartStr)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const row = (data || [])[0]
+    const c = parseLogContent(row?.content)
+    setMonthTheme({ main: c.main || '', growth: c.growth || '', logId: row?.id || null, loading: false })
+  }, [viewingName, monthStartStr])
+  useEffect(() => { loadMonthTheme() }, [loadMonthTheme])
+
+  async function saveMonthTheme({ main, growth }) {
+    if (!isViewingSelf) return
+    const content = JSON.stringify({ main, growth })
+    if (monthTheme.logId) {
+      await supabase.from('coaching_logs').update({ content }).eq('id', monthTheme.logId)
+    } else {
+      await supabase.from('coaching_logs').insert({
+        owner: myName, log_type: 'monthly_theme',
+        week_start: monthStartStr, content,
+      })
+    }
+    await loadMonthTheme()
+  }
+
+  // 今週の成果: 完了タスク + KR記入
+  const [achievements, setAchievements] = useState({ items: [], loading: true })
+  const loadAchievements = useCallback(async () => {
+    if (!viewingName) { setAchievements({ items: [], loading: false }); return }
+    const monday = getMondayJSTStr()
+    const sundayD = new Date(monday + 'T00:00:00Z'); sundayD.setUTCDate(sundayD.getUTCDate() + 6)
+    const sunday = sundayD.toISOString().split('T')[0]
+
+    const [doneTasksRes, krReviewsRes] = await Promise.all([
+      supabase.from('ka_tasks')
+        .select('*, weekly_reports(kr_title, ka_title, owner)')
+        .eq('assignee', viewingName).eq('done', true)
+        .gte('due_date', monday).lte('due_date', sunday),
+      supabase.from('kr_weekly_reviews')
+        .select('*, key_results(title, owner)')
+        .eq('week_start', monday),
+    ])
+
+    const items = []
+    ;(doneTasksRes.data || []).forEach(t => items.push({
+      kind: 'task', date: t.due_date, icon: '✅',
+      text: `完了: ${t.title || t.weekly_reports?.ka_title || '(無題)'}`,
+    }))
+    ;(krReviewsRes.data || [])
+      .filter(r => r.key_results?.owner === viewingName)
+      .filter(r => (r.good||'').trim() || (r.more||'').trim() || (r.focus_output||'').trim())
+      .forEach(r => items.push({
+        kind: 'kr', date: (r.updated_at || r.created_at || '').slice(0,10), icon: '📝',
+        text: `KR更新: ${truncate(r.key_results?.title || '(KR)', 30)}`,
+      }))
+
+    items.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    setAchievements({ items, loading: false })
+  }, [viewingName])
+  useEffect(() => { loadAchievements() }, [loadAchievements])
 
   async function handleStart() {
     if (busy || !myName) return
@@ -636,17 +712,41 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
         {/* 右カラム：月テーマ + 成果 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
-          <Section T={T} icon="🌟" title="今月のメインテーマ" flex={0}>
-            <Placeholder T={T} lines={['Phase 6: coaching_logs.log_type=monthly_theme から読み込み']} />
-          </Section>
-          <Section T={T} icon="💪" title="今月の成長テーマ" flex={0}>
-            <Placeholder T={T} lines={['Phase 6: 同上']} />
-          </Section>
-          <Section T={T} icon="🏆" title="今週の成果" flex={1}>
-            <Placeholder T={T} lines={[
-              'Phase 6: 完了タスク数 / KR進捗',
-              '日付別の達成ログ',
-            ]} />
+          <ThemeEditor T={T} icon="🌟" title="今月のメインテーマ" field="main"
+            value={monthTheme.main} loading={monthTheme.loading}
+            canEdit={isViewingSelf}
+            placeholder="例: 評議会24社のクロージング完了"
+            onSave={(v) => saveMonthTheme({ main: v, growth: monthTheme.growth })} />
+          <ThemeEditor T={T} icon="💪" title="今月の成長テーマ" field="growth"
+            value={monthTheme.growth} loading={monthTheme.loading}
+            canEdit={isViewingSelf}
+            placeholder="例: 1on1で相手の話を引き出す力"
+            onSave={(v) => saveMonthTheme({ main: monthTheme.main, growth: v })} />
+          <Section T={T} icon="🏆" title={`今週の成果${achievements.items.length ? ` (${achievements.items.length})` : ''}`} flex={1} headerRight={
+            <button onClick={loadAchievements} title="再読み込み" style={{
+              background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+              borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+            }}>↻</button>
+          }>
+            {achievements.loading ? <Loading T={T} /> :
+              achievements.items.length === 0
+                ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>今週の成果はまだありません</div>
+                : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {achievements.items.map((it, i) => (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 6,
+                        padding: '5px 8px', borderRadius: 6,
+                        background: T.successBg, border: `1px solid ${T.success}22`,
+                        fontSize: 11, color: T.text, lineHeight: 1.5,
+                      }}>
+                        <span>{it.icon}</span>
+                        <span style={{ color: T.textMuted, fontWeight: 600, minWidth: 48 }}>{it.date || '--'}</span>
+                        <span style={{ flex: 1 }}>{it.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
           </Section>
         </div>
       </div>
@@ -784,6 +884,66 @@ function truncate(s, n) {
 
 function Loading({ T }) {
   return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>読み込み中...</div>
+}
+
+function ThemeEditor({ T, icon, title, value, loading, canEdit, placeholder, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function startEdit() { setDraft(value || ''); setEditing(true) }
+  async function commit() {
+    setSaving(true)
+    await onSave(draft)
+    setSaving(false)
+    setEditing(false)
+  }
+
+  return (
+    <Section T={T} icon={icon} title={title} flex={0} headerRight={
+      canEdit && !editing && (
+        <button onClick={startEdit} title="編集" style={{
+          background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+          borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+        }}>✏️</button>
+      )
+    }>
+      {loading ? <Loading T={T} /> : editing ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            rows={3}
+            placeholder={placeholder}
+            style={{
+              width: '100%', padding: 8, background: T.sectionBg,
+              border: `1px solid ${T.borderMid}`, borderRadius: 6, color: T.text,
+              fontSize: 12, fontFamily: 'inherit', resize: 'vertical', outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+            <button onClick={() => setEditing(false)} disabled={saving} style={{
+              background: 'transparent', border: `1px solid ${T.borderMid}`, color: T.textSub,
+              borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+            }}>キャンセル</button>
+            <button onClick={commit} disabled={saving} style={{
+              background: T.accentSolid, border: 'none', color: '#fff',
+              borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700,
+              cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit',
+              opacity: saving ? 0.6 : 1,
+            }}>💾 保存</button>
+          </div>
+        </div>
+      ) : value ? (
+        <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{value}</div>
+      ) : (
+        <div style={{ fontSize: 11, color: T.textMuted, fontStyle: 'italic' }}>
+          {canEdit ? '未設定 (✏️ で編集)' : '未設定'}
+        </div>
+      )}
+    </Section>
+  )
 }
 
 function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
