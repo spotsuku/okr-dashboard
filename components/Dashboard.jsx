@@ -13,6 +13,7 @@ import MilestonePage from './MilestonePage'
 import OwnerOKRView from './OwnerOKRView'
 import MyTasksPage from './MyTasksPage'
 import MyCoachPage from './MyCoachPage'
+import MyPageShell from './MyPageShell'
 import PortalPage from './PortalPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -1239,16 +1240,8 @@ export default function Dashboard({ user, onSignOut }) {
                 <button onClick={() => setActivePage('okr')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>OKR詳細</button>
               </div>
             </div>
-            {/* マイOKR */}
-            <button onClick={() => setActivePage('myokr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'myokr' ? T.navActiveBg : 'transparent', color: activePage === 'myokr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイOKR</button>
-            {/* タスク ドロップダウン */}
-            <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.task-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.task-dropdown').style.display='none'}>
-              <button style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>タスク ▾</button>
-              <div className="task-dropdown" style={{ display: 'none', position: 'absolute', top: 'calc(100% - 2px)', left: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, paddingTop: 6, minWidth: 140, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
-                <button onClick={() => { setActivePage('mytasks'); setTaskViewMode('my') }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' && taskViewMode === 'my' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' && taskViewMode === 'my' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>マイタスク</button>
-                <button onClick={() => { setActivePage('mytasks'); setTaskViewMode('all') }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveText : T.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}>全社タスク</button>
-              </div>
-            </div>
+            {/* 全社タスク (マイOKR/マイタスクはマイページ内サブタブに移動) */}
+            <button onClick={() => { setActivePage('mytasks'); setTaskViewMode('all') }} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>全社タスク</button>
             {/* 週次MTG */}
             <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
             {/* 組織 */}
@@ -1320,7 +1313,7 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}
-      {activePage === 'mycoach' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyCoachPage user={user} members={members} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'mycoach' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyPageShell user={user} members={members} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'summary' && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
       {activePage === 'milestone' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
