@@ -16,8 +16,9 @@ export async function GET(request) {
   const owner = url.searchParams.get('owner')
   const service = url.searchParams.get('service')
   const returnTo = url.searchParams.get('return_to') || '/'
+  const debug = url.searchParams.get('debug') === '1'
 
-  if (!owner) return new Response('owner is required', { status: 400 })
+  if (!owner && !debug) return new Response('owner is required', { status: 400 })
   if (!service || !SCOPE_MAP[service]) {
     return new Response(`service must be one of: ${Object.keys(SCOPE_MAP).join(', ')}`, { status: 400 })
   }
@@ -28,7 +29,7 @@ export async function GET(request) {
   }
 
   const redirectUri = `${getOrigin(request)}/api/integrations/google/callback`
-  const state = Buffer.from(JSON.stringify({ owner, service, returnTo }), 'utf-8').toString('base64url')
+  const state = Buffer.from(JSON.stringify({ owner: owner || 'debug', service, returnTo }), 'utf-8').toString('base64url')
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   authUrl.searchParams.set('client_id', clientId)
@@ -41,6 +42,30 @@ export async function GET(request) {
   // include_granted_scopes を付けると別サービス(例: Calendar)の既存スコープが混ざり、
   // Gmail の consent 画面で gmail.readonly を外した場合に token が不整合な状態になる。
   // サービスごとに独立したトークンを得るため、ここでは付けない。
+
+  // ?debug=1 で JSON を返し、実際のリクエスト内容を可視化 (Cloud Console の設定照合用)
+  if (debug) {
+    const scopeList = SCOPE_MAP[service].split(' ')
+    const clientIdProject = clientId.split('-')[0]  // プロジェクト番号部分
+    return new Response(JSON.stringify({
+      service,
+      client_id: clientId,
+      client_id_project_number: clientIdProject,
+      redirect_uri: redirectUri,
+      requested_scopes: scopeList,
+      has_gmail_compose: scopeList.includes('https://www.googleapis.com/auth/gmail.compose'),
+      access_type: 'offline',
+      prompt: 'consent',
+      auth_url: authUrl.toString(),
+      hints: [
+        '1. client_id_project_number が Google Cloud Console の「認証情報」にある OAuth クライアントと一致するか確認',
+        '2. そのプロジェクトの「OAuth同意画面」→「スコープ」に .../auth/gmail.compose が保存されているか確認',
+        '3. auth_url をシークレットウィンドウで直接開き、同意画面に「メールの下書きの作成・管理」が表示されるか確認',
+      ],
+    }, null, 2), {
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    })
+  }
 
   return Response.redirect(authUrl.toString(), 302)
 }
