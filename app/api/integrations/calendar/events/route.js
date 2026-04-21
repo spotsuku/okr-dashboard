@@ -39,14 +39,35 @@ export async function GET(request) {
     const data = await r.json()
     const items = (data.items || []).map(ev => {
       const start = ev.start?.dateTime || ev.start?.date
-      const time = start ? (start.length > 10 ? formatTime(start) : '終日') : ''
+      const end = ev.end?.dateTime || ev.end?.date
+      const allDay = start && start.length <= 10
+      const time = start ? (allDay ? '終日' : formatTime(start)) : ''
       return {
         title: ev.summary || '(無題)',
         time,
         start,
+        end,
+        allDay,
         hangoutLink: ev.hangoutLink || null,
+        conflictsWith: [],  // タイトルの配列で埋める
       }
     })
+
+    // 重複検出: 時刻指定のイベント同士で start < 他.end && end > 他.start なら重複
+    const timed = items.filter(e => !e.allDay && e.start && e.end)
+    for (let i = 0; i < timed.length; i++) {
+      for (let j = i + 1; j < timed.length; j++) {
+        const aStart = new Date(timed[i].start).getTime()
+        const aEnd = new Date(timed[i].end).getTime()
+        const bStart = new Date(timed[j].start).getTime()
+        const bEnd = new Date(timed[j].end).getTime()
+        if (aStart < bEnd && aEnd > bStart) {
+          timed[i].conflictsWith.push(timed[j].title)
+          timed[j].conflictsWith.push(timed[i].title)
+        }
+      }
+    }
+
     return json({ items })
   } catch (e) {
     return json({ error: `取得失敗: ${e.message}` }, { status: 500 })

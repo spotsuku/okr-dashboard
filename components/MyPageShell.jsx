@@ -662,6 +662,24 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     line:     { connected: false, loading: false, error: '' },
   })
 
+  // Gmail AI assist モーダル
+  const [gmailAI, setGmailAI] = useState(null)  // null | { message, loading, summary, draft, error }
+  const openGmailAI = async (message) => {
+    setGmailAI({ message, loading: true, summary: '', draft: '', error: '' })
+    try {
+      const r = await fetch('/api/integrations/gmail/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner: viewingName, messageId: message.id }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setGmailAI({ message, loading: false, summary: j.summary || '', draft: j.draft || '', error: '' })
+    } catch (e) {
+      setGmailAI({ message, loading: false, summary: '', draft: '', error: e.message || 'エラー' })
+    }
+  }
+
   const loadIntegrations = useCallback(async () => {
     if (!viewingName) return
     // 公開ビュー経由: トークン以外の接続状態のみ取得可 (RLSバイパス)
@@ -911,9 +929,21 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
               onConnect={onGoToIntegrations} maxVisible={3}
               detailLabel="📅 Googleカレンダーを開く ↗"
               detailUrl="https://calendar.google.com/"
-              renderItem={ev => (
-                <><span style={{ color: T.textMuted, fontWeight:600, minWidth:42, fontSize:10 }}>{ev.time || '--'}</span><span style={{ flex:1 }}>{truncate(ev.title, 28)}</span></>
-              )} />
+              renderItem={ev => {
+                const hasConflict = (ev.conflictsWith || []).length > 0
+                return (
+                  <>
+                    <span style={{
+                      color: hasConflict ? '#ff6b6b' : T.textMuted,
+                      fontWeight: 600, minWidth: 42, fontSize: 10,
+                    }}>{ev.time || '--'}</span>
+                    <span style={{ flex: 1 }}>
+                      {hasConflict && <span title={`重複: ${ev.conflictsWith.join(' / ')}`} style={{ marginRight: 4 }}>⚠️</span>}
+                      {truncate(ev.title, 28)}
+                    </span>
+                  </>
+                )
+              }} />
           </Section>
 
           <Section T={T} icon="📧" title="Gmail" flex={0}>
@@ -923,7 +953,16 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
               detailLabel="📧 Gmailを開く ↗"
               detailUrl="https://mail.google.com/"
               renderItem={m => (
-                <><span>📧</span><span style={{ flex:1 }}>{m.from}: {truncate(m.subject, 24)}</span></>
+                <button onClick={() => openGmailAI(m)}
+                  title="AIで要約・返信草稿を生成"
+                  style={{
+                    all: 'unset', display: 'flex', alignItems: 'center', gap: 6,
+                    flex: 1, cursor: 'pointer',
+                  }}>
+                  <span>📧</span>
+                  <span style={{ flex: 1 }}>{m.from}: {truncate(m.subject, 24)}</span>
+                  <span style={{ fontSize: 9, color: T.accent, fontWeight: 700 }}>✨AI</span>
+                </button>
               )} />
           </Section>
 
@@ -1020,6 +1059,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
           onCancel={() => setKptOpen(false)} onSave={handleEnd}
           startedAt={content.start_at}
         />
+      )}
+
+      {gmailAI && (
+        <GmailAIModal T={T} state={gmailAI} onClose={() => setGmailAI(null)} />
       )}
     </div>
   )
@@ -1304,6 +1347,106 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
               opacity: busy ? 0.6 : 1,
             }}
           >💾 保存して終業</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GmailAIModal({ T, state, onClose }) {
+  const { message, loading, summary, draft, error } = state
+  const [copied, setCopied] = useState(false)
+  const copyDraft = async () => {
+    if (!draft) return
+    try {
+      await navigator.clipboard.writeText(draft)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {}
+  }
+  const openInGmail = () => {
+    // Gmail の受信トレイで件名検索して開く (直接 message リンクは OAuth スコープ的に生成困難)
+    const q = encodeURIComponent(`subject:"${(message.subject || '').replace(/"/g, '')}"`)
+    window.open(`https://mail.google.com/mail/u/0/#search/${q}`, '_blank', 'noopener,noreferrer')
+  }
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+      zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 14,
+        width: '100%', maxWidth: 680, maxHeight: '88vh',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{
+          padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
+          background: T.sectionBg, display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>✨</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {message.subject || '(件名なし)'}
+            </div>
+            <div style={{ fontSize: 11, color: T.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              From: {message.from}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', color: T.textMuted,
+            fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', padding: '0 6px',
+          }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
+          {loading && (
+            <div style={{ textAlign: 'center', padding: 40, color: T.textMuted }}>
+              ✨ AI が要約と返信草稿を生成中...
+            </div>
+          )}
+          {error && (
+            <div style={{ padding: 14, background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', borderRadius: 8, fontSize: 12 }}>
+              エラー: {error}
+            </div>
+          )}
+          {!loading && !error && (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>📝 要約</div>
+                <div style={{
+                  padding: 12, background: T.sectionBg, border: `1px solid ${T.border}`,
+                  borderRadius: 8, fontSize: 13, lineHeight: 1.7, color: T.text, whiteSpace: 'pre-wrap',
+                }}>{summary || '(要約なし)'}</div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub }}>💬 返信草稿</div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={copyDraft} disabled={!draft} style={{
+                      background: copied ? '#00d68f' : 'transparent',
+                      border: `1px solid ${copied ? '#00d68f' : T.borderMid}`,
+                      color: copied ? '#fff' : T.textSub,
+                      borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700,
+                      cursor: draft ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+                    }}>{copied ? '✓ コピー済' : '📋 コピー'}</button>
+                    <button onClick={openInGmail} style={{
+                      background: 'transparent', border: `1px solid ${T.borderMid}`,
+                      color: T.textSub, borderRadius: 6, padding: '4px 10px',
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>Gmail で開く ↗</button>
+                  </div>
+                </div>
+                <textarea readOnly value={draft} rows={8} style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '10px 12px', fontSize: 13, lineHeight: 1.7,
+                  background: T.sectionBg, border: `1px solid ${T.borderMid}`,
+                  borderRadius: 8, color: T.text, outline: 'none', fontFamily: 'inherit',
+                  resize: 'vertical',
+                }} />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
