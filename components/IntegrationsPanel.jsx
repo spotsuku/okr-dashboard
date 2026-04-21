@@ -2,6 +2,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
+// requiredScopes: 保存済みトークンのスコープ文字列に対して「最低限この機能を含んでいること」を検査する matcher。
+// match(scope) が全て true にならないと「権限不足」と判断して再認証を促す。
+// label は UI 表示用の分かりやすい名前。
 const INTEGRATIONS = [
   {
     key: 'google_calendar',
@@ -15,7 +18,12 @@ const INTEGRATIONS = [
       '競合スケジュールの検出',
     ],
     provider: 'google',
-    scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+    requiredScopes: [
+      {
+        label: '予定の閲覧 (calendar.readonly)',
+        match: s => /calendar\.readonly|calendar\.events|\/auth\/calendar(\s|$)/.test(s),
+      },
+    ],
   },
   {
     key: 'google_gmail',
@@ -29,7 +37,16 @@ const INTEGRATIONS = [
       'AI返信草稿の自動生成',
     ],
     provider: 'google',
-    scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+    requiredScopes: [
+      {
+        label: 'メールの閲覧 (gmail.readonly)',
+        match: s => /gmail\.readonly|gmail\.modify|mail\.google\.com\//.test(s),
+      },
+      {
+        label: '下書きの管理・送信 (gmail.compose)',
+        match: s => /gmail\.compose|gmail\.modify|mail\.google\.com\//.test(s),
+      },
+    ],
   },
   {
     key: 'slack',
@@ -60,6 +77,14 @@ const INTEGRATIONS = [
     oauthUrl: '/api/integrations/line/start',
   },
 ]
+
+// 保存済みの scope 文字列を検査し、不足しているスコープ定義 (requiredScopes の要素) を返す。
+// scope 列が未設定 (DB に null) の場合は「判定不能」として空配列を返す — 誤検知で既存ユーザーを驚かせない。
+function findMissingScopes(integ, storedScope) {
+  if (!integ.requiredScopes) return []
+  if (!storedScope) return []  // 旧データで scope 列が空なら検知しない
+  return integ.requiredScopes.filter(rs => !rs.match(storedScope))
+}
 
 function formatRelative(iso) {
   if (!iso) return ''
@@ -241,6 +266,9 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
               const isConnected = !!conn
               const isBusy = busyKey === integ.key
               const isExpired = conn?.expires_at && new Date(conn.expires_at) < new Date()
+              const missingScopes = isConnected ? findMissingScopes(integ, conn?.scope) : []
+              const hasMissingScope = missingScopes.length > 0
+              const needsReauth = isExpired || hasMissingScope
               return (
                 <div key={integ.key} style={{
                   background: T.bgCard, border: `1px solid ${T.border}`,
@@ -261,10 +289,13 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                     {isConnected && (
                       <div style={{
                         padding: '3px 8px', borderRadius: 99,
-                        background: isExpired ? T.warnBg : T.successBg,
-                        color: isExpired ? T.warn : T.success,
+                        background: needsReauth ? T.warnBg : T.successBg,
+                        color: needsReauth ? T.warn : T.success,
                         fontSize: 10, fontWeight: 700,
-                      }}>{isExpired ? '要再認証' : '連携中'}</div>
+                      }}>{
+                        isExpired ? '要再認証' :
+                        hasMissingScope ? '権限不足' : '連携中'
+                      }</div>
                     )}
                   </div>
 
@@ -288,6 +319,25 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                     </div>
                   )}
 
+                  {/* スコープ不足警告 */}
+                  {hasMissingScope && (
+                    <div style={{
+                      padding: '8px 10px',
+                      background: T.warnBg, border: `1px solid ${T.warn}40`,
+                      borderRadius: 6, fontSize: 11, color: T.warn, lineHeight: 1.5,
+                    }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                        ⚠️ 以下の権限が不足しています
+                      </div>
+                      {missingScopes.map((rs, i) => (
+                        <div key={i}>・{rs.label}</div>
+                      ))}
+                      <div style={{ marginTop: 6, fontSize: 10, color: T.textMuted }}>
+                        「連携解除 → 再認証」を行って、Google 同意画面で新しい権限にチェックを入れてください。
+                      </div>
+                    </div>
+                  )}
+
                   {/* アクションボタン */}
                   <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
                     {!isConnected ? (
@@ -307,7 +357,7 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                       >{isBusy ? '接続中...' : `🔌 ${integ.title}と連携`}</button>
                     ) : (
                       <>
-                        {isExpired && (
+                        {needsReauth && (
                           <button
                             onClick={() => connect(integ)}
                             disabled={isBusy || !isViewingSelf}
@@ -315,7 +365,9 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                               flex: 1, background: T.warn,
                               color: '#fff', border: 'none', borderRadius: 8,
                               padding: '7px 12px', fontSize: 11, fontWeight: 700,
-                              cursor: 'pointer', fontFamily: 'inherit',
+                              cursor: isBusy || !isViewingSelf ? 'not-allowed' : 'pointer',
+                              fontFamily: 'inherit',
+                              opacity: isBusy || !isViewingSelf ? 0.5 : 1,
                             }}
                           >🔄 再認証</button>
                         )}
