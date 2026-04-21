@@ -84,11 +84,12 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
   const load = useCallback(async () => {
     if (!myName) { setLoading(false); return }
     setLoading(true)
-    // 公開ビュー user_integrations_status には環境によって metadata 列が無い場合があるため除外。
-    // metadata は自分の行のみ user_integrations テーブルから取得 (RLS で自分の行しか見えない)。
+    // 公開ビュー user_integrations_status は環境によっては metadata / scope 列が無い。
+    // ビューからは必ず存在する列だけ取得し、必要な列 (scope, metadata) は
+    // 自分の行のみ user_integrations テーブルから取得してマージ。
     const viewRes = await supabase
       .from('user_integrations_status')
-      .select('service, connected_at, expires_at, scope')
+      .select('service, connected_at, expires_at')
       .eq('owner', myName)
     let data = viewRes.data
     let error = viewRes.error
@@ -106,14 +107,17 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
     const map = {}
     ;(data || []).forEach(row => { map[row.service] = row })
 
-    // 自分が閲覧対象なら metadata を取得して付加 (email 等の表示用)
+    // 自分が閲覧対象なら scope / metadata を取得して付加 (email 等の表示用)
     if (isViewingSelf && Object.keys(map).length > 0) {
       const metaRes = await supabase
         .from('user_integrations')
-        .select('service, metadata')
+        .select('service, metadata, scope')
         .eq('owner', myName)
       ;(metaRes.data || []).forEach(row => {
-        if (map[row.service]) map[row.service].metadata = row.metadata
+        if (map[row.service]) {
+          map[row.service].metadata = row.metadata
+          map[row.service].scope = row.scope
+        }
       })
     }
 
