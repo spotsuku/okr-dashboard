@@ -16,8 +16,8 @@
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | サーバーサイドでトークン保存・参照 |
-| `GOOGLE_OAUTH_CLIENT_ID` | Google トークン自動リフレッシュ用 (Supabaseに登録したものと同じ) |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | 同上 |
+| `GOOGLE_CLIENT_ID` | Google トークン自動リフレッシュ用 (Supabaseに登録したものと同じ) |
+| `GOOGLE_CLIENT_SECRET` | 同上 |
 | `SLACK_CLIENT_ID` | Slack OAuth |
 | `SLACK_CLIENT_SECRET` | 同上 |
 | `LINE_CHANNEL_ID` | LINE OAuth + リフレッシュ |

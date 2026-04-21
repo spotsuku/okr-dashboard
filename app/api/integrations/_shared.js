@@ -12,10 +12,11 @@ export function getAdminClient() {
 // ─── Token Refresh ─────────────────────────────────────
 // Google (Gmail/Calendar) のアクセストークンをリフレッシュ
 async function refreshGoogleToken(integration) {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  // GOOGLE_CLIENT_ID / SECRET を優先、互換のため GOOGLE_OAUTH_* もサポート
+  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET
   if (!clientId || !clientSecret) {
-    throw new Error('GOOGLE_OAUTH_CLIENT_ID / SECRET が未設定です (Vercel環境変数)')
+    throw new Error('GOOGLE_CLIENT_ID / SECRET が未設定です (Vercel環境変数)')
   }
   if (!integration.refresh_token) {
     throw new Error('refresh_token が保存されていません。再連携してください')
@@ -127,7 +128,10 @@ export async function getIntegration(owner, service) {
   if (needsRefresh && data.refresh_token) {
     // Google 系で env vars 未設定なら refresh せず、直接「再連携してください」を返す
     const isGoogle = service === 'google_gmail' || service === 'google_calendar'
-    const hasGoogleEnv = !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET)
+    const hasGoogleEnv = !!(
+      (process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID) &&
+      (process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET)
+    )
     if (isGoogle && !hasGoogleEnv) {
       return { integration: data, expired: true, refreshError: 'トークンの有効期限が切れました。再連携してください。' }
     }
