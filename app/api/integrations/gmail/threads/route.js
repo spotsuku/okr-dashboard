@@ -28,6 +28,10 @@ function parseAddressList(raw) {
 export async function GET(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  // scope: 'reply_needed' (default, ダッシュボード) | 'all' (メールタブ)
+  const scope = url.searchParams.get('scope') || 'reply_needed'
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '5', 10), 1), 50)
+
   const result = await getIntegration(owner, 'google_gmail')
   if (result.error) return json({ error: result.error }, { status: 400 })
   if (result.expired) return json({
@@ -39,18 +43,25 @@ export async function GET(request) {
   const token = result.integration.access_token
   const myEmail = (result.integration.metadata?.email || '').toLowerCase()
 
-  const query = encodeURIComponent('in:inbox -from:me older_than:3d')
+  // scope に応じた検索クエリ
+  const rawQuery = scope === 'all'
+    ? 'in:inbox -from:me'                  // 最近の受信一覧 (返信済みも含む)
+    : 'in:inbox -from:me older_than:3d'    // 要返信候補 (3日以上前)
+  const query = encodeURIComponent(rawQuery)
+
+  // 取得数: 返信済みフィルタで半分くらい弾ける前提で多めに取得
+  const fetchCount = Math.min(limit * 3, 50)
 
   try {
     // 1. スレッド一覧
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/threads?q=${query}&maxResults=15`
+    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/threads?q=${query}&maxResults=${fetchCount}`
     const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } })
     if (!listRes.ok) {
       const body = await listRes.text()
       return json({ error: `Gmail API ${listRes.status}: ${body.slice(0, 200)}` }, { status: listRes.status })
     }
     const listData = await listRes.json()
-    const threadIds = (listData.threads || []).map(t => t.id).slice(0, 12)
+    const threadIds = (listData.threads || []).map(t => t.id).slice(0, fetchCount)
 
     // 2. 各スレッド詳細を並列取得
     const metaHeaders = ['From', 'To', 'Cc', 'Subject', 'Message-ID', 'Date']
@@ -75,11 +86,20 @@ export async function GET(request) {
         msgHeaders.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || ''
       const lastFrom = parseAddress(getH(lastHeaders, 'From'))
 
-      // 最新が自分発なら返信済みとみなし除外
-      if (myEmail && lastFrom.email === myEmail) continue
+      // scope=reply_needed の場合は、最新が自分発なら返信済みとみなし除外
+      // scope=all の場合は返信済みも含めて表示 (ただしマーク付け)
+      const replied = myEmail && lastFrom.email === myEmail
+      if (scope !== 'all' && replied) continue
 
-      // 相手発の最新メッセージを表示対象とする
-      const reply = last
+      // scope=all で最新が自分発の場合は、その一つ前の相手メッセージを採用
+      let reply = last
+      if (scope === 'all' && replied && messages.length >= 2) {
+        for (let i = messages.length - 2; i >= 0; i--) {
+          const fh = messages[i].payload?.headers || []
+          const fromE = parseAddress(getH(fh, 'From')).email
+          if (fromE !== myEmail) { reply = messages[i]; break }
+        }
+      }
       const rh = reply.payload?.headers || []
       const fromStr = getH(rh, 'From')
       const from = parseAddress(fromStr)
@@ -103,16 +123,20 @@ export async function GET(request) {
         subject: getH(rh, 'Subject') || '(件名なし)',
         snippet: reply.snippet || '',
         messageIdHeader: getH(rh, 'Message-ID'),  // In-Reply-To 用
+        date: getH(rh, 'Date'),
         category,
+        replied,                            // scope=all のとき「返信済み」表示用
       })
     }
 
-    // to を優先、次に cc、other は最後
-    const rank = { to: 0, cc: 1, other: 2 }
-    items.sort((a, b) => (rank[a.category] ?? 9) - (rank[b.category] ?? 9))
+    // reply_needed: to 優先 → cc → other の順
+    // all: 日付降順 (Gmail 返却順をそのまま)
+    if (scope !== 'all') {
+      const rank = { to: 0, cc: 1, other: 2 }
+      items.sort((a, b) => (rank[a.category] ?? 9) - (rank[b.category] ?? 9))
+    }
 
-    // 最大5件まで返す (ダッシュボードでは3件表示、詳細で全件)
-    return json({ items: items.slice(0, 5) })
+    return json({ items: items.slice(0, limit) })
   } catch (e) {
     return json({ error: `取得失敗: ${e.message}` }, { status: 500 })
   }

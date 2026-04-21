@@ -283,6 +283,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'wbs',          icon: '📅', label: 'タスクWBS'     },
             { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
             { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
+            { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
             { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
@@ -383,6 +384,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
+          )}
+          {activeTab === 'mail' && (
+            <MailTab T={T} viewingName={viewingName} isViewingSelf={isViewingSelf} />
           )}
           {activeTab === 'integrations' && (
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
@@ -509,11 +513,18 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
   async function toggleTaskDone(task) {
     if (!isViewingSelf) return
-    const newDone = !(task.done || task.status === 'done')
-    await supabase.from('ka_tasks').update({
-      done: newDone,
-      status: newDone ? 'done' : 'not_started',
-    }).eq('id', task.id)
+    // クリックで 未着手 → 進行中 → 完了 → 未着手 を循環
+    const done = task.done || task.status === 'done'
+    const inProgress = task.status === 'in_progress'
+    let next
+    if (done) {
+      next = { done: false, status: 'not_started' }
+    } else if (inProgress) {
+      next = { done: true, status: 'done' }
+    } else {
+      next = { done: false, status: 'in_progress' }
+    }
+    await supabase.from('ka_tasks').update(next).eq('id', task.id)
     loadTasks()
     loadReminders()
     loadAchievements()
@@ -917,38 +928,54 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
               }} />
           </Section>
 
-          <Section T={T} icon="📧" title="Gmail" flex={0}>
+          <Section T={T} icon="📧" title="Gmail"
+            flex={0}
+            headerRight={
+              <button onClick={() => onGoToTab && onGoToTab('mail')} style={{
+                background: 'transparent', border: `1px dashed ${T.borderMid}`,
+                color: T.accent, borderRadius: 6, padding: '2px 8px',
+                fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }}>📧 メールタブで全部見る →</button>
+            }
+          >
             <IntegrationStatus T={T} state={integData.gmail} isViewingSelf={isViewingSelf}
               serviceLabel="Gmail" emptyText="✨ 要対応のメールはありません"
-              onConnect={onGoToIntegrations} maxVisible={3}
-              detailLabel="📧 Gmailを開く ↗"
-              detailUrl="https://mail.google.com/"
+              onConnect={onGoToIntegrations} maxVisible={5}
+              detailLabel="📧 メールタブで一覧を見る →"
+              detailUrl={null}
+              onDetail={() => onGoToTab && onGoToTab('mail')}
               renderItem={m => {
                 const catStyle = m.category === 'to'
-                  ? { bg: 'rgba(255,107,107,0.15)', fg: '#d64545', label: '🔴 要対応' }
+                  ? { bg: 'rgba(255,107,107,0.15)', fg: '#d64545', label: '🔴' }
                   : m.category === 'cc'
-                  ? { bg: 'rgba(212,149,0,0.15)', fg: '#a37200', label: '🟡 要確認' }
+                  ? { bg: 'rgba(212,149,0,0.15)', fg: '#a37200', label: '🟡' }
                   : null
                 return (
                   <button onClick={() => openGmailAI(m)}
-                    title="AIで要約・返信草稿を生成"
+                    title={
+                      (m.category === 'to' ? '要対応 / ' : m.category === 'cc' ? '要確認 / ' : '') +
+                      'AIで要約・返信草稿を生成'
+                    }
                     style={{
                       all: 'unset', display: 'flex', alignItems: 'center', gap: 6,
-                      flex: 1, cursor: 'pointer',
+                      flex: 1, cursor: 'pointer', width: '100%',
                     }}>
                     {catStyle && (
                       <span style={{
-                        fontSize: 10, fontWeight: 700, color: catStyle.fg,
+                        fontSize: 11, fontWeight: 700, color: catStyle.fg,
                         background: catStyle.bg, borderRadius: 4,
-                        padding: '2px 5px', whiteSpace: 'nowrap',
+                        padding: '1px 5px', flexShrink: 0,
                       }}>{catStyle.label}</span>
                     )}
-                    <span style={{ flex: 1, minWidth: 0 }}>{m.from}: {truncate(m.subject, 20)}</span>
+                    <span style={{
+                      flex: 1, minWidth: 0,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{m.from}: {m.subject}</span>
                     <span style={{
                       fontSize: 10, color: '#fff', fontWeight: 700,
                       background: T.accentSolid, borderRadius: 4,
-                      padding: '2px 6px', whiteSpace: 'nowrap',
-                    }}>✨ AIで要約・返信</span>
+                      padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0,
+                    }}>✨ AI返信</span>
                   </button>
                 )
               }} />
@@ -1533,6 +1560,202 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
   )
 }
 
+// ─── メールタブ: Gmail のメールを To / Cc で切り替えて一覧表示 ───────
+function MailTab({ T, viewingName, isViewingSelf }) {
+  const [filter, setFilter] = useState('to')       // 'all' | 'to' | 'cc' | 'reply_needed'
+  const [scope, setScope] = useState('all')        // 'all' (最近の受信) | 'reply_needed' (要返信)
+  const [state, setState] = useState({ items: [], loading: true, error: '' })
+  const [gmailAI, setGmailAI] = useState(null)
+
+  const load = useCallback(async () => {
+    if (!viewingName) return
+    setState(s => ({ ...s, loading: true, error: '' }))
+    try {
+      const r = await fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&scope=${scope}&limit=50`)
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setState({ items: j.items || [], loading: false, error: '' })
+    } catch (e) {
+      setState({ items: [], loading: false, error: e.message || 'エラー' })
+    }
+  }, [viewingName, scope])
+  useEffect(() => { load() }, [load])
+
+  const openAI = async (m) => {
+    setGmailAI({ message: m, loading: true, summary: '', draft: '', error: '' })
+    try {
+      const r = await fetch('/api/integrations/gmail/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner: viewingName, messageId: m.id }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setGmailAI({ message: m, loading: false, summary: j.summary || '', draft: j.draft || '', error: '' })
+    } catch (e) {
+      setGmailAI({ message: m, loading: false, summary: '', draft: '', error: e.message || 'エラー' })
+    }
+  }
+
+  const filtered = state.items.filter(m => {
+    if (filter === 'all') return true
+    if (filter === 'to') return m.category === 'to'
+    if (filter === 'cc') return m.category === 'cc'
+    return true
+  })
+
+  const counts = {
+    all: state.items.length,
+    to: state.items.filter(m => m.category === 'to').length,
+    cc: state.items.filter(m => m.category === 'cc').length,
+  }
+
+  const formatDate = (raw) => {
+    if (!raw) return ''
+    const d = new Date(raw)
+    if (isNaN(d.getTime())) return ''
+    const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+    const today = new Date()
+    const jstToday = new Date(today.getTime() + 9 * 3600 * 1000)
+    const sameDay = jst.getUTCFullYear() === jstToday.getUTCFullYear()
+      && jst.getUTCMonth() === jstToday.getUTCMonth()
+      && jst.getUTCDate() === jstToday.getUTCDate()
+    if (sameDay) return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`
+    return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()}`
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', background: T.bg }}>
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: T.text, margin: 0 }}>📧 メール</h2>
+          <div style={{ fontSize: 11, color: T.textMuted }}>
+            Gmail の受信箱から最大50件を取得。To / Cc で絞り込み可能。
+          </div>
+        </div>
+
+        {/* スコープ切り替え */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          {[
+            { k: 'all', label: '📥 最近の受信' },
+            { k: 'reply_needed', label: '⏰ 3日以上前 (要返信候補)' },
+          ].map(t => (
+            <button key={t.k} onClick={() => setScope(t.k)} style={{
+              background: scope === t.k ? T.accentSolid : 'transparent',
+              color: scope === t.k ? '#fff' : T.textSub,
+              border: `1px solid ${scope === t.k ? T.accentSolid : T.borderMid}`,
+              borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>{t.label}</button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <button onClick={load} disabled={state.loading} style={{
+            background: 'transparent', border: `1px solid ${T.borderMid}`,
+            color: T.textSub, borderRadius: 7, padding: '5px 12px',
+            fontSize: 12, fontWeight: 600, cursor: state.loading ? 'wait' : 'pointer',
+            fontFamily: 'inherit', opacity: state.loading ? 0.6 : 1,
+          }}>{state.loading ? '取得中…' : '🔄 更新'}</button>
+        </div>
+
+        {/* カテゴリタブ */}
+        <div style={{
+          display: 'flex', gap: 2, marginBottom: 12,
+          borderBottom: `1px solid ${T.border}`,
+        }}>
+          {[
+            { k: 'all', label: `すべて (${counts.all})`, color: T.textSub },
+            { k: 'to',  label: `🔴 要対応 - To (${counts.to})`, color: '#d64545' },
+            { k: 'cc',  label: `🟡 要確認 - Cc (${counts.cc})`, color: '#a37200' },
+          ].map(t => {
+            const active = filter === t.k
+            return (
+              <button key={t.k} onClick={() => setFilter(t.k)} style={{
+                background: 'transparent', border: 'none',
+                borderBottom: `2px solid ${active ? t.color : 'transparent'}`,
+                color: active ? t.color : T.textSub,
+                padding: '8px 14px', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+                marginBottom: -1,
+              }}>{t.label}</button>
+            )
+          })}
+        </div>
+
+        {state.error && (
+          <div style={{
+            padding: '10px 14px', marginBottom: 12,
+            background: T.dangerBg, border: `1px solid ${T.danger}40`,
+            borderRadius: 8, fontSize: 12, color: T.danger,
+          }}>⚠️ {state.error}</div>
+        )}
+
+        {state.loading ? (
+          <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+            読み込み中…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+            {filter === 'to' ? '要対応 (To) のメールはありません' :
+             filter === 'cc' ? '要確認 (Cc) のメールはありません' :
+             'メールはありません'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {filtered.map((m, i) => {
+              const catStyle = m.category === 'to'
+                ? { bg: 'rgba(255,107,107,0.12)', fg: '#d64545', label: '🔴 To' }
+                : m.category === 'cc'
+                ? { bg: 'rgba(212,149,0,0.12)', fg: '#a37200', label: '🟡 Cc' }
+                : { bg: T.sectionBg, fg: T.textMuted, label: '—' }
+              return (
+                <div key={m.id + i} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', background: T.bgCard,
+                  border: `1px solid ${T.border}`, borderRadius: 8,
+                  opacity: m.replied ? 0.6 : 1,
+                }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, color: catStyle.fg,
+                    background: catStyle.bg, borderRadius: 5,
+                    padding: '3px 7px', flexShrink: 0, minWidth: 38, textAlign: 'center',
+                  }}>{catStyle.label}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13, fontWeight: 600, color: T.text,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {m.replied && <span style={{ color: T.success, fontSize: 10, fontWeight: 700, marginRight: 6 }}>✓返信済</span>}
+                      {m.subject}
+                    </div>
+                    <div style={{
+                      fontSize: 11, color: T.textMuted, marginTop: 2,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {m.from} · {m.snippet}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>{formatDate(m.date)}</span>
+                  {isViewingSelf && (
+                    <button onClick={() => openAI(m)} style={{
+                      background: T.accentSolid, color: '#fff', border: 'none',
+                      borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700,
+                      cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+                    }}>✨ AI返信</button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {gmailAI && (
+          <GmailAIModal T={T} state={gmailAI} owner={viewingName} onClose={() => setGmailAI(null)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
 function RetrospectTab({ T, viewingName, viewingMember }) {
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
@@ -1894,8 +2117,10 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {tasks.map(t => {
         const done = t.done || t.status === 'done'
+        const inProgress = !done && t.status === 'in_progress'
         const overdue = t.due_date && t.due_date < today && !done
         const label = t.title || t.weekly_reports?.ka_title || '(無題)'
+        const nextHint = done ? '未着手に戻す' : inProgress ? '完了にする' : '進行中にする'
         return (
           <div key={t.id} style={{
             display: 'flex', alignItems: 'flex-start', gap: 7,
@@ -1907,17 +2132,28 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
             <button
               onClick={() => canEdit && onToggle(t)}
               disabled={!canEdit}
-              title={canEdit ? (done ? '未完了に戻す' : '完了にする') : '閲覧のみ'}
+              title={canEdit ? `クリックで${nextHint}` : '閲覧のみ'}
               style={{
                 width: 16, height: 16, flexShrink: 0, marginTop: 1,
-                borderRadius: 4, border: `1.5px solid ${done ? T.success : T.borderMid}`,
-                background: done ? T.success : 'transparent',
+                borderRadius: 4,
+                border: `1.5px solid ${done ? T.success : inProgress ? T.info : T.borderMid}`,
+                background: done ? T.success : inProgress ? T.info : 'transparent',
                 color: '#fff', fontSize: 11, lineHeight: 1,
                 cursor: canEdit ? 'pointer' : 'not-allowed',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: 0, fontFamily: 'inherit',
+                position: 'relative', overflow: 'hidden',
               }}
-            >{done ? '✓' : ''}</button>
+            >
+              {done && '✓'}
+              {inProgress && (
+                // 半円 (進行中)
+                <span style={{
+                  position: 'absolute', inset: 0,
+                  background: `linear-gradient(to right, ${T.info} 50%, transparent 50%)`,
+                }} />
+              )}
+            </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 12, color: T.text, fontWeight: 500,
@@ -1930,7 +2166,7 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
                     {overdue ? '🚨 ' : '📅 '}{t.due_date}
                   </span>
                 )}
-                {t.status === 'in_progress' && <span style={{ color: T.info }}>◐ 進行中</span>}
+                {inProgress && <span style={{ color: T.info, fontWeight: 700 }}>◐ 進行中</span>}
                 {t.weekly_reports?.kr_title && <span>KR: {truncate(t.weekly_reports.kr_title, 20)}</span>}
               </div>
             </div>
@@ -1974,15 +2210,24 @@ function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
 
 // 連携サービスの状態表示 (未接続→CTA / 読込中 / データ表示 / エラー)
 function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isViewingSelf, onConnect,
-                             maxVisible = 3, detailLabel, detailUrl }) {
-  const DetailButton = () => detailLabel && detailUrl ? (
-    <a href={detailUrl} target="_blank" rel="noopener noreferrer" style={{
-      marginTop: 2, background: 'transparent', border: `1px dashed ${T.borderMid}`,
-      color: T.accent, borderRadius: 6, padding: '5px 8px',
-      fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-      textAlign: 'center', textDecoration: 'none', display: 'block',
-    }}>{detailLabel}</a>
-  ) : null
+                             maxVisible = 3, detailLabel, detailUrl, onDetail }) {
+  const detailCommonStyle = {
+    marginTop: 2, background: 'transparent', border: `1px dashed ${T.borderMid}`,
+    color: T.accent, borderRadius: 6, padding: '5px 8px',
+    fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+    textAlign: 'center', textDecoration: 'none', display: 'block', width: '100%',
+  }
+  const DetailButton = ({ prefix = '' }) => {
+    if (!detailLabel) return null
+    const label = `${prefix}${detailLabel}`
+    if (onDetail) {
+      return <button onClick={onDetail} style={detailCommonStyle}>{label}</button>
+    }
+    if (detailUrl) {
+      return <a href={detailUrl} target="_blank" rel="noopener noreferrer" style={detailCommonStyle}>{label}</a>
+    }
+    return null
+  }
 
   if (!state.connected) {
     return (
@@ -2048,16 +2293,7 @@ function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isVi
           {renderItem ? renderItem(it) : <span style={{ flex:1 }}>{JSON.stringify(it)}</span>}
         </div>
       ))}
-      {detailLabel && detailUrl && (
-        <a href={detailUrl} target="_blank" rel="noopener noreferrer" style={{
-          marginTop: 2, background: 'transparent', border: `1px dashed ${T.borderMid}`,
-          color: T.accent, borderRadius: 6, padding: '5px 8px',
-          fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-          textAlign: 'center', textDecoration: 'none', display: 'block',
-        }}>
-          {hidden > 0 ? `他 ${hidden} 件 · ` : ''}{detailLabel}
-        </a>
-      )}
+      <DetailButton prefix={hidden > 0 ? `他 ${hidden} 件 · ` : ''} />
     </div>
   )
 }
