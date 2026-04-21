@@ -513,18 +513,33 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
   async function toggleTaskDone(task) {
     if (!isViewingSelf) return
-    // クリックで 未着手 → 進行中 → 完了 → 未着手 を循環
-    const done = task.done || task.status === 'done'
-    const inProgress = task.status === 'in_progress'
-    let next
-    if (done) {
-      next = { done: false, status: 'not_started' }
-    } else if (inProgress) {
-      next = { done: true, status: 'done' }
-    } else {
-      next = { done: false, status: 'in_progress' }
+    // 既存の task status 仕様 (MyTasksPage.jsx と同じ STATUS_ORDER) に従い循環:
+    // not_started → in_progress → done → not_started
+    const cur = task.status || (task.done ? 'done' : 'not_started')
+    const nextStatus = cur === 'not_started' ? 'in_progress'
+                     : cur === 'in_progress' ? 'done'
+                     : 'not_started'
+    const newDone = nextStatus === 'done'
+
+    // done カラムは確実に更新 (旧スキーマでも成功)
+    const { error } = await supabase.from('ka_tasks').update({ done: newDone }).eq('id', task.id)
+    if (error) { alert('更新に失敗しました: ' + error.message); return }
+    // status カラムがあれば更新 (無い環境でもエラーは握りつぶす、MyTasksPage と同じ方針)
+    await supabase.from('ka_tasks').update({ status: nextStatus }).eq('id', task.id).then(() => {}).catch(() => {})
+
+    // done に遷移したとき Slack 通知 (MyTasksPage.jsx:1013-1016 と同じ)
+    if (newDone) {
+      fetch('/api/slack-task-done', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id, taskTitle: task.title,
+          kaTitle: task.weekly_reports?.ka_title,
+          objectiveTitle: null,
+          completedBy: task.assignee || myName,
+        }),
+      }).catch(() => {})
     }
-    await supabase.from('ka_tasks').update(next).eq('id', task.id)
+
     loadTasks()
     loadReminders()
     loadAchievements()
@@ -2111,16 +2126,26 @@ function ThemeEditor({ T, icon, title, value, loading, canEdit, placeholder, onS
   )
 }
 
+// 既存の MyTasksPage.jsx STATUS_CONFIG と合わせる (not_started / in_progress / done)
+const TASK_STATUS_CONFIG = {
+  not_started: { icon: '○', color: '#7a8599', label: '未着手' },
+  in_progress: { icon: '◐', color: '#4d9fff', label: '進行中' },
+  done:        { icon: '●', color: '#00d68f', label: '完了' },
+}
+
 function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
   const today = toJSTDateStr(new Date())
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {tasks.map(t => {
-        const done = t.done || t.status === 'done'
-        const inProgress = !done && t.status === 'in_progress'
+        const status = t.status || (t.done ? 'done' : 'not_started')
+        const cfg = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG.not_started
+        const done = status === 'done'
         const overdue = t.due_date && t.due_date < today && !done
         const label = t.title || t.weekly_reports?.ka_title || '(無題)'
-        const nextHint = done ? '未着手に戻す' : inProgress ? '完了にする' : '進行中にする'
+        const nextLabel = status === 'not_started' ? '進行中'
+                        : status === 'in_progress' ? '完了'
+                        : '未着手'
         return (
           <div key={t.id} style={{
             display: 'flex', alignItems: 'flex-start', gap: 7,
@@ -2132,28 +2157,16 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
             <button
               onClick={() => canEdit && onToggle(t)}
               disabled={!canEdit}
-              title={canEdit ? `クリックで${nextHint}` : '閲覧のみ'}
+              title={canEdit ? `クリックで「${nextLabel}」に変更` : '閲覧のみ'}
               style={{
-                width: 16, height: 16, flexShrink: 0, marginTop: 1,
-                borderRadius: 4,
-                border: `1.5px solid ${done ? T.success : inProgress ? T.info : T.borderMid}`,
-                background: done ? T.success : inProgress ? T.info : 'transparent',
-                color: '#fff', fontSize: 11, lineHeight: 1,
+                width: 18, height: 18, flexShrink: 0, marginTop: 1,
+                borderRadius: 4, border: 'none', background: 'transparent',
+                color: cfg.color, fontSize: 16, lineHeight: 1,
                 cursor: canEdit ? 'pointer' : 'not-allowed',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: 0, fontFamily: 'inherit',
-                position: 'relative', overflow: 'hidden',
+                padding: 0, fontFamily: 'inherit', fontWeight: 700,
               }}
-            >
-              {done && '✓'}
-              {inProgress && (
-                // 半円 (進行中)
-                <span style={{
-                  position: 'absolute', inset: 0,
-                  background: `linear-gradient(to right, ${T.info} 50%, transparent 50%)`,
-                }} />
-              )}
-            </button>
+            >{cfg.icon}</button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 12, color: T.text, fontWeight: 500,
@@ -2166,7 +2179,7 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
                     {overdue ? '🚨 ' : '📅 '}{t.due_date}
                   </span>
                 )}
-                {inProgress && <span style={{ color: T.info, fontWeight: 700 }}>◐ 進行中</span>}
+                {status === 'in_progress' && <span style={{ color: cfg.color, fontWeight: 700 }}>{cfg.icon} {cfg.label}</span>}
                 {t.weekly_reports?.kr_title && <span>KR: {truncate(t.weekly_reports.kr_title, 20)}</span>}
               </div>
             </div>
