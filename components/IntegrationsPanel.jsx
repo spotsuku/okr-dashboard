@@ -112,13 +112,13 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
   }, [myName])
   useEffect(() => { load() }, [load])
 
-  // URLパラメータで OAuth 結果を受け取ったら処理 (Googleはここでトークン保存)
+  // URLパラメータで OAuth 結果を受け取る
+  // Google / Slack / LINE 全てサーバーサイドで保存済み、ここは表示のみ
   useEffect(() => {
     if (typeof window === 'undefined' || !myName) return
     const url = new URL(window.location.href)
     const integResult = url.searchParams.get('integ_result')
     const integService = url.searchParams.get('integ_service')
-    const integServiceKey = url.searchParams.get('integ_service_key')
     const integError = url.searchParams.get('integ_error')
 
     if (integError) {
@@ -128,89 +128,7 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
       return
     }
 
-    if (integResult !== 'ok' || !integService) return
-
-    // Google: provider_token は localStorage に保存されないため
-    // onAuthStateChange で初期セッションを確実に取得してから保存
-    const isGoogle = integServiceKey === 'google_gmail' || integServiceKey === 'google_calendar'
-    let saved = false
-
-    const saveGoogleToken = async (session) => {
-      if (saved) return
-      saved = true
-      console.log('[Integration] saving Google token:', {
-        hasProviderToken: !!session?.provider_token,
-        hasRefreshToken: !!session?.provider_refresh_token,
-        userEmail: session?.user?.email,
-        myName,
-      })
-      if (!session?.provider_token) {
-        setErrorMsg(`${integService} のトークンが取得できませんでした。ブラウザを全画面リロードして再試行してください。`)
-        return
-      }
-      // サーバーサイドで保存 (RLS の影響を受けない)
-      try {
-        const r = await fetch('/api/integrations/google/save-token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            service: integServiceKey,
-            accessToken: session.provider_token,
-            refreshToken: session.provider_refresh_token || null,
-            expiresAt: session.expires_at
-              ? new Date(session.expires_at * 1000).toISOString() : null,
-            email: session.user?.email || '',
-          }),
-        })
-        const j = await r.json()
-        if (!r.ok) {
-          console.error('[Integration] server save error:', j)
-          setErrorMsg(`トークン保存エラー: ${j.error || `HTTP ${r.status}`}`)
-          return
-        }
-        console.log('[Integration] server save success:', j)
-      } catch (e) {
-        console.error('[Integration] server save exception:', e)
-        setErrorMsg(`トークン保存例外: ${e.message || e}`)
-        return
-      }
-      setSuccessMsg(`${integService} の連携が完了しました`)
-      await load()
-      url.searchParams.delete('integ_result')
-      url.searchParams.delete('integ_service')
-      url.searchParams.delete('integ_service_key')
-      window.history.replaceState({}, '', url.toString())
-      setTimeout(() => setSuccessMsg(''), 5000)
-    }
-
-    if (isGoogle) {
-      // ① 即時取得も試す (既にセッションが確立している場合)
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.provider_token) saveGoogleToken(session)
-      })
-      // ② onAuthStateChange で INITIAL_SESSION / SIGNED_IN を確実に待つ
-      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-        console.log('[Integration] auth event:', event, 'hasProviderToken:', !!session?.provider_token)
-        if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')
-            && session?.provider_token) {
-          saveGoogleToken(session)
-        }
-      })
-      // ③ タイムアウト: 5秒待っても provider_token が来なければ諦める
-      const timer = setTimeout(() => {
-        if (!saved) {
-          setErrorMsg(`${integService} のトークン取得がタイムアウトしました。ブラウザをリロードして再試行してください。Supabase Google Provider の設定 (Additional Scopes 追加 & Client ID/Secret) を確認してください。`)
-        }
-      }, 5000)
-      return () => {
-        sub.subscription.unsubscribe()
-        clearTimeout(timer)
-      }
-    } else {
-      // Slack / LINE はサーバーサイドで保存済み、ここでは success 表示のみ
+    if (integResult === 'ok' && integService) {
       setSuccessMsg(`${integService} の連携が完了しました`)
       load()
       url.searchParams.delete('integ_result')
@@ -241,24 +159,14 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
     setErrorMsg('')
     try {
       if (integ.provider === 'google') {
-        // Supabase の Google OAuth に追加スコープを要求して再認証
-        const returnUrl = new URL(window.location.href)
-        returnUrl.searchParams.set('integ_result', 'ok')
-        returnUrl.searchParams.set('integ_service', integ.title)
-        returnUrl.searchParams.set('integ_service_key', integ.key)
-        const baseScopes = ['openid', 'email', 'profile']
-        const scopes = [...baseScopes, ...integ.scopes].join(' ')
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            scopes,
-            redirectTo: returnUrl.toString(),
-            queryParams: { access_type: 'offline', prompt: 'consent' },
-          },
-        })
-        if (error) throw error
+        // 独自サーバー経由で Google OAuth (Supabase Auth の race condition を回避)
+        const u = new URL('/api/integrations/google/start', window.location.origin)
+        u.searchParams.set('owner', myName)
+        u.searchParams.set('service', integ.key)  // 'google_gmail' or 'google_calendar'
+        u.searchParams.set('return_to', window.location.pathname + window.location.search)
+        window.location.href = u.toString()
       } else if (integ.oauthUrl) {
-        // サーバーサイド OAuth へリダイレクト
+        // Slack / LINE も同様のサーバーサイド OAuth
         const u = new URL(integ.oauthUrl, window.location.origin)
         u.searchParams.set('owner', myName)
         u.searchParams.set('return_to', window.location.pathname + window.location.search)
