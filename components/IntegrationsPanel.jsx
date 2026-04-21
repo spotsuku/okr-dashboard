@@ -101,68 +101,98 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
   // URLパラメータで OAuth 結果を受け取ったら処理 (Googleはここでトークン保存)
   useEffect(() => {
     if (typeof window === 'undefined' || !myName) return
-    const run = async () => {
-      const url = new URL(window.location.href)
-      const integResult = url.searchParams.get('integ_result')
-      const integService = url.searchParams.get('integ_service')
-      const integServiceKey = url.searchParams.get('integ_service_key')
-      const integError = url.searchParams.get('integ_error')
+    const url = new URL(window.location.href)
+    const integResult = url.searchParams.get('integ_result')
+    const integService = url.searchParams.get('integ_service')
+    const integServiceKey = url.searchParams.get('integ_service_key')
+    const integError = url.searchParams.get('integ_error')
 
-      if (integResult === 'ok' && integService) {
-        // Google系: Supabase session の provider_token を取り出して user_integrations に保存
-        if (integServiceKey === 'google_gmail' || integServiceKey === 'google_calendar') {
-          try {
-            const { data: { session } } = await supabase.auth.getSession()
-            console.log('[Integration] Google session:', {
-              hasSession: !!session,
-              hasProviderToken: !!session?.provider_token,
-              hasRefreshToken: !!session?.provider_refresh_token,
-              userEmail: session?.user?.email,
-              myName,
-            })
-            if (!session?.provider_token) {
-              setErrorMsg(`${integService} のトークンが取得できませんでした (session.provider_token が null)。ブラウザをリロードして再度お試しください。`)
-              return
-            }
-            const payload = {
-              owner: myName,
-              service: integServiceKey,
-              access_token: session.provider_token,
-              refresh_token: session.provider_refresh_token || null,
-              expires_at: session.expires_at
-                ? new Date(session.expires_at * 1000).toISOString() : null,
-              metadata: { email: session.user?.email || '' },
-            }
-            const { data: upserted, error: upsertErr } = await supabase
-              .from('user_integrations')
-              .upsert(payload, { onConflict: 'owner,service' })
-              .select()
-            if (upsertErr) {
-              console.error('[Integration] upsert error:', upsertErr)
-              setErrorMsg(`トークン保存エラー: ${upsertErr.message} (code: ${upsertErr.code || '?'}, details: ${upsertErr.details || 'なし'})`)
-              return
-            }
-            console.log('[Integration] upsert success:', upserted)
-          } catch (e) {
-            console.error('[Integration] exception:', e)
-            setErrorMsg(`トークン保存例外: ${e.message || e}`)
-            return
-          }
-        }
-        setSuccessMsg(`${integService} の連携が完了しました`)
-        await load()
-        url.searchParams.delete('integ_result')
-        url.searchParams.delete('integ_service')
-        url.searchParams.delete('integ_service_key')
-        window.history.replaceState({}, '', url.toString())
-        setTimeout(() => setSuccessMsg(''), 5000)
-      } else if (integError) {
-        setErrorMsg(`連携エラー: ${decodeURIComponent(integError)}`)
-        url.searchParams.delete('integ_error')
-        window.history.replaceState({}, '', url.toString())
-      }
+    if (integError) {
+      setErrorMsg(`連携エラー: ${decodeURIComponent(integError)}`)
+      url.searchParams.delete('integ_error')
+      window.history.replaceState({}, '', url.toString())
+      return
     }
-    run()
+
+    if (integResult !== 'ok' || !integService) return
+
+    // Google: provider_token は localStorage に保存されないため
+    // onAuthStateChange で初期セッションを確実に取得してから保存
+    const isGoogle = integServiceKey === 'google_gmail' || integServiceKey === 'google_calendar'
+    let saved = false
+
+    const saveGoogleToken = async (session) => {
+      if (saved) return
+      saved = true
+      console.log('[Integration] saving Google token:', {
+        hasProviderToken: !!session?.provider_token,
+        hasRefreshToken: !!session?.provider_refresh_token,
+        userEmail: session?.user?.email,
+        myName,
+      })
+      if (!session?.provider_token) {
+        setErrorMsg(`${integService} のトークンが取得できませんでした。ブラウザを全画面リロードして再試行してください。`)
+        return
+      }
+      const payload = {
+        owner: myName,
+        service: integServiceKey,
+        access_token: session.provider_token,
+        refresh_token: session.provider_refresh_token || null,
+        expires_at: session.expires_at
+          ? new Date(session.expires_at * 1000).toISOString() : null,
+        metadata: { email: session.user?.email || '' },
+      }
+      const { error: upsertErr } = await supabase
+        .from('user_integrations')
+        .upsert(payload, { onConflict: 'owner,service' })
+      if (upsertErr) {
+        console.error('[Integration] upsert error:', upsertErr)
+        setErrorMsg(`トークン保存エラー: ${upsertErr.message} (code: ${upsertErr.code || '?'})`)
+        return
+      }
+      setSuccessMsg(`${integService} の連携が完了しました`)
+      await load()
+      url.searchParams.delete('integ_result')
+      url.searchParams.delete('integ_service')
+      url.searchParams.delete('integ_service_key')
+      window.history.replaceState({}, '', url.toString())
+      setTimeout(() => setSuccessMsg(''), 5000)
+    }
+
+    if (isGoogle) {
+      // ① 即時取得も試す (既にセッションが確立している場合)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.provider_token) saveGoogleToken(session)
+      })
+      // ② onAuthStateChange で INITIAL_SESSION / SIGNED_IN を確実に待つ
+      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log('[Integration] auth event:', event, 'hasProviderToken:', !!session?.provider_token)
+        if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')
+            && session?.provider_token) {
+          saveGoogleToken(session)
+        }
+      })
+      // ③ タイムアウト: 5秒待っても provider_token が来なければ諦める
+      const timer = setTimeout(() => {
+        if (!saved) {
+          setErrorMsg(`${integService} のトークン取得がタイムアウトしました。ブラウザをリロードして再試行してください。Supabase Google Provider の設定 (Additional Scopes 追加 & Client ID/Secret) を確認してください。`)
+        }
+      }, 5000)
+      return () => {
+        sub.subscription.unsubscribe()
+        clearTimeout(timer)
+      }
+    } else {
+      // Slack / LINE はサーバーサイドで保存済み、ここでは success 表示のみ
+      setSuccessMsg(`${integService} の連携が完了しました`)
+      load()
+      url.searchParams.delete('integ_result')
+      url.searchParams.delete('integ_service')
+      url.searchParams.delete('integ_service_key')
+      window.history.replaceState({}, '', url.toString())
+      setTimeout(() => setSuccessMsg(''), 5000)
+    }
   }, [load, myName])
 
   async function disconnect(service, title) {
