@@ -116,7 +116,7 @@ export async function GET(request) {
         else if (inCc) category = 'cc'
       }
 
-      // ─── bulk (通知/キャンペーン) 判定 ───
+      // ─── bulk (通知/キャンペーン/カレンダー招待) 判定 ───
       // 1. List-Unsubscribe 付き → ほぼ確実に一斉配信
       const listUnsub = getH(rh, 'List-Unsubscribe')
       // 2. Precedence: bulk/list/junk → 一括送信
@@ -127,24 +127,31 @@ export async function GET(request) {
       const fromLocal = (from.email || '').split('@')[0] || ''
       const isNoReplyAddr = /^(no[-._]?reply|do[-._]?not[-._]?reply|notifications?|alerts?|mailer|postmaster|info|news|newsletter|support[-._]?noreply|bounce|auto|system|automated|notice|notify|marketing|campaign|promo)(@|$|[-._])/i.test(from.email || '')
         || /^(no[-._]?reply|do[-._]?not[-._]?reply|notifications?|alerts?|mailer|postmaster|newsletter|bounce|automated|notice|notify|marketing|campaign|promo)$/i.test(fromLocal)
+      // 5. カレンダー招待 (Google Calendar / Outlook / Teams)
+      //    件名の prefix または From アドレスで判定
+      const subject = getH(rh, 'Subject') || ''
+      const isCalendarInvite = /^(招待[:：]|更新された(招待|予定)[:：]?|キャンセル[:：]|取り消された(招待|予定)[:：]?|参加予定|出欠確認|Invitation[:：]|Updated invitation[:：]|Canceled( event| invitation)?[:：]|Cancelled[:：]|Accepted[:：]|Declined[:：]|Tentative[:：]|Meeting invitation[:：])/i.test(subject)
+        || /calendar-?notification@|@calendar\.google\.com|@resource\.calendar\.google\.com/i.test(from.email || '')
 
       const isBulk = !!listUnsub
         || precedence === 'bulk' || precedence === 'list' || precedence === 'junk'
         || (autoSub && autoSub !== 'no')
         || isNoReplyAddr
+        || isCalendarInvite
 
       items.push({
         id: reply.id,                       // AI assist & draft 用のメッセージID
         threadId: t.id,                     // draft をスレッドに紐付けるため
         from: from.name || from.email || fromStr.replace(/<.*>/, '').trim() || '(不明)',
         fromEmail: from.email,              // 返信先として使う
-        subject: getH(rh, 'Subject') || '(件名なし)',
+        subject: subject || '(件名なし)',
         snippet: reply.snippet || '',
         messageIdHeader: getH(rh, 'Message-ID'),  // In-Reply-To 用
         date: getH(rh, 'Date'),
         category,
         replied,                            // scope=all のとき「返信済み」表示用
         bulk: isBulk,                       // 通知/メルマガ/一斉配信か
+        calendarInvite: isCalendarInvite,   // カレンダー招待かどうか
       })
     }
 
