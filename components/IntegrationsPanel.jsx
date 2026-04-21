@@ -84,15 +84,29 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
   const load = useCallback(async () => {
     if (!myName) { setLoading(false); return }
     setLoading(true)
-    const { data, error } = await supabase
-      .from('user_integrations')
+    // 公開ビュー経由で読む (RLSをバイパス、トークンは含まない)
+    // フォールバック: ビューが無い場合は元のテーブルから読む
+    let data, error
+    const viewRes = await supabase
+      .from('user_integrations_status')
       .select('service, metadata, connected_at, expires_at, scope')
       .eq('owner', myName)
+    if (viewRes.error && (viewRes.error.code === '42P01' || viewRes.error.message?.includes('not find'))) {
+      // ビューが未作成 → 元のテーブルにフォールバック
+      const tblRes = await supabase
+        .from('user_integrations')
+        .select('service, metadata, connected_at, expires_at, scope')
+        .eq('owner', myName)
+      data = tblRes.data; error = tblRes.error
+    } else {
+      data = viewRes.data; error = viewRes.error
+    }
     if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
       setErrorMsg(`読み込みエラー: ${error.message}`)
     }
     const map = {}
     ;(data || []).forEach(row => { map[row.service] = row })
+    console.log('[Integration] loaded:', { myName, count: (data || []).length, services: Object.keys(map) })
     setIntegrations(map)
     setLoading(false)
   }, [myName])
@@ -134,21 +148,33 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
         setErrorMsg(`${integService} のトークンが取得できませんでした。ブラウザを全画面リロードして再試行してください。`)
         return
       }
-      const payload = {
-        owner: myName,
-        service: integServiceKey,
-        access_token: session.provider_token,
-        refresh_token: session.provider_refresh_token || null,
-        expires_at: session.expires_at
-          ? new Date(session.expires_at * 1000).toISOString() : null,
-        metadata: { email: session.user?.email || '' },
-      }
-      const { error: upsertErr } = await supabase
-        .from('user_integrations')
-        .upsert(payload, { onConflict: 'owner,service' })
-      if (upsertErr) {
-        console.error('[Integration] upsert error:', upsertErr)
-        setErrorMsg(`トークン保存エラー: ${upsertErr.message} (code: ${upsertErr.code || '?'})`)
+      // サーバーサイドで保存 (RLS の影響を受けない)
+      try {
+        const r = await fetch('/api/integrations/google/save-token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            service: integServiceKey,
+            accessToken: session.provider_token,
+            refreshToken: session.provider_refresh_token || null,
+            expiresAt: session.expires_at
+              ? new Date(session.expires_at * 1000).toISOString() : null,
+            email: session.user?.email || '',
+          }),
+        })
+        const j = await r.json()
+        if (!r.ok) {
+          console.error('[Integration] server save error:', j)
+          setErrorMsg(`トークン保存エラー: ${j.error || `HTTP ${r.status}`}`)
+          return
+        }
+        console.log('[Integration] server save success:', j)
+      } catch (e) {
+        console.error('[Integration] server save exception:', e)
+        setErrorMsg(`トークン保存例外: ${e.message || e}`)
         return
       }
       setSuccessMsg(`${integService} の連携が完了しました`)

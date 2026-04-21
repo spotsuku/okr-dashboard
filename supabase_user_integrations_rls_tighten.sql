@@ -25,8 +25,9 @@ CREATE POLICY "own rows - delete" ON user_integrations
   FOR DELETE TO authenticated
   USING (owner = (SELECT name FROM members WHERE email = auth.email() LIMIT 1));
 
--- ─── 他メンバーの「接続されているか」だけ見える公開 View ─────
--- access_token / refresh_token / scope / metadata は含まない
+-- ─── 他メンバーの「接続されているか」を見る公開 View ─────
+-- access_token / refresh_token は含めない (機密情報)
+-- scope / metadata は含める (画面表示用)
 -- View は所有者権限で実行されるため RLS をバイパス
 CREATE OR REPLACE VIEW user_integrations_status AS
   SELECT
@@ -34,6 +35,8 @@ CREATE OR REPLACE VIEW user_integrations_status AS
     service,
     expires_at,
     connected_at,
+    scope,
+    metadata,
     (expires_at IS NULL OR expires_at > NOW()) AS is_active
   FROM user_integrations;
 
