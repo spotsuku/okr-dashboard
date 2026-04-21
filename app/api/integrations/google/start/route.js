@@ -36,9 +36,11 @@ export async function GET(request) {
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('scope', SCOPE_MAP[service])
   authUrl.searchParams.set('access_type', 'offline')
-  authUrl.searchParams.set('prompt', 'consent')  // refresh_token を毎回返させる
+  authUrl.searchParams.set('prompt', 'consent')  // refresh_token を毎回返させる + 明示的に同意を取る
   authUrl.searchParams.set('state', state)
-  authUrl.searchParams.set('include_granted_scopes', 'true')
+  // include_granted_scopes を付けると別サービス(例: Calendar)の既存スコープが混ざり、
+  // Gmail の consent 画面で gmail.readonly を外した場合に token が不整合な状態になる。
+  // サービスごとに独立したトークンを得るため、ここでは付けない。
 
   return Response.redirect(authUrl.toString(), 302)
 }
