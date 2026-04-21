@@ -1,6 +1,6 @@
 // 直近の Google カレンダー予定を取得 (現在時刻〜+8時間)
 // GET /api/integrations/calendar/events?owner=<name>&hours=<8>
-import { getIntegration, json } from '../../_shared'
+import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 export async function GET(request) {
   const url = new URL(request.url)
@@ -12,26 +12,30 @@ export async function GET(request) {
     error: result.refreshError
       ? `自動リフレッシュに失敗: ${result.refreshError} 再連携してください`
       : 'トークン期限切れ。再連携してください',
+    needsReauth: true,
   }, { status: 401 })
 
-  const token = result.integration.access_token
   // 現在時刻から hours 時間先まで
   const now = new Date()
   const windowEnd = new Date(now.getTime() + hours * 3600 * 1000)
-  const timeMin = now.toISOString()
-  const timeMax = windowEnd.toISOString()
-
   const apiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
-  apiUrl.searchParams.set('timeMin', timeMin)
-  apiUrl.searchParams.set('timeMax', timeMax)
+  apiUrl.searchParams.set('timeMin', now.toISOString())
+  apiUrl.searchParams.set('timeMax', windowEnd.toISOString())
   apiUrl.searchParams.set('singleEvents', 'true')
   apiUrl.searchParams.set('orderBy', 'startTime')
   apiUrl.searchParams.set('maxResults', '20')
 
   try {
-    const r = await fetch(apiUrl.toString(), {
-      headers: { Authorization: `Bearer ${token}` },
+    // 401 時は refresh_token で再試行
+    const { response: r } = await callGoogleApiWithRetry(result.integration, async (token) => {
+      return fetch(apiUrl.toString(), { headers: { Authorization: `Bearer ${token}` } })
     })
+    if (r.status === 401) {
+      return json({
+        error: 'Calendar のアクセストークンが無効です。Calendar を連携解除→再連携してください',
+        needsReauth: true,
+      }, { status: 401 })
+    }
     if (!r.ok) {
       const body = await r.text()
       return json({ error: `Calendar API error ${r.status}: ${body.slice(0, 200)}` }, { status: r.status })
