@@ -931,8 +931,12 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
                     flex: 1, cursor: 'pointer',
                   }}>
                   <span>📧</span>
-                  <span style={{ flex: 1 }}>{m.from}: {truncate(m.subject, 24)}</span>
-                  <span style={{ fontSize: 9, color: T.accent, fontWeight: 700 }}>✨AI</span>
+                  <span style={{ flex: 1 }}>{m.from}: {truncate(m.subject, 22)}</span>
+                  <span style={{
+                    fontSize: 10, color: '#fff', fontWeight: 700,
+                    background: T.accentSolid, borderRadius: 4,
+                    padding: '2px 6px', whiteSpace: 'nowrap',
+                  }}>✨ AIで要約・返信</span>
                 </button>
               )} />
           </Section>
