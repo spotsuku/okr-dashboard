@@ -1,7 +1,7 @@
 // Gmail メール単体の全文取得 (AI には通さない、軽量)
 // GET /api/integrations/gmail/message?owner=<name>&messageId=<id>
 
-import { getIntegration, json } from '../../_shared'
+import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 function decodeBase64Url(s) {
   if (!s) return ''
@@ -58,16 +58,17 @@ export async function GET(request) {
       : 'トークン期限切れ。再連携してください',
   }, { status: 401 })
 
-  const token = result.integration.access_token
-
   try {
-    const r = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-      { headers: { Authorization: `Bearer ${token}` } }
+    const { response: r } = await callGoogleApiWithRetry(result.integration, (token) =>
+      fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
     )
     if (!r.ok) {
       const text = await r.text()
-      return json({ error: `Gmail API ${r.status}: ${text.slice(0, 200)}` }, { status: r.status })
+      const hint = r.status === 401 ? '。再連携してください。' : ''
+      return json({ error: `Gmail API ${r.status}: ${text.slice(0, 200)}${hint}` }, { status: r.status })
     }
     const msg = await r.json()
     const headers = msg.payload?.headers || []

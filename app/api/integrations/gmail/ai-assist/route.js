@@ -3,7 +3,7 @@
 // Body: { owner, messageId }
 // Response: { summary, draft, from, subject }
 
-import { getIntegration, json } from '../../_shared'
+import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 // base64url デコード
 function decodeBase64Url(s) {
@@ -54,18 +54,19 @@ export async function POST(request) {
       : 'トークン期限切れ。再連携してください',
   }, { status: 401 })
 
-  const token = result.integration.access_token
-
-  // メール本文を取得
+  // メール本文を取得 (401時は refresh して再試行)
   let msg
   try {
-    const r = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-      { headers: { Authorization: `Bearer ${token}` } }
+    const { response: r } = await callGoogleApiWithRetry(result.integration, (token) =>
+      fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
     )
     if (!r.ok) {
       const text = await r.text()
-      return json({ error: `Gmail API ${r.status}: ${text.slice(0, 200)}` }, { status: r.status })
+      const hint = r.status === 401 ? '。再連携してください。' : ''
+      return json({ error: `Gmail API ${r.status}: ${text.slice(0, 200)}${hint}` }, { status: r.status })
     }
     msg = await r.json()
   } catch (e) {

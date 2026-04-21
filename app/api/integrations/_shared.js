@@ -151,6 +151,24 @@ export async function getIntegration(owner, service) {
 
 export { refreshIntegration }
 
+// Google API 呼び出しを401時に自動リフレッシュ + 再試行する
+// integration は getIntegration() が返す result.integration 前提
+// build は token を受け取って Response を返す fetch 呼び出し関数
+export async function callGoogleApiWithRetry(integration, build) {
+  let current = integration
+  let r = await build(current.access_token)
+  if (r.status !== 401) return { response: r, integration: current }
+  // 401 → refresh して再試行
+  if (!current.refresh_token) return { response: r, integration: current }
+  try {
+    current = await refreshIntegration(current)
+  } catch {
+    return { response: r, integration: current }
+  }
+  const r2 = await build(current.access_token)
+  return { response: r2, integration: current }
+}
+
 export function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
     status: init.status || 200,
