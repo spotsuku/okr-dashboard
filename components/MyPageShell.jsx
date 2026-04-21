@@ -1647,40 +1647,41 @@ function RetrospectSummary({ T, stats, kpt, range }) {
   return (
     <div style={{
       background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
-      padding: 14, display: 'flex', flexDirection: 'column', gap: 14,
+      padding: 14, display: 'grid',
+      gridTemplateColumns: 'minmax(220px, 1fr) minmax(320px, 2fr)',
+      gap: 16,
     }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
-        📊 {rangeLabel}のサマリー
-      </div>
-
-      {/* タスク統計: 3 カラム */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-        <div style={{
-          padding: 12, background: 'rgba(0,214,143,0.10)', border: '1px solid rgba(0,214,143,0.3)',
-          borderRadius: 8, textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#00d68f', lineHeight: 1 }}>{stats.onTime}</div>
-          <div style={{ fontSize: 10, color: T.textSub, marginTop: 4, fontWeight: 600 }}>✅ 完了タスク</div>
-        </div>
-        <div style={{
-          padding: 12, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.3)',
-          borderRadius: 8, textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#ff6b6b', lineHeight: 1 }}>{stats.overdue}</div>
-          <div style={{ fontSize: 10, color: T.textSub, marginTop: 4, fontWeight: 600 }}>🚨 遅延タスク</div>
-        </div>
-        <div style={{
-          padding: 12, background: 'rgba(77,159,255,0.10)', border: '1px solid rgba(77,159,255,0.3)',
-          borderRadius: 8, textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#4d9fff', lineHeight: 1 }}>{completionPct}%</div>
-          <div style={{ fontSize: 10, color: T.textSub, marginTop: 4, fontWeight: 600 }}>📈 期限内達成率</div>
-        </div>
-      </div>
-
-      {/* KPT 集約 */}
+      {/* 左: 成果 (タスク統計) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.3 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
+          📊 {rangeLabel}の成果
+        </div>
+        <div style={{
+          padding: 14, background: 'rgba(0,214,143,0.10)', border: '1px solid rgba(0,214,143,0.3)',
+          borderRadius: 8, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: '#00d68f', lineHeight: 1 }}>{stats.onTime}</div>
+          <div style={{ fontSize: 11, color: T.textSub, marginTop: 5, fontWeight: 600 }}>✅ 完了タスク</div>
+        </div>
+        <div style={{
+          padding: 14, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.3)',
+          borderRadius: 8, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: '#ff6b6b', lineHeight: 1 }}>{stats.overdue}</div>
+          <div style={{ fontSize: 11, color: T.textSub, marginTop: 5, fontWeight: 600 }}>🚨 遅延タスク</div>
+        </div>
+        <div style={{
+          padding: 14, background: 'rgba(77,159,255,0.10)', border: '1px solid rgba(77,159,255,0.3)',
+          borderRadius: 8, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: '#4d9fff', lineHeight: 1 }}>{completionPct}%</div>
+          <div style={{ fontSize: 11, color: T.textSub, marginTop: 5, fontWeight: 600 }}>📈 期限内達成率</div>
+        </div>
+      </div>
+
+      {/* 右: KPT 集約 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
           💭 {rangeLabel}の KPT
         </div>
         {renderList('🟢 Keep', kpt.keep, '#00a86b', 'rgba(0,168,107,0.12)')}

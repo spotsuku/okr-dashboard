@@ -84,32 +84,42 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
   const load = useCallback(async () => {
     if (!myName) { setLoading(false); return }
     setLoading(true)
-    // 公開ビュー経由で読む (RLSをバイパス、トークンは含まない)
-    // フォールバック: ビューが無い場合は元のテーブルから読む
-    let data, error
+    // 公開ビュー user_integrations_status には環境によって metadata 列が無い場合があるため除外。
+    // metadata は自分の行のみ user_integrations テーブルから取得 (RLS で自分の行しか見えない)。
     const viewRes = await supabase
       .from('user_integrations_status')
-      .select('service, metadata, connected_at, expires_at, scope')
+      .select('service, connected_at, expires_at, scope')
       .eq('owner', myName)
-    if (viewRes.error && (viewRes.error.code === '42P01' || viewRes.error.message?.includes('not find'))) {
-      // ビューが未作成 → 元のテーブルにフォールバック
+    let data = viewRes.data
+    let error = viewRes.error
+    if (error && (error.code === '42P01' || error.message?.includes('not find'))) {
+      // ビュー未作成 → テーブルへフォールバック
       const tblRes = await supabase
         .from('user_integrations')
         .select('service, metadata, connected_at, expires_at, scope')
         .eq('owner', myName)
       data = tblRes.data; error = tblRes.error
-    } else {
-      data = viewRes.data; error = viewRes.error
     }
     if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
       setErrorMsg(`読み込みエラー: ${error.message}`)
     }
     const map = {}
     ;(data || []).forEach(row => { map[row.service] = row })
-    console.log('[Integration] loaded:', { myName, count: (data || []).length, services: Object.keys(map) })
+
+    // 自分が閲覧対象なら metadata を取得して付加 (email 等の表示用)
+    if (isViewingSelf && Object.keys(map).length > 0) {
+      const metaRes = await supabase
+        .from('user_integrations')
+        .select('service, metadata')
+        .eq('owner', myName)
+      ;(metaRes.data || []).forEach(row => {
+        if (map[row.service]) map[row.service].metadata = row.metadata
+      })
+    }
+
     setIntegrations(map)
     setLoading(false)
-  }, [myName])
+  }, [myName, isViewingSelf])
   useEffect(() => { load() }, [load])
 
   // URLパラメータで OAuth 結果を受け取る
