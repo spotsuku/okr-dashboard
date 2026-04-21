@@ -618,7 +618,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   }
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // 今週の成果: 完了タスク + KR記入
+  // 今週の成果: 完了タスクのみ
   const [achievements, setAchievements] = useState({ items: [], loading: true })
   const loadAchievements = useCallback(async () => {
     if (!viewingName) { setAchievements({ items: [], loading: false }); return }
@@ -626,29 +626,17 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     const sundayD = new Date(monday + 'T00:00:00Z'); sundayD.setUTCDate(sundayD.getUTCDate() + 6)
     const sunday = sundayD.toISOString().split('T')[0]
 
-    const [doneTasksRes, krReviewsRes] = await Promise.all([
-      supabase.from('ka_tasks')
-        .select('*, weekly_reports(kr_title, ka_title, owner)')
-        .eq('assignee', viewingName).eq('done', true)
-        .gte('due_date', monday).lte('due_date', sunday),
-      supabase.from('kr_weekly_reviews')
-        .select('*, key_results(title, owner)')
-        .eq('week_start', monday),
-    ])
+    // 今週中に完了したタスク (done=true) を取得
+    // due_date が今週内 OR done になった日が今週内 (現状 done 日時カラムが無いので due_date で代替)
+    const { data: doneTasks } = await supabase.from('ka_tasks')
+      .select('*, weekly_reports(kr_title, ka_title, owner)')
+      .eq('assignee', viewingName).eq('done', true)
+      .gte('due_date', monday).lte('due_date', sunday)
 
-    const items = []
-    ;(doneTasksRes.data || []).forEach(t => items.push({
+    const items = (doneTasks || []).map(t => ({
       kind: 'task', date: t.due_date, icon: '✅',
-      text: `完了: ${t.title || t.weekly_reports?.ka_title || '(無題)'}`,
+      text: t.title || t.weekly_reports?.ka_title || '(無題)',
     }))
-    ;(krReviewsRes.data || [])
-      .filter(r => r.key_results?.owner === viewingName)
-      .filter(r => (r.good||'').trim() || (r.more||'').trim() || (r.focus_output||'').trim())
-      .forEach(r => items.push({
-        kind: 'kr', date: (r.updated_at || r.created_at || '').slice(0,10), icon: '📝',
-        text: `KR更新: ${truncate(r.key_results?.title || '(KR)', 30)}`,
-      }))
-
     items.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     setAchievements({ items, loading: false })
   }, [viewingName])
@@ -906,23 +894,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
             })()}
           </Section>
 
-          <Section T={T} icon="⚠️" title="タスク期限" flex={0}>
-            {reminders.loading ? <Loading T={T} /> : (() => {
-              const items = [
-                ...reminders.overdueTasks.map(t => ({ icon: '🚨', sev: 'danger',
-                  text: `期限超過: ${truncate(t.title, 28)} (${t.due_date})` })),
-                ...reminders.todayTasks.map(t => ({ icon: '📅', sev: 'warn',
-                  text: `今日: ${truncate(t.title, 32)}` })),
-                ...reminders.tomorrowTasks.map(t => ({ icon: '📆', sev: 'info',
-                  text: `明日: ${truncate(t.title, 32)}` })),
-              ]
-              return <ReminderList T={T} items={items} maxVisible={3}
-                emptyText="✨ 直近の期限タスクはありません"
-                detailLabel="📅 タスクWBSで全て見る →"
-                onDetail={() => onGoToTab && onGoToTab('wbs')} />
-            })()}
-          </Section>
-
           <Section T={T} icon="📅" title="Googleカレンダー" flex={0}>
             <IntegrationStatus T={T} state={integData.calendar} isViewingSelf={isViewingSelf}
               serviceLabel="Google Calendar" emptyText="✨ 今日の予定はありません"
@@ -1021,33 +992,47 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
             />
           )}
           {showW('achievements') && (
-            <Section T={T} icon="🏆" title={`今週の成果${achievements.items.length ? ` (${achievements.items.length})` : ''}`} flex={0} headerRight={
+            <Section T={T} icon="🏆" title="今週の成果" flex={0} headerRight={
               <button onClick={loadAchievements} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
               }}>↻</button>
             }>
-              <div style={{ maxHeight: 140, overflowY: 'auto' }}>
-                {achievements.loading ? <Loading T={T} /> :
-                  achievements.items.length === 0
-                    ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>今週の成果はまだありません</div>
-                    : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        {achievements.items.map((it, i) => (
-                          <div key={i} style={{
-                            display: 'flex', alignItems: 'flex-start', gap: 6,
-                            padding: '4px 6px', borderRadius: 5,
-                            background: T.successBg, border: `1px solid ${T.success}22`,
-                            fontSize: 10, color: T.text, lineHeight: 1.4,
-                          }}>
-                            <span>{it.icon}</span>
-                            <span style={{ color: T.textMuted, fontWeight: 600, minWidth: 40, fontSize: 9 }}>{it.date || '--'}</span>
-                            <span style={{ flex: 1 }}>{it.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-              </div>
+              {achievements.loading ? <Loading T={T} /> : (
+                <>
+                  <div style={{
+                    display: 'flex', alignItems: 'baseline', gap: 8,
+                    padding: '8px 10px', marginBottom: 6,
+                    background: T.successBg, border: `1px solid ${T.success}33`,
+                    borderRadius: 7,
+                  }}>
+                    <span style={{ fontSize: 24, fontWeight: 800, color: T.success || '#00d68f' }}>
+                      {achievements.items.length}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>件 タスク完了</span>
+                  </div>
+                  <div style={{ maxHeight: 110, overflowY: 'auto' }}>
+                    {achievements.items.length === 0
+                      ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>今週の完了タスクはまだありません</div>
+                      : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {achievements.items.map((it, i) => (
+                            <div key={i} style={{
+                              display: 'flex', alignItems: 'flex-start', gap: 6,
+                              padding: '4px 6px', borderRadius: 5,
+                              background: T.successBg, border: `1px solid ${T.success}22`,
+                              fontSize: 10, color: T.text, lineHeight: 1.4,
+                            }}>
+                              <span>{it.icon}</span>
+                              <span style={{ color: T.textMuted, fontWeight: 600, minWidth: 40, fontSize: 9 }}>{it.date || '--'}</span>
+                              <span style={{ flex: 1 }}>{it.text}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                </>
+              )}
             </Section>
           )}
         </div>
@@ -1487,13 +1472,14 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
 function RetrospectTab({ T, viewingName, viewingMember }) {
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
-  const [data, setData] = useState({ days: [], loading: true })
+  const [data, setData] = useState({ days: [], loading: true, taskStats: { onTime: 0, overdue: 0 }, kptSummary: { keep: [], problem: [], try: [] } })
 
   const load = useCallback(async () => {
-    if (!viewingName) { setData({ days: [], loading: false }); return }
+    if (!viewingName) { setData({ days: [], loading: false, taskStats: { onTime: 0, overdue: 0 }, kptSummary: { keep: [], problem: [], try: [] } }); return }
     setData(d => ({ ...d, loading: true }))
 
     const now = new Date()
+    const today = toJSTDateStr(now)
     const rangeStart = (() => {
       if (range === 'all') return null
       if (range === 'month') {
@@ -1505,6 +1491,7 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
       const monday = new Date(getMondayJSTStr() + 'T00:00:00Z')
       return monday.toISOString()
     })()
+    const rangeStartDateOnly = rangeStart ? rangeStart.slice(0, 10) : null
 
     let q = supabase.from('coaching_logs')
       .select('*')
@@ -1513,7 +1500,25 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
       .order('created_at', { ascending: false })
     if (rangeStart) q = q.gte('created_at', rangeStart)
 
-    const { data: rows } = await q
+    // タスク統計取得 (期間内に due_date があるタスク)
+    let tasksQ = supabase.from('ka_tasks').select('id, title, due_date, done').eq('assignee', viewingName)
+    if (rangeStartDateOnly) tasksQ = tasksQ.gte('due_date', rangeStartDateOnly)
+
+    const [logsRes, tasksRes] = await Promise.all([q, tasksQ])
+    const rows = logsRes.data
+    const tasks = tasksRes.data || []
+
+    // タスク統計
+    let onTime = 0, overdue = 0
+    tasks.forEach(t => {
+      if (t.done) {
+        // 完了タスクは「期限内完了」とみなす (done時刻カラムが無いため)
+        onTime += 1
+      } else if (t.due_date && t.due_date < today) {
+        // 未完了 & 期限超過
+        overdue += 1
+      }
+    })
 
     // 日付ごとにまとめる (JST日付)
     const byDate = {}
@@ -1522,15 +1527,24 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
       if (!byDate[dateKey]) byDate[dateKey] = { date: dateKey, workLog: null, kpts: [] }
       const content = parseLogContent(row.content)
       if (row.log_type === 'work_log') {
-        // 同日複数ある場合は最新を採用
         if (!byDate[dateKey].workLog) byDate[dateKey].workLog = { ...content, id: row.id }
       } else if (row.log_type === 'kpt') {
         byDate[dateKey].kpts.push({ ...content, id: row.id, created_at: row.created_at })
       }
     })
 
+    // KPT 集約 (keep/problem/try それぞれの記入を全部集める)
+    const kptSummary = { keep: [], problem: [], try: [] }
+    Object.values(byDate).forEach(d => {
+      d.kpts.forEach(k => {
+        if ((k.keep || '').trim()) kptSummary.keep.push({ text: k.keep.trim(), date: d.date })
+        if ((k.problem || '').trim()) kptSummary.problem.push({ text: k.problem.trim(), date: d.date })
+        if ((k.try || '').trim()) kptSummary.try.push({ text: k.try.trim(), date: d.date })
+      })
+    })
+
     const days = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date))
-    setData({ days, loading: false })
+    setData({ days, loading: false, taskStats: { onTime, overdue }, kptSummary })
   }, [viewingName, range])
 
   useEffect(() => { load() }, [load])
@@ -1582,21 +1596,96 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
 
       {/* 本体 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
-        {data.loading ? <Loading T={T} /> :
-          data.days.length === 0
-            ? (
+        {data.loading ? <Loading T={T} /> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 880, margin: '0 auto' }}>
+            {/* サマリー: タスク統計 + KPT 集約 */}
+            <RetrospectSummary T={T} stats={data.taskStats} kpt={data.kptSummary} range={range} />
+
+            {/* 日別ログ */}
+            {data.days.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 40, color: T.textMuted, fontSize: 12 }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>💭</div>
-                <div>この期間の振り返りはまだありません</div>
+                <div>この期間のKPT記録はまだありません</div>
                 <div style={{ marginTop: 6, fontSize: 10 }}>
                   ダッシュボードの「🌙 終業する」でKPTを記入すると、ここに蓄積されます
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 880, margin: '0 auto' }}>
-                {data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} />)}
-              </div>
+              data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} />)
             )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RetrospectSummary({ T, stats, kpt, range }) {
+  const rangeLabel = range === 'week' ? '今週' : range === 'month' ? '今月' : '全期間'
+  const total = stats.onTime + stats.overdue
+  const completionPct = total > 0 ? Math.round((stats.onTime / total) * 100) : 0
+  const renderList = (label, items, color, bg) => (
+    <div>
+      <div style={{
+        fontSize: 11, fontWeight: 700, color, marginBottom: 6,
+        padding: '3px 8px', background: bg, borderRadius: 5, display: 'inline-block',
+      }}>{label} ({items.length})</div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 8px' }}>記入なし</div>
+      ) : (
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.7, color: T.text }}>
+          {items.map((it, i) => (
+            <li key={i}>
+              {it.text}
+              <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 6 }}>({it.date.slice(5).replace('-', '/')})</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
+      padding: 14, display: 'flex', flexDirection: 'column', gap: 14,
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
+        📊 {rangeLabel}のサマリー
+      </div>
+
+      {/* タスク統計: 3 カラム */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+        <div style={{
+          padding: 12, background: 'rgba(0,214,143,0.10)', border: '1px solid rgba(0,214,143,0.3)',
+          borderRadius: 8, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#00d68f', lineHeight: 1 }}>{stats.onTime}</div>
+          <div style={{ fontSize: 10, color: T.textSub, marginTop: 4, fontWeight: 600 }}>✅ 完了タスク</div>
+        </div>
+        <div style={{
+          padding: 12, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.3)',
+          borderRadius: 8, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#ff6b6b', lineHeight: 1 }}>{stats.overdue}</div>
+          <div style={{ fontSize: 10, color: T.textSub, marginTop: 4, fontWeight: 600 }}>🚨 遅延タスク</div>
+        </div>
+        <div style={{
+          padding: 12, background: 'rgba(77,159,255,0.10)', border: '1px solid rgba(77,159,255,0.3)',
+          borderRadius: 8, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#4d9fff', lineHeight: 1 }}>{completionPct}%</div>
+          <div style={{ fontSize: 10, color: T.textSub, marginTop: 4, fontWeight: 600 }}>📈 期限内達成率</div>
+        </div>
+      </div>
+
+      {/* KPT 集約 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.3 }}>
+          💭 {rangeLabel}の KPT
+        </div>
+        {renderList('🟢 Keep', kpt.keep, '#00a86b', 'rgba(0,168,107,0.12)')}
+        {renderList('🟡 Problem', kpt.problem, '#d49500', 'rgba(212,149,0,0.12)')}
+        {renderList('🔵 Try', kpt.try, '#4d9fff', 'rgba(77,159,255,0.12)')}
       </div>
     </div>
   )
