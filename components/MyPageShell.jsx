@@ -923,9 +923,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
             })()}
           </Section>
 
-          <Section T={T} icon="📅" title="Googleカレンダー" flex={0}>
+          <Section T={T} icon="📅" title="Googleカレンダー (直近8時間)" flex={0}>
             <IntegrationStatus T={T} state={integData.calendar} isViewingSelf={isViewingSelf}
-              serviceLabel="Google Calendar" emptyText="✨ 今日の予定はありません"
+              serviceLabel="Google Calendar" emptyText="✨ 直近8時間の予定はありません"
               onConnect={onGoToIntegrations} maxVisible={3}
               detailLabel="📅 Googleカレンダーを開く ↗"
               detailUrl="https://calendar.google.com/"

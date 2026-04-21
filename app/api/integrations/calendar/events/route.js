@@ -1,10 +1,11 @@
-// 今日のGoogleカレンダー予定を取得
-// GET /api/integrations/calendar/events?owner=<name>
+// 直近の Google カレンダー予定を取得 (現在時刻〜+8時間)
+// GET /api/integrations/calendar/events?owner=<name>&hours=<8>
 import { getIntegration, json } from '../../_shared'
 
 export async function GET(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const hours = Math.max(1, Math.min(24, Number(url.searchParams.get('hours')) || 8))
   const result = await getIntegration(owner, 'google_calendar')
   if (result.error) return json({ error: result.error }, { status: 400 })
   if (result.expired) return json({
@@ -14,16 +15,15 @@ export async function GET(request) {
   }, { status: 401 })
 
   const token = result.integration.access_token
-  // 今日のJST範囲をUTCで算出
+  // 現在時刻から hours 時間先まで
   const now = new Date()
-  const jst = new Date(now.getTime() + 9 * 3600 * 1000)
-  const yyyy = jst.getUTCFullYear(), mm = jst.getUTCMonth(), dd = jst.getUTCDate()
-  const jstMidnight = new Date(Date.UTC(yyyy, mm, dd, -9, 0, 0)).toISOString() // JST 00:00
-  const jstNextMidnight = new Date(Date.UTC(yyyy, mm, dd + 1, -9, 0, 0)).toISOString()
+  const windowEnd = new Date(now.getTime() + hours * 3600 * 1000)
+  const timeMin = now.toISOString()
+  const timeMax = windowEnd.toISOString()
 
   const apiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
-  apiUrl.searchParams.set('timeMin', jstMidnight)
-  apiUrl.searchParams.set('timeMax', jstNextMidnight)
+  apiUrl.searchParams.set('timeMin', timeMin)
+  apiUrl.searchParams.set('timeMax', timeMax)
   apiUrl.searchParams.set('singleEvents', 'true')
   apiUrl.searchParams.set('orderBy', 'startTime')
   apiUrl.searchParams.set('maxResults', '20')
@@ -37,21 +37,29 @@ export async function GET(request) {
       return json({ error: `Calendar API error ${r.status}: ${body.slice(0, 200)}` }, { status: r.status })
     }
     const data = await r.json()
-    const items = (data.items || []).map(ev => {
-      const start = ev.start?.dateTime || ev.start?.date
-      const end = ev.end?.dateTime || ev.end?.date
-      const allDay = start && start.length <= 10
-      const time = start ? (allDay ? '終日' : formatTime(start)) : ''
-      return {
-        title: ev.summary || '(無題)',
-        time,
-        start,
-        end,
-        allDay,
-        hangoutLink: ev.hangoutLink || null,
-        conflictsWith: [],  // タイトルの配列で埋める
-      }
-    })
+    const nowMs = now.getTime()
+    const items = (data.items || [])
+      .map(ev => {
+        const start = ev.start?.dateTime || ev.start?.date
+        const end = ev.end?.dateTime || ev.end?.date
+        const allDay = start && start.length <= 10
+        const time = start ? (allDay ? '終日' : formatTime(start)) : ''
+        return {
+          title: ev.summary || '(無題)',
+          time,
+          start,
+          end,
+          allDay,
+          hangoutLink: ev.hangoutLink || null,
+          conflictsWith: [],
+        }
+      })
+      // 時刻指定イベントのうち、既に終わったものは除外 (end <= 現在)
+      .filter(ev => {
+        if (ev.allDay) return true
+        if (!ev.end) return true
+        return new Date(ev.end).getTime() > nowMs
+      })
 
     // 重複検出: 時刻指定のイベント同士で start < 他.end && end > 他.start なら重複
     const timed = items.filter(e => !e.allDay && e.start && e.end)
@@ -68,7 +76,7 @@ export async function GET(request) {
       }
     }
 
-    return json({ items })
+    return json({ items, windowHours: hours })
   } catch (e) {
     return json({ error: `取得失敗: ${e.message}` }, { status: 500 })
   }
