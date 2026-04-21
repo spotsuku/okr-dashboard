@@ -47,6 +47,21 @@ export async function GET(request) {
   if (debug) {
     const scopeList = SCOPE_MAP[service].split(' ')
     const clientIdProject = clientId.split('-')[0]  // プロジェクト番号部分
+    // Supabase 接続情報の確認 (キーは表示しない、URL のプロジェクトIDと service_role の ref を返す)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    const supabaseProjectId = supabaseUrl.replace('https://', '').split('.')[0]
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    let serviceKeyRef = null
+    let serviceKeyRole = null
+    try {
+      const payload = serviceKey.split('.')[1]
+      if (payload) {
+        const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'))
+        serviceKeyRef = decoded.ref
+        serviceKeyRole = decoded.role
+      }
+    } catch { /* noop */ }
+    const supabaseMatches = supabaseProjectId && serviceKeyRef && supabaseProjectId === serviceKeyRef
     return new Response(JSON.stringify({
       service,
       client_id: clientId,
@@ -57,6 +72,15 @@ export async function GET(request) {
       access_type: 'offline',
       prompt: 'consent',
       auth_url: authUrl.toString(),
+      supabase: {
+        url_project_id: supabaseProjectId,
+        service_role_ref: serviceKeyRef,
+        service_role_role: serviceKeyRole,
+        url_and_key_match: supabaseMatches,
+        note: supabaseMatches
+          ? '✓ URL と SERVICE_ROLE_KEY のプロジェクトIDが一致'
+          : '✗ URL と SERVICE_ROLE_KEY のプロジェクトIDが不一致。これが "未連携" エラーの原因',
+      },
       hints: [
         '1. client_id_project_number が Google Cloud Console の「認証情報」にある OAuth クライアントと一致するか確認',
         '2. そのプロジェクトの「OAuth同意画面」→「スコープ」に .../auth/gmail.compose が保存されているか確認',
