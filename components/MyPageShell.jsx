@@ -712,10 +712,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     setIntegData(base)
 
     // 接続済みのサービスに対してデータ取得(エラー時は silently fail → error を保持)
-    const fetchService = async (svc, url) => {
+    const fetchService = async (svc, url, extraParams = {}) => {
       setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: true } }))
       try {
-        const r = await fetch(`${url}?owner=${encodeURIComponent(viewingName)}`)
+        const qs = new URLSearchParams({ owner: viewingName, ...extraParams }).toString()
+        const r = await fetch(`${url}?${qs}`)
         const j = await r.json()
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
         setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: false, items: j.items || [], error: '' } }))
@@ -724,7 +725,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
       }
     }
     if (map.google_calendar) fetchService('calendar', '/api/integrations/calendar/events')
-    if (map.google_gmail)    fetchService('gmail',    '/api/integrations/gmail/threads')
+    // Gmail: ダッシュボードでは「人から届いた要返信メール」のみ表示 (通知/メルマガは除外)
+    // limit=10 で取得し、bulk を除外した上位を表示 (非bulk が少ない場合に備えて多めに)
+    if (map.google_gmail)    fetchService('gmail',    '/api/integrations/gmail/threads', { limit: 10 })
     if (map.slack)           fetchService('slack',    '/api/integrations/slack/unread')
   }, [viewingName])
   useEffect(() => { loadIntegrations() }, [loadIntegrations])
@@ -943,7 +946,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
               }} />
           </Section>
 
-          <Section T={T} icon="📧" title="Gmail"
+          <Section T={T} icon="📧" title="Gmail (人からのメール)"
             flex={0}
             headerRight={
               <button onClick={() => onGoToTab && onGoToTab('mail')} style={{
@@ -953,10 +956,16 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
               }}>📧 メールタブで全部見る →</button>
             }
           >
-            <IntegrationStatus T={T} state={integData.gmail} isViewingSelf={isViewingSelf}
-              serviceLabel="Gmail" emptyText="✨ 要対応のメールはありません"
+            <IntegrationStatus T={T}
+              state={{
+                ...integData.gmail,
+                // 通知/メルマガ/noreply 系を除外し、人から届いたメールだけ表示
+                items: (integData.gmail.items || []).filter(m => !m.bulk),
+              }}
+              isViewingSelf={isViewingSelf}
+              serviceLabel="Gmail" emptyText="✨ 人からの要対応メールはありません"
               onConnect={onGoToIntegrations} maxVisible={5}
-              detailLabel="📧 メールタブで一覧を見る →"
+              detailLabel="📧 メールタブで一覧を見る (通知も含む) →"
               detailUrl={null}
               onDetail={() => onGoToTab && onGoToTab('mail')}
               renderItem={m => {
@@ -1577,8 +1586,9 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
 
 // ─── メールタブ: Gmail のメールを To / Cc で切り替えて一覧表示 ───────
 function MailTab({ T, viewingName, isViewingSelf }) {
-  const [filter, setFilter] = useState('to')       // 'all' | 'to' | 'cc' | 'reply_needed'
-  const [scope, setScope] = useState('all')        // 'all' (最近の受信) | 'reply_needed' (要返信)
+  // 初期タブは「人から (To)」= 顧客/営業のやりとりが真っ先に見える
+  const [filter, setFilter] = useState('human_to')  // 'all' | 'human_to' | 'human_cc' | 'notification'
+  const [scope, setScope] = useState('all')         // 'all' (最近の受信) | 'reply_needed' (要返信)
   const [state, setState] = useState({ items: [], loading: true, error: '' })
   const [gmailAI, setGmailAI] = useState(null)
 
@@ -1614,15 +1624,17 @@ function MailTab({ T, viewingName, isViewingSelf }) {
 
   const filtered = state.items.filter(m => {
     if (filter === 'all') return true
-    if (filter === 'to') return m.category === 'to'
-    if (filter === 'cc') return m.category === 'cc'
+    if (filter === 'human_to') return !m.bulk && m.category === 'to'
+    if (filter === 'human_cc') return !m.bulk && m.category === 'cc'
+    if (filter === 'notification') return m.bulk
     return true
   })
 
   const counts = {
     all: state.items.length,
-    to: state.items.filter(m => m.category === 'to').length,
-    cc: state.items.filter(m => m.category === 'cc').length,
+    human_to: state.items.filter(m => !m.bulk && m.category === 'to').length,
+    human_cc: state.items.filter(m => !m.bulk && m.category === 'cc').length,
+    notification: state.items.filter(m => m.bulk).length,
   }
 
   const formatDate = (raw) => {
@@ -1672,15 +1684,16 @@ function MailTab({ T, viewingName, isViewingSelf }) {
           }}>{state.loading ? '取得中…' : '🔄 更新'}</button>
         </div>
 
-        {/* カテゴリタブ */}
+        {/* カテゴリタブ - 顧客/営業の人間コミュニケーションを最優先 */}
         <div style={{
           display: 'flex', gap: 2, marginBottom: 12,
-          borderBottom: `1px solid ${T.border}`,
+          borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap',
         }}>
           {[
-            { k: 'all', label: `すべて (${counts.all})`, color: T.textSub },
-            { k: 'to',  label: `🔴 要対応 - To (${counts.to})`, color: '#d64545' },
-            { k: 'cc',  label: `🟡 要確認 - Cc (${counts.cc})`, color: '#a37200' },
+            { k: 'human_to',     label: `👥 人から - 要対応 (${counts.human_to})`,   color: '#d64545' },
+            { k: 'human_cc',     label: `👀 人から - 要確認 (${counts.human_cc})`,   color: '#a37200' },
+            { k: 'notification', label: `📢 通知・キャンペーン (${counts.notification})`, color: T.textMuted },
+            { k: 'all',          label: `すべて (${counts.all})`,                     color: T.textSub },
           ].map(t => {
             const active = filter === t.k
             return (
@@ -1710,14 +1723,17 @@ function MailTab({ T, viewingName, isViewingSelf }) {
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
-            {filter === 'to' ? '要対応 (To) のメールはありません' :
-             filter === 'cc' ? '要確認 (Cc) のメールはありません' :
+            {filter === 'human_to' ? '👥 人からの「要対応」メールはありません' :
+             filter === 'human_cc' ? '👀 人からの「要確認」メールはありません' :
+             filter === 'notification' ? '📢 通知メールはありません' :
              'メールはありません'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {filtered.map((m, i) => {
-              const catStyle = m.category === 'to'
+              const catStyle = m.bulk
+                ? { bg: T.sectionBg, fg: T.textMuted, label: '📢 通知' }
+                : m.category === 'to'
                 ? { bg: 'rgba(255,107,107,0.12)', fg: '#d64545', label: '🔴 To' }
                 : m.category === 'cc'
                 ? { bg: 'rgba(212,149,0,0.12)', fg: '#a37200', label: '🟡 Cc' }
@@ -1727,12 +1743,12 @@ function MailTab({ T, viewingName, isViewingSelf }) {
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 12px', background: T.bgCard,
                   border: `1px solid ${T.border}`, borderRadius: 8,
-                  opacity: m.replied ? 0.6 : 1,
+                  opacity: m.bulk ? 0.7 : m.replied ? 0.6 : 1,
                 }}>
                   <span style={{
                     fontSize: 11, fontWeight: 700, color: catStyle.fg,
                     background: catStyle.bg, borderRadius: 5,
-                    padding: '3px 7px', flexShrink: 0, minWidth: 38, textAlign: 'center',
+                    padding: '3px 7px', flexShrink: 0, minWidth: 50, textAlign: 'center',
                   }}>{catStyle.label}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
@@ -1750,7 +1766,7 @@ function MailTab({ T, viewingName, isViewingSelf }) {
                     </div>
                   </div>
                   <span style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>{formatDate(m.date)}</span>
-                  {isViewingSelf && (
+                  {isViewingSelf && !m.bulk && (
                     <button onClick={() => openAI(m)} style={{
                       background: T.accentSolid, color: '#fff', border: 'none',
                       borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700,

@@ -64,7 +64,8 @@ export async function GET(request) {
     const threadIds = (listData.threads || []).map(t => t.id).slice(0, fetchCount)
 
     // 2. 各スレッド詳細を並列取得
-    const metaHeaders = ['From', 'To', 'Cc', 'Subject', 'Message-ID', 'Date']
+    const metaHeaders = ['From', 'To', 'Cc', 'Subject', 'Message-ID', 'Date',
+                         'List-Unsubscribe', 'Precedence', 'Auto-Submitted', 'X-Auto-Response-Suppress']
     const headerQs = metaHeaders.map(h => `metadataHeaders=${encodeURIComponent(h)}`).join('&')
 
     const threads = await Promise.all(threadIds.map(async tid => {
@@ -115,6 +116,23 @@ export async function GET(request) {
         else if (inCc) category = 'cc'
       }
 
+      // ─── bulk (通知/キャンペーン) 判定 ───
+      // 1. List-Unsubscribe 付き → ほぼ確実に一斉配信
+      const listUnsub = getH(rh, 'List-Unsubscribe')
+      // 2. Precedence: bulk/list/junk → 一括送信
+      const precedence = (getH(rh, 'Precedence') || '').toLowerCase()
+      // 3. Auto-Submitted: auto-generated/auto-replied → 自動生成
+      const autoSub = (getH(rh, 'Auto-Submitted') || '').toLowerCase()
+      // 4. From がシステムアドレス (noreply@ / notifications@ 等)
+      const fromLocal = (from.email || '').split('@')[0] || ''
+      const isNoReplyAddr = /^(no[-._]?reply|do[-._]?not[-._]?reply|notifications?|alerts?|mailer|postmaster|info|news|newsletter|support[-._]?noreply|bounce|auto|system|automated|notice|notify|marketing|campaign|promo)(@|$|[-._])/i.test(from.email || '')
+        || /^(no[-._]?reply|do[-._]?not[-._]?reply|notifications?|alerts?|mailer|postmaster|newsletter|bounce|automated|notice|notify|marketing|campaign|promo)$/i.test(fromLocal)
+
+      const isBulk = !!listUnsub
+        || precedence === 'bulk' || precedence === 'list' || precedence === 'junk'
+        || (autoSub && autoSub !== 'no')
+        || isNoReplyAddr
+
       items.push({
         id: reply.id,                       // AI assist & draft 用のメッセージID
         threadId: t.id,                     // draft をスレッドに紐付けるため
@@ -126,14 +144,20 @@ export async function GET(request) {
         date: getH(rh, 'Date'),
         category,
         replied,                            // scope=all のとき「返信済み」表示用
+        bulk: isBulk,                       // 通知/メルマガ/一斉配信か
       })
     }
 
-    // reply_needed: to 優先 → cc → other の順
-    // all: 日付降順 (Gmail 返却順をそのまま)
+    // reply_needed: 人からのメール(非bulk) 優先 → to/cc → bulk最後
+    // all: 日付降順 (Gmail 返却順をそのまま、bulk も含める)
     if (scope !== 'all') {
-      const rank = { to: 0, cc: 1, other: 2 }
-      items.sort((a, b) => (rank[a.category] ?? 9) - (rank[b.category] ?? 9))
+      const rank = (it) => {
+        if (it.bulk) return 10                 // 通知は末尾
+        if (it.category === 'to') return 0
+        if (it.category === 'cc') return 1
+        return 2
+      }
+      items.sort((a, b) => rank(a) - rank(b))
     }
 
     return json({ items: items.slice(0, limit) })
