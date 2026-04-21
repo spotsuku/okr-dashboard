@@ -1,7 +1,8 @@
-// Gmail 連携トークンの診断用エンドポイント
-// GET /api/integrations/gmail/diagnose?owner=<name>
+// Google 連携トークンの診断用エンドポイント
+// GET /api/integrations/gmail/diagnose?owner=<name>&service=<google_gmail|google_calendar>
 // DB に保存されている Google トークンの状態と、Google 側の実トークン情報を返す
 // 本番で個人情報が漏れないよう、アクセストークン等は先頭/末尾のみ
+// service 未指定時は google_gmail (後方互換)
 
 import { getIntegration, json } from '../../_shared'
 
@@ -31,16 +32,19 @@ async function probeTokenInfo(token) {
   }
 }
 
-async function probeGmailProfile(token) {
+async function probeApi(token, service) {
+  const endpoint = service === 'google_calendar'
+    ? 'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1'
+    : 'https://gmail.googleapis.com/gmail/v1/users/me/profile'
   try {
-    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+    const r = await fetch(endpoint, {
       headers: { Authorization: `Bearer ${token}` },
     })
     const j = await r.json().catch(() => ({}))
     return {
       ok: r.ok,
       status: r.status,
-      emailAddress: j.emailAddress,
+      emailAddress: j.emailAddress,  // Gmail profile のみ
       error: j.error?.message,
       errorStatus: j.error?.status,
     }
@@ -87,9 +91,13 @@ async function probeRefresh(refreshToken) {
 export async function GET(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const service = url.searchParams.get('service') || 'google_gmail'
   if (!owner) return json({ error: 'owner is required' }, { status: 400 })
+  if (!['google_gmail', 'google_calendar'].includes(service)) {
+    return json({ error: 'service must be google_gmail or google_calendar' }, { status: 400 })
+  }
 
-  const result = await getIntegration(owner, 'google_gmail')
+  const result = await getIntegration(owner, service)
   if (result.error) return json({ error: result.error, stage: 'getIntegration' })
 
   const integ = result.integration
@@ -116,7 +124,7 @@ export async function GET(request) {
   }
 
   diag.live = await probeTokenInfo(integ.access_token)
-  diag.gmailProbe = await probeGmailProfile(integ.access_token)
+  diag.apiProbe = await probeApi(integ.access_token, service)
   diag.refreshProbe = await probeRefresh(integ.refresh_token)
 
   // refresh で新たに得た access_token が実際に Google から見て有効か？

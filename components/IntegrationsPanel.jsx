@@ -105,6 +105,8 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
   const [busyKey, setBusyKey] = useState(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
+  const [diagKey, setDiagKey] = useState(null)       // 診断中のサービス key
+  const [diagResult, setDiagResult] = useState(null) // 診断結果 (service, data)
 
   const load = useCallback(async () => {
     if (!myName) { setLoading(false); return }
@@ -181,15 +183,52 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
   async function disconnect(service, title) {
     if (!window.confirm(`${title} の連携を解除しますか？`)) return
     setBusyKey(service)
-    const { error } = await supabase
-      .from('user_integrations')
-      .delete()
-      .eq('owner', myName).eq('service', service)
-    setBusyKey(null)
-    if (error) { setErrorMsg(`解除エラー: ${error.message}`); return }
-    setSuccessMsg(`${title} の連携を解除しました`)
-    await load()
-    setTimeout(() => setSuccessMsg(''), 3000)
+    setErrorMsg('')
+    try {
+      // Google 系はサーバーサイド (service_role) で確実に削除する。
+      // クライアント supabase.delete は RLS やセッション状態次第で silent fail することがあるため。
+      if (service === 'google_gmail' || service === 'google_calendar') {
+        const r = await fetch('/api/integrations/google/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ owner: myName, service }),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      } else {
+        const { error } = await supabase
+          .from('user_integrations')
+          .delete()
+          .eq('owner', myName).eq('service', service)
+        if (error) throw new Error(error.message)
+      }
+      setSuccessMsg(`${title} の連携を解除しました`)
+      await load()
+      setTimeout(() => setSuccessMsg(''), 3000)
+    } catch (e) {
+      setErrorMsg(`解除エラー: ${e.message || e}`)
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  async function runDiagnose(integ) {
+    setDiagKey(integ.key)
+    setDiagResult(null)
+    setErrorMsg('')
+    try {
+      const u = new URL('/api/integrations/gmail/diagnose', window.location.origin)
+      u.searchParams.set('owner', myName)
+      u.searchParams.set('service', integ.key)
+      const r = await fetch(u.toString())
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setDiagResult({ service: integ.key, title: integ.title, data: j })
+    } catch (e) {
+      setErrorMsg(`診断エラー: ${e.message || e}`)
+    } finally {
+      setDiagKey(null)
+    }
   }
 
   async function connect(integ) {
@@ -386,6 +425,25 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                       </>
                     )}
                   </div>
+
+                  {/* 診断ボタン (Google 系のみ) */}
+                  {integ.provider === 'google' && isConnected && isViewingSelf && (
+                    <button
+                      onClick={() => runDiagnose(integ)}
+                      disabled={diagKey === integ.key}
+                      style={{
+                        background: 'transparent', border: `1px solid ${T.border}`,
+                        color: T.textSub, borderRadius: 6, padding: '5px 10px',
+                        fontSize: 10, fontWeight: 600, fontFamily: 'inherit',
+                        cursor: diagKey === integ.key ? 'wait' : 'pointer',
+                      }}
+                    >{diagKey === integ.key ? '診断中…' : '🔍 トークンを診断'}</button>
+                  )}
+
+                  {/* 診断結果 (このカードの分) */}
+                  {diagResult?.service === integ.key && (
+                    <DiagnoseView T={T} result={diagResult.data} onClose={() => setDiagResult(null)} />
+                  )}
                 </div>
               )
             })}
@@ -401,12 +459,98 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
           <div style={{ fontWeight: 700, color: T.textSub, marginBottom: 6 }}>⚙️ 管理者向けセットアップ</div>
           連携を有効化するには、各サービスの OAuth 設定が必要です。詳細は <code style={{ padding: '1px 6px', background: T.bgCard, borderRadius: 4 }}>INTEGRATIONS_SETUP.md</code> を参照してください。
           <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
-            <li>Google (Gmail/Calendar): Google Cloud Console で Gmail API / Calendar API を有効化 + Supabase Auth にスコープ追加</li>
+            <li>Google (Gmail/Calendar): Google Cloud Console で Gmail API / Calendar API を有効化 + Vercel に <code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> を設定</li>
             <li>Slack: api.slack.com で App を作成し <code>SLACK_CLIENT_ID</code> / <code>SLACK_CLIENT_SECRET</code> を Vercel に設定</li>
             <li>LINE: LINE Developers Console で Channel を作成し <code>LINE_CHANNEL_ID</code> / <code>LINE_CHANNEL_SECRET</code> を Vercel に設定</li>
           </ul>
         </div>
       </div>
+    </div>
+  )
+}
+
+function DiagnoseView({ T, result, onClose }) {
+  if (!result) return null
+  const Row = ({ label, value, mono = true, danger = false }) => (
+    <div style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 11, lineHeight: 1.5 }}>
+      <div style={{ color: T.textMuted, minWidth: 120, flexShrink: 0 }}>{label}</div>
+      <div style={{
+        flex: 1, color: danger ? T.danger : T.text,
+        fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'inherit',
+        wordBreak: 'break-all',
+      }}>{value ?? <span style={{ color: T.textMuted }}>—</span>}</div>
+    </div>
+  )
+  const live = result.live || {}
+  const refreshP = result.refreshProbe || {}
+  const apiP = result.apiProbe || {}
+  const stored = result.stored || {}
+  const isInvalidClient = /invalid_client/i.test(
+    [live.error, live.error_description, refreshP.error, refreshP.error_description].join(' ')
+  )
+  return (
+    <div style={{
+      marginTop: 8, padding: 10,
+      background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+      fontSize: 11,
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 6,
+      }}>
+        <div style={{ fontWeight: 700, color: T.textSub }}>🔍 診断結果</div>
+        <button onClick={onClose} style={{
+          background: 'transparent', border: 'none', color: T.textMuted,
+          cursor: 'pointer', fontSize: 14, fontFamily: 'inherit',
+        }}>×</button>
+      </div>
+
+      {isInvalidClient && (
+        <div style={{
+          padding: 8, marginBottom: 8,
+          background: T.dangerBg, border: `1px solid ${T.danger}40`,
+          borderRadius: 6, color: T.danger, fontSize: 11, lineHeight: 1.6,
+        }}>
+          <b>🚨 invalid_client エラーを検出しました。</b><br />
+          Vercel の環境変数 <code>GOOGLE_CLIENT_SECRET</code> が Google Cloud Console の有効なシークレットと一致していません。<br />
+          Google Cloud Console でシークレットをローテーションした場合は、新しいシークレットを Vercel に設定して Redeploy してください。
+        </div>
+      )}
+
+      <div style={{ fontWeight: 700, color: T.textSub, margin: '6px 0 2px' }}>📦 DB 保存値</div>
+      <Row label="access_token" value={stored.access_token} />
+      <Row label="refresh_token" value={stored.refresh_token} />
+      <Row label="expires_at" value={stored.expires_at} mono={false} />
+      <Row label="scope" value={stored.scope} />
+      <Row label="connected_at" value={stored.connected_at} mono={false} />
+
+      <div style={{ fontWeight: 700, color: T.textSub, margin: '8px 0 2px' }}>🔑 Google tokeninfo (実トークン検査)</div>
+      <Row label="ok" value={String(live.ok ?? '')} danger={!live.ok} />
+      <Row label="status" value={live.status} />
+      <Row label="scope" value={live.scope} />
+      <Row label="aud (client_id)" value={live.aud} />
+      <Row label="error" value={live.error} danger={!!live.error} />
+
+      <div style={{ fontWeight: 700, color: T.textSub, margin: '8px 0 2px' }}>📡 API 呼び出し検査</div>
+      <Row label="ok" value={String(apiP.ok ?? '')} danger={!apiP.ok} />
+      <Row label="status" value={apiP.status} />
+      <Row label="error" value={apiP.error} danger={!!apiP.error} />
+
+      <div style={{ fontWeight: 700, color: T.textSub, margin: '8px 0 2px' }}>🔄 refresh_token で新トークン発行</div>
+      <Row label="ok" value={String(refreshP.ok ?? '')} danger={!refreshP.ok} />
+      <Row label="status" value={refreshP.status} />
+      <Row label="scope (新)" value={refreshP.scope} />
+      <Row label="error" value={refreshP.error || refreshP.reason} danger={!!(refreshP.error || refreshP.reason)} />
+
+      {result.hint && (
+        <div style={{
+          marginTop: 8, padding: 8,
+          background: T.warnBg, border: `1px solid ${T.warn}40`,
+          borderRadius: 6, color: T.warn, fontSize: 11, lineHeight: 1.6,
+        }}>
+          💡 {result.hint}
+        </div>
+      )}
     </div>
   )
 }
