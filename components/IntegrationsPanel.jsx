@@ -224,7 +224,7 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                           <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>
                                       Gmail・Googleカレンダー・Slack・LINE を接続してダッシュボードに情報を集約できます。
                             {!isViewingSelf && ' (自分を選択中のみ操作可能)'}
-                          </div>div>
+                          </div>
 
                   {errorMsg && (
                     <div style={{
@@ -233,13 +233,13 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                   borderRadius: 8, fontSize: 12, color: T.danger,
                                   display: 'flex', alignItems: 'center', gap: 8,
                     }}>
-                                  <span>⚠️</span>span>
-                                <span style={{ flex: 1 }}>{errorMsg}</span>span>
+                                  <span>⚠️</span>
+                                <span style={{ flex: 1 }}>{errorMsg}</span>
                                 <button onClick={() => setErrorMsg('')} style={{
                                     background: 'transparent', border: 'none', color: T.danger,
                                     cursor: 'pointer', fontSize: 14, fontFamily: 'inherit',
-                    }}>×</button>button>
-                    </div>div>
+                    }}>×</button>
+                    </div>
                         )}
                 
                   {successMsg && (
@@ -248,16 +248,16 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                   background: T.successBg, border: `1px solid ${T.success}40`,
                                   borderRadius: 8, fontSize: 12, color: T.success,
                                   display: 'flex', alignItems: 'center', gap: 8,
-                    }}>
-                                <span>✅</span>span>
-                                <span style={{ flex: 1 }}>{successMsg}</span>span>
-                    </div>div>
+                    }}
+                                <span>✅</span>
+                                <span style={{ flex: 1 }}>{successMsg}</span>
+                    </div>
                         )}
                 
                   {loading ? (
                     <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
                                 読み込み中...
-                    </div>div>
+                    </div>
                   ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
                       {INTEGRATIONS.map(integ => {
@@ -279,27 +279,27 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                                                                                                                               fontSize: 24, width: 40, height: 40, borderRadius: 10,
                                                                                                                                               background: `${integ.brandColor}18`, color: integ.brandColor,
                                                                                                                                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                                                                        }}>{integ.icon}</div>div>
+                                                                                                                        }}>{integ.icon}</div>
                                                                                                                                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                                                                                                                                                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{integ.title}</div>div>
-                                                                                                                                                                                  <div style={{ fontSize: 11, color: T.textMuted, marginTop: 1 }}>{integ.desc}</div>div>
-                                                                                                                                                              </div>div>
+                                                                                                                                                                                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{integ.title}</div>
+                                                                                                                                                                                  <div style={{ fontSize: 11, color: T.textMuted, marginTop: 1 }}>{integ.desc}</div>
+                                                                                                                                                              </div>
                                                                                                                                           {isConnected && (
                                                                                                                                               <div style={{
                                                      padding: '3px 8px', borderRadius: 99,
                                                                                                                                                                         background: isExpired ? T.warnBg : T.successBg,
                                                                                                                                                                         color: isExpired ? T.warn : T.success,
                                                                                                                                                                         fontSize: 10, fontWeight: 700,
-                                                                                                                                                }}>{isExpired ? '要再認証' : '連携中'}</div>div>
+                                                                                                                                                }}>{isExpired ? '要再認証' : '連携中'}</div>
                                                                                                                                                             )}
-                                                                                                                                          </div>div>
+                                                                                                                                          </div>
                                                                                                                       
                                                                                                                         {/* 機能一覧 */}
                                                                                                                                         <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
                                                                                                                                           {integ.benefits.map((b, i) => (
-                                                                                                                                              <div key={i}>・{b}</div>div>
+                                                                                                                                              <div key={i}>・{b}</div>
                                                                                                                                             ))}
-                                                                                                                                          </div>div>
+                                                                                                                                          </div>
                                                                                                                       
                                                                                                                         {/* 接続状態の詳細 */}
                                                                                                                         {isConnected && (
@@ -307,11 +307,11 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                                                                                                                                                     padding: '6px 8px', background: T.sectionBg,
                                                                                                                                                                     borderRadius: 6, fontSize: 10, color: T.textMuted, lineHeight: 1.5,
                                                                                                                                               }}>
-                                                                                                                                              {conn.metadata?.email && <div>📮 {conn.metadata.email}</div>div>}
-                                                                                                                                              {conn.metadata?.team_name && <div>🏢 {conn.metadata.team_name}</div>div>}
-                                                                                                                                              {conn.metadata?.display_name && <div>👤 {conn.metadata.display_name}</div>div>}
-                                                                                                                                                                  <div>接続: {formatRelative(conn.connected_at)}</div>div>
-                                                                                                                                              </div>div>
+                                                                                                                                              {conn.metadata?.email && <div>📮 {conn.metadata.email}</div>}
+                                                                                                                                              {conn.metadata?.team_name && <div>🏢 {conn.metadata.team_name}</div>}
+                                                                                                                                              {conn.metadata?.display_name && <div>👤 {conn.metadata.display_name}</div>}
+                                                                                                                                                                  <div>接続: {formatRelative(conn.connected_at)}</div>
+                                                                                                                                              </div>
                                                                                                                                         )}
                                                                                                                       
                                                                                                                         {/* アクションボタン */}
@@ -329,7 +329,7 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                                                                                                                                                                                     opacity: isBusy || !isViewingSelf ? 0.5 : 1,
                                                                                                                                                                                                     transition: 'opacity 0.15s',
                                                                                                                                                                           }}
-                                                                                                                                                                      >{isBusy ? '接続中...' : `🔌 ${integ.title}と連携`}</button>button>
+                                                                                                                                                                      >{isBusy ? '接続中...' : `🔌 ${integ.title}と連携`}</button>
                                                                                                                                             ) : (
                                                                                                                                               <>
                                                                                                                                                 {isExpired && (
@@ -342,7 +342,7 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                                                                                                                                                                                                                         fontSize: 11, fontWeight: 700, cursor: 'pointer',
                                                                                                                                                                                                                                         fontFamily: 'inherit',
                                                                                                                                                                                                                                       }}
-                                                                                                                                                                                                      >🔄 再認証</button>button>
+                                                                                                                                                                                                      >🔄 再認証</button>
                                                                                                                                                                       )}
                                                                                                                                                                       <button
                                                                                                                                                                                                   onClick={() => disconnect(integ.key, integ.title)}
@@ -355,14 +355,14 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                                                                                                                                                                                                                 fontFamily: 'inherit',
                                                                                                                                                                                                                                 opacity: isBusy || !isViewingSelf ? 0.5 : 1,
                                                                                                                                                                                                                               }}
-                                                                                                                                                                                                >{isBusy ? '処理中...' : '連携解除'}</button>button>
+                                                                                                                                                                                                >{isBusy ? '処理中...' : '連携解除'}</button>
                                                                                                                                                 </>>
                                                                                                                                             )}
-                                                                                                                                          </div>div>
-                                                                                                                        </div>div>
+                                                                                                                                          </div>
+                                                                                                                        </div>
                                                                                                                     )
                       })}
-                    </div>div>
+                    </div>
                         )}
                 
                   {/* セットアップ情報 */}
@@ -371,7 +371,7 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                     background: T.sectionBg, border: `1px dashed ${T.border}`,
                     borderRadius: 8, fontSize: 11, color: T.textMuted, lineHeight: 1.6,
         }}>
-                                  <div style={{ fontWeight: 700, color: T.textSub, marginBottom: 6 }}>⚙️ 管理者向けセットアップ</div>div>
+                                  <div style={{ fontWeight: 700, color: T.textSub, marginBottom: 6 }}>⚙️ 管理者向けセットアップ</div>
                                   連携を有効化するには、各サービスの OAuth 設定が必要です。詳細は{' '}
                                   <code style={{ padding: '1px 6px', background: T.bgCard, borderRadius: 4 }}>INTEGRATIONS_SETUP.md</code>code>{' '}
                                   を参照してください。
@@ -379,9 +379,9 @@ export default function IntegrationsPanel({ myName, T, isViewingSelf }) {
                                               <li>Google (Gmail/Calendar): Google Cloud Console で Gmail API / Calendar API を有効化 + Supabase Auth にスコープ追加</li>li>
                                               <li>Slack: api.slack.com で App を作成し <code>SLACK_CLIENT_ID</code>code> / <code>SLACK_CLIENT_SECRET</code>code> を Vercel に設定</li>li>
                                               <li>LINE: LINE Developers Console で Channel を作成し <code>LINE_CHANNEL_ID</code>code> / <code>LINE_CHANNEL_SECRET</code>code> を Vercel に設定</li>li>
-                                  </ul>ul>
-                        </div>div>
-                </div>div>
-        </div>div>
+                                  </ul>
+                        </div>
+                </div>
+        </div>
       )
 }</></span>
