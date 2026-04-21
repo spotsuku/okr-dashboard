@@ -1613,11 +1613,19 @@ function MailDetailModal({ T, mail, owner, isViewingSelf, onClose }) {
                         background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
                         color: '#d64545', borderRadius: 6, fontSize: 11, lineHeight: 1.5,
                       }}>
-                        ⚠️ {createErr}
-                        {/gmail\.compose/.test(createErr) && (
-                          <div style={{ marginTop: 4, fontSize: 10, color: T.textMuted }}>
-                            → マイページ「🔌 連携」タブで Gmail を「連携解除」→「連携」し直してください
-                          </div>
+                        <div>⚠️ {createErr}</div>
+                        {/gmail\.compose|再連携|期限切れ|token/i.test(createErr) && isViewingSelf && (
+                          <button onClick={() => {
+                            const u = new URL('/api/integrations/google/start', window.location.origin)
+                            u.searchParams.set('owner', owner)
+                            u.searchParams.set('service', 'google_gmail')
+                            u.searchParams.set('return_to', window.location.pathname + window.location.search)
+                            window.location.href = u.toString()
+                          }} style={{
+                            marginTop: 6, background: T.accentSolid, color: '#fff',
+                            border: 'none', borderRadius: 6, padding: '5px 12px',
+                            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                          }}>🔄 Gmail を再連携する</button>
                         )}
                       </div>
                     )}
@@ -1762,11 +1770,19 @@ function GmailAIModal({ T, state, owner, onClose }) {
                     background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
                     color: '#d64545', borderRadius: 6, fontSize: 11, lineHeight: 1.5,
                   }}>
-                    ⚠️ {createErr}
-                    {/gmail\.compose/.test(createErr) && (
-                      <div style={{ marginTop: 4, fontSize: 10, color: T.textMuted }}>
-                        → マイページ「🔌 連携」タブで Gmail を「連携解除」→「連携」し直してください
-                      </div>
+                    <div>⚠️ {createErr}</div>
+                    {/gmail\.compose|再連携|期限切れ|token/i.test(createErr) && (
+                      <button onClick={() => {
+                        const u = new URL('/api/integrations/google/start', window.location.origin)
+                        u.searchParams.set('owner', owner)
+                        u.searchParams.set('service', 'google_gmail')
+                        u.searchParams.set('return_to', window.location.pathname + window.location.search)
+                        window.location.href = u.toString()
+                      }} style={{
+                        marginTop: 6, background: T.accentSolid, color: '#fff',
+                        border: 'none', borderRadius: 6, padding: '5px 12px',
+                        fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                      }}>🔄 Gmail を再連携する</button>
                     )}
                   </div>
                 )}
