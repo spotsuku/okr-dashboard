@@ -6,7 +6,7 @@
 // 下書きは threadId 指定で「元スレッドへの返信」として作成される。
 // In-Reply-To / References ヘッダを付けて、Gmail 上でも「返信」として扱われる。
 
-import { getIntegration, json } from '../../_shared'
+import { getIntegration, refreshIntegration, json } from '../../_shared'
 
 // RFC 2822 メッセージを base64url に
 function buildRawMessage({ to, subject, inReplyTo, body }) {
@@ -28,6 +28,26 @@ function buildRawMessage({ to, subject, inReplyTo, body }) {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+async function fetchTokenInfo(token) {
+  try {
+    const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`)
+    const j = await r.json().catch(() => ({}))
+    return { ok: r.ok, status: r.status, scope: j.scope || '', error: j.error || j.error_description || '' }
+  } catch (e) {
+    return { ok: false, status: 0, scope: '', error: e.message }
+  }
+}
+
+async function callGmailDrafts(token, threadId, raw) {
+  const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: threadId ? { raw, threadId } : { raw } }),
+  })
+  const data = await r.json().catch(() => ({}))
+  return { ok: r.ok, status: r.status, data }
+}
+
 export async function POST(request) {
   let payload
   try { payload = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
@@ -43,58 +63,68 @@ export async function POST(request) {
       : 'トークン期限切れ。再連携してください',
   }, { status: 401 })
 
-  const token = result.integration.access_token
-  const storedScope = result.integration.scope || ''
+  let integration = result.integration
+  let token = integration.access_token
 
-  // 実トークンのスコープを tokeninfo で取得 (DB の scope メタデータと実トークンがズレるケース対策)
-  let liveScope = ''
-  try {
-    const tr = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`)
-    if (tr.ok) {
-      const tj = await tr.json()
-      liveScope = tj.scope || ''
+  // Step 1: tokeninfo で実トークンの有効性とスコープを確認
+  let info = await fetchTokenInfo(token)
+
+  // トークン自体が無効 → refresh_token で再発行を試行
+  if (!info.ok && integration.refresh_token) {
+    try {
+      integration = await refreshIntegration(integration)
+      token = integration.access_token
+      info = await fetchTokenInfo(token)
+    } catch (e) {
+      return json({
+        error: `保存されたアクセストークンが無効 (${info.error || info.status}) + 自動リフレッシュ失敗: ${e.message}。再連携してください。`,
+      }, { status: 401 })
     }
-  } catch { /* tokeninfo 失敗は致命ではないので握りつぶして続行 */ }
+  }
 
-  const effectiveScope = liveScope || storedScope
-  if (!/gmail\.compose/.test(effectiveScope)) {
+  if (!info.ok) {
     return json({
-      error: `Gmail 連携のスコープに gmail.compose が含まれていません。再連携してください。 (実際のトークンスコープ: ${liveScope || '(取得不可)'})`,
+      error: `アクセストークンが Google に拒否されました (${info.error || info.status})。再連携してください。`,
+    }, { status: 401 })
+  }
+
+  // Step 2: gmail.compose スコープ確認 (実トークンベース)
+  const liveScope = info.scope
+  if (!/gmail\.compose/.test(liveScope)) {
+    return json({
+      error: `Gmail 連携のスコープに gmail.compose が含まれていません。再連携してください。 (実際のトークンスコープ: ${liveScope || '(空)'})`,
     }, { status: 403 })
   }
 
+  // Step 3: 下書き作成 (401 時は refresh して一度だけ再試行)
   const raw = buildRawMessage({ to, subject, inReplyTo: messageIdHeader, body })
+  let apiResult = await callGmailDrafts(token, threadId, raw)
 
-  try {
-    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: threadId ? { raw, threadId } : { raw },
-      }),
-    })
-    const data = await r.json()
-    if (!r.ok) {
-      const apiMsg = data.error?.message || JSON.stringify(data).slice(0, 200)
-      // 403 スコープ系エラー時は実スコープも併記 → 診断しやすく
-      const scopeHint = r.status === 403 && liveScope
-        ? ` (実トークンのスコープ: ${liveScope})`
-        : ''
+  if (!apiResult.ok && apiResult.status === 401 && integration.refresh_token) {
+    try {
+      integration = await refreshIntegration(integration)
+      token = integration.access_token
+      apiResult = await callGmailDrafts(token, threadId, raw)
+    } catch (e) {
       return json({
-        error: `下書き作成失敗 ${r.status}: ${apiMsg}${scopeHint}。再連携してください。`,
-      }, { status: r.status })
+        error: `Gmail API が 401 を返し、リフレッシュにも失敗: ${e.message}。再連携してください。`,
+      }, { status: 401 })
     }
-    // 返却: 下書きID / 作成先スレッドID / Gmail を開くための URL
-    const draftId = data.id
-    const resolvedThreadId = data.message?.threadId || threadId
-    const openUrl = resolvedThreadId
-      ? `https://mail.google.com/mail/u/0/#inbox/${resolvedThreadId}`
-      : 'https://mail.google.com/mail/u/0/#drafts'
-    return json({ draftId, threadId: resolvedThreadId, openUrl })
-  } catch (e) {
-    return json({ error: `下書き作成例外: ${e.message}` }, { status: 500 })
   }
+
+  if (!apiResult.ok) {
+    const apiMsg = apiResult.data.error?.message || JSON.stringify(apiResult.data).slice(0, 200)
+    const hint = apiResult.status === 403 ? ` (実トークンのスコープ: ${liveScope})` : ''
+    return json({
+      error: `下書き作成失敗 ${apiResult.status}: ${apiMsg}${hint}。再連携してください。`,
+    }, { status: apiResult.status })
+  }
+
+  const data = apiResult.data
+  const draftId = data.id
+  const resolvedThreadId = data.message?.threadId || threadId
+  const openUrl = resolvedThreadId
+    ? `https://mail.google.com/mail/u/0/#inbox/${resolvedThreadId}`
+    : 'https://mail.google.com/mail/u/0/#drafts'
+  return json({ draftId, threadId: resolvedThreadId, openUrl })
 }
