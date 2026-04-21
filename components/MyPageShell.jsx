@@ -1942,12 +1942,22 @@ function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isVi
     return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>読み込み中...</div>
   }
   if (state.error) {
+    // 認証・期限切れ系のエラーは「再連携」ボタンを表示
+    const isAuthError = /期限切れ|リフレッシュ|401|再連携|token/i.test(state.error)
     return (
       <div style={{
         padding: 8, background: T.dangerBg, border: `1px solid ${T.danger}30`,
         borderRadius: 6, fontSize: 11, color: T.danger, lineHeight: 1.5,
+        display: 'flex', flexDirection: 'column', gap: 6,
       }}>
-        ⚠️ {state.error}
+        <div>⚠️ {state.error}</div>
+        {isAuthError && isViewingSelf && onConnect && (
+          <button onClick={onConnect} style={{
+            alignSelf: 'flex-start', background: T.accentSolid, color: '#fff',
+            border: 'none', borderRadius: 6, padding: '4px 12px',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>🔄 再連携する</button>
+        )}
       </div>
     )
   }

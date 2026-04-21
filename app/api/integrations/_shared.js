@@ -125,6 +125,12 @@ export async function getIntegration(owner, service) {
   const needsRefresh = data.expires_at
     && new Date(data.expires_at).getTime() < Date.now() + 60_000
   if (needsRefresh && data.refresh_token) {
+    // Google 系で env vars 未設定なら refresh せず、直接「再連携してください」を返す
+    const isGoogle = service === 'google_gmail' || service === 'google_calendar'
+    const hasGoogleEnv = !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET)
+    if (isGoogle && !hasGoogleEnv) {
+      return { integration: data, expired: true, refreshError: 'トークンの有効期限が切れました。再連携してください。' }
+    }
     try {
       const refreshed = await refreshIntegration(data)
       return { integration: refreshed, expired: false, refreshed: true }
