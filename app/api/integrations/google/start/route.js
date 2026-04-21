@@ -6,7 +6,8 @@ function getOrigin(request) {
 }
 
 const SCOPE_MAP = {
-  google_gmail: 'https://www.googleapis.com/auth/gmail.readonly openid email profile',
+  // gmail.compose は「返信下書きの作成」に必要 (readonly だけでは drafts.create 不可)
+  google_gmail: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose openid email profile',
   google_calendar: 'https://www.googleapis.com/auth/calendar.readonly openid email profile',
 }
 

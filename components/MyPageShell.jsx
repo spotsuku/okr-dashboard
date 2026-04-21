@@ -923,22 +923,35 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
               onConnect={onGoToIntegrations} maxVisible={3}
               detailLabel="📧 Gmailを開く ↗"
               detailUrl="https://mail.google.com/"
-              renderItem={m => (
-                <button onClick={() => openGmailAI(m)}
-                  title="AIで要約・返信草稿を生成"
-                  style={{
-                    all: 'unset', display: 'flex', alignItems: 'center', gap: 6,
-                    flex: 1, cursor: 'pointer',
-                  }}>
-                  <span>📧</span>
-                  <span style={{ flex: 1 }}>{m.from}: {truncate(m.subject, 22)}</span>
-                  <span style={{
-                    fontSize: 10, color: '#fff', fontWeight: 700,
-                    background: T.accentSolid, borderRadius: 4,
-                    padding: '2px 6px', whiteSpace: 'nowrap',
-                  }}>✨ AIで要約・返信</span>
-                </button>
-              )} />
+              renderItem={m => {
+                const catStyle = m.category === 'to'
+                  ? { bg: 'rgba(255,107,107,0.15)', fg: '#d64545', label: '🔴 要対応' }
+                  : m.category === 'cc'
+                  ? { bg: 'rgba(212,149,0,0.15)', fg: '#a37200', label: '🟡 要確認' }
+                  : null
+                return (
+                  <button onClick={() => openGmailAI(m)}
+                    title="AIで要約・返信草稿を生成"
+                    style={{
+                      all: 'unset', display: 'flex', alignItems: 'center', gap: 6,
+                      flex: 1, cursor: 'pointer',
+                    }}>
+                    {catStyle && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: catStyle.fg,
+                        background: catStyle.bg, borderRadius: 4,
+                        padding: '2px 5px', whiteSpace: 'nowrap',
+                      }}>{catStyle.label}</span>
+                    )}
+                    <span style={{ flex: 1, minWidth: 0 }}>{m.from}: {truncate(m.subject, 20)}</span>
+                    <span style={{
+                      fontSize: 10, color: '#fff', fontWeight: 700,
+                      background: T.accentSolid, borderRadius: 4,
+                      padding: '2px 6px', whiteSpace: 'nowrap',
+                    }}>✨ AIで要約・返信</span>
+                  </button>
+                )
+              }} />
           </Section>
 
           <Section T={T} icon="💬" title="Slack" flex={0}>
@@ -1051,7 +1064,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
       )}
 
       {gmailAI && (
-        <GmailAIModal T={T} state={gmailAI} onClose={() => setGmailAI(null)} />
+        <GmailAIModal T={T} state={gmailAI} owner={viewingName} onClose={() => setGmailAI(null)} />
       )}
     </div>
   )
@@ -1342,9 +1355,11 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
   )
 }
 
-function GmailAIModal({ T, state, onClose }) {
+function GmailAIModal({ T, state, owner, onClose }) {
   const { message, loading, summary, draft, error } = state
   const [copied, setCopied] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createErr, setCreateErr] = useState('')
   const copyDraft = async () => {
     if (!draft) return
     try {
@@ -1353,10 +1368,36 @@ function GmailAIModal({ T, state, onClose }) {
       setTimeout(() => setCopied(false), 1500)
     } catch {}
   }
-  const openInGmail = () => {
-    // Gmail の受信トレイで件名検索して開く (直接 message リンクは OAuth スコープ的に生成困難)
-    const q = encodeURIComponent(`subject:"${(message.subject || '').replace(/"/g, '')}"`)
-    window.open(`https://mail.google.com/mail/u/0/#search/${q}`, '_blank', 'noopener,noreferrer')
+  const openInGmail = async () => {
+    // Gmail API で返信下書きを作成 → 作成されたスレッドURLを開く
+    if (!draft) {
+      window.open('https://mail.google.com/mail/u/0/#inbox', '_blank', 'noopener,noreferrer')
+      return
+    }
+    setCreating(true)
+    setCreateErr('')
+    try {
+      const r = await fetch('/api/integrations/gmail/create-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner,
+          threadId: message.threadId,
+          messageId: message.id,
+          to: message.fromEmail || message.from,
+          subject: message.subject || '',
+          messageIdHeader: message.messageIdHeader || '',
+          body: draft,
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      window.open(j.openUrl, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      setCreateErr(e.message || '下書き作成エラー')
+    } finally {
+      setCreating(false)
+    }
   }
   return (
     <div onClick={onClose} style={{
@@ -1419,11 +1460,16 @@ function GmailAIModal({ T, state, onClose }) {
                       borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700,
                       cursor: draft ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
                     }}>{copied ? '✓ コピー済' : '📋 コピー'}</button>
-                    <button onClick={openInGmail} style={{
-                      background: 'transparent', border: `1px solid ${T.borderMid}`,
-                      color: T.textSub, borderRadius: 6, padding: '4px 10px',
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                    }}>Gmail で開く ↗</button>
+                    <button onClick={openInGmail} disabled={creating || !draft} style={{
+                      background: draft ? T.accentSolid : 'transparent',
+                      border: `1px solid ${draft ? T.accentSolid : T.borderMid}`,
+                      color: draft ? '#fff' : T.textMuted,
+                      borderRadius: 6, padding: '4px 10px',
+                      fontSize: 11, fontWeight: 700,
+                      cursor: (creating || !draft) ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                      opacity: creating ? 0.6 : 1,
+                    }}>{creating ? '作成中…' : '📝 下書きを作成して Gmail で開く ↗'}</button>
                   </div>
                 </div>
                 <textarea readOnly value={draft} rows={8} style={{
@@ -1433,6 +1479,20 @@ function GmailAIModal({ T, state, onClose }) {
                   borderRadius: 8, color: T.text, outline: 'none', fontFamily: 'inherit',
                   resize: 'vertical',
                 }} />
+                {createErr && (
+                  <div style={{
+                    marginTop: 8, padding: '8px 10px',
+                    background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
+                    color: '#d64545', borderRadius: 6, fontSize: 11, lineHeight: 1.5,
+                  }}>
+                    ⚠️ {createErr}
+                    {/gmail\.compose/.test(createErr) && (
+                      <div style={{ marginTop: 4, fontSize: 10, color: T.textMuted }}>
+                        → マイページ「🔌 連携」タブで Gmail を「連携解除」→「連携」し直してください
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
