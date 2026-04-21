@@ -43,15 +43,26 @@ export async function POST(request) {
       : 'トークン期限切れ。再連携してください',
   }, { status: 401 })
 
-  // gmail.compose スコープを持っているか確認
-  const scope = result.integration.scope || ''
-  if (!/gmail\.compose/.test(scope)) {
+  const token = result.integration.access_token
+  const storedScope = result.integration.scope || ''
+
+  // 実トークンのスコープを tokeninfo で取得 (DB の scope メタデータと実トークンがズレるケース対策)
+  let liveScope = ''
+  try {
+    const tr = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`)
+    if (tr.ok) {
+      const tj = await tr.json()
+      liveScope = tj.scope || ''
+    }
+  } catch { /* tokeninfo 失敗は致命ではないので握りつぶして続行 */ }
+
+  const effectiveScope = liveScope || storedScope
+  if (!/gmail\.compose/.test(effectiveScope)) {
     return json({
-      error: 'Gmail 連携のスコープに gmail.compose が含まれていません。再連携してください。',
+      error: `Gmail 連携のスコープに gmail.compose が含まれていません。再連携してください。 (実際のトークンスコープ: ${liveScope || '(取得不可)'})`,
     }, { status: 403 })
   }
 
-  const token = result.integration.access_token
   const raw = buildRawMessage({ to, subject, inReplyTo: messageIdHeader, body })
 
   try {
@@ -67,8 +78,13 @@ export async function POST(request) {
     })
     const data = await r.json()
     if (!r.ok) {
+      const apiMsg = data.error?.message || JSON.stringify(data).slice(0, 200)
+      // 403 スコープ系エラー時は実スコープも併記 → 診断しやすく
+      const scopeHint = r.status === 403 && liveScope
+        ? ` (実トークンのスコープ: ${liveScope})`
+        : ''
       return json({
-        error: `下書き作成失敗 ${r.status}: ${data.error?.message || JSON.stringify(data).slice(0, 200)}`,
+        error: `下書き作成失敗 ${r.status}: ${apiMsg}${scopeHint}。再連携してください。`,
       }, { status: r.status })
     }
     // 返却: 下書きID / 作成先スレッドID / Gmail を開くための URL

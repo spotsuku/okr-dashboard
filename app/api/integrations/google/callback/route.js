@@ -112,11 +112,22 @@ export async function GET(request) {
 
   try {
     const admin = getAdminClient()
+    // 既存の refresh_token を取得して保険として保持 (Google が稀に新 refresh_token を返さないケース対応)
+    let existingRefresh = null
+    try {
+      const { data: existing } = await admin
+        .from('user_integrations')
+        .select('refresh_token')
+        .eq('owner', owner).eq('service', service)
+        .maybeSingle()
+      existingRefresh = existing?.refresh_token || null
+    } catch { /* 既存行なしは想定内 */ }
+
     const { error } = await admin.from('user_integrations').upsert({
       owner,
       service,
       access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token || null,
+      refresh_token: tokenData.refresh_token || existingRefresh,
       expires_at: expiresAt,
       scope: tokenData.scope || null,
       metadata: { email },
