@@ -39,13 +39,19 @@
 
 1. **APIとサービス → OAuth同意画面**
 2. ユーザータイプ: 「内部」推奨（社内のみ）
-3. スコープ追加:
-   - `.../auth/gmail.readonly`
+3. スコープ追加（**すべて追加する必要あり。欠けるとトークンに含まれなくなる**）:
+   - `.../auth/gmail.readonly`   ← 受信メールの閲覧
+   - `.../auth/gmail.compose`    ← **返信下書きの作成に必須**
    - `.../auth/calendar.readonly`
    - `.../auth/userinfo.email`
    - `.../auth/userinfo.profile`
    - `openid`
 4. テストユーザー追加（テスト中の場合）
+
+> ⚠️ **トラブル**: 返信下書き作成で「gmail.compose が含まれていません」と
+> 表示される場合は、ここで `gmail.compose` をスコープに追加し忘れています。
+> Google は「OAuth 同意画面に登録されていないスコープ」を consent 要求しても
+> サイレントに無視するため、アプリ側で要求しても token に入ってきません。
 
 ### 1-3. Supabase の Google Provider に scope を追加
 

@@ -89,10 +89,18 @@ export async function POST(request) {
   }
 
   // Step 2: gmail.compose スコープ確認 (実トークンベース)
-  const liveScope = info.scope
-  if (!/gmail\.compose/.test(liveScope)) {
+  // gmail.modify / mail.google.com/ (フル) でも drafts.create 可
+  const liveScope = info.scope || ''
+  const canCreateDraft = /gmail\.compose|gmail\.modify|mail\.google\.com\//.test(liveScope)
+  if (!canCreateDraft) {
+    const hasReadOnly = /gmail\.readonly/.test(liveScope)
+    const hint = hasReadOnly
+      ? 'gmail.readonly は付与されていますが gmail.compose がありません。Google Cloud Console の「OAuth 同意画面」→「スコープ」で .../auth/gmail.compose を追加してから、Gmail を連携解除 → 再連携してください。'
+      : 'Gmail 連携のスコープが不十分です。再連携してください。'
     return json({
-      error: `Gmail 連携のスコープに gmail.compose が含まれていません。再連携してください。 (実際のトークンスコープ: ${liveScope || '(空)'})`,
+      error: `下書き作成に必要な権限(gmail.compose)が不足しています。${hint} (現在のトークンスコープ: ${liveScope || '(空)'})`,
+      needsScope: 'gmail.compose',
+      currentScope: liveScope,
     }, { status: 403 })
   }
 
