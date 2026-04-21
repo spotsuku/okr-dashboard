@@ -528,7 +528,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
           onChange={e=>{ handleFieldChange('good', e.target.value, setGood); autoGrowTextarea(e.target, 3) }}
           onFocus={e=>{ autoSave.setFocusedField('good'); e.target.style.borderColor='rgba(0,214,143,0.4)'; autoGrowTextarea(e.target, 5) }}
           onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('good',good); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
-          placeholder={canEdit?"先週良かったこと":""}
+          placeholder={canEdit?"良かったこと・続けたいこと":""}
           style={{ ...taS, color:good?wT().text:wT().textFaint }} />
       </td>
       {/* More */}
@@ -538,7 +538,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
           onChange={e=>{ handleFieldChange('more', e.target.value, setMore); autoGrowTextarea(e.target, 3) }}
           onFocus={e=>{ autoSave.setFocusedField('more'); e.target.style.borderColor='rgba(255,107,107,0.4)'; autoGrowTextarea(e.target, 5) }}
           onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('more',more); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
-          placeholder={canEdit?"先週の課題・改善点":""}
+          placeholder={canEdit?"課題・改善点":""}
           style={{ ...taS, color:more?wT().text:wT().textFaint }} />
       </td>
       {/* Focus */}
@@ -548,7 +548,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
           onChange={e=>{ handleFieldChange('focus_output', e.target.value, setFocusOutput); autoGrowTextarea(e.target, 3) }}
           onFocus={e=>{ autoSave.setFocusedField('focus_output'); e.target.style.borderColor='rgba(77,159,255,0.4)'; autoGrowTextarea(e.target, 5) }}
           onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('focus_output',focusOutput); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
-          placeholder={canEdit?"今週の重点アクション":""}
+          placeholder={canEdit?"重点アクション":""}
           style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
       </td>
       {/* Tasks + Delete */}
@@ -813,13 +813,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <div>
               <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
-                ✅ 先週good<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
+                ✅ good<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
               </div>
               <textarea value={good} onChange={e=>updateGood(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
             <div>
               <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
-                🔺 先週more<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
+                🔺 more<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
               </div>
               <textarea value={more} onChange={e=>updateMore(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
             </div>
@@ -829,7 +829,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </div>
           <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
-              🎯 今週focus<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(activeWeek)})` : ''}</span>
+              🎯 focus<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(activeWeek)})` : ''}</span>
             </div>
             <textarea value={focus} onChange={e=>updateFocus(e.target.value)} rows={2} style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
           </div>
@@ -874,13 +874,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
               <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>KAタイトル</th>
               <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>状態</th>
               <th style={{ padding:'6px 8px', fontSize:9, color:'#00d68f', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                ✅ 先週good<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
+                ✅ good<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
               </th>
               <th style={{ padding:'6px 8px', fontSize:9, color:'#ff6b6b', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                🔺 先週more<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
+                🔺 more<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
               </th>
               <th style={{ padding:'6px 8px', fontSize:9, color:'#4d9fff', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                🎯 今週focus<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(activeWeek) : ''}</div>
+                🎯 focus<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(activeWeek) : ''}</div>
               </th>
               <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>Tasks</th>
               <th style={{ padding:'6px 2px', borderBottom:`1px solid ${wT().border}` }}></th>

@@ -5,8 +5,23 @@
 ## 前提
 
 - `supabase_user_integrations.sql` を Supabase SQL Editor で実行済みであること
+- `supabase_user_integrations_rls_tighten.sql` を続けて実行すること (RLS強化 + 公開ビュー作成)
 - Vercel にデプロイ済みであること
 - Supabase の `SUPABASE_SERVICE_ROLE_KEY` が Vercel 環境変数に設定済み
+
+## 必須 Vercel 環境変数 (一覧)
+
+| 環境変数 | 用途 |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | サーバーサイドでトークン保存・参照 |
+| `GOOGLE_CLIENT_ID` | Google トークン自動リフレッシュ用 (Supabaseに登録したものと同じ) |
+| `GOOGLE_CLIENT_SECRET` | 同上 |
+| `SLACK_CLIENT_ID` | Slack OAuth |
+| `SLACK_CLIENT_SECRET` | 同上 |
+| `LINE_CHANNEL_ID` | LINE OAuth + リフレッシュ |
+| `LINE_CHANNEL_SECRET` | 同上 |
 
 ---
 
@@ -24,13 +39,19 @@
 
 1. **APIとサービス → OAuth同意画面**
 2. ユーザータイプ: 「内部」推奨（社内のみ）
-3. スコープ追加:
-   - `.../auth/gmail.readonly`
+3. スコープ追加（**すべて追加する必要あり。欠けるとトークンに含まれなくなる**）:
+   - `.../auth/gmail.readonly`   ← 受信メールの閲覧
+   - `.../auth/gmail.compose`    ← **返信下書きの作成に必須**
    - `.../auth/calendar.readonly`
    - `.../auth/userinfo.email`
    - `.../auth/userinfo.profile`
    - `openid`
 4. テストユーザー追加（テスト中の場合）
+
+> ⚠️ **トラブル**: 返信下書き作成で「gmail.compose が含まれていません」と
+> 表示される場合は、ここで `gmail.compose` をスコープに追加し忘れています。
+> Google は「OAuth 同意画面に登録されていないスコープ」を consent 要求しても
+> サイレントに無視するため、アプリ側で要求しても token に入ってきません。
 
 ### 1-3. Supabase の Google Provider に scope を追加
 
@@ -156,5 +177,19 @@ LINE_CHANNEL_SECRET = <Channel Secret>
 
 - OAuth トークンは `user_integrations` テーブルに保存（RLS有効）
 - サービス ロール キー（サーバー側のみ）を使って保存・読み出し
-- 他ユーザーのトークンを閲覧するのは物理的には RLS ポリシー次第（現状は `authenticated` 全員読み取り可）
-- 厳密に分離したい場合は RLS ポリシーを owner = current_user に制限すること
+- **RLS**: `supabase_user_integrations_rls_tighten.sql` 適用後は本人の行のみ操作可
+  (owner = 認証ユーザーの members.name のみ許可)
+- 他メンバーの「連携状態 (接続/非接続)」のみ `user_integrations_status` ビュー経由で閲覧可
+  (トークン本体は含まない)
+
+## トークン自動リフレッシュ
+
+- `getIntegration()` (app/api/integrations/_shared.js) が API 呼び出しのたびに
+  expires_at をチェックし、期限 60 秒以内なら自動リフレッシュします
+- **Google**: `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` を使って
+  `https://oauth2.googleapis.com/token` にリフレッシュトークンで再取得
+- **LINE**: `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` を使って
+  `https://api.line.me/oauth2/v2.1/token` で再取得
+- **Slack**: user_token は既定で無期限のためリフレッシュ不要
+- リフレッシュ失敗時は API が 401 で失敗理由を返す → 再連携促す
+

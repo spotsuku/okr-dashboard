@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
+import { openNotionUrl } from '../lib/notionLink'
 
 // 汎用: どの会議でも使える議事録タスク取り込みモーダル
 //   props:
@@ -25,35 +26,50 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
   const [kaSearch, setKaSearch] = useState('')
   const [loadingItems, setLoadingItems] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
+  // ページ一覧の取得 (初回 + 再読み込み両対応)
+  const loadPages = useCallback(async () => {
     setError(null); setSaved(null); setMeetingInfo(null); setItems([]); setSelectedPage(null); setPages([])
     setLoading(true)
-    Promise.all([
-      fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}`).then(r => r.json()),
-      supabase.from('weekly_reports').select('id,ka_title,kr_id,objective_id,owner,status,week_start')
-        .neq('status','done').order('week_start', { ascending: false }).order('ka_title'),
-      supabase.from('objectives').select('id,title'),
-    ]).then(([nt, kas, objs]) => {
+    try {
+      // cache: 'no-store' でブラウザキャッシュを回避 (キャンセル→再取込で同じURLでも最新を取得)
+      const ts = Date.now()  // 念のためクエリにタイムスタンプも追加
+      const [ntRes, kasRes, objsRes] = await Promise.all([
+        fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&_t=${ts}`, { cache: 'no-store' }),
+        supabase.from('weekly_reports').select('id,ka_title,kr_id,objective_id,owner,status,week_start')
+          .neq('status','done').order('week_start', { ascending: false }).order('ka_title'),
+        supabase.from('objectives').select('id,title'),
+      ])
+      const nt = await ntRes.json()
       setLoading(false)
       if (nt?.error) { setError(nt.error); return }
       const seen = new Set()
-      const unique = (kas?.data || []).filter(ka => {
+      const unique = (kasRes?.data || []).filter(ka => {
         const key = `${ka.ka_title}_${ka.owner}_${ka.objective_id}`
         if (seen.has(key)) return false
         seen.add(key); return true
       })
       setAllKAs(unique)
-      const om = {}; (objs?.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
+      const om = {}; (objsRes?.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
       setPages(nt.pages || [])
-    }).catch(e => { setLoading(false); setError(e.message || '取得エラー') })
-  }, [open, meetingKey])
+    } catch (e) {
+      setLoading(false); setError(e.message || '取得エラー')
+    }
+  }, [meetingKey])
+
+  useEffect(() => {
+    if (!open) return
+    loadPages()
+  }, [open, loadPages])
 
   const selectPage = async (page) => {
     setSelectedPage(page)
     setLoadingItems(true); setError(null); setItems([])
     try {
-      const res = await fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&pageId=${page.id}`)
+      const ts = Date.now()
+      const res = await fetch(
+        `/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&pageId=${page.id}&_t=${ts}`,
+        { cache: 'no-store' }
+      )
       const nt = await res.json()
       if (nt?.error) { setError(nt.error); setLoadingItems(false); return }
       setMeetingInfo({ pageTitle: nt.pageTitle, meetingDate: nt.meetingDate, pageUrl: nt.pageUrl })
@@ -64,6 +80,12 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
       setError(e.message || 'ページ取得エラー')
     }
     setLoadingItems(false)
+  }
+
+  // 選択中ページのアクションアイテムを再取得 (会議直後のNotion伝播待ちに使用)
+  const reloadSelectedPage = async () => {
+    if (!selectedPage) return
+    await selectPage(selectedPage)
   }
 
   if (!open) return null
@@ -113,7 +135,11 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
               <div style={{ fontSize:11, color: T?.textMuted || '#888', marginTop:2 }}>
                 {meetingInfo.meetingDate} ・ {meetingInfo.pageTitle || '(無題)'}
                 {meetingInfo.pageUrl && (
-                  <a href={meetingInfo.pageUrl} target="_blank" rel="noreferrer" style={{ marginLeft:8, color:'#4d9fff', textDecoration:'none' }}>↗ Notionで開く</a>
+                  <button
+                    type="button"
+                    onClick={() => openNotionUrl(meetingInfo.pageUrl)}
+                    style={{ marginLeft:8, color:'#4d9fff', background:'none', border:'none', padding:0, cursor:'pointer', fontSize:11, fontFamily:'inherit' }}
+                  >↗ Notionで開く</button>
                 )}
               </div>
             )}
@@ -133,8 +159,15 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
           {/* ステップ1: ページ選択 */}
           {!loading && !saved && !selectedPage && pages.length > 0 && (
             <div>
-              <div style={{ fontSize:12, color: T?.textMuted || '#888', marginBottom:10 }}>
-                最新{pages.length}件のページ（Date プロパティ降順）
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                <div style={{ fontSize:12, color: T?.textMuted || '#888' }}>
+                  最新{pages.length}件のページ（Date プロパティ降順）
+                </div>
+                <button onClick={loadPages}
+                  title="Notion議事録DBを再取得"
+                  style={{ background:'none', border:`1px solid ${T?.borderMid || '#ddd'}`, borderRadius:6, padding:'3px 10px', color:'inherit', cursor:'pointer', fontSize:11, fontFamily:'inherit' }}>
+                  🔄 再読み込み
+                </button>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                 {pages.map(p => (
@@ -158,15 +191,34 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
             </div>
           )}
           {!loading && !saved && !selectedPage && pages.length === 0 && !error && (
-            <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>議事録DBにページが見つかりませんでした。</div>
+            <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>
+              議事録DBにページが見つかりませんでした。
+              <button onClick={loadPages}
+                style={{ display:'block', marginTop:8, background:'#4d9fff', border:'none', color:'#fff', borderRadius:6, padding:'5px 14px', cursor:'pointer', fontSize:12, fontFamily:'inherit', fontWeight:600 }}>
+                🔄 再読み込み
+              </button>
+            </div>
           )}
 
           {/* ステップ2: アクションアイテム確認 */}
           {loadingItems && <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>アクションアイテムを読み込み中…</div>}
           {selectedPage && !loadingItems && !saved && items.length === 0 && !error && (
             <div style={{ color: T?.textMuted || '#888', fontSize:13 }}>
-              アクションアイテムが見つかりませんでした。Notionページに「アクションアイテム」見出しの配下にto-doブロックを入れてください。
-              <button onClick={() => setSelectedPage(null)} style={{ display:'block', marginTop:10, background:'none', border:`1px solid ${T?.borderMid || '#ddd'}`, borderRadius:6, padding:'5px 12px', color:'inherit', cursor:'pointer', fontSize:12, fontFamily:'inherit' }}>← 別の日を選ぶ</button>
+              アクションアイテムが見つかりませんでした。<br />
+              Notionページに「アクションアイテム」見出しの配下にto-doブロックを入れてください。
+              <div style={{ marginTop:6, fontSize:11, color: T?.textMuted || '#888', lineHeight:1.6 }}>
+                会議直後でNotion側が反映されていない可能性もあります。少し待ってから再読み込みしてみてください。
+              </div>
+              <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                <button onClick={reloadSelectedPage}
+                  style={{ background:'#4d9fff', border:'none', color:'#fff', borderRadius:6, padding:'5px 14px', cursor:'pointer', fontSize:12, fontFamily:'inherit', fontWeight:600 }}>
+                  🔄 再読み込み
+                </button>
+                <button onClick={() => setSelectedPage(null)}
+                  style={{ background:'none', border:`1px solid ${T?.borderMid || '#ddd'}`, borderRadius:6, padding:'5px 12px', color:'inherit', cursor:'pointer', fontSize:12, fontFamily:'inherit' }}>
+                  ← 別の日を選ぶ
+                </button>
+              </div>
             </div>
           )}
           {selectedPage && !loadingItems && !saved && items.length > 0 && (
