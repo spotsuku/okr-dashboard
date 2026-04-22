@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabase'
 
 // 必要スコープのチェック
 const REQUIRED_SCOPES = [
-  { url: 'https://www.googleapis.com/auth/calendar.readonly', label: 'Calendar 読み取り' },
-  { url: 'https://www.googleapis.com/auth/gmail.readonly',    label: 'Gmail 読み取り'    },
-  { url: 'https://www.googleapis.com/auth/gmail.compose',     label: 'Gmail 下書き作成'   },
+  { url: 'https://www.googleapis.com/auth/calendar.events',   label: 'Calendar 予定の作成・編集' },
+  { url: 'https://www.googleapis.com/auth/calendar.readonly', label: 'Calendar 読み取り'    },
+  { url: 'https://www.googleapis.com/auth/gmail.readonly',    label: 'Gmail 読み取り'       },
+  { url: 'https://www.googleapis.com/auth/gmail.compose',     label: 'Gmail 下書き作成'      },
 ]
 
 function formatRelative(iso) {

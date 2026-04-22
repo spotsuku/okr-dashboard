@@ -6,6 +6,7 @@ import MyTasksPage from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
+import CalendarTab from './CalendarTab'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -121,6 +122,14 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   useEffect(() => { if (myName && !viewingName) setViewingName(myName) }, [myName, viewingName])
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const t = new URL(window.location.href).searchParams.get('tab')
+    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'retrospect', 'integrations'].includes(t)) {
+      setActiveTab(t)
+    }
+  }, [])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   // 集中記入モーダル (ダッシュボードからも OKR記入タブからも開ける)
@@ -310,6 +319,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
             { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
             { key: 'mail',         icon: '📧', label: 'メール'         },
+            { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
             { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
@@ -418,6 +428,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onMarkRead={markMailAsRead}
               onUnmarkRead={unmarkMail}
             />
+          )}
+          {activeTab === 'calendar' && (
+            <CalendarTab T={T} myName={myName} members={members} viewingName={viewingName} />
           )}
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
@@ -2051,21 +2064,24 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
   // 返信必要: To=自分 かつ 未返信 かつ 未既読
   const toMeItems = allItems.filter(m => m.category === 'to_me' && !isDone(m))
 
-  // 確認必要: Cc=自分 / その他 + (To=自分 かつ 返信済みor既読 → ここへ移動)
-  //   並び順: アクティブ(未確認)を上、確認済み(返信済み/既読)を下
-  const ccPool = allItems.filter(m =>
-    m.category === 'cc_me' || m.category === 'other'
-    || (m.category === 'to_me' && isDone(m))
+  // 確認必要: Cc=自分 / その他 で 未既読
+  const ccMeItems = allItems.filter(m =>
+    (m.category === 'cc_me' || m.category === 'other') && !isDone(m)
   )
-  const ccActive = ccPool.filter(m => !isDone(m))
-  const ccDone = ccPool.filter(m => isDone(m))
-  const ccMeItems = [...ccActive, ...ccDone]
+
+  // 返信・既読済み: 通知系以外で、返信済み or 既読な全て
+  //   並び順: 返信済み → 既読のみ (情報量が多い順)
+  const donePool = allItems.filter(m => m.category !== 'notification' && isDone(m))
+  const doneReplied = donePool.filter(m => m.replied)
+  const doneReadOnly = donePool.filter(m => !m.replied && marks.has(m.id))
+  const doneItems = [...doneReplied, ...doneReadOnly]
 
   const notifyItems = allItems.filter(m => m.category === 'notification')
 
   const CATS = [
     { key: 'to_me',        label: '📮 返信必要',      color: '#ff6b6b', items: toMeItems },
-    { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems, activeCount: ccActive.length },
+    { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems },
+    { key: 'done',         label: '✅ 返信・既読済み',  color: '#00d68f', items: doneItems },
     { key: 'notification', label: '📢 通知・キャンペーン', color: '#8aa0b8', items: notifyItems },
   ]
   const current = CATS.find(c => c.key === activeCat) || CATS[0]
@@ -2116,27 +2132,21 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
               display: 'flex', gap: 6, marginBottom: 14,
               borderBottom: `1px solid ${T.border}`, paddingBottom: 0,
             }}>
-              {CATS.map(c => {
-                // 確認必要タブはアクティブ件数を優先表示 (例: "📋 確認必要 (3 / 10)")
-                const countStr = c.activeCount !== undefined
-                  ? `${c.activeCount} / ${c.items.length}`
-                  : c.items.length
-                return (
-                  <button
-                    key={c.key}
-                    onClick={() => setActiveCat(c.key)}
-                    style={{
-                      padding: '8px 14px',
-                      background: activeCat === c.key ? T.bgCard : 'transparent',
-                      color: activeCat === c.key ? c.color : T.textMuted,
-                      border: 'none',
-                      borderBottom: activeCat === c.key ? `3px solid ${c.color}` : '3px solid transparent',
-                      borderRadius: '8px 8px 0 0',
-                      fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                    }}
-                  >{c.label} ({countStr})</button>
-                )
-              })}
+              {CATS.map(c => (
+                <button
+                  key={c.key}
+                  onClick={() => setActiveCat(c.key)}
+                  style={{
+                    padding: '8px 14px',
+                    background: activeCat === c.key ? T.bgCard : 'transparent',
+                    color: activeCat === c.key ? c.color : T.textMuted,
+                    border: 'none',
+                    borderBottom: activeCat === c.key ? `3px solid ${c.color}` : '3px solid transparent',
+                    borderRadius: '8px 8px 0 0',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >{c.label} ({c.items.length})</button>
+              ))}
             </div>
 
             {/* メール一覧 */}

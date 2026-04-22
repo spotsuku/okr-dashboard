@@ -5,6 +5,9 @@ const SCOPES = [
   'openid',
   'email',
   'profile',
+  // calendar.events: 予定の閲覧+作成+更新+削除 (primary カレンダー操作に十分)
+  // calendar.readonly は互換性のため残す (旧ユーザーが readonly のみで連携済みのため)
+  'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.compose',
