@@ -8,7 +8,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { getAdminClient, json } from '../_shared'
+import { getAdminClient, getIntegration, json } from '../_shared'
 
 function mask(val) {
   if (!val) return null
@@ -133,11 +133,25 @@ export async function GET(request) {
         })
       }
 
+      // calendar/events 等が実際に使う getIntegration を直接呼んで結果を比較
+      const integ = await getIntegration(owner, 'google')
+      const getIntegrationResult = {
+        hasIntegration: !!integ.integration,
+        error: integ.error || null,
+        expired: integ.expired || false,
+        refreshed: integ.refreshed || false,
+        refreshError: integ.refreshError || null,
+        integrationOwner: integ.integration?.owner || null,
+        integrationService: integ.integration?.service || null,
+        integrationExpiresAt: integ.integration?.expires_at || null,
+      }
+
       result.ownerQuery = {
         input: owner,
         inputHex: Buffer.from(owner, 'utf-8').toString('hex'),
         inputLength: owner.length,
         runs,
+        getIntegrationResult,
       }
     }
   } catch (e) {
