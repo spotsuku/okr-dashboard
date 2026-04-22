@@ -383,22 +383,6 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
       ? prev.filter(t => t.id !== task.id)
       : prev.map(t => t.id === task.id ? { ...t, status: newStatus, done: false } : t)
     )
-    // 完了時はSlack通知
-    if (newDone) {
-      const ka = kaMap[task.report_id]
-      const obj = ka ? objMap[ka.objective_id] : null
-      fetch('/api/slack-task-done', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: task.id,
-          taskTitle: task.title,
-          kaTitle: ka?.ka_title,
-          objectiveTitle: obj?.title,
-          completedBy: task.assignee || myName,
-        }),
-      }).catch(() => {})
-    }
   }
   const deleteTask = async (taskId) => {
     await supabase.from('ka_tasks').delete().eq('id', taskId)
