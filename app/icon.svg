@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <style>
+    .fg { fill: #000; }
+    @media (prefers-color-scheme: dark) { .fg { fill: #fff; } }
+  </style>
+  <!-- &lt; chevron (bold arrow) -->
+  <path class="fg" d="M 38 10 L 46 22 L 26 50 L 46 78 L 38 90 L 6 50 Z"/>
+  <!-- N: left vertical -->
+  <rect class="fg" x="50" y="10" width="10" height="80"/>
+  <!-- N: right vertical -->
+  <rect class="fg" x="84" y="10" width="10" height="80"/>
+  <!-- N: diagonal (from top-inner-left to bottom-inner-right) -->
+  <polygon class="fg" points="50,10 60,10 94,90 84,90"/>
+</svg>
