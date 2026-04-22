@@ -128,6 +128,30 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   // AI返信モーダル (ダッシュボードのGmailBox / メールタブ 両方から開く)
   const [aiReplyMail, setAiReplyMail] = useState(null)  // null | { id, threadId, from, fromRaw, subject, snippet, messageIdHeader, ... }
 
+  // メール「✓ 既読」マーク (viewingName ごとに localStorage 永続化)
+  const mailReadStorageKey = `mail_read_marks_${viewingName || 'guest'}`
+  const [mailReadMarks, setMailReadMarks] = useState(() => new Set())
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(mailReadStorageKey) : null
+      setMailReadMarks(raw ? new Set(JSON.parse(raw)) : new Set())
+    } catch { setMailReadMarks(new Set()) }
+  }, [mailReadStorageKey])
+  const markMailAsRead = useCallback((id) => {
+    setMailReadMarks(prev => {
+      const next = new Set(prev); next.add(id)
+      try { window.localStorage.setItem(mailReadStorageKey, JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }, [mailReadStorageKey])
+  const unmarkMail = useCallback((id) => {
+    setMailReadMarks(prev => {
+      const next = new Set(prev); next.delete(id)
+      try { window.localStorage.setItem(mailReadStorageKey, JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }, [mailReadStorageKey])
+
   // 今日の work_log 一覧 (メンバー名 → log)
   const [workLogs, setWorkLogs] = useState({})
   const reloadWorkLogs = useCallback(async () => {
@@ -326,6 +350,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onGoToTab={(key) => setActiveTab(key)}
               onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
               onOpenAIReply={(mail) => setAiReplyMail(mail)}
+              mailReadMarks={mailReadMarks}
             />
           )}
           {activeTab === 'wbs' && (
@@ -389,6 +414,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
               onGoToTab={(key) => setActiveTab(key)}
               onOpenAIReply={(mail) => setAiReplyMail(mail)}
+              readMarks={mailReadMarks}
+              onMarkRead={markMailAsRead}
+              onUnmarkRead={unmarkMail}
             />
           )}
           {activeTab === 'retrospect' && (
@@ -429,7 +457,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks }) {
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -869,7 +897,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
           {/* Gmail Box - 返信必要 / 確認必要 5件 */}
           {showW('gmail') && (
-            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} />
+            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} />
           )}
         </div>
 
@@ -1883,8 +1911,8 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
 }
 
 // ─── GmailBox: ダッシュボードの重要メール 5件 ────────────────────────────
-function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply }) {
-  const [items, setItems] = useState([])
+function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks }) {
+  const [rawItems, setRawItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [needsReauth, setNeedsReauth] = useState(false)
@@ -1893,16 +1921,17 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply }) {
     if (!viewingName) return
     let alive = true
     setLoading(true); setError(''); setNeedsReauth(false)
-    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&limit=5&category=important`)
+    // 返信済み・既読が混じっても 5 件確保するため多めに取る
+    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&limit=20&category=important`)
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
         if (!r.ok) {
           setError(j.error || `HTTP ${r.status}`)
           setNeedsReauth(!!j.needsReauth)
-          setItems([])
+          setRawItems([])
         } else {
-          setItems(j.items || [])
+          setRawItems(j.items || [])
         }
       })
       .catch(e => { if (alive) setError(e.message || 'エラー') })
@@ -1910,11 +1939,16 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply }) {
     return () => { alive = false }
   }, [viewingName])
 
+  // 返信済み・既読を除外し、先頭 5 件に絞る
+  const items = rawItems
+    .filter(m => !m.replied && !(readMarks && readMarks.has(m.id)))
+    .slice(0, 5)
+
   const isUnconnected = error.startsWith('未連携')
 
   return (
     <Section
-      T={T} icon="📧" title="Gmail (返信必要 / 確認必要 5件)" flex={0}
+      T={T} icon="📧" title="Gmail (要対応 5件)" flex={0}
       headerRight={
         !isUnconnected && !error ? (
           <button onClick={() => onGoToTab?.('mail')} style={{
@@ -1981,7 +2015,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply }) {
 }
 
 // ─── MailTab: 3カテゴリ分類のメールタブ ─────────────────────────────
-function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply }) {
+function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, readMarks, onMarkRead, onUnmarkRead }) {
   const [allItems, setAllItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2011,13 +2045,27 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply }) {
 
   const isUnconnected = error.startsWith('未連携')
 
-  const toMeItems    = allItems.filter(m => m.category === 'to_me')
-  const ccMeItems    = allItems.filter(m => m.category === 'cc_me' || m.category === 'other')
-  const notifyItems  = allItems.filter(m => m.category === 'notification')
+  const marks = readMarks || new Set()
+  const isDone = (m) => m.replied || marks.has(m.id)
+
+  // 返信必要: To=自分 かつ 未返信 かつ 未既読
+  const toMeItems = allItems.filter(m => m.category === 'to_me' && !isDone(m))
+
+  // 確認必要: Cc=自分 / その他 + (To=自分 かつ 返信済みor既読 → ここへ移動)
+  //   並び順: アクティブ(未確認)を上、確認済み(返信済み/既読)を下
+  const ccPool = allItems.filter(m =>
+    m.category === 'cc_me' || m.category === 'other'
+    || (m.category === 'to_me' && isDone(m))
+  )
+  const ccActive = ccPool.filter(m => !isDone(m))
+  const ccDone = ccPool.filter(m => isDone(m))
+  const ccMeItems = [...ccActive, ...ccDone]
+
+  const notifyItems = allItems.filter(m => m.category === 'notification')
 
   const CATS = [
     { key: 'to_me',        label: '📮 返信必要',      color: '#ff6b6b', items: toMeItems },
-    { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems },
+    { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems, activeCount: ccActive.length },
     { key: 'notification', label: '📢 通知・キャンペーン', color: '#8aa0b8', items: notifyItems },
   ]
   const current = CATS.find(c => c.key === activeCat) || CATS[0]
@@ -2068,21 +2116,27 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply }) {
               display: 'flex', gap: 6, marginBottom: 14,
               borderBottom: `1px solid ${T.border}`, paddingBottom: 0,
             }}>
-              {CATS.map(c => (
-                <button
-                  key={c.key}
-                  onClick={() => setActiveCat(c.key)}
-                  style={{
-                    padding: '8px 14px',
-                    background: activeCat === c.key ? T.bgCard : 'transparent',
-                    color: activeCat === c.key ? c.color : T.textMuted,
-                    border: 'none',
-                    borderBottom: activeCat === c.key ? `3px solid ${c.color}` : '3px solid transparent',
-                    borderRadius: '8px 8px 0 0',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >{c.label} ({c.items.length})</button>
-              ))}
+              {CATS.map(c => {
+                // 確認必要タブはアクティブ件数を優先表示 (例: "📋 確認必要 (3 / 10)")
+                const countStr = c.activeCount !== undefined
+                  ? `${c.activeCount} / ${c.items.length}`
+                  : c.items.length
+                return (
+                  <button
+                    key={c.key}
+                    onClick={() => setActiveCat(c.key)}
+                    style={{
+                      padding: '8px 14px',
+                      background: activeCat === c.key ? T.bgCard : 'transparent',
+                      color: activeCat === c.key ? c.color : T.textMuted,
+                      border: 'none',
+                      borderBottom: activeCat === c.key ? `3px solid ${c.color}` : '3px solid transparent',
+                      borderRadius: '8px 8px 0 0',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >{c.label} ({countStr})</button>
+                )
+              })}
             </div>
 
             {/* メール一覧 */}
@@ -2100,6 +2154,10 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply }) {
                     color={current.color}
                     canReply={current.key !== 'notification'}
                     onOpenAIReply={onOpenAIReply}
+                    readMarked={marks.has(m.id)}
+                    onMarkRead={onMarkRead}
+                    onUnmarkRead={onUnmarkRead}
+                    viewingName={viewingName}
                   />
                 ))}
               </div>
@@ -2111,8 +2169,12 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply }) {
   )
 }
 
-function MailCard({ mail, T, color, canReply, onOpenAIReply }) {
+function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkRead, onUnmarkRead, viewingName }) {
   const [expanded, setExpanded] = useState(false)
+  const [fullBody, setFullBody] = useState(null)
+  const [loadingBody, setLoadingBody] = useState(false)
+  const [bodyError, setBodyError] = useState('')
+
   const dateStr = mail.date ? (() => {
     try {
       const d = new Date(mail.date)
@@ -2121,11 +2183,59 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply }) {
     } catch { return '' }
   })() : ''
 
+  const repliedAtStr = mail.repliedAt ? (() => {
+    try {
+      const d = new Date(mail.repliedAt)
+      const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+      return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()} ${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`
+    } catch { return '' }
+  })() : ''
+
+  const dimmed = mail.replied || readMarked
+
+  const handleExpand = async () => {
+    if (expanded) { setExpanded(false); return }
+    setExpanded(true)
+    if (fullBody !== null || loadingBody) return
+    setLoadingBody(true); setBodyError('')
+    try {
+      const r = await fetch(`/api/integrations/gmail/message?owner=${encodeURIComponent(viewingName || '')}&id=${encodeURIComponent(mail.id)}`)
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) setBodyError(j.error || `HTTP ${r.status}`)
+      else setFullBody(j.text || '(本文なし)')
+    } catch (e) {
+      setBodyError(e.message || 'エラー')
+    }
+    setLoadingBody(false)
+  }
+
   return (
     <div style={{
       background: T.bgCard, border: `1px solid ${T.border}`,
       borderLeft: `3px solid ${color}`, borderRadius: 8, padding: '12px 14px',
+      opacity: dimmed ? 0.55 : 1,
+      transition: 'opacity 0.15s ease',
     }}>
+      {/* 返信済み / 既読バッジ */}
+      {(mail.replied || readMarked) && (
+        <div style={{ marginBottom: 6 }}>
+          {mail.replied && (
+            <span style={{
+              display: 'inline-block', padding: '2px 8px', borderRadius: 10,
+              background: '#00d68f22', color: '#00d68f',
+              fontSize: 10, fontWeight: 700, marginRight: 6,
+            }}>↩ 返信済み{repliedAtStr ? ` (${repliedAtStr})` : ''}</span>
+          )}
+          {readMarked && !mail.replied && (
+            <span style={{
+              display: 'inline-block', padding: '2px 8px', borderRadius: 10,
+              background: '#8aa0b822', color: '#8aa0b8',
+              fontSize: 10, fontWeight: 700,
+            }}>✓ 確認済み</span>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
@@ -2138,24 +2248,35 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply }) {
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>
             {mail.subject}
           </div>
-          <div style={{
-            fontSize: 11, color: T.textSub, lineHeight: 1.6,
-            ...(expanded ? {} : {
+          {/* 本文表示: 展開前はスニペット clamped、展開時は全文を遅延ロード */}
+          {!expanded ? (
+            <div style={{
+              fontSize: 11, color: T.textSub, lineHeight: 1.6,
               overflow: 'hidden', textOverflow: 'ellipsis',
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-            })
-          }}>
-            {mail.snippet}
-          </div>
-          {mail.snippet && mail.snippet.length > 120 && (
-            <button onClick={() => setExpanded(!expanded)} style={{
-              marginTop: 4, background: 'transparent', border: 'none', color: T.accent,
-              fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-            }}>{expanded ? '▲ 閉じる' : '▼ もっと見る'}</button>
+            }}>
+              {mail.snippet}
+            </div>
+          ) : loadingBody ? (
+            <div style={{ fontSize: 11, color: T.textMuted, padding: '6px 0' }}>読み込み中...</div>
+          ) : bodyError ? (
+            <div style={{ fontSize: 11, color: T.danger, padding: '6px 0' }}>⚠️ {bodyError}</div>
+          ) : (
+            <pre style={{
+              fontSize: 11, color: T.textSub, lineHeight: 1.6, margin: 0,
+              fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              maxHeight: 500, overflowY: 'auto',
+              padding: '6px 8px', background: T.sectionBg, borderRadius: 6,
+            }}>{fullBody ?? mail.snippet}</pre>
           )}
+          <button onClick={handleExpand} style={{
+            marginTop: 4, background: 'transparent', border: 'none', color: T.accent,
+            fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+          }}>{expanded ? '▲ 閉じる' : '▼ もっと見る'}</button>
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-          {canReply && (
+          {canReply && !mail.replied && (
             <button onClick={() => onOpenAIReply?.(mail)} style={{
               padding: '5px 12px', borderRadius: 6,
               background: T.accent, color: '#fff', border: 'none',
@@ -2163,6 +2284,28 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply }) {
               whiteSpace: 'nowrap',
             }}>✨ AI返信</button>
           )}
+
+          {/* 既読トグル: 返信済みは自動判定なので手動操作不可 */}
+          {!mail.replied && canReply && (
+            readMarked ? (
+              <button onClick={() => onUnmarkRead?.(mail.id)} style={{
+                padding: '4px 10px', borderRadius: 6,
+                background: 'transparent', color: T.textMuted,
+                border: `1px solid ${T.border}`,
+                fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+              }}>↻ 未読に戻す</button>
+            ) : (
+              <button onClick={() => onMarkRead?.(mail.id)} style={{
+                padding: '4px 10px', borderRadius: 6,
+                background: T.successBg, color: T.success,
+                border: `1px solid ${T.success}40`,
+                fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+              }}>✓ 既読にする</button>
+            )
+          )}
+
           <a
             href={`https://mail.google.com/mail/u/0/#inbox/${mail.threadId}`}
             target="_blank" rel="noreferrer"
