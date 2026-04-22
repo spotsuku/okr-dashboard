@@ -1,6 +1,18 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 
+// スマホ判定
+function useIsMobile(bp = 768) {
+  const [m, setM] = useState(() => (typeof window === 'undefined' ? false : window.innerWidth < bp))
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const h = () => setM(window.innerWidth < bp)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [bp])
+  return m
+}
+
 // ─── Date utilities (JST) ─────────────────────────────────────────────────
 function jstMonday(d = new Date()) {
   const jst = new Date(d.getTime() + 9 * 3600 * 1000)
@@ -51,6 +63,7 @@ const PALETTE = [
 ]
 
 export default function CalendarTab({ T, myName, members, viewingName }) {
+  const isMobile = useIsMobile()
   // 週開始日 (JST月曜の UTC 00:00)
   const [weekStart, setWeekStart] = useState(() => jstMonday(new Date()))
   // 選択中メンバー名
@@ -196,7 +209,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
         />
       </div>
 
-      {/* ─── 右: AIチャット常駐 ─── */}
+      {/* ─── 右: AIチャット常駐 (モバイルはボトムシート) ─── */}
       <AIPanel
         T={T}
         myName={myName}
@@ -205,6 +218,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
         selected={selected}
         weekStart={weekStart}
         onProposal={(type, plan) => setPendingProposal({ type, plan })}
+        isMobile={isMobile}
       />
 
       {/* 確認ダイアログ */}
@@ -591,12 +605,12 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
 }
 
 // ─── AI チャットパネル (右側常駐) ──────────────────────────────────────
-function AIPanel({ T, myName, viewingName, members, selected, weekStart, onProposal }) {
+function AIPanel({ T, myName, viewingName, members, selected, weekStart, onProposal, isMobile = false }) {
   const [history, setHistory] = useState([])  // [{role, content (string)}]
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(isMobile)  // モバイルは初期閉
   const scrollRef = useRef(null)
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -656,6 +670,21 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
   }
 
   if (collapsed) {
+    // スマホ: 右下に丸い FAB ボタン
+    if (isMobile) {
+      return (
+        <button
+          onClick={() => setCollapsed(false)} title="AI を開く"
+          style={{
+            position: 'fixed', right: 16, bottom: 76, zIndex: 25,
+            width: 52, height: 52, borderRadius: '50%',
+            background: T.accent, color: '#fff', border: 'none',
+            boxShadow: '0 6px 18px rgba(77,159,255,0.4)',
+            fontSize: 22, cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >🤖</button>
+      )
+    }
     return (
       <div style={{
         width: 36, borderLeft: `1px solid ${T.border}`, background: T.bgCard,
@@ -670,7 +699,12 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
   }
 
   return (
-    <div style={{
+    <div style={isMobile ? {
+      // モバイル: フルスクリーンシート
+      position: 'fixed', inset: 0, zIndex: 40,
+      background: T.bgCard, display: 'flex', flexDirection: 'column',
+      paddingBottom: 60,  // 下メニュー分
+    } : {
       width: 340, flexShrink: 0,
       borderLeft: `1px solid ${T.border}`, background: T.bgCard,
       display: 'flex', flexDirection: 'column',
