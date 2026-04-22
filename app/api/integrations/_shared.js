@@ -103,7 +103,9 @@ export async function getIntegration(owner, service = 'google') {
         hintStr = ' (DB内に行がありません)'
       }
     } catch { /* noop */ }
-    return { error: `未連携: owner="${owner}" service="${service}"${hintStr}` }
+    // 接続先 Supabase URL を併記して、想定 DB と異なる接続をしていないか即確認できるようにする
+    const dbHost = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^https?:\/\//, '').split('.')[0]
+    return { error: `未連携: owner="${owner}" service="${service}"${hintStr} [db=${dbHost}]` }
   }
 
   // 期限切れ or 60秒以内に切れる → 自動リフレッシュ
