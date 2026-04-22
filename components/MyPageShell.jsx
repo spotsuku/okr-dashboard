@@ -5,6 +5,7 @@ import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
 import FocusFillModal from './FocusFillModal'
+import IntegrationsPanel from './IntegrationsPanel'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -124,6 +125,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [memberSearch, setMemberSearch] = useState('')
   // 集中記入モーダル (ダッシュボードからも OKR記入タブからも開ける)
   const [focusFillOpen, setFocusFillOpen] = useState(null)  // null | 'kr' | 'ka'
+  // AI返信モーダル (ダッシュボードのGmailBox / メールタブ 両方から開く)
+  const [aiReplyMail, setAiReplyMail] = useState(null)  // null | { id, threadId, from, fromRaw, subject, snippet, messageIdHeader, ... }
 
   // 今日の work_log 一覧 (メンバー名 → log)
   const [workLogs, setWorkLogs] = useState({})
@@ -282,7 +285,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'wbs',          icon: '📅', label: 'タスクWBS'     },
             { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
             { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
+            { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
+            { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
             <button
               key={t.key}
@@ -320,6 +325,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onWorkLogChange={reloadWorkLogs}
               onGoToTab={(key) => setActiveTab(key)}
               onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
+              onOpenAIReply={(mail) => setAiReplyMail(mail)}
             />
           )}
           {activeTab === 'wbs' && (
@@ -378,8 +384,18 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               />
             </div>
           )}
+          {activeTab === 'mail' && (
+            <MailTab
+              T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
+              onGoToTab={(key) => setActiveTab(key)}
+              onOpenAIReply={(mail) => setAiReplyMail(mail)}
+            />
+          )}
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
+          )}
+          {activeTab === 'integrations' && (
+            <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
           )}
         </div>
 
@@ -396,13 +412,24 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             levels={levels}
           />
         )}
+
+        {/* AI返信モーダル (ダッシュボードGmailBox / メールタブから共通で使用) */}
+        {aiReplyMail && (
+          <GmailAIModal
+            open={!!aiReplyMail}
+            onClose={() => setAiReplyMail(null)}
+            mail={aiReplyMail}
+            owner={viewingName}
+            T={T}
+          />
+        )}
       </div>
     </div>
   )
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply }) {
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -595,6 +622,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   const DEFAULT_PREFS = {
     today: true, week: true,
     rem_okr: true, rem_task: true,
+    calendar: true, gmail: true,
     goal_month_main: true, goal_month_growth: true, goal_week: true, achievements: true,
   }
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
@@ -834,6 +862,15 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
             })()}
           </Section>
 
+          {/* カレンダー Box - 直近8時間の予定 */}
+          {showW('calendar') && (
+            <CalendarBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} />
+          )}
+
+          {/* Gmail Box - 返信必要 / 確認必要 5件 */}
+          {showW('gmail') && (
+            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} />
+          )}
         </div>
 
         {/* ─── 右カラム：ポップなゴール3種 + コンパクト成果 ─── */}
@@ -978,6 +1015,10 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
     { title: 'タスク', items: [
       { key: 'today', label: '⚡ 今日やること' },
       { key: 'week',  label: '📅 今週やること' },
+    ]},
+    { title: '外部連携', items: [
+      { key: 'calendar', label: '📅 Google カレンダー' },
+      { key: 'gmail',    label: '📧 Gmail (重要メール)' },
     ]},
     { title: 'ゴール / 成果', items: [
       { key: 'goal_month_main',   label: '🌟 今月のメインテーマ' },
@@ -1745,6 +1786,592 @@ function Placeholder({ T, lines = [] }) {
       borderRadius: 6, fontSize: 11, color: T.textMuted, lineHeight: 1.6,
     }}>
       {lines.map((l, i) => <div key={i}>{l}</div>)}
+    </div>
+  )
+}
+
+// ─── CalendarBox: ダッシュボードの直近8時間カレンダー ────────────────────
+function CalendarBox({ T, viewingName, onGoToTab }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [needsReauth, setNeedsReauth] = useState(false)
+
+  useEffect(() => {
+    if (!viewingName) return
+    let alive = true
+    setLoading(true); setError(''); setNeedsReauth(false)
+    fetch(`/api/integrations/calendar/events?owner=${encodeURIComponent(viewingName)}&hours=8`)
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (!alive) return
+        if (!r.ok) {
+          setError(j.error || `HTTP ${r.status}`)
+          setNeedsReauth(!!j.needsReauth)
+          setItems([])
+        } else {
+          setItems(j.items || [])
+        }
+      })
+      .catch(e => { if (alive) setError(e.message || 'エラー') })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [viewingName])
+
+  const isUnconnected = error.startsWith('未連携')
+  const visible = items.slice(0, 5)
+  const extra = Math.max(0, items.length - visible.length)
+
+  return (
+    <Section T={T} icon="📅" title="Google カレンダー (直近8時間)" flex={0}>
+      {loading ? (
+        <div style={{ padding: 12, color: T.textMuted, fontSize: 11 }}>読み込み中...</div>
+      ) : isUnconnected ? (
+        <div style={{ padding: 10, fontSize: 11, color: T.textMuted, lineHeight: 1.7 }}>
+          未連携です。
+          <button onClick={() => onGoToTab?.('integrations')} style={{
+            marginLeft: 6, padding: '3px 10px', borderRadius: 6,
+            background: T.accent, color: '#fff', border: 'none',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>🔌 連携タブへ</button>
+        </div>
+      ) : error ? (
+        <div style={{ padding: 10, fontSize: 11, color: T.danger, lineHeight: 1.6 }}>
+          ⚠️ {error}
+          {needsReauth && (
+            <button onClick={() => onGoToTab?.('integrations')} style={{
+              marginLeft: 6, padding: '3px 10px', borderRadius: 6,
+              background: T.warn, color: '#fff', border: 'none',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>🔄 再連携</button>
+          )}
+        </div>
+      ) : visible.length === 0 ? (
+        <div style={{ padding: 10, fontSize: 11, color: T.textMuted }}>✨ 直近の予定はありません</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {visible.map(ev => (
+            <div key={ev.id} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 8px', background: T.sectionBg, borderRadius: 6,
+              fontSize: 11, color: T.text,
+            }}>
+              <span style={{ fontWeight: 700, color: T.textSub, minWidth: 42 }}>{ev.time}</span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {ev.title}
+              </span>
+              {ev.hangoutLink && (
+                <a href={ev.hangoutLink} target="_blank" rel="noreferrer" style={{
+                  padding: '2px 8px', borderRadius: 10,
+                  background: T.accentBg, color: T.accent,
+                  fontSize: 10, fontWeight: 700, textDecoration: 'none',
+                }}>参加</a>
+              )}
+            </div>
+          ))}
+          {extra > 0 && (
+            <div style={{ fontSize: 11, color: T.textMuted, paddingLeft: 6 }}>他 {extra} 件</div>
+          )}
+          <a href="https://calendar.google.com/" target="_blank" rel="noreferrer" style={{
+            fontSize: 11, color: T.accent, textAlign: 'center',
+            padding: '4px 0', textDecoration: 'none',
+          }}>📅 Google カレンダーを開く ↗</a>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+// ─── GmailBox: ダッシュボードの重要メール 5件 ────────────────────────────
+function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [needsReauth, setNeedsReauth] = useState(false)
+
+  useEffect(() => {
+    if (!viewingName) return
+    let alive = true
+    setLoading(true); setError(''); setNeedsReauth(false)
+    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&limit=5&category=important`)
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (!alive) return
+        if (!r.ok) {
+          setError(j.error || `HTTP ${r.status}`)
+          setNeedsReauth(!!j.needsReauth)
+          setItems([])
+        } else {
+          setItems(j.items || [])
+        }
+      })
+      .catch(e => { if (alive) setError(e.message || 'エラー') })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [viewingName])
+
+  const isUnconnected = error.startsWith('未連携')
+
+  return (
+    <Section
+      T={T} icon="📧" title="Gmail (返信必要 / 確認必要 5件)" flex={0}
+      headerRight={
+        !isUnconnected && !error ? (
+          <button onClick={() => onGoToTab?.('mail')} style={{
+            padding: '3px 8px', borderRadius: 6,
+            background: 'transparent', color: T.accent,
+            border: `1px solid ${T.accent}40`,
+            fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>📧 メールタブで全部見る →</button>
+        ) : null
+      }
+    >
+      {loading ? (
+        <div style={{ padding: 12, color: T.textMuted, fontSize: 11 }}>読み込み中...</div>
+      ) : isUnconnected ? (
+        <div style={{ padding: 10, fontSize: 11, color: T.textMuted, lineHeight: 1.7 }}>
+          未連携です。
+          <button onClick={() => onGoToTab?.('integrations')} style={{
+            marginLeft: 6, padding: '3px 10px', borderRadius: 6,
+            background: T.accent, color: '#fff', border: 'none',
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>🔌 連携タブへ</button>
+        </div>
+      ) : error ? (
+        <div style={{ padding: 10, fontSize: 11, color: T.danger, lineHeight: 1.6 }}>
+          ⚠️ {error}
+          {needsReauth && (
+            <button onClick={() => onGoToTab?.('integrations')} style={{
+              marginLeft: 6, padding: '3px 10px', borderRadius: 6,
+              background: T.warn, color: '#fff', border: 'none',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>🔄 再連携</button>
+          )}
+        </div>
+      ) : items.length === 0 ? (
+        <div style={{ padding: 10, fontSize: 11, color: T.textMuted }}>✨ 要対応メールはありません</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map(m => (
+            <div key={m.id} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 10px', background: T.sectionBg, borderRadius: 6,
+              fontSize: 11,
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {m.from}: {m.subject}
+                </div>
+                <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {m.snippet}
+                </div>
+              </div>
+              <button onClick={() => onOpenAIReply?.(m)} style={{
+                padding: '4px 10px', borderRadius: 6,
+                background: T.accent, color: '#fff', border: 'none',
+                fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+              }}>✨ AI返信</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  )
+}
+
+// ─── MailTab: 3カテゴリ分類のメールタブ ─────────────────────────────
+function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply }) {
+  const [allItems, setAllItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [needsReauth, setNeedsReauth] = useState(false)
+  const [activeCat, setActiveCat] = useState('to_me')
+
+  useEffect(() => {
+    if (!viewingName) return
+    let alive = true
+    setLoading(true); setError(''); setNeedsReauth(false)
+    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&limit=50&category=all`)
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (!alive) return
+        if (!r.ok) {
+          setError(j.error || `HTTP ${r.status}`)
+          setNeedsReauth(!!j.needsReauth)
+          setAllItems([])
+        } else {
+          setAllItems(j.allItems || j.items || [])
+        }
+      })
+      .catch(e => { if (alive) setError(e.message || 'エラー') })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [viewingName])
+
+  const isUnconnected = error.startsWith('未連携')
+
+  const toMeItems    = allItems.filter(m => m.category === 'to_me')
+  const ccMeItems    = allItems.filter(m => m.category === 'cc_me' || m.category === 'other')
+  const notifyItems  = allItems.filter(m => m.category === 'notification')
+
+  const CATS = [
+    { key: 'to_me',        label: '📮 返信必要',      color: '#ff6b6b', items: toMeItems },
+    { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems },
+    { key: 'notification', label: '📢 通知・キャンペーン', color: '#8aa0b8', items: notifyItems },
+  ]
+  const current = CATS.find(c => c.key === activeCat) || CATS[0]
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: 20 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: 0, marginBottom: 12 }}>
+          📧 メール
+        </h2>
+
+        {isUnconnected ? (
+          <div style={{
+            padding: 24, background: T.bgCard, border: `1px solid ${T.border}`,
+            borderRadius: 10, fontSize: 13, color: T.textMuted, textAlign: 'center',
+          }}>
+            Google と連携するとメールが表示されます。
+            <div style={{ marginTop: 10 }}>
+              <button onClick={() => onGoToTab?.('integrations')} style={{
+                padding: '8px 16px', borderRadius: 8,
+                background: T.accent, color: '#fff', border: 'none',
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              }}>🔌 連携タブへ</button>
+            </div>
+          </div>
+        ) : error ? (
+          <div style={{
+            padding: 14, background: T.dangerBg, border: `1px solid ${T.danger}40`,
+            borderRadius: 8, fontSize: 12, color: T.danger,
+          }}>
+            ⚠️ {error}
+            {needsReauth && (
+              <button onClick={() => onGoToTab?.('integrations')} style={{
+                marginLeft: 8, padding: '4px 12px', borderRadius: 6,
+                background: T.warn, color: '#fff', border: 'none',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              }}>🔄 再連携</button>
+            )}
+          </div>
+        ) : loading ? (
+          <div style={{ padding: 20, color: T.textMuted, fontSize: 12, textAlign: 'center' }}>
+            読み込み中...
+          </div>
+        ) : (
+          <>
+            {/* カテゴリタブ */}
+            <div style={{
+              display: 'flex', gap: 6, marginBottom: 14,
+              borderBottom: `1px solid ${T.border}`, paddingBottom: 0,
+            }}>
+              {CATS.map(c => (
+                <button
+                  key={c.key}
+                  onClick={() => setActiveCat(c.key)}
+                  style={{
+                    padding: '8px 14px',
+                    background: activeCat === c.key ? T.bgCard : 'transparent',
+                    color: activeCat === c.key ? c.color : T.textMuted,
+                    border: 'none',
+                    borderBottom: activeCat === c.key ? `3px solid ${c.color}` : '3px solid transparent',
+                    borderRadius: '8px 8px 0 0',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >{c.label} ({c.items.length})</button>
+              ))}
+            </div>
+
+            {/* メール一覧 */}
+            {current.items.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+                ✨ メールはありません
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {current.items.map(m => (
+                  <MailCard
+                    key={m.id}
+                    mail={m}
+                    T={T}
+                    color={current.color}
+                    canReply={current.key !== 'notification'}
+                    onOpenAIReply={onOpenAIReply}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MailCard({ mail, T, color, canReply, onOpenAIReply }) {
+  const [expanded, setExpanded] = useState(false)
+  const dateStr = mail.date ? (() => {
+    try {
+      const d = new Date(mail.date)
+      const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+      return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()} ${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`
+    } catch { return '' }
+  })() : ''
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`,
+      borderLeft: `3px solid ${color}`, borderRadius: 8, padding: '12px 14px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4,
+            fontSize: 11, color: T.textMuted,
+          }}>
+            <span style={{ fontWeight: 700, color: T.textSub }}>{mail.from}</span>
+            <span>・{dateStr}</span>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+            {mail.subject}
+          </div>
+          <div style={{
+            fontSize: 11, color: T.textSub, lineHeight: 1.6,
+            ...(expanded ? {} : {
+              overflow: 'hidden', textOverflow: 'ellipsis',
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+            })
+          }}>
+            {mail.snippet}
+          </div>
+          {mail.snippet && mail.snippet.length > 120 && (
+            <button onClick={() => setExpanded(!expanded)} style={{
+              marginTop: 4, background: 'transparent', border: 'none', color: T.accent,
+              fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+            }}>{expanded ? '▲ 閉じる' : '▼ もっと見る'}</button>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+          {canReply && (
+            <button onClick={() => onOpenAIReply?.(mail)} style={{
+              padding: '5px 12px', borderRadius: 6,
+              background: T.accent, color: '#fff', border: 'none',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              whiteSpace: 'nowrap',
+            }}>✨ AI返信</button>
+          )}
+          <a
+            href={`https://mail.google.com/mail/u/0/#inbox/${mail.threadId}`}
+            target="_blank" rel="noreferrer"
+            style={{
+              padding: '4px 10px', borderRadius: 6,
+              background: 'transparent', color: T.textMuted,
+              border: `1px solid ${T.border}`,
+              fontSize: 10, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap',
+            }}
+          >Gmail で開く ↗</a>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── GmailAIModal: AI返信草稿 生成 + 下書き作成 or mailto フォールバック ─────
+function GmailAIModal({ open, onClose, mail, owner, T }) {
+  const [draft, setDraft] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState('')
+
+  useEffect(() => {
+    if (!open || !mail) return
+    let alive = true
+    setLoading(true); setError(''); setDraft('')
+    fetch('/api/integrations/gmail/ai-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner,
+        subject: mail.subject || '',
+        from: mail.fromRaw || mail.from || '',
+        snippet: mail.snippet || '',
+      }),
+    })
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (!alive) return
+        if (!r.ok) setError(j.error || `HTTP ${r.status}`)
+        else setDraft(j.draft || '')
+      })
+      .catch(e => { if (alive) setError(e.message || 'エラー') })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [open, mail, owner])
+
+  if (!open || !mail) return null
+
+  // From ヘッダから email 部分を抽出
+  function extractEmail(raw) {
+    if (!raw) return ''
+    const m = raw.match(/<([^>]+)>/)
+    if (m) return m[1].trim()
+    return raw.trim()
+  }
+  const toEmail = extractEmail(mail.fromRaw || mail.from || '')
+
+  function copyDraft() {
+    navigator.clipboard?.writeText(draft || '').then(() => {
+      setToast('コピーしました')
+      setTimeout(() => setToast(''), 2000)
+    }).catch(() => setToast('コピー失敗'))
+  }
+
+  function openMailtoFallback() {
+    const url = new URL('https://mail.google.com/mail/')
+    url.searchParams.set('view', 'cm')
+    url.searchParams.set('fs', '1')
+    if (toEmail) url.searchParams.set('to', toEmail)
+    url.searchParams.set('su', `Re: ${mail.subject || ''}`)
+    url.searchParams.set('body', draft)
+    window.open(url.toString(), '_blank')
+  }
+
+  async function createDraft() {
+    setSubmitting(true); setToast('')
+    try {
+      const r = await fetch('/api/integrations/gmail/create-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner,
+          threadId: mail.threadId,
+          messageIdHeader: mail.messageIdHeader,
+          to: toEmail,
+          subject: `Re: ${mail.subject || ''}`,
+          body: draft,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        // 403 など → mailto フォールバック
+        if (r.status === 403 || j.needsScope || j.needsReauth) {
+          setToast(`${j.error || 'Gmail API で下書き作成できませんでした'} → 代わりに Gmail の新規作成画面を開きます`)
+          setTimeout(() => openMailtoFallback(), 500)
+          return
+        }
+        setError(j.error || `HTTP ${r.status}`)
+        return
+      }
+      // 成功 → 下書きを Gmail で開く
+      if (j.openUrl) window.open(j.openUrl, '_blank')
+      setToast('下書きを作成しました')
+      setTimeout(() => { setToast(''); onClose?.() }, 1000)
+    } catch (e) {
+      setError(`送信エラー: ${e.message || e}`)
+    }
+    setSubmitting(false)
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 100, padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: T.bgCard, borderRadius: 12,
+          width: '100%', maxWidth: 640, maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column',
+          border: `1px solid ${T.border}`, overflow: 'hidden',
+        }}
+      >
+        {/* ヘッダ */}
+        <div style={{
+          padding: '14px 16px', borderBottom: `1px solid ${T.border}`,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <div style={{ fontSize: 18 }}>✨</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>AI返信草稿</div>
+            <div style={{ fontSize: 11, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              To: {mail.from} | {mail.subject}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', color: T.textMuted,
+            fontSize: 20, cursor: 'pointer', padding: 4, fontFamily: 'inherit',
+          }}>×</button>
+        </div>
+
+        {/* 本文 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {loading ? (
+            <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+              ✨ AIが返信草稿を作成中...
+            </div>
+          ) : error ? (
+            <div style={{
+              padding: 12, background: T.dangerBg, border: `1px solid ${T.danger}40`,
+              borderRadius: 8, fontSize: 12, color: T.danger,
+            }}>⚠️ {error}</div>
+          ) : (
+            <textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              style={{
+                width: '100%', minHeight: 240,
+                padding: 12, background: T.sectionBg,
+                border: `1px solid ${T.border}`, borderRadius: 8,
+                color: T.text, fontSize: 13, lineHeight: 1.7,
+                fontFamily: 'inherit', resize: 'vertical',
+              }}
+            />
+          )}
+        </div>
+
+        {/* アクション */}
+        <div style={{
+          padding: '12px 16px', borderTop: `1px solid ${T.border}`,
+          display: 'flex', gap: 8, alignItems: 'center',
+        }}>
+          {toast && (
+            <div style={{ flex: 1, fontSize: 11, color: T.textMuted }}>{toast}</div>
+          )}
+          {!toast && <div style={{ flex: 1 }} />}
+          <button
+            onClick={copyDraft}
+            disabled={loading || !draft}
+            style={{
+              padding: '8px 14px', borderRadius: 7,
+              background: 'transparent', color: T.text,
+              border: `1px solid ${T.border}`,
+              fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              cursor: loading || !draft ? 'not-allowed' : 'pointer',
+              opacity: loading || !draft ? 0.5 : 1,
+            }}
+          >📋 コピー</button>
+          <button
+            onClick={createDraft}
+            disabled={loading || submitting || !draft}
+            style={{
+              padding: '8px 14px', borderRadius: 7,
+              background: T.accent, color: '#fff', border: 'none',
+              fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              cursor: loading || submitting || !draft ? 'not-allowed' : 'pointer',
+              opacity: loading || submitting || !draft ? 0.5 : 1,
+            }}
+          >{submitting ? '作成中...' : '📝 下書きを作成して Gmail で開く'}</button>
+        </div>
+      </div>
     </div>
   )
 }
