@@ -92,11 +92,39 @@ export async function GET(request) {
 
     if (messageIds.length === 0) return json({ items: [], myEmail })
 
-    // 2. 各メッセージのメタデータを並列取得
-    const items = await Promise.all(messageIds.map(async id => {
+    // Gmail API の「Too many concurrent requests」(429) を避けるため、
+    // 並列度を制限しつつ 429/503 時は指数バックオフで再試行する
+    async function fetchWithBackoff(url, token, maxRetries = 3) {
+      let attempt = 0
+      let delay = 400
+      while (true) {
+        const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+        if (r.status !== 429 && r.status !== 503) return r
+        if (attempt >= maxRetries) return r
+        await new Promise(res => setTimeout(res, delay + Math.random() * 200))
+        delay *= 2
+        attempt++
+      }
+    }
+    async function runBatched(items, concurrency, fn) {
+      const results = new Array(items.length)
+      let idx = 0
+      const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+        while (true) {
+          const i = idx++
+          if (i >= items.length) return
+          results[i] = await fn(items[i], i)
+        }
+      })
+      await Promise.all(workers)
+      return results
+    }
+
+    // 2. メッセージメタデータ取得 (並列度 5 で制限)
+    const items = await runBatched(messageIds, 5, async id => {
       const mUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Message-ID&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence`
       const { response: mRes } = await callGoogleApiWithRetry(integ1, async (token) => {
-        return fetch(mUrl, { headers: { Authorization: `Bearer ${token}` } })
+        return fetchWithBackoff(mUrl, token)
       })
       if (!mRes.ok) return null
       const m = await mRes.json()
@@ -118,45 +146,53 @@ export async function GET(request) {
         replied: false,
         repliedAt: null,
       }
-    }))
+    })
 
     const filtered = items.filter(Boolean)
 
-    // 2b. スレッド情報を引いて「自分が後に返信しているか」を判定
-    //     threadId 単位でユニーク化して並列取得 (通知系は軽減のためスキップ)
-    const needReplyCheck = filtered.filter(it => it.category !== 'notification')
-    const uniqueThreadIds = [...new Set(needReplyCheck.map(it => it.threadId).filter(Boolean))]
-    const threadMap = new Map()
-    if (myEmail && uniqueThreadIds.length > 0) {
-      await Promise.all(uniqueThreadIds.map(async tid => {
-        const tUrl = `https://gmail.googleapis.com/gmail/v1/users/me/threads/${tid}?format=metadata&metadataHeaders=From`
-        const { response: tRes } = await callGoogleApiWithRetry(integ1, async (token) => {
-          return fetch(tUrl, { headers: { Authorization: `Bearer ${token}` } })
-        })
-        if (!tRes.ok) return
-        const td = await tRes.json().catch(() => null)
-        if (td) threadMap.set(tid, td)
-      }))
-      const myLower = myEmail.toLowerCase()
-      filtered.forEach(it => {
-        const thread = threadMap.get(it.threadId)
-        if (!thread) return
-        let repliedAtMs = null
-        for (const tm of thread.messages || []) {
-          if (tm.id === it.id) continue
-          const tmDate = Number(tm.internalDate || 0)
-          if (tmDate <= it.internalDate) continue
-          const tmFrom = (tm.payload?.headers || [])
-            .find(h => h.name.toLowerCase() === 'from')?.value.toLowerCase() || ''
-          if (tmFrom.includes(myLower)) {
-            if (!repliedAtMs || tmDate > repliedAtMs) repliedAtMs = tmDate
-          }
-        }
-        if (repliedAtMs) {
-          it.replied = true
-          it.repliedAt = new Date(repliedAtMs).toISOString()
-        }
+    // 2b. 返信済み判定
+    //   最適化1: Gmail 検索で「自分が送信 かつ newer_than:7d」のメッセージ群 (SENT 限定) を
+    //            1 クエリで取得し、threadId → 自分発の latest internalDate のマップを作る。
+    //   これで thread.get を叩く必要がなくなり、API 呼び出しが大幅に減って 429 を回避できる。
+    if (myEmail) {
+      const sentQuery = encodeURIComponent(`in:sent newer_than:30d`)
+      const sentListUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${sentQuery}&maxResults=200`
+      const { response: sentListRes } = await callGoogleApiWithRetry(integ1, async (token) => {
+        return fetchWithBackoff(sentListUrl, token)
       })
+      if (sentListRes.ok) {
+        const sentListData = await sentListRes.json().catch(() => ({}))
+        // Gmail の messages.list は threadId 込みで返すので metadata 取得不要で threadId を知れる
+        const sentIds = (sentListData.messages || []).map(m => ({ id: m.id, threadId: m.threadId }))
+        // 対象スレッドに属する sent メッセージだけに絞り、internalDate を取る (並列度 5)
+        const targetThreadIds = new Set(filtered.map(it => it.threadId))
+        const relevantSent = sentIds.filter(s => targetThreadIds.has(s.threadId))
+        // internalDate 取得用に minimal format で fetch (sent は自分発が自明なので From 不要)
+        const sentInfo = await runBatched(relevantSent, 5, async s => {
+          const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${s.id}?format=minimal`
+          const { response: r } = await callGoogleApiWithRetry(integ1, async (token) => {
+            return fetchWithBackoff(url, token)
+          })
+          if (!r.ok) return null
+          const m = await r.json().catch(() => null)
+          if (!m) return null
+          return { threadId: s.threadId, internalDate: Number(m.internalDate || 0) }
+        })
+        // threadId → 最新の自分発 internalDate
+        const latestSentByThread = new Map()
+        for (const s of sentInfo) {
+          if (!s) continue
+          const prev = latestSentByThread.get(s.threadId) || 0
+          if (s.internalDate > prev) latestSentByThread.set(s.threadId, s.internalDate)
+        }
+        filtered.forEach(it => {
+          const sentAt = latestSentByThread.get(it.threadId)
+          if (sentAt && sentAt > it.internalDate) {
+            it.replied = true
+            it.repliedAt = new Date(sentAt).toISOString()
+          }
+        })
+      }
     }
 
     // カテゴリフィルタリング
