@@ -106,6 +106,7 @@ export async function GET(request) {
       return {
         id,
         threadId: m.threadId,
+        internalDate: Number(m.internalDate || 0),
         from: extractFromName(from) || '(不明)',
         fromRaw: from,
         subject: getHeader(headers, 'subject') || '(件名なし)',
@@ -114,10 +115,49 @@ export async function GET(request) {
         messageIdHeader: getHeader(headers, 'message-id'),
         category: category_,
         labelIds: m.labelIds || [],
+        replied: false,
+        repliedAt: null,
       }
     }))
 
     const filtered = items.filter(Boolean)
+
+    // 2b. スレッド情報を引いて「自分が後に返信しているか」を判定
+    //     threadId 単位でユニーク化して並列取得 (通知系は軽減のためスキップ)
+    const needReplyCheck = filtered.filter(it => it.category !== 'notification')
+    const uniqueThreadIds = [...new Set(needReplyCheck.map(it => it.threadId).filter(Boolean))]
+    const threadMap = new Map()
+    if (myEmail && uniqueThreadIds.length > 0) {
+      await Promise.all(uniqueThreadIds.map(async tid => {
+        const tUrl = `https://gmail.googleapis.com/gmail/v1/users/me/threads/${tid}?format=metadata&metadataHeaders=From`
+        const { response: tRes } = await callGoogleApiWithRetry(integ1, async (token) => {
+          return fetch(tUrl, { headers: { Authorization: `Bearer ${token}` } })
+        })
+        if (!tRes.ok) return
+        const td = await tRes.json().catch(() => null)
+        if (td) threadMap.set(tid, td)
+      }))
+      const myLower = myEmail.toLowerCase()
+      filtered.forEach(it => {
+        const thread = threadMap.get(it.threadId)
+        if (!thread) return
+        let repliedAtMs = null
+        for (const tm of thread.messages || []) {
+          if (tm.id === it.id) continue
+          const tmDate = Number(tm.internalDate || 0)
+          if (tmDate <= it.internalDate) continue
+          const tmFrom = (tm.payload?.headers || [])
+            .find(h => h.name.toLowerCase() === 'from')?.value.toLowerCase() || ''
+          if (tmFrom.includes(myLower)) {
+            if (!repliedAtMs || tmDate > repliedAtMs) repliedAtMs = tmDate
+          }
+        }
+        if (repliedAtMs) {
+          it.replied = true
+          it.repliedAt = new Date(repliedAtMs).toISOString()
+        }
+      })
+    }
 
     // カテゴリフィルタリング
     let result_ = filtered
