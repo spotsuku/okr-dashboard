@@ -20,7 +20,7 @@ async function resolveIntegration(owner) {
   return { integration: res.integration }
 }
 
-function buildEventPayload({ summary, description, start_iso, end_iso, attendee_emails, add_meet }) {
+function buildEventPayload({ summary, description, start_iso, end_iso, attendee_emails, add_meet, recurrence }) {
   const payload = {}
   if (summary !== undefined) payload.summary = summary
   if (description !== undefined) payload.description = description
@@ -28,6 +28,10 @@ function buildEventPayload({ summary, description, start_iso, end_iso, attendee_
   if (end_iso) payload.end = { dateTime: end_iso, timeZone: 'Asia/Tokyo' }
   if (attendee_emails !== undefined) {
     payload.attendees = (attendee_emails || []).map(email => ({ email }))
+  }
+  if (Array.isArray(recurrence) && recurrence.length > 0) {
+    // 例: ['RRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=10']
+    payload.recurrence = recurrence
   }
   if (add_meet) {
     payload.conferenceData = {
@@ -43,14 +47,14 @@ function buildEventPayload({ summary, description, start_iso, end_iso, attendee_
 export async function POST(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
-  const { owner, summary, description, start_iso, end_iso, attendee_emails, add_meet } = body || {}
+  const { owner, summary, description, start_iso, end_iso, attendee_emails, add_meet, recurrence } = body || {}
   if (!owner || !summary || !start_iso || !end_iso) {
     return json({ error: 'owner / summary / start_iso / end_iso が必要です' }, { status: 400 })
   }
   const resolved = await resolveIntegration(owner)
   if (resolved.error) return json({ error: resolved.error, needsReauth: resolved.needsReauth }, { status: resolved.status })
 
-  const payload = buildEventPayload({ summary, description, start_iso, end_iso, attendee_emails, add_meet })
+  const payload = buildEventPayload({ summary, description, start_iso, end_iso, attendee_emails, add_meet, recurrence })
   const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
   url.searchParams.set('sendUpdates', 'all')
   if (add_meet) url.searchParams.set('conferenceDataVersion', '1')

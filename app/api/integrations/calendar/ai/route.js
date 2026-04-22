@@ -45,7 +45,7 @@ const TOOLS = [
   },
   {
     name: 'find_free_slots',
-    description: '指定メンバー全員が空いている時間枠を検索する。日程調整で使う。',
+    description: '指定メンバー全員が空いている時間枠を検索する。日程調整で使う。営業時間は 9:00-22:00 JST デフォルト。',
     input_schema: {
       type: 'object',
       properties: {
@@ -53,14 +53,14 @@ const TOOLS = [
         start_iso: { type: 'string' },
         end_iso:   { type: 'string' },
         duration_min: { type: 'number', description: '必要な連続空き時間 (分)' },
-        working_hours: { type: 'object', properties: { from: { type: 'number' }, to: { type: 'number' } }, description: '営業時間帯 (例: from:9, to:18) JST' },
+        working_hours: { type: 'object', properties: { from: { type: 'number' }, to: { type: 'number' } }, description: '営業時間帯 (例: from:9, to:22) JST。省略時 9-22。' },
       },
       required: ['members', 'start_iso', 'end_iso', 'duration_min'],
     },
   },
   {
     name: 'create_event',
-    description: '自分のカレンダーに予定を作成し、指定メンバーを招待する。Google Meet リンクも任意で付与。',
+    description: '自分のカレンダーに予定を作成し、指定メンバーを招待する。Google Meet リンクも任意で付与。繰り返し予定も RRULE 配列で指定可能。',
     input_schema: {
       type: 'object',
       properties: {
@@ -70,6 +70,7 @@ const TOOLS = [
         attendee_names: { type: 'array', items: { type: 'string' }, description: '招待するメンバー名' },
         description: { type: 'string' },
         add_meet: { type: 'boolean', description: 'Google Meet リンクを自動発行' },
+        recurrence: { type: 'array', items: { type: 'string' }, description: "RRULE 配列。例: 毎週金曜 10回は ['RRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=10']、毎月最終木曜は ['RRULE:FREQ=MONTHLY;BYDAY=-1TH']" },
       },
       required: ['summary', 'start_iso', 'end_iso'],
     },
@@ -86,6 +87,7 @@ const TOOLS = [
         end_iso: { type: 'string' },
         attendee_names: { type: 'array', items: { type: 'string' } },
         description: { type: 'string' },
+        recurrence: { type: 'array', items: { type: 'string' }, description: 'RRULE 配列で繰り返しルールを変更' },
       },
       required: ['event_id'],
     },
@@ -175,7 +177,7 @@ function computeFreeSlots(memberEvents, startIso, endIso, durationMin, workingHo
 
   // 各空き区間を JST 営業時間で日割り & duration_min 以上を抽出
   const fromH = workingHours?.from ?? 9
-  const toH = workingHours?.to ?? 18
+  const toH = workingHours?.to ?? 22
   const slots = []
   for (const [s, e] of free) {
     // 日をまたぐ空きを営業時間ごとに細切れにする
@@ -217,55 +219,51 @@ async function executeTool(name, input, ctx) {
       const slots = computeFreeSlots(memberEvents, input.start_iso, input.end_iso, input.duration_min, input.working_hours)
       return { ok: true, slots, memberStatuses: memberEvents.map(m => ({ name: m.name, error: m.error, eventCount: m.events.length })) }
     }
+    // mutate 系 (create/update/delete) は即実行せず「提案」を返す。
+    // UI 側で確認ダイアログを出し、ユーザー承認後に直接 /api/integrations/calendar/event を叩く。
+    // 招待メールが自動で飛ぶため誤発火防止を最優先。
     if (name === 'create_event') {
       const emails = resolveEmails(input.attendee_names, ctx.members)
-      const r = await fetch(`${ctx.origin}/api/integrations/calendar/event`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner: ctx.owner,
+      const unresolved = (input.attendee_names || []).filter(n =>
+        !(ctx.members || []).find(x => x.name === n)
+      )
+      // 件名に [仮] プレフィックスを自動付与 (すでに付いていなければ)
+      const summary = /^\s*\[仮\]/.test(input.summary || '') ? input.summary : `[仮] ${input.summary || ''}`.trim()
+      return {
+        ok: true,
+        proposal: 'create',
+        plan: {
+          summary,
+          description: input.description || '',
+          start_iso: input.start_iso,
+          end_iso: input.end_iso,
+          attendee_names: input.attendee_names || [],
+          attendee_emails: emails,
+          unresolved_names: unresolved,
+          add_meet: !!input.add_meet,
+          recurrence: input.recurrence || [],
+        },
+      }
+    }
+    if (name === 'update_event') {
+      const emails = input.attendee_names ? resolveEmails(input.attendee_names, ctx.members) : undefined
+      return {
+        ok: true,
+        proposal: 'update',
+        plan: {
+          event_id: input.event_id,
           summary: input.summary,
           description: input.description,
           start_iso: input.start_iso,
           end_iso: input.end_iso,
+          attendee_names: input.attendee_names,
           attendee_emails: emails,
-          add_meet: !!input.add_meet,
-        }),
-      })
-      const j = await r.json()
-      if (!r.ok) return { ok: false, error: j.error || `HTTP ${r.status}` }
-      return { ok: true, event: { id: j.id, htmlLink: j.htmlLink, hangoutLink: j.hangoutLink } }
-    }
-    if (name === 'update_event') {
-      const emails = input.attendee_names ? resolveEmails(input.attendee_names, ctx.members) : undefined
-      const r = await fetch(`${ctx.origin}/api/integrations/calendar/event`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner: ctx.owner,
-          event_id: input.event_id,
-          updates: {
-            summary: input.summary,
-            description: input.description,
-            start_iso: input.start_iso,
-            end_iso: input.end_iso,
-            attendee_emails: emails,
-          },
-        }),
-      })
-      const j = await r.json()
-      if (!r.ok) return { ok: false, error: j.error || `HTTP ${r.status}` }
-      return { ok: true, event: { id: j.id, htmlLink: j.htmlLink } }
+          recurrence: input.recurrence,
+        },
+      }
     }
     if (name === 'delete_event') {
-      const r = await fetch(`${ctx.origin}/api/integrations/calendar/event`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner: ctx.owner, event_id: input.event_id }),
-      })
-      const j = await r.json()
-      if (!r.ok) return { ok: false, error: j.error || `HTTP ${r.status}` }
-      return { ok: true }
+      return { ok: true, proposal: 'delete', plan: { event_id: input.event_id } }
     }
     return { ok: false, error: `不明なツール: ${name}` }
   } catch (e) {
@@ -305,13 +303,15 @@ export async function POST(request) {
 ${membersStr || '(なし)'}
 
 ## 行動ルール
-1. 日程を「仮押さえ」する場合、件名の先頭に「[仮]」を付ける (例: "[仮] 企画MTG")
+1. 仮押さえは件名の先頭に「[仮]」を付ける (create_event ツール側で自動付与されるが、AI も意識すること)
 2. 空き時間を探す時は必ず find_free_slots を使う (勘で答えない)
-3. 予定作成前に、実行内容 (件名/日時/招待者) をユーザーに確認してから create_event を呼ぶ。ただし「〜で予定入れて」のような明確な指示は即実行してよい
+3. **重要**: create_event / update_event / delete_event は「提案」として返り、実行はユーザー承認後 UI 側で行われる。したがって AI の最終返答では「作成しました」ではなく「以下の内容で作成します。よろしければ『承認』を押してください」のように表現すること
 4. 招待者は必ず attendee_names でメンバー名を渡す (メールアドレス解決は裏で行う)
 5. Google Meet が必要そうな会議 (チーム打合せ等) は add_meet: true
 6. 時刻は JST (+09:00) の ISO 8601 で指定
-7. 最終返答は日本語で簡潔に。実行結果や提案を短くまとめる
+7. 繰り返しは recurrence に RRULE 配列で指定 (例: 毎週金曜10回は ['RRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=10'])
+8. 未連携メンバーが含まれる場合は「◯◯さんは未連携のためカレンダー閲覧不可」と明言しつつ、招待には含める (Gmail アドレスが分かれば招待メールは届く)
+9. 最終返答は日本語で簡潔に。実行結果や提案を短くまとめる
 
 最初のユーザー指示を受け、必要なら複数ツール呼び出しを連続で行ってください。`
 
