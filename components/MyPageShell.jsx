@@ -361,6 +361,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
               onOpenAIReply={(mail) => setAiReplyMail(mail)}
               mailReadMarks={mailReadMarks}
+              onMarkMailRead={markMailAsRead}
             />
           )}
           {activeTab === 'wbs' && (
@@ -470,7 +471,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead }) {
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -910,7 +911,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
           {/* Gmail Box - 返信必要 / 確認必要 5件 */}
           {showW('gmail') && (
-            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} />
+            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} onMarkRead={onMarkMailRead} />
           )}
         </div>
 
@@ -1924,7 +1925,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
 }
 
 // ─── GmailBox: ダッシュボードの重要メール 5件 ────────────────────────────
-function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks }) {
+function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkRead }) {
   const [rawItems, setRawItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2013,12 +2014,21 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks }) {
                   {m.snippet}
                 </div>
               </div>
-              <button onClick={() => onOpenAIReply?.(m)} style={{
-                padding: '4px 10px', borderRadius: 6,
-                background: T.accent, color: '#fff', border: 'none',
-                fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                whiteSpace: 'nowrap',
-              }}>✨ AI返信</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                <button onClick={() => onMarkRead?.(m.id)} style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: T.successBg, color: T.success,
+                  border: `1px solid ${T.success}40`,
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  whiteSpace: 'nowrap',
+                }}>✓ 既読</button>
+                <button onClick={() => onOpenAIReply?.(m)} style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: T.accent, color: '#fff', border: 'none',
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  whiteSpace: 'nowrap',
+                }}>✨ AI返信</button>
+              </div>
             </div>
           ))}
         </div>
@@ -2069,18 +2079,22 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
     (m.category === 'cc_me' || m.category === 'other') && !isDone(m)
   )
 
-  // 返信・既読済み: 通知系以外で、返信済み or 既読な全て
+  // 返信・既読済み: 通知/招待系以外で、返信済み or 既読な全て
   //   並び順: 返信済み → 既読のみ (情報量が多い順)
-  const donePool = allItems.filter(m => m.category !== 'notification' && isDone(m))
+  const donePool = allItems.filter(m => m.category !== 'notification' && m.category !== 'invite' && isDone(m))
   const doneReplied = donePool.filter(m => m.replied)
   const doneReadOnly = donePool.filter(m => !m.replied && marks.has(m.id))
   const doneItems = [...doneReplied, ...doneReadOnly]
 
   const notifyItems = allItems.filter(m => m.category === 'notification')
 
+  // カレンダー招待 (未読のみ)
+  const inviteItems = allItems.filter(m => m.category === 'invite' && !isDone(m))
+
   const CATS = [
     { key: 'to_me',        label: '📮 返信必要',      color: '#ff6b6b', items: toMeItems },
     { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems },
+    { key: 'invite',       label: '📅 カレンダー招待',  color: '#4d9fff', items: inviteItems },
     { key: 'done',         label: '✅ 返信・既読済み',  color: '#00d68f', items: doneItems },
     { key: 'notification', label: '📢 通知・キャンペーン', color: '#8aa0b8', items: notifyItems },
   ]
