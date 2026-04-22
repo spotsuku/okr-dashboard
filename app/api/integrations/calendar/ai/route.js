@@ -323,27 +323,49 @@ ${membersStr || '(なし)'}
   const actions = []
   let finalText = ''
 
-  for (let step = 0; step < MAX_STEPS; step++) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 2048,
-        system: systemPrompt,
-        tools: TOOLS,
-        messages,
-      }),
-    })
-    if (!res.ok) {
-      const raw = await res.text()
-      return json({ error: `Anthropic API ${res.status}: ${raw.slice(0, 300)}`, actions }, { status: 500 })
+  // 529 (Overloaded) / 429 (Rate limit) は指数バックオフでリトライ
+  async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
+    let lastStatus = 0, lastRaw = ''
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+      if (res.ok) return { ok: true, data: await res.json() }
+      lastStatus = res.status
+      lastRaw = await res.text()
+      // 529 / 429 / 5xx 系はリトライ
+      if ([429, 500, 502, 503, 504, 529].includes(res.status) && attempt < maxRetries - 1) {
+        const delayMs = Math.min(8000, 1000 * Math.pow(2, attempt))  // 1s, 2s, 4s, 8s
+        await new Promise(r => setTimeout(r, delayMs))
+        continue
+      }
+      break
     }
-    const data = await res.json()
+    return { ok: false, status: lastStatus, raw: lastRaw }
+  }
+
+  for (let step = 0; step < MAX_STEPS; step++) {
+    const r = await callAnthropicWithRetry({
+      model: MODEL,
+      max_tokens: 2048,
+      system: systemPrompt,
+      tools: TOOLS,
+      messages,
+    })
+    if (!r.ok) {
+      // 529 の場合はユーザーに分かりやすいメッセージ
+      const friendly = r.status === 529
+        ? 'Anthropic API が一時的に過負荷状態です (529 Overloaded)。数分後にもう一度試してください。'
+        : `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      return json({ error: friendly, status: r.status, actions }, { status: 503 })
+    }
+    const data = r.data
 
     // assistant message を履歴に追加
     messages.push({ role: 'assistant', content: data.content })

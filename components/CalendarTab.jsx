@@ -594,14 +594,17 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
   }, [history, busy])
 
   const owner = viewingName || myName
+  const [lastUserMsg, setLastUserMsg] = useState('')
 
-  const send = async () => {
-    const msg = input.trim()
+  const send = async (overrideMsg) => {
+    const msg = (overrideMsg ?? input).trim()
     if (!msg || busy) return
-    setInput('')
+    // 再送でない場合のみ入力欄クリア & 履歴に追加
+    const isRetry = overrideMsg != null
+    if (!isRetry) setInput('')
     setErr('')
-    const newHistory = [...history, { role: 'user', content: msg }]
-    setHistory(newHistory)
+    setLastUserMsg(msg)
+    if (!isRetry) setHistory(prev => [...prev, { role: 'user', content: msg }])
     setBusy(true)
     try {
       const ctxMembers = (members || []).map(m => ({ name: m.name, email: m.email }))
@@ -707,7 +710,20 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
           <div style={{ padding: 8, fontSize: 11, color: T.textMuted }}>考え中…</div>
         )}
         {err && (
-          <div style={{ padding: 8, fontSize: 11, color: T.danger }}>⚠️ {err}</div>
+          <div style={{
+            padding: 10, fontSize: 11, color: T.danger,
+            background: T.dangerBg, border: `1px solid ${T.danger}40`,
+            borderRadius: 6, marginTop: 4, lineHeight: 1.5,
+          }}>
+            <div style={{ marginBottom: 6 }}>⚠️ {err}</div>
+            {lastUserMsg && (
+              <button onClick={() => send(lastUserMsg)} disabled={busy} style={{
+                padding: '4px 12px', borderRadius: 6,
+                background: T.accent, color: '#fff', border: 'none',
+                fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+              }}>🔄 再試行</button>
+            )}
+          </div>
         )}
       </div>
       <div style={{
