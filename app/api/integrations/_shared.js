@@ -1,0 +1,113 @@
+// 連携 API 共通ヘルパー
+import { createClient } from '@supabase/supabase-js'
+
+export function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+// Google アクセストークンをリフレッシュトークンで更新する
+// 成功すると fresh なトークン情報を返し、DB も更新する
+export async function refreshGoogleToken(integration) {
+  const clientId = process.env.GOOGLE_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+  if (!clientId || !clientSecret) {
+    throw new Error('GOOGLE_CLIENT_ID / SECRET が未設定です')
+  }
+  if (!integration.refresh_token) {
+    throw new Error('refresh_token が保存されていません。再連携してください')
+  }
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: integration.refresh_token,
+      grant_type: 'refresh_token',
+    }),
+    cache: 'no-store',
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.access_token) {
+    throw new Error(`Google refresh failed: ${data.error || data.error_description || res.status}`)
+  }
+
+  const expiresAt = data.expires_in
+    ? new Date(Date.now() + data.expires_in * 1000).toISOString()
+    : null
+
+  // 新しいトークンを DB に反映 (scope が返れば更新)
+  const admin = getAdminClient()
+  const { data: updated, error } = await admin
+    .from('user_integrations')
+    .update({
+      access_token: data.access_token,
+      expires_at: expiresAt,
+      scope: data.scope || integration.scope,
+      refresh_token: data.refresh_token || integration.refresh_token,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('owner', integration.owner)
+    .eq('service', integration.service)
+    .select()
+    .single()
+  if (error) throw new Error(`トークン更新DBエラー: ${error.message}`)
+  return updated
+}
+
+// owner + service の連携を取得。期限切れなら自動リフレッシュ
+export async function getIntegration(owner, service = 'google') {
+  if (!owner) return { error: 'owner が指定されていません' }
+  const admin = getAdminClient()
+  const { data, error } = await admin
+    .from('user_integrations')
+    .select('*')
+    .eq('owner', owner)
+    .eq('service', service)
+    .maybeSingle()
+  if (error) return { error: `DB読込エラー: ${error.message}` }
+  if (!data) return { error: '未連携' }
+
+  // 期限切れ or 60秒以内に切れる → 自動リフレッシュ
+  const needsRefresh = data.expires_at
+    && new Date(data.expires_at).getTime() < Date.now() + 60_000
+  if (needsRefresh && data.refresh_token) {
+    try {
+      const refreshed = await refreshGoogleToken(data)
+      return { integration: refreshed, expired: false, refreshed: true }
+    } catch (e) {
+      return { integration: data, expired: true, refreshError: e.message }
+    }
+  }
+  if (needsRefresh) {
+    return { integration: data, expired: true }
+  }
+  return { integration: data, expired: false }
+}
+
+// Google API 呼び出し時の 401 自動リトライ (refresh → 再試行)
+export async function callGoogleApiWithRetry(integration, build) {
+  let current = integration
+  let r = await build(current.access_token)
+  if (r.status !== 401) return { response: r, integration: current }
+  if (!current.refresh_token) return { response: r, integration: current }
+  try {
+    current = await refreshGoogleToken(current)
+  } catch {
+    return { response: r, integration: current }
+  }
+  const r2 = await build(current.access_token)
+  return { response: r2, integration: current }
+}
+
+export function json(body, init = {}) {
+  return new Response(JSON.stringify(body), {
+    status: init.status || 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
