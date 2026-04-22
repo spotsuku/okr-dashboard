@@ -1818,7 +1818,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
     return () => { alive = false }
   }, [viewingName])
 
-  const isUnconnected = error === '未連携'
+  const isUnconnected = error.startsWith('未連携')
   const visible = items.slice(0, 5)
   const extra = Math.max(0, items.length - visible.length)
 
@@ -1910,7 +1910,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply }) {
     return () => { alive = false }
   }, [viewingName])
 
-  const isUnconnected = error === '未連携'
+  const isUnconnected = error.startsWith('未連携')
 
   return (
     <Section
@@ -2009,7 +2009,7 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply }) {
     return () => { alive = false }
   }, [viewingName])
 
-  const isUnconnected = error === '未連携'
+  const isUnconnected = error.startsWith('未連携')
 
   const toMeItems    = allItems.filter(m => m.category === 'to_me')
   const ccMeItems    = allItems.filter(m => m.category === 'cc_me' || m.category === 'other')
