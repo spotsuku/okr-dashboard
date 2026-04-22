@@ -42,8 +42,9 @@ export async function refreshGoogleToken(integration) {
     : null
 
   // 新しいトークンを DB に反映 (scope が返れば更新)
+  // ※ .single() は 1 行存在しても null を返すケースが確認されたので使わない
   const admin = getAdminClient()
-  const { data: updated, error } = await admin
+  const { data: updatedRows, error } = await admin
     .from('user_integrations')
     .update({
       access_token: data.access_token,
@@ -55,8 +56,9 @@ export async function refreshGoogleToken(integration) {
     .eq('owner', integration.owner)
     .eq('service', integration.service)
     .select()
-    .single()
   if (error) throw new Error(`トークン更新DBエラー: ${error.message}`)
+  const updated = updatedRows && updatedRows[0]
+  if (!updated) throw new Error('トークン更新後の行が取得できません (owner/service 不一致?)')
   return updated
 }
 
@@ -72,19 +74,21 @@ export async function getIntegration(owner, service = 'google') {
     return { error: '環境変数 SUPABASE_SERVICE_ROLE_KEY が未設定です (Vercel Preview env?)' }
   }
 
+  // ※ .maybeSingle() は 1 行存在しても null を返すケースがあるため配列取得して自前で絞る
   const admin = getAdminClient()
-  const { data, error } = await admin
+  const { data: rows, error } = await admin
     .from('user_integrations')
     .select('*')
     .eq('owner', owner)
     .eq('service', service)
-    .maybeSingle()
+    .limit(1)
   if (error) {
     console.error('[getIntegration] supabase error', { owner, service, error })
     const detail = [error.message, error.code && `code=${error.code}`, error.hint && `hint=${error.hint}`]
       .filter(Boolean).join(' | ')
     return { error: `DB読込エラー: ${detail}` }
   }
+  const data = rows && rows[0]
   if (!data) {
     // ヒント: 同じ owner または同じ service の行を一部だけ返す
     let hintStr = ''

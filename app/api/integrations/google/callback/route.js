@@ -94,12 +94,13 @@ export async function GET(request) {
     // 既存 refresh_token を保険として保持 (Google が新 refresh_token を返さないケース対応)
     let existingRefresh = null
     try {
-      const { data: existing } = await admin
+      // .maybeSingle() は 1 行存在しても null を返すことがあるため使わない
+      const { data: existingRows } = await admin
         .from('user_integrations')
         .select('refresh_token')
         .eq('owner', owner).eq('service', 'google')
-        .maybeSingle()
-      existingRefresh = existing?.refresh_token || null
+        .limit(1)
+      existingRefresh = existingRows?.[0]?.refresh_token || null
     } catch { /* noop */ }
 
     const { error } = await admin.from('user_integrations').upsert({

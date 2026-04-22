@@ -31,16 +31,17 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
   const load = useCallback(async () => {
     if (!myName) { setLoading(false); return }
     setLoading(true)
-    const { data, error } = await supabase
+    // .maybeSingle() は 1 行存在しても null を返すことがあるため使わない
+    const { data: rows, error } = await supabase
       .from('user_integrations')
       .select('service, scope, expires_at, metadata, connected_at')
       .eq('owner', myName)
       .eq('service', 'google')
-      .maybeSingle()
+      .limit(1)
     if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
       setErrorMsg(`読み込みエラー: ${error.message}`)
     }
-    setInteg(data || null)
+    setInteg((rows && rows[0]) || null)
     setLoading(false)
   }, [myName])
 

@@ -13,11 +13,13 @@ export async function POST(request) {
   const admin = getAdminClient()
 
   // DB から取得 (revoke 用に access_token 取得)
-  const { data: row } = await admin
+  // .maybeSingle() は 1 行存在しても null を返すことがあるため使わない
+  const { data: rows } = await admin
     .from('user_integrations')
     .select('access_token,refresh_token')
     .eq('owner', owner).eq('service', 'google')
-    .maybeSingle()
+    .limit(1)
+  const row = rows?.[0] || null
 
   // Google 側で revoke (best-effort、失敗しても DB 削除は進める)
   if (row?.refresh_token || row?.access_token) {
