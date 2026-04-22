@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
-import IntegrationsPanel from './IntegrationsPanel'
 import FocusFillModal from './FocusFillModal'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
@@ -283,9 +282,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'wbs',          icon: '📅', label: 'タスクWBS'     },
             { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
             { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
-            { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
-            { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
             <button
               key={t.key}
@@ -321,7 +318,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               isViewingSelf={isViewingSelf} myName={myName}
               workLog={workLogs[viewingName]}
               onWorkLogChange={reloadWorkLogs}
-              onGoToIntegrations={() => setActiveTab('integrations')}
               onGoToTab={(key) => setActiveTab(key)}
               onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
             />
@@ -385,12 +381,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
           )}
-          {activeTab === 'mail' && (
-            <MailTab T={T} viewingName={viewingName} isViewingSelf={isViewingSelf} />
-          )}
-          {activeTab === 'integrations' && (
-            <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
-          )}
         </div>
 
         {/* 集中記入モーダル (OKR記入タブ/ダッシュボードから共通で使用) */}
@@ -412,7 +402,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToIntegrations, onGoToTab, onOpenFocusFill }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill }) {
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -527,19 +517,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     // status カラムがあれば更新 (無い環境でもエラーは握りつぶす、MyTasksPage と同じ方針)
     await supabase.from('ka_tasks').update({ status: nextStatus }).eq('id', task.id).then(() => {}).catch(() => {})
 
-    // done に遷移したとき Slack 通知 (MyTasksPage.jsx:1013-1016 と同じ)
-    if (newDone) {
-      fetch('/api/slack-task-done', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: task.id, taskTitle: task.title,
-          kaTitle: task.weekly_reports?.ka_title,
-          objectiveTitle: null,
-          completedBy: task.assignee || myName,
-        }),
-      }).catch(() => {})
-    }
-
     loadTasks()
     loadReminders()
     loadAchievements()
@@ -614,12 +591,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   }
 
   // ─── ウィジェット表示/非表示 prefs (localStorage) ────
-  // v2: 連携プレースホルダもデフォルト表示に (UI確認を優先)
   const PREFS_KEY = `mypage-widget-prefs-v2:${myName || 'guest'}`
   const DEFAULT_PREFS = {
     today: true, week: true,
     rem_okr: true, rem_task: true,
-    rem_calendar: true, rem_gmail: true, rem_slack: true, rem_line: true,
     goal_month_main: true, goal_month_growth: true, goal_week: true, achievements: true,
   }
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
@@ -667,70 +642,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     setAchievements({ items, loading: false })
   }, [viewingName])
   useEffect(() => { loadAchievements() }, [loadAchievements])
-
-  // ─── 連携状態 & 外部データ取得 ─────────────────────
-  const [integData, setIntegData] = useState({
-    calendar: { connected: false, loading: false, items: [], error: '' },
-    gmail:    { connected: false, loading: false, items: [], error: '' },
-    slack:    { connected: false, loading: false, items: [], error: '' },
-    line:     { connected: false, loading: false, error: '' },
-  })
-
-  // Gmail AI assist モーダル
-  const [gmailAI, setGmailAI] = useState(null)  // null | { message, loading, summary, draft, error }
-  const openGmailAI = async (message) => {
-    setGmailAI({ message, loading: true, summary: '', draft: '', error: '' })
-    try {
-      const r = await fetch('/api/integrations/gmail/ai-assist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner: viewingName, messageId: message.id }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-      setGmailAI({ message, loading: false, summary: j.summary || '', draft: j.draft || '', error: '' })
-    } catch (e) {
-      setGmailAI({ message, loading: false, summary: '', draft: '', error: e.message || 'エラー' })
-    }
-  }
-
-  const loadIntegrations = useCallback(async () => {
-    if (!viewingName) return
-    // 公開ビュー経由: トークン以外の接続状態のみ取得可 (RLSバイパス)
-    const { data } = await supabase
-      .from('user_integrations_status')
-      .select('service, expires_at, is_active')
-      .eq('owner', viewingName)
-    const map = {}
-    ;(data || []).forEach(r => { map[r.service] = r })
-    const base = {
-      calendar: { connected: !!map.google_calendar, loading: false, items: [], error: '' },
-      gmail:    { connected: !!map.google_gmail,    loading: false, items: [], error: '' },
-      slack:    { connected: !!map.slack,           loading: false, items: [], error: '' },
-      line:     { connected: !!map.line,            loading: false, error: '' },
-    }
-    setIntegData(base)
-
-    // 接続済みのサービスに対してデータ取得(エラー時は silently fail → error を保持)
-    const fetchService = async (svc, url, extraParams = {}) => {
-      setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: true } }))
-      try {
-        const qs = new URLSearchParams({ owner: viewingName, ...extraParams }).toString()
-        const r = await fetch(`${url}?${qs}`)
-        const j = await r.json()
-        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-        setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: false, items: j.items || [], error: '' } }))
-      } catch (e) {
-        setIntegData(s => ({ ...s, [svc]: { ...s[svc], loading: false, items: [], error: e.message || 'エラー' } }))
-      }
-    }
-    if (map.google_calendar) fetchService('calendar', '/api/integrations/calendar/events')
-    // Gmail: ダッシュボードでは「人から届いた要返信メール」のみ表示 (通知/メルマガは除外)
-    // limit=10 で取得し、bulk を除外した上位を表示 (非bulk が少ない場合に備えて多めに)
-    if (map.google_gmail)    fetchService('gmail',    '/api/integrations/gmail/threads', { limit: 10 })
-    if (map.slack)           fetchService('slack',    '/api/integrations/slack/unread')
-  }, [viewingName])
-  useEffect(() => { loadIntegrations() }, [loadIntegrations])
 
   async function handleStart() {
     if (busy || !myName) return
@@ -923,108 +834,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
             })()}
           </Section>
 
-          <Section T={T} icon="📅" title="Googleカレンダー (直近8時間)" flex={0}>
-            <IntegrationStatus T={T} state={integData.calendar} isViewingSelf={isViewingSelf}
-              serviceLabel="Google Calendar" emptyText="✨ 直近8時間の予定はありません"
-              onConnect={onGoToIntegrations} maxVisible={3}
-              detailLabel="📅 Googleカレンダーを開く ↗"
-              detailUrl="https://calendar.google.com/"
-              renderItem={ev => {
-                const hasConflict = (ev.conflictsWith || []).length > 0
-                return (
-                  <>
-                    <span style={{
-                      color: hasConflict ? '#ff6b6b' : T.textMuted,
-                      fontWeight: 600, minWidth: 42, fontSize: 10,
-                    }}>{ev.time || '--'}</span>
-                    <span style={{ flex: 1 }}>
-                      {hasConflict && <span title={`重複: ${ev.conflictsWith.join(' / ')}`} style={{ marginRight: 4 }}>⚠️</span>}
-                      {truncate(ev.title, 28)}
-                    </span>
-                  </>
-                )
-              }} />
-          </Section>
-
-          <Section T={T} icon="📧" title="Gmail (人からのメール)"
-            flex={0}
-            headerRight={
-              <button onClick={() => onGoToTab && onGoToTab('mail')} style={{
-                background: 'transparent', border: `1px dashed ${T.borderMid}`,
-                color: T.accent, borderRadius: 6, padding: '2px 8px',
-                fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>📧 メールタブで全部見る →</button>
-            }
-          >
-            <IntegrationStatus T={T}
-              state={{
-                ...integData.gmail,
-                // 通知/メルマガ/noreply 系を除外し、人から届いたメールだけ表示
-                items: (integData.gmail.items || []).filter(m => !m.bulk),
-              }}
-              isViewingSelf={isViewingSelf}
-              serviceLabel="Gmail" emptyText="✨ 人からの要対応メールはありません"
-              onConnect={onGoToIntegrations} maxVisible={5}
-              detailLabel="📧 メールタブで一覧を見る (通知も含む) →"
-              detailUrl={null}
-              onDetail={() => onGoToTab && onGoToTab('mail')}
-              renderItem={m => {
-                const catStyle = m.category === 'to'
-                  ? { bg: 'rgba(255,107,107,0.15)', fg: '#d64545', label: '🔴' }
-                  : m.category === 'cc'
-                  ? { bg: 'rgba(212,149,0,0.15)', fg: '#a37200', label: '🟡' }
-                  : null
-                return (
-                  <button onClick={() => openGmailAI(m)}
-                    title={
-                      (m.category === 'to' ? '要対応 / ' : m.category === 'cc' ? '要確認 / ' : '') +
-                      'AIで要約・返信草稿を生成'
-                    }
-                    style={{
-                      all: 'unset', display: 'flex', alignItems: 'center', gap: 6,
-                      flex: 1, cursor: 'pointer', width: '100%',
-                    }}>
-                    {catStyle && (
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, color: catStyle.fg,
-                        background: catStyle.bg, borderRadius: 4,
-                        padding: '1px 5px', flexShrink: 0,
-                      }}>{catStyle.label}</span>
-                    )}
-                    <span style={{
-                      flex: 1, minWidth: 0,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>{m.from}: {m.subject}</span>
-                    <span style={{
-                      fontSize: 10, color: '#fff', fontWeight: 700,
-                      background: T.accentSolid, borderRadius: 4,
-                      padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0,
-                    }}>✨ AI返信</span>
-                  </button>
-                )
-              }} />
-          </Section>
-
-          <Section T={T} icon="💬" title="Slack" flex={0}>
-            <IntegrationStatus T={T} state={integData.slack} isViewingSelf={isViewingSelf}
-              serviceLabel="Slack" emptyText="✨ 未読メンションはありません"
-              onConnect={onGoToIntegrations} maxVisible={3}
-              detailLabel="💬 Slackを開く ↗"
-              detailUrl="https://app.slack.com/"
-              renderItem={m => (
-                <><span>#{truncate(m.channel, 12)}</span><span style={{ flex:1 }}>{truncate(m.text, 22)}</span></>
-              )} />
-          </Section>
-
-          <Section T={T} icon="🟢" title="LINE" flex={0}>
-            <IntegrationStatus T={T} state={integData.line} isViewingSelf={isViewingSelf}
-              serviceLabel="LINE" emptyText="LINE連携済み (通知Bot APIは別途必要)"
-              onConnect={onGoToIntegrations} maxVisible={3}
-              detailLabel="🟢 LINEを開く ↗"
-              detailUrl="https://line.me/"
-              renderItem={null}
-            />
-          </Section>
         </div>
 
         {/* ─── 右カラム：ポップなゴール3種 + コンパクト成果 ─── */}
@@ -1112,10 +921,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
           onCancel={() => setKptOpen(false)} onSave={handleEnd}
           startedAt={content.start_at}
         />
-      )}
-
-      {gmailAI && (
-        <GmailAIModal T={T} state={gmailAI} owner={viewingName} onClose={() => setGmailAI(null)} />
       )}
     </div>
   )
@@ -1406,395 +1211,6 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
   )
 }
 
-// ─── メール詳細モーダル: 本文表示 + オンデマンドAI返信 ─────
-function MailDetailModal({ T, mail, owner, isViewingSelf, onClose }) {
-  const [detail, setDetail] = useState({ loading: true, body: '', error: '' })
-  const [ai, setAI] = useState({ requested: false, loading: false, summary: '', draft: '', error: '' })
-  const [copied, setCopied] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createErr, setCreateErr] = useState('')
-
-  // 本文取得
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      setDetail({ loading: true, body: '', error: '' })
-      try {
-        const r = await fetch(`/api/integrations/gmail/message?owner=${encodeURIComponent(owner)}&messageId=${encodeURIComponent(mail.id)}`)
-        const j = await r.json()
-        if (cancelled) return
-        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-        setDetail({ loading: false, body: j.body || '', error: '', meta: j })
-      } catch (e) {
-        if (cancelled) return
-        setDetail({ loading: false, body: '', error: e.message || 'エラー' })
-      }
-    })()
-    return () => { cancelled = true }
-  }, [owner, mail.id])
-
-  // AI 要約・返信生成
-  const requestAI = async () => {
-    setAI(a => ({ ...a, requested: true, loading: true, error: '' }))
-    try {
-      const r = await fetch('/api/integrations/gmail/ai-assist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner, messageId: mail.id }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-      setAI({ requested: true, loading: false, summary: j.summary || '', draft: j.draft || '', error: '' })
-    } catch (e) {
-      setAI({ requested: true, loading: false, summary: '', draft: '', error: e.message || 'エラー' })
-    }
-  }
-
-  const copyDraft = async () => {
-    if (!ai.draft) return
-    try {
-      await navigator.clipboard.writeText(ai.draft)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {}
-  }
-
-  const openInGmail = async () => {
-    if (!ai.draft) {
-      window.open('https://mail.google.com/mail/u/0/#inbox', '_blank', 'noopener,noreferrer')
-      return
-    }
-    setCreating(true); setCreateErr('')
-    try {
-      const r = await fetch('/api/integrations/gmail/create-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner,
-          threadId: mail.threadId,
-          messageId: mail.id,
-          to: mail.fromEmail || mail.from,
-          subject: mail.subject || '',
-          messageIdHeader: mail.messageIdHeader || '',
-          body: ai.draft,
-        }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-      window.open(j.openUrl, '_blank', 'noopener,noreferrer')
-    } catch (e) {
-      setCreateErr(e.message || '下書き作成エラー')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const meta = detail.meta || {}
-
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-      zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 14,
-        width: '100%', maxWidth: 780, maxHeight: '90vh',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-      }}>
-        {/* ヘッダ */}
-        <div style={{
-          padding: '14px 18px', borderBottom: `1px solid ${T.border}`,
-          background: T.sectionBg, display: 'flex', alignItems: 'flex-start', gap: 10,
-        }}>
-          <span style={{ fontSize: 20 }}>📧</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, lineHeight: 1.35, wordBreak: 'break-word' }}>
-              {mail.subject || '(件名なし)'}
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, lineHeight: 1.5 }}>
-              <div><b style={{ color: T.textSub }}>From:</b> {mail.from}{mail.fromEmail && mail.fromEmail !== mail.from ? ` <${mail.fromEmail}>` : ''}</div>
-              {meta.to && <div><b style={{ color: T.textSub }}>To:</b> {meta.to}</div>}
-              {meta.cc && <div><b style={{ color: T.textSub }}>Cc:</b> {meta.cc}</div>}
-              {meta.date && <div><b style={{ color: T.textSub }}>Date:</b> {meta.date}</div>}
-            </div>
-          </div>
-          <button onClick={onClose} style={{
-            background: 'transparent', border: 'none', color: T.textMuted,
-            fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', padding: '0 6px',
-          }}>×</button>
-        </div>
-
-        {/* 本文 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 8 }}>📄 本文</div>
-          {detail.loading ? (
-            <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中…</div>
-          ) : detail.error ? (
-            <div style={{
-              padding: 12, background: T.dangerBg, border: `1px solid ${T.danger}40`,
-              borderRadius: 8, fontSize: 12, color: T.danger,
-            }}>⚠️ {detail.error}</div>
-          ) : (
-            <div style={{
-              padding: 14, background: T.sectionBg, border: `1px solid ${T.border}`,
-              borderRadius: 8, fontSize: 13, lineHeight: 1.75, color: T.text,
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              maxHeight: 360, overflowY: 'auto',
-            }}>{detail.body || '(本文なし)'}</div>
-          )}
-
-          {/* AI 返信セクション */}
-          {isViewingSelf && !mail.bulk && (
-            <div style={{ marginTop: 18 }}>
-              {!ai.requested && (
-                <button onClick={requestAI} style={{
-                  background: T.accentSolid, color: '#fff', border: 'none',
-                  borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 700,
-                  cursor: 'pointer', fontFamily: 'inherit',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                }}>✨ AIで要約・返信草稿を生成</button>
-              )}
-              {ai.loading && (
-                <div style={{ padding: 18, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
-                  ✨ AI が要約と返信草稿を生成中…
-                </div>
-              )}
-              {ai.error && (
-                <div style={{
-                  padding: 12, background: 'rgba(255,107,107,0.1)', color: '#d64545',
-                  borderRadius: 8, fontSize: 12, marginTop: 10,
-                }}>⚠️ {ai.error}</div>
-              )}
-              {ai.requested && !ai.loading && !ai.error && (
-                <>
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>📝 AI要約</div>
-                    <div style={{
-                      padding: 12, background: T.sectionBg, border: `1px solid ${T.border}`,
-                      borderRadius: 8, fontSize: 13, lineHeight: 1.7, color: T.text,
-                      whiteSpace: 'pre-wrap',
-                    }}>{ai.summary || '(要約なし)'}</div>
-                  </div>
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub }}>💬 返信草稿</div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={copyDraft} disabled={!ai.draft} style={{
-                          background: copied ? '#00d68f' : 'transparent',
-                          border: `1px solid ${copied ? '#00d68f' : T.borderMid}`,
-                          color: copied ? '#fff' : T.textSub,
-                          borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700,
-                          cursor: ai.draft ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
-                        }}>{copied ? '✓ コピー済' : '📋 コピー'}</button>
-                        <button onClick={openInGmail} disabled={creating || !ai.draft} style={{
-                          background: ai.draft ? T.accentSolid : 'transparent',
-                          border: `1px solid ${ai.draft ? T.accentSolid : T.borderMid}`,
-                          color: ai.draft ? '#fff' : T.textMuted,
-                          borderRadius: 6, padding: '4px 10px',
-                          fontSize: 11, fontWeight: 700,
-                          cursor: (creating || !ai.draft) ? 'not-allowed' : 'pointer',
-                          fontFamily: 'inherit',
-                          opacity: creating ? 0.6 : 1,
-                        }}>{creating ? '作成中…' : '📝 下書きを作成して Gmail で開く ↗'}</button>
-                      </div>
-                    </div>
-                    <textarea readOnly value={ai.draft} rows={8} style={{
-                      width: '100%', boxSizing: 'border-box',
-                      padding: '10px 12px', fontSize: 13, lineHeight: 1.7,
-                      background: T.sectionBg, border: `1px solid ${T.borderMid}`,
-                      borderRadius: 8, color: T.text, outline: 'none', fontFamily: 'inherit',
-                      resize: 'vertical',
-                    }} />
-                    {createErr && (
-                      <div style={{
-                        marginTop: 8, padding: '8px 10px',
-                        background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
-                        color: '#d64545', borderRadius: 6, fontSize: 11, lineHeight: 1.5,
-                      }}>
-                        <div>⚠️ {createErr}</div>
-                        {/gmail\.compose|再連携|期限切れ|token/i.test(createErr) && isViewingSelf && (
-                          <button onClick={() => {
-                            const u = new URL('/api/integrations/google/start', window.location.origin)
-                            u.searchParams.set('owner', owner)
-                            u.searchParams.set('service', 'google_gmail')
-                            u.searchParams.set('return_to', window.location.pathname + window.location.search)
-                            window.location.href = u.toString()
-                          }} style={{
-                            marginTop: 6, background: T.accentSolid, color: '#fff',
-                            border: 'none', borderRadius: 6, padding: '5px 12px',
-                            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                          }}>🔄 Gmail を再連携する</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function GmailAIModal({ T, state, owner, onClose }) {
-  const { message, loading, summary, draft, error } = state
-  const [copied, setCopied] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createErr, setCreateErr] = useState('')
-  const copyDraft = async () => {
-    if (!draft) return
-    try {
-      await navigator.clipboard.writeText(draft)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {}
-  }
-  const openInGmail = async () => {
-    // Gmail API で返信下書きを作成 → 作成されたスレッドURLを開く
-    if (!draft) {
-      window.open('https://mail.google.com/mail/u/0/#inbox', '_blank', 'noopener,noreferrer')
-      return
-    }
-    setCreating(true)
-    setCreateErr('')
-    try {
-      const r = await fetch('/api/integrations/gmail/create-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner,
-          threadId: message.threadId,
-          messageId: message.id,
-          to: message.fromEmail || message.from,
-          subject: message.subject || '',
-          messageIdHeader: message.messageIdHeader || '',
-          body: draft,
-        }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-      window.open(j.openUrl, '_blank', 'noopener,noreferrer')
-    } catch (e) {
-      setCreateErr(e.message || '下書き作成エラー')
-    } finally {
-      setCreating(false)
-    }
-  }
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-      zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 14,
-        width: '100%', maxWidth: 680, maxHeight: '88vh',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-      }}>
-        <div style={{
-          padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
-          background: T.sectionBg, display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: 18 }}>✨</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {message.subject || '(件名なし)'}
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              From: {message.from}
-            </div>
-          </div>
-          <button onClick={onClose} style={{
-            background: 'transparent', border: 'none', color: T.textMuted,
-            fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', padding: '0 6px',
-          }}>×</button>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
-          {loading && (
-            <div style={{ textAlign: 'center', padding: 40, color: T.textMuted }}>
-              ✨ AI が要約と返信草稿を生成中...
-            </div>
-          )}
-          {error && (
-            <div style={{ padding: 14, background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', borderRadius: 8, fontSize: 12 }}>
-              エラー: {error}
-            </div>
-          )}
-          {!loading && !error && (
-            <>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>📝 要約</div>
-                <div style={{
-                  padding: 12, background: T.sectionBg, border: `1px solid ${T.border}`,
-                  borderRadius: 8, fontSize: 13, lineHeight: 1.7, color: T.text, whiteSpace: 'pre-wrap',
-                }}>{summary || '(要約なし)'}</div>
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub }}>💬 返信草稿</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={copyDraft} disabled={!draft} style={{
-                      background: copied ? '#00d68f' : 'transparent',
-                      border: `1px solid ${copied ? '#00d68f' : T.borderMid}`,
-                      color: copied ? '#fff' : T.textSub,
-                      borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700,
-                      cursor: draft ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
-                    }}>{copied ? '✓ コピー済' : '📋 コピー'}</button>
-                    <button onClick={openInGmail} disabled={creating || !draft} style={{
-                      background: draft ? T.accentSolid : 'transparent',
-                      border: `1px solid ${draft ? T.accentSolid : T.borderMid}`,
-                      color: draft ? '#fff' : T.textMuted,
-                      borderRadius: 6, padding: '4px 10px',
-                      fontSize: 11, fontWeight: 700,
-                      cursor: (creating || !draft) ? 'not-allowed' : 'pointer',
-                      fontFamily: 'inherit',
-                      opacity: creating ? 0.6 : 1,
-                    }}>{creating ? '作成中…' : '📝 下書きを作成して Gmail で開く ↗'}</button>
-                  </div>
-                </div>
-                <textarea readOnly value={draft} rows={8} style={{
-                  width: '100%', boxSizing: 'border-box',
-                  padding: '10px 12px', fontSize: 13, lineHeight: 1.7,
-                  background: T.sectionBg, border: `1px solid ${T.borderMid}`,
-                  borderRadius: 8, color: T.text, outline: 'none', fontFamily: 'inherit',
-                  resize: 'vertical',
-                }} />
-                {createErr && (
-                  <div style={{
-                    marginTop: 8, padding: '8px 10px',
-                    background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
-                    color: '#d64545', borderRadius: 6, fontSize: 11, lineHeight: 1.5,
-                  }}>
-                    <div>⚠️ {createErr}</div>
-                    {/gmail\.compose|再連携|期限切れ|token/i.test(createErr) && (
-                      <button onClick={() => {
-                        const u = new URL('/api/integrations/google/start', window.location.origin)
-                        u.searchParams.set('owner', owner)
-                        u.searchParams.set('service', 'google_gmail')
-                        u.searchParams.set('return_to', window.location.pathname + window.location.search)
-                        window.location.href = u.toString()
-                      }} style={{
-                        marginTop: 6, background: T.accentSolid, color: '#fff',
-                        border: 'none', borderRadius: 6, padding: '5px 12px',
-                        fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                      }}>🔄 Gmail を再連携する</button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
   // flex=0 の場合は内容に合わせて自動サイズ (flex-basis:0 の罠を回避)
   // flex>=1 の場合は grow して親の残りスペースを埋める
@@ -1821,198 +1237,6 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
       </div>
       <div style={innerStyle}>
         {children}
-      </div>
-    </div>
-  )
-}
-
-// ─── メールタブ: Gmail のメールを To / Cc で切り替えて一覧表示 ───────
-function MailTab({ T, viewingName, isViewingSelf }) {
-  // 初期タブは「人から (To)」= 顧客/営業のやりとりが真っ先に見える
-  const [filter, setFilter] = useState('human_to')  // 'all' | 'human_to' | 'human_cc' | 'notification'
-  const [scope, setScope] = useState('all')         // 'all' (最近の受信) | 'reply_needed' (要返信)
-  const [state, setState] = useState({ items: [], loading: true, error: '' })
-  const [selectedMail, setSelectedMail] = useState(null)  // MailDetailModal 表示対象
-
-  const load = useCallback(async () => {
-    if (!viewingName) return
-    setState(s => ({ ...s, loading: true, error: '' }))
-    try {
-      const r = await fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&scope=${scope}&limit=50`)
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-      setState({ items: j.items || [], loading: false, error: '' })
-    } catch (e) {
-      setState({ items: [], loading: false, error: e.message || 'エラー' })
-    }
-  }, [viewingName, scope])
-  useEffect(() => { load() }, [load])
-
-  // メール行クリック → 詳細モーダルを開く (本文表示 → 必要に応じて AI 返信)
-  const openDetail = (m) => setSelectedMail(m)
-
-  const filtered = state.items.filter(m => {
-    if (filter === 'all') return true
-    if (filter === 'human_to') return !m.bulk && m.category === 'to'
-    if (filter === 'human_cc') return !m.bulk && m.category === 'cc'
-    if (filter === 'notification') return m.bulk
-    return true
-  })
-
-  const counts = {
-    all: state.items.length,
-    human_to: state.items.filter(m => !m.bulk && m.category === 'to').length,
-    human_cc: state.items.filter(m => !m.bulk && m.category === 'cc').length,
-    notification: state.items.filter(m => m.bulk).length,
-  }
-
-  const formatDate = (raw) => {
-    if (!raw) return ''
-    const d = new Date(raw)
-    if (isNaN(d.getTime())) return ''
-    const jst = new Date(d.getTime() + 9 * 3600 * 1000)
-    const today = new Date()
-    const jstToday = new Date(today.getTime() + 9 * 3600 * 1000)
-    const sameDay = jst.getUTCFullYear() === jstToday.getUTCFullYear()
-      && jst.getUTCMonth() === jstToday.getUTCMonth()
-      && jst.getUTCDate() === jstToday.getUTCDate()
-    if (sameDay) return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`
-    return `${jst.getUTCMonth() + 1}/${jst.getUTCDate()}`
-  }
-
-  return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', background: T.bg }}>
-      <div style={{ maxWidth: 960, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: T.text, margin: 0 }}>📧 メール</h2>
-          <div style={{ fontSize: 11, color: T.textMuted }}>
-            Gmail の受信箱から最大50件を取得。To / Cc で絞り込み可能。
-          </div>
-        </div>
-
-        {/* スコープ切り替え */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-          {[
-            { k: 'all', label: '📥 最近の受信' },
-            { k: 'reply_needed', label: '⏰ 3日以上前 (要返信候補)' },
-          ].map(t => (
-            <button key={t.k} onClick={() => setScope(t.k)} style={{
-              background: scope === t.k ? T.accentSolid : 'transparent',
-              color: scope === t.k ? '#fff' : T.textSub,
-              border: `1px solid ${scope === t.k ? T.accentSolid : T.borderMid}`,
-              borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}>{t.label}</button>
-          ))}
-          <div style={{ flex: 1 }} />
-          <button onClick={load} disabled={state.loading} style={{
-            background: 'transparent', border: `1px solid ${T.borderMid}`,
-            color: T.textSub, borderRadius: 7, padding: '5px 12px',
-            fontSize: 12, fontWeight: 600, cursor: state.loading ? 'wait' : 'pointer',
-            fontFamily: 'inherit', opacity: state.loading ? 0.6 : 1,
-          }}>{state.loading ? '取得中…' : '🔄 更新'}</button>
-        </div>
-
-        {/* カテゴリタブ - 顧客/営業の人間コミュニケーションを最優先 */}
-        <div style={{
-          display: 'flex', gap: 2, marginBottom: 12,
-          borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap',
-        }}>
-          {[
-            { k: 'human_to',     label: `👥 人から - 要対応 (${counts.human_to})`,   color: '#d64545' },
-            { k: 'human_cc',     label: `👀 人から - 要確認 (${counts.human_cc})`,   color: '#a37200' },
-            { k: 'notification', label: `📢 通知・キャンペーン (${counts.notification})`, color: T.textMuted },
-            { k: 'all',          label: `すべて (${counts.all})`,                     color: T.textSub },
-          ].map(t => {
-            const active = filter === t.k
-            return (
-              <button key={t.k} onClick={() => setFilter(t.k)} style={{
-                background: 'transparent', border: 'none',
-                borderBottom: `2px solid ${active ? t.color : 'transparent'}`,
-                color: active ? t.color : T.textSub,
-                padding: '8px 14px', fontSize: 12, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit',
-                marginBottom: -1,
-              }}>{t.label}</button>
-            )
-          })}
-        </div>
-
-        {state.error && (
-          <div style={{
-            padding: '10px 14px', marginBottom: 12,
-            background: T.dangerBg, border: `1px solid ${T.danger}40`,
-            borderRadius: 8, fontSize: 12, color: T.danger,
-          }}>⚠️ {state.error}</div>
-        )}
-
-        {state.loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
-            読み込み中…
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
-            {filter === 'human_to' ? '👥 人からの「要対応」メールはありません' :
-             filter === 'human_cc' ? '👀 人からの「要確認」メールはありません' :
-             filter === 'notification' ? '📢 通知メールはありません' :
-             'メールはありません'}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {filtered.map((m, i) => {
-              const catStyle = m.bulk
-                ? { bg: T.sectionBg, fg: T.textMuted, label: '📢 通知' }
-                : m.category === 'to'
-                ? { bg: 'rgba(255,107,107,0.12)', fg: '#d64545', label: '🔴 To' }
-                : m.category === 'cc'
-                ? { bg: 'rgba(212,149,0,0.12)', fg: '#a37200', label: '🟡 Cc' }
-                : { bg: T.sectionBg, fg: T.textMuted, label: '—' }
-              return (
-                <button key={m.id + i}
-                  onClick={() => openDetail(m)}
-                  style={{
-                    all: 'unset',
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 12px', background: T.bgCard,
-                    border: `1px solid ${T.border}`, borderRadius: 8,
-                    opacity: m.bulk ? 0.7 : m.replied ? 0.6 : 1,
-                    cursor: 'pointer',
-                    boxSizing: 'border-box',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = T.sectionBg }}
-                  onMouseLeave={e => { e.currentTarget.style.background = T.bgCard }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, color: catStyle.fg,
-                    background: catStyle.bg, borderRadius: 5,
-                    padding: '3px 7px', flexShrink: 0, minWidth: 50, textAlign: 'center',
-                  }}>{catStyle.label}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: 13, fontWeight: 600, color: T.text,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {m.replied && <span style={{ color: T.success, fontSize: 10, fontWeight: 700, marginRight: 6 }}>✓返信済</span>}
-                      {m.subject}
-                    </div>
-                    <div style={{
-                      fontSize: 11, color: T.textMuted, marginTop: 2,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {m.from} · {m.snippet}
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>{formatDate(m.date)}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        {selectedMail && (
-          <MailDetailModal T={T} mail={selectedMail} owner={viewingName}
-            isViewingSelf={isViewingSelf}
-            onClose={() => setSelectedMail(null)} />
-        )}
       </div>
     </div>
   )
@@ -2464,96 +1688,6 @@ function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
           </div>
         )
       })}
-    </div>
-  )
-}
-
-// 連携サービスの状態表示 (未接続→CTA / 読込中 / データ表示 / エラー)
-function IntegrationStatus({ T, state, serviceLabel, emptyText, renderItem, isViewingSelf, onConnect,
-                             maxVisible = 3, detailLabel, detailUrl, onDetail }) {
-  const detailCommonStyle = {
-    marginTop: 2, background: 'transparent', border: `1px dashed ${T.borderMid}`,
-    color: T.accent, borderRadius: 6, padding: '5px 8px',
-    fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-    textAlign: 'center', textDecoration: 'none', display: 'block', width: '100%',
-  }
-  const DetailButton = ({ prefix = '' }) => {
-    if (!detailLabel) return null
-    const label = `${prefix}${detailLabel}`
-    if (onDetail) {
-      return <button onClick={onDetail} style={detailCommonStyle}>{label}</button>
-    }
-    if (detailUrl) {
-      return <a href={detailUrl} target="_blank" rel="noopener noreferrer" style={detailCommonStyle}>{label}</a>
-    }
-    return null
-  }
-
-  if (!state.connected) {
-    return (
-      <div style={{
-        padding: 10, background: T.sectionBg, border: `1px dashed ${T.border}`,
-        borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 6,
-      }}>
-        <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5 }}>
-          {serviceLabel} と連携すると、ここに情報が表示されます。
-        </div>
-        {isViewingSelf && (
-          <button onClick={onConnect} style={{
-            alignSelf: 'flex-start', background: T.accentSolid, color: '#fff',
-            border: 'none', borderRadius: 6, padding: '4px 12px',
-            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>🔌 連携設定へ</button>
-        )}
-      </div>
-    )
-  }
-  if (state.loading) {
-    return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>読み込み中...</div>
-  }
-  if (state.error) {
-    // 認証・期限切れ系のエラーは「再連携」ボタンを表示
-    const isAuthError = /期限切れ|リフレッシュ|401|再連携|token/i.test(state.error)
-    return (
-      <div style={{
-        padding: 8, background: T.dangerBg, border: `1px solid ${T.danger}30`,
-        borderRadius: 6, fontSize: 11, color: T.danger, lineHeight: 1.5,
-        display: 'flex', flexDirection: 'column', gap: 6,
-      }}>
-        <div>⚠️ {state.error}</div>
-        {isAuthError && isViewingSelf && onConnect && (
-          <button onClick={onConnect} style={{
-            alignSelf: 'flex-start', background: T.accentSolid, color: '#fff',
-            border: 'none', borderRadius: 6, padding: '4px 12px',
-            fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>🔄 再連携する</button>
-        )}
-      </div>
-    )
-  }
-  if (!state.items || state.items.length === 0) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>{emptyText}</div>
-        <DetailButton />
-      </div>
-    )
-  }
-  const visible = state.items.slice(0, maxVisible)
-  const hidden = state.items.length - visible.length
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {visible.map((it, i) => (
-        <div key={i} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '5px 8px', borderRadius: 6,
-          background: T.sectionBg, border: `1px solid ${T.border}`,
-          fontSize: 11, color: T.text, lineHeight: 1.5,
-        }}>
-          {renderItem ? renderItem(it) : <span style={{ flex:1 }}>{JSON.stringify(it)}</span>}
-        </div>
-      ))}
-      <DetailButton prefix={hidden > 0 ? `他 ${hidden} 件 · ` : ''} />
     </div>
   )
 }

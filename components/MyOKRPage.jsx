@@ -366,12 +366,6 @@ function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle,
     const nd = !t.done
     await supabase.from('ka_tasks').update({ done:nd }).eq('id', key)
     setTasks(p => p.map(x => x.id===key ? {...x,done:nd} : x))
-    if (nd) {
-      fetch('/api/slack-task-done', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: key, taskTitle: t.title, kaTitle, objectiveTitle, completedBy }),
-      }).catch(() => {})
-    }
   }
   const saveTask = async (key) => {
     const t = tasksRef.current.find(x => x.id===key)

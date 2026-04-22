@@ -1006,15 +1006,6 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     // statusカラムがあれば更新（エラーは無視）
     await supabase.from('ka_tasks').update({ status: newStatus }).eq('id', taskId).then(() => {}).catch(() => {})
     setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus, done: newDone } : t))
-    if (newDone) {
-      const task = allTasks.find(t => t.id === taskId)
-      const ka = task ? kaMap[task.report_id] : null
-      const obj = ka ? objMap[ka.objective_id] : null
-      fetch('/api/slack-task-done', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, taskTitle: task?.title, kaTitle: ka?.ka_title, objectiveTitle: obj?.title, completedBy: task?.assignee || myName }),
-      }).catch(() => {})
-    }
   }
 
   const updateTask = async (taskId, fields) => {
