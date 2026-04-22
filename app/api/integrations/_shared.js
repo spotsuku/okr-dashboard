@@ -5,7 +5,16 @@ export function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { autoRefreshToken: false, persistSession: false } }
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      // Next.js は fetch を内部キャッシュする (Data Cache)。
+      // 連携前の dashboard 初回ロードで空配列が返ったレスポンスが固定キャッシュされ、
+      // 連携完了後も「DB内に行がありません」が返り続ける現象が確認されたため、
+      // Supabase 経由の fetch はすべて cache:'no-store' を強制する。
+      global: {
+        fetch: (input, init = {}) => fetch(input, { ...init, cache: 'no-store' }),
+      },
+    }
   )
 }
 
