@@ -63,6 +63,15 @@ export async function refreshGoogleToken(integration) {
 // owner + service の連携を取得。期限切れなら自動リフレッシュ
 export async function getIntegration(owner, service = 'google') {
   if (!owner) return { error: 'owner が指定されていません' }
+
+  // 環境変数チェック (未設定なら即座に原因特定できるようにする)
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return { error: '環境変数 NEXT_PUBLIC_SUPABASE_URL が未設定です (Vercel Preview env?)' }
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: '環境変数 SUPABASE_SERVICE_ROLE_KEY が未設定です (Vercel Preview env?)' }
+  }
+
   const admin = getAdminClient()
   const { data, error } = await admin
     .from('user_integrations')
@@ -70,8 +79,28 @@ export async function getIntegration(owner, service = 'google') {
     .eq('owner', owner)
     .eq('service', service)
     .maybeSingle()
-  if (error) return { error: `DB読込エラー: ${error.message}` }
-  if (!data) return { error: '未連携' }
+  if (error) {
+    console.error('[getIntegration] supabase error', { owner, service, error })
+    const detail = [error.message, error.code && `code=${error.code}`, error.hint && `hint=${error.hint}`]
+      .filter(Boolean).join(' | ')
+    return { error: `DB読込エラー: ${detail}` }
+  }
+  if (!data) {
+    // ヒント: 同じ owner または同じ service の行を一部だけ返す
+    let hintStr = ''
+    try {
+      const { data: hints } = await admin
+        .from('user_integrations')
+        .select('owner, service')
+        .limit(10)
+      if (hints && hints.length > 0) {
+        hintStr = ` (DB内の行: ${hints.map(h => `${h.owner}/${h.service}`).join(', ')})`
+      } else {
+        hintStr = ' (DB内に行がありません)'
+      }
+    } catch { /* noop */ }
+    return { error: `未連携: owner="${owner}" service="${service}"${hintStr}` }
+  }
 
   // 期限切れ or 60秒以内に切れる → 自動リフレッシュ
   const needsRefresh = data.expires_at
