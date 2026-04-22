@@ -56,31 +56,88 @@ export async function GET(request) {
           updated_at: r.updated_at,
         })) }
 
-    // owner 指定時: その行を明示的に引く
+    // owner 指定時: 複数のクエリ手法で試して「どれなら通るか」特定
     if (owner) {
-      const { data: row, error: rowErr } = await admin
-        .from('user_integrations')
-        .select('*')
-        .eq('owner', owner)
-        .eq('service', 'google')
-        .maybeSingle()
+      const runs = []
+
+      // A: .eq chain (現行 API)
+      {
+        const { data, error } = await admin
+          .from('user_integrations')
+          .select('owner, service')
+          .eq('owner', owner)
+          .eq('service', 'google')
+        runs.push({ method: 'eq_chain', found: data?.length || 0, error: error?.message || null })
+      }
+
+      // B: .filter (低レベル)
+      {
+        const { data, error } = await admin
+          .from('user_integrations')
+          .select('owner, service')
+          .filter('owner', 'eq', owner)
+          .filter('service', 'eq', 'google')
+        runs.push({ method: 'filter', found: data?.length || 0, error: error?.message || null })
+      }
+
+      // C: .match (複数キー一括)
+      {
+        const { data, error } = await admin
+          .from('user_integrations')
+          .select('owner, service')
+          .match({ owner, service: 'google' })
+        runs.push({ method: 'match', found: data?.length || 0, error: error?.message || null })
+      }
+
+      // D: .in (配列比較)
+      {
+        const { data, error } = await admin
+          .from('user_integrations')
+          .select('owner, service')
+          .in('owner', [owner])
+          .eq('service', 'google')
+        runs.push({ method: 'in_array', found: data?.length || 0, error: error?.message || null })
+      }
+
+      // E: .ilike (前後 '%' なし、大文字小文字無視)
+      {
+        const { data, error } = await admin
+          .from('user_integrations')
+          .select('owner, service')
+          .ilike('owner', owner)
+          .eq('service', 'google')
+        runs.push({ method: 'ilike_exact', found: data?.length || 0, error: error?.message || null })
+      }
+
+      // F: .ilike with wildcards (部分一致)
+      {
+        const { data, error } = await admin
+          .from('user_integrations')
+          .select('owner, service')
+          .ilike('owner', `%${owner}%`)
+          .eq('service', 'google')
+        runs.push({ method: 'ilike_partial', found: data?.length || 0, error: error?.message || null })
+      }
+
+      // G: クライアント側フィルタ (全行取得 → JS で絞り込み)
+      {
+        const { data, error } = await admin
+          .from('user_integrations')
+          .select('owner, service')
+        const matched = (data || []).filter(r => r.owner === owner && r.service === 'google')
+        runs.push({
+          method: 'client_side_filter',
+          found: matched.length,
+          error: error?.message || null,
+          totalRowsFetched: data?.length || 0,
+        })
+      }
+
       result.ownerQuery = {
         input: owner,
         inputHex: Buffer.from(owner, 'utf-8').toString('hex'),
         inputLength: owner.length,
-        found: !!row,
-        error: rowErr ? { message: rowErr.message, code: rowErr.code, details: rowErr.details } : null,
-        row: row ? {
-          owner: row.owner,
-          service: row.service,
-          scope: row.scope,
-          expires_at: row.expires_at,
-          metadata: row.metadata,
-          hasAccessToken: !!row.access_token,
-          hasRefreshToken: !!row.refresh_token,
-          accessTokenMasked: mask(row.access_token),
-          connected_at: row.connected_at,
-        } : null,
+        runs,
       }
     }
   } catch (e) {
