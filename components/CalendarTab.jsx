@@ -219,7 +219,16 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
               setPendingProposal(null)
               await fetchEvents()
             } catch (e) {
-              alert(`実行エラー: ${e.message}`)
+              const msg = e.message || 'エラー'
+              if (/403|Insufficient|insufficient auth/i.test(msg)) {
+                if (window.confirm(
+                  'Google の書き込み権限が不足しています。\n\n予定作成には「Calendar 予定の作成・編集」スコープが必要です。連携タブで再認証してください。\n\n今すぐ連携タブに移動しますか？'
+                )) {
+                  window.location.href = '/?tab=integrations'
+                }
+              } else {
+                alert(`実行エラー: ${msg}`)
+              }
             }
           }}
         />
