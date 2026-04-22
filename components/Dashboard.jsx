@@ -828,11 +828,18 @@ export default function Dashboard({ user, onSignOut }) {
   const [undoDelete, setUndoDelete]         = useState(null) // { objId, obj, krs, timer }
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640)
+    const check = () => setIsMobile(window.innerWidth < 768)
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // スマホではマイページ (mycoach) を強制 (他ページは非表示)
+  useEffect(() => {
+    if (isMobile && activePage !== 'mycoach') {
+      setActivePage('mycoach')
+    }
+  }, [isMobile])  // activePage を依存に入れると無限ループになるので除外
 
   // URL にページ・年度を同期（リロード時に復元される）
   useEffect(() => {
@@ -1206,8 +1213,8 @@ export default function Dashboard({ user, onSignOut }) {
 
   return (
     <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
+      {/* Header (スマホでは非表示 - MyPageShell の下メニューでナビゲート) */}
+      <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
         <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, overflow: 'visible' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>

@@ -66,6 +66,11 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
   const isMobile = useIsMobile()
   // 週開始日 (JST月曜の UTC 00:00)
   const [weekStart, setWeekStart] = useState(() => jstMonday(new Date()))
+  // モバイル: 日ビュー用のカレント日付 (UTC ベース、デフォ今日)
+  const [mobileDay, setMobileDay] = useState(() => {
+    const j = new Date(Date.now() + 9 * 3600 * 1000)
+    return new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate()))
+  })
   // 選択中メンバー名
   const [selected, setSelected] = useState(() => myName ? [myName] : [])
   useEffect(() => {
@@ -76,9 +81,13 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
+  // モバイル: 1日だけ表示。PC: 月曜起点の7日
+  const days = useMemo(
+    () => isMobile ? [mobileDay] : Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
+    [weekStart, mobileDay, isMobile]
+  )
   const startISO = useMemo(() => isoFromJST(jstYMD(days[0]), HOUR_FROM), [days])
-  const endISO = useMemo(() => isoFromJST(jstYMD(days[6]), HOUR_TO), [days])
+  const endISO = useMemo(() => isoFromJST(jstYMD(days[days.length - 1]), HOUR_TO), [days])
 
   // メンバー名 → 色
   const colorOf = useCallback((name) => {
@@ -178,9 +187,18 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
         <CalendarHeader
           T={T}
           weekStart={weekStart}
-          onPrev={() => setWeekStart(addDays(weekStart, -7))}
-          onNext={() => setWeekStart(addDays(weekStart, 7))}
-          onToday={() => setWeekStart(jstMonday(new Date()))}
+          mobileDay={mobileDay}
+          isMobile={isMobile}
+          onPrev={() => isMobile ? setMobileDay(addDays(mobileDay, -1)) : setWeekStart(addDays(weekStart, -7))}
+          onNext={() => isMobile ? setMobileDay(addDays(mobileDay, 1)) : setWeekStart(addDays(weekStart, 7))}
+          onToday={() => {
+            if (isMobile) {
+              const j = new Date(Date.now() + 9 * 3600 * 1000)
+              setMobileDay(new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate())))
+            } else {
+              setWeekStart(jstMonday(new Date()))
+            }
+          }}
           loading={loading}
           onReload={fetchEvents}
         />
@@ -252,23 +270,23 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
 }
 
 // ─── ヘッダ (前後/今週) ────────────────────────────────────────────────
-function CalendarHeader({ T, weekStart, onPrev, onNext, onToday, loading, onReload }) {
+function CalendarHeader({ T, weekStart, mobileDay, isMobile, onPrev, onNext, onToday, loading, onReload }) {
   const end = addDays(weekStart, 6)
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8,
-      padding: '10px 16px', borderBottom: `1px solid ${T.border}`,
+      padding: '10px 14px', borderBottom: `1px solid ${T.border}`,
       background: T.bgCard, flexShrink: 0,
     }}>
-      <button onClick={onPrev} style={btnSm(T)}>← 前週</button>
-      <button onClick={onToday} style={btnSm(T, true)}>今週</button>
-      <button onClick={onNext} style={btnSm(T)}>翌週 →</button>
-      <div style={{ marginLeft: 6, fontSize: 13, fontWeight: 700, color: T.text }}>
-        {jstLabel(weekStart)} 〜 {jstLabel(end)}
+      <button onClick={onPrev} style={btnSm(T)}>← {isMobile ? '前日' : '前週'}</button>
+      <button onClick={onToday} style={btnSm(T, true)}>{isMobile ? '今日' : '今週'}</button>
+      <button onClick={onNext} style={btnSm(T)}>{isMobile ? '翌日' : '翌週'} →</button>
+      <div style={{ marginLeft: 6, fontSize: 13, fontWeight: 700, color: T.text, flex: isMobile ? 1 : 'none' }}>
+        {isMobile ? jstLabel(mobileDay) : `${jstLabel(weekStart)} 〜 ${jstLabel(end)}`}
       </div>
-      <div style={{ flex: 1 }} />
+      {!isMobile && <div style={{ flex: 1 }} />}
       <button onClick={onReload} disabled={loading} style={btnSm(T)}>
-        {loading ? '更新中…' : '🔄 再取得'}
+        {loading ? '…' : '🔄'}
       </button>
     </div>
   )
@@ -352,7 +370,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
 
   return (
     <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
-      <div style={{ display: 'flex', minWidth: 720 }}>
+      <div style={{ display: 'flex', minWidth: days.length === 1 ? 'auto' : 720 }}>
         {/* 時間軸列 */}
         <div style={{
           width: TIME_COL, flexShrink: 0,

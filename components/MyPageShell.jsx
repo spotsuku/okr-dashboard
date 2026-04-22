@@ -215,12 +215,19 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const isMobile = useIsMobile()
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
-  // 下メニュー項目 (PC/mobileで共通、mobileのみ表示)
+  // 下メニュー項目 (モバイル時のみ表示)
   const MOBILE_NAV = [
-    { key: 'dashboard', icon: '🏠', label: 'ホーム' },
-    { key: 'wbs',       icon: '✅', label: 'タスク' },
-    { key: 'mail',      icon: '📧', label: 'メール' },
-    { key: 'calendar',  icon: '📅', label: 'カレンダー' },
+    { key: 'dashboard',  icon: '🏠', label: 'ホーム' },
+    { key: 'wbs',        icon: '✅', label: 'タスク' },
+    { key: 'mail',       icon: '📧', label: 'メール' },
+    { key: 'calendar',   icon: '📅', label: 'カレンダー' },
+    { key: 'retrospect', icon: '💭', label: '振り返り' },
+  ]
+  // サイドバードロワー下部の「その他」メニュー
+  const SIDEBAR_OTHER = [
+    { key: 'okr_edit',     icon: '🎯', label: 'OKR記入' },
+    { key: 'okr_view',     icon: '📈', label: 'OKR詳細' },
+    { key: 'integrations', icon: '🔌', label: '連携' },
   ]
 
   return (
@@ -345,6 +352,42 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             )
           })}
         </div>
+
+        {/* サイドバー下部: その他メニュー (モバイル時のみ、下メニュー外のタブへアクセス) */}
+        {isMobile && !sidebarCollapsed && (
+          <div style={{
+            borderTop: `1px solid ${T.border}`,
+            padding: '8px 0',
+            background: T.bgSidebar,
+          }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: T.textMuted,
+              letterSpacing: 0.5, padding: '4px 12px', marginBottom: 2,
+            }}>その他</div>
+            {SIDEBAR_OTHER.map(item => {
+              const isActive = activeTab === item.key
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => { setActiveTab(item.key); setMobileSidebarOpen(false) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '10px 14px',
+                    background: isActive ? T.navActiveBg : 'transparent',
+                    border: 'none',
+                    borderLeft: `3px solid ${isActive ? T.accent : 'transparent'}`,
+                    color: isActive ? T.navActiveText : T.text,
+                    fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* ─── メインエリア ─── */}
@@ -382,14 +425,12 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           </div>
         )}
 
-        {/* サブタブバー (スマホは横スクロール、下メニュー外のタブ用) */}
+        {/* サブタブバー (PCのみ表示。モバイルは下メニュー + サイドバーの「その他」で代替) */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 4,
-          padding: isMobile ? '6px 10px' : '8px 14px',
+          display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 4,
+          padding: '8px 14px',
           borderBottom: `1px solid ${T.border}`,
           background: T.bgCard, flexShrink: 0,
-          overflowX: isMobile ? 'auto' : 'visible',
-          WebkitOverflowScrolling: 'touch',
         }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
