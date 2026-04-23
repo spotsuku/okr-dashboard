@@ -8,6 +8,8 @@ import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
 import CalendarTab from './CalendarTab'
 import DriveTab from './DriveTab'
+import COOTab from './COOTab'
+import COOKnowledgePanel from './COOKnowledgePanel'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -141,11 +143,13 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // ぺろっぺ 設定モーダル (admin のみ)
+  const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return
     const t = new URL(window.location.href).searchParams.get('tab')
-    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'drive', 'retrospect', 'integrations'].includes(t)) {
+    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'drive', 'coo', 'retrospect', 'integrations'].includes(t)) {
       setActiveTab(t)
     }
   }, [])
@@ -501,6 +505,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
+            { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
             { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
             { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
@@ -625,6 +630,10 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           {!summaryMode && activeTab === 'drive' && (
             <DriveTab T={T} myName={myName} viewingName={viewingName} />
           )}
+          {!summaryMode && activeTab === 'coo' && (
+            <COOTab T={T} myName={myName} viewingName={viewingName}
+              isAdmin={isAdmin} onOpenSettings={() => setCooSettingsOpen(true)} />
+          )}
           {!summaryMode && activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
           )}
@@ -632,6 +641,11 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
           )}
         </div>
+
+        {/* ぺろっぺ設定モーダル (admin) */}
+        {cooSettingsOpen && (
+          <COOKnowledgePanel T={T} owner={myName} onClose={() => setCooSettingsOpen(false)} />
+        )}
 
         {/* 集中記入モーダル (OKR記入タブ/ダッシュボードから共通で使用) */}
         {focusFillOpen && (
