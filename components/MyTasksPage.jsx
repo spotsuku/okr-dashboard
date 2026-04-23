@@ -126,7 +126,7 @@ function ConfirmDialog({ message, onConfirm, onCancel, T }) {
 }
 
 // ─── タスク作成モーダル ──────────────────────────────────
-export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaultDueDate = '', defaultNoKaLink = false }) {
+export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaultDueDate = '', defaultNoKaLink = false, fiscalYear = '2026' }) {
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState(myName)
   const [dueDate, setDueDate] = useState(defaultDueDate)
@@ -147,7 +147,7 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
         supabase.from('weekly_reports')
           .select('id,ka_title,kr_id,objective_id,level_id,owner,status,week_start')
           .neq('status', 'done').order('week_start', { ascending: false }).order('ka_title'),
-        supabase.from('levels').select('id,name,parent_id,icon,color'),
+        supabase.from('levels').select('id,name,parent_id,icon,color,fiscal_year'),
       ])
       const seen = new Set()
       const uniqueKAs = (kasRes?.data || []).filter(ka => {
@@ -156,7 +156,8 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
         seen.add(key); return true
       })
       setAllKAs(uniqueKAs)
-      setLevels(levelsRes?.data || [])
+      // 今年度の levels のみ使用 (2024/2025/2026 で名前が同じ「全社」が並ぶのを防ぐ)
+      setLevels((levelsRes?.data || []).filter(l => !l.fiscal_year || l.fiscal_year === fiscalYear))
       const objIds = [...new Set(uniqueKAs.map(k => k.objective_id).filter(Boolean))]
       if (objIds.length > 0) {
         const { data: objs } = await supabase.from('objectives').select('id,title,owner,period,level_id').in('id', objIds)
@@ -164,10 +165,13 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
       }
       setLoadingKAs(false)
     })()
-  }, [])
+  }, [fiscalYear])
 
   // 部署/チーム階層を構築
-  const topLevels = levels.filter(l => !l.parent_id)
+  // 部署ドロップダウンは depth-1 (事業部) を直接表示する
+  //   - depth-0 = 全社 (root) は選択肢として表示しない (= 「全部署」と同等なので冗長)
+  const rootLevelIds = new Set(levels.filter(l => !l.parent_id).map(l => String(l.id)))
+  const departmentLevels = levels.filter(l => l.parent_id && rootLevelIds.has(String(l.parent_id)))
   const childLevels = selectedDept ? levels.filter(l => String(l.parent_id) === String(selectedDept)) : []
 
   // KA検索フィルタ + 部署/チーム絞り込み
@@ -268,7 +272,7 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
                 <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                   <select value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setSelectedTeam(''); setReportId('') }} style={{ ...inputSt, fontSize: 12, flex: 1 }}>
                     <option value="">全部署</option>
-                    {topLevels.map(l => (
+                    {departmentLevels.map(l => (
                       <option key={l.id} value={l.id}>{l.icon || '📁'} {l.name}</option>
                     ))}
                   </select>
@@ -936,7 +940,7 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
 }
 
 // ─── メイン ─────────────────────────────────────────
-export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange }) {
+export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange, fiscalYear = '2026' }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { isMobile } = useResponsive()
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
@@ -1179,7 +1183,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
         </div>
       </div>
       {showCreateModal && (
-        <TaskCreateModal onClose={() => setShowCreateModal(false)} onCreated={load} members={members} myName={myName} T={T} />
+        <TaskCreateModal onClose={() => setShowCreateModal(false)} onCreated={load} members={members} myName={myName} T={T} fiscalYear={fiscalYear} />
       )}
     </div>
   )
