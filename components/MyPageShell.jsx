@@ -8,6 +8,8 @@ import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
 import CalendarTab from './CalendarTab'
 import DriveTab from './DriveTab'
+import COOTab from './COOTab'
+import COOKnowledgePanel from './COOKnowledgePanel'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -141,11 +143,13 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // ぺろっぺ 設定モーダル (admin のみ)
+  const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return
     const t = new URL(window.location.href).searchParams.get('tab')
-    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'drive', 'retrospect', 'integrations'].includes(t)) {
+    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'drive', 'coo', 'retrospect', 'integrations'].includes(t)) {
       setActiveTab(t)
     }
   }, [])
@@ -501,6 +505,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
+            { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
             { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
             { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
@@ -625,6 +630,10 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           {!summaryMode && activeTab === 'drive' && (
             <DriveTab T={T} myName={myName} viewingName={viewingName} />
           )}
+          {!summaryMode && activeTab === 'coo' && (
+            <COOTab T={T} myName={myName} viewingName={viewingName}
+              isAdmin={isAdmin} onOpenSettings={() => setCooSettingsOpen(true)} />
+          )}
           {!summaryMode && activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
           )}
@@ -632,6 +641,11 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
           )}
         </div>
+
+        {/* ぺろっぺ設定モーダル (admin) */}
+        {cooSettingsOpen && (
+          <COOKnowledgePanel T={T} owner={myName} onClose={() => setCooSettingsOpen(false)} />
+        )}
 
         {/* 集中記入モーダル (OKR記入タブ/ダッシュボードから共通で使用) */}
         {focusFillOpen && (
@@ -1835,6 +1849,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
 // ─── 全社サマリー: 全員の今日のタスクと達成率を可視化 ──────────────────
 function CompanySummaryTab({ T, members }) {
   const [tasks, setTasks] = useState([])
+  const [overdueTasks, setOverdueTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -1846,14 +1861,25 @@ function CompanySummaryTab({ T, members }) {
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    const { data, error: e } = await supabase
-      .from('ka_tasks')
-      .select('id, title, assignee, due_date, done, status')
-      .eq('due_date', today)
-      .order('assignee')
-      .order('id', { ascending: false })
-    if (e) { setError(e.message); setTasks([]); setLoading(false); return }
-    setTasks(data || [])
+    const [todayRes, overdueRes] = await Promise.all([
+      supabase.from('ka_tasks')
+        .select('id, title, assignee, due_date, done, status')
+        .eq('due_date', today)
+        .order('assignee')
+        .order('id', { ascending: false }),
+      supabase.from('ka_tasks')
+        .select('id, title, assignee, due_date, done, status')
+        .lt('due_date', today)
+        .order('assignee')
+        .order('due_date', { ascending: true }),
+    ])
+    if (todayRes.error || overdueRes.error) {
+      setError((todayRes.error || overdueRes.error).message)
+      setTasks([]); setOverdueTasks([]); setLoading(false); return
+    }
+    setTasks(todayRes.data || [])
+    // 未完了のみを遅延とみなす (done フラグ or status='done' を除外)
+    setOverdueTasks((overdueRes.data || []).filter(t => !t.done && t.status !== 'done'))
     setLoading(false)
   }, [today])
 
@@ -1862,22 +1888,28 @@ function CompanySummaryTab({ T, members }) {
   // メンバー別に集計
   const byMember = useMemo(() => {
     const map = new Map()
-    for (const m of (members || [])) map.set(m.name, { member: m, tasks: [] })
+    for (const m of (members || [])) map.set(m.name, { member: m, tasks: [], overdue: [] })
     for (const t of tasks) {
       if (!t.assignee) continue
-      if (!map.has(t.assignee)) map.set(t.assignee, { member: { name: t.assignee }, tasks: [] })
+      if (!map.has(t.assignee)) map.set(t.assignee, { member: { name: t.assignee }, tasks: [], overdue: [] })
       map.get(t.assignee).tasks.push(t)
     }
-    // タスクがあるメンバーだけ抽出 + sort_order 順
-    const arr = Array.from(map.values()).filter(x => x.tasks.length > 0)
+    for (const t of overdueTasks) {
+      if (!t.assignee) continue
+      if (!map.has(t.assignee)) map.set(t.assignee, { member: { name: t.assignee }, tasks: [], overdue: [] })
+      map.get(t.assignee).overdue.push(t)
+    }
+    // 今日のタスク or 遅延タスクがあるメンバーだけ抽出 + sort_order 順
+    const arr = Array.from(map.values()).filter(x => x.tasks.length > 0 || x.overdue.length > 0)
     arr.sort((a, b) => (a.member.sort_order ?? 999) - (b.member.sort_order ?? 999) || (a.member.name || '').localeCompare(b.member.name || ''))
     return arr
-  }, [tasks, members])
+  }, [tasks, overdueTasks, members])
 
   // 全体集計
   const totalTasks = tasks.length
   const totalDone = tasks.filter(t => t.done || t.status === 'done').length
   const overallPct = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0
+  const totalOverdue = overdueTasks.length
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
@@ -1923,6 +1955,7 @@ function CompanySummaryTab({ T, members }) {
               <Stat T={T} label="完了" value={totalDone} color={T.success} />
               <Stat T={T} label="残り" value={totalTasks - totalDone} color={T.warn} />
               <Stat T={T} label="合計" value={totalTasks} color={T.textSub} />
+              <Stat T={T} label="遅延" value={totalOverdue} color={totalOverdue > 0 ? '#ff6b6b' : T.textMuted} />
             </div>
           </div>
         </div>
@@ -1942,68 +1975,127 @@ function CompanySummaryTab({ T, members }) {
             background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 12,
           }}>
             <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
-            まだ本日のタスクが登録されていません<br />
+            本日のタスク・遅延タスクは登録されていません<br />
             <span style={{ fontSize: 10 }}>各メンバーが始業時にタスクを登録すると、ここに集約されます</span>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {byMember.map(({ member, tasks: ts }) => {
+            {byMember.map(({ member, tasks: ts, overdue }) => {
               const done = ts.filter(t => t.done || t.status === 'done').length
               const pct = ts.length > 0 ? Math.round((done / ts.length) * 100) : 0
-              const color = pct >= 80 ? '#00d68f' : pct >= 50 ? '#4d9fff' : pct > 0 ? '#ffd166' : '#ff6b6b'
+              const hasToday = ts.length > 0
+              const color = !hasToday ? T.textMuted
+                : pct >= 80 ? '#00d68f' : pct >= 50 ? '#4d9fff' : pct > 0 ? '#ffd166' : '#ff6b6b'
+              // 遅延があるメンバーは左ボーダーを赤に優先
+              const borderColor = overdue.length > 0 ? '#ff6b6b' : color
               return (
                 <div key={member.name} style={{
                   background: T.bgCard, border: `1px solid ${T.border}`,
-                  borderLeft: `4px solid ${color}`,
+                  borderLeft: `4px solid ${borderColor}`,
                   borderRadius: 10, padding: 12,
                 }}>
                   {/* メンバーヘッダ */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <Avatar member={member} size={32} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{member.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{member.name}</div>
+                        {overdue.length > 0 && (
+                          <span style={{
+                            padding: '1px 6px', borderRadius: 99,
+                            background: '#ff6b6b22', color: '#ff6b6b',
+                            fontSize: 9, fontWeight: 800,
+                          }}>⚠️ 遅延 {overdue.length}</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
                         {member.role || ''}
                       </div>
                     </div>
-                    <div style={{
-                      padding: '4px 10px', borderRadius: 99,
-                      background: `${color}22`, color, fontWeight: 800, fontSize: 14,
-                    }}>{pct}%</div>
+                    {hasToday && (
+                      <div style={{
+                        padding: '4px 10px', borderRadius: 99,
+                        background: `${color}22`, color, fontWeight: 800, fontSize: 14,
+                      }}>{pct}%</div>
+                    )}
                   </div>
 
                   {/* 達成率バー */}
-                  <div style={{
-                    height: 6, background: T.sectionBg, borderRadius: 99, overflow: 'hidden',
-                    marginBottom: 10,
-                  }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: color }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 8 }}>
-                    完了 {done} / 全 {ts.length} 件
-                  </div>
+                  {hasToday && (
+                    <>
+                      <div style={{
+                        height: 6, background: T.sectionBg, borderRadius: 99, overflow: 'hidden',
+                        marginBottom: 10,
+                      }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: color }} />
+                      </div>
+                      <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 8 }}>
+                        完了 {done} / 全 {ts.length} 件
+                      </div>
+                    </>
+                  )}
 
-                  {/* タスク一覧 */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {ts.map(t => {
-                      const isDone = t.done || t.status === 'done'
-                      return (
-                        <div key={t.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '5px 8px',
-                          background: isDone ? T.successBg : T.sectionBg,
-                          borderRadius: 6, fontSize: 11,
-                          color: isDone ? T.textMuted : T.text,
-                          textDecoration: isDone ? 'line-through' : 'none',
-                        }}>
-                          <span>{isDone ? '✅' : '⬜'}</span>
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {t.title || '(無題)'}
-                          </span>
+                  {/* 遅延タスク一覧 (未完了のみ) */}
+                  {overdue.length > 0 && (
+                    <div style={{ marginBottom: ts.length > 0 ? 10 : 0 }}>
+                      <div style={{
+                        fontSize: 10, fontWeight: 700, color: '#ff6b6b',
+                        marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4,
+                      }}>
+                        <span>⚠️ 遅延タスク</span>
+                        <span style={{ color: T.textMuted, fontWeight: 600 }}>({overdue.length}件)</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {overdue.map(t => (
+                          <div key={t.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '5px 8px',
+                            background: '#ff6b6b10',
+                            border: '1px solid #ff6b6b30',
+                            borderRadius: 6, fontSize: 11,
+                            color: T.text,
+                          }}>
+                            <span>⚠️</span>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t.title || '(無題)'}
+                            </span>
+                            <span style={{ fontSize: 9, color: '#ff6b6b', fontWeight: 700, flexShrink: 0 }}>
+                              {t.due_date?.slice(5)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 今日のタスク一覧 */}
+                  {ts.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {overdue.length > 0 && (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: T.textSub, marginBottom: 2 }}>
+                          本日のタスク
                         </div>
-                      )
-                    })}
-                  </div>
+                      )}
+                      {ts.map(t => {
+                        const isDone = t.done || t.status === 'done'
+                        return (
+                          <div key={t.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '5px 8px',
+                            background: isDone ? T.successBg : T.sectionBg,
+                            borderRadius: 6, fontSize: 11,
+                            color: isDone ? T.textMuted : T.text,
+                            textDecoration: isDone ? 'line-through' : 'none',
+                          }}>
+                            <span>{isDone ? '✅' : '⬜'}</span>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t.title || '(無題)'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             })}
