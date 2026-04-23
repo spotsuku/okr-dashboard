@@ -187,6 +187,12 @@ function DriveChat({ T, owner }) {
             </div>
             {h.files && h.files.length > 0 && (
               <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{
+                  fontSize: 10, fontWeight: 700, color: T.textMuted,
+                  letterSpacing: 0.5, padding: '0 4px',
+                }}>
+                  📌 候補ファイル ({h.files.length}件中 上位{Math.min(8, h.files.length)}件)
+                </div>
                 {h.files.slice(0, 8).map(f => (
                   <FileCard key={f.id} T={T} file={f} />
                 ))}

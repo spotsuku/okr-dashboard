@@ -437,12 +437,12 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
             { key: 'wbs',          icon: '📅', label: 'タスクWBS'     },
-            { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
-            { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
+            { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
+            { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
             { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
             <button
