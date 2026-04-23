@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 const MODEL = 'claude-sonnet-4-5'
-const MAX_STEPS = 6
+const MAX_STEPS = 8
 const MAX_READ_CHARS = 20000  // AI に渡す最大本文文字数 (tokens 節約)
 
 function getDriveId() { return process.env.NEO_FUKUOKA_DRIVE_ID || '' }
@@ -25,11 +25,15 @@ function escapeQuery(q) { return q.replace(/\\/g, '\\\\').replace(/'/g, "\\'") }
 const TOOLS = [
   {
     name: 'search_files',
-    description: 'ネオ福岡 共有ドライブ内のファイルを全文検索する。タイトル/本文のどちらにヒットしても返す。',
+    description: 'ネオ福岡 共有ドライブ内のファイルを検索する。既定では「ファイル名一致」と「本文一致」の両方を返すが、名前一致を上位に並べ替えて返す。ユーザーがファイル名を明示している場合 (例: 「プレスリリースまとめ を表示」) は name_only=true を使うと本文一致を除外できる。',
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '検索キーワード (タイトル/本文にマッチ)' },
+        query: { type: 'string', description: '検索キーワード。既定ではタイトル/本文両方にマッチする' },
+        name_only: {
+          type: 'boolean',
+          description: 'true にするとファイル名一致のみ返す (本文一致は除外)。ユーザーがファイル名/タイトルを明示しているときに推奨。省略時は false。',
+        },
         mime: {
           type: 'string',
           description: 'MIME type で絞り込み (省略可)。例: application/vnd.google-apps.document (Docs), application/vnd.google-apps.spreadsheet (Sheets), application/vnd.google-apps.presentation (Slides), application/pdf',
@@ -51,9 +55,15 @@ const TOOLS = [
   },
 ]
 
-async function doSearch(integration, driveId, query, mime) {
+async function doSearch(integration, driveId, query, mime, nameOnly = false) {
+  // Drive API の q 構築
+  //  - nameOnly=true の場合は name contains のみ (本文一致は除外)
+  //  - 既定は name or fullText
+  const match = nameOnly
+    ? `name contains '${escapeQuery(query)}'`
+    : `(name contains '${escapeQuery(query)}' or fullText contains '${escapeQuery(query)}')`
   const q = [
-    `(name contains '${escapeQuery(query)}' or fullText contains '${escapeQuery(query)}')`,
+    match,
     'trashed = false',
     mime ? `mimeType = '${escapeQuery(mime)}'` : null,
   ].filter(Boolean).join(' and ')
@@ -64,23 +74,38 @@ async function doSearch(integration, driveId, query, mime) {
   url.searchParams.set('includeItemsFromAllDrives', 'true')
   url.searchParams.set('supportsAllDrives', 'true')
   url.searchParams.set('orderBy', 'modifiedTime desc')
-  url.searchParams.set('pageSize', '15')
+  url.searchParams.set('pageSize', '30')
   url.searchParams.set('fields', 'files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName))')
   const { response: r } = await callGoogleApiWithRetry(integration, async (token) => {
     return fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } })
   })
   if (!r.ok) return { ok: false, error: `Drive API ${r.status}` }
   const data = await r.json()
+
+  // 名前一致を優先して並べ替える
+  //   1. name に query を含むもの (= 名前一致) を先頭に
+  //   2. それぞれのグループ内では modifiedTime 降順を維持
+  const qLower = (query || '').toLowerCase()
+  const files = (data.files || []).map(f => ({
+    id: f.id,
+    name: f.name,
+    mimeType: f.mimeType,
+    modifiedTime: f.modifiedTime,
+    webViewLink: f.webViewLink,
+    owner: f.owners?.[0]?.displayName || '',
+    match_type: (f.name || '').toLowerCase().includes(qLower) ? 'name' : 'body',
+  }))
+  files.sort((a, b) => {
+    if (a.match_type !== b.match_type) return a.match_type === 'name' ? -1 : 1
+    return new Date(b.modifiedTime) - new Date(a.modifiedTime)
+  })
+
   return {
     ok: true,
-    files: (data.files || []).map(f => ({
-      id: f.id,
-      name: f.name,
-      mimeType: f.mimeType,
-      modifiedTime: f.modifiedTime,
-      webViewLink: f.webViewLink,
-      owner: f.owners?.[0]?.displayName || '',
-    })),
+    files,
+    query,
+    name_only: nameOnly,
+    name_match_count: files.filter(f => f.match_type === 'name').length,
   }
 }
 
@@ -155,14 +180,17 @@ async function handlePost(request) {
 
 ## 行動ルール
 1. 「○○ どこだっけ?」「○○の資料」のような質問には、まず search_files で候補を探す
-2. 候補が出たら、特に関連が強そうなものを数件 (1-3件) 絞って最終回答に含める
-3. 「要約して」「内容を教えて」と言われたら read_file で本文を読んで要約する
-4. 本文が truncated の場合は「本文が長いため一部のみ確認しました」と断る
-5. 該当ファイルが見つからない場合は、代替キーワードでの再検索を提案する
-6. ファイル情報を提示する時は必ず webViewLink (Drive URL) を含める
-7. 最終回答は日本語で簡潔に、マークダウンなし (プレーンテキスト)
+2. **ユーザーがファイル名/タイトルを明示している場合 (例: 「プレスリリースまとめを表示」「○○議事録 を開いて」) は必ず name_only=true で検索する**。本文一致のノイズを避けるため。
+3. name_only=true でヒットしなかった場合のみ、name_only=false (既定) で本文一致も含めて再検索する
+4. 検索結果には match_type フィールドがある: 'name' はファイル名一致、'body' は本文のみ一致。名前一致を優先的に紹介する
+5. 候補が出たら、特に関連が強そうなものを数件 (1-3件) 絞って最終回答に含める
+6. 「要約して」「内容を教えて」と言われたら read_file で本文を読んで要約する
+7. 本文が truncated の場合は「本文が長いため一部のみ確認しました」と断る
+8. 該当ファイルが見つからない場合は、代替キーワードでの再検索を提案する
+9. ファイル情報を提示する時は必ず webViewLink (Drive URL) を含める
+10. 最終回答は日本語で簡潔に、マークダウンなし (プレーンテキスト)
 
-ツールは最大 ${MAX_STEPS} ステップまで連続実行できます。`
+ツールは最大 ${MAX_STEPS} ステップまで連続実行できます。無駄な検索を避け、最初に name_only=true で絞ると効率的です。`
 
   const messages = [
     ...history.map(h => ({ role: h.role, content: h.content })),
@@ -172,6 +200,7 @@ async function handlePost(request) {
   const actions = []
   const suggestedFiles = new Map()  // id → file (重複排除)
   let finalText = ''
+  let lastInterimText = ''  // ループ中の interim text (step 上限到達時のフォールバックで使用)
 
   async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
     let lastStatus = 0, lastRaw = ''
@@ -217,6 +246,7 @@ async function handlePost(request) {
 
     const toolUses = (data.content || []).filter(b => b.type === 'tool_use')
     const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim()
+    if (textBlocks) lastInterimText = textBlocks
 
     if (data.stop_reason === 'end_turn' || toolUses.length === 0) {
       finalText = textBlocks
@@ -227,10 +257,12 @@ async function handlePost(request) {
     for (const tu of toolUses) {
       let result
       if (tu.name === 'search_files') {
-        result = await doSearch(integration, driveId, tu.input.query || '', tu.input.mime)
-        // 候補ファイルを集積
+        result = await doSearch(integration, driveId, tu.input.query || '', tu.input.mime, !!tu.input.name_only)
+        // 候補ファイルを集積 (名前一致を優先、既に登録済みでも match_type='name' なら上書き)
         if (result.ok) for (const f of (result.files || [])) {
-          if (!suggestedFiles.has(f.id)) suggestedFiles.set(f.id, f)
+          const existing = suggestedFiles.get(f.id)
+          if (!existing) suggestedFiles.set(f.id, f)
+          else if (f.match_type === 'name' && existing.match_type !== 'name') suggestedFiles.set(f.id, f)
         }
       } else if (tu.name === 'read_file') {
         result = await doRead(integration, tu.input.file_id)
@@ -253,9 +285,31 @@ async function handlePost(request) {
     messages.push({ role: 'user', content: toolResults })
   }
 
+  // step 上限到達などで finalText が空の場合、ツール無しで最終回答を強制取得する
+  if (!finalText) {
+    const forced = await callAnthropicWithRetry({
+      model: MODEL,
+      max_tokens: 2048,
+      system: systemPrompt + `\n\n【重要】ツール呼び出しの上限 (${MAX_STEPS} 回) に達しました。これまでの検索結果とツール結果を元に、ユーザーへの最終回答を日本語で簡潔に返してください。追加のツール呼び出しはせず、テキストのみで回答してください。候補ファイルが複数ある場合は上位 1-3 件を提示し、判断材料が不足していれば質問の絞り込みを促してください。`,
+      messages, // tools を渡さないので AI はテキストしか返せない
+    })
+    if (forced.ok) {
+      const text = (forced.data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim()
+      if (text) finalText = text
+    }
+    // それでもダメなら直前の interim text を使う (少なくとも「検索します」等は出る)
+    if (!finalText && lastInterimText) finalText = lastInterimText
+  }
+
+  // 候補ファイル全体も名前一致を先頭に並べ替え (UI の「候補ファイル」に同じ順序で出る)
+  const sortedSuggested = Array.from(suggestedFiles.values()).sort((a, b) => {
+    if (a.match_type !== b.match_type) return a.match_type === 'name' ? -1 : 1
+    return new Date(b.modifiedTime) - new Date(a.modifiedTime)
+  })
+
   return json({
-    text: finalText || '(応答なし)',
+    text: finalText || '(応答なし - ツール実行ステップ上限に達しました。質問を絞り込んで再度お試しください)',
     actions,
-    suggested_files: Array.from(suggestedFiles.values()),
+    suggested_files: sortedSuggested,
   })
 }
