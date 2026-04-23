@@ -926,8 +926,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* 挨拶バー + 始業/終業ボタン + 設定 */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        padding: '10px 16px', background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        padding: isMobile ? '10px 12px' : '10px 16px',
+        background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
         flexShrink: 0, position: 'relative',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -977,12 +978,16 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
       <div style={{
         flex: 1, display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
-        gap: 10, padding: 10,
+        gap: isMobile ? 14 : 10, padding: isMobile ? 14 : 10,
+        paddingBottom: isMobile ? 80 : 10,  /* 下メニュー分 */
         minHeight: 0,
         overflow: isMobile ? 'auto' : 'hidden',
       }}>
         {/* ─── 左カラム：今日やること / 今週やること ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
+          minHeight: isMobile ? 'auto' : 0,
+        }}>
           {showW('today') && (
             <Section T={T} icon="⚡" title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
               <button onClick={loadTasks} title="再読み込み" style={{
@@ -1006,7 +1011,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
         </div>
 
         {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
+          minHeight: isMobile ? 'auto' : 0,
+          overflowY: isMobile ? 'visible' : 'auto',
+        }}>
           {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
           <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
@@ -1073,7 +1082,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
         </div>
 
         {/* ─── 右カラム：ポップなゴール3種 + コンパクト成果 ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
+          minHeight: isMobile ? 'auto' : 0,
+          overflowY: isMobile ? 'visible' : 'auto',
+        }}>
           {showW('goal_month_main') && (
             <PopGoalCard
               T={T} icon="🌟" title="今月のメインテーマ"
@@ -1452,9 +1465,11 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
 }
 
 function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
+  const isMobile = useIsMobile()
   // flex=0 の場合は内容に合わせて自動サイズ (flex-basis:0 の罠を回避)
   // flex>=1 の場合は grow して親の残りスペースを埋める
-  const isAutoSize = flex === 0 || flex === 'none'
+  // モバイルでは常に自動サイズ (外側スクロール + 中身フルハイト)
+  const isAutoSize = isMobile || flex === 0 || flex === 'none'
   const outerStyle = isAutoSize
     ? { flex: '0 0 auto', display: 'flex', flexDirection: 'column',
         background: T.bgCard, border: `1px solid ${T.border}`,
@@ -1463,7 +1478,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
         background: T.bgCard, border: `1px solid ${T.border}`,
         borderRadius: 10, overflow: 'hidden' }
   const innerStyle = isAutoSize
-    ? { padding: '8px 12px' }
+    ? { padding: isMobile ? '10px 14px' : '8px 12px' }
     : { flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }
   return (
     <div style={outerStyle}>
@@ -1484,6 +1499,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
 
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
 function RetrospectTab({ T, viewingName, viewingMember }) {
+  const isMobile = useIsMobile()
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
   const [data, setData] = useState({ days: [], loading: true, taskStats: { onTime: 0, overdue: 0 }, kptSummary: { keep: [], problem: [], try: [] } })
 
@@ -1576,25 +1592,28 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
       {/* ヘッダー */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 16px', background: T.sectionBg,
+        padding: isMobile ? '8px 10px' : '10px 16px', background: T.sectionBg,
         borderBottom: `1px solid ${T.border}`, flexShrink: 0,
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
       }}>
-        <Avatar member={viewingMember} size={28} />
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
+        <Avatar member={viewingMember} size={isMobile ? 24 : 28} />
+        <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text, flex: isMobile ? 1 : 'none', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {viewingName} さんの振り返り
         </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10 }}>
-          {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
-        </div>
-        <div style={{ display: 'flex', gap: 2, background: T.bgCard, padding: 3, borderRadius: 8, border: `1px solid ${T.border}` }}>
+        {!isMobile && <div style={{ flex: 1 }} />}
+        {!isMobile && (
+          <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10 }}>
+            {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 2, background: T.bgCard, padding: 3, borderRadius: 8, border: `1px solid ${T.border}`, flexShrink: 0 }}>
           {[
             { key: 'week',  label: '今週' },
             { key: 'month', label: '今月' },
             { key: 'all',   label: '全期間' },
           ].map(r => (
             <button key={r.key} onClick={() => setRange(r.key)} style={{
-              padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+              padding: isMobile ? '5px 9px' : '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
               background: range === r.key ? T.navActiveBg : 'transparent',
               color: range === r.key ? T.navActiveText : T.textMuted,
               fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
@@ -1605,6 +1624,11 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
           background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
           borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
         }}>↻</button>
+        {isMobile && (
+          <div style={{ fontSize: 10, color: T.textMuted, width: '100%' }}>
+            {totalDays}日 · 合計 {totalHrs}時間{totalMins}分
+          </div>
+        )}
       </div>
 
       {/* 本体 */}
@@ -1634,6 +1658,7 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
 }
 
 function RetrospectSummary({ T, stats, kpt, range }) {
+  const isMobile = useIsMobile()
   const rangeLabel = range === 'week' ? '今週' : range === 'month' ? '今月' : '全期間'
   const total = stats.onTime + stats.overdue
   const completionPct = total > 0 ? Math.round((stats.onTime / total) * 100) : 0
@@ -1661,11 +1686,16 @@ function RetrospectSummary({ T, stats, kpt, range }) {
     <div style={{
       background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
       padding: 14, display: 'grid',
-      gridTemplateColumns: 'minmax(220px, 1fr) minmax(320px, 2fr)',
-      gap: 16,
+      gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(320px, 2fr)',
+      gap: isMobile ? 14 : 16,
     }}>
-      {/* 左: 成果 (タスク統計) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* 左: 成果 (タスク統計) — モバイルは3つの統計を横3列並びに */}
+      <div style={{
+        display: isMobile ? 'grid' : 'flex',
+        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : undefined,
+        flexDirection: isMobile ? undefined : 'column',
+        gap: 10,
+      }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
           📊 {rangeLabel}の成果
         </div>
@@ -1706,6 +1736,7 @@ function RetrospectSummary({ T, stats, kpt, range }) {
 }
 
 function RetrospectDay({ T, day }) {
+  const isMobile = useIsMobile()
   const dt = new Date(day.date + 'T00:00:00Z')
   const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
   const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}(${wd})`
@@ -1740,7 +1771,7 @@ function RetrospectDay({ T, day }) {
       ) : (
         <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {day.kpts.map(kpt => (
-            <div key={kpt.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <div key={kpt.id} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 8 }}>
               <KPTField T={T} color={T.success} label="🟢 Keep"     text={kpt.keep} />
               <KPTField T={T} color={T.warn}    label="🟡 Problem" text={kpt.problem} />
               <KPTField T={T} color={T.info}    label="🔵 Try"     text={kpt.try} />
