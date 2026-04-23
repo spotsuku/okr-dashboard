@@ -126,12 +126,12 @@ function ConfirmDialog({ message, onConfirm, onCancel, T }) {
 }
 
 // ─── タスク作成モーダル ──────────────────────────────────
-function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
+export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaultDueDate = '', defaultNoKaLink = false }) {
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState(myName)
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(defaultDueDate)
   const [reportId, setReportId] = useState('')
-  const [noKaLink, setNoKaLink] = useState(false)
+  const [noKaLink, setNoKaLink] = useState(defaultNoKaLink)
   const [allKAs, setAllKAs] = useState([])
   const [objMap, setObjMap] = useState({})
   const [levels, setLevels] = useState([])
@@ -942,6 +942,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
   const [viewMode, setViewMode] = useState(initialViewMode)
   const [displayMode, setDisplayMode] = useState('list') // 'list' | 'board' | 'gantt'
+  // モバイルは常に list ビューに強制
+  useEffect(() => { if (isMobile && displayMode !== 'list') setDisplayMode('list') }, [isMobile, displayMode])
   const [selectedMember, setSelectedMember] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -1047,8 +1049,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif' }}>
-      {/* 全社モード時のサイドバー */}
-      {viewMode === 'all' && (
+      {/* 全社モード時のサイドバー (モバイル非表示 - マイタスクに限定) */}
+      {viewMode === 'all' && !isMobile && (
         <div style={{
           width: 200, flexShrink: 0, overflowY: 'auto', background: T.sidebarBg,
           borderRight: `1px solid ${T.border}`, padding: '12px 0',
@@ -1095,8 +1097,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: displayMode === 'list' ? 800 : displayMode === 'board' ? 1200 : '100%', margin: '0 auto', padding: isMobile ? '12px' : '24px 24px' }}>
           {/* ヘッダー */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ marginBottom: isMobile ? 14 : 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
               {targetMember?.avatar_url ? (
                 <img src={targetMember.avatar_url} alt={targetName} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${avatarColor(targetName)}60` }} />
               ) : targetName ? (
@@ -1104,31 +1106,42 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                   {targetName.slice(0, 2)}
                 </div>
               ) : null}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 700 }}>
                   {viewMode === 'my' ? 'マイタスク' : selectedMember ? `${selectedMember} のタスク` : '全社タスク'}
                 </div>
-                <div style={{ fontSize: 12, color: T.textMuted }}>
-                  {viewMode === 'my' ? `${myName} さんに割り当てられたタスク` : selectedMember ? `${selectedMember} さんに割り当てられたタスク` : '全メンバーのタスク一覧'}
-                </div>
+                {!isMobile && (
+                  <div style={{ fontSize: 12, color: T.textMuted }}>
+                    {viewMode === 'my' ? `${myName} さんに割り当てられたタスク` : selectedMember ? `${selectedMember} さんに割り当てられたタスク` : '全メンバーのタスク一覧'}
+                  </div>
+                )}
               </div>
               {/* タスク追加 */}
-              <button onClick={() => setShowCreateModal(true)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: '#00d68f', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>＋ タスク追加</button>
-              {/* マイ/全社 切替 */}
-              <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-                <button onClick={() => handleViewModeChange('my')} style={{
-                  padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                  background: viewMode === 'my' ? T.accent : 'transparent',
-                  color: viewMode === 'my' ? '#fff' : T.textMuted,
-                }}>マイタスク</button>
-                <button onClick={() => handleViewModeChange('all')} style={{
-                  padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                  background: viewMode === 'all' ? T.accent : 'transparent',
-                  color: viewMode === 'all' ? '#fff' : T.textMuted,
-                }}>全社タスク</button>
-              </div>
-              {/* リスト/カード/ガント切替 */}
-              <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+              <button onClick={() => setShowCreateModal(true)} style={{
+                padding: isMobile ? '10px 14px' : '6px 14px', borderRadius: 8, border: 'none',
+                background: '#00d68f', color: '#fff',
+                fontSize: isMobile ? 14 : 12, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: 4,
+                minHeight: isMobile ? 44 : 'auto',
+              }}>＋ タスク追加</button>
+              {/* マイ/全社 切替 (モバイルはマイタスクに固定、切替不可) */}
+              {!isMobile && (
+                <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                  <button onClick={() => handleViewModeChange('my')} style={{
+                    padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                    background: viewMode === 'my' ? T.accent : 'transparent',
+                    color: viewMode === 'my' ? '#fff' : T.textMuted,
+                  }}>マイタスク</button>
+                  <button onClick={() => handleViewModeChange('all')} style={{
+                    padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                    background: viewMode === 'all' ? T.accent : 'transparent',
+                    color: viewMode === 'all' ? '#fff' : T.textMuted,
+                  }}>全社タスク</button>
+                </div>
+              )}
+              {/* リスト/カード/ガント切替 (モバイルはリスト固定) */}
+              <div style={{ display: isMobile ? 'none' : 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                 {[
                   { key: 'list',  icon: '📋', label: 'リスト', title: 'リスト: 期限でグルーピング' },
                   { key: 'board', icon: '🗂',  label: 'カード', title: 'カード: ステータス別カンバン' },

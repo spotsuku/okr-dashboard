@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import MyOKRPageNew from './MyOKRPage'
-import MyTasksPage from './MyTasksPage'
+import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
@@ -74,6 +74,21 @@ function parseLogContent(content) {
   if (!content) return {}
   try { return typeof content === 'string' ? JSON.parse(content) : content }
   catch { return { raw: content } }
+}
+
+// ─── Mobile breakpoint hook (LINE風 下メニュー用) ───────────────────────
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth < breakpoint
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [breakpoint])
+  return isMobile
 }
 
 // ─── Avatar ────────────────────────────────────────────────────────────────
@@ -196,15 +211,49 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const isViewingSelf = viewingName === myName
   const viewingMember = useMemo(() => members?.find(m => m.name === viewingName), [members, viewingName])
 
+  // スマホ (LINE風 下メニュー) 対応
+  const isMobile = useIsMobile()
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+
+  // 下メニュー項目 (モバイル時のみ表示)
+  const MOBILE_NAV = [
+    { key: 'dashboard',  icon: '🏠', label: 'ホーム' },
+    { key: 'wbs',        icon: '✅', label: 'タスク' },
+    { key: 'mail',       icon: '📧', label: 'メール' },
+    { key: 'calendar',   icon: '📅', label: 'カレンダー' },
+    { key: 'retrospect', icon: '💭', label: '振り返り' },
+  ]
+  // サイドバードロワー下部の「その他」メニュー
+  const SIDEBAR_OTHER = [
+    { key: 'okr_edit',     icon: '🎯', label: 'OKR記入' },
+    { key: 'okr_view',     icon: '📈', label: 'OKR詳細' },
+    { key: 'integrations', icon: '🔌', label: '連携' },
+  ]
+
   return (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: T.bg, minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: T.bg, minHeight: 0, position: 'relative' }}>
+      {/* スマホ: サイドバーを隠し、ドロワーとして表示 */}
+      {isMobile && mobileSidebarOpen && (
+        <div
+          onClick={() => setMobileSidebarOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40,
+          }}
+        />
+      )}
+
       {/* ─── 左サイドバー：メンバー一覧 ─── */}
       <div style={{
-        width: sidebarCollapsed ? 52 : 220,
+        width: isMobile ? 240 : (sidebarCollapsed ? 52 : 220),
         background: T.bgSidebar,
         borderRight: `1px solid ${T.border}`,
-        display: 'flex', flexDirection: 'column',
+        display: isMobile && !mobileSidebarOpen ? 'none' : 'flex',
+        flexDirection: 'column',
         flexShrink: 0, transition: 'width 0.18s ease',
+        ...(isMobile ? {
+          position: 'fixed', top: 0, bottom: 0, left: 0, zIndex: 50,
+          boxShadow: '4px 0 18px rgba(0,0,0,0.35)',
+        } : {}),
       }}>
         {/* サイドバーヘッダー */}
         <div style={{
@@ -256,7 +305,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               return (
                 <button
                   key={m.id}
-                  onClick={() => setViewingName(m.name)}
+                  onClick={() => { setViewingName(m.name); if (isMobile) setMobileSidebarOpen(false) }}
                   title={m.name}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -273,7 +322,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             return (
               <button
                 key={m.id}
-                onClick={() => setViewingName(m.name)}
+                onClick={() => { setViewingName(m.name); if (isMobile) setMobileSidebarOpen(false) }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   width: '100%', padding: '7px 12px', background: isSelected ? T.navActiveBg : 'transparent',
@@ -303,14 +352,84 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             )
           })}
         </div>
+
+        {/* サイドバー下部: その他メニュー (モバイル時のみ、下メニュー外のタブへアクセス) */}
+        {isMobile && !sidebarCollapsed && (
+          <div style={{
+            borderTop: `1px solid ${T.border}`,
+            padding: '8px 0',
+            background: T.bgSidebar,
+          }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: T.textMuted,
+              letterSpacing: 0.5, padding: '4px 12px', marginBottom: 2,
+            }}>その他</div>
+            {SIDEBAR_OTHER.map(item => {
+              const isActive = activeTab === item.key
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => { setActiveTab(item.key); setMobileSidebarOpen(false) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '10px 14px',
+                    background: isActive ? T.navActiveBg : 'transparent',
+                    border: 'none',
+                    borderLeft: `3px solid ${isActive ? T.accent : 'transparent'}`,
+                    color: isActive ? T.navActiveText : T.text,
+                    fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* ─── メインエリア ─── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {/* サブタブバー */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, paddingBottom: isMobile ? 60 : 0 }}>
+        {/* スマホ: トップバー (ハンバーガー + タブ横スクロール) */}
+        {isMobile && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 10px', borderBottom: `1px solid ${T.border}`,
+            background: T.bgCard, flexShrink: 0,
+          }}>
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              style={{
+                padding: '6px 10px', borderRadius: 7,
+                background: 'transparent', border: `1px solid ${T.border}`,
+                color: T.text, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+              title="メンバー一覧"
+            >☰</button>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 12, color: T.text, flex: 1, overflow: 'hidden',
+            }}>
+              <Avatar member={viewingMember} size={24} />
+              <span style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {viewingName || '(未選択)'}
+              </span>
+              <span style={{
+                fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                background: isViewingSelf ? T.accentBg : T.sectionBg,
+                color: isViewingSelf ? T.accent : T.textMuted, fontWeight: 700,
+              }}>{isViewingSelf ? '編集可' : '閲覧のみ'}</span>
+            </div>
+          </div>
+        )}
+
+        {/* サブタブバー (PCのみ表示。モバイルは下メニュー + サイドバーの「その他」で代替) */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 4,
-          padding: '8px 14px', borderBottom: `1px solid ${T.border}`,
+          display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 4,
+          padding: '8px 14px',
+          borderBottom: `1px solid ${T.border}`,
           background: T.bgCard, flexShrink: 0,
         }}>
           {[
@@ -335,17 +454,19 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             >{t.icon} {t.label}</button>
           ))}
           <div style={{ flex: 1 }} />
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 11, color: T.textMuted, padding: '4px 10px',
-            background: T.sectionBg, borderRadius: 7,
-          }}>
-            <Avatar member={viewingMember} size={20} />
-            <span style={{ fontWeight: 700, color: T.text }}>{viewingName || '(未選択)'}</span>
-            <span style={{ color: isViewingSelf ? T.accent : T.textMuted, fontWeight: 600 }}>
-              {isViewingSelf ? '✏️ 編集可' : '👁 閲覧のみ'}
-            </span>
-          </div>
+          {!isMobile && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 11, color: T.textMuted, padding: '4px 10px',
+              background: T.sectionBg, borderRadius: 7,
+            }}>
+              <Avatar member={viewingMember} size={20} />
+              <span style={{ fontWeight: 700, color: T.text }}>{viewingName || '(未選択)'}</span>
+              <span style={{ color: isViewingSelf ? T.accent : T.textMuted, fontWeight: 600 }}>
+                {isViewingSelf ? '✏️ 編集可' : '👁 閲覧のみ'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* タブコンテンツ */}
@@ -355,12 +476,14 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               T={T} themeKey={themeKey}
               viewingName={viewingName} viewingMember={viewingMember}
               isViewingSelf={isViewingSelf} myName={myName}
+              members={members}
               workLog={workLogs[viewingName]}
               onWorkLogChange={reloadWorkLogs}
               onGoToTab={(key) => setActiveTab(key)}
               onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
               onOpenAIReply={(mail) => setAiReplyMail(mail)}
               mailReadMarks={mailReadMarks}
+              onMarkMailRead={markMailAsRead}
             />
           )}
           {activeTab === 'wbs' && (
@@ -464,13 +587,46 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             T={T}
           />
         )}
+
+        {/* スマホ: 下メニュー (LINE風) */}
+        {isMobile && (
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0,
+            height: 60, background: T.bgCard,
+            borderTop: `1px solid ${T.border}`,
+            display: 'flex', alignItems: 'stretch', justifyContent: 'space-around',
+            zIndex: 30, boxShadow: '0 -4px 18px rgba(0,0,0,0.18)',
+          }}>
+            {MOBILE_NAV.map(item => {
+              const active = activeTab === item.key
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setActiveTab(item.key)}
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: 2,
+                    color: active ? T.accent : T.textMuted,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                    borderTop: `2px solid ${active ? T.accent : 'transparent'}`,
+                  }}
+                >
+                  <div style={{ fontSize: 20 }}>{item.icon}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700 }}>{item.label}</div>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead }) {
+  const isMobile = useIsMobile()
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -479,8 +635,80 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   const greet = jst.getUTCHours() < 11 ? 'おはようございます' : jst.getUTCHours() < 18 ? 'こんにちは' : 'こんばんは'
   const dateStr = `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
 
+  // 平日判定 (0=日 ... 6=土)
+  const jstDay = jst.getUTCDay()
+  const isWeekday = jstDay >= 1 && jstDay <= 5
+
   const [busy, setBusy] = useState(false)
   const [kptOpen, setKptOpen] = useState(false)
+  // 朝の「今日やること」モーダル
+  const [morningOpen, setMorningOpen] = useState(false)
+  // 昨日未終業の log (null=未取得, false=なし, {}=あり)
+  const [pendingYesterdayLog, setPendingYesterdayLog] = useState(null)
+
+  // 昨日未終業の work_log を検出 (自分閲覧 & 平日 & 今日未始業 の時のみ)
+  useEffect(() => {
+    if (!isViewingSelf || !myName || !isWeekday || st !== 'none') {
+      setPendingYesterdayLog(false)
+      return
+    }
+    let alive = true
+    ;(async () => {
+      const boundary = getTodayBoundaryISO()
+      const { data } = await supabase
+        .from('coaching_logs')
+        .select('*')
+        .eq('owner', myName)
+        .eq('log_type', 'work_log')
+        .lt('created_at', boundary)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      if (!alive) return
+      const row = (data || [])[0]
+      if (!row) { setPendingYesterdayLog(false); return }
+      const c = parseLogContent(row.content)
+      if (c.start_at && !c.end_at) {
+        setPendingYesterdayLog(row)
+      } else {
+        setPendingYesterdayLog(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [isViewingSelf, myName, isWeekday, st])
+
+  // 昨日ログ日付文字列
+  const yesterdayDateStr = (() => {
+    if (!pendingYesterdayLog) return ''
+    const yj = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
+    return `${yj.getUTCMonth() + 1}/${yj.getUTCDate()}(${['日','月','火','水','木','金','土'][yj.getUTCDay()]})`
+  })()
+
+  // 昨日ログを強制終業
+  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM }) {
+    if (!pendingYesterdayLog) return
+    setBusy(true)
+    const createdJST = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
+    const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
+    const endUtc = new Date(Date.UTC(
+      createdJST.getUTCFullYear(), createdJST.getUTCMonth(), createdJST.getUTCDate(),
+      hh - 9, mm, 0
+    ))
+    const oldContent = parseLogContent(pendingYesterdayLog.content)
+    const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
+    const { error: e1 } = await supabase.from('coaching_logs')
+      .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.id)
+    if (e1) { setBusy(false); alert('昨日の終業記録に失敗しました: ' + e1.message); return }
+    if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
+      await supabase.from('coaching_logs').insert({
+        owner: myName, log_type: 'kpt',
+        week_start: getMondayJSTStr(new Date(pendingYesterdayLog.created_at)),
+        content: JSON.stringify({ keep, problem, try: tryNote }),
+      })
+    }
+    setBusy(false)
+    setPendingYesterdayLog(false)
+    await onWorkLogChange()
+  }
 
   // ─── リマインダー用データ ──────────────────────────
   const [reminders, setReminders] = useState({
@@ -526,7 +754,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     setReminders({ missingKRs, missingKAs, overdueTasks, todayTasks, tomorrowTasks, loading: false })
   }, [viewingName])
 
-  useEffect(() => { loadReminders() }, [loadReminders])
+  useEffect(() => { loadReminders() }, [loadReminders, workLog?.id])
 
   // ─── Phase 5: 今日/今週やること ─────────────────────
   const [taskBoard, setTaskBoard] = useState({
@@ -567,7 +795,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
     setTaskBoard({ today: todayList, byWeekday, loading: false })
   }, [viewingName])
-  useEffect(() => { loadTasks() }, [loadTasks])
+  // workLog の id が変わる (始業/終業) たびにタスク・リマインダー・成果を再取得
+  useEffect(() => { loadTasks() }, [loadTasks, workLog?.id])
+  // 既存の useEffect は loadTasks 内部で deps 経由で再実行されるので一旦保持
 
   async function toggleTaskDone(task) {
     if (!isViewingSelf) return
@@ -710,9 +940,20 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     items.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     setAchievements({ items, loading: false })
   }, [viewingName])
-  useEffect(() => { loadAchievements() }, [loadAchievements])
+  useEffect(() => { loadAchievements() }, [loadAchievements, workLog?.id])
 
+  // 平日 → 朝のタスク登録モーダルを開く (閉じ不可)
+  // 土日 → 直接 work_log insert
   async function handleStart() {
+    if (busy || !myName) return
+    if (isWeekday) {
+      setMorningOpen(true)
+      return
+    }
+    await doStartWorkLog()
+  }
+
+  async function doStartWorkLog() {
     if (busy || !myName) return
     setBusy(true)
     const { error } = await supabase.from('coaching_logs').insert({
@@ -723,6 +964,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     })
     setBusy(false)
     if (error) { alert('始業の記録に失敗しました: ' + error.message); return }
+    setMorningOpen(false)
     await onWorkLogChange()
   }
 
@@ -754,12 +996,34 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
   // ─── A. 始業ゲーティング: 自分閲覧 & 未始業 → 始業画面のみ表示 ────
   if (isViewingSelf && st === 'none') {
+    // 昨日未終業(平日のみ): まず強制 KPT モーダル
+    const showYesterdayKPT = isWeekday && pendingYesterdayLog && pendingYesterdayLog !== false
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <StartWorkGate
           T={T} viewingMember={viewingMember} viewingName={viewingName}
           greet={greet} dateStr={dateStr} busy={busy} onStart={handleStart}
+          weekday={isWeekday}
         />
+        {showYesterdayKPT && (
+          <KPTModal
+            T={T} busy={busy} force
+            yesterdayDateStr={yesterdayDateStr}
+            startedAt={parseLogContent(pendingYesterdayLog.content).start_at}
+            onSave={forceCloseYesterday}
+            onCancel={() => {}}
+          />
+        )}
+        {morningOpen && !showYesterdayKPT && (
+          <MorningTaskModal
+            T={T}
+            viewingMember={viewingMember}
+            viewingName={viewingName}
+            members={members}
+            busy={busy}
+            onStart={doStartWorkLog}
+          />
+        )}
       </div>
     )
   }
@@ -771,8 +1035,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* 挨拶バー + 始業/終業ボタン + 設定 */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        padding: '10px 16px', background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        padding: isMobile ? '10px 12px' : '10px 16px',
+        background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
         flexShrink: 0, position: 'relative',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -818,13 +1083,20 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
         )}
       </div>
 
-      {/* 3カラム本体 */}
+      {/* 3カラム本体 (スマホは1カラム縦積み) */}
       <div style={{
-        flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
-        gap: 10, padding: 10, minHeight: 0, overflow: 'hidden',
+        flex: 1, display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+        gap: isMobile ? 14 : 10, padding: isMobile ? 14 : 10,
+        paddingBottom: isMobile ? 80 : 10,  /* 下メニュー分 */
+        minHeight: 0,
+        overflow: isMobile ? 'auto' : 'hidden',
       }}>
         {/* ─── 左カラム：今日やること / 今週やること ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
+          minHeight: isMobile ? 'auto' : 0,
+        }}>
           {showW('today') && (
             <Section T={T} icon="⚡" title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
               <button onClick={loadTasks} title="再読み込み" style={{
@@ -848,7 +1120,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
         </div>
 
         {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
+          minHeight: isMobile ? 'auto' : 0,
+          overflowY: isMobile ? 'visible' : 'auto',
+        }}>
           {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
           <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
@@ -910,12 +1186,16 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
           {/* Gmail Box - 返信必要 / 確認必要 5件 */}
           {showW('gmail') && (
-            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} />
+            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} onMarkRead={onMarkMailRead} />
           )}
         </div>
 
         {/* ─── 右カラム：ポップなゴール3種 + コンパクト成果 ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
+          minHeight: isMobile ? 'auto' : 0,
+          overflowY: isMobile ? 'visible' : 'auto',
+        }}>
           {showW('goal_month_main') && (
             <PopGoalCard
               T={T} icon="🌟" title="今月のメインテーマ"
@@ -1005,7 +1285,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 }
 
 // ─── 始業ゲート画面 ────────────────────────────────────────
-function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart }) {
+function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart, weekday = true }) {
   return (
     <div style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1042,10 +1322,163 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
           onMouseEnter={e => !busy && (e.currentTarget.style.transform = 'translateY(-2px)')}
           onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
         >☀️ 始業する</button>
-        <div style={{ marginTop: 20, fontSize: 10, color: T.textFaint }}>
+        {weekday && (
+          <div style={{
+            marginTop: 20, padding: '8px 14px',
+            background: T.accentBg, color: T.accent,
+            borderRadius: 8, fontSize: 11, fontWeight: 600, lineHeight: 1.5,
+          }}>
+            💡 平日は始業時に「今日やること」を最低1件 登録してから始業します
+          </div>
+        )}
+        <div style={{ marginTop: 14, fontSize: 10, color: T.textFaint }}>
           ※ 翌日 04:00 JST に自動的にリセットされます
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── 朝の「今日やること」モーダル (平日・閉じ不可・最低1件必須) ─────────────
+// 既存 TaskCreateModal を呼び出す薄いラッパー。
+// 今日期日&自分アサインのタスクを DB から取得して一覧表示し、1件以上あると始業可能。
+function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart }) {
+  const [todayTasks, setTodayTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [addOpen, setAddOpen] = useState(false)
+  const today = toJSTDateStr(new Date())
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('ka_tasks')
+      .select('id, title, due_date, done')
+      .eq('assignee', viewingName)
+      .eq('due_date', today)
+      .order('id', { ascending: false })
+    setTodayTasks(data || [])
+    setLoading(false)
+  }, [viewingName, today])
+
+  useEffect(() => { reload() }, [reload])
+
+  // タスク0件で開いた時は自動で追加モーダルを前面に
+  useEffect(() => {
+    if (!loading && todayTasks.length === 0 && !addOpen) {
+      setAddOpen(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
+  const canStart = todayTasks.length >= 1
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 9998, padding: 20,
+    }}>
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
+        padding: 22, width: '100%', maxWidth: 560, maxHeight: '90vh',
+        overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <Avatar member={viewingMember} size={42} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>☀️ 今日やること</div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+              {viewingName}さん、朝会でも使えるように今日やることを最低1件 登録してから始業してください
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          padding: '8px 12px', background: T.accentBg, color: T.accent,
+          borderRadius: 6, fontSize: 11, marginBottom: 14, lineHeight: 1.5,
+        }}>
+          💡 タスクWBS と同じ登録機能です。OKR紐付けも可能です。
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>
+          ✅ 本日({today})のタスク
+          <span style={{
+            marginLeft: 8, padding: '1px 8px', borderRadius: 99,
+            background: canStart ? T.successBg : T.warnBg,
+            color: canStart ? T.success : T.warn,
+            fontSize: 10, fontWeight: 700,
+          }}>{todayTasks.length}件</span>
+        </div>
+
+        <div style={{
+          border: `1px solid ${T.border}`, borderRadius: 8,
+          minHeight: 60, maxHeight: 220, overflowY: 'auto',
+          marginBottom: 14, background: T.sectionBg,
+        }}>
+          {loading ? (
+            <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 11 }}>
+              読み込み中...
+            </div>
+          ) : todayTasks.length === 0 ? (
+            <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 12, lineHeight: 1.6 }}>
+              登録されたタスクはありません<br />
+              <span style={{ fontSize: 10 }}>下のボタンからタスクを追加してください</span>
+            </div>
+          ) : (
+            todayTasks.map((t, i) => (
+              <div key={t.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px',
+                borderBottom: i < todayTasks.length - 1 ? `1px solid ${T.border}` : 'none',
+                fontSize: 12, color: T.text,
+              }}>
+                <span style={{ fontSize: 14 }}>✅</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {t.title}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <button
+          onClick={() => setAddOpen(true)}
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 8,
+            background: 'transparent', border: `1px dashed ${T.accent}`,
+            color: T.accent, fontSize: 13, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14,
+          }}
+        >+ タスクを追加</button>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onStart}
+            disabled={busy || !canStart}
+            style={{
+              background: canStart ? 'linear-gradient(135deg, #00d68f 0%, #4d9fff 100%)' : T.border,
+              color: '#fff', border: 'none', borderRadius: 10,
+              padding: '12px 28px', fontSize: 14, fontWeight: 800,
+              cursor: busy || !canStart ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', opacity: busy ? 0.6 : 1,
+              boxShadow: canStart ? '0 4px 14px rgba(0,214,143,0.3)' : 'none',
+            }}
+          >{busy ? '始業中…' : canStart ? '☀️ 始業する' : '⚠️ タスクを追加してください'}</button>
+        </div>
+      </div>
+
+      {/* 既存 TaskCreateModal を期日=本日 + KA未紐付け でプリセット起動 */}
+      {addOpen && (
+        <TaskCreateModal
+          T={T}
+          myName={viewingName}
+          members={members}
+          defaultDueDate={today}
+          defaultNoKaLink={true}
+          onClose={() => setAddOpen(false)}
+          onCreated={() => { setAddOpen(false); reload() }}
+        />
+      )}
     </div>
   )
 }
@@ -1202,15 +1635,18 @@ function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit
 }
 
 // ─── KPT入力モーダル ───────────────────────────────────────────────────────
-function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
+// force=true: 朝の昨日強制KPT用。キャンセル不可 + 終業時刻入力 + 最低1項目必須
+function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterdayDateStr }) {
   const [keep, setKeep] = useState('')
   const [problem, setProblem] = useState('')
   const [tryNote, setTryNote] = useState('')
+  const [endTimeHHMM, setEndTimeHHMM] = useState('18:00')
 
   const now = new Date()
   const jst = new Date(now.getTime() + 9 * 3600 * 1000)
-  const dateStr = `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
-  const worked = startedAt ? (() => {
+  const dateStr = yesterdayDateStr ||
+    `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
+  const worked = !force && startedAt ? (() => {
     const mins = Math.floor((now - new Date(startedAt)) / 60000)
     const h = Math.floor(mins / 60), m = mins % 60
     return `${h}時間${m}分`
@@ -1225,9 +1661,12 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
   const labelStyle = { fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4, display: 'block' }
   const hintStyle = { fontSize: 10, color: T.textMuted, marginTop: 2, marginBottom: 6 }
 
+  const hasAny = (keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()
+  const canSave = force ? hasAny : true  // forceでは最低1項目必須
+
   return (
     <div
-      onClick={onCancel}
+      onClick={force ? undefined : onCancel}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1243,13 +1682,40 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>🌙 今日の振り返り</div>
+          <div style={{ width: '100%' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+              {force ? '⚠️ 昨日の振り返りを入力してください' : '🌙 今日の振り返り'}
+            </div>
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
               {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
             </div>
+            {force && (
+              <div style={{
+                marginTop: 8, padding: '6px 10px',
+                background: T.warnBg, color: T.warn,
+                fontSize: 11, borderRadius: 6, lineHeight: 1.5,
+              }}>
+                昨日の業務が終業されていません。振り返りを入力してから今日を始業できます。
+              </div>
+            )}
           </div>
         </div>
+
+        {force && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>🕐 昨日の終業時刻 (JST)</label>
+            <input
+              type="time"
+              value={endTimeHHMM}
+              onChange={e => setEndTimeHHMM(e.target.value)}
+              style={{
+                padding: '6px 10px', background: T.sectionBg,
+                border: `1px solid ${T.borderMid}`, borderRadius: 6,
+                color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+              }}
+            />
+          </div>
+        )}
 
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>🟢 Keep（良かったこと・続けたいこと）</label>
@@ -1268,25 +1734,28 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          {!force && (
+            <button
+              onClick={onCancel}
+              disabled={busy}
+              style={{
+                background: 'transparent', border: `1px solid ${T.borderMid}`, color: T.textSub,
+                borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >キャンセル</button>
+          )}
           <button
-            onClick={onCancel}
-            disabled={busy}
+            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM })}
+            disabled={busy || !canSave}
             style={{
-              background: 'transparent', border: `1px solid ${T.borderMid}`, color: T.textSub,
-              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >キャンセル</button>
-          <button
-            onClick={() => onSave({ keep, problem, tryNote })}
-            disabled={busy}
-            style={{
-              background: T.info, color: '#fff', border: 'none', borderRadius: 8,
+              background: canSave ? T.info : T.border,
+              color: '#fff', border: 'none', borderRadius: 8,
               padding: '8px 18px', fontSize: 13, fontWeight: 700,
-              cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+              cursor: busy || !canSave ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
               opacity: busy ? 0.6 : 1,
             }}
-          >💾 保存して終業</button>
+          >{force ? '💾 保存して昨日を終業' : '💾 保存して終業'}</button>
         </div>
       </div>
     </div>
@@ -1294,9 +1763,11 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
 }
 
 function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
+  const isMobile = useIsMobile()
   // flex=0 の場合は内容に合わせて自動サイズ (flex-basis:0 の罠を回避)
   // flex>=1 の場合は grow して親の残りスペースを埋める
-  const isAutoSize = flex === 0 || flex === 'none'
+  // モバイルでは常に自動サイズ (外側スクロール + 中身フルハイト)
+  const isAutoSize = isMobile || flex === 0 || flex === 'none'
   const outerStyle = isAutoSize
     ? { flex: '0 0 auto', display: 'flex', flexDirection: 'column',
         background: T.bgCard, border: `1px solid ${T.border}`,
@@ -1305,7 +1776,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
         background: T.bgCard, border: `1px solid ${T.border}`,
         borderRadius: 10, overflow: 'hidden' }
   const innerStyle = isAutoSize
-    ? { padding: '8px 12px' }
+    ? { padding: isMobile ? '10px 14px' : '8px 12px' }
     : { flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }
   return (
     <div style={outerStyle}>
@@ -1326,6 +1797,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
 
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
 function RetrospectTab({ T, viewingName, viewingMember }) {
+  const isMobile = useIsMobile()
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
   const [data, setData] = useState({ days: [], loading: true, taskStats: { onTime: 0, overdue: 0 }, kptSummary: { keep: [], problem: [], try: [] } })
 
@@ -1418,25 +1890,28 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
       {/* ヘッダー */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 16px', background: T.sectionBg,
+        padding: isMobile ? '8px 10px' : '10px 16px', background: T.sectionBg,
         borderBottom: `1px solid ${T.border}`, flexShrink: 0,
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
       }}>
-        <Avatar member={viewingMember} size={28} />
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
+        <Avatar member={viewingMember} size={isMobile ? 24 : 28} />
+        <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text, flex: isMobile ? 1 : 'none', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {viewingName} さんの振り返り
         </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10 }}>
-          {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
-        </div>
-        <div style={{ display: 'flex', gap: 2, background: T.bgCard, padding: 3, borderRadius: 8, border: `1px solid ${T.border}` }}>
+        {!isMobile && <div style={{ flex: 1 }} />}
+        {!isMobile && (
+          <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10 }}>
+            {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 2, background: T.bgCard, padding: 3, borderRadius: 8, border: `1px solid ${T.border}`, flexShrink: 0 }}>
           {[
             { key: 'week',  label: '今週' },
             { key: 'month', label: '今月' },
             { key: 'all',   label: '全期間' },
           ].map(r => (
             <button key={r.key} onClick={() => setRange(r.key)} style={{
-              padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+              padding: isMobile ? '5px 9px' : '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
               background: range === r.key ? T.navActiveBg : 'transparent',
               color: range === r.key ? T.navActiveText : T.textMuted,
               fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
@@ -1447,6 +1922,11 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
           background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
           borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
         }}>↻</button>
+        {isMobile && (
+          <div style={{ fontSize: 10, color: T.textMuted, width: '100%' }}>
+            {totalDays}日 · 合計 {totalHrs}時間{totalMins}分
+          </div>
+        )}
       </div>
 
       {/* 本体 */}
@@ -1476,6 +1956,7 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
 }
 
 function RetrospectSummary({ T, stats, kpt, range }) {
+  const isMobile = useIsMobile()
   const rangeLabel = range === 'week' ? '今週' : range === 'month' ? '今月' : '全期間'
   const total = stats.onTime + stats.overdue
   const completionPct = total > 0 ? Math.round((stats.onTime / total) * 100) : 0
@@ -1503,11 +1984,16 @@ function RetrospectSummary({ T, stats, kpt, range }) {
     <div style={{
       background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
       padding: 14, display: 'grid',
-      gridTemplateColumns: 'minmax(220px, 1fr) minmax(320px, 2fr)',
-      gap: 16,
+      gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(320px, 2fr)',
+      gap: isMobile ? 14 : 16,
     }}>
-      {/* 左: 成果 (タスク統計) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* 左: 成果 (タスク統計) — モバイルは3つの統計を横3列並びに */}
+      <div style={{
+        display: isMobile ? 'grid' : 'flex',
+        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : undefined,
+        flexDirection: isMobile ? undefined : 'column',
+        gap: 10,
+      }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
           📊 {rangeLabel}の成果
         </div>
@@ -1548,6 +2034,7 @@ function RetrospectSummary({ T, stats, kpt, range }) {
 }
 
 function RetrospectDay({ T, day }) {
+  const isMobile = useIsMobile()
   const dt = new Date(day.date + 'T00:00:00Z')
   const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
   const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}(${wd})`
@@ -1582,7 +2069,7 @@ function RetrospectDay({ T, day }) {
       ) : (
         <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {day.kpts.map(kpt => (
-            <div key={kpt.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <div key={kpt.id} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 8 }}>
               <KPTField T={T} color={T.success} label="🟢 Keep"     text={kpt.keep} />
               <KPTField T={T} color={T.warn}    label="🟡 Problem" text={kpt.problem} />
               <KPTField T={T} color={T.info}    label="🔵 Try"     text={kpt.try} />
@@ -1924,7 +2411,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
 }
 
 // ─── GmailBox: ダッシュボードの重要メール 5件 ────────────────────────────
-function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks }) {
+function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkRead }) {
   const [rawItems, setRawItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2013,12 +2500,21 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks }) {
                   {m.snippet}
                 </div>
               </div>
-              <button onClick={() => onOpenAIReply?.(m)} style={{
-                padding: '4px 10px', borderRadius: 6,
-                background: T.accent, color: '#fff', border: 'none',
-                fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                whiteSpace: 'nowrap',
-              }}>✨ AI返信</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                <button onClick={() => onMarkRead?.(m.id)} style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: T.successBg, color: T.success,
+                  border: `1px solid ${T.success}40`,
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  whiteSpace: 'nowrap',
+                }}>✓ 既読</button>
+                <button onClick={() => onOpenAIReply?.(m)} style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: T.accent, color: '#fff', border: 'none',
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  whiteSpace: 'nowrap',
+                }}>✨ AI返信</button>
+              </div>
             </div>
           ))}
         </div>
@@ -2069,18 +2565,22 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
     (m.category === 'cc_me' || m.category === 'other') && !isDone(m)
   )
 
-  // 返信・既読済み: 通知系以外で、返信済み or 既読な全て
+  // 返信・既読済み: 通知/招待系以外で、返信済み or 既読な全て
   //   並び順: 返信済み → 既読のみ (情報量が多い順)
-  const donePool = allItems.filter(m => m.category !== 'notification' && isDone(m))
+  const donePool = allItems.filter(m => m.category !== 'notification' && m.category !== 'invite' && isDone(m))
   const doneReplied = donePool.filter(m => m.replied)
   const doneReadOnly = donePool.filter(m => !m.replied && marks.has(m.id))
   const doneItems = [...doneReplied, ...doneReadOnly]
 
   const notifyItems = allItems.filter(m => m.category === 'notification')
 
+  // カレンダー招待 (未読のみ)
+  const inviteItems = allItems.filter(m => m.category === 'invite' && !isDone(m))
+
   const CATS = [
     { key: 'to_me',        label: '📮 返信必要',      color: '#ff6b6b', items: toMeItems },
     { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems },
+    { key: 'invite',       label: '📅 カレンダー招待',  color: '#4d9fff', items: inviteItems },
     { key: 'done',         label: '✅ 返信・既読済み',  color: '#00d68f', items: doneItems },
     { key: 'notification', label: '📢 通知・キャンペーン', color: '#8aa0b8', items: notifyItems },
   ]

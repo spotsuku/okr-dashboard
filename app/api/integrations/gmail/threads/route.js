@@ -1,9 +1,10 @@
 // Gmail: To/Cc に自分が含まれる重要メールを取得
-// GET /api/integrations/gmail/threads?owner=<name>&limit=5&category=<important|notification|all>
+// GET /api/integrations/gmail/threads?owner=<name>&limit=5&category=<important|notification|invite|all>
 //
 // category:
-//   important    - To または Cc に自分 + 通知系でない (デフォルト)
+//   important    - To または Cc に自分 + 通知/招待でない (デフォルト)
 //   notification - 通知・キャンペーン系
+//   invite       - カレンダー招待 (Google Calendar からの招待/更新/辞退/キャンセル)
 //   all          - 全て (分類フラグ付き)
 
 export const dynamic = 'force-dynamic'
@@ -25,14 +26,34 @@ function isNotificationMail(headers, from) {
   return false
 }
 
+// カレンダー招待判定 (件名/from から推定)
+// 例: "招待: 会議", "招待 - 更新: MTG", "更新: 〇〇招待", "辞退: ...", "Invitation: ...",
+//     "Updated invitation: ...", "Canceled event: ...", "Declined: ..."
+function isCalendarInvite(headers, subject, from) {
+  if (!subject) return false
+  const s = subject.trim()
+  // 日本語パターン
+  if (/^招待/.test(s)) return true                   // "招待:", "招待 -", "招待 更新:"
+  if (/^更新.*招待/.test(s)) return true              // "更新: ...招待"
+  if (/^更新された招待/.test(s)) return true
+  if (/^(辞退|キャンセル|取り消し)\s*[:：]/.test(s)) return true
+  // 英語パターン
+  if (/^(Invitation|Updated invitation|Canceled event|Declined|Accepted|Tentative)\s*[:：]/i.test(s)) return true
+  // Google Calendar 通知系 from (補助判定)
+  if (/calendar-notification@google\.com/i.test(from)) return true
+  return false
+}
+
 // カテゴリ分類
 function classify(message, myEmail) {
   const headers = message.payload?.headers || []
   const from = getHeader(headers, 'from')
+  const subject = getHeader(headers, 'subject')
   const to = getHeader(headers, 'to').toLowerCase()
   const cc = getHeader(headers, 'cc').toLowerCase()
   const me = (myEmail || '').toLowerCase()
 
+  if (isCalendarInvite(headers, subject, from)) return 'invite'
   if (isNotificationMail(headers, from)) return 'notification'
   if (me && to.includes(me)) return 'to_me'          // 返信必要
   if (me && cc.includes(me)) return 'cc_me'          // 確認必要
@@ -198,10 +219,12 @@ export async function GET(request) {
     // カテゴリフィルタリング
     let result_ = filtered
     if (category === 'important') {
-      // To/Cc に自分 + 通知以外
+      // To/Cc に自分 + 通知/招待以外 (classify で invite/notification は既に除外済みだが明示)
       result_ = filtered.filter(it => it.category === 'to_me' || it.category === 'cc_me')
     } else if (category === 'notification') {
       result_ = filtered.filter(it => it.category === 'notification')
+    } else if (category === 'invite') {
+      result_ = filtered.filter(it => it.category === 'invite')
     }
     // category==='all' なら全て返す
 
