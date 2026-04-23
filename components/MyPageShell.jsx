@@ -137,6 +137,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [viewingName, setViewingName] = useState(myName)
   useEffect(() => { if (myName && !viewingName) setViewingName(myName) }, [myName, viewingName])
 
+  // 全社サマリーモード (個別メンバーの代わりに全社の今日タスクを集約表示)
+  const [summaryMode, setSummaryMode] = useState(false)
+
   const [activeTab, setActiveTab] = useState('dashboard')
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
@@ -297,17 +300,75 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 
         {/* メンバー一覧（内部スクロール） */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+          {/* ▼ 全社サマリー (メンバー一覧の上) */}
+          {!sidebarCollapsed && (
+            <button
+              onClick={() => { setSummaryMode(true); if (isMobile) setMobileSidebarOpen(false) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '9px 12px',
+                background: summaryMode ? T.navActiveBg : 'transparent',
+                border: 'none',
+                borderLeft: `3px solid ${summaryMode ? T.accent : 'transparent'}`,
+                borderBottom: `1px solid ${T.border}`,
+                cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+              }}
+            >
+              <div style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: summaryMode ? T.accent : T.sectionBg,
+                color: summaryMode ? '#fff' : T.textSub,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 700,
+              }}>📊</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 12, fontWeight: 700,
+                  color: summaryMode ? T.navActiveText : T.text,
+                }}>
+                  全社サマリー
+                </div>
+                <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
+                  みんなの今日のタスク
+                </div>
+              </div>
+            </button>
+          )}
+          {sidebarCollapsed && (
+            <button
+              onClick={() => { setSummaryMode(true); if (isMobile) setMobileSidebarOpen(false) }}
+              title="全社サマリー"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '100%', padding: '9px 0',
+                background: summaryMode ? T.navActiveBg : 'transparent',
+                border: 'none',
+                borderLeft: `3px solid ${summaryMode ? T.accent : 'transparent'}`,
+                borderBottom: `1px solid ${T.border}`,
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: summaryMode ? T.accent : T.sectionBg,
+                color: summaryMode ? '#fff' : T.textSub,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14,
+              }}>📊</div>
+            </button>
+          )}
+
           {filteredMembers.map(m => {
             const log = workLogs[m.name]
             const st = statusOf(log)
             const content = parseLogContent(log?.content)
-            const isSelected = m.name === viewingName
+            const isSelected = !summaryMode && m.name === viewingName
             const isMe = m.name === myName
             if (sidebarCollapsed) {
               return (
                 <button
                   key={m.id}
-                  onClick={() => { setViewingName(m.name); if (isMobile) setMobileSidebarOpen(false) }}
+                  onClick={() => { setViewingName(m.name); setSummaryMode(false); if (isMobile) setMobileSidebarOpen(false) }}
                   title={m.name}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -324,7 +385,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             return (
               <button
                 key={m.id}
-                onClick={() => { setViewingName(m.name); if (isMobile) setMobileSidebarOpen(false) }}
+                onClick={() => { setViewingName(m.name); setSummaryMode(false); if (isMobile) setMobileSidebarOpen(false) }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   width: '100%', padding: '7px 12px', background: isSelected ? T.navActiveBg : 'transparent',
@@ -371,7 +432,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               return (
                 <button
                   key={item.key}
-                  onClick={() => { setActiveTab(item.key); setMobileSidebarOpen(false) }}
+                  onClick={() => { setActiveTab(item.key); setSummaryMode(false); setMobileSidebarOpen(false) }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     width: '100%', padding: '10px 14px',
@@ -447,7 +508,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           ].map(t => (
             <button
               key={t.key}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => { setActiveTab(t.key); setSummaryMode(false) }}
               style={{
                 padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
                 background: activeTab === t.key ? T.navActiveBg : 'transparent',
@@ -474,7 +535,10 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 
         {/* タブコンテンツ */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0 }}>
-          {activeTab === 'dashboard' && (
+          {summaryMode ? (
+            <CompanySummaryTab T={T} members={members} />
+          ) : null}
+          {!summaryMode && activeTab === 'dashboard' && (
             <DashboardTab
               T={T} themeKey={themeKey}
               viewingName={viewingName} viewingMember={viewingMember}
@@ -489,7 +553,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onMarkMailRead={markMailAsRead}
             />
           )}
-          {activeTab === 'wbs' && (
+          {!summaryMode && activeTab === 'wbs' && (
             <MyTasksPage
               user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
               members={members}
@@ -498,7 +562,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onViewModeChange={() => {}}
             />
           )}
-          {activeTab === 'okr_edit' && (
+          {!summaryMode && activeTab === 'okr_edit' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               {/* 記入モード / 一覧モード トグル */}
               <div style={{
@@ -535,7 +599,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               </div>
             </div>
           )}
-          {activeTab === 'okr_view' && (
+          {!summaryMode && activeTab === 'okr_view' && (
             <div style={{ flex: 1, overflowY: 'auto' }}>
               <OwnerOKRView
                 ownerName={viewingName}
@@ -545,7 +609,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               />
             </div>
           )}
-          {activeTab === 'mail' && (
+          {!summaryMode && activeTab === 'mail' && (
             <MailTab
               T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
               onGoToTab={(key) => setActiveTab(key)}
@@ -555,16 +619,16 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onUnmarkRead={unmarkMail}
             />
           )}
-          {activeTab === 'calendar' && (
+          {!summaryMode && activeTab === 'calendar' && (
             <CalendarTab T={T} myName={myName} members={members} viewingName={viewingName} />
           )}
-          {activeTab === 'drive' && (
+          {!summaryMode && activeTab === 'drive' && (
             <DriveTab T={T} myName={myName} viewingName={viewingName} />
           )}
-          {activeTab === 'retrospect' && (
+          {!summaryMode && activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
           )}
-          {activeTab === 'integrations' && (
+          {!summaryMode && activeTab === 'integrations' && (
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
           )}
         </div>
@@ -608,7 +672,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               return (
                 <button
                   key={item.key}
-                  onClick={() => setActiveTab(item.key)}
+                  onClick={() => { setActiveTab(item.key); setSummaryMode(false) }}
                   style={{
                     flex: 1, background: 'transparent', border: 'none',
                     display: 'flex', flexDirection: 'column',
@@ -1764,6 +1828,197 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
           >{force ? '💾 保存して昨日を終業' : '💾 保存して終業'}</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── 全社サマリー: 全員の今日のタスクと達成率を可視化 ──────────────────
+function CompanySummaryTab({ T, members }) {
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const today = toJSTDateStr(new Date())
+  const todayLabel = (() => {
+    const j = new Date(Date.now() + 9 * 3600 * 1000)
+    return `${j.getUTCMonth() + 1}/${j.getUTCDate()}(${['日','月','火','水','木','金','土'][j.getUTCDay()]})`
+  })()
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('')
+    const { data, error: e } = await supabase
+      .from('ka_tasks')
+      .select('id, title, assignee, due_date, done, status')
+      .eq('due_date', today)
+      .order('assignee')
+      .order('id', { ascending: false })
+    if (e) { setError(e.message); setTasks([]); setLoading(false); return }
+    setTasks(data || [])
+    setLoading(false)
+  }, [today])
+
+  useEffect(() => { load() }, [load])
+
+  // メンバー別に集計
+  const byMember = useMemo(() => {
+    const map = new Map()
+    for (const m of (members || [])) map.set(m.name, { member: m, tasks: [] })
+    for (const t of tasks) {
+      if (!t.assignee) continue
+      if (!map.has(t.assignee)) map.set(t.assignee, { member: { name: t.assignee }, tasks: [] })
+      map.get(t.assignee).tasks.push(t)
+    }
+    // タスクがあるメンバーだけ抽出 + sort_order 順
+    const arr = Array.from(map.values()).filter(x => x.tasks.length > 0)
+    arr.sort((a, b) => (a.member.sort_order ?? 999) - (b.member.sort_order ?? 999) || (a.member.name || '').localeCompare(b.member.name || ''))
+    return arr
+  }, [tasks, members])
+
+  // 全体集計
+  const totalTasks = tasks.length
+  const totalDone = tasks.filter(t => t.done || t.status === 'done').length
+  const overallPct = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '20px 16px' }}>
+        {/* ヘッダ */}
+        <div style={{
+          display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16, flexWrap: 'wrap',
+        }}>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: 0 }}>📊 全社サマリー</h2>
+          <div style={{ fontSize: 12, color: T.textMuted }}>{todayLabel} 時点</div>
+          <div style={{ flex: 1 }} />
+          <button onClick={load} disabled={loading} style={{
+            padding: '6px 12px', borderRadius: 7,
+            background: 'transparent', border: `1px solid ${T.border}`,
+            color: T.textSub, fontSize: 11, fontWeight: 700,
+            cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
+          }}>{loading ? '更新中…' : '🔄 再取得'}</button>
+        </div>
+
+        {/* 全体統計バー */}
+        <div style={{
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
+          padding: 18, marginBottom: 18,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 4 }}>
+                本日の全社達成率
+              </div>
+              <div style={{
+                height: 14, background: T.sectionBg, borderRadius: 99, overflow: 'hidden',
+                border: `1px solid ${T.border}`, position: 'relative',
+              }}>
+                <div style={{
+                  height: '100%', width: `${overallPct}%`,
+                  background: overallPct >= 80 ? '#00d68f' : overallPct >= 50 ? '#4d9fff' : '#ffd166',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 14 }}>
+              <Stat T={T} label="達成率" value={`${overallPct}%`} color={overallPct >= 80 ? '#00d68f' : overallPct >= 50 ? '#4d9fff' : '#ffd166'} />
+              <Stat T={T} label="完了" value={totalDone} color={T.success} />
+              <Stat T={T} label="残り" value={totalTasks - totalDone} color={T.warn} />
+              <Stat T={T} label="合計" value={totalTasks} color={T.textSub} />
+            </div>
+          </div>
+        </div>
+
+        {/* メンバー別 */}
+        {loading ? (
+          <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+            読み込み中...
+          </div>
+        ) : error ? (
+          <div style={{ padding: 14, color: T.danger, fontSize: 12, background: T.dangerBg, borderRadius: 8 }}>
+            ⚠️ {error}
+          </div>
+        ) : byMember.length === 0 ? (
+          <div style={{
+            padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12,
+            background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 12,
+          }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
+            まだ本日のタスクが登録されていません<br />
+            <span style={{ fontSize: 10 }}>各メンバーが始業時にタスクを登録すると、ここに集約されます</span>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {byMember.map(({ member, tasks: ts }) => {
+              const done = ts.filter(t => t.done || t.status === 'done').length
+              const pct = ts.length > 0 ? Math.round((done / ts.length) * 100) : 0
+              const color = pct >= 80 ? '#00d68f' : pct >= 50 ? '#4d9fff' : pct > 0 ? '#ffd166' : '#ff6b6b'
+              return (
+                <div key={member.name} style={{
+                  background: T.bgCard, border: `1px solid ${T.border}`,
+                  borderLeft: `4px solid ${color}`,
+                  borderRadius: 10, padding: 12,
+                }}>
+                  {/* メンバーヘッダ */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <Avatar member={member} size={32} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{member.name}</div>
+                      <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
+                        {member.role || ''}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '4px 10px', borderRadius: 99,
+                      background: `${color}22`, color, fontWeight: 800, fontSize: 14,
+                    }}>{pct}%</div>
+                  </div>
+
+                  {/* 達成率バー */}
+                  <div style={{
+                    height: 6, background: T.sectionBg, borderRadius: 99, overflow: 'hidden',
+                    marginBottom: 10,
+                  }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: color }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 8 }}>
+                    完了 {done} / 全 {ts.length} 件
+                  </div>
+
+                  {/* タスク一覧 */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {ts.map(t => {
+                      const isDone = t.done || t.status === 'done'
+                      return (
+                        <div key={t.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '5px 8px',
+                          background: isDone ? T.successBg : T.sectionBg,
+                          borderRadius: 6, fontSize: 11,
+                          color: isDone ? T.textMuted : T.text,
+                          textDecoration: isDone ? 'line-through' : 'none',
+                        }}>
+                          <span>{isDone ? '✅' : '⬜'}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.title || '(無題)'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Stat({ T, label, value, color }) {
+  return (
+    <div style={{ textAlign: 'center', minWidth: 50 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 10, color: T.textMuted, marginTop: 4, fontWeight: 600 }}>{label}</div>
     </div>
   )
 }
