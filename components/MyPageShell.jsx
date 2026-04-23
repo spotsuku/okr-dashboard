@@ -622,6 +622,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               viewingName={viewingName} viewingMember={viewingMember}
               isViewingSelf={isViewingSelf} myName={myName}
               members={members}
+              fiscalYear={fiscalYear}
               workLog={workLogs[viewingName]}
               onWorkLogChange={reloadWorkLogs}
               onGoToTab={(key) => setActiveTab(key)}
@@ -783,7 +784,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
   const isMobile = useIsMobile()
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
