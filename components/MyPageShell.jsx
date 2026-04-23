@@ -565,6 +565,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               themeKey={themeKey}
               initialViewMode="my"
               onViewModeChange={() => {}}
+              fiscalYear={fiscalYear}
             />
           )}
           {!summaryMode && activeTab === 'okr_edit' && (
@@ -1106,6 +1107,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             members={members}
             busy={busy}
             onStart={doStartWorkLog}
+            fiscalYear={fiscalYear}
           />
         )}
       </div>
@@ -1426,7 +1428,7 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
 // ─── 朝の「今日やること」モーダル (平日・閉じ不可・最低1件必須) ─────────────
 // 既存 TaskCreateModal を呼び出す薄いラッパー。
 // 今日期日&自分アサインのタスクを DB から取得して一覧表示し、1件以上あると始業可能。
-function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart }) {
+function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart, fiscalYear = '2026' }) {
   const [todayTasks, setTodayTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -1559,6 +1561,7 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
           members={members}
           defaultDueDate={today}
           defaultNoKaLink={true}
+          fiscalYear={fiscalYear}
           onClose={() => setAddOpen(false)}
           onCreated={() => { setAddOpen(false); reload() }}
         />
