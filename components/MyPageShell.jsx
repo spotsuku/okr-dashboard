@@ -977,14 +977,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     if (busy || !myName) return
     setBusy(true)
     // 1. タスクを ka_tasks に insert (today 期限)
+    // ka_key / report_id は任意カラム (OKR紐付け用) なので省略。
+    // 存在しない or スキーマキャッシュ不整合で 400 になるのを回避。
     const today = toJSTDateStr(new Date())
     const payload = tasks.map(title => ({
       title: title.trim(),
       assignee: myName,
       due_date: today,
       done: false,
-      report_id: null,
-      ka_key: null,
     }))
     if (payload.length > 0) {
       const { error: eTasks } = await supabase.from('ka_tasks').insert(payload)
