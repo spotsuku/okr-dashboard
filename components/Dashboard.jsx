@@ -480,19 +480,34 @@ function KASection({ krId }) {
 
   const addKA = async () => {
     if (!newTitle.trim()) return
-    const { data } = await supabase.from('key_actions')
+    const { data, error } = await supabase.from('key_actions')
       .insert({ key_result_id: krId, title: newTitle.trim(), type: newType, week_start: weekStart })
       .select().single()
+    if (error) {
+      console.error('KA追加エラー:', error)
+      alert('KAの追加に失敗しました: ' + (error.message || JSON.stringify(error)))
+      return
+    }
     if (data) { setKAs(p => [...p, data]); setNewTitle(''); setAdding(false) }
   }
 
   const deleteKA = async (id) => {
-    await supabase.from('key_actions').delete().eq('id', id)
+    const { error } = await supabase.from('key_actions').delete().eq('id', id)
+    if (error) {
+      console.error('KA削除エラー:', error)
+      alert('KAの削除に失敗しました: ' + (error.message || JSON.stringify(error)))
+      return
+    }
     setKAs(p => p.filter(k => k.id !== id))
   }
 
   const updateType = async (id, type) => {
-    await supabase.from('key_actions').update({ type }).eq('id', id)
+    const { error } = await supabase.from('key_actions').update({ type }).eq('id', id)
+    if (error) {
+      console.error('KA更新エラー:', error)
+      alert('KAの更新に失敗しました: ' + (error.message || JSON.stringify(error)))
+      return
+    }
     setKAs(p => p.map(k => k.id === id ? { ...k, type } : k))
   }
 
