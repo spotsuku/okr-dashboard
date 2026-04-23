@@ -17,6 +17,12 @@ function escapeQuery(q) {
 }
 
 export async function GET(request) {
+  try { return await handleGet(request) } catch (e) {
+    return json({ error: `drive/search 内部エラー: ${e?.message || e}` }, { status: 500 })
+  }
+}
+
+async function handleGet(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
   const query = (url.searchParams.get('q') || '').trim()

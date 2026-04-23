@@ -24,7 +24,13 @@ function exportMimeFor(mimeType) {
   }
 }
 
-export async function GET(request, { params }) {
+export async function GET(request, ctx) {
+  try { return await handleGet(request, ctx) } catch (e) {
+    return json({ error: `drive/file 内部エラー: ${e?.message || e}` }, { status: 500 })
+  }
+}
+
+async function handleGet(request, { params }) {
   const fileId = params.id
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')

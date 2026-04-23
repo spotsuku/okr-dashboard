@@ -129,6 +129,12 @@ async function doRead(integration, fileId) {
 }
 
 export async function POST(request) {
+  try { return await handlePost(request) } catch (e) {
+    return json({ error: `drive/ai 内部エラー: ${e?.message || e}` }, { status: 500 })
+  }
+}
+
+async function handlePost(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
   const { owner, message, history = [] } = body || {}

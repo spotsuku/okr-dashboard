@@ -12,6 +12,18 @@ function getDriveId() {
 }
 
 export async function GET(request) {
+  try {
+    return await handleGet(request)
+  } catch (e) {
+    // 予期しない例外も JSON で返す (Next.js の 500 HTML を避けて診断しやすくする)
+    return json({
+      error: `drive/list 内部エラー: ${e?.message || e}`,
+      stack: (e?.stack || '').split('\n').slice(0, 3).join(' | '),
+    }, { status: 500 })
+  }
+}
+
+async function handleGet(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
   if (!owner) return json({ error: 'owner が必要です' }, { status: 400 })
@@ -23,7 +35,7 @@ export async function GET(request) {
 
   const res = await getIntegration(owner, 'google')
   if (res.error || !res.integration) return json({ error: res.error || '未連携' }, { status: 400 })
-  if (res.expired) return json({ error: 'トークン期限切れ', needsReauth: true }, { status: 401 })
+  if (res.expired) return json({ error: res.refreshError || 'トークン期限切れ。再連携してください', needsReauth: true }, { status: 401 })
   const integration = res.integration
 
   // フォルダ直下のファイル/サブフォルダ一覧
