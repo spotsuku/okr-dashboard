@@ -1060,12 +1060,18 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     createWeek(nextMon)
   }, [reports.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // reload() は並列実行されうる (連続 KA 追加など)。古い SELECT 結果が後から来て
+  // 新しい結果を上書きする race を防ぐため、reload ごとに ID を振って「最新のみ適用」する
+  const reloadIdRef = useRef(0)
   const reload = async () => {
+    const thisId = ++reloadIdRef.current
     let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id')
     if (error) {
       const res = await supabase.from('weekly_reports').select('*').order('id')
       data = res.data
     }
+    // このリクエスト中に後続の reload が始まっていたら、古い結果は捨てる
+    if (thisId !== reloadIdRef.current) return
     setReports(data||[])
   }
 
