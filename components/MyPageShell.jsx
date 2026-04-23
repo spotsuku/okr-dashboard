@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import MyOKRPageNew from './MyOKRPage'
-import MyTasksPage from './MyTasksPage'
+import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
@@ -476,6 +476,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               T={T} themeKey={themeKey}
               viewingName={viewingName} viewingMember={viewingMember}
               isViewingSelf={isViewingSelf} myName={myName}
+              members={members}
               workLog={workLogs[viewingName]}
               onWorkLogChange={reloadWorkLogs}
               onGoToTab={(key) => setActiveTab(key)}
@@ -624,7 +625,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead }) {
   const isMobile = useIsMobile()
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
@@ -634,8 +635,80 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   const greet = jst.getUTCHours() < 11 ? 'おはようございます' : jst.getUTCHours() < 18 ? 'こんにちは' : 'こんばんは'
   const dateStr = `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
 
+  // 平日判定 (0=日 ... 6=土)
+  const jstDay = jst.getUTCDay()
+  const isWeekday = jstDay >= 1 && jstDay <= 5
+
   const [busy, setBusy] = useState(false)
   const [kptOpen, setKptOpen] = useState(false)
+  // 朝の「今日やること」モーダル
+  const [morningOpen, setMorningOpen] = useState(false)
+  // 昨日未終業の log (null=未取得, false=なし, {}=あり)
+  const [pendingYesterdayLog, setPendingYesterdayLog] = useState(null)
+
+  // 昨日未終業の work_log を検出 (自分閲覧 & 平日 & 今日未始業 の時のみ)
+  useEffect(() => {
+    if (!isViewingSelf || !myName || !isWeekday || st !== 'none') {
+      setPendingYesterdayLog(false)
+      return
+    }
+    let alive = true
+    ;(async () => {
+      const boundary = getTodayBoundaryISO()
+      const { data } = await supabase
+        .from('coaching_logs')
+        .select('*')
+        .eq('owner', myName)
+        .eq('log_type', 'work_log')
+        .lt('created_at', boundary)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      if (!alive) return
+      const row = (data || [])[0]
+      if (!row) { setPendingYesterdayLog(false); return }
+      const c = parseLogContent(row.content)
+      if (c.start_at && !c.end_at) {
+        setPendingYesterdayLog(row)
+      } else {
+        setPendingYesterdayLog(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [isViewingSelf, myName, isWeekday, st])
+
+  // 昨日ログ日付文字列
+  const yesterdayDateStr = (() => {
+    if (!pendingYesterdayLog) return ''
+    const yj = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
+    return `${yj.getUTCMonth() + 1}/${yj.getUTCDate()}(${['日','月','火','水','木','金','土'][yj.getUTCDay()]})`
+  })()
+
+  // 昨日ログを強制終業
+  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM }) {
+    if (!pendingYesterdayLog) return
+    setBusy(true)
+    const createdJST = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
+    const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
+    const endUtc = new Date(Date.UTC(
+      createdJST.getUTCFullYear(), createdJST.getUTCMonth(), createdJST.getUTCDate(),
+      hh - 9, mm, 0
+    ))
+    const oldContent = parseLogContent(pendingYesterdayLog.content)
+    const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
+    const { error: e1 } = await supabase.from('coaching_logs')
+      .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.id)
+    if (e1) { setBusy(false); alert('昨日の終業記録に失敗しました: ' + e1.message); return }
+    if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
+      await supabase.from('coaching_logs').insert({
+        owner: myName, log_type: 'kpt',
+        week_start: getMondayJSTStr(new Date(pendingYesterdayLog.created_at)),
+        content: JSON.stringify({ keep, problem, try: tryNote }),
+      })
+    }
+    setBusy(false)
+    setPendingYesterdayLog(false)
+    await onWorkLogChange()
+  }
 
   // ─── リマインダー用データ ──────────────────────────
   const [reminders, setReminders] = useState({
@@ -867,7 +940,18 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
   }, [viewingName])
   useEffect(() => { loadAchievements() }, [loadAchievements])
 
+  // 平日 → 朝のタスク登録モーダルを開く (閉じ不可)
+  // 土日 → 直接 work_log insert
   async function handleStart() {
+    if (busy || !myName) return
+    if (isWeekday) {
+      setMorningOpen(true)
+      return
+    }
+    await doStartWorkLog()
+  }
+
+  async function doStartWorkLog() {
     if (busy || !myName) return
     setBusy(true)
     const { error } = await supabase.from('coaching_logs').insert({
@@ -878,6 +962,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     })
     setBusy(false)
     if (error) { alert('始業の記録に失敗しました: ' + error.message); return }
+    setMorningOpen(false)
     await onWorkLogChange()
   }
 
@@ -909,12 +994,34 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 
   // ─── A. 始業ゲーティング: 自分閲覧 & 未始業 → 始業画面のみ表示 ────
   if (isViewingSelf && st === 'none') {
+    // 昨日未終業(平日のみ): まず強制 KPT モーダル
+    const showYesterdayKPT = isWeekday && pendingYesterdayLog && pendingYesterdayLog !== false
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <StartWorkGate
           T={T} viewingMember={viewingMember} viewingName={viewingName}
           greet={greet} dateStr={dateStr} busy={busy} onStart={handleStart}
+          weekday={isWeekday}
         />
+        {showYesterdayKPT && (
+          <KPTModal
+            T={T} busy={busy} force
+            yesterdayDateStr={yesterdayDateStr}
+            startedAt={parseLogContent(pendingYesterdayLog.content).start_at}
+            onSave={forceCloseYesterday}
+            onCancel={() => {}}
+          />
+        )}
+        {morningOpen && !showYesterdayKPT && (
+          <MorningTaskModal
+            T={T}
+            viewingMember={viewingMember}
+            viewingName={viewingName}
+            members={members}
+            busy={busy}
+            onStart={doStartWorkLog}
+          />
+        )}
       </div>
     )
   }
@@ -1176,7 +1283,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
 }
 
 // ─── 始業ゲート画面 ────────────────────────────────────────
-function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart }) {
+function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart, weekday = true }) {
   return (
     <div style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1213,10 +1320,163 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
           onMouseEnter={e => !busy && (e.currentTarget.style.transform = 'translateY(-2px)')}
           onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
         >☀️ 始業する</button>
-        <div style={{ marginTop: 20, fontSize: 10, color: T.textFaint }}>
+        {weekday && (
+          <div style={{
+            marginTop: 20, padding: '8px 14px',
+            background: T.accentBg, color: T.accent,
+            borderRadius: 8, fontSize: 11, fontWeight: 600, lineHeight: 1.5,
+          }}>
+            💡 平日は始業時に「今日やること」を最低1件 登録してから始業します
+          </div>
+        )}
+        <div style={{ marginTop: 14, fontSize: 10, color: T.textFaint }}>
           ※ 翌日 04:00 JST に自動的にリセットされます
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── 朝の「今日やること」モーダル (平日・閉じ不可・最低1件必須) ─────────────
+// 既存 TaskCreateModal を呼び出す薄いラッパー。
+// 今日期日&自分アサインのタスクを DB から取得して一覧表示し、1件以上あると始業可能。
+function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart }) {
+  const [todayTasks, setTodayTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [addOpen, setAddOpen] = useState(false)
+  const today = toJSTDateStr(new Date())
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('ka_tasks')
+      .select('id, title, due_date, done')
+      .eq('assignee', viewingName)
+      .eq('due_date', today)
+      .order('id', { ascending: false })
+    setTodayTasks(data || [])
+    setLoading(false)
+  }, [viewingName, today])
+
+  useEffect(() => { reload() }, [reload])
+
+  // タスク0件で開いた時は自動で追加モーダルを前面に
+  useEffect(() => {
+    if (!loading && todayTasks.length === 0 && !addOpen) {
+      setAddOpen(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
+  const canStart = todayTasks.length >= 1
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 9998, padding: 20,
+    }}>
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
+        padding: 22, width: '100%', maxWidth: 560, maxHeight: '90vh',
+        overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <Avatar member={viewingMember} size={42} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>☀️ 今日やること</div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+              {viewingName}さん、朝会でも使えるように今日やることを最低1件 登録してから始業してください
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          padding: '8px 12px', background: T.accentBg, color: T.accent,
+          borderRadius: 6, fontSize: 11, marginBottom: 14, lineHeight: 1.5,
+        }}>
+          💡 タスクWBS と同じ登録機能です。OKR紐付けも可能です。
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>
+          ✅ 本日({today})のタスク
+          <span style={{
+            marginLeft: 8, padding: '1px 8px', borderRadius: 99,
+            background: canStart ? T.successBg : T.warnBg,
+            color: canStart ? T.success : T.warn,
+            fontSize: 10, fontWeight: 700,
+          }}>{todayTasks.length}件</span>
+        </div>
+
+        <div style={{
+          border: `1px solid ${T.border}`, borderRadius: 8,
+          minHeight: 60, maxHeight: 220, overflowY: 'auto',
+          marginBottom: 14, background: T.sectionBg,
+        }}>
+          {loading ? (
+            <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 11 }}>
+              読み込み中...
+            </div>
+          ) : todayTasks.length === 0 ? (
+            <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 12, lineHeight: 1.6 }}>
+              登録されたタスクはありません<br />
+              <span style={{ fontSize: 10 }}>下のボタンからタスクを追加してください</span>
+            </div>
+          ) : (
+            todayTasks.map((t, i) => (
+              <div key={t.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px',
+                borderBottom: i < todayTasks.length - 1 ? `1px solid ${T.border}` : 'none',
+                fontSize: 12, color: T.text,
+              }}>
+                <span style={{ fontSize: 14 }}>✅</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {t.title}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <button
+          onClick={() => setAddOpen(true)}
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 8,
+            background: 'transparent', border: `1px dashed ${T.accent}`,
+            color: T.accent, fontSize: 13, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14,
+          }}
+        >+ タスクを追加</button>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onStart}
+            disabled={busy || !canStart}
+            style={{
+              background: canStart ? 'linear-gradient(135deg, #00d68f 0%, #4d9fff 100%)' : T.border,
+              color: '#fff', border: 'none', borderRadius: 10,
+              padding: '12px 28px', fontSize: 14, fontWeight: 800,
+              cursor: busy || !canStart ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', opacity: busy ? 0.6 : 1,
+              boxShadow: canStart ? '0 4px 14px rgba(0,214,143,0.3)' : 'none',
+            }}
+          >{busy ? '始業中…' : canStart ? '☀️ 始業する' : '⚠️ タスクを追加してください'}</button>
+        </div>
+      </div>
+
+      {/* 既存 TaskCreateModal を期日=本日 + KA未紐付け でプリセット起動 */}
+      {addOpen && (
+        <TaskCreateModal
+          T={T}
+          myName={viewingName}
+          members={members}
+          defaultDueDate={today}
+          defaultNoKaLink={true}
+          onClose={() => setAddOpen(false)}
+          onCreated={() => { setAddOpen(false); reload() }}
+        />
+      )}
     </div>
   )
 }
@@ -1373,15 +1633,18 @@ function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit
 }
 
 // ─── KPT入力モーダル ───────────────────────────────────────────────────────
-function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
+// force=true: 朝の昨日強制KPT用。キャンセル不可 + 終業時刻入力 + 最低1項目必須
+function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterdayDateStr }) {
   const [keep, setKeep] = useState('')
   const [problem, setProblem] = useState('')
   const [tryNote, setTryNote] = useState('')
+  const [endTimeHHMM, setEndTimeHHMM] = useState('18:00')
 
   const now = new Date()
   const jst = new Date(now.getTime() + 9 * 3600 * 1000)
-  const dateStr = `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
-  const worked = startedAt ? (() => {
+  const dateStr = yesterdayDateStr ||
+    `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
+  const worked = !force && startedAt ? (() => {
     const mins = Math.floor((now - new Date(startedAt)) / 60000)
     const h = Math.floor(mins / 60), m = mins % 60
     return `${h}時間${m}分`
@@ -1396,9 +1659,12 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
   const labelStyle = { fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4, display: 'block' }
   const hintStyle = { fontSize: 10, color: T.textMuted, marginTop: 2, marginBottom: 6 }
 
+  const hasAny = (keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()
+  const canSave = force ? hasAny : true  // forceでは最低1項目必須
+
   return (
     <div
-      onClick={onCancel}
+      onClick={force ? undefined : onCancel}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1414,13 +1680,40 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>🌙 今日の振り返り</div>
+          <div style={{ width: '100%' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+              {force ? '⚠️ 昨日の振り返りを入力してください' : '🌙 今日の振り返り'}
+            </div>
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
               {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
             </div>
+            {force && (
+              <div style={{
+                marginTop: 8, padding: '6px 10px',
+                background: T.warnBg, color: T.warn,
+                fontSize: 11, borderRadius: 6, lineHeight: 1.5,
+              }}>
+                昨日の業務が終業されていません。振り返りを入力してから今日を始業できます。
+              </div>
+            )}
           </div>
         </div>
+
+        {force && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>🕐 昨日の終業時刻 (JST)</label>
+            <input
+              type="time"
+              value={endTimeHHMM}
+              onChange={e => setEndTimeHHMM(e.target.value)}
+              style={{
+                padding: '6px 10px', background: T.sectionBg,
+                border: `1px solid ${T.borderMid}`, borderRadius: 6,
+                color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+              }}
+            />
+          </div>
+        )}
 
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>🟢 Keep（良かったこと・続けたいこと）</label>
@@ -1439,25 +1732,28 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt }) {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          {!force && (
+            <button
+              onClick={onCancel}
+              disabled={busy}
+              style={{
+                background: 'transparent', border: `1px solid ${T.borderMid}`, color: T.textSub,
+                borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >キャンセル</button>
+          )}
           <button
-            onClick={onCancel}
-            disabled={busy}
+            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM })}
+            disabled={busy || !canSave}
             style={{
-              background: 'transparent', border: `1px solid ${T.borderMid}`, color: T.textSub,
-              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >キャンセル</button>
-          <button
-            onClick={() => onSave({ keep, problem, tryNote })}
-            disabled={busy}
-            style={{
-              background: T.info, color: '#fff', border: 'none', borderRadius: 8,
+              background: canSave ? T.info : T.border,
+              color: '#fff', border: 'none', borderRadius: 8,
               padding: '8px 18px', fontSize: 13, fontWeight: 700,
-              cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+              cursor: busy || !canSave ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
               opacity: busy ? 0.6 : 1,
             }}
-          >💾 保存して終業</button>
+          >{force ? '💾 保存して昨日を終業' : '💾 保存して終業'}</button>
         </div>
       </div>
     </div>
