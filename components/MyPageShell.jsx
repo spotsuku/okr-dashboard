@@ -143,6 +143,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // OKR プルダウンメニュー (サブタブバー - PC のみ使用)
+  const [okrMenuOpen, setOkrMenuOpen] = useState(false)
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
@@ -501,15 +503,12 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
         }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
-            { key: 'wbs',          icon: '📅', label: 'タスクWBS'     },
+            { key: 'wbs',          icon: '📅', label: 'タスク'         },
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
             { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
-            { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
-            { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
-            { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
             <button
               key={t.key}
@@ -522,6 +521,62 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               }}
             >{t.icon} {t.label}</button>
           ))}
+
+          {/* OKR プルダウン (記入 / 詳細 を集約) */}
+          {(() => {
+            const okrActive = activeTab === 'okr_edit' || activeTab === 'okr_view'
+            return (
+              <div style={{ position: 'relative' }}
+                onMouseLeave={() => setOkrMenuOpen(false)}>
+                <button
+                  onClick={() => setOkrMenuOpen(o => !o)}
+                  onMouseEnter={() => setOkrMenuOpen(true)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    background: okrActive ? T.navActiveBg : 'transparent',
+                    color: okrActive ? T.navActiveText : T.textSub,
+                    fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}
+                >🎯 OKR <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span></button>
+                {okrMenuOpen && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 100,
+                    background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.25)', padding: 4, minWidth: 140,
+                  }}>
+                    {[
+                      { key: 'okr_edit', icon: '🎯', label: 'OKR記入' },
+                      { key: 'okr_view', icon: '📈', label: 'OKR詳細' },
+                    ].map(t => (
+                      <button
+                        key={t.key}
+                        onClick={() => { setActiveTab(t.key); setSummaryMode(false); setOkrMenuOpen(false) }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                          background: activeTab === t.key ? T.navActiveBg : 'transparent',
+                          color: activeTab === t.key ? T.navActiveText : T.textSub,
+                          fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                        }}
+                      >{t.icon} {t.label}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* 連携はプルダウンの後ろに配置 */}
+          <button
+            onClick={() => { setActiveTab('integrations'); setSummaryMode(false) }}
+            style={{
+              padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+              background: activeTab === 'integrations' ? T.navActiveBg : 'transparent',
+              color: activeTab === 'integrations' ? T.navActiveText : T.textSub,
+              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+            }}
+          >🔌 連携</button>
           <div style={{ flex: 1 }} />
           {!isMobile && (
             <div style={{
@@ -1483,7 +1538,7 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
           padding: '8px 12px', background: T.accentBg, color: T.accent,
           borderRadius: 6, fontSize: 11, marginBottom: 14, lineHeight: 1.5,
         }}>
-          💡 タスクWBS と同じ登録機能です。OKR紐付けも可能です。
+          💡 タスクタブと同じ登録機能です。OKR紐付けも可能です。
         </div>
 
         <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>
