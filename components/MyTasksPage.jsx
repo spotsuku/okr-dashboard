@@ -126,12 +126,12 @@ function ConfirmDialog({ message, onConfirm, onCancel, T }) {
 }
 
 // ─── タスク作成モーダル ──────────────────────────────────
-export function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
+export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaultDueDate = '', defaultNoKaLink = false }) {
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState(myName)
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(defaultDueDate)
   const [reportId, setReportId] = useState('')
-  const [noKaLink, setNoKaLink] = useState(false)
+  const [noKaLink, setNoKaLink] = useState(defaultNoKaLink)
   const [allKAs, setAllKAs] = useState([])
   const [objMap, setObjMap] = useState({})
   const [levels, setLevels] = useState([])
