@@ -11,6 +11,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.compose',
+  // drive.readonly: ネオ福岡 共有ドライブの検索・本文取得に必要
+  'https://www.googleapis.com/auth/drive.readonly',
 ].join(' ')
 
 function getOrigin(request) {

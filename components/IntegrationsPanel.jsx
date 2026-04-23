@@ -8,6 +8,7 @@ const REQUIRED_SCOPES = [
   { url: 'https://www.googleapis.com/auth/calendar.readonly', label: 'Calendar 読み取り'    },
   { url: 'https://www.googleapis.com/auth/gmail.readonly',    label: 'Gmail 読み取り'       },
   { url: 'https://www.googleapis.com/auth/gmail.compose',     label: 'Gmail 下書き作成'      },
+  { url: 'https://www.googleapis.com/auth/drive.readonly',    label: 'Drive 読み取り'        },
 ]
 
 function formatRelative(iso) {

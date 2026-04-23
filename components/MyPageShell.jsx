@@ -7,6 +7,7 @@ import OwnerOKRView from './OwnerOKRView'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
 import CalendarTab from './CalendarTab'
+import DriveTab from './DriveTab'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -141,7 +142,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const t = new URL(window.location.href).searchParams.get('tab')
-    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'retrospect', 'integrations'].includes(t)) {
+    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'drive', 'retrospect', 'integrations'].includes(t)) {
       setActiveTab(t)
     }
   }, [])
@@ -225,6 +226,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   ]
   // サイドバードロワー下部の「その他」メニュー
   const SIDEBAR_OTHER = [
+    { key: 'drive',        icon: '📁', label: 'ドライブ' },
     { key: 'okr_edit',     icon: '🎯', label: 'OKR記入' },
     { key: 'okr_view',     icon: '📈', label: 'OKR詳細' },
     { key: 'integrations', icon: '🔌', label: '連携' },
@@ -435,11 +437,12 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
             { key: 'wbs',          icon: '📅', label: 'タスクWBS'     },
-            { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
-            { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
+            { key: 'drive',        icon: '📁', label: 'ドライブ'       },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
+            { key: 'okr_edit',     icon: '🎯', label: 'OKR記入'       },
+            { key: 'okr_view',     icon: '📈', label: 'OKR詳細'       },
             { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => (
             <button
@@ -554,6 +557,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'calendar' && (
             <CalendarTab T={T} myName={myName} members={members} viewingName={viewingName} />
+          )}
+          {activeTab === 'drive' && (
+            <DriveTab T={T} myName={myName} viewingName={viewingName} />
           )}
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
