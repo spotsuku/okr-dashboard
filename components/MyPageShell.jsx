@@ -754,7 +754,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     setReminders({ missingKRs, missingKAs, overdueTasks, todayTasks, tomorrowTasks, loading: false })
   }, [viewingName])
 
-  useEffect(() => { loadReminders() }, [loadReminders])
+  useEffect(() => { loadReminders() }, [loadReminders, workLog?.id])
 
   // ─── Phase 5: 今日/今週やること ─────────────────────
   const [taskBoard, setTaskBoard] = useState({
@@ -795,7 +795,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
 
     setTaskBoard({ today: todayList, byWeekday, loading: false })
   }, [viewingName])
-  useEffect(() => { loadTasks() }, [loadTasks])
+  // workLog の id が変わる (始業/終業) たびにタスク・リマインダー・成果を再取得
+  useEffect(() => { loadTasks() }, [loadTasks, workLog?.id])
+  // 既存の useEffect は loadTasks 内部で deps 経由で再実行されるので一旦保持
 
   async function toggleTaskDone(task) {
     if (!isViewingSelf) return
@@ -938,7 +940,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     items.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     setAchievements({ items, loading: false })
   }, [viewingName])
-  useEffect(() => { loadAchievements() }, [loadAchievements])
+  useEffect(() => { loadAchievements() }, [loadAchievements, workLog?.id])
 
   // 平日 → 朝のタスク登録モーダルを開く (閉じ不可)
   // 土日 → 直接 work_log insert
