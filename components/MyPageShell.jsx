@@ -1749,16 +1749,12 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
         </div>
       </div>
 
-      {/* 既存 TaskCreateModal をそのまま呼び出し。
-          朝の簡易タスク向けに 期日=本日 + KA未紐付け をプリセット。
-          (KAに紐付けたい場合はチェックを外せば従来通り KA選択可能) */}
+      {/* 既存 TaskCreateModal をそのまま呼び出し (OKR紐付け有り) */}
       {addOpen && (
         <TaskCreateModal
           T={T}
           myName={viewingName}
           members={members}
-          defaultDueDate={today}
-          defaultNoKaLink={true}
           onClose={() => setAddOpen(false)}
           onCreated={() => { setAddOpen(false); reload() }}
         />
