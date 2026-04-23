@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 const MODEL = 'claude-sonnet-4-5'
-const MAX_STEPS = 6
+const MAX_STEPS = 8
 const MAX_READ_CHARS = 20000  // AI に渡す最大本文文字数 (tokens 節約)
 
 function getDriveId() { return process.env.NEO_FUKUOKA_DRIVE_ID || '' }
@@ -172,6 +172,7 @@ async function handlePost(request) {
   const actions = []
   const suggestedFiles = new Map()  // id → file (重複排除)
   let finalText = ''
+  let lastInterimText = ''  // ループ中の interim text (step 上限到達時のフォールバックで使用)
 
   async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
     let lastStatus = 0, lastRaw = ''
@@ -217,6 +218,7 @@ async function handlePost(request) {
 
     const toolUses = (data.content || []).filter(b => b.type === 'tool_use')
     const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim()
+    if (textBlocks) lastInterimText = textBlocks
 
     if (data.stop_reason === 'end_turn' || toolUses.length === 0) {
       finalText = textBlocks
@@ -253,8 +255,24 @@ async function handlePost(request) {
     messages.push({ role: 'user', content: toolResults })
   }
 
+  // step 上限到達などで finalText が空の場合、ツール無しで最終回答を強制取得する
+  if (!finalText) {
+    const forced = await callAnthropicWithRetry({
+      model: MODEL,
+      max_tokens: 2048,
+      system: systemPrompt + `\n\n【重要】ツール呼び出しの上限 (${MAX_STEPS} 回) に達しました。これまでの検索結果とツール結果を元に、ユーザーへの最終回答を日本語で簡潔に返してください。追加のツール呼び出しはせず、テキストのみで回答してください。候補ファイルが複数ある場合は上位 1-3 件を提示し、判断材料が不足していれば質問の絞り込みを促してください。`,
+      messages, // tools を渡さないので AI はテキストしか返せない
+    })
+    if (forced.ok) {
+      const text = (forced.data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim()
+      if (text) finalText = text
+    }
+    // それでもダメなら直前の interim text を使う (少なくとも「検索します」等は出る)
+    if (!finalText && lastInterimText) finalText = lastInterimText
+  }
+
   return json({
-    text: finalText || '(応答なし)',
+    text: finalText || '(応答なし - ツール実行ステップ上限に達しました。質問を絞り込んで再度お試しください)',
     actions,
     suggested_files: Array.from(suggestedFiles.values()),
   })
