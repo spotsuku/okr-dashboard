@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import MyOKRPageNew from './MyOKRPage'
-import MyTasksPage from './MyTasksPage'
+import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
 import OwnerOKRView from './OwnerOKRView'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
@@ -476,6 +476,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               T={T} themeKey={themeKey}
               viewingName={viewingName} viewingMember={viewingMember}
               isViewingSelf={isViewingSelf} myName={myName}
+              members={members}
               workLog={workLogs[viewingName]}
               onWorkLogChange={reloadWorkLogs}
               onGoToTab={(key) => setActiveTab(key)}
@@ -624,7 +625,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead }) {
   const isMobile = useIsMobile()
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
@@ -972,37 +973,12 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
     return 'ok'
   }
 
-  // 朝のタスク登録 → 始業 (モーダルから呼ばれる)
-  async function handleMorningSubmit({ tasks, theme }) {
-    if (busy || !myName) return
-    setBusy(true)
-    // 1. タスクを ka_tasks に insert (today 期限)
-    // ka_key / report_id は任意カラム (OKR紐付け用) なので省略。
-    // 存在しない or スキーマキャッシュ不整合で 400 になるのを回避。
-    const today = toJSTDateStr(new Date())
-    const payload = tasks.map(title => ({
-      title: title.trim(),
-      assignee: myName,
-      due_date: today,
-      done: false,
-    }))
-    if (payload.length > 0) {
-      const { error: eTasks } = await supabase.from('ka_tasks').insert(payload)
-      if (eTasks) { setBusy(false); alert('タスク登録に失敗しました: ' + eTasks.message); return }
-    }
-    // 2. テーマ (任意) を含めた work_log を insert
-    const startContent = { start_at: new Date().toISOString() }
-    if (theme) startContent.morning_theme = theme
-    const { error: eLog } = await supabase.from('coaching_logs').insert({
-      owner: myName,
-      log_type: 'work_log',
-      week_start: getMondayJSTStr(),
-      content: JSON.stringify(startContent),
-    })
-    setBusy(false)
-    if (eLog) { alert('始業記録に失敗しました: ' + eLog.message); return }
-    setMorningTaskOpen(false)
-    await onWorkLogChange()
+  // 朝のタスク登録モーダルから「始業する」が押された時:
+  // タスクは既に TaskCreateModal 経由で ka_tasks に insert 済みなので、
+  // ここでは work_log を作成するだけ。
+  async function handleMorningStart() {
+    const result = await doStartWorkLog()
+    if (result === 'ok') setMorningTaskOpen(false)
   }
 
   async function handleEnd({ keep, problem, tryNote }) {
@@ -1054,7 +1030,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, wo
         {morningTaskOpen && (
           <MorningTaskModal
             T={T} viewingMember={viewingMember} viewingName={viewingName}
-            busy={busy} onSubmit={handleMorningSubmit}
+            members={members}
+            busy={busy} onStart={handleMorningStart}
           />
         )}
       </div>
@@ -1639,29 +1616,45 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
   )
 }
 
-// ─── 朝の「今日やること」入力モーダル (非閉じ可、最低1件必須) ──────────────
-function MorningTaskModal({ T, viewingMember, viewingName, busy, onSubmit }) {
-  const [tasks, setTasks] = useState([''])
-  const [theme, setTheme] = useState('')
-  const updateTask = (i, v) => setTasks(prev => prev.map((t, idx) => idx === i ? v : t))
-  const addRow = () => setTasks(prev => [...prev, ''])
-  const removeRow = (i) => setTasks(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev)
+// ─── 朝の「今日やること」モーダル ──────────────────────────────────────
+// 既存 TaskCreateModal (MyTasksPage) をそのまま利用してタスクを作成。
+// 今日の期限で作成されたタスクを一覧表示し、最低1件あると始業ボタンが有効化。
+function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart }) {
+  const [todayTasks, setTodayTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [addOpen, setAddOpen] = useState(false)
 
-  const validTasks = tasks.map(t => t.trim()).filter(Boolean)
-  const canSubmit = validTasks.length >= 1
+  const today = toJSTDateStr(new Date())
 
-  const fieldStyle = {
-    width: '100%', padding: '8px 10px', fontSize: 13,
-    background: T.sectionBg, border: `1px solid ${T.borderMid}`,
-    borderRadius: 6, color: T.text, fontFamily: 'inherit',
-    outline: 'none', boxSizing: 'border-box',
-  }
+  const reload = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('ka_tasks')
+      .select('id, title, due_date, done')
+      .eq('assignee', viewingName)
+      .eq('due_date', today)
+      .order('id', { ascending: false })
+    setTodayTasks(data || [])
+    setLoading(false)
+  }, [viewingName, today])
+
+  useEffect(() => { reload() }, [reload])
+
+  // 初回開く時、今日のタスクがゼロなら自動で追加モーダルを開く
+  useEffect(() => {
+    if (!loading && todayTasks.length === 0 && !addOpen) {
+      setAddOpen(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
+  const canStart = todayTasks.length >= 1
 
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 9999, padding: 20,
+      zIndex: 9998, padding: 20,
     }}>
       <div style={{
         background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
@@ -1673,7 +1666,7 @@ function MorningTaskModal({ T, viewingMember, viewingName, busy, onSubmit }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>☀️ 今日やること</div>
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-              {viewingName}さん、朝会でも使えるように今日やることを入力してから始業してください
+              {viewingName}さん、朝会でも使えるように今日やることを最低1件 登録してから始業してください
             </div>
           </div>
         </div>
@@ -1682,76 +1675,90 @@ function MorningTaskModal({ T, viewingMember, viewingName, busy, onSubmit }) {
           padding: '8px 12px', background: T.accentBg, color: T.accent,
           borderRadius: 6, fontSize: 11, marginBottom: 14, lineHeight: 1.5,
         }}>
-          💡 入力したタスクは「タスクWBS」に本日の期限で登録されます。朝会で全員のダッシュボードを順に見ながら進行できます。
+          💡 既存のタスク登録機能をそのまま使います。OKR紐付けも可能です。登録したタスクは「タスクWBS」にも反映されます。
         </div>
 
+        {/* 今日のタスク一覧 */}
         <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>
-          ✅ 今日のタスク <span style={{ color: T.danger }}>*</span>
-          <span style={{ fontWeight: 400, fontSize: 10, color: T.textMuted, marginLeft: 6 }}>
-            (最低1件)
-          </span>
+          ✅ 今日({today})登録済みのタスク
+          <span style={{
+            marginLeft: 8, padding: '1px 8px', borderRadius: 99,
+            background: canStart ? T.successBg : T.warnBg,
+            color: canStart ? T.success : T.warn,
+            fontSize: 10, fontWeight: 700,
+          }}>{todayTasks.length}件</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-          {tasks.map((t, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: T.textMuted, width: 18 }}>{i + 1}.</span>
-              <input
-                value={t}
-                onChange={e => updateTask(i, e.target.value)}
-                placeholder={i === 0 ? '例: やずや提案書を午前中に仕上げる' : 'タスクを入力'}
-                style={fieldStyle}
-                autoFocus={i === 0}
-              />
-              {tasks.length > 1 && (
-                <button
-                  onClick={() => removeRow(i)}
-                  style={{
-                    padding: '6px 10px', borderRadius: 6,
-                    background: 'transparent', border: `1px solid ${T.border}`,
-                    color: T.textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >×</button>
-              )}
+
+        <div style={{
+          border: `1px solid ${T.border}`, borderRadius: 8,
+          minHeight: 60, maxHeight: 220, overflowY: 'auto',
+          marginBottom: 14, background: T.sectionBg,
+        }}>
+          {loading ? (
+            <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 11 }}>
+              読み込み中...
             </div>
-          ))}
-          <button
-            onClick={addRow}
-            style={{
-              alignSelf: 'flex-start', padding: '4px 10px', borderRadius: 6,
-              background: 'transparent', border: `1px dashed ${T.border}`,
-              color: T.textSub, fontSize: 11, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >+ タスクを追加</button>
+          ) : todayTasks.length === 0 ? (
+            <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 12, lineHeight: 1.6 }}>
+              登録されたタスクはありません<br />
+              <span style={{ fontSize: 10 }}>下のボタンからタスクを追加してください</span>
+            </div>
+          ) : (
+            todayTasks.map((t, i) => (
+              <div key={t.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px',
+                borderBottom: i < todayTasks.length - 1 ? `1px solid ${T.border}` : 'none',
+                fontSize: 12, color: T.text,
+              }}>
+                <span style={{ fontSize: 14 }}>✅</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {t.title}
+                </span>
+              </div>
+            ))
+          )}
         </div>
 
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6, display: 'block' }}>
-            🎯 今日のメインテーマ <span style={{ fontWeight: 400, fontSize: 10, color: T.textMuted }}>(任意)</span>
-          </label>
-          <input
-            value={theme}
-            onChange={e => setTheme(e.target.value)}
-            placeholder="例: 大型案件の提案準備に集中"
-            style={fieldStyle}
-          />
-        </div>
+        {/* タスク追加ボタン */}
+        <button
+          onClick={() => setAddOpen(true)}
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 8,
+            background: 'transparent', border: `1px dashed ${T.accent}`,
+            color: T.accent, fontSize: 13, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit',
+            marginBottom: 14,
+          }}
+        >+ タスクを追加</button>
 
+        {/* 始業ボタン */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
-            onClick={() => onSubmit({ tasks: validTasks, theme: theme.trim() })}
-            disabled={busy || !canSubmit}
+            onClick={onStart}
+            disabled={busy || !canStart}
             style={{
-              background: canSubmit ? 'linear-gradient(135deg, #00d68f 0%, #4d9fff 100%)' : T.border,
+              background: canStart ? 'linear-gradient(135deg, #00d68f 0%, #4d9fff 100%)' : T.border,
               color: '#fff', border: 'none', borderRadius: 10,
               padding: '12px 28px', fontSize: 14, fontWeight: 800,
-              cursor: busy || !canSubmit ? 'not-allowed' : 'pointer',
+              cursor: busy || !canStart ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit', opacity: busy ? 0.6 : 1,
-              boxShadow: canSubmit ? '0 4px 14px rgba(0,214,143,0.3)' : 'none',
+              boxShadow: canStart ? '0 4px 14px rgba(0,214,143,0.3)' : 'none',
             }}
-          >{busy ? '保存中…' : '☀️ タスク登録して始業する'}</button>
+          >{busy ? '始業中…' : canStart ? '☀️ 始業する' : '⚠️ タスクを追加してください'}</button>
         </div>
       </div>
+
+      {/* 既存 TaskCreateModal をそのまま呼び出し (OKR紐付け有り) */}
+      {addOpen && (
+        <TaskCreateModal
+          T={T}
+          myName={viewingName}
+          members={members}
+          onClose={() => setAddOpen(false)}
+          onCreated={() => { setAddOpen(false); reload() }}
+        />
+      )}
     </div>
   )
 }

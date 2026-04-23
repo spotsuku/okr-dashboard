@@ -126,7 +126,7 @@ function ConfirmDialog({ message, onConfirm, onCancel, T }) {
 }
 
 // ─── タスク作成モーダル ──────────────────────────────────
-function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
+export function TaskCreateModal({ onClose, onCreated, members, myName, T }) {
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState(myName)
   const [dueDate, setDueDate] = useState('')
