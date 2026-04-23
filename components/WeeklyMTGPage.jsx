@@ -716,7 +716,9 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       alert('KAをDBには書き込めましたが、読み戻しに失敗しています。Supabase の RLS (SELECT USING) 設定を確認してください。')
       return
     }
-    onAddKA()
+    // 追加した行を直接親に渡してローカル state に反映する (reload() のページング上限で
+    // 新 KA が欠落するケースに備える)
+    onAddKA(firstRes.data)
   }
 
   const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
@@ -1029,11 +1031,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   useEffect(() => {
     setLoading(true)
-    supabase.from('weekly_reports').select('*').order('sort_order').order('id')
+    // PostgREST のデフォルト上限 (1000) を超える本番データ量を想定し range() で拡張
+    supabase.from('weekly_reports').select('*').order('sort_order').order('id').range(0, 9999)
       .then(({data, error}) => {
         if (error) {
           console.warn('sort_order order failed, falling back:', error.message)
-          return supabase.from('weekly_reports').select('*').order('id')
+          return supabase.from('weekly_reports').select('*').order('id').range(0, 9999)
         }
         return { data, error: null }
       })
@@ -1065,9 +1068,10 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const reloadIdRef = useRef(0)
   const reload = async () => {
     const thisId = ++reloadIdRef.current
-    let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id')
+    // PostgREST の 1000 行上限を超えるデータでも全件取得する
+    let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id').range(0, 9999)
     if (error) {
-      const res = await supabase.from('weekly_reports').select('*').order('id')
+      const res = await supabase.from('weekly_reports').select('*').order('id').range(0, 9999)
       data = res.data
     }
     // このリクエスト中に後続の reload が始まっていたら、古い結果は捨てる
@@ -1592,7 +1596,15 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   key={kr.id}
                   kr={kr}
                   reports={weekReports}
-                  onAddKA={reload}
+                  onAddKA={(newRow) => {
+                    // 直接 state に追加 (reload のページング上限で落ちない)
+                    // realtime も同じ行を配信するが id でdedup 済
+                    if (newRow && newRow.id) {
+                      setReports(prev => prev.some(r => r.id === newRow.id) ? prev : [...prev, newRow])
+                    } else {
+                      reload()
+                    }
+                  }}
                   onSaveKA={handleSave}
                   onDeleteKA={handleDelete}
                   members={members}
