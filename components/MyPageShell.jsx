@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
@@ -143,8 +143,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
-  // OKR プルダウンメニュー (サブタブバー - PC のみ使用)
+  // マイOKR プルダウンメニュー (サブタブバー - PC のみ使用)
   const [okrMenuOpen, setOkrMenuOpen] = useState(false)
+  const okrCloseTimerRef = useRef(null)
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
@@ -522,15 +523,25 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             >{t.icon} {t.label}</button>
           ))}
 
-          {/* OKR プルダウン (記入 / 詳細 を集約) */}
+          {/* マイOKR プルダウン (記入 / 詳細 を集約)
+             マウスがボタン↔メニュー間を移動する際に閉じないよう、
+             close は小さな遅延 (120ms) をかけ、enter で cancel する */}
           {(() => {
             const okrActive = activeTab === 'okr_edit' || activeTab === 'okr_view'
+            const openMenu = () => {
+              if (okrCloseTimerRef.current) { clearTimeout(okrCloseTimerRef.current); okrCloseTimerRef.current = null }
+              setOkrMenuOpen(true)
+            }
+            const scheduleClose = () => {
+              if (okrCloseTimerRef.current) clearTimeout(okrCloseTimerRef.current)
+              okrCloseTimerRef.current = setTimeout(() => setOkrMenuOpen(false), 120)
+            }
             return (
-              <div style={{ position: 'relative' }}
-                onMouseLeave={() => setOkrMenuOpen(false)}>
+              <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setOkrMenuOpen(o => !o)}
-                  onMouseEnter={() => setOkrMenuOpen(true)}
+                  onMouseEnter={openMenu}
+                  onMouseLeave={scheduleClose}
                   style={{
                     padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
                     background: okrActive ? T.navActiveBg : 'transparent',
@@ -538,29 +549,36 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                     fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                   }}
-                >🎯 OKR <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span></button>
+                >🎯 マイOKR <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span></button>
                 {okrMenuOpen && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 100,
-                    background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.25)', padding: 4, minWidth: 140,
-                  }}>
-                    {[
-                      { key: 'okr_edit', icon: '🎯', label: 'OKR記入' },
-                      { key: 'okr_view', icon: '📈', label: 'OKR詳細' },
-                    ].map(t => (
-                      <button
-                        key={t.key}
-                        onClick={() => { setActiveTab(t.key); setSummaryMode(false); setOkrMenuOpen(false) }}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                          background: activeTab === t.key ? T.navActiveBg : 'transparent',
-                          color: activeTab === t.key ? T.navActiveText : T.textSub,
-                          fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                        }}
-                      >{t.icon} {t.label}</button>
-                    ))}
+                  <div
+                    onMouseEnter={openMenu}
+                    onMouseLeave={scheduleClose}
+                    style={{
+                      position: 'absolute', top: '100%', left: 0, paddingTop: 4, zIndex: 100,
+                      minWidth: 140,
+                    }}>
+                    <div style={{
+                      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.25)', padding: 4,
+                    }}>
+                      {[
+                        { key: 'okr_edit', icon: '🎯', label: 'OKR記入' },
+                        { key: 'okr_view', icon: '📈', label: 'OKR詳細' },
+                      ].map(t => (
+                        <button
+                          key={t.key}
+                          onClick={() => { setActiveTab(t.key); setSummaryMode(false); setOkrMenuOpen(false) }}
+                          style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                            background: activeTab === t.key ? T.navActiveBg : 'transparent',
+                            color: activeTab === t.key ? T.navActiveText : T.textSub,
+                            fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                          }}
+                        >{t.icon} {t.label}</button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
