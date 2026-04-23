@@ -692,12 +692,29 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
       kr_id:kr.id, kr_title:kr.title, ka_title:'新しいKA', status:'normal',
       sort_order: maxOrder + 1,
     }
-    let { error } = await supabase.from('weekly_reports').insert(payload)
-    if (error) {
-      console.warn('KA insert failed, retrying without sort_order:', error.message)
+    // 1回目: sort_order あり
+    let firstRes = await supabase.from('weekly_reports').insert(payload).select().single()
+    if (firstRes.error) {
+      console.warn('KA insert failed (with sort_order), retrying without:', firstRes.error)
+      // sort_order カラムが無い環境向けのフォールバック。それ以外のエラーならその時点で alert
+      const isSortOrderIssue = /sort_order/i.test(firstRes.error.message || '')
+      if (!isSortOrderIssue) {
+        alert('KAの追加に失敗しました: ' + (firstRes.error.message || JSON.stringify(firstRes.error)))
+        return
+      }
       const { sort_order, ...payloadNoSort } = payload
-      const res = await supabase.from('weekly_reports').insert(payloadNoSort)
-      if (res.error) { console.error('KA追加エラー:', res.error); alert('KAの追加に失敗しました: ' + res.error.message); return }
+      const res = await supabase.from('weekly_reports').insert(payloadNoSort).select().single()
+      if (res.error) {
+        console.error('KA追加エラー (retry):', res.error)
+        alert('KAの追加に失敗しました: ' + (res.error.message || JSON.stringify(res.error)))
+        return
+      }
+      firstRes = res
+    }
+    // insert が成功しても SELECT で見えないケース (RLS の USING が restrictive など) を検知
+    if (!firstRes.data) {
+      alert('KAをDBには書き込めましたが、読み戻しに失敗しています。Supabase の RLS (SELECT USING) 設定を確認してください。')
+      return
     }
     onAddKA()
   }
