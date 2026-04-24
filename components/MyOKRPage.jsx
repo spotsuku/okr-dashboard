@@ -464,6 +464,17 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
     await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
   }
 
+  // マイOKR は 週次MTG の今週 + 翌週のビューなので、同じ KA の対応する
+  // 他方の週の行にも同じフィールドを反映させる (週次MTG 側と同期させる)
+  const syncSiblingWeeks = async (field, value) => {
+    await supabase.from('weekly_reports').update({ [field]: value })
+      .eq('kr_id', report.kr_id)
+      .eq('ka_title', report.ka_title || '')
+      .eq('owner', report.owner || '')
+      .eq('objective_id', report.objective_id)
+      .neq('id', report.id)
+  }
+
   const handleOwnerChange = (val) => {
     setOwnerDraft(val)
     autoSave.save('owner', val)
@@ -471,6 +482,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
     const oldKey = computeKAKey(report)
     const newKey = computeKAKey({ ...report, owner: val })
     syncTaskKaKey(oldKey, newKey)
+    syncSiblingWeeks('owner', val)
   }
 
   const handleTitleBlur = () => {
@@ -483,6 +495,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
       const oldKey = computeKAKey(report)
       const newKey = computeKAKey({ ...report, ka_title: newTitle })
       syncTaskKaKey(oldKey, newKey)
+      syncSiblingWeeks('ka_title', newTitle)
     }
   }
 
@@ -685,11 +698,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     if (!myName) return
     const load = async () => {
       setLoading(true)
+      // 今週と翌週のみを対象とする (週次MTG の内容を引用するビュー)
+      //   DB 上の weekly_reports から selectedWeek / currentWeek / nextWeek に
+      //   絞って取得し、過去週の取り残しは表示しない
+      const weeksToLoad = Array.from(new Set([currentWeek, nextWeek])).filter(Boolean)
+
       // ① 自分がOwner/KR担当/KA担当のデータを並行取得
       const [{ data: myObjs }, { data: myKRs }, { data: myKAs }, { data: myAssignedTasks }] = await Promise.all([
         supabase.from('objectives').select('id,title,level_id,period,owner').eq('owner', myName).order('period'),
         supabase.from('key_results').select('*').eq('owner', myName),
-        supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done'),
+        supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done').in('week_start', weeksToLoad),
         supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false),
       ])
       // ★ 年度フィルタを適用
@@ -699,13 +717,14 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       })
       const ownedObjs = filterByFY(myObjs)
 
-      // ①-b 他人のKAで自分がタスク担当のものも取得
+      // ①-b 他人のKAで自分がタスク担当のものも取得 (今週と翌週のみ)
       const assignedReportIds = [...new Set((myAssignedTasks || []).map(t => t.report_id).filter(Boolean))]
       const myKAIds = new Set((myKAs || []).map(r => r.id))
       const missingReportIds = assignedReportIds.filter(id => !myKAIds.has(id))
       let assignedKAs = []
       if (missingReportIds.length > 0) {
-        const { data } = await supabase.from('weekly_reports').select('*').in('id', missingReportIds).neq('status', 'done')
+        const { data } = await supabase.from('weekly_reports').select('*')
+          .in('id', missingReportIds).neq('status', 'done').in('week_start', weeksToLoad)
         assignedKAs = data || []
       }
       const allMyKAs = [...(myKAs || []), ...assignedKAs].filter((r,i,arr) => arr.findIndex(x => x.id === r.id) === i)
