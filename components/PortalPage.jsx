@@ -24,11 +24,19 @@ const DASHBOARDS = [
   },
   {
     id: 'sales',
-    title: 'セールスダッシュボード',
+    title: '営業ダッシュボード',
     description: '営業活動・商談管理',
     icon: '💰',
     color: '#ff9f43',
-    url: 'https://sales-dashboard-jade-chi.vercel.app/',
+    url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard',
+  },
+  {
+    id: 'seisaku',
+    title: '制作物管理',
+    description: '制作物の進行・管理',
+    icon: '🎨',
+    color: '#06b6d4',
+    url: 'https://seisaku-kanri-blond.vercel.app/',
   },
   {
     id: 'budget',
