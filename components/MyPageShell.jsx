@@ -10,6 +10,7 @@ import CalendarTab from './CalendarTab'
 import DriveTab from './DriveTab'
 import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
+import ConfirmationsTab from './ConfirmationsTab'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -504,6 +505,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
         }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
+            { key: 'confirm',      icon: '📬', label: '確認'           },
             { key: 'wbs',          icon: '📅', label: 'タスク'         },
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
@@ -711,6 +713,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {!summaryMode && activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
+          )}
+          {!summaryMode && activeTab === 'confirm' && (
+            <ConfirmationsTab T={T} myName={myName} members={members} viewingName={viewingName} />
           )}
           {!summaryMode && activeTab === 'integrations' && (
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
@@ -1338,6 +1343,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               )
             })()}
           </Section>
+
+          {/* メンバー確認 Box - 自分宛の未解決 3件 */}
+          <ConfirmationsBox T={T} myName={myName} isViewingSelf={isViewingSelf}
+            viewingName={viewingName} onGoToTab={onGoToTab} />
 
           {/* カレンダー Box - 直近8時間の予定 */}
           {showW('calendar') && (
@@ -2745,6 +2754,74 @@ function Placeholder({ T, lines = [] }) {
     }}>
       {lines.map((l, i) => <div key={i}>{l}</div>)}
     </div>
+  )
+}
+
+// ─── ConfirmationsBox: 自分宛の未解決「確認事項」3件 ──────────────
+function ConfirmationsBox({ T, myName, isViewingSelf, viewingName, onGoToTab }) {
+  // 他メンバーのダッシュボードを見るとき viewingName も表示対象にしたいので
+  // 「表示対象名」を決める。自分閲覧時は myName、他人閲覧時は viewingName で絞る。
+  const targetName = isViewingSelf ? myName : viewingName
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    if (!targetName) { setItems([]); setLoading(false); return }
+    setLoading(true)
+    const { data } = await supabase.from('member_confirmations')
+      .select('id, from_name, content, created_at')
+      .eq('to_name', targetName).eq('status', 'open')
+      .order('created_at', { ascending: false }).limit(3)
+    setItems(data || [])
+    setLoading(false)
+  }, [targetName])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!targetName) return
+    const ch = supabase.channel(`confirmations_box_${targetName}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [targetName, load])
+
+  // 件数 0 なら折りたたみ気味に表示
+  const count = items.length
+
+  return (
+    <Section T={T} icon="📬" title={`確認事項 (自分宛)${count > 0 ? ` · ${count}件` : ''}`} flex={0}
+      headerRight={
+        <button onClick={() => onGoToTab && onGoToTab('confirm')} style={{
+          background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+          borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+        }}>すべて見る →</button>
+      }>
+      {loading ? (
+        <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 2px' }}>読み込み中...</div>
+      ) : count === 0 ? (
+        <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 2px' }}>未解決の確認事項はありません</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map(it => (
+            <div key={it.id} style={{
+              padding: '6px 8px', borderRadius: 6,
+              background: T.accentBg, border: `1px solid ${T.accent}30`,
+              cursor: 'pointer',
+            }} onClick={() => onGoToTab && onGoToTab('confirm')}>
+              <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
+                from <b style={{ color: T.textSub }}>{it.from_name}</b>
+              </div>
+              <div style={{
+                fontSize: 12, color: T.text, lineHeight: 1.5,
+                overflow: 'hidden', display: '-webkit-box',
+                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              }}>{it.content}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
   )
 }
 
