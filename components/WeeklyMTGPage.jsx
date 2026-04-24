@@ -422,14 +422,21 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   }
 
   // 同じ KA (同じ ka_key) を持つ他週の weekly_reports 行にも同じフィールドを
-  // 反映させる。これによりマイOKR と 週次MTG の表示が同期する
+  // 反映させる。Postgres では owner の NULL と '' が別物扱いになるため、
+  // 候補を取得してから JS 側で正規化比較して UPDATE 対象 id を決める。
   const syncSiblingWeeks = async (field, value) => {
-    await supabase.from('weekly_reports').update({ [field]: value })
+    const { data: candidates } = await supabase.from('weekly_reports')
+      .select('id, owner')
       .eq('kr_id', report.kr_id)
       .eq('ka_title', report.ka_title || '')
-      .eq('owner', report.owner || '')
       .eq('objective_id', report.objective_id)
-      .neq('id', report.id) // 現在の行は autoSave が更新済
+      .neq('id', report.id)
+    const targetOwner = (report.owner || '').trim()
+    const ids = (candidates || [])
+      .filter(r => (r.owner || '').trim() === targetOwner)
+      .map(r => r.id)
+    if (ids.length === 0) return
+    await supabase.from('weekly_reports').update({ [field]: value }).in('id', ids)
   }
 
   const handleOwnerChange = (val) => {

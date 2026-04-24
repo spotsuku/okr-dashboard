@@ -466,13 +466,21 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
 
   // マイOKR は 週次MTG の今週 + 翌週のビューなので、同じ KA の対応する
   // 他方の週の行にも同じフィールドを反映させる (週次MTG 側と同期させる)
+  // Postgres では owner の NULL と '' が別物扱いのため、候補取得→ JS 側で
+  // 正規化比較して UPDATE 対象 id を決める
   const syncSiblingWeeks = async (field, value) => {
-    await supabase.from('weekly_reports').update({ [field]: value })
+    const { data: candidates } = await supabase.from('weekly_reports')
+      .select('id, owner')
       .eq('kr_id', report.kr_id)
       .eq('ka_title', report.ka_title || '')
-      .eq('owner', report.owner || '')
       .eq('objective_id', report.objective_id)
       .neq('id', report.id)
+    const targetOwner = (report.owner || '').trim()
+    const ids = (candidates || [])
+      .filter(r => (r.owner || '').trim() === targetOwner)
+      .map(r => r.id)
+    if (ids.length === 0) return
+    await supabase.from('weekly_reports').update({ [field]: value }).in('id', ids)
   }
 
   const handleOwnerChange = (val) => {
@@ -820,27 +828,30 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
   // KA 削除: 同じ ka_key を持つ他週の行もまとめて削除
   //   (マイOKR は重複排除で 1 KA = 1 行表示しているが、DB には複数週分あるので一括削除)
+  //   注: Postgres では null と '' が別物扱いなので、どちらのケースも拾う
   const handleKADelete = async (id) => {
     if (!window.confirm('この KA を全週分 まとめて削除しますか？')) return
     const target = kaReports.find(r => r.id === id)
-    const kaKey = target ? computeKAKey(target) : null
-    if (!kaKey) {
+    if (!target) {
       await supabase.from('weekly_reports').delete().eq('id', id)
       setKaReports(p=>p.filter(r=>r.id!==id))
       return
     }
-    // DB から同じ ka_key の全週行を取得
-    //   ka_key はカラムに無いので (kr_id, ka_title, owner, objective_id) で絞る
-    const { data: sameRows } = await supabase.from('weekly_reports')
-      .select('id')
+    // kr_id + ka_title + objective_id で候補を絞り、owner は null/'' を両方許容
+    let q = supabase.from('weekly_reports').select('id, owner, ka_title')
       .eq('kr_id', target.kr_id)
-      .eq('ka_title', target.ka_title || '')
-      .eq('owner', target.owner || '')
       .eq('objective_id', target.objective_id)
-    const sameIds = (sameRows || []).map(r => r.id)
+      .eq('ka_title', target.ka_title || '')
+    const { data: candidates } = await q
+    const targetOwner = (target.owner || '').trim()
+    // owner を正規化 (null / 空白 を空文字扱いで比較)
+    const sameIds = (candidates || [])
+      .filter(r => (r.owner || '').trim() === targetOwner)
+      .map(r => r.id)
     if (sameIds.length === 0) sameIds.push(id)
     const { error } = await supabase.from('weekly_reports').delete().in('id', sameIds)
     if (error) { alert('削除失敗: ' + error.message); return }
+    const kaKey = computeKAKey(target)
     setKaReports(p => p.filter(r => computeKAKey(r) !== kaKey))
   }
 
