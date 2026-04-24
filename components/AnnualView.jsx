@@ -2,6 +2,26 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildQuarterMap } from '../lib/objectiveMatching'
+import KASection from './KASection'
+
+// KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
+function makeKATheme(t) {
+  return {
+    accent:       t.btnEditColor || '#4d9fff',
+    accentSolid:  t.addBtnBg     || '#4d9fff',
+    text:         t.text,
+    textSub:      t.textSub,
+    textMuted:    t.textMuted,
+    textFaint:    t.textFaint,
+    textFaintest: t.textFaintest,
+    bgCard:       t.bgCard,
+    bgCard2:      t.bgKr,
+    border:       t.border,
+    borderMid:    t.borderDash,
+    badgeBg:      t.btnEditColor || '#4d9fff',
+    badgeBorder:  t.btnEditBorder || 'rgba(77,159,255,0.25)',
+  }
+}
 
 // ─── themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -325,14 +345,19 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                                     const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
                                     const kr_r = getRating(kp)
                                     return (
-                                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, background: T().bgKr, borderRadius: 7, padding: '7px 10px' }}>
-                                        <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
-                                        <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>{kr.title}</span>
-                                        {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
-                                        <div style={{ width: 80, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                                          <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                                      <div key={i} style={{ marginBottom: 6 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T().bgKr, borderRadius: 7, padding: '7px 10px' }}>
+                                          <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
+                                          <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>{kr.title}</span>
+                                          {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
+                                          <div style={{ width: 80, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                                            <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                                          </div>
+                                          <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
                                         </div>
-                                        <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
+                                        <div style={{ marginLeft: 16 }}>
+                                          <KASection krId={kr.id} objectiveId={qObj.id} levelId={qObj.level_id} theme={makeKATheme(T())} />
+                                        </div>
                                       </div>
                                     )
                                   })}
@@ -349,14 +374,19 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                             const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
                             const kr_r = getRating(kp)
                             return (
-                              <div key={i} style={{ background: T().bgKrOuter, border: `1px solid ${T().borderKr}`, borderRadius: 8, padding: '10px 12px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
-                                <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>{kr.title}</span>
-                                {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
-                                <div style={{ width: 100, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                                  <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                              <div key={i} style={{ marginBottom: 6 }}>
+                                <div style={{ background: T().bgKrOuter, border: `1px solid ${T().borderKr}`, borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
+                                  <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>{kr.title}</span>
+                                  {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
+                                  <div style={{ width: 100, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                                  </div>
+                                  <span style={{ fontSize: 12, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
                                 </div>
-                                <span style={{ fontSize: 12, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
+                                <div style={{ marginLeft: 16 }}>
+                                  <KASection krId={kr.id} objectiveId={ann.id} levelId={ann.level_id} theme={makeKATheme(T())} />
+                                </div>
                               </div>
                             )
                           })}

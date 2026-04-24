@@ -826,6 +826,36 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   })
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
+
+  // KA を追加: 選択週 (今週 or 翌週) の weekly_reports に新規行を insert
+  //   owner は閲覧中メンバー (自分のマイOKR なら自分)
+  const handleKAAdd = async (kr) => {
+    if (!kr || !activeObjId) return
+    const obj = selectedObj
+    const levelId = obj?.level_id
+    const payload = {
+      week_start: selectedWeek,
+      level_id: levelId,
+      objective_id: activeObjId,
+      kr_id: kr.id,
+      kr_title: kr.title,
+      ka_title: '新しいKA',
+      owner: myName || '',
+      status: 'normal',
+    }
+    // sort_order 付きで試し、カラムが無ければフォールバック
+    const currentKAs = kaReports.filter(r => Number(r.kr_id) === Number(kr.id))
+    const maxOrder = currentKAs.reduce((m, r) => Math.max(m, r.sort_order || 0), 0)
+    let res = await supabase.from('weekly_reports')
+      .insert({ ...payload, sort_order: maxOrder + 1 }).select().single()
+    if (res.error) {
+      if (/sort_order/i.test(res.error.message || '')) {
+        res = await supabase.from('weekly_reports').insert(payload).select().single()
+      }
+      if (res.error) { alert('KA追加失敗: ' + res.error.message); return }
+    }
+    if (res.data) setKaReports(p => [...p, res.data])
+  }
   // KA 削除: 同じ ka_key を持つ他週の行もまとめて削除
   //   (マイOKR は重複排除で 1 KA = 1 行表示しているが、DB には複数週分あるので一括削除)
   //   注: Postgres では null と '' が別物扱いなので、どちらのケースも拾う
@@ -1065,19 +1095,28 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                             })
                           })
                         }} />
-                        {krKAs.length > 0 && (
-                          <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
-                            <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
-                            <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
-                              <KATableHeader wT={wT} />
-                              <tbody>
-                                {krKAs.map(r => (
-                                  <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
-                                ))}
-                              </tbody>
-                            </table>
+                        <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
+                          {krKAs.length > 0 && (
+                            <>
+                              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
+                              <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
+                                <KATableHeader wT={wT} />
+                                <tbody>
+                                  {krKAs.map(r => (
+                                    <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
+                                  ))}
+                                </tbody>
+                              </table>
+                            </>
+                          )}
+                          <div onClick={() => handleKAAdd(kr)} style={{
+                            display:'flex', alignItems:'center', gap:6, padding:'6px 10px', cursor:'pointer',
+                            color:wT().textMuted, fontSize:11, marginTop: krKAs.length > 0 ? 4 : 0,
+                            borderTop: krKAs.length > 0 ? `1px solid ${wT().border}` : 'none',
+                          }}>
+                            <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
                           </div>
-                        )}
+                        </div>
                       </div>
                     )
                   })}

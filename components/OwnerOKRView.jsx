@@ -1,6 +1,26 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import KASection from './KASection'
+
+// KASection に渡すテーマオブジェクト (OwnerOKRView の THEMES から抽出)
+function makeKATheme(t) {
+  return {
+    accent:       t.btnEditColor || '#4d9fff',
+    accentSolid:  t.btnEditColor || '#4d9fff',
+    text:         t.text,
+    textSub:      t.textSub,
+    textMuted:    t.textMuted,
+    textFaint:    t.textFaint,
+    textFaintest: t.textFaintest,
+    bgCard:       t.bgCard,
+    bgCard2:      t.bgKr,
+    border:       t.border,
+    borderMid:    t.borderDash,
+    badgeBg:      t.btnEditColor || '#4d9fff',
+    badgeBorder:  t.btnEditBorder || 'rgba(77,159,255,0.25)',
+  }
+}
 
 const THEMES = {
   dark: {
@@ -347,11 +367,9 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                                 </div>
                                 <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kp}%</span>
                               </div>
-                              {krKAs.length > 0 && (
-                                <div style={{ marginLeft: 16, borderLeft: `2px solid ${T().border}`, paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
-                                  {krKAs.map(ka => <ReadOnlyKARow key={ka.id} ka={ka} />)}
-                                </div>
-                              )}
+                              <div style={{ marginLeft: 16, borderLeft: `2px solid ${T().border}`, paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
+                                <KASection krId={kr.id} objectiveId={obj.id} levelId={obj.level_id} theme={makeKATheme(T())} />
+                              </div>
                             </div>
                           )
                         })}
