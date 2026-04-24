@@ -799,10 +799,30 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   })
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
+  // KA 削除: 同じ ka_key を持つ他週の行もまとめて削除
+  //   (マイOKR は重複排除で 1 KA = 1 行表示しているが、DB には複数週分あるので一括削除)
   const handleKADelete = async (id) => {
-    if (!window.confirm('削除しますか？')) return
-    await supabase.from('weekly_reports').delete().eq('id', id)
-    setKaReports(p=>p.filter(r=>r.id!==id))
+    if (!window.confirm('この KA を全週分 まとめて削除しますか？')) return
+    const target = kaReports.find(r => r.id === id)
+    const kaKey = target ? computeKAKey(target) : null
+    if (!kaKey) {
+      await supabase.from('weekly_reports').delete().eq('id', id)
+      setKaReports(p=>p.filter(r=>r.id!==id))
+      return
+    }
+    // DB から同じ ka_key の全週行を取得
+    //   ka_key はカラムに無いので (kr_id, ka_title, owner, objective_id) で絞る
+    const { data: sameRows } = await supabase.from('weekly_reports')
+      .select('id')
+      .eq('kr_id', target.kr_id)
+      .eq('ka_title', target.ka_title || '')
+      .eq('owner', target.owner || '')
+      .eq('objective_id', target.objective_id)
+    const sameIds = (sameRows || []).map(r => r.id)
+    if (sameIds.length === 0) sameIds.push(id)
+    const { error } = await supabase.from('weekly_reports').delete().in('id', sameIds)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    setKaReports(p => p.filter(r => computeKAKey(r) !== kaKey))
   }
 
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]

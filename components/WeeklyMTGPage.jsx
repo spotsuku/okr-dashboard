@@ -421,6 +421,17 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
   }
 
+  // 同じ KA (同じ ka_key) を持つ他週の weekly_reports 行にも同じフィールドを
+  // 反映させる。これによりマイOKR と 週次MTG の表示が同期する
+  const syncSiblingWeeks = async (field, value) => {
+    await supabase.from('weekly_reports').update({ [field]: value })
+      .eq('kr_id', report.kr_id)
+      .eq('ka_title', report.ka_title || '')
+      .eq('owner', report.owner || '')
+      .eq('objective_id', report.objective_id)
+      .neq('id', report.id) // 現在の行は autoSave が更新済
+  }
+
   const handleOwnerChange = (val) => {
     setOwnerDraft(val)
     autoSave.save('owner', val)
@@ -428,6 +439,8 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     const oldKey = computeKAKey(report)
     const newKey = computeKAKey({ ...report, owner: val })
     syncTaskKaKey(oldKey, newKey)
+    // 他週の同じ KA 行の owner も追従
+    syncSiblingWeeks('owner', val)
   }
 
   const handleTitleBlur = () => {
@@ -440,6 +453,8 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       const oldKey = computeKAKey(report)
       const newKey = computeKAKey({ ...report, ka_title: newTitle })
       syncTaskKaKey(oldKey, newKey)
+      // 他週の同じ KA 行の ka_title も追従
+      syncSiblingWeeks('ka_title', newTitle)
     }
   }
 
@@ -1178,10 +1193,24 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     createWeek(toDateStr(nextMon))
   }
   const handleSave   = (updated) => setReports(p => p.map(r => r.id===updated.id ? updated : r))
+  // KA 削除: 同じ ka_key を持つ他週の行もまとめて削除する
+  //   (週ごとに別レコードの設計なので、1行だけ消すと他週から「復活」して見えるため)
   const handleDelete = async (id) => {
-    if (!window.confirm('削除しますか？')) return
-    await supabase.from('weekly_reports').delete().eq('id', id)
-    setReports(p => p.filter(r => r.id!==id))
+    if (!window.confirm('この KA を全週分 まとめて削除しますか？')) return
+    const target = reports.find(r => r.id === id)
+    if (!target) {
+      await supabase.from('weekly_reports').delete().eq('id', id)
+      setReports(p => p.filter(r => r.id!==id))
+      return
+    }
+    // 同じ ka_key に属する行をすべて集めて一括削除
+    const kaKey = computeKAKey(target)
+    const sameKaIds = reports
+      .filter(r => computeKAKey(r) === kaKey)
+      .map(r => r.id)
+    const { error } = await supabase.from('weekly_reports').delete().in('id', sameKaIds)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    setReports(p => p.filter(r => !sameKaIds.includes(r.id)))
   }
   const handleKROwnerChange = async (krId, newOwner) => {
     const { error } = await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
