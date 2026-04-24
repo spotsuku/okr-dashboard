@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 // 📬 メンバー間の確認事項タブ
@@ -9,6 +9,10 @@ import { supabase } from '../lib/supabase'
 // Props: { T, myName, members, viewingName }
 
 export default function ConfirmationsTab({ T, myName, members = [], viewingName }) {
+  // 表示対象: 他メンバーのページを見ている場合はそのメンバー、自分のページなら自分
+  const targetName = viewingName || myName
+  const isViewingSelf = !viewingName || viewingName === myName
+
   const [tab, setTab] = useState('received') // 'received' | 'sent'
   const [showResolved, setShowResolved] = useState(false)
   const [items, setItems] = useState([])
@@ -16,13 +20,15 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
   const [loading, setLoading] = useState(true)
   const [composing, setComposing] = useState(false)
   const [replyingId, setReplyingId] = useState(null)
+  // 受信/送信 それぞれの件数 (バッジ表示用)
+  const [counts, setCounts] = useState({ receivedOpen: 0, receivedAll: 0, sentAll: 0 })
 
   const load = useCallback(async () => {
-    if (!myName) return
+    if (!targetName) return
     setLoading(true)
     const column = tab === 'received' ? 'to_name' : 'from_name'
     let q = supabase.from('member_confirmations')
-      .select('*').eq(column, myName).order('created_at', { ascending: false })
+      .select('*').eq(column, targetName).order('created_at', { ascending: false })
     if (!showResolved) q = q.eq('status', 'open')
     const { data } = await q
     setItems(data || [])
@@ -43,18 +49,36 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
       setReplies({})
     }
     setLoading(false)
-  }, [myName, tab, showResolved])
+  }, [targetName, tab, showResolved])
 
-  useEffect(() => { load() }, [load])
+  // 件数バッジ用に受信 open / 受信 全 / 送信 全 を並行で取得
+  const loadCounts = useCallback(async () => {
+    if (!targetName) return
+    const [recvOpen, recvAll, sentAll] = await Promise.all([
+      supabase.from('member_confirmations').select('id', { count: 'exact', head: true })
+        .eq('to_name', targetName).eq('status', 'open'),
+      supabase.from('member_confirmations').select('id', { count: 'exact', head: true })
+        .eq('to_name', targetName),
+      supabase.from('member_confirmations').select('id', { count: 'exact', head: true })
+        .eq('from_name', targetName),
+    ])
+    setCounts({
+      receivedOpen: recvOpen.count || 0,
+      receivedAll:  recvAll.count  || 0,
+      sentAll:      sentAll.count  || 0,
+    })
+  }, [targetName])
 
-  // Realtime: 確認事項 + 返信 の変更を即反映
+  useEffect(() => { load(); loadCounts() }, [load, loadCounts])
+
+  // Realtime: 確認事項 + 返信 の変更を即反映 (件数も再取得)
   useEffect(() => {
-    const ch = supabase.channel('confirmations_' + (myName || 'anon'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => load())
+    const ch = supabase.channel('confirmations_' + (targetName || 'anon'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => { load(); loadCounts() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmation_replies' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [myName, load])
+  }, [targetName, load, loadCounts])
 
   const resolve = async (id) => {
     const { error } = await supabase.from('member_confirmations')
@@ -77,16 +101,15 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
     load()
   }
 
-  // 未読件数 (受信タブの open)
-  const unresolvedCount = useMemo(() => items.filter(it => it.status === 'open').length, [items])
-
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '20px 16px' }}>
         {/* ヘッダ */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>📬 確認</h2>
-          <div style={{ fontSize: 11, color: T.textMuted }}>メンバー間の確認事項を送受信</div>
+          <div style={{ fontSize: 11, color: T.textMuted }}>
+            {isViewingSelf ? 'メンバー間の確認事項を送受信' : `${targetName}さんの確認事項 (閲覧)`}
+          </div>
           <div style={{ flex: 1 }} />
           <button onClick={() => setComposing(true)} style={{
             padding: '6px 14px', borderRadius: 7,
@@ -108,17 +131,38 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
           padding: '8px 12px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
         }}>
           {[
-            { key: 'received', label: `受信${tab === 'received' && unresolvedCount > 0 ? ` (${unresolvedCount})` : ''}` },
-            { key: 'sent',     label: '送信' },
-          ].map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: '5px 12px', borderRadius: 6, border: 'none',
-              cursor: 'pointer', fontFamily: 'inherit',
-              background: tab === t.key ? T.accent : 'transparent',
-              color:      tab === t.key ? '#fff'    : T.textSub,
-              fontSize: 12, fontWeight: 700,
-            }}>{t.label}</button>
-          ))}
+            // 受信は「未確認 件数 / 全件数」を表示 (未確認があれば赤バッジ)
+            { key: 'received', label: '受信',
+              countMain: showResolved ? counts.receivedAll : counts.receivedOpen,
+              hasAlert: counts.receivedOpen > 0 },
+            // 送信は全件数
+            { key: 'sent', label: '送信',
+              countMain: counts.sentAll, hasAlert: false },
+          ].map(t => {
+            const active = tab === t.key
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                padding: '5px 12px', borderRadius: 6, border: 'none',
+                cursor: 'pointer', fontFamily: 'inherit',
+                background: active ? T.accent : 'transparent',
+                color:      active ? '#fff'    : T.textSub,
+                fontSize: 12, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+                <span>{t.label}</span>
+                <span style={{
+                  padding: '1px 7px', borderRadius: 99,
+                  background: active
+                    ? 'rgba(255,255,255,0.25)'
+                    : (t.hasAlert ? '#ff6b6b' : T.border),
+                  color: active
+                    ? '#fff'
+                    : (t.hasAlert ? '#fff' : T.textMuted),
+                  fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
+                }}>{t.countMain}</span>
+              </button>
+            )
+          })}
           <div style={{ flex: 1 }} />
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: T.textMuted, cursor: 'pointer' }}>
             <input type="checkbox" checked={showResolved} onChange={e => setShowResolved(e.target.checked)} />
