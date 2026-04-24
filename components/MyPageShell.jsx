@@ -1,9 +1,8 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
-import OwnerOKRView from './OwnerOKRView'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
 import CalendarTab from './CalendarTab'
@@ -11,6 +10,7 @@ import DriveTab from './DriveTab'
 import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
 import ConfirmationsTab from './ConfirmationsTab'
+import CompanySummaryPage from './CompanySummaryPage'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -131,6 +131,23 @@ function statusDot(status, T) {
   return <span title={s.label} style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0, display: 'inline-block' }} />
 }
 
+// 全体サマリーモードでまだ中身が確定していないタブ用のプレースホルダ
+function SummaryPlaceholder({ T, title, note }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+      <div style={{
+        maxWidth: 420, textAlign: 'center', color: T.textSub,
+        padding: '28px 32px', borderRadius: 14,
+        border: `1px dashed ${T.borderMid}`, background: T.sectionBg,
+      }}>
+        <div style={{ fontSize: 30, marginBottom: 10 }}>🚧</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 6 }}>{title}</div>
+        <div style={{ fontSize: 12, color: T.textMuted }}>{note}</div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ────────────────────────────────────────────────────────
 export default function MyPageShell({ user, members, levels, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
   const T = THEMES[themeKey] || THEMES.dark
@@ -144,9 +161,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
-  // マイOKR プルダウンメニュー (サブタブバー - PC のみ使用)
-  const [okrMenuOpen, setOkrMenuOpen] = useState(false)
-  const okrCloseTimerRef = useRef(null)
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
   // 📬 表示対象メンバー宛の未解決「確認事項」件数 (サブタブバッジ + バナー用)
@@ -171,8 +185,10 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const t = new URL(window.location.href).searchParams.get('tab')
-    if (t && ['dashboard', 'wbs', 'okr_edit', 'okr_view', 'mail', 'calendar', 'drive', 'coo', 'retrospect', 'integrations'].includes(t)) {
-      setActiveTab(t)
+    // okr_view は廃止 (詳細はヘッダーのOKRへ) → 互換で okr_edit にマップ
+    const normalized = t === 'okr_view' ? 'okr_edit' : t
+    if (normalized && ['dashboard', 'confirm', 'wbs', 'okr_edit', 'mail', 'calendar', 'drive', 'coo', 'retrospect', 'integrations'].includes(normalized)) {
+      setActiveTab(normalized)
     }
   }, [])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -256,8 +272,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   // サイドバードロワー下部の「その他」メニュー
   const SIDEBAR_OTHER = [
     { key: 'drive',        icon: '📁', label: 'ドライブ' },
-    { key: 'okr_edit',     icon: '🎯', label: 'OKR記入' },
-    { key: 'okr_view',     icon: '📈', label: 'OKR詳細' },
+    { key: 'okr_edit',     icon: '🎯', label: 'OKR' },
     { key: 'integrations', icon: '🔌', label: '連携' },
   ]
 
@@ -531,12 +546,12 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
           ].map(t => {
-            // 📬確認 タブのみ未解決件数バッジを表示 (0件なら非表示)
-            const showBadge = t.key === 'confirm' && unresolvedConfirmCount > 0
+            // 📬確認 タブのみ未解決件数バッジを表示 (個人モード時、0件なら非表示)
+            const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
             return (
               <button
                 key={t.key}
-                onClick={() => { setActiveTab(t.key); setSummaryMode(false) }}
+                onClick={() => setActiveTab(t.key)}
                 style={{
                   padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
                   background: activeTab === t.key ? T.navActiveBg : 'transparent',
@@ -558,71 +573,23 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             )
           })}
 
-          {/* マイOKR プルダウン (記入 / 詳細 を集約)
-             マウスがボタン↔メニュー間を移動する際に閉じないよう、
-             close は小さな遅延 (120ms) をかけ、enter で cancel する */}
-          {(() => {
-            const okrActive = activeTab === 'okr_edit' || activeTab === 'okr_view'
-            const openMenu = () => {
-              if (okrCloseTimerRef.current) { clearTimeout(okrCloseTimerRef.current); okrCloseTimerRef.current = null }
-              setOkrMenuOpen(true)
-            }
-            const scheduleClose = () => {
-              if (okrCloseTimerRef.current) clearTimeout(okrCloseTimerRef.current)
-              okrCloseTimerRef.current = setTimeout(() => setOkrMenuOpen(false), 120)
-            }
-            return (
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setOkrMenuOpen(o => !o)}
-                  onMouseEnter={openMenu}
-                  onMouseLeave={scheduleClose}
-                  style={{
-                    padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                    background: okrActive ? T.navActiveBg : 'transparent',
-                    color: okrActive ? T.navActiveText : T.textSub,
-                    fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                  }}
-                >🎯 マイOKR <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span></button>
-                {okrMenuOpen && (
-                  <div
-                    onMouseEnter={openMenu}
-                    onMouseLeave={scheduleClose}
-                    style={{
-                      position: 'absolute', top: '100%', left: 0, paddingTop: 4, zIndex: 100,
-                      minWidth: 140,
-                    }}>
-                    <div style={{
-                      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.25)', padding: 4,
-                    }}>
-                      {[
-                        { key: 'okr_edit', icon: '🎯', label: 'OKR記入' },
-                        { key: 'okr_view', icon: '📈', label: 'OKR詳細' },
-                      ].map(t => (
-                        <button
-                          key={t.key}
-                          onClick={() => { setActiveTab(t.key); setSummaryMode(false); setOkrMenuOpen(false) }}
-                          style={{
-                            display: 'block', width: '100%', textAlign: 'left',
-                            padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                            background: activeTab === t.key ? T.navActiveBg : 'transparent',
-                            color: activeTab === t.key ? T.navActiveText : T.textSub,
-                            fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                          }}
-                        >{t.icon} {t.label}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-
-          {/* 連携はプルダウンの後ろに配置 */}
+          {/* OKR (旧マイOKR、ドロップダウンは撤廃)
+              モードによって中身が切替わる:
+                全体サマリー → CompanySummaryPage (全社OKRサマリー)
+                メンバー     → MyOKRPageNew (OKR記入) */}
           <button
-            onClick={() => { setActiveTab('integrations'); setSummaryMode(false) }}
+            onClick={() => setActiveTab('okr_edit')}
+            style={{
+              padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+              background: activeTab === 'okr_edit' ? T.navActiveBg : 'transparent',
+              color: activeTab === 'okr_edit' ? T.navActiveText : T.textSub,
+              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+            }}
+          >🎯 OKR</button>
+
+          {/* 連携 */}
+          <button
+            onClick={() => setActiveTab('integrations')}
             style={{
               padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
               background: activeTab === 'integrations' ? T.navActiveBg : 'transparent',
@@ -646,85 +613,101 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
         </div>
 
-        {/* タブコンテンツ */}
+        {/* タブコンテンツ
+            summaryMode (全体サマリー) / 個別メンバーモード でコンテンツを切替。
+            メール/カレンダー/ドライブ/MyCOO/振り返り/連携 は個人用途のため
+            summaryMode でも既存挙動のまま (viewingName は myName をデフォルト) */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0 }}>
-          {summaryMode ? (
-            <CompanySummaryTab T={T} members={members} />
-          ) : null}
-          {!summaryMode && activeTab === 'dashboard' && (
-            <DashboardTab
-              T={T} themeKey={themeKey}
-              viewingName={viewingName} viewingMember={viewingMember}
-              isViewingSelf={isViewingSelf} myName={myName}
-              members={members}
-              fiscalYear={fiscalYear}
-              workLog={workLogs[viewingName]}
-              onWorkLogChange={reloadWorkLogs}
-              onGoToTab={(key) => setActiveTab(key)}
-              onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
-              onOpenAIReply={(mail) => setAiReplyMail(mail)}
-              mailReadMarks={mailReadMarks}
-              onMarkMailRead={markMailAsRead}
-            />
+          {activeTab === 'dashboard' && (
+            summaryMode ? (
+              <SummaryPlaceholder T={T} title="全体ダッシュボード" note="表示内容は検討中です。" />
+            ) : (
+              <DashboardTab
+                T={T} themeKey={themeKey}
+                viewingName={viewingName} viewingMember={viewingMember}
+                isViewingSelf={isViewingSelf} myName={myName}
+                members={members}
+                fiscalYear={fiscalYear}
+                workLog={workLogs[viewingName]}
+                onWorkLogChange={reloadWorkLogs}
+                onGoToTab={(key) => setActiveTab(key)}
+                onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
+                onOpenAIReply={(mail) => setAiReplyMail(mail)}
+                mailReadMarks={mailReadMarks}
+                onMarkMailRead={markMailAsRead}
+              />
+            )
           )}
-          {!summaryMode && activeTab === 'wbs' && (
-            <MyTasksPage
-              user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
-              members={members}
-              themeKey={themeKey}
-              initialViewMode="my"
-              onViewModeChange={() => {}}
-              fiscalYear={fiscalYear}
-            />
+          {activeTab === 'confirm' && (
+            summaryMode ? (
+              <ConfirmationsTab T={T} myName={myName} members={members} companyWide />
+            ) : (
+              <ConfirmationsTab T={T} myName={myName} members={members} viewingName={viewingName} />
+            )
           )}
-          {!summaryMode && activeTab === 'okr_edit' && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              {/* 記入モード / 一覧モード トグル */}
-              <div style={{
-                display: 'flex', gap: 6, padding: '8px 16px',
-                borderBottom: `1px solid ${T.border}`, background: T.sectionBg,
-                flexShrink: 0, alignItems: 'center',
-              }}>
-                <div style={{ fontSize: 11, color: T.textMuted, marginRight: 4 }}>入力スタイル:</div>
-                <button onClick={() => setFocusFillOpen('kr')} style={{
-                  padding: '5px 12px', borderRadius: 7, border: 'none',
-                  background: '#4d9fff', color: '#fff',
-                  fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}>📝 KR記入モード</button>
-                <button onClick={() => setFocusFillOpen('ka')} style={{
-                  padding: '5px 12px', borderRadius: 7, border: 'none',
-                  background: '#00d68f', color: '#fff',
-                  fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}>📝 KA記入モード</button>
-                <div style={{
-                  padding: '5px 12px', borderRadius: 7,
-                  background: T.navActiveBg, color: T.navActiveText,
-                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-                }}>📋 一覧モード（表示中）</div>
-              </div>
-              <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-                <MyOKRPageNew
-                  user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
+          {activeTab === 'wbs' && (
+            summaryMode ? (
+              <CompanySummaryTab T={T} members={members} />
+            ) : (
+              <MyTasksPage
+                user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
+                members={members}
+                themeKey={themeKey}
+                initialViewMode="my"
+                onViewModeChange={() => {}}
+                fiscalYear={fiscalYear}
+              />
+            )
+          )}
+          {activeTab === 'okr_edit' && (
+            summaryMode ? (
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <CompanySummaryPage
                   levels={levels}
                   members={members}
                   themeKey={themeKey}
                   fiscalYear={fiscalYear}
-                  onAIFeedback={onAIFeedback}
                 />
               </div>
-            </div>
+            ) : (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                {/* 記入モード / 一覧モード トグル */}
+                <div style={{
+                  display: 'flex', gap: 6, padding: '8px 16px',
+                  borderBottom: `1px solid ${T.border}`, background: T.sectionBg,
+                  flexShrink: 0, alignItems: 'center',
+                }}>
+                  <div style={{ fontSize: 11, color: T.textMuted, marginRight: 4 }}>入力スタイル:</div>
+                  <button onClick={() => setFocusFillOpen('kr')} style={{
+                    padding: '5px 12px', borderRadius: 7, border: 'none',
+                    background: '#4d9fff', color: '#fff',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>📝 KR記入モード</button>
+                  <button onClick={() => setFocusFillOpen('ka')} style={{
+                    padding: '5px 12px', borderRadius: 7, border: 'none',
+                    background: '#00d68f', color: '#fff',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>📝 KA記入モード</button>
+                  <div style={{
+                    padding: '5px 12px', borderRadius: 7,
+                    background: T.navActiveBg, color: T.navActiveText,
+                    fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                  }}>📋 一覧モード（表示中）</div>
+                </div>
+                <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+                  <MyOKRPageNew
+                    user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
+                    levels={levels}
+                    members={members}
+                    themeKey={themeKey}
+                    fiscalYear={fiscalYear}
+                    onAIFeedback={onAIFeedback}
+                  />
+                </div>
+              </div>
+            )
           )}
-          {!summaryMode && activeTab === 'okr_view' && (
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              <OwnerOKRView
-                ownerName={viewingName}
-                levels={levels}
-                fiscalYear={fiscalYear}
-                themeKey={themeKey}
-              />
-            </div>
-          )}
-          {!summaryMode && activeTab === 'mail' && (
+          {activeTab === 'mail' && (
             <MailTab
               T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
               onGoToTab={(key) => setActiveTab(key)}
@@ -734,23 +717,20 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               onUnmarkRead={unmarkMail}
             />
           )}
-          {!summaryMode && activeTab === 'calendar' && (
+          {activeTab === 'calendar' && (
             <CalendarTab T={T} myName={myName} members={members} viewingName={viewingName} />
           )}
-          {!summaryMode && activeTab === 'drive' && (
+          {activeTab === 'drive' && (
             <DriveTab T={T} myName={myName} viewingName={viewingName} />
           )}
-          {!summaryMode && activeTab === 'coo' && (
+          {activeTab === 'coo' && (
             <COOTab T={T} myName={myName} viewingName={viewingName}
               isAdmin={isAdmin} onOpenSettings={() => setCooSettingsOpen(true)} />
           )}
-          {!summaryMode && activeTab === 'retrospect' && (
+          {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
           )}
-          {!summaryMode && activeTab === 'confirm' && (
-            <ConfirmationsTab T={T} myName={myName} members={members} viewingName={viewingName} />
-          )}
-          {!summaryMode && activeTab === 'integrations' && (
+          {activeTab === 'integrations' && (
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
           )}
         </div>
