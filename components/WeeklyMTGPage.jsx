@@ -1241,9 +1241,11 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || ''
   const isAdmin  = myMember?.is_admin === true
-  // 週次MTG中の共同編集を許可: ログイン済みユーザー全員がKAを編集可能
-  // (旧: 管理者・KA担当・Obj責任者・KR担当のみだったが、会議中の不便さから解放)
-  const canEditKA = useCallback(() => !!myName, [myName])
+  // 週次MTG中の共同編集を許可: ログイン済みユーザー全員が KA を編集可能
+  //   (旧: 管理者・KA担当・Obj責任者・KR担当のみだったが、会議中の不便さから解放)
+  //   注: members テーブルに登録されていないユーザー (email マッチしない場合も)
+  //       認証済みなら編集可とする (myName が空でも user.email があれば OK)
+  const canEditKA = useCallback(() => !!(myName || user?.email), [myName, user?.email])
 
   // 年度・部署フィルタ（左パネルは通期OKRのみ表示）
   const visibleLevelIds = activeLevelId ? [Number(activeLevelId)] : levels.map(l=>l.id)
