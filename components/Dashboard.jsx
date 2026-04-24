@@ -17,6 +17,7 @@ import MyPageShell from './MyPageShell'
 import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
 import { computeKAKey } from '../lib/kaKey'
+import KASection from './KASection'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -442,184 +443,6 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         <Btn onClick={save} disabled={saving}>{saving ? '保存中...' : '保存する'}</Btn>
       </div>
     </>
-  )
-}
-
-// ─── KA Section ───────────────────────────────────────────────────────────────
-// KASection: OKR詳細 組織ビュー用の KA 表示パネル
-//   データソース: weekly_reports (週次MTG / マイOKR と統一)
-//   表示粒度: 同じ KA (kr_id+ka_title+owner+objective_id) の重複を
-//            ka_key で集約し 1 件表示 (週をまたぐ行は 1つに)
-//   機能: 展開/折りたたみ, 追加 (選択週に挿入), 削除 (全週一括),
-//         owner 変更 (他週にも同期), 状態切替 (normal/done),
-//         詳細編集は「週次MTGで編集」リンクで 週次MTG 画面へ
-function KASection({ krId, objectiveId, levelId }) {
-  const [reports, setReports] = useState([])
-  const [members,  setMembers]  = useState([])
-  const [open,     setOpen]     = useState(false)
-  const [loading,  setLoading]  = useState(false)
-  const [adding,   setAdding]   = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newOwner, setNewOwner] = useState('')
-
-  // 現在週の月曜日 (JST)
-  const currentWeekStart = (() => {
-    const now = new Date()
-    const jst = new Date(now.getTime() + 9 * 3600 * 1000)
-    const day = jst.getUTCDay()
-    const diff = jst.getUTCDate() - day + (day === 0 ? -6 : 1)
-    jst.setUTCDate(diff)
-    return jst.toISOString().split('T')[0]
-  })()
-
-  useEffect(() => {
-    if (!open || !krId) return
-    load()
-    supabase.from('members').select('id,name,email').order('name').then(({ data }) => setMembers(data || []))
-  }, [open, krId])
-
-  const load = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('weekly_reports')
-      .select('*').eq('kr_id', krId).neq('status', 'done').range(0, 9999)
-    setReports(data || [])
-    setLoading(false)
-  }
-
-  // ka_key で重複排除 (最新週のデータを優先)
-  const uniqueKAs = (() => {
-    const map = new Map()
-    for (const r of reports) {
-      const k = computeKAKey(r)
-      const cur = map.get(k)
-      if (!cur || (r.week_start || '') > (cur.week_start || '')) map.set(k, r)
-    }
-    return Array.from(map.values())
-  })()
-
-  const addKA = async () => {
-    if (!newTitle.trim()) return
-    const payload = {
-      week_start: currentWeekStart,
-      level_id: levelId,
-      objective_id: objectiveId,
-      kr_id: krId,
-      ka_title: newTitle.trim(),
-      owner: newOwner || '',
-      status: 'normal',
-    }
-    const { data, error } = await supabase.from('weekly_reports').insert(payload).select().single()
-    if (error) { alert('KA追加失敗: ' + error.message); return }
-    if (data) { setReports(p => [...p, data]); setNewTitle(''); setNewOwner(''); setAdding(false) }
-  }
-
-  const deleteKA = async (report) => {
-    if (!window.confirm(`この KA「${report.ka_title}」を全週分 まとめて削除しますか？`)) return
-    // ka_key (kr_id, ka_title, owner, objective_id) で同じ KA の行を全週取得
-    const { data: candidates } = await supabase.from('weekly_reports')
-      .select('id, owner')
-      .eq('kr_id', report.kr_id)
-      .eq('ka_title', report.ka_title || '')
-      .eq('objective_id', report.objective_id)
-    const targetOwner = (report.owner || '').trim()
-    const ids = (candidates || [])
-      .filter(r => (r.owner || '').trim() === targetOwner)
-      .map(r => r.id)
-    if (ids.length === 0) ids.push(report.id)
-    const { error } = await supabase.from('weekly_reports').delete().in('id', ids)
-    if (error) { alert('削除失敗: ' + error.message); return }
-    const key = computeKAKey(report)
-    setReports(p => p.filter(r => computeKAKey(r) !== key))
-  }
-
-  const updateOwner = async (report, newOwner) => {
-    // 同じ ka_key の全週行に新 owner を反映
-    const { data: candidates } = await supabase.from('weekly_reports')
-      .select('id, owner')
-      .eq('kr_id', report.kr_id)
-      .eq('ka_title', report.ka_title || '')
-      .eq('objective_id', report.objective_id)
-    const targetOwner = (report.owner || '').trim()
-    const ids = (candidates || [])
-      .filter(r => (r.owner || '').trim() === targetOwner)
-      .map(r => r.id)
-    if (ids.length === 0) ids.push(report.id)
-    const { error } = await supabase.from('weekly_reports').update({ owner: newOwner }).in('id', ids)
-    if (error) { alert('担当者変更失敗: ' + error.message); return }
-    setReports(p => p.map(r => ids.includes(r.id) ? { ...r, owner: newOwner } : r))
-  }
-
-  return (
-    <div style={{ marginLeft: 50, marginTop: 6, marginBottom: 8 }}>
-      <div onClick={() => setOpen(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}>
-        <span style={{ fontSize: 10, color: getT().accent, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
-        <span style={{ fontSize: 11, color: getT().accent }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
-        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: '#fff' }}>
-          {open ? uniqueKAs.length : ''}
-        </span>
-      </div>
-
-      {open && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: 10, color: getT().textMuted, marginBottom: 6 }}>
-            <span>💡 詳細編集 (good / more / focus) は</span>
-            <a onClick={() => { /* メインタブ切替は親コンポーネントで制御、ここでは案内のみ */ }}
-               style={{ color: getT().accent, cursor: 'pointer', textDecoration: 'underline' }}>週次MTG</a>
-            <span>で</span>
-          </div>
-
-          {loading && <div style={{ fontSize: 11, color: getT().textMuted, padding: '4px 0' }}>読み込み中...</div>}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
-            {uniqueKAs.map(ka => (
-              <div key={ka.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 7, background: getT().bgCard2, border: `1px solid ${getT().border}` }}>
-                <span style={{ flex: 1, fontSize: 12, color: getT().textSub, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{ka.ka_title || '(無題)'}</span>
-                <select value={ka.owner || ''} onChange={e => updateOwner(ka, e.target.value)} onClick={e => e.stopPropagation()} style={{
-                  fontSize: 10, background: 'transparent', border: `1px solid ${getT().border}`, borderRadius: 4,
-                  color: getT().textSub, cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px', outline: 'none',
-                }}>
-                  <option value="">-- 担当 --</option>
-                  {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                </select>
-                <button onClick={() => deleteKA(ka)} style={{ background: 'none', border: 'none', color: getT().textFaint, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>✕</button>
-              </div>
-            ))}
-            {uniqueKAs.length === 0 && !loading && (
-              <div style={{ fontSize: 11, color: getT().textFaintest, fontStyle: 'italic', padding: '2px 0' }}>KAがありません</div>
-            )}
-          </div>
-
-          {adding ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <textarea
-                autoFocus value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (newTitle.trim()) addKA() }
-                  if (e.key === 'Escape') setAdding(false)
-                }}
-                placeholder="KA タイトル (Enter追加・Shift+Enter改行)"
-                rows={2}
-                style={{ flex: 1, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: getT().text, outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 56, lineHeight: 1.6 }}
-              />
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <select value={newOwner} onChange={e => setNewOwner(e.target.value)}
-                  style={{ fontSize: 11, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '5px 8px', color: getT().text, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
-                  <option value="">-- 担当 (任意) --</option>
-                  {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                </select>
-                <button onClick={addKA} disabled={!newTitle.trim()} style={{ background: newTitle.trim() ? getT().accentSolid : getT().badgeBg, border: 'none', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: newTitle.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>追加</button>
-                <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#fff', background: getT().badgeBg, border: `1px dashed ${getT().badgeBorder}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
-              ＋ KAを追加
-            </button>
-          )}
-        </>
-      )}
-    </div>
   )
 }
 
@@ -1321,21 +1144,11 @@ export default function Dashboard({ user, onSignOut }) {
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {[{key:'org',label:'🏢 組織'},{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
+              {[{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
                 <button key={v.key} onClick={() => setViewMode(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: viewMode === v.key ? T.navActiveBg : 'transparent', color: viewMode === v.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
               ))}
             </div>
 
-            {viewMode === 'org' && (
-              <>
-                <div style={{ width: 1, height: 18, background: T.border }} />
-                <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-                  {periods.map(p => (
-                    <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePeriod === p.key ? T.navActiveBg : 'transparent', color: activePeriod === p.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>{p.label}</button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         )}
       </div>
@@ -1389,53 +1202,6 @@ export default function Dashboard({ user, onSignOut }) {
           />
         </div>
       </div>
-
-      {/* Org View */}
-      <div style={{ display: activePage === 'okr' && viewMode === 'org' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {isMobile && showSidebar && (
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
-        )}
-        <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
-          <SidebarContent />
-        </div>
-        <div style={{ flex: 1, padding: isMobile ? '14px' : '20px 24px', overflow: 'auto', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 22, fontWeight: 700, color: T.text }}>{activeLevel?.name}</span>
-              <span style={{ fontSize: 16 }}>{activeLevel?.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: getT().badgeBg, color: '#fff', border: `1px solid ${getT().badgeBorder}` }}>{fiscalYear}年度</span>
-              <span style={{ fontSize: 13, color: getT().textMuted }}>{periods.find(p => p.key === activePeriod)?.label}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${globalR.color}10`, border: `1px solid ${globalR.color}30`, borderRadius: 10, padding: '8px 14px' }}>
-              <div>
-                <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 1 }}>全社平均達成率</div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: globalR.color, lineHeight: 1 }}>{globalAvg}%</div>
-              </div>
-              <Stars score={globalR.score} size={11} />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            {[{ label: '経営', color: T.warn }, { label: '事業部', color: T.accent }, { label: 'チーム', color: T.accent }].map(l => (
-              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: l.color }} />
-                <span style={{ fontSize: 12, color: getT().textSub }}>{l.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {activeLevelId && (
-            <NodeBlock
-              levelId={activeLevelId}
-              levels={levels}
-              nodeObjectives={nodeObjectives}
-              onEdit={o => setModal({ type: 'edit', obj: o })}
-              onDelete={handleDelete}
-            />
-          )}
-        </div>
-      </div>
-
       {/* Owner View */}
       <div style={{ display: activePage === 'okr' && viewMode === 'owner' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
