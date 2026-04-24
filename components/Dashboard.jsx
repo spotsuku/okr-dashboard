@@ -16,6 +16,7 @@ import MyCoachPage from './MyCoachPage'
 import MyPageShell from './MyPageShell'
 import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
+import { computeKAKey } from '../lib/kaKey'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -445,82 +446,108 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 }
 
 // ─── KA Section ───────────────────────────────────────────────────────────────
-function KASection({ krId }) {
-  const [kas, setKAs] = useState([])
-  const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState('all')
-  const [adding, setAdding] = useState(false)
+// KASection: OKR詳細 組織ビュー用の KA 表示パネル
+//   データソース: weekly_reports (週次MTG / マイOKR と統一)
+//   表示粒度: 同じ KA (kr_id+ka_title+owner+objective_id) の重複を
+//            ka_key で集約し 1 件表示 (週をまたぐ行は 1つに)
+//   機能: 展開/折りたたみ, 追加 (選択週に挿入), 削除 (全週一括),
+//         owner 変更 (他週にも同期), 状態切替 (normal/done),
+//         詳細編集は「週次MTGで編集」リンクで 週次MTG 画面へ
+function KASection({ krId, objectiveId, levelId }) {
+  const [reports, setReports] = useState([])
+  const [members,  setMembers]  = useState([])
+  const [open,     setOpen]     = useState(false)
+  const [loading,  setLoading]  = useState(false)
+  const [adding,   setAdding]   = useState(false)
   const [newTitle, setNewTitle] = useState('')
-  const [newType, setNewType] = useState('normal')
-  const [loading, setLoading] = useState(false)
+  const [newOwner, setNewOwner] = useState('')
 
-  const weekStart = (() => {
-    const d = new Date()
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    const mon = new Date(d.setDate(diff))
-    return mon.toISOString().split('T')[0]
+  // 現在週の月曜日 (JST)
+  const currentWeekStart = (() => {
+    const now = new Date()
+    const jst = new Date(now.getTime() + 9 * 3600 * 1000)
+    const day = jst.getUTCDay()
+    const diff = jst.getUTCDate() - day + (day === 0 ? -6 : 1)
+    jst.setUTCDate(diff)
+    return jst.toISOString().split('T')[0]
   })()
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !krId) return
     load()
+    supabase.from('members').select('id,name,email').order('name').then(({ data }) => setMembers(data || []))
   }, [open, krId])
 
   const load = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('key_actions')
-      .select('*')
-      .eq('key_result_id', krId)
-      .eq('week_start', weekStart)
-      .order('id')
-    setKAs(data || [])
+    const { data } = await supabase.from('weekly_reports')
+      .select('*').eq('kr_id', krId).neq('status', 'done').range(0, 9999)
+    setReports(data || [])
     setLoading(false)
   }
 
+  // ka_key で重複排除 (最新週のデータを優先)
+  const uniqueKAs = (() => {
+    const map = new Map()
+    for (const r of reports) {
+      const k = computeKAKey(r)
+      const cur = map.get(k)
+      if (!cur || (r.week_start || '') > (cur.week_start || '')) map.set(k, r)
+    }
+    return Array.from(map.values())
+  })()
+
   const addKA = async () => {
     if (!newTitle.trim()) return
-    const { data, error } = await supabase.from('key_actions')
-      .insert({ key_result_id: krId, title: newTitle.trim(), type: newType, week_start: weekStart })
-      .select().single()
-    if (error) {
-      console.error('KA追加エラー:', error)
-      alert('KAの追加に失敗しました: ' + (error.message || JSON.stringify(error)))
-      return
+    const payload = {
+      week_start: currentWeekStart,
+      level_id: levelId,
+      objective_id: objectiveId,
+      kr_id: krId,
+      ka_title: newTitle.trim(),
+      owner: newOwner || '',
+      status: 'normal',
     }
-    if (data) { setKAs(p => [...p, data]); setNewTitle(''); setAdding(false) }
+    const { data, error } = await supabase.from('weekly_reports').insert(payload).select().single()
+    if (error) { alert('KA追加失敗: ' + error.message); return }
+    if (data) { setReports(p => [...p, data]); setNewTitle(''); setNewOwner(''); setAdding(false) }
   }
 
-  const deleteKA = async (id) => {
-    const { error } = await supabase.from('key_actions').delete().eq('id', id)
-    if (error) {
-      console.error('KA削除エラー:', error)
-      alert('KAの削除に失敗しました: ' + (error.message || JSON.stringify(error)))
-      return
-    }
-    setKAs(p => p.filter(k => k.id !== id))
+  const deleteKA = async (report) => {
+    if (!window.confirm(`この KA「${report.ka_title}」を全週分 まとめて削除しますか？`)) return
+    // ka_key (kr_id, ka_title, owner, objective_id) で同じ KA の行を全週取得
+    const { data: candidates } = await supabase.from('weekly_reports')
+      .select('id, owner')
+      .eq('kr_id', report.kr_id)
+      .eq('ka_title', report.ka_title || '')
+      .eq('objective_id', report.objective_id)
+    const targetOwner = (report.owner || '').trim()
+    const ids = (candidates || [])
+      .filter(r => (r.owner || '').trim() === targetOwner)
+      .map(r => r.id)
+    if (ids.length === 0) ids.push(report.id)
+    const { error } = await supabase.from('weekly_reports').delete().in('id', ids)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    const key = computeKAKey(report)
+    setReports(p => p.filter(r => computeKAKey(r) !== key))
   }
 
-  const updateType = async (id, type) => {
-    const { error } = await supabase.from('key_actions').update({ type }).eq('id', id)
-    if (error) {
-      console.error('KA更新エラー:', error)
-      alert('KAの更新に失敗しました: ' + (error.message || JSON.stringify(error)))
-      return
-    }
-    setKAs(p => p.map(k => k.id === id ? { ...k, type } : k))
+  const updateOwner = async (report, newOwner) => {
+    // 同じ ka_key の全週行に新 owner を反映
+    const { data: candidates } = await supabase.from('weekly_reports')
+      .select('id, owner')
+      .eq('kr_id', report.kr_id)
+      .eq('ka_title', report.ka_title || '')
+      .eq('objective_id', report.objective_id)
+    const targetOwner = (report.owner || '').trim()
+    const ids = (candidates || [])
+      .filter(r => (r.owner || '').trim() === targetOwner)
+      .map(r => r.id)
+    if (ids.length === 0) ids.push(report.id)
+    const { error } = await supabase.from('weekly_reports').update({ owner: newOwner }).in('id', ids)
+    if (error) { alert('担当者変更失敗: ' + error.message); return }
+    setReports(p => p.map(r => ids.includes(r.id) ? { ...r, owner: newOwner } : r))
   }
-
-  const TYPE_CONFIG = {
-    normal: { label: '未分類', color: getT().textMuted, bg: getT().bgCard2, border: getT().border },
-    focus:  { label: '🎯 今週注力', color: '#fff', bg: getT().badgeBg, border: getT().badgeBorder },
-    good:   { label: '✅ Good',    color: '#fff', bg: getT().badgeBg, border: getT().badgeBorder },
-    more:   { label: '🔺 More',   color: getT().warn, bg: getT().warnBg, border: getT().warnBg },
-  }
-
-  const filtered = tab === 'all' ? kas : kas.filter(k => k.type === tab)
-  const focusCount = kas.filter(k => k.type === 'focus').length
 
   return (
     <div style={{ marginLeft: 50, marginTop: 6, marginBottom: 8 }}>
@@ -528,51 +555,36 @@ function KASection({ krId }) {
         <span style={{ fontSize: 10, color: getT().accent, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
         <span style={{ fontSize: 11, color: getT().accent }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
         <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: '#fff' }}>
-          {open ? kas.length : ''}
+          {open ? uniqueKAs.length : ''}
         </span>
-        {!open && focusCount > 0 && (
-          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: getT().badgeBg, color: '#fff', fontWeight: 700 }}>🎯 {focusCount}</span>
-        )}
       </div>
 
       {open && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: getT().badgeBg, border: `1px solid ${getT().badgeBorder}`, borderRadius: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 11 }}>📅</span>
-            <span style={{ fontSize: 11, color: getT().accent, fontWeight: 600 }}>今週のKA</span>
-            <span style={{ fontSize: 10, color: getT().textMuted, marginLeft: 'auto' }}>{weekStart}</span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-            {[['all','すべて'],['focus','🎯 注力'],['good','✅ Good'],['more','🔺 More']].map(([key, lbl]) => (
-              <button key={key} onClick={() => setTab(key)} style={{
-                fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 99, cursor: 'pointer', fontFamily: 'inherit',
-                background: tab === key ? (key === 'all' ? 'rgba(255,255,255,0.12)' : `${TYPE_CONFIG[key]?.bg || 'rgba(255,255,255,0.1)'}`) : 'transparent',
-                border: `1px solid ${tab === key ? (key === 'all' ? 'rgba(255,255,255,0.25)' : TYPE_CONFIG[key]?.border || 'rgba(255,255,255,0.2)') : 'rgba(255,255,255,0.1)'}`,
-                color: tab === key ? (key === 'all' ? '#e8eaf0' : TYPE_CONFIG[key]?.color) : getT().textMuted,
-              }}>{lbl}</button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: 10, color: getT().textMuted, marginBottom: 6 }}>
+            <span>💡 詳細編集 (good / more / focus) は</span>
+            <a onClick={() => { /* メインタブ切替は親コンポーネントで制御、ここでは案内のみ */ }}
+               style={{ color: getT().accent, cursor: 'pointer', textDecoration: 'underline' }}>週次MTG</a>
+            <span>で</span>
           </div>
 
           {loading && <div style={{ fontSize: 11, color: getT().textMuted, padding: '4px 0' }}>読み込み中...</div>}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
-            {filtered.map(ka => (
-              <div key={ka.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '6px 10px', borderRadius: 7, background: TYPE_CONFIG[ka.type]?.bg, border: `1px solid ${TYPE_CONFIG[ka.type]?.border}` }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: TYPE_CONFIG[ka.type]?.color, flexShrink: 0, marginTop: 5 }} />
-                <span style={{ flex: 1, fontSize: 12, color: getT().textSub, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{ka.title}</span>
-                <select value={ka.type} onChange={e => updateType(ka.id, e.target.value)} onClick={e => e.stopPropagation()} style={{
-                  fontSize: 9, background: 'transparent', border: 'none', color: TYPE_CONFIG[ka.type]?.color,
-                  cursor: 'pointer', fontFamily: 'inherit', padding: 0, outline: 'none',
+            {uniqueKAs.map(ka => (
+              <div key={ka.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 7, background: getT().bgCard2, border: `1px solid ${getT().border}` }}>
+                <span style={{ flex: 1, fontSize: 12, color: getT().textSub, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{ka.ka_title || '(無題)'}</span>
+                <select value={ka.owner || ''} onChange={e => updateOwner(ka, e.target.value)} onClick={e => e.stopPropagation()} style={{
+                  fontSize: 10, background: 'transparent', border: `1px solid ${getT().border}`, borderRadius: 4,
+                  color: getT().textSub, cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px', outline: 'none',
                 }}>
-                  <option value="normal">未分類</option>
-                  <option value="focus">🎯 注力</option>
-                  <option value="good">✅ Good</option>
-                  <option value="more">🔺 More</option>
+                  <option value="">-- 担当 --</option>
+                  {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
-                <button onClick={() => deleteKA(ka.id)} style={{ background: 'none', border: 'none', color: getT().textFaint, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>✕</button>
+                <button onClick={() => deleteKA(ka)} style={{ background: 'none', border: 'none', color: getT().textFaint, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>✕</button>
               </div>
             ))}
-            {filtered.length === 0 && !loading && (
+            {uniqueKAs.length === 0 && !loading && (
               <div style={{ fontSize: 11, color: getT().textFaintest, fontStyle: 'italic', padding: '2px 0' }}>KAがありません</div>
             )}
           </div>
@@ -580,27 +592,24 @@ function KASection({ krId }) {
           {adding ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <textarea
-                autoFocus
-                value={newTitle}
+                autoFocus value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (newTitle.trim()) addKA() }
                   if (e.key === 'Escape') setAdding(false)
                 }}
-                placeholder="KAを入力（Enterで追加、Shift+Enterで改行）"
+                placeholder="KA タイトル (Enter追加・Shift+Enter改行)"
                 rows={2}
                 style={{ flex: 1, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: getT().text, outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 56, lineHeight: 1.6 }}
               />
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <select value={newType} onChange={e => setNewType(e.target.value)} style={{ fontSize: 11, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '5px 6px', color: getT().text, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
-                  <option value="normal">未分類</option>
-                  <option value="focus">🎯 注力</option>
-                  <option value="good">✅ Good</option>
-                  <option value="more">🔺 More</option>
+                <select value={newOwner} onChange={e => setNewOwner(e.target.value)}
+                  style={{ fontSize: 11, background: getT().bgCard, border: `1px solid ${getT().borderMid}`, borderRadius: 6, padding: '5px 8px', color: getT().text, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
+                  <option value="">-- 担当 (任意) --</option>
+                  {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
                 <button onClick={addKA} disabled={!newTitle.trim()} style={{ background: newTitle.trim() ? getT().accentSolid : getT().badgeBg, border: 'none', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: newTitle.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>追加</button>
                 <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
-                <span style={{ fontSize: 10, color: getT().textFaint, marginLeft: 'auto' }}>Enter: 追加　Shift+Enter: 改行</span>
               </div>
             </div>
           ) : (
@@ -691,7 +700,7 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
                       <Bar value={kprog} color={kr_rating.color} />
                     </div>
                   </div>
-                  <KASection krId={kr.id} />
+                  <KASection krId={kr.id} objectiveId={obj.id} levelId={obj.level_id} />
                 </div>
               )
             })}
