@@ -35,10 +35,14 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
   })()
 
   useEffect(() => {
-    if (!open || !krId) return
+    if (!krId) return
     load()
+  }, [krId])
+
+  useEffect(() => {
+    if (!open || members.length > 0) return
     supabase.from('members').select('id,name,email').order('name').then(({ data }) => setMembers(data || []))
-  }, [open, krId])
+  }, [open])
 
   const load = async () => {
     setLoading(true)
@@ -115,7 +119,7 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
         <span style={{ fontSize: 10, color: T.accent, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
         <span style={{ fontSize: 11, color: T.accent }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
         <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: T.badgeBg, color: '#fff' }}>
-          {open ? uniqueKAs.length : ''}
+          {uniqueKAs.length}件
         </span>
       </div>
 
