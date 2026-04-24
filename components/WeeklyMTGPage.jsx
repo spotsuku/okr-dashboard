@@ -422,14 +422,21 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   }
 
   // 同じ KA (同じ ka_key) を持つ他週の weekly_reports 行にも同じフィールドを
-  // 反映させる。これによりマイOKR と 週次MTG の表示が同期する
+  // 反映させる。Postgres では owner の NULL と '' が別物扱いになるため、
+  // 候補を取得してから JS 側で正規化比較して UPDATE 対象 id を決める。
   const syncSiblingWeeks = async (field, value) => {
-    await supabase.from('weekly_reports').update({ [field]: value })
+    const { data: candidates } = await supabase.from('weekly_reports')
+      .select('id, owner')
       .eq('kr_id', report.kr_id)
       .eq('ka_title', report.ka_title || '')
-      .eq('owner', report.owner || '')
       .eq('objective_id', report.objective_id)
-      .neq('id', report.id) // 現在の行は autoSave が更新済
+      .neq('id', report.id)
+    const targetOwner = (report.owner || '').trim()
+    const ids = (candidates || [])
+      .filter(r => (r.owner || '').trim() === targetOwner)
+      .map(r => r.id)
+    if (ids.length === 0) return
+    await supabase.from('weekly_reports').update({ [field]: value }).in('id', ids)
   }
 
   const handleOwnerChange = (val) => {
@@ -1129,6 +1136,15 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   // ★ 手動で週を作成（前週のKAをKR単位でコピー、既存KRはスキップ）
   const copyingRef = useRef(new Set())
+  // プレースホルダー判定: タイトルが「新しいKA」のまま + owner 無し + 本文全て空
+  //   (追加ボタンを押して放置された未完成 KA は carry-forward しない)
+  const isOrphanedPlaceholder = (r) => {
+    if (!r) return false
+    const titleIsPlaceholder = (r.ka_title || '').trim() === '新しいKA'
+    const noOwner = !(r.owner || '').trim()
+    const noContent = !(r.good || '').trim() && !(r.more || '').trim() && !(r.focus_output || '').trim()
+    return titleIsPlaceholder && noOwner && noContent
+  }
   const createWeek = async (targetMonday) => {
     // 多重実行防止
     if (copyingRef.current.has(targetMonday)) return
@@ -1141,6 +1157,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       for (const r of reports) {
         if (r.week_start >= targetMonday) continue  // 未来週は除外
         if (r.status === 'done') continue            // 完了は引き継がない
+        if (isOrphanedPlaceholder(r)) continue       // 未完成プレースホルダーは除外
         const k = computeKAKey(r)
         const cur = srcMap.get(k)
         if (!cur || (r.week_start || '') > (cur.week_start || '')) srcMap.set(k, r)
@@ -1181,10 +1198,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   useEffect(() => {
     if (!activeWeek || loading || reports.length === 0) return
     // 過去の全週で active だった KA の ka_key セット
+    //   未完成プレースホルダー (新しいKA / owner 無し / 本文空) は引き継がない
     const pastActive = new Map()
     for (const r of reports) {
       if (r.week_start >= activeWeek) continue
       if (r.status === 'done') continue
+      if (isOrphanedPlaceholder(r)) continue
       const k = computeKAKey(r)
       if (!pastActive.has(k)) pastActive.set(k, true)
     }
