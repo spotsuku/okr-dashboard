@@ -299,6 +299,9 @@ function UserListTab({ members, currentUser, isAdmin }) {
 
   return (
     <div style={{ maxWidth: 900 }}>
+      {/* Slack 連携 (admin のみ) */}
+      {isAdmin && <SlackSyncPanel />}
+
       {/* サマリー */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         {[
@@ -447,6 +450,75 @@ function UserListTab({ members, currentUser, isAdmin }) {
             <button onClick={() => setRoleModal(null)} style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${T().border}`, background: 'transparent', color: T().textMuted, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>キャンセル</button>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════
+// Slack 連携 (admin 用) : ユーザー同期ボタン
+// ══════════════════════════════════════════════════
+function SlackSyncPanel() {
+  const [syncing, setSyncing] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+
+  const sync = async () => {
+    setSyncing(true); setResult(null); setError('')
+    try {
+      const r = await fetch('/api/integrations/slack/sync-users', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok || !j.ok) { setError(j.error || `HTTP ${r.status}`); return }
+      setResult(j)
+    } catch (e) {
+      setError(e.message || String(e))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <div style={{
+      marginBottom: 20, padding: '14px 18px', borderRadius: 12,
+      background: T().bgCard, border: `1px solid ${T().border}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 18 }}>💬</span>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T().text }}>Slack ユーザー同期</div>
+          <div style={{ fontSize: 11, color: T().textMuted }}>
+            Slack ワークスペースのユーザーを email マッチで members.slack_user_id に自動設定
+          </div>
+        </div>
+        <button onClick={sync} disabled={syncing} style={{
+          padding: '8px 18px', borderRadius: 8, border: 'none',
+          background: '#4A154B', color: '#fff',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          cursor: syncing ? 'wait' : 'pointer',
+          opacity: syncing ? 0.6 : 1,
+        }}>{syncing ? '同期中...' : '🔄 Slack ユーザー同期'}</button>
+      </div>
+      {result && (
+        <div style={{
+          marginTop: 10, padding: 10, borderRadius: 8,
+          background: 'rgba(0,214,143,0.1)', border: '1px solid rgba(0,214,143,0.3)',
+          fontSize: 12, color: T().text,
+        }}>
+          ✅ 同期完了: <b>{result.updated}</b> 名を更新しました
+          (Slack 側ユーザー: {result.total} / メンバー総数: {result.membersTotal})
+          {result.unmatched?.length > 0 && (
+            <div style={{ marginTop: 4, fontSize: 11, color: T().textMuted }}>
+              マッチしなかったメンバー: {result.unmatched.join(', ')} (email が Slack と一致しないか未設定)
+            </div>
+          )}
+        </div>
+      )}
+      {error && (
+        <div style={{
+          marginTop: 10, padding: 10, borderRadius: 8,
+          background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
+          fontSize: 12, color: T().danger,
+        }}>⚠️ エラー: {error}</div>
       )}
     </div>
   )
