@@ -1134,20 +1134,31 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     if (copyingRef.current.has(targetMonday)) return
     copyingRef.current.add(targetMonday)
     try {
-      // 直近の既存週からコピー
-      const prevWeeks = weeksList.filter(w => w < targetMonday)
-      const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
-      if (!srcWeek) return
-
-      const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
+      // 過去の全週から ka_key でユニークな active KA を集める
+      //   (直前1週だけに頼ると、古い週にしか存在しない KA が永久に取り残される)
+      //   同じ ka_key の場合、より新しい週のデータを優先する
+      const srcMap = new Map()
+      for (const r of reports) {
+        if (r.week_start >= targetMonday) continue  // 未来週は除外
+        if (r.status === 'done') continue            // 完了は引き継がない
+        const k = computeKAKey(r)
+        const cur = srcMap.get(k)
+        if (!cur || (r.week_start || '') > (cur.week_start || '')) srcMap.set(k, r)
+      }
+      const srcKAs = Array.from(srcMap.values())
       if (srcKAs.length === 0) return
 
-      // DB上の対象週データを直接取得（stateとのズレを防止）
-      const { data: existingData } = await supabase.from('weekly_reports').select('kr_id,ka_title').eq('week_start', targetMonday)
-      const existingKeys = new Set((existingData || []).map(r => `${r.kr_id}_${r.ka_title}`))
+      // DB上の対象週データを直接取得 (state とのズレを防止)
+      const { data: existingData } = await supabase.from('weekly_reports')
+        .select('kr_id,ka_title,owner,objective_id').eq('week_start', targetMonday)
+      // ka_key (4 列の組合せ) で判定。旧実装の kr_id+ka_title 同定は、
+      // owner 違いの同タイトル KA を誤って重複扱いしていた
+      const existingKeys = new Set(
+        (existingData || []).map(r => computeKAKey(r))
+      )
 
-      // 未コピーのKAのみ抽出
-      const toCopy = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
+      // 未コピーの KA のみ抽出
+      const toCopy = srcKAs.filter(r => !existingKeys.has(computeKAKey(r)))
       if (toCopy.length === 0) return
 
       const copies = toCopy.map(r => ({
@@ -1157,9 +1168,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       }))
       await supabase.from('weekly_reports').insert(copies).select()
 
-      // ★ 旧実装では未完了タスクを複製していたが、ka_tasks は ka_key で
-      // 週を跨いで識別するようになったので、コピーは不要（同じKAなら
-      // 新しい週の行でも同じタスクが見える）
+      // ★ ka_tasks は ka_key で週をまたぐ。コピー不要
 
       await reload()
       setActiveWeek(targetMonday)
@@ -1168,18 +1177,23 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     }
   }
 
-  // ★ 週を開いた時に前週から未コピーKAを自動補完
+  // ★ 週を開いた時に過去週から未コピー KA を自動補完
   useEffect(() => {
     if (!activeWeek || loading || reports.length === 0) return
-    const prevWeeks = weeksList.filter(w => w < activeWeek)
-    if (prevWeeks.length === 0) return
-    const srcWeek = prevWeeks[prevWeeks.length - 1]
-    const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
-    const existingKeys = new Set(
-      reports.filter(r => r.week_start === activeWeek)
-        .map(r => `${r.kr_id}_${r.ka_title}`)
+    // 過去の全週で active だった KA の ka_key セット
+    const pastActive = new Map()
+    for (const r of reports) {
+      if (r.week_start >= activeWeek) continue
+      if (r.status === 'done') continue
+      const k = computeKAKey(r)
+      if (!pastActive.has(k)) pastActive.set(k, true)
+    }
+    if (pastActive.size === 0) return
+    // 選択週に既存の ka_key
+    const existing = new Set(
+      reports.filter(r => r.week_start === activeWeek).map(r => computeKAKey(r))
     )
-    const missing = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
+    const missing = [...pastActive.keys()].filter(k => !existing.has(k))
     if (missing.length > 0) {
       createWeek(activeWeek)
     }
