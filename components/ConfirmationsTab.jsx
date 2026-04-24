@@ -6,9 +6,10 @@ import { supabase } from '../lib/supabase'
 //   受信: 自分宛の未解決/解決済
 //   送信: 自分が送ったもの
 //   新規作成 / 返信 / 解決化
-// Props: { T, myName, members, viewingName }
+// Props: { T, myName, members, viewingName, companyWide }
+//   companyWide=true の場合は全社の確認事項を一覧表示 (受信/送信タブなし・新規作成不可)
 
-export default function ConfirmationsTab({ T, myName, members = [], viewingName }) {
+export default function ConfirmationsTab({ T, myName, members = [], viewingName, companyWide = false }) {
   // 表示対象: 他メンバーのページを見ている場合はそのメンバー、自分のページなら自分
   const targetName = viewingName || myName
   const isViewingSelf = !viewingName || viewingName === myName
@@ -24,11 +25,14 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
   const [counts, setCounts] = useState({ receivedOpen: 0, receivedAll: 0, sentAll: 0 })
 
   const load = useCallback(async () => {
-    if (!targetName) return
+    if (!companyWide && !targetName) return
     setLoading(true)
-    const column = tab === 'received' ? 'to_name' : 'from_name'
     let q = supabase.from('member_confirmations')
-      .select('*').eq(column, targetName).order('created_at', { ascending: false })
+      .select('*').order('created_at', { ascending: false })
+    if (!companyWide) {
+      const column = tab === 'received' ? 'to_name' : 'from_name'
+      q = q.eq(column, targetName)
+    }
     if (!showResolved) q = q.eq('status', 'open')
     const { data } = await q
     setItems(data || [])
@@ -49,11 +53,11 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
       setReplies({})
     }
     setLoading(false)
-  }, [targetName, tab, showResolved])
+  }, [targetName, tab, showResolved, companyWide])
 
   // 件数バッジ用に受信 open / 受信 全 / 送信 全 を並行で取得
   const loadCounts = useCallback(async () => {
-    if (!targetName) return
+    if (companyWide || !targetName) return
     const [recvOpen, recvAll, sentAll] = await Promise.all([
       supabase.from('member_confirmations').select('id', { count: 'exact', head: true })
         .eq('to_name', targetName).eq('status', 'open'),
@@ -67,18 +71,18 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
       receivedAll:  recvAll.count  || 0,
       sentAll:      sentAll.count  || 0,
     })
-  }, [targetName])
+  }, [targetName, companyWide])
 
   useEffect(() => { load(); loadCounts() }, [load, loadCounts])
 
   // Realtime: 確認事項 + 返信 の変更を即反映 (件数も再取得)
   useEffect(() => {
-    const ch = supabase.channel('confirmations_' + (targetName || 'anon'))
+    const ch = supabase.channel('confirmations_' + (companyWide ? 'all' : (targetName || 'anon')))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => { load(); loadCounts() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmation_replies' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [targetName, load, loadCounts])
+  }, [targetName, load, loadCounts, companyWide])
 
   const resolve = async (id) => {
     const { error } = await supabase.from('member_confirmations')
@@ -108,18 +112,22 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>📬 確認</h2>
           <div style={{ fontSize: 11, color: T.textMuted }}>
-            {isViewingSelf ? 'メンバー間の確認事項を送受信' : `${targetName}さんの確認事項 (閲覧)`}
+            {companyWide
+              ? '全社の確認事項 (全メンバー間)'
+              : isViewingSelf ? 'メンバー間の確認事項を送受信' : `${targetName}さんの確認事項 (閲覧)`}
           </div>
           <div style={{ flex: 1 }} />
-          <button onClick={() => setComposing(true)} style={{
-            padding: '6px 14px', borderRadius: 7,
-            background: T.accent, color: '#fff', border: 'none',
-            fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-          }}>＋ 新規作成</button>
+          {!companyWide && (
+            <button onClick={() => setComposing(true)} style={{
+              padding: '6px 14px', borderRadius: 7,
+              background: T.accent, color: '#fff', border: 'none',
+              fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+            }}>＋ 新規作成</button>
+          )}
         </div>
 
         {/* 新規作成モーダル */}
-        {composing && (
+        {composing && !companyWide && (
           <ComposeModal T={T} myName={myName} members={members}
             onClose={() => setComposing(false)}
             onSaved={() => { setComposing(false); load() }} />
@@ -130,7 +138,7 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
           display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap',
           padding: '8px 12px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
         }}>
-          {[
+          {!companyWide && [
             // 受信は「未確認 件数 / 全件数」を表示 (未確認があれば赤バッジ)
             { key: 'received', label: '受信',
               countMain: showResolved ? counts.receivedAll : counts.receivedOpen,
@@ -163,6 +171,11 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
               </button>
             )
           })}
+          {companyWide && (
+            <div style={{ fontSize: 11, color: T.textSub, padding: '3px 4px' }}>
+              件数: <strong style={{ color: T.text }}>{items.length}</strong>
+            </div>
+          )}
           <div style={{ flex: 1 }} />
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: T.textMuted, cursor: 'pointer' }}>
             <input type="checkbox" checked={showResolved} onChange={e => setShowResolved(e.target.checked)} />
@@ -179,12 +192,14 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
             background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 10,
           }}>
             <div style={{ fontSize: 28, marginBottom: 10 }}>📭</div>
-            {tab === 'received' ? '自分宛の確認事項はありません' : '送信した確認事項はありません'}
+            {companyWide ? '確認事項はありません'
+              : tab === 'received' ? '自分宛の確認事項はありません' : '送信した確認事項はありません'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {items.map(it => (
               <ConfirmationCard key={it.id} T={T} item={it} tab={tab}
+                companyWide={companyWide}
                 replies={replies[it.id] || []} myName={myName} members={members}
                 isReplying={replyingId === it.id}
                 onStartReply={() => setReplyingId(it.id)}
@@ -202,7 +217,7 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName 
 }
 
 // ─── 確認事項カード ─────────────────────────────────────────────
-function ConfirmationCard({ T, item, tab, replies, myName, members, isReplying, onStartReply, onCancelReply, onReplied, onResolve, onUnresolve, onRemove }) {
+function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, members, isReplying, onStartReply, onCancelReply, onReplied, onResolve, onUnresolve, onRemove }) {
   const isResolved = item.status === 'resolved'
   const isReceived = tab === 'received'
   const counterparty = isReceived ? item.from_name : item.to_name
@@ -211,22 +226,31 @@ function ConfirmationCard({ T, item, tab, replies, myName, members, isReplying, 
   return (
     <div style={{
       background: isResolved ? T.sectionBg : T.bgCard,
-      border: `1px solid ${isResolved ? T.border : (isReceived ? T.accent + '40' : T.border)}`,
-      borderLeft: isReceived && !isResolved ? `3px solid ${T.accent}` : `1px solid ${T.border}`,
+      border: `1px solid ${isResolved ? T.border : ((!companyWide && isReceived) ? T.accent + '40' : T.border)}`,
+      borderLeft: (!companyWide && isReceived && !isResolved) ? `3px solid ${T.accent}` : `1px solid ${T.border}`,
       borderRadius: 8, padding: 12,
       opacity: isResolved ? 0.7 : 1,
     }}>
       {/* ヘッダ行 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 14 }}>{isReceived ? '📥' : '📤'}</span>
-        <span style={{ fontSize: 11, color: T.textMuted }}>
-          {isReceived ? 'from' : 'to'}
-        </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-          {counterpartyMember?.name || counterparty}
-        </span>
-        {counterpartyMember?.role && (
-          <span style={{ fontSize: 9, color: T.textFaint }}>({counterpartyMember.role})</span>
+        {companyWide ? (
+          <>
+            <span style={{ fontSize: 11, color: T.textMuted }}>from</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.from_name}</span>
+            <span style={{ fontSize: 11, color: T.textMuted }}>→ to</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.to_name}</span>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: 14 }}>{isReceived ? '📥' : '📤'}</span>
+            <span style={{ fontSize: 11, color: T.textMuted }}>{isReceived ? 'from' : 'to'}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+              {counterpartyMember?.name || counterparty}
+            </span>
+            {counterpartyMember?.role && (
+              <span style={{ fontSize: 9, color: T.textFaint }}>({counterpartyMember.role})</span>
+            )}
+          </>
         )}
         <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>
           {formatRelTime(item.created_at)}
