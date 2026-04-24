@@ -34,20 +34,30 @@ export async function POST(request) {
       .select('*').eq('id', confirmation_id).maybeSingle()
     if (!conf) return json({ error: 'confirmation not found' }, { status: 404 })
 
-    // 2. 宛先メンバー情報
+    // 2. 宛先メンバー情報 (slack_user_id があれば実メンション <@USERID> を使う)
     const { data: toMember } = await supabase.from('members')
-      .select('id, name, email, level_id').eq('name', conf.to_name).maybeSingle()
+      .select('id, name, email, level_id, slack_user_id').eq('name', conf.to_name).maybeSingle()
+    const toMention = toMember?.slack_user_id
+      ? `<@${toMember.slack_user_id}>`           // 実メンション (push 通知発火)
+      : `@${conf.to_name}`                        // フォールバック (文字列)
 
-    const lines = [
-      `📬 ${conf.from_name} さんから確認事項が届いています`,
+    // 送信者 (任意・本文中に表示)
+    const { data: fromMember } = await supabase.from('members')
+      .select('slack_user_id').eq('name', conf.from_name).maybeSingle()
+    const fromMention = fromMember?.slack_user_id
+      ? `<@${fromMember.slack_user_id}>`
+      : conf.from_name
+
+    const text = [
+      `${toMention} 📬 確認事項が届いています`,
+      `(from: ${fromMention})`,
       ``,
       conf.content,
       ``,
       `→ マイページ → 📬確認 タブで返信できます`,
-    ]
-    const text = lines.join('\n')
+    ].join('\n')
 
-    // 3a. 部署 webhook に通知 (推奨パス)
+    // 3a. 部署 webhook に通知 (設定あれば優先)
     let notified = false
     if (toMember?.level_id) {
       const { data: lvl } = await supabase.from('levels')
@@ -57,9 +67,7 @@ export async function POST(request) {
           await fetch(lvl.slack_webhook_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: `@${conf.to_name} ` + text, // メンション (Slack 側でリアルメンションにするには <@USERID> が必要)
-            }),
+            body: JSON.stringify({ text }),
           })
           notified = true
         } catch (e) {
@@ -68,13 +76,13 @@ export async function POST(request) {
       }
     }
 
-    // 3b. グローバル webhook (fallback)
+    // 3b. グローバル webhook (通常はこちらで社内連携チャンネルに投稿)
     if (!notified && process.env.SLACK_WEBHOOK_URL) {
       try {
         await fetch(process.env.SLACK_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: `to: ${conf.to_name}\n` + text }),
+          body: JSON.stringify({ text }),
         })
         notified = true
       } catch (e) {

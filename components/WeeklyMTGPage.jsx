@@ -421,6 +421,17 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
   }
 
+  // 同じ KA (同じ ka_key) を持つ他週の weekly_reports 行にも同じフィールドを
+  // 反映させる。これによりマイOKR と 週次MTG の表示が同期する
+  const syncSiblingWeeks = async (field, value) => {
+    await supabase.from('weekly_reports').update({ [field]: value })
+      .eq('kr_id', report.kr_id)
+      .eq('ka_title', report.ka_title || '')
+      .eq('owner', report.owner || '')
+      .eq('objective_id', report.objective_id)
+      .neq('id', report.id) // 現在の行は autoSave が更新済
+  }
+
   const handleOwnerChange = (val) => {
     setOwnerDraft(val)
     autoSave.save('owner', val)
@@ -428,6 +439,8 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     const oldKey = computeKAKey(report)
     const newKey = computeKAKey({ ...report, owner: val })
     syncTaskKaKey(oldKey, newKey)
+    // 他週の同じ KA 行の owner も追従
+    syncSiblingWeeks('owner', val)
   }
 
   const handleTitleBlur = () => {
@@ -440,6 +453,8 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       const oldKey = computeKAKey(report)
       const newKey = computeKAKey({ ...report, ka_title: newTitle })
       syncTaskKaKey(oldKey, newKey)
+      // 他週の同じ KA 行の ka_title も追従
+      syncSiblingWeeks('ka_title', newTitle)
     }
   }
 
@@ -1119,20 +1134,31 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     if (copyingRef.current.has(targetMonday)) return
     copyingRef.current.add(targetMonday)
     try {
-      // 直近の既存週からコピー
-      const prevWeeks = weeksList.filter(w => w < targetMonday)
-      const srcWeek = prevWeeks.length > 0 ? prevWeeks[prevWeeks.length - 1] : null
-      if (!srcWeek) return
-
-      const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
+      // 過去の全週から ka_key でユニークな active KA を集める
+      //   (直前1週だけに頼ると、古い週にしか存在しない KA が永久に取り残される)
+      //   同じ ka_key の場合、より新しい週のデータを優先する
+      const srcMap = new Map()
+      for (const r of reports) {
+        if (r.week_start >= targetMonday) continue  // 未来週は除外
+        if (r.status === 'done') continue            // 完了は引き継がない
+        const k = computeKAKey(r)
+        const cur = srcMap.get(k)
+        if (!cur || (r.week_start || '') > (cur.week_start || '')) srcMap.set(k, r)
+      }
+      const srcKAs = Array.from(srcMap.values())
       if (srcKAs.length === 0) return
 
-      // DB上の対象週データを直接取得（stateとのズレを防止）
-      const { data: existingData } = await supabase.from('weekly_reports').select('kr_id,ka_title').eq('week_start', targetMonday)
-      const existingKeys = new Set((existingData || []).map(r => `${r.kr_id}_${r.ka_title}`))
+      // DB上の対象週データを直接取得 (state とのズレを防止)
+      const { data: existingData } = await supabase.from('weekly_reports')
+        .select('kr_id,ka_title,owner,objective_id').eq('week_start', targetMonday)
+      // ka_key (4 列の組合せ) で判定。旧実装の kr_id+ka_title 同定は、
+      // owner 違いの同タイトル KA を誤って重複扱いしていた
+      const existingKeys = new Set(
+        (existingData || []).map(r => computeKAKey(r))
+      )
 
-      // 未コピーのKAのみ抽出
-      const toCopy = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
+      // 未コピーの KA のみ抽出
+      const toCopy = srcKAs.filter(r => !existingKeys.has(computeKAKey(r)))
       if (toCopy.length === 0) return
 
       const copies = toCopy.map(r => ({
@@ -1142,9 +1168,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       }))
       await supabase.from('weekly_reports').insert(copies).select()
 
-      // ★ 旧実装では未完了タスクを複製していたが、ka_tasks は ka_key で
-      // 週を跨いで識別するようになったので、コピーは不要（同じKAなら
-      // 新しい週の行でも同じタスクが見える）
+      // ★ ka_tasks は ka_key で週をまたぐ。コピー不要
 
       await reload()
       setActiveWeek(targetMonday)
@@ -1153,18 +1177,23 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     }
   }
 
-  // ★ 週を開いた時に前週から未コピーKAを自動補完
+  // ★ 週を開いた時に過去週から未コピー KA を自動補完
   useEffect(() => {
     if (!activeWeek || loading || reports.length === 0) return
-    const prevWeeks = weeksList.filter(w => w < activeWeek)
-    if (prevWeeks.length === 0) return
-    const srcWeek = prevWeeks[prevWeeks.length - 1]
-    const srcKAs = reports.filter(r => r.week_start === srcWeek && r.status !== 'done')
-    const existingKeys = new Set(
-      reports.filter(r => r.week_start === activeWeek)
-        .map(r => `${r.kr_id}_${r.ka_title}`)
+    // 過去の全週で active だった KA の ka_key セット
+    const pastActive = new Map()
+    for (const r of reports) {
+      if (r.week_start >= activeWeek) continue
+      if (r.status === 'done') continue
+      const k = computeKAKey(r)
+      if (!pastActive.has(k)) pastActive.set(k, true)
+    }
+    if (pastActive.size === 0) return
+    // 選択週に既存の ka_key
+    const existing = new Set(
+      reports.filter(r => r.week_start === activeWeek).map(r => computeKAKey(r))
     )
-    const missing = srcKAs.filter(r => !existingKeys.has(`${r.kr_id}_${r.ka_title}`))
+    const missing = [...pastActive.keys()].filter(k => !existing.has(k))
     if (missing.length > 0) {
       createWeek(activeWeek)
     }
@@ -1178,10 +1207,24 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     createWeek(toDateStr(nextMon))
   }
   const handleSave   = (updated) => setReports(p => p.map(r => r.id===updated.id ? updated : r))
+  // KA 削除: 同じ ka_key を持つ他週の行もまとめて削除する
+  //   (週ごとに別レコードの設計なので、1行だけ消すと他週から「復活」して見えるため)
   const handleDelete = async (id) => {
-    if (!window.confirm('削除しますか？')) return
-    await supabase.from('weekly_reports').delete().eq('id', id)
-    setReports(p => p.filter(r => r.id!==id))
+    if (!window.confirm('この KA を全週分 まとめて削除しますか？')) return
+    const target = reports.find(r => r.id === id)
+    if (!target) {
+      await supabase.from('weekly_reports').delete().eq('id', id)
+      setReports(p => p.filter(r => r.id!==id))
+      return
+    }
+    // 同じ ka_key に属する行をすべて集めて一括削除
+    const kaKey = computeKAKey(target)
+    const sameKaIds = reports
+      .filter(r => computeKAKey(r) === kaKey)
+      .map(r => r.id)
+    const { error } = await supabase.from('weekly_reports').delete().in('id', sameKaIds)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    setReports(p => p.filter(r => !sameKaIds.includes(r.id)))
   }
   const handleKROwnerChange = async (krId, newOwner) => {
     const { error } = await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
@@ -1198,9 +1241,11 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || ''
   const isAdmin  = myMember?.is_admin === true
-  // 週次MTG中の共同編集を許可: ログイン済みユーザー全員がKAを編集可能
-  // (旧: 管理者・KA担当・Obj責任者・KR担当のみだったが、会議中の不便さから解放)
-  const canEditKA = useCallback(() => !!myName, [myName])
+  // 週次MTG中の共同編集を許可: ログイン済みユーザー全員が KA を編集可能
+  //   (旧: 管理者・KA担当・Obj責任者・KR担当のみだったが、会議中の不便さから解放)
+  //   注: members テーブルに登録されていないユーザー (email マッチしない場合も)
+  //       認証済みなら編集可とする (myName が空でも user.email があれば OK)
+  const canEditKA = useCallback(() => !!(myName || user?.email), [myName, user?.email])
 
   // 年度・部署フィルタ（左パネルは通期OKRのみ表示）
   const visibleLevelIds = activeLevelId ? [Number(activeLevelId)] : levels.map(l=>l.id)
