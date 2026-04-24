@@ -149,23 +149,24 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const okrCloseTimerRef = useRef(null)
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
-  // 📬 自分宛の未解決「確認事項」件数 (サブタブバッジ + ダッシュボードバナー用)
+  // 📬 表示対象メンバー宛の未解決「確認事項」件数 (サブタブバッジ + バナー用)
+  //   viewingName で絞るため、他メンバーのページを見ても件数が表示される
   const [unresolvedConfirmCount, setUnresolvedConfirmCount] = useState(0)
   useEffect(() => {
-    if (!myName) return
+    if (!viewingName) return
     let alive = true
     const loadCount = async () => {
       const { count } = await supabase.from('member_confirmations')
         .select('id', { count: 'exact', head: true })
-        .eq('to_name', myName).eq('status', 'open')
+        .eq('to_name', viewingName).eq('status', 'open')
       if (alive) setUnresolvedConfirmCount(count || 0)
     }
     loadCount()
-    const ch = supabase.channel('unread_confirm_' + myName)
+    const ch = supabase.channel('unread_confirm_' + viewingName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, loadCount)
       .subscribe()
     return () => { alive = false; supabase.removeChannel(ch) }
-  }, [myName])
+  }, [viewingName])
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1230,10 +1231,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* 📬 自分宛に未解決の確認事項がある時だけ最上部に出るバナー (自分閲覧時のみ) */}
-      {isViewingSelf && (
-        <ConfirmationsBanner T={T} myName={myName} onGoToTab={onGoToTab} />
-      )}
+      {/* 📬 表示対象宛に未解決の確認事項がある時だけ最上部に出るバナー */}
+      <ConfirmationsBanner T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
+        onGoToTab={onGoToTab} />
 
       {/* 挨拶バー + 始業/終業ボタン + 設定 */}
       <div style={{
@@ -2791,36 +2791,36 @@ function Placeholder({ T, lines = [] }) {
 }
 
 // ─── ConfirmationsBanner: ダッシュボード最上部の「確認事項あり」バナー ──
-//   自分宛に未解決があるときだけ表示 (0件なら null)
-//   最上部フル幅、アクセント色でアテンションを引く。クリックで 📬確認タブへ。
-function ConfirmationsBanner({ T, myName, onGoToTab }) {
+//   表示対象 (viewingName) 宛に未解決があるときだけ表示 (0件なら null)
+//   自分閲覧時 / 他メンバー閲覧時 で文言を切り替える
+function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
   const [items, setItems] = useState([])
   const [count, setCount] = useState(0)
 
   const load = useCallback(async () => {
-    if (!myName) return
+    if (!viewingName) return
     // プレビュー用の上位 3件
     const { data } = await supabase.from('member_confirmations')
       .select('id, from_name, content, created_at')
-      .eq('to_name', myName).eq('status', 'open')
+      .eq('to_name', viewingName).eq('status', 'open')
       .order('created_at', { ascending: false }).limit(3)
     setItems(data || [])
     // 全件数
     const { count: total } = await supabase.from('member_confirmations')
       .select('id', { count: 'exact', head: true })
-      .eq('to_name', myName).eq('status', 'open')
+      .eq('to_name', viewingName).eq('status', 'open')
     setCount(total || 0)
-  }, [myName])
+  }, [viewingName])
 
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    if (!myName) return
-    const ch = supabase.channel(`confirm_banner_${myName}`)
+    if (!viewingName) return
+    const ch = supabase.channel(`confirm_banner_${viewingName}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [myName, load])
+  }, [viewingName, load])
 
   // 0件なら非表示 (UI 汚さない)
   if (count === 0) return null
@@ -2838,7 +2838,9 @@ function ConfirmationsBanner({ T, myName, onGoToTab }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 18 }}>📬</span>
         <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>
-          未解決の確認事項が {count}件 あります
+          {isViewingSelf
+            ? `未解決の確認事項が ${count}件 あります`
+            : `${viewingName}さん宛の未解決 確認事項が ${count}件 あります`}
         </span>
         <div style={{ flex: 1 }} />
         <span style={{
