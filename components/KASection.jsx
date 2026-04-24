@@ -16,13 +16,15 @@ import { computeKAKey } from '../lib/kaKey'
 export default function KASection({ krId, objectiveId, levelId, theme }) {
   const T = theme || DEFAULT_THEME
 
-  const [reports, setReports] = useState([])
-  const [members,  setMembers]  = useState([])
-  const [open,     setOpen]     = useState(false)
-  const [loading,  setLoading]  = useState(false)
-  const [adding,   setAdding]   = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newOwner, setNewOwner] = useState('')
+  const [reports,   setReports]   = useState([])
+  const [members,   setMembers]   = useState([])
+  const [open,      setOpen]      = useState(false)
+  const [loading,   setLoading]   = useState(false)
+  const [adding,    setAdding]    = useState(false)
+  const [newTitle,  setNewTitle]  = useState('')
+  const [newOwner,  setNewOwner]  = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
 
   // 現在週の月曜日 (JST)
   const currentWeekStart = (() => {
@@ -97,6 +99,36 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
     setReports(p => p.filter(r => computeKAKey(r) !== key))
   }
 
+  const startEdit = (ka) => {
+    setEditingId(ka.id)
+    setEditTitle(ka.ka_title || '')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditTitle('')
+  }
+
+  const saveEdit = async (report) => {
+    const trimmed = editTitle.trim()
+    if (!trimmed) { cancelEdit(); return }
+    if (trimmed === (report.ka_title || '')) { cancelEdit(); return }
+    const { data: candidates } = await supabase.from('weekly_reports')
+      .select('id, owner')
+      .eq('kr_id', report.kr_id)
+      .eq('ka_title', report.ka_title || '')
+      .eq('objective_id', report.objective_id)
+    const targetOwner = (report.owner || '').trim()
+    const ids = (candidates || [])
+      .filter(r => (r.owner || '').trim() === targetOwner)
+      .map(r => r.id)
+    if (ids.length === 0) ids.push(report.id)
+    const { error } = await supabase.from('weekly_reports').update({ ka_title: trimmed }).in('id', ids)
+    if (error) { alert('タイトル変更失敗: ' + error.message); return }
+    setReports(p => p.map(r => ids.includes(r.id) ? { ...r, ka_title: trimmed } : r))
+    cancelEdit()
+  }
+
   const updateOwner = async (report, newOwner) => {
     const { data: candidates } = await supabase.from('weekly_reports')
       .select('id, owner')
@@ -128,19 +160,59 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
           {loading && <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 0' }}>読み込み中...</div>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 6 }}>
-            {uniqueKAs.map(ka => (
-              <div key={ka.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 7, background: T.bgCard2, border: `1px solid ${T.border}` }}>
-                <span style={{ flex: 1, fontSize: 12, color: T.textSub, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{ka.ka_title || '(無題)'}</span>
-                <select value={ka.owner || ''} onChange={e => updateOwner(ka, e.target.value)} onClick={e => e.stopPropagation()} style={{
-                  fontSize: 10, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 4,
-                  color: T.textSub, cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px', outline: 'none',
-                }}>
-                  <option value="">-- 担当 --</option>
-                  {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                </select>
-                <button onClick={() => deleteKA(ka)} style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>✕</button>
-              </div>
-            ))}
+            {uniqueKAs.map(ka => {
+              const isEditing = editingId === ka.id
+              return (
+                <div key={ka.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 7, background: T.bgCard2, border: `1px solid ${T.border}` }}>
+                  {isEditing ? (
+                    <textarea
+                      autoFocus
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); saveEdit(ka) }
+                        if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      rows={1}
+                      style={{
+                        flex: 1, fontSize: 12, color: T.text, lineHeight: 1.6,
+                        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 4,
+                        padding: '3px 6px', outline: 'none', fontFamily: 'inherit',
+                        resize: 'vertical', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        minHeight: 24,
+                      }}
+                    />
+                  ) : (
+                    <span
+                      onClick={() => startEdit(ka)}
+                      title="クリックで編集"
+                      style={{ flex: 1, fontSize: 12, color: T.textSub, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: 'text' }}
+                    >
+                      {ka.ka_title || '(無題)'}
+                    </span>
+                  )}
+                  {isEditing ? (
+                    <>
+                      <button onClick={() => saveEdit(ka)} style={{ background: 'none', border: 'none', color: T.accent, cursor: 'pointer', fontSize: 13, padding: '0 2px', lineHeight: 1, fontFamily: 'inherit' }} title="保存 (Enter)">✓</button>
+                      <button onClick={cancelEdit} style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', fontSize: 13, padding: '0 2px', lineHeight: 1, fontFamily: 'inherit' }} title="キャンセル (Esc)">✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <select value={ka.owner || ''} onChange={e => updateOwner(ka, e.target.value)} onClick={e => e.stopPropagation()} style={{
+                        fontSize: 10, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 4,
+                        color: T.textSub, cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px', outline: 'none',
+                      }}>
+                        <option value="">-- 担当 --</option>
+                        {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                      </select>
+                      <button onClick={() => startEdit(ka)} style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1, fontFamily: 'inherit' }} title="タイトルを編集">✏</button>
+                      <button onClick={() => deleteKA(ka)} style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }} title="削除">✕</button>
+                    </>
+                  )}
+                </div>
+              )
+            })}
             {uniqueKAs.length === 0 && !loading && (
               <div style={{ fontSize: 11, color: T.textFaintest, fontStyle: 'italic', padding: '2px 0' }}>KAがありません</div>
             )}
@@ -152,10 +224,10 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
                 autoFocus value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (newTitle.trim()) addKA() }
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (newTitle.trim()) addKA() }
                   if (e.key === 'Escape') setAdding(false)
                 }}
-                placeholder="KA タイトル (Enter追加・Shift+Enter改行)"
+                placeholder="KA タイトル（確定後にEnterで追加 / Shift+Enterで改行）"
                 rows={2}
                 style={{ flex: 1, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T.text, outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 56, lineHeight: 1.6 }}
               />
