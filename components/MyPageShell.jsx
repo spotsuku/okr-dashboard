@@ -10,6 +10,7 @@ import CalendarTab from './CalendarTab'
 import DriveTab from './DriveTab'
 import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
+import ConfirmationsTab from './ConfirmationsTab'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -148,6 +149,24 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const okrCloseTimerRef = useRef(null)
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
+  // 📬 表示対象メンバー宛の未解決「確認事項」件数 (サブタブバッジ + バナー用)
+  //   viewingName で絞るため、他メンバーのページを見ても件数が表示される
+  const [unresolvedConfirmCount, setUnresolvedConfirmCount] = useState(0)
+  useEffect(() => {
+    if (!viewingName) return
+    let alive = true
+    const loadCount = async () => {
+      const { count } = await supabase.from('member_confirmations')
+        .select('id', { count: 'exact', head: true })
+        .eq('to_name', viewingName).eq('status', 'open')
+      if (alive) setUnresolvedConfirmCount(count || 0)
+    }
+    loadCount()
+    const ch = supabase.channel('unread_confirm_' + viewingName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, loadCount)
+      .subscribe()
+    return () => { alive = false; supabase.removeChannel(ch) }
+  }, [viewingName])
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -504,24 +523,40 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
         }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
+            { key: 'confirm',      icon: '📬', label: '確認'           },
             { key: 'wbs',          icon: '📅', label: 'タスク'         },
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
             { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
-          ].map(t => (
-            <button
-              key={t.key}
-              onClick={() => { setActiveTab(t.key); setSummaryMode(false) }}
-              style={{
-                padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                background: activeTab === t.key ? T.navActiveBg : 'transparent',
-                color: activeTab === t.key ? T.navActiveText : T.textSub,
-                fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-              }}
-            >{t.icon} {t.label}</button>
-          ))}
+          ].map(t => {
+            // 📬確認 タブのみ未解決件数バッジを表示 (0件なら非表示)
+            const showBadge = t.key === 'confirm' && unresolvedConfirmCount > 0
+            return (
+              <button
+                key={t.key}
+                onClick={() => { setActiveTab(t.key); setSummaryMode(false) }}
+                style={{
+                  padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: activeTab === t.key ? T.navActiveBg : 'transparent',
+                  color: activeTab === t.key ? T.navActiveText : T.textSub,
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <span>{t.icon} {t.label}</span>
+                {showBadge && (
+                  <span style={{
+                    padding: '1px 6px', borderRadius: 99,
+                    background: '#ff6b6b', color: '#fff',
+                    fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
+                    lineHeight: 1.4,
+                  }}>{unresolvedConfirmCount}</span>
+                )}
+              </button>
+            )
+          })}
 
           {/* マイOKR プルダウン (記入 / 詳細 を集約)
              マウスがボタン↔メニュー間を移動する際に閉じないよう、
@@ -711,6 +746,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {!summaryMode && activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
+          )}
+          {!summaryMode && activeTab === 'confirm' && (
+            <ConfirmationsTab T={T} myName={myName} members={members} viewingName={viewingName} />
           )}
           {!summaryMode && activeTab === 'integrations' && (
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
@@ -1193,6 +1231,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* 📬 表示対象宛に未解決の確認事項がある時だけ最上部に出るバナー */}
+      <ConfirmationsBanner T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
+        onGoToTab={onGoToTab} />
+
       {/* 挨拶バー + 始業/終業ボタン + 設定 */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
@@ -2744,6 +2786,92 @@ function Placeholder({ T, lines = [] }) {
       borderRadius: 6, fontSize: 11, color: T.textMuted, lineHeight: 1.6,
     }}>
       {lines.map((l, i) => <div key={i}>{l}</div>)}
+    </div>
+  )
+}
+
+// ─── ConfirmationsBanner: ダッシュボード最上部の「確認事項あり」バナー ──
+//   表示対象 (viewingName) 宛に未解決があるときだけ表示 (0件なら null)
+//   自分閲覧時 / 他メンバー閲覧時 で文言を切り替える
+function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
+  const [items, setItems] = useState([])
+  const [count, setCount] = useState(0)
+
+  const load = useCallback(async () => {
+    if (!viewingName) return
+    // プレビュー用の上位 3件
+    const { data } = await supabase.from('member_confirmations')
+      .select('id, from_name, content, created_at')
+      .eq('to_name', viewingName).eq('status', 'open')
+      .order('created_at', { ascending: false }).limit(3)
+    setItems(data || [])
+    // 全件数
+    const { count: total } = await supabase.from('member_confirmations')
+      .select('id', { count: 'exact', head: true })
+      .eq('to_name', viewingName).eq('status', 'open')
+    setCount(total || 0)
+  }, [viewingName])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!viewingName) return
+    const ch = supabase.channel(`confirm_banner_${viewingName}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [viewingName, load])
+
+  // 0件なら非表示 (UI 汚さない)
+  if (count === 0) return null
+
+  return (
+    <div
+      onClick={() => onGoToTab && onGoToTab('confirm')}
+      style={{
+        background: `linear-gradient(90deg, ${T.accentBg} 0%, ${T.accent}15 100%)`,
+        borderBottom: `2px solid ${T.accent}`,
+        padding: '10px 16px',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 18 }}>📬</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>
+          {isViewingSelf
+            ? `未解決の確認事項が ${count}件 あります`
+            : `${viewingName}さん宛の未解決 確認事項が ${count}件 あります`}
+        </span>
+        <div style={{ flex: 1 }} />
+        <span style={{
+          padding: '4px 12px', borderRadius: 6,
+          background: T.accent, color: '#fff',
+          fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+        }}>📬 確認タブで返信 →</span>
+      </div>
+      {items.length > 0 && (
+        <div style={{
+          display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap',
+        }}>
+          {items.map(it => (
+            <div key={it.id} style={{
+              flex: '1 1 240px', minWidth: 0,
+              padding: '6px 10px', borderRadius: 6,
+              background: T.bgCard, border: `1px solid ${T.border}`,
+              fontSize: 11,
+            }}>
+              <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
+                from <b style={{ color: T.textSub }}>{it.from_name}</b>
+              </div>
+              <div style={{
+                color: T.text, lineHeight: 1.5,
+                overflow: 'hidden', display: '-webkit-box',
+                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              }}>{it.content}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
