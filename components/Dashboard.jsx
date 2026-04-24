@@ -15,7 +15,6 @@ import MyTasksPage from './MyTasksPage'
 import MyCoachPage from './MyCoachPage'
 import MyPageShell from './MyPageShell'
 import PortalPage from './PortalPage'
-import MorningMeetingPage from './MorningMeetingPage'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -1267,8 +1266,6 @@ export default function Dashboard({ user, onSignOut }) {
             <button onClick={() => { setActivePage('mytasks'); setTaskViewMode('all') }} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveBg : 'transparent', color: activePage === 'mytasks' && taskViewMode === 'all' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>全社タスク</button>
             {/* 週次MTG */}
             <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
-            {/* 朝会 */}
-            <button onClick={() => setActivePage('morning')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'morning' ? T.navActiveBg : 'transparent', color: activePage === 'morning' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🌅 朝会</button>
             {/* 組織 */}
             <button onClick={() => setActivePage('orgjd')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'orgjd' ? T.navActiveBg : 'transparent', color: activePage === 'orgjd' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>組織</button>
           </div>
@@ -1335,7 +1332,6 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'portal' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><PortalPage user={user} onNavigate={setActivePage} themeKey={themeKey} members={members} T={T} /></div>}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
-      {activePage === 'morning' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><MorningMeetingPage user={user} members={members} themeKey={themeKey} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}
