@@ -149,6 +149,23 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const okrCloseTimerRef = useRef(null)
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
+  // 📬 自分宛の未解決「確認事項」件数 (サブタブバッジ + ダッシュボードバナー用)
+  const [unresolvedConfirmCount, setUnresolvedConfirmCount] = useState(0)
+  useEffect(() => {
+    if (!myName) return
+    let alive = true
+    const loadCount = async () => {
+      const { count } = await supabase.from('member_confirmations')
+        .select('id', { count: 'exact', head: true })
+        .eq('to_name', myName).eq('status', 'open')
+      if (alive) setUnresolvedConfirmCount(count || 0)
+    }
+    loadCount()
+    const ch = supabase.channel('unread_confirm_' + myName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, loadCount)
+      .subscribe()
+    return () => { alive = false; supabase.removeChannel(ch) }
+  }, [myName])
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -512,18 +529,33 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
             { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
-          ].map(t => (
-            <button
-              key={t.key}
-              onClick={() => { setActiveTab(t.key); setSummaryMode(false) }}
-              style={{
-                padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                background: activeTab === t.key ? T.navActiveBg : 'transparent',
-                color: activeTab === t.key ? T.navActiveText : T.textSub,
-                fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-              }}
-            >{t.icon} {t.label}</button>
-          ))}
+          ].map(t => {
+            // 📬確認 タブのみ未解決件数バッジを表示 (0件なら非表示)
+            const showBadge = t.key === 'confirm' && unresolvedConfirmCount > 0
+            return (
+              <button
+                key={t.key}
+                onClick={() => { setActiveTab(t.key); setSummaryMode(false) }}
+                style={{
+                  padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: activeTab === t.key ? T.navActiveBg : 'transparent',
+                  color: activeTab === t.key ? T.navActiveText : T.textSub,
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <span>{t.icon} {t.label}</span>
+                {showBadge && (
+                  <span style={{
+                    padding: '1px 6px', borderRadius: 99,
+                    background: '#ff6b6b', color: '#fff',
+                    fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
+                    lineHeight: 1.4,
+                  }}>{unresolvedConfirmCount}</span>
+                )}
+              </button>
+            )
+          })}
 
           {/* マイOKR プルダウン (記入 / 詳細 を集約)
              マウスがボタン↔メニュー間を移動する際に閉じないよう、
@@ -1198,6 +1230,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* 📬 自分宛に未解決の確認事項がある時だけ最上部に出るバナー (自分閲覧時のみ) */}
+      {isViewingSelf && (
+        <ConfirmationsBanner T={T} myName={myName} onGoToTab={onGoToTab} />
+      )}
+
       {/* 挨拶バー + 始業/終業ボタン + 設定 */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
@@ -1343,10 +1380,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               )
             })()}
           </Section>
-
-          {/* メンバー確認 Box - 自分宛の未解決 3件 */}
-          <ConfirmationsBox T={T} myName={myName} isViewingSelf={isViewingSelf}
-            viewingName={viewingName} onGoToTab={onGoToTab} />
 
           {/* カレンダー Box - 直近8時間の予定 */}
           {showW('calendar') && (
@@ -2757,63 +2790,79 @@ function Placeholder({ T, lines = [] }) {
   )
 }
 
-// ─── ConfirmationsBox: 自分宛の未解決「確認事項」3件 ──────────────
-function ConfirmationsBox({ T, myName, isViewingSelf, viewingName, onGoToTab }) {
-  // 他メンバーのダッシュボードを見るとき viewingName も表示対象にしたいので
-  // 「表示対象名」を決める。自分閲覧時は myName、他人閲覧時は viewingName で絞る。
-  const targetName = isViewingSelf ? myName : viewingName
+// ─── ConfirmationsBanner: ダッシュボード最上部の「確認事項あり」バナー ──
+//   自分宛に未解決があるときだけ表示 (0件なら null)
+//   最上部フル幅、アクセント色でアテンションを引く。クリックで 📬確認タブへ。
+function ConfirmationsBanner({ T, myName, onGoToTab }) {
   const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [count, setCount] = useState(0)
 
   const load = useCallback(async () => {
-    if (!targetName) { setItems([]); setLoading(false); return }
-    setLoading(true)
+    if (!myName) return
+    // プレビュー用の上位 3件
     const { data } = await supabase.from('member_confirmations')
       .select('id, from_name, content, created_at')
-      .eq('to_name', targetName).eq('status', 'open')
+      .eq('to_name', myName).eq('status', 'open')
       .order('created_at', { ascending: false }).limit(3)
     setItems(data || [])
-    setLoading(false)
-  }, [targetName])
+    // 全件数
+    const { count: total } = await supabase.from('member_confirmations')
+      .select('id', { count: 'exact', head: true })
+      .eq('to_name', myName).eq('status', 'open')
+    setCount(total || 0)
+  }, [myName])
 
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    if (!targetName) return
-    const ch = supabase.channel(`confirmations_box_${targetName}`)
+    if (!myName) return
+    const ch = supabase.channel(`confirm_banner_${myName}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [targetName, load])
+  }, [myName, load])
 
-  // 件数 0 なら折りたたみ気味に表示
-  const count = items.length
+  // 0件なら非表示 (UI 汚さない)
+  if (count === 0) return null
 
   return (
-    <Section T={T} icon="📬" title={`確認事項 (自分宛)${count > 0 ? ` · ${count}件` : ''}`} flex={0}
-      headerRight={
-        <button onClick={() => onGoToTab && onGoToTab('confirm')} style={{
-          background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
-          borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-        }}>すべて見る →</button>
-      }>
-      {loading ? (
-        <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 2px' }}>読み込み中...</div>
-      ) : count === 0 ? (
-        <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 2px' }}>未解決の確認事項はありません</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div
+      onClick={() => onGoToTab && onGoToTab('confirm')}
+      style={{
+        background: `linear-gradient(90deg, ${T.accentBg} 0%, ${T.accent}15 100%)`,
+        borderBottom: `2px solid ${T.accent}`,
+        padding: '10px 16px',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 18 }}>📬</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>
+          未解決の確認事項が {count}件 あります
+        </span>
+        <div style={{ flex: 1 }} />
+        <span style={{
+          padding: '4px 12px', borderRadius: 6,
+          background: T.accent, color: '#fff',
+          fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+        }}>📬 確認タブで返信 →</span>
+      </div>
+      {items.length > 0 && (
+        <div style={{
+          display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap',
+        }}>
           {items.map(it => (
             <div key={it.id} style={{
-              padding: '6px 8px', borderRadius: 6,
-              background: T.accentBg, border: `1px solid ${T.accent}30`,
-              cursor: 'pointer',
-            }} onClick={() => onGoToTab && onGoToTab('confirm')}>
+              flex: '1 1 240px', minWidth: 0,
+              padding: '6px 10px', borderRadius: 6,
+              background: T.bgCard, border: `1px solid ${T.border}`,
+              fontSize: 11,
+            }}>
               <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
                 from <b style={{ color: T.textSub }}>{it.from_name}</b>
               </div>
               <div style={{
-                fontSize: 12, color: T.text, lineHeight: 1.5,
+                color: T.text, lineHeight: 1.5,
                 overflow: 'hidden', display: '-webkit-box',
                 WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
               }}>{it.content}</div>
@@ -2821,7 +2870,7 @@ function ConfirmationsBox({ T, myName, isViewingSelf, viewingName, onGoToTab }) 
           ))}
         </div>
       )}
-    </Section>
+    </div>
   )
 }
 
