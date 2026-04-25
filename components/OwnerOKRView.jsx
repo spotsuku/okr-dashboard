@@ -134,9 +134,9 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
 
     // 1. ownerNameが担当のObjectives + KAを並行取得
     const [{ data: objs }, { data: myKAs }, { data: myKRs }] = await Promise.all([
-      supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').eq('owner', ownerName).order('period,id'),
-      supabase.from('weekly_reports').select('*').eq('owner', ownerName).neq('status', 'done'),
-      supabase.from('key_results').select('*').eq('owner', ownerName),
+      supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').eq('owner', ownerName).order('period,id').range(0, 49999),
+      supabase.from('weekly_reports').select('*').eq('owner', ownerName).neq('status', 'done').range(0, 49999),
+      supabase.from('key_results').select('*').eq('owner', ownerName).range(0, 49999),
     ])
 
     // 年度フィルタ
@@ -151,7 +151,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     // 2. KR取得（自分がObjective担当のもの）
     let objKRs = []
     if (objIds.length > 0) {
-      const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds)
+      const { data } = await supabase.from('key_results').select('*').in('objective_id', objIds).range(0, 49999)
       objKRs = data || []
     }
 
@@ -161,7 +161,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     const missingObjIds = [...new Set([...krObjIds, ...kaObjIds])]
     let extraObjs = []
     if (missingObjIds.length > 0) {
-      const { data } = await supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').in('id', missingObjIds)
+      const { data } = await supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').in('id', missingObjIds).range(0, 49999)
       extraObjs = filterByFY(data)
     }
 
@@ -179,7 +179,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     // 追加Objectiveに不足しているKRも取得
     const extraIds = extraObjs.map(o => o.id).filter(id => !krMap[id])
     if (extraIds.length > 0) {
-      const { data } = await supabase.from('key_results').select('*').in('objective_id', extraIds)
+      const { data } = await supabase.from('key_results').select('*').in('objective_id', extraIds).range(0, 49999)
       ;(data || []).forEach(kr => {
         if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
         krMap[kr.objective_id].push(kr)

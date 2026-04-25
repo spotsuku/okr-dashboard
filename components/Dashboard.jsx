@@ -777,7 +777,7 @@ export default function Dashboard({ user, onSignOut }) {
   // ─── 不正なperiodキーを自動修正 ─────────────────────────────────────────
   useEffect(() => {
     const fixBadPeriods = async () => {
-      const { data: objs } = await supabase.from('objectives').select('id,period')
+      const { data: objs } = await supabase.from('objectives').select('id,period').range(0, 49999)
       if (!objs) return
       let fixed = 0
       // 二重プレフィックス修正 (2025_2025_q1 → 2025_q1)

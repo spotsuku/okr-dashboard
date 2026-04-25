@@ -138,6 +138,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
         .select('id,level_id,period,title,owner')
         .in('level_id', levelIds)
         .order('id')
+        .range(0, 49999)
 
       if (activePeriod === 'all') {
         const allPeriodKeys = ['annual','q1','q2','q3','q4'].map(p => toPeriodKey(p, fiscalYear))
@@ -158,6 +159,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
         const { data: krs } = await supabase.from('key_results')
           .select('*')
           .in('objective_id', chunk)
+          .range(0, 49999)
         if (krs) allKrs = allKrs.concat(krs)
       }
 
