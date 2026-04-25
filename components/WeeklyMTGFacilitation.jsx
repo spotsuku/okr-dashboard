@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAutoSave } from '../lib/useAutoSave'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 const DARK_T = {
@@ -613,19 +614,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     }
   }
 
-  // 進捗計算（null セーフ）
-  const target  = Number(currentKR.target  ?? 0)
-  const current_ = Number(currentKR.current ?? 0)
-  const progress = target > 0
-    ? Math.min(150, Math.round(currentKR.lower_is_better
-        ? Math.max(0, ((target * 2 - current_) / target) * 100)
-        : (current_ / target) * 100))
-    : 0
-  const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
-
-  const ownerName = currentKR.owner || ''
-  const ownerMember = ownerName ? members.find(m => m?.name === ownerName) : null
-  const ownerColor = avatarColor(ownerName)
+  // KREditCard に渡す期間ラベル（年度プレフィックスを除去）
   const periodLabel = (currentObj?.period || '').toString().split('_').pop().toUpperCase()
 
   return (
@@ -658,59 +647,12 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
         </div>
       </div>
 
-      {/* 現在のKR カード */}
-      <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-        padding: '22px 26px', marginBottom: 18, position: 'relative',
-      }}>
-        {/* 階層パンくず */}
-        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span>{currentLevel?.icon || '🏢'}</span>
-          <strong style={{ color: T.textSub }}>{currentLevel?.name}</strong>
-          <span>›</span>
-          <span style={{ color: T.textSub }}>{currentObj?.title}</span>
-          {periodLabel && (
-            <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 99, background: `${T.accent}20`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
-              {periodLabel}
-            </span>
-          )}
-        </div>
-
-        {/* KRタイトル */}
-        <div style={{ fontSize: 20, fontWeight: 800, color: T.text, lineHeight: 1.4, marginBottom: 14 }}>
-          {currentKR.title}
-        </div>
-
-        {/* 担当 + 数値 + 進捗 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Avatar name={currentKR.owner} avatarUrl={ownerMember?.avatar_url} size={28} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: ownerColor }}>{currentKR.owner || '(担当未設定)'}</span>
-          </div>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 22, fontWeight: 800, color: progressColor }}>{currentKR.current ?? 0}</span>
-            <span style={{ fontSize: 12, color: T.textMuted }}>{currentKR.unit}</span>
-            <span style={{ fontSize: 12, color: T.textMuted }}>/</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: T.textSub }}>{currentKR.target ?? 0}</span>
-            <span style={{ fontSize: 12, color: T.textMuted }}>{currentKR.unit}</span>
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: progressColor, minWidth: 60, textAlign: 'right' }}>{progress}%</div>
-        </div>
-
-        {/* 進捗バー */}
-        <div style={{ height: 8, background: T.bgSection, borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
-          <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, background: progressColor, transition: 'width 0.3s' }} />
-        </div>
-
-        {/* Phase 3-2 で天気 / good / more / focus 編集を入れる予定 */}
-        <div style={{
-          marginTop: 16, padding: '10px 14px', background: T.bgSection,
-          borderRadius: 8, fontSize: 11, color: T.textMuted, fontStyle: 'italic',
-        }}>
-          💡 数値・天気・good/more/focus の編集UIは Phase 3-2 で追加予定。今は表示のみ。
-        </div>
-      </div>
+      {/* 現在のKR カード（Phase 3-2: インライン編集 + kr_weekly_reviews 編集） */}
+      <KREditCard
+        key={currentKR.id /* KR切替時に内部state再初期化 */}
+        T={T} kr={currentKR} objective={currentObj} level={currentLevel}
+        weekStart={weekStart} members={members} periodLabel={periodLabel}
+      />
 
       {/* 次へ/前へ/スキップ */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -750,6 +692,293 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── KR編集カード（Phase 3-2） ─────────────────────────────────────────────
+const WEATHERS = [
+  { v: 1, icon: '☀️', label: '快晴' },
+  { v: 2, icon: '🌤', label: '晴れ' },
+  { v: 3, icon: '☁️', label: '曇り' },
+  { v: 4, icon: '🌧',  label: '雨'  },
+]
+
+// 指定 monday の前週月曜日を返す（YYYY-MM-DD）
+function getPrevMondayStr(mondayStr) {
+  const [y, m, d] = mondayStr.split('-').map(Number)
+  const prev = new Date(Date.UTC(y, m - 1, d - 7))
+  return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth()+1).padStart(2,'0')}-${String(prev.getUTCDate()).padStart(2,'0')}`
+}
+// "YYYY-MM-DD" → "M/D〜D"
+function formatWeekRange2(mondayStr) {
+  if (!mondayStr) return ''
+  const [y, m, d] = mondayStr.split('-').map(Number)
+  const sun = new Date(Date.UTC(y, m - 1, d + 6))
+  const sm = sun.getUTCMonth() + 1
+  const sd = sun.getUTCDate()
+  return m === sm ? `${m}/${d}〜${sd}` : `${m}/${d}〜${sm}/${sd}`
+}
+
+function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }) {
+  // KR本体のローカルstate（編集用）
+  const [target,     setTarget]     = useState(kr.target ?? 0)
+  const [currentVal, setCurrentVal] = useState(kr.current ?? 0)
+  const [ownerDraft, setOwnerDraft] = useState(kr.owner || '')
+  const krAutoSave = useAutoSave('key_results', kr.id)
+
+  // kr_weekly_reviews
+  const [reviewId,   setReviewId]   = useState(null)
+  const [weather,    setWeather]    = useState(0)
+  const [good,       setGood]       = useState('')
+  const [more,       setMore]       = useState('')
+  const [focusText,  setFocusText]  = useState('')
+  const [reviewSaving, setReviewSaving] = useState(false)
+  const [reviewSaved,  setReviewSaved]  = useState(false)
+
+  // 編集中のフィールド (Realtimeで上書きされないように管理)
+  const [focusedField, setFocusedField] = useState(null)
+  const focusedRef = useRef(null)
+  useEffect(() => { focusedRef.current = focusedField }, [focusedField])
+
+  // 800ms デバウンスのタイマー
+  const reviewTimer = useRef(null)
+
+  // 初回ロード + 週/KR切替時にレビューを取得
+  useEffect(() => {
+    let alive = true
+    supabase.from('kr_weekly_reviews').select('*')
+      .eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        if (data) {
+          setReviewId(data.id)
+          if (focusedRef.current !== 'weather')   setWeather(data.weather || 0)
+          if (focusedRef.current !== 'good')      setGood(data.good || '')
+          if (focusedRef.current !== 'more')      setMore(data.more || '')
+          if (focusedRef.current !== 'focusText') setFocusText(data.focus || '')
+        } else {
+          setReviewId(null); setWeather(0); setGood(''); setMore(''); setFocusText('')
+        }
+      })
+    return () => { alive = false }
+  }, [kr.id, weekStart])
+
+  // Realtime: kr_weekly_reviews 変更 → 編集中フィールドは上書きしない
+  useEffect(() => {
+    const ch = supabase.channel(`krrev_${kr.id}_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kr_weekly_reviews', filter: `kr_id=eq.${kr.id}` }, payload => {
+        const row = payload.new || payload.old
+        if (!row || row.week_start !== weekStart) return
+        if (payload.eventType === 'DELETE') { setReviewId(null); return }
+        setReviewId(row.id)
+        if (focusedRef.current !== 'weather')   setWeather(row.weather || 0)
+        if (focusedRef.current !== 'good')      setGood(row.good || '')
+        if (focusedRef.current !== 'more')      setMore(row.more || '')
+        if (focusedRef.current !== 'focusText') setFocusText(row.focus || '')
+      }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [kr.id, weekStart])
+
+  // Realtime: key_results 変更（target/current/owner）
+  useEffect(() => {
+    const ch = supabase.channel(`kr_${kr.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'key_results', filter: `id=eq.${kr.id}` }, payload => {
+        if (!payload.new) return
+        if (focusedRef.current !== 'target')  setTarget(payload.new.target ?? 0)
+        if (focusedRef.current !== 'current') setCurrentVal(payload.new.current ?? 0)
+        if (focusedRef.current !== 'owner')   setOwnerDraft(payload.new.owner || '')
+      }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [kr.id])
+
+  // KR切替時にローカルstateを新KR値で再初期化（key={kr.id}でも保険）
+  useEffect(() => {
+    setTarget(kr.target ?? 0)
+    setCurrentVal(kr.current ?? 0)
+    setOwnerDraft(kr.owner || '')
+  }, [kr.id, kr.target, kr.current, kr.owner])
+
+  // kr_weekly_reviews を upsert（id があれば update、無ければ insert）
+  const saveReview = useCallback(async (w, g, m, f) => {
+    setReviewSaving(true)
+    const payload = { kr_id: kr.id, week_start: weekStart, weather: w, good: g, more: m, focus: f, updated_at: new Date().toISOString() }
+    if (reviewId) {
+      await supabase.from('kr_weekly_reviews').update(payload).eq('id', reviewId)
+    } else {
+      const { data } = await supabase.from('kr_weekly_reviews').insert(payload).select().single()
+      if (data) setReviewId(data.id)
+    }
+    setReviewSaving(false); setReviewSaved(true)
+    setTimeout(() => setReviewSaved(false), 1200)
+  }, [kr.id, weekStart, reviewId])
+
+  const scheduleReviewSave = (w, g, m, f) => {
+    if (reviewTimer.current) clearTimeout(reviewTimer.current)
+    reviewTimer.current = setTimeout(() => saveReview(w, g, m, f), 800)
+  }
+  const flushReviewSave = (w, g, m, f) => {
+    if (reviewTimer.current) clearTimeout(reviewTimer.current)
+    saveReview(w, g, m, f)
+  }
+
+  // 進捗計算
+  const progress = target > 0
+    ? Math.min(150, Math.round(kr.lower_is_better
+        ? Math.max(0, ((target * 2 - currentVal) / target) * 100)
+        : (currentVal / target) * 100))
+    : 0
+  const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
+
+  const ownerMember = ownerDraft ? members.find(m => m?.name === ownerDraft) : null
+
+  const inputBase = {
+    border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '4px 8px',
+    fontSize: 13, fontFamily: 'inherit', outline: 'none',
+    background: T.bgCard, color: T.text,
+  }
+
+  const prevWeek = getPrevMondayStr(weekStart)
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+      padding: '22px 26px', marginBottom: 18, position: 'relative',
+    }}>
+      {/* 階層パンくず */}
+      <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span>{level?.icon || '🏢'}</span>
+        <strong style={{ color: T.textSub }}>{level?.name}</strong>
+        <span>›</span>
+        <span style={{ color: T.textSub }}>{objective?.title}</span>
+        {periodLabel && (
+          <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 99, background: `${T.accent}20`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
+            {periodLabel}
+          </span>
+        )}
+        {/* 保存インジケータ */}
+        <span style={{ marginLeft: 'auto', fontSize: 10 }}>
+          {(krAutoSave.saving || reviewSaving) && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
+          {(krAutoSave.saved || reviewSaved) && !(krAutoSave.saving || reviewSaving) && <span style={{ color: T.success }}>✓ 保存済</span>}
+        </span>
+      </div>
+
+      {/* KRタイトル */}
+      <div style={{ fontSize: 20, fontWeight: 800, color: T.text, lineHeight: 1.4, marginBottom: 14 }}>
+        {kr.title}
+      </div>
+
+      {/* 担当 + 数値編集 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Avatar name={ownerDraft} avatarUrl={ownerMember?.avatar_url} size={28} />
+          <select value={ownerDraft}
+            onFocus={() => setFocusedField('owner')}
+            onBlur={() => { setFocusedField(null); krAutoSave.saveNow('owner', ownerDraft) }}
+            onChange={e => { setOwnerDraft(e.target.value); krAutoSave.save('owner', e.target.value) }}
+            style={{ ...inputBase, fontWeight: 700, color: avatarColor(ownerDraft), minWidth: 130 }}>
+            <option value="">-- 担当 --</option>
+            {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <input type="number" value={currentVal}
+            onFocus={() => setFocusedField('current')}
+            onBlur={() => { setFocusedField(null); krAutoSave.saveNow('current', Number(currentVal)) }}
+            onChange={e => { const v = Number(e.target.value); setCurrentVal(v); krAutoSave.save('current', v) }}
+            style={{ ...inputBase, width: 80, fontSize: 18, fontWeight: 800, color: progressColor, textAlign: 'right' }} />
+          <span style={{ fontSize: 12, color: T.textMuted }}>{kr.unit}</span>
+          <span style={{ fontSize: 12, color: T.textMuted }}>/</span>
+          <input type="number" value={target}
+            onFocus={() => setFocusedField('target')}
+            onBlur={() => { setFocusedField(null); krAutoSave.saveNow('target', Number(target)) }}
+            onChange={e => { const v = Number(e.target.value); setTarget(v); krAutoSave.save('target', v) }}
+            style={{ ...inputBase, width: 80, fontSize: 13, fontWeight: 700, color: T.textSub, textAlign: 'right' }} />
+          <span style={{ fontSize: 12, color: T.textMuted }}>{kr.unit}</span>
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: progressColor, minWidth: 60, textAlign: 'right' }}>{progress}%</div>
+      </div>
+
+      {/* 進捗バー */}
+      <div style={{ height: 8, background: T.bgSection, borderRadius: 99, overflow: 'hidden', marginBottom: 14 }}>
+        <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, background: progressColor, transition: 'width 0.3s' }} />
+      </div>
+
+      {/* 天気 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>天気（{formatWeekRange2(weekStart)}）</span>
+        {WEATHERS.map(w => {
+          const active = weather === w.v
+          return (
+            <button key={w.v}
+              onClick={() => { setWeather(w.v); flushReviewSave(w.v, good, more, focusText) }}
+              title={w.label}
+              style={{
+                padding: '6px 10px', borderRadius: 8, border: `1px solid ${active ? T.accent : T.border}`,
+                background: active ? `${T.accent}18` : 'transparent', cursor: 'pointer',
+                fontSize: 18, lineHeight: 1, fontFamily: 'inherit',
+              }}>{w.icon}</button>
+          )
+        })}
+      </div>
+
+      {/* good / more / focus 入力 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        {/* Good */}
+        <ReviewBox T={T} icon="✅" label="Good" sub={`先週 ${formatWeekRange2(prevWeek)}`} accent={T.success}
+          value={good}
+          onChange={v => { setGood(v); scheduleReviewSave(weather, v, more, focusText) }}
+          onFocus={() => setFocusedField('good')}
+          onBlur={() => { setFocusedField(null); flushReviewSave(weather, good, more, focusText) }}
+          placeholder="良かったこと・続けたいこと"
+        />
+        {/* More */}
+        <ReviewBox T={T} icon="🔺" label="More" sub={`先週 ${formatWeekRange2(prevWeek)}`} accent={T.danger}
+          value={more}
+          onChange={v => { setMore(v); scheduleReviewSave(weather, good, v, focusText) }}
+          onFocus={() => setFocusedField('more')}
+          onBlur={() => { setFocusedField(null); flushReviewSave(weather, good, more, focusText) }}
+          placeholder="課題・改善したいこと"
+        />
+        {/* Focus */}
+        <ReviewBox T={T} icon="🎯" label="Focus" sub={`今週 ${formatWeekRange2(weekStart)}`} accent={T.accent}
+          value={focusText}
+          onChange={v => { setFocusText(v); scheduleReviewSave(weather, good, more, v) }}
+          onFocus={() => setFocusedField('focusText')}
+          onBlur={() => { setFocusedField(null); flushReviewSave(weather, good, more, focusText) }}
+          placeholder="今週の重点アクション"
+        />
+      </div>
+    </div>
+  )
+}
+
+function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBlur, placeholder }) {
+  return (
+    <div style={{
+      background: T.bgSection, borderRadius: 8, border: `1px solid ${T.border}`,
+      padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ fontSize: 12 }}>{icon}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: accent }}>{label}</span>
+        <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
+      </div>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        rows={3}
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6,
+          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.5,
+          outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 60,
+        }}
+      />
     </div>
   )
 }
