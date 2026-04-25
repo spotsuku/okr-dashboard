@@ -1077,55 +1077,52 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
 
+        // 先週の team_weekly_summary を取得 (チームサマリー本体)
+        const summariesRes = await supabase.from('team_weekly_summary')
+          .select('level_id, good, more, focus')
+          .in('level_id', scopeLevelIds)
+          .eq('week_start', lastMonday)
+          .range(0, 49999)
+        const summaryMap = new Map((summariesRes.data || []).map(s => [Number(s.level_id), s]))
+
+        // 参考: 先週のKA件数 (補助情報として表示)
         const objsRes = await supabase.from('objectives')
           .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
-        if (objsRes.error) throw objsRes.error
         const objs = objsRes.data || []
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
-
         let kas = []
         if (objIds.length > 0) {
           const kasRes = await supabase.from('weekly_reports')
-            .select('id, ka_title, owner, status, good, more, focus_output, objective_id, kr_id')
+            .select('id, owner, status, objective_id')
             .in('objective_id', objIds)
             .eq('week_start', lastMonday)
             .neq('status', 'done')
             .range(0, 49999)
-          if (kasRes.error) throw kasRes.error
           kas = kasRes.data || []
         }
-
-        // チーム単位で集計
-        const teamMap = new Map(scopeLevelIds.map(id => [Number(id), {
-          kaCount: 0, ownerSet: new Set(),
-          good: [], more: [], focus: [],
-        }]))
+        const kaCountByLevel = new Map(scopeLevelIds.map(id => [Number(id), 0]))
+        const ownerSetByLevel = new Map(scopeLevelIds.map(id => [Number(id), new Set()]))
         for (const ka of kas) {
           const lvlId = objToLevel.get(Number(ka.objective_id))
           if (!lvlId) continue
-          const td = teamMap.get(Number(lvlId))
-          if (!td) continue
-          td.kaCount++
-          if (ka.owner) td.ownerSet.add(ka.owner)
-          const goodTrim  = (ka.good || '').trim()
-          const moreTrim  = (ka.more || '').trim()
-          const focusTrim = (ka.focus_output || '').trim()
-          if (goodTrim)  td.good.push({  owner: ka.owner, ka_title: ka.ka_title, text: goodTrim })
-          if (moreTrim)  td.more.push({  owner: ka.owner, ka_title: ka.ka_title, text: moreTrim })
-          if (focusTrim) td.focus.push({ owner: ka.owner, ka_title: ka.ka_title, text: focusTrim })
+          kaCountByLevel.set(Number(lvlId), (kaCountByLevel.get(Number(lvlId)) || 0) + 1)
+          if (ka.owner) ownerSetByLevel.get(Number(lvlId)).add(ka.owner)
         }
+
         const built = scopeLevelIds.map(id => {
           const team = levels.find(l => Number(l.id) === Number(id)) || { id, name: '?', icon: '🏢' }
-          const td = teamMap.get(Number(id))
+          const sum = summaryMap.get(Number(id))
           return {
             team,
-            kaCount: td.kaCount,
-            owners: [...td.ownerSet],
-            good: td.good, more: td.more, focus: td.focus,
-            recordCount: td.good.length + td.more.length + td.focus.length,
+            kaCount: kaCountByLevel.get(Number(id)) || 0,
+            owners: [...(ownerSetByLevel.get(Number(id)) || [])],
+            good:  (sum?.good || '').trim(),
+            more:  (sum?.more || '').trim(),
+            focus: (sum?.focus || '').trim(),
+            hasSummary: !!(sum && (sum.good || sum.more || sum.focus)),
           }
-        }).filter(t => t.recordCount > 0 || t.kaCount > 0) // KAも記録もないチームは省略
+        }).filter(t => t.hasSummary || t.kaCount > 0) // 何もないチームは省略
         if (alive) setTeams(built)
       } catch (e) {
         console.error('PreviousManagerSummary load error:', e)
@@ -1146,7 +1143,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
   }
 
   const lastLabel = formatWeekRange2(lastMonday)
-  const totalRecords = teams.reduce((s, t) => s + t.recordCount, 0)
+  const writtenTeams = teams.filter(t => t.hasSummary).length
 
   // 表示するチーム
   const visibleTeams = activeTeamId == null ? teams : teams.filter(t => Number(t.team?.id) === Number(activeTeamId))
@@ -1163,7 +1160,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
         <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>📊 先週のマネージャー定例サマリー</span>
         <span style={{ fontSize: 11, color: T.textMuted }}>（{lastLabel}）</span>
         <span style={{ marginLeft: 'auto', fontSize: 10, color: T.textMuted }}>
-          記録 <strong style={{ color: T.text }}>{totalRecords}</strong> 件 / {teams.length} チーム
+          記入済 <strong style={{ color: T.text }}>{writtenTeams}</strong> / {teams.length} チーム
         </span>
       </button>
 
@@ -1185,7 +1182,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
                   <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
                     style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
                     {t.team.icon || '🤝'} {t.team.name}
-                    <span style={{ opacity: 0.65, marginLeft: 4 }}>({t.recordCount})</span>
+                    {t.hasSummary && <span style={{ marginLeft: 4 }}>✓</span>}
                   </button>
                 ))}
               </div>
@@ -1214,7 +1211,7 @@ function chipStyle(T, active) {
 }
 
 function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
-  const { team, kaCount, owners, good, more, focus } = teamData
+  const { team, kaCount, owners, good, more, focus, hasSummary } = teamData
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
   const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
   const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
@@ -1223,9 +1220,11 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 18 }}>{team?.icon || '🤝'}</span>
         <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{team?.name}</div>
-        <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
-          KA {kaCount}件
-        </span>
+        {kaCount > 0 && (
+          <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
+            KA {kaCount}件
+          </span>
+        )}
         {owners.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
             {owners.slice(0, 5).map(name => {
@@ -1236,38 +1235,35 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
           </div>
         )}
       </div>
-      <ReadOnlySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} items={good} />
-      <ReadOnlySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} items={more} />
-      <ReadOnlySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} items={focus} lastSection />
+      {!hasSummary ? (
+        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0' }}>
+          このチームはまだサマリーが記入されていません。
+        </div>
+      ) : (
+        <>
+          <ReadOnlyBlock T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} text={good} />
+          <ReadOnlyBlock T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} text={more} />
+          <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} text={focus} lastBlock />
+        </>
+      )}
     </div>
   )
 }
 
-function ReadOnlySection({ T, icon, label, sub, accent, items, lastSection }) {
-  if (items.length === 0) return null
+function ReadOnlyBlock({ T, icon, label, sub, accent, text, lastBlock }) {
+  if (!text) return null
   return (
-    <div style={{ marginBottom: lastSection ? 0 : 10 }}>
+    <div style={{ marginBottom: lastBlock ? 0 : 10 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 12 }}>{icon}</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>{label}</span>
         <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
-        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>{items.length}件</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {items.map((it, i) => (
-          <div key={i} style={{
-            padding: '6px 10px', background: T.bgCard, borderRadius: 6,
-            borderLeft: `3px solid ${accent}`, fontSize: 11, color: T.textSub, lineHeight: 1.5,
-          }}>
-            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
-              {it.owner && <strong style={{ color: avatarColor(it.owner) }}>{it.owner}</strong>}
-              {it.owner && it.ka_title && <span> ・ </span>}
-              {it.ka_title && <span style={{ color: T.textSub }}>{it.ka_title}</span>}
-            </div>
-            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.text}</div>
-          </div>
-        ))}
-      </div>
+      <div style={{
+        padding: '8px 12px', background: T.bgCard, borderRadius: 6,
+        borderLeft: `3px solid ${accent}`, fontSize: 12, color: T.textSub, lineHeight: 1.6,
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+      }}>{text}</div>
     </div>
   )
 }
@@ -1488,10 +1484,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
 }
 
 function TeamSummaryCard({ T, teamData, members, weekStart }) {
-  const { team, kaCount, owners, statusCounts, kas } = teamData
-  const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
-  const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
-  const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
+  const { team, kaCount, owners, statusCounts } = teamData
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '22px 26px' }}>
       {/* ヘッダー: チーム名 + 担当者リスト */}
@@ -1513,141 +1506,145 @@ function TeamSummaryCard({ T, teamData, members, weekStart }) {
         )}
       </div>
 
-      {/* ステータス内訳 */}
-      <div style={{
-        display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16,
-        padding: '8px 12px', background: T.bgSection, borderRadius: 8,
-      }}>
-        {Object.entries(KA_STATUS_CFG).filter(([k]) => k !== 'done').map(([k, cfg]) => (
-          <span key={k} style={{
-            padding: '3px 10px', borderRadius: 99, background: cfg.bg, color: cfg.color,
-            border: `1px solid ${cfg.border}`, fontSize: 11, fontWeight: 700,
-          }}>
-            {cfg.label} {statusCounts[k] || 0}
-          </span>
-        ))}
-      </div>
-
-      {/* Good / More / Focus 編集可能セクション (会議中にその場で記入できる) */}
-      <EditableSummarySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} kas={kas} fieldName="good" members={members} />
-      <EditableSummarySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} kas={kas} fieldName="more" members={members} />
-      <EditableSummarySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} kas={kas} fieldName="focus_output" members={members} lastSection />
-    </div>
-  )
-}
-
-function EditableSummarySection({ T, icon, label, sub, accent, kas, fieldName, members, lastSection }) {
-  const [showEmpty, setShowEmpty] = useState(false)
-  const withText = kas.filter(k => (k[fieldName] || '').trim())
-  const withoutText = kas.filter(k => !(k[fieldName] || '').trim())
-  const visible = showEmpty ? [...withText, ...withoutText] : withText
-
-  return (
-    <div style={{ marginBottom: lastSection ? 0 : 16 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 14 }}>{icon}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: accent }}>{label}</span>
-        <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
-        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>
-          {withText.length} / {kas.length} 件 記入済
-        </span>
-      </div>
-      {kas.length === 0 ? (
-        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0' }}>
-          (このチームには今週のKAがまだ登録されていません)
+      {/* KAステータス内訳 (参考情報) */}
+      {kaCount > 0 && (
+        <div style={{
+          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16,
+          padding: '8px 12px', background: T.bgSection, borderRadius: 8,
+        }}>
+          {Object.entries(KA_STATUS_CFG).filter(([k]) => k !== 'done').map(([k, cfg]) => (
+            <span key={k} style={{
+              padding: '3px 10px', borderRadius: 99, background: cfg.bg, color: cfg.color,
+              border: `1px solid ${cfg.border}`, fontSize: 11, fontWeight: 700,
+            }}>
+              {cfg.label} {statusCounts[k] || 0}
+            </span>
+          ))}
         </div>
-      ) : (
-        <>
-          {visible.length === 0 && (
-            <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0', marginBottom: 6 }}>
-              （まだ記入されていません。下のボタンで開いて入力できます）
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {visible.map(ka => (
-              <EditableSummaryRow key={`${ka.id}_${fieldName}`} T={T} ka={ka} fieldName={fieldName} accent={accent} members={members} />
-            ))}
-          </div>
-          {withoutText.length > 0 && (
-            <button
-              onClick={() => setShowEmpty(s => !s)}
-              style={{
-                marginTop: 8, padding: '5px 12px', borderRadius: 6,
-                border: `1px dashed ${T.borderMid}`, background: 'transparent', color: T.textMuted,
-                cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-              }}>
-              {showEmpty ? `未記入 ${withoutText.length} 件を畳む` : `+ 未記入の ${withoutText.length} 件にも追記する`}
-            </button>
-          )}
-        </>
       )}
+
+      {/* チームの Good/More/Focus サマリー（編集可能、KA有無に関係なく書ける） */}
+      <TeamSummaryEditor T={T} team={team} weekStart={weekStart} />
     </div>
   )
 }
 
-// 1KA × 1フィールド (good / more / focus_output) の編集行。autosave + Realtime同期。
-function EditableSummaryRow({ T, ka, fieldName, accent, members }) {
-  const [text, setText] = useState(ka[fieldName] || '')
-  const [focused, setFocused] = useState(false)
-  const focusedRef = useRef(focused)
-  useEffect(() => { focusedRef.current = focused }, [focused])
+// ─── チーム単位の Good/More/Focus 編集（team_weekly_summary テーブル） ────
+function TeamSummaryEditor({ T, team, weekStart }) {
+  const [summary, setSummary]   = useState({ good: '', more: '', focus: '' })
+  const [summaryId, setSummaryId] = useState(null)
+  const [focusedField, setFocusedField] = useState(null)
+  const focusedRef = useRef(focusedField)
+  useEffect(() => { focusedRef.current = focusedField }, [focusedField])
 
-  const autoSave = useAutoSave('weekly_reports', ka.id)
+  const [saving, setSaving] = useState(false)
+  const [saved,  setSaved]  = useState(false)
+  const timer = useRef(null)
+  const summaryIdRef = useRef(null)
+  useEffect(() => { summaryIdRef.current = summaryId }, [summaryId])
 
-  // Realtime: 自分が編集中でなければ最新値で上書き
+  // 取得 (チーム/週切替時に再取得)
   useEffect(() => {
-    const ch = supabase.channel(`mgr_row_${ka.id}_${fieldName}`)
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'weekly_reports', filter: `id=eq.${ka.id}` },
+    let alive = true
+    if (!team?.id || !weekStart) return
+    supabase.from('team_weekly_summary')
+      .select('*').eq('level_id', team.id).eq('week_start', weekStart)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        if (data) {
+          setSummaryId(data.id)
+          setSummary({ good: data.good || '', more: data.more || '', focus: data.focus || '' })
+        } else {
+          setSummaryId(null)
+          setSummary({ good: '', more: '', focus: '' })
+        }
+      })
+    return () => { alive = false }
+  }, [team?.id, weekStart])
+
+  // Realtime: 他クライアントの編集を即時反映 (編集中フィールドは保護)
+  useEffect(() => {
+    if (!team?.id || !weekStart) return
+    const ch = supabase.channel(`tws_${team.id}_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_weekly_summary', filter: `level_id=eq.${team.id}` },
         payload => {
-          if (!payload.new || focusedRef.current) return
-          setText(payload.new[fieldName] || '')
-        })
-      .subscribe()
+          const row = payload.new || payload.old
+          if (!row || row.week_start !== weekStart) return
+          if (payload.eventType === 'DELETE') { setSummaryId(null); return }
+          setSummaryId(row.id)
+          setSummary(prev => ({
+            good:  focusedRef.current === 'good'  ? prev.good  : (row.good  || ''),
+            more:  focusedRef.current === 'more'  ? prev.more  : (row.more  || ''),
+            focus: focusedRef.current === 'focus' ? prev.focus : (row.focus || ''),
+          }))
+        }).subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [ka.id, fieldName])
+  }, [team?.id, weekStart])
 
-  // ka prop 自体が変わったら同期 (週切替 / KR切替時)
-  useEffect(() => {
-    if (!focusedRef.current) setText(ka[fieldName] || '')
-  }, [ka.id, ka[fieldName]]) // eslint-disable-line
+  const persist = useCallback(async (newSummary) => {
+    setSaving(true)
+    const payload = { ...newSummary, updated_at: new Date().toISOString() }
+    if (summaryIdRef.current) {
+      await supabase.from('team_weekly_summary').update(payload).eq('id', summaryIdRef.current)
+    } else {
+      const { data } = await supabase.from('team_weekly_summary')
+        .insert({ level_id: team.id, week_start: weekStart, ...payload })
+        .select().single()
+      if (data) { setSummaryId(data.id); summaryIdRef.current = data.id }
+    }
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1200)
+  }, [team?.id, weekStart])
 
-  const ownerMember = ka.owner ? members.find(m => m?.name === ka.owner) : null
+  const schedule = (newSummary) => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => persist(newSummary), 800)
+  }
+  const flush = (newSummary) => {
+    if (timer.current) clearTimeout(timer.current)
+    persist(newSummary)
+  }
+
+  const change = (field, value) => {
+    const next = { ...summary, [field]: value }
+    setSummary(next); schedule(next)
+  }
+
+  const prevWeek  = weekStart ? getPrevMondayStr(weekStart) : null
+  const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
+  const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
 
   return (
-    <div style={{
-      padding: '8px 10px', background: T.bgSection, borderRadius: 7,
-      borderLeft: `3px solid ${accent}`,
-    }}>
-      <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-        {ka.owner ? <Avatar name={ka.owner} avatarUrl={ownerMember?.avatar_url} size={16} /> : null}
-        <strong style={{ color: ka.owner ? avatarColor(ka.owner) : T.textMuted }}>
-          {ka.owner || '(未割当)'}
-        </strong>
-        {ka.ka_title && (
-          <span style={{ color: T.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            ・ {ka.ka_title}
-          </span>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 9 }}>
-          {autoSave.saving && <span style={{ color: T.accent }}>⟳</span>}
-          {autoSave.saved && !autoSave.saving && <span style={{ color: T.success }}>✓</span>}
-        </span>
+    <div>
+      {/* 保存インジケータ */}
+      <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 6, textAlign: 'right', minHeight: 14 }}>
+        {saving && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
+        {saved && !saving && <span style={{ color: T.success }}>✓ 保存済</span>}
       </div>
-      <textarea
-        value={text}
-        onChange={e => { setText(e.target.value); autoSave.save(fieldName, e.target.value) }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => { setFocused(false); autoSave.saveNow(fieldName, text) }}
-        placeholder="(クリックして入力)"
-        rows={1}
-        style={{
-          width: '100%', boxSizing: 'border-box',
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 5,
-          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.5,
-          outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 32,
-        }}
-      />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        <ReviewBox T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success}
+          value={summary.good}
+          onChange={v => change('good', v)}
+          onFocus={() => setFocusedField('good')}
+          onBlur={() => { setFocusedField(null); flush(summary) }}
+          placeholder="チームの良かったこと・続けたいこと"
+        />
+        <ReviewBox T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger}
+          value={summary.more}
+          onChange={v => change('more', v)}
+          onFocus={() => setFocusedField('more')}
+          onBlur={() => { setFocusedField(null); flush(summary) }}
+          placeholder="チームの課題・改善点"
+        />
+        <ReviewBox T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent}
+          value={summary.focus}
+          onChange={v => change('focus', v)}
+          onFocus={() => setFocusedField('focus')}
+          onBlur={() => { setFocusedField(null); flush(summary) }}
+          placeholder="今週の重点・注力"
+        />
+      </div>
     </div>
   )
 }
