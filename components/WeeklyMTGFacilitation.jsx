@@ -1083,7 +1083,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
         const teamMap = new Map(scopeLevelIds.map(id => [Number(id), {
           kaCount: 0, ownerSet: new Set(),
           statusCounts: { focus: 0, good: 0, more: 0, normal: 0 },
-          good: [], more: [], focus: [],
+          kas: [], // チーム配下の全KA（編集可能サマリー用）
         }]))
         for (const ka of kas) {
           const lvlId = objToLevel.get(Number(ka.objective_id))
@@ -1094,12 +1094,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
           if (ka.owner) td.ownerSet.add(ka.owner)
           const st = KA_STATUS_ORDER.includes(ka.status) ? ka.status : 'normal'
           td.statusCounts[st] = (td.statusCounts[st] || 0) + 1
-          const goodTrim  = (ka.good || '').trim()
-          const moreTrim  = (ka.more || '').trim()
-          const focusTrim = (ka.focus_output || '').trim()
-          if (goodTrim)  td.good.push({  owner: ka.owner, ka_title: ka.ka_title, text: goodTrim })
-          if (moreTrim)  td.more.push({  owner: ka.owner, ka_title: ka.ka_title, text: moreTrim })
-          if (focusTrim) td.focus.push({ owner: ka.owner, ka_title: ka.ka_title, text: focusTrim })
+          td.kas.push(ka)
         }
 
         const built = scopeLevelIds.map(id => {
@@ -1110,7 +1105,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
             kaCount: td.kaCount,
             owners: [...td.ownerSet],
             statusCounts: td.statusCounts,
-            good: td.good, more: td.more, focus: td.focus,
+            kas: (td.kas || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id),
           }
         })
         if (alive) { setTeams(built); setLoadError(null) }
@@ -1262,7 +1257,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
 }
 
 function TeamSummaryCard({ T, teamData, members, weekStart }) {
-  const { team, kaCount, owners, statusCounts, good, more, focus } = teamData
+  const { team, kaCount, owners, statusCounts, kas } = teamData
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
   const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
   const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
@@ -1302,42 +1297,126 @@ function TeamSummaryCard({ T, teamData, members, weekStart }) {
         ))}
       </div>
 
-      {/* Good / More / Focus セクション */}
-      <SummarySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} items={good} emptyText="（記入されたGoodはまだありません）" />
-      <SummarySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} items={more} emptyText="（記入されたMoreはまだありません）" />
-      <SummarySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} items={focus} emptyText="（記入されたFocusはまだありません）" lastSection />
+      {/* Good / More / Focus 編集可能セクション (会議中にその場で記入できる) */}
+      <EditableSummarySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} kas={kas} fieldName="good" members={members} />
+      <EditableSummarySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} kas={kas} fieldName="more" members={members} />
+      <EditableSummarySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} kas={kas} fieldName="focus_output" members={members} lastSection />
     </div>
   )
 }
 
-function SummarySection({ T, icon, label, sub, accent, items, emptyText, lastSection }) {
+function EditableSummarySection({ T, icon, label, sub, accent, kas, fieldName, members, lastSection }) {
+  const [showEmpty, setShowEmpty] = useState(false)
+  const withText = kas.filter(k => (k[fieldName] || '').trim())
+  const withoutText = kas.filter(k => !(k[fieldName] || '').trim())
+  const visible = showEmpty ? [...withText, ...withoutText] : withText
+
   return (
     <div style={{ marginBottom: lastSection ? 0 : 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 14 }}>{icon}</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: accent }}>{label}</span>
         <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
-        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>{items.length}件</span>
+        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>
+          {withText.length} / {kas.length} 件 記入済
+        </span>
       </div>
-      {items.length === 0 ? (
-        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0' }}>{emptyText}</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {items.map((it, i) => (
-            <div key={i} style={{
-              padding: '8px 10px', background: T.bgSection, borderRadius: 7,
-              borderLeft: `3px solid ${accent}`, fontSize: 12, color: T.textSub, lineHeight: 1.5,
-            }}>
-              <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
-                {it.owner && <strong style={{ color: avatarColor(it.owner) }}>{it.owner}</strong>}
-                {it.owner && it.ka_title && <span> ・ </span>}
-                {it.ka_title && <span style={{ color: T.textSub }}>{it.ka_title}</span>}
-              </div>
-              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.text}</div>
-            </div>
-          ))}
+      {kas.length === 0 ? (
+        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0' }}>
+          (このチームには今週のKAがまだ登録されていません)
         </div>
+      ) : (
+        <>
+          {visible.length === 0 && (
+            <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0', marginBottom: 6 }}>
+              （まだ記入されていません。下のボタンで開いて入力できます）
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {visible.map(ka => (
+              <EditableSummaryRow key={`${ka.id}_${fieldName}`} T={T} ka={ka} fieldName={fieldName} accent={accent} members={members} />
+            ))}
+          </div>
+          {withoutText.length > 0 && (
+            <button
+              onClick={() => setShowEmpty(s => !s)}
+              style={{
+                marginTop: 8, padding: '5px 12px', borderRadius: 6,
+                border: `1px dashed ${T.borderMid}`, background: 'transparent', color: T.textMuted,
+                cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+              }}>
+              {showEmpty ? `未記入 ${withoutText.length} 件を畳む` : `+ 未記入の ${withoutText.length} 件にも追記する`}
+            </button>
+          )}
+        </>
       )}
+    </div>
+  )
+}
+
+// 1KA × 1フィールド (good / more / focus_output) の編集行。autosave + Realtime同期。
+function EditableSummaryRow({ T, ka, fieldName, accent, members }) {
+  const [text, setText] = useState(ka[fieldName] || '')
+  const [focused, setFocused] = useState(false)
+  const focusedRef = useRef(focused)
+  useEffect(() => { focusedRef.current = focused }, [focused])
+
+  const autoSave = useAutoSave('weekly_reports', ka.id)
+
+  // Realtime: 自分が編集中でなければ最新値で上書き
+  useEffect(() => {
+    const ch = supabase.channel(`mgr_row_${ka.id}_${fieldName}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'weekly_reports', filter: `id=eq.${ka.id}` },
+        payload => {
+          if (!payload.new || focusedRef.current) return
+          setText(payload.new[fieldName] || '')
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [ka.id, fieldName])
+
+  // ka prop 自体が変わったら同期 (週切替 / KR切替時)
+  useEffect(() => {
+    if (!focusedRef.current) setText(ka[fieldName] || '')
+  }, [ka.id, ka[fieldName]]) // eslint-disable-line
+
+  const ownerMember = ka.owner ? members.find(m => m?.name === ka.owner) : null
+
+  return (
+    <div style={{
+      padding: '8px 10px', background: T.bgSection, borderRadius: 7,
+      borderLeft: `3px solid ${accent}`,
+    }}>
+      <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {ka.owner ? <Avatar name={ka.owner} avatarUrl={ownerMember?.avatar_url} size={16} /> : null}
+        <strong style={{ color: ka.owner ? avatarColor(ka.owner) : T.textMuted }}>
+          {ka.owner || '(未割当)'}
+        </strong>
+        {ka.ka_title && (
+          <span style={{ color: T.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            ・ {ka.ka_title}
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 9 }}>
+          {autoSave.saving && <span style={{ color: T.accent }}>⟳</span>}
+          {autoSave.saved && !autoSave.saving && <span style={{ color: T.success }}>✓</span>}
+        </span>
+      </div>
+      <textarea
+        value={text}
+        onChange={e => { setText(e.target.value); autoSave.save(fieldName, e.target.value) }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); autoSave.saveNow(fieldName, text) }}
+        placeholder="(クリックして入力)"
+        rows={1}
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.5,
+          outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 32,
+        }}
+      />
     </div>
   )
 }
