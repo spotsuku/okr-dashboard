@@ -2338,7 +2338,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
       .select('*')
       .eq('meeting_key', meeting.key)
       .eq('week_start', weekStart || null)
-      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
       .range(0, 49999)
       .then(({ data, error }) => {
         if (!alive) return
