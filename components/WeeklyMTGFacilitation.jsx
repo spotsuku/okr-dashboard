@@ -433,64 +433,80 @@ function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onSta
 function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev }) {
   const wkly = meeting?.weeklyMTG
   const [items, setItems] = useState(null) // [{ level, objective, kr }, ...] in order
+  const [loadError, setLoadError] = useState(null)
 
   // scope 内の KR を順序付きで集める（depth=2 全チーム or depth=1 全事業部、当四半期）
   useEffect(() => {
     let alive = true
     const load = async () => {
-      // 1) スコープ内の levels
-      let scopeLevelIds = []
-      if (wkly?.scope === 'all-teams') {
-        scopeLevelIds = levels.filter(l => {
-          if (l.parent_id == null) return false
-          const p = levels.find(x => Number(x.id) === Number(l.parent_id))
-          return p && p.parent_id == null
-        }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
-      } else if (wkly?.scope === 'all-departments') {
-        scopeLevelIds = levels.filter(l => l.parent_id == null)
-          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
-      }
-      if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
+      try {
+        if (!weekStart || typeof weekStart !== 'string' || weekStart.length < 7) {
+          if (alive) setItems([]); return
+        }
+        if (!Array.isArray(levels) || levels.length === 0) {
+          if (alive) setItems([]); return
+        }
 
-      // 2) 当四半期の Objective を取得
-      const fy = weekStart.slice(0, 4) // 年度近似(粗いが現状の派生でOK)
-      const month = Number(weekStart.slice(5, 7))
-      const q = month >= 4 && month <= 6 ? 'q1' : month >= 7 && month <= 9 ? 'q2' : month >= 10 && month <= 12 ? 'q3' : 'q4'
-      const periodKeys = [q, `${fy}_${q}`] // 年度プレフィックスあり/なし両対応
+        // 1) スコープ内の levels
+        let scopeLevelIds = []
+        if (wkly?.scope === 'all-teams') {
+          scopeLevelIds = levels.filter(l => {
+            if (l == null || l.parent_id == null) return false
+            const p = levels.find(x => Number(x?.id) === Number(l.parent_id))
+            return !!p && p.parent_id == null
+          }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
+        } else if (wkly?.scope === 'all-departments') {
+          scopeLevelIds = levels.filter(l => l != null && l.parent_id == null)
+            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
+        }
+        if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
 
-      const { data: objs } = await supabase.from('objectives')
-        .select('id, level_id, period, title, owner, parent_objective_id')
-        .in('level_id', scopeLevelIds)
-        .in('period', periodKeys)
-        .range(0, 49999)
+        // 2) 当四半期の Objective を取得
+        const fy = weekStart.slice(0, 4)
+        const month = Number(weekStart.slice(5, 7))
+        const q = month >= 4 && month <= 6 ? 'q1' : month >= 7 && month <= 9 ? 'q2' : month >= 10 && month <= 12 ? 'q3' : 'q4'
+        const periodKeys = [q, `${fy}_${q}`]
 
-      const objIds = (objs || []).map(o => o.id)
-      let krs = []
-      if (objIds.length > 0) {
-        const { data } = await supabase.from('key_results')
-          .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
-          .in('objective_id', objIds)
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id, period, title, owner, parent_objective_id')
+          .in('level_id', scopeLevelIds)
+          .in('period', periodKeys)
           .range(0, 49999)
-        krs = data || []
-      }
+        if (objsRes.error) throw objsRes.error
+        const objs = objsRes.data || []
 
-      // 3) 順序組み立て: level 順 → objective 順 → kr 順
-      const byLevel = new Map(scopeLevelIds.map(id => [id, []]))
-      ;(objs || []).forEach(o => {
-        if (byLevel.has(o.level_id)) byLevel.get(o.level_id).push(o)
-      })
-      const built = []
-      for (const lvlId of scopeLevelIds) {
-        const lvl = levels.find(l => Number(l.id) === Number(lvlId))
-        const lvlObjs = (byLevel.get(lvlId) || []).sort((a, b) => a.id - b.id)
-        for (const o of lvlObjs) {
-          const objKrs = krs.filter(k => Number(k.objective_id) === Number(o.id)).sort((a, b) => a.id - b.id)
-          for (const kr of objKrs) {
-            built.push({ level: lvl, objective: o, kr })
+        const objIds = objs.map(o => o.id)
+        let krs = []
+        if (objIds.length > 0) {
+          const krsRes = await supabase.from('key_results')
+            .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
+            .in('objective_id', objIds)
+            .range(0, 49999)
+          if (krsRes.error) throw krsRes.error
+          krs = krsRes.data || []
+        }
+
+        // 3) 順序組み立て: level 順 → objective 順 → kr 順
+        const byLevel = new Map(scopeLevelIds.map(id => [id, []]))
+        objs.forEach(o => {
+          if (o && byLevel.has(o.level_id)) byLevel.get(o.level_id).push(o)
+        })
+        const built = []
+        for (const lvlId of scopeLevelIds) {
+          const lvl = levels.find(l => Number(l?.id) === Number(lvlId)) || { id: lvlId, name: '?', icon: '🏢' }
+          const lvlObjs = (byLevel.get(lvlId) || []).sort((a, b) => a.id - b.id)
+          for (const o of lvlObjs) {
+            const objKrs = krs.filter(k => Number(k.objective_id) === Number(o.id)).sort((a, b) => a.id - b.id)
+            for (const kr of objKrs) {
+              built.push({ level: lvl, objective: o, kr })
+            }
           }
         }
+        if (alive) { setItems(built); setLoadError(null) }
+      } catch (e) {
+        console.error('Step1KRLoop load error:', e)
+        if (alive) { setItems([]); setLoadError(e?.message || String(e)) }
       }
-      if (alive) setItems(built)
     }
     load()
     return () => { alive = false }
@@ -498,6 +514,19 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
 
   if (items === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KR一覧を読み込み中...</div>
+  }
+  if (loadError) {
+    return (
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 24px' }}>
+        <div style={{ background: `${T.danger}15`, border: `1px solid ${T.danger}40`, borderRadius: 10, padding: 16, color: T.danger, fontSize: 13 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>KR一覧の取得でエラー</div>
+          <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: 'pre-wrap' }}>{loadError}</div>
+        </div>
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+        </div>
+      </div>
+    )
   }
   if (items.length === 0) {
     return (
@@ -512,12 +541,20 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
 
   // 現在位置: session.current_item_id を items から探す。なければ先頭。
   const completed = new Set(session?.completed_item_ids || [])
-  let currentIdx = items.findIndex(it => Number(it.kr.id) === Number(session?.current_item_id))
-  if (currentIdx === -1) currentIdx = 0
+  let currentIdx = items.findIndex(it => Number(it.kr?.id) === Number(session?.current_item_id))
+  if (currentIdx === -1 || currentIdx >= items.length) currentIdx = 0
   const current = items[currentIdx]
+  if (!current || !current.kr) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: T.danger, fontSize: 13 }}>
+        現在のKRが見つかりません。
+        <button onClick={onPrev} style={{ ...secondaryBtn(T), marginLeft: 12 }}>← 会議準備に戻る</button>
+      </div>
+    )
+  }
   const currentKR = current.kr
-  const currentObj = current.objective
-  const currentLevel = current.level
+  const currentObj = current.objective || {}
+  const currentLevel = current.level || {}
 
   const goNext = async () => {
     const nextCompleted = [...new Set([...completed, currentKR.id])]
@@ -545,19 +582,25 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     }
   }
   const jumpTo = async (idx) => {
-    await onUpdateSession({ current_item_id: items[idx].kr.id })
+    if (items[idx]?.kr?.id) {
+      await onUpdateSession({ current_item_id: items[idx].kr.id })
+    }
   }
 
-  // 進捗計算
-  const progress = currentKR.target > 0
-    ? Math.min(150, Math.round((currentKR.lower_is_better
-        ? Math.max(0, ((currentKR.target * 2 - currentKR.current) / currentKR.target) * 100)
-        : (currentKR.current / currentKR.target) * 100)))
+  // 進捗計算（null セーフ）
+  const target  = Number(currentKR.target  ?? 0)
+  const current_ = Number(currentKR.current ?? 0)
+  const progress = target > 0
+    ? Math.min(150, Math.round(currentKR.lower_is_better
+        ? Math.max(0, ((target * 2 - current_) / target) * 100)
+        : (current_ / target) * 100))
     : 0
   const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
 
-  const ownerMember = members.find(m => m.name === currentKR.owner)
-  const ownerColor = avatarColor(currentKR.owner)
+  const ownerName = currentKR.owner || ''
+  const ownerMember = ownerName ? members.find(m => m?.name === ownerName) : null
+  const ownerColor = avatarColor(ownerName)
+  const periodLabel = (currentObj?.period || '').toString().split('_').pop().toUpperCase()
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
@@ -589,9 +632,11 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           <strong style={{ color: T.textSub }}>{currentLevel?.name}</strong>
           <span>›</span>
           <span style={{ color: T.textSub }}>{currentObj?.title}</span>
-          <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 99, background: `${T.accent}20`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
-            {(currentObj?.period || '').replace(/^.+_/, '').toUpperCase()}
-          </span>
+          {periodLabel && (
+            <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 99, background: `${T.accent}20`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
+              {periodLabel}
+            </span>
+          )}
         </div>
 
         {/* KRタイトル */}
