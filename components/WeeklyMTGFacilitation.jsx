@@ -94,6 +94,8 @@ export default function WeeklyMTGFacilitation({
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [scopePreview, setScopePreview] = useState(null) // { perLevel: [{level, count}], total }
+  // 会議に入ったとき、セッションがすでに進行中でも一度はスタートページを表示する
+  const [viewingPrep, setViewingPrep] = useState(true)
 
   // ── セッションを取得（無ければ未開始扱い） ─────────────
   useEffect(() => {
@@ -241,8 +243,8 @@ export default function WeeklyMTGFacilitation({
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      {/* ステップヘッダー（step >= 1 の時だけ表示） */}
-      {step >= 1 && (
+      {/* ステップヘッダー（準備画面表示中は出さない） */}
+      {!viewingPrep && step >= 1 && (
         <div style={{
           padding: '12px 20px', borderBottom: `1px solid ${T.border}`,
           background: T.bgCard, flexShrink: 0,
@@ -284,48 +286,62 @@ export default function WeeklyMTGFacilitation({
 
       {/* メインコンテンツ */}
       <div style={{ flex: 1 }}>
-        {step === 0 && (
+        {viewingPrep ? (
           <Step0Preparation
             T={T} meeting={meeting} weekStart={weekStart} myName={myName}
             scope={scopePreview} session={session}
-            onStart={startMeeting}
+            onStart={async () => { await startMeeting(); setViewingPrep(false) }}
+            onResume={() => setViewingPrep(false)}
+            onReset={resetMeeting}
             onSwitchToList={onSwitchToList}
           />
-        )}
-        {step === 1 && wkly?.flow === 'kr' && (
-          <Step1KRLoop
-            T={T} meeting={meeting} weekStart={weekStart}
-            levels={levels} members={members}
-            session={session}
-            onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-            onAdvanceToStep2={() => goToStep(2)}
-            onPrev={() => goToStep(0)}
-            onBackToPrep={() => goToStep(0)}
-          />
-        )}
-        {step === 1 && wkly?.flow === 'ka' && (
-          <Step1KALoop
-            T={T} meeting={meeting} weekStart={weekStart}
-            levels={levels} members={members}
-            session={session}
-            onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-            onAdvanceToStep2={() => goToStep(2)}
-            onPrev={() => goToStep(0)}
-            onBackToPrep={() => goToStep(0)}
-          />
-        )}
-        {step === 2 && (
-          <Step2Confirmations
-            T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
-            onPrev={() => goToStep(1)}
-            onFinish={finishMeeting}
-          />
-        )}
-        {step === 3 && (
-          <Step3Done
-            T={T} session={session} scope={scopePreview} meeting={meeting}
-            onReset={resetMeeting} onSwitchToList={onSwitchToList}
-          />
+        ) : (
+          <>
+            {step === 1 && wkly?.flow === 'kr' && (
+              <Step1KRLoop
+                T={T} meeting={meeting} weekStart={weekStart}
+                levels={levels} members={members}
+                session={session}
+                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onAdvanceToStep2={() => goToStep(2)}
+                onPrev={() => setViewingPrep(true)}
+                onBackToPrep={() => setViewingPrep(true)}
+              />
+            )}
+            {step === 1 && wkly?.flow === 'ka' && (
+              <Step1KALoop
+                T={T} meeting={meeting} weekStart={weekStart}
+                levels={levels} members={members}
+                session={session}
+                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onAdvanceToStep2={() => goToStep(2)}
+                onPrev={() => setViewingPrep(true)}
+                onBackToPrep={() => setViewingPrep(true)}
+              />
+            )}
+            {step === 2 && (
+              <Step2Confirmations
+                T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
+                onPrev={() => goToStep(1)}
+                onFinish={finishMeeting}
+              />
+            )}
+            {step === 3 && (
+              <Step3Done
+                T={T} session={session} scope={scopePreview} meeting={meeting}
+                onReset={async () => { await resetMeeting(); setViewingPrep(true) }}
+                onSwitchToList={onSwitchToList}
+              />
+            )}
+            {/* セッション未開始(step=0) なのに viewingPrep=false になった保険：準備に戻す */}
+            {step === 0 && (
+              <div style={{ padding: 40, textAlign: 'center' }}>
+                <button onClick={() => setViewingPrep(true)} style={primaryBtn(T)}>
+                  会議準備画面に戻る →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -333,7 +349,7 @@ export default function WeeklyMTGFacilitation({
 }
 
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onStart, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onStart, onResume, onReset, onSwitchToList }) {
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点' : 'KR重点'
   const scopeLabel = wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
@@ -435,34 +451,66 @@ function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onSta
         )}
       </div>
 
-      {/* 開始 / 一覧モード切替 */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button onClick={onStart} disabled={!scope}
-          style={{
-            padding: '14px 32px', borderRadius: 10, border: 'none', cursor: scope ? 'pointer' : 'wait',
-            background: scope ? T.accent : T.borderMid, color: '#fff',
-            fontSize: 15, fontWeight: 700, fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-          <span style={{ fontSize: 18 }}>▶️</span> 会議を開始
-          {myName && <span style={{ fontSize: 11, opacity: 0.85 }}>（ファシリ: {myName}）</span>}
-        </button>
-        {onSwitchToList && (
-          <button onClick={onSwitchToList} style={{
-            padding: '14px 20px', borderRadius: 10, border: `1px solid ${T.borderMid}`,
-            background: 'transparent', color: T.textSub, cursor: 'pointer',
-            fontSize: 13, fontFamily: 'inherit',
-          }}>
-            📋 一覧モードで開く
-          </button>
-        )}
-      </div>
+      {/* 開始 / 再開 / リセット / 一覧モード切替 */}
+      {(() => {
+        const sessStep = session?.step ?? 0
+        const inProgress = sessStep > 0 && sessStep < 3
+        const isFinished = sessStep === 3
 
-      {session?.facilitator && session?.step === 0 && (
-        <div style={{ marginTop: 16, fontSize: 11, color: T.textMuted, textAlign: 'center' }}>
-          前回ファシリ: {session.facilitator}（{formatTime(session.started_at)}）
-        </div>
-      )}
+        const bigPrimary = {
+          padding: '14px 28px', borderRadius: 10, border: 'none', cursor: scope ? 'pointer' : 'wait',
+          background: scope ? T.accent : T.borderMid, color: '#fff',
+          fontSize: 15, fontWeight: 700, fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }
+        const bigSecondary = {
+          padding: '14px 20px', borderRadius: 10, border: `1px solid ${T.borderMid}`,
+          background: 'transparent', color: T.textSub, cursor: 'pointer',
+          fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+        }
+
+        return (
+          <>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {inProgress ? (
+                <>
+                  <button onClick={onResume} disabled={!scope} style={bigPrimary}>
+                    <span style={{ fontSize: 18 }}>▶️</span> 続きから再開
+                    <span style={{ fontSize: 11, opacity: 0.85 }}>(Step {sessStep})</span>
+                  </button>
+                  <button onClick={onReset} style={bigSecondary}>↻ リセットして最初から</button>
+                </>
+              ) : isFinished ? (
+                <button onClick={onStart} disabled={!scope} style={bigPrimary}>
+                  <span style={{ fontSize: 18 }}>▶️</span> もう一度開始
+                  {myName && <span style={{ fontSize: 11, opacity: 0.85 }}>（ファシリ: {myName}）</span>}
+                </button>
+              ) : (
+                <button onClick={onStart} disabled={!scope} style={bigPrimary}>
+                  <span style={{ fontSize: 18 }}>▶️</span> 会議を開始
+                  {myName && <span style={{ fontSize: 11, opacity: 0.85 }}>（ファシリ: {myName}）</span>}
+                </button>
+              )}
+              {onSwitchToList && (
+                <button onClick={onSwitchToList} style={bigSecondary}>📋 一覧モードで開く</button>
+              )}
+            </div>
+
+            {/* 状態の補足表示 */}
+            <div style={{ marginTop: 14, fontSize: 11, color: T.textMuted, textAlign: 'center' }}>
+              {inProgress && session?.facilitator && (
+                <>進行中: ファシリ {session.facilitator} ・ 開始 {formatTime(session.started_at)}</>
+              )}
+              {isFinished && session?.finished_at && (
+                <>前回 終了済み: {formatTime(session.finished_at)}</>
+              )}
+              {sessStep === 0 && session?.facilitator && (
+                <>前回ファシリ: {session.facilitator}（{formatTime(session.started_at)}）</>
+              )}
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
