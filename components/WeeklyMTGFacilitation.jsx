@@ -979,7 +979,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
       <KAEditCard
         key={current.ka.id}
         T={T} ka={current.ka} team={current.team} objective={current.objective} kr={current.kr}
-        members={members}
+        members={members} weekStart={weekStart}
       />
 
       {/* 次へ/前へ/スキップ */}
@@ -1208,7 +1208,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
       </div>
 
       {/* 現在チームのサマリーカード */}
-      <TeamSummaryCard T={T} teamData={current} members={members} />
+      <TeamSummaryCard T={T} teamData={current} members={members} weekStart={weekStart} />
 
       {/* 次へ / 前へ / スキップ */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 18 }}>
@@ -1261,8 +1261,11 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
   )
 }
 
-function TeamSummaryCard({ T, teamData, members }) {
+function TeamSummaryCard({ T, teamData, members, weekStart }) {
   const { team, kaCount, owners, statusCounts, good, more, focus } = teamData
+  const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
+  const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
+  const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '22px 26px' }}>
       {/* ヘッダー: チーム名 + 担当者リスト */}
@@ -1300,9 +1303,9 @@ function TeamSummaryCard({ T, teamData, members }) {
       </div>
 
       {/* Good / More / Focus セクション */}
-      <SummarySection T={T} icon="✅" label="Good" sub="今週の成果" accent={T.success} items={good} emptyText="（記入されたGoodはまだありません）" />
-      <SummarySection T={T} icon="🔺" label="More" sub="課題・改善点" accent={T.danger} items={more} emptyText="（記入されたMoreはまだありません）" />
-      <SummarySection T={T} icon="🎯" label="Focus" sub="今週の注力" accent={T.accent} items={focus} emptyText="（記入されたFocusはまだありません）" lastSection />
+      <SummarySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} items={good} emptyText="（記入されたGoodはまだありません）" />
+      <SummarySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} items={more} emptyText="（記入されたMoreはまだありません）" />
+      <SummarySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} items={focus} emptyText="（記入されたFocusはまだありません）" lastSection />
     </div>
   )
 }
@@ -1340,7 +1343,7 @@ function SummarySection({ T, icon, label, sub, accent, items, emptyText, lastSec
 }
 
 // ─── KA編集カード（Phase 4） ────────────────────────────────────────────────
-function KAEditCard({ T, ka, team, objective, kr, members }) {
+function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
   const [kaTitle,     setKaTitle]     = useState(ka.ka_title || '')
   const [ownerDraft,  setOwnerDraft]  = useState(ka.owner || '')
   const [status,      setStatus]      = useState(ka.status || 'normal')
@@ -1394,6 +1397,9 @@ function KAEditCard({ T, ka, team, objective, kr, members }) {
   }
 
   const cfg = KA_STATUS_CFG[status] || KA_STATUS_CFG.normal
+  const prevWeek  = weekStart ? getPrevMondayStr(weekStart) : null
+  const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
+  const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
   const ownerMember = ownerDraft ? members.find(m => m?.name === ownerDraft) : null
 
   return (
@@ -1465,21 +1471,21 @@ function KAEditCard({ T, ka, team, objective, kr, members }) {
 
       {/* good / more / focus */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-        <ReviewBox T={T} icon="✅" label="Good" sub="先週の良かったこと" accent={T.success}
+        <ReviewBox T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success}
           value={good}
           onChange={v => { setGood(v); autoSave.save('good', v) }}
           onFocus={() => setFocusedField('good')}
           onBlur={() => { setFocusedField(null); autoSave.saveNow('good', good) }}
           placeholder="良かったこと・続けたいこと"
         />
-        <ReviewBox T={T} icon="🔺" label="More" sub="先週の改善点" accent={T.danger}
+        <ReviewBox T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger}
           value={more}
           onChange={v => { setMore(v); autoSave.save('more', v) }}
           onFocus={() => setFocusedField('more')}
           onBlur={() => { setFocusedField(null); autoSave.saveNow('more', more) }}
           placeholder="課題・改善点"
         />
-        <ReviewBox T={T} icon="🎯" label="Focus" sub="今週の重点" accent={T.accent}
+        <ReviewBox T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent}
           value={focusOutput}
           onChange={v => { setFocusOutput(v); autoSave.save('focus_output', v) }}
           onFocus={() => setFocusedField('focus_output')}
@@ -1806,9 +1812,9 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onFini
         </div>
       )}
 
-      {/* ConfirmationsTab を全社モードで埋め込み */}
+      {/* ConfirmationsTab を全社モードで埋め込み（会議中は新規追加も可能に） */}
       <div style={{ flex: 1, minHeight: 0 }}>
-        <ConfirmationsTab T={extendedT} myName={myName} members={members} companyWide />
+        <ConfirmationsTab T={extendedT} myName={myName} members={members} companyWide allowCompose />
       </div>
 
       {/* フッターナビ */}

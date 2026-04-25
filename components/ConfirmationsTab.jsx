@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase'
 // Props: { T, myName, members, viewingName, companyWide }
 //   companyWide=true の場合は全社の確認事項を一覧表示 (受信/送信タブなし・新規作成不可)
 
-export default function ConfirmationsTab({ T, myName, members = [], viewingName, companyWide = false }) {
+export default function ConfirmationsTab({ T, myName, members = [], viewingName, companyWide = false, allowCompose = false }) {
   // 表示対象: 他メンバーのページを見ている場合はそのメンバー、自分のページなら自分
   const targetName = viewingName || myName
   const isViewingSelf = !viewingName || viewingName === myName
@@ -117,7 +117,7 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
               : isViewingSelf ? 'メンバー間の確認事項を送受信' : `${targetName}さんの確認事項 (閲覧)`}
           </div>
           <div style={{ flex: 1 }} />
-          {!companyWide && (
+          {(!companyWide || allowCompose) && (
             <button onClick={() => setComposing(true)} style={{
               padding: '6px 14px', borderRadius: 7,
               background: T.accent, color: '#fff', border: 'none',
@@ -127,7 +127,7 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
         </div>
 
         {/* 新規作成モーダル */}
-        {composing && !companyWide && (
+        {composing && (!companyWide || allowCompose) && (
           <ComposeModal T={T} myName={myName} members={members}
             onClose={() => setComposing(false)}
             onSaved={() => { setComposing(false); load() }} />
