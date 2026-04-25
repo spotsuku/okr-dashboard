@@ -16,6 +16,22 @@ const LIGHT_T = {
   accent: '#3B82C4', success: '#15A977', warn: '#D97A1F', danger: '#DC6B6B',
 }
 
+// ─── アバター ─────────────────────────────────────────────────────────────
+const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
+function avatarColor(name) {
+  if (!name) return '#606880'
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+function Avatar({ name, avatarUrl, size = 22 }) {
+  if (!name) return null
+  const color = avatarColor(name)
+  return avatarUrl
+    ? <img src={avatarUrl} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: `1.5px solid ${color}60`, flexShrink: 0 }} />
+    : <div style={{ width: size, height: size, borderRadius: '50%', background: `${color}25`, border: `1.5px solid ${color}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 700, color, flexShrink: 0 }}>{name.slice(0,2)}</div>
+}
+
 // ─── 共通: ステップ定義 ─────────────────────────────────────────────────────
 function stepsForFlow(wkly) {
   // 共通4ステップ: 0=未開始 / 1=順送り / 2=確認事項(manager: 課題・依頼も同画面) / 3=終了
