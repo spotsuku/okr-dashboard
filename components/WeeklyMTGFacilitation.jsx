@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
+import { getMeeting } from '../lib/meetings'
 import ConfirmationsTab from './ConfirmationsTab'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
@@ -296,6 +297,7 @@ export default function WeeklyMTGFacilitation({
         {viewingPrep ? (
           <Step0Preparation
             T={T} meeting={meeting} weekStart={weekStart} myName={myName} members={members}
+            levels={levels}
             scope={scopePreview} session={session}
             facilitatorDraft={facilitatorDraft}
             onFacilitatorChange={setFacilitatorDraft}
@@ -369,7 +371,7 @@ export default function WeeklyMTGFacilitation({
 }
 
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, members = [], scope, session, facilitatorDraft, onFacilitatorChange, onStart, onResume, onReset, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, onStart, onResume, onReset, onSwitchToList }) {
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点' : 'KR重点'
   const scopeLabel = wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
@@ -470,6 +472,11 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], scope, 
           </>
         )}
       </div>
+
+      {/* ディレクター確認会議の場合: 先週のマネージャー定例サマリーを Step 0 で参照可能に */}
+      {meeting?.key === 'director' && (
+        <PreviousManagerSummary T={T} weekStart={weekStart} levels={levels} members={members} />
+      )}
 
       {/* ファシリテーター選択 */}
       <div style={{
@@ -1036,6 +1043,230 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
             </div>
           ))
         })()}
+      </div>
+    </div>
+  )
+}
+
+// ─── 過去のマネージャー定例サマリー（ディレクター確認会議の準備画面用） ─────
+// 直前回のマネージャー定例で記録されたチーム別 Good/More/Focus を read-only 表示。
+// データソースは Step1ManagerSummary と同じ weekly_reports (先週分)。
+function PreviousManagerSummary({ T, weekStart, levels, members }) {
+  const [teams, setTeams] = useState(null)
+  const [expanded, setExpanded] = useState(true)
+  const [activeTeamId, setActiveTeamId] = useState(null) // null = 全チーム表示
+
+  // 「先週」の月曜日。今週の weekStart から -7日。
+  const lastMonday = useMemo(() => {
+    if (!weekStart) return null
+    const [y, m, d] = weekStart.split('-').map(Number)
+    const prev = new Date(Date.UTC(y, m - 1, d - 7))
+    return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth()+1).padStart(2,'0')}-${String(prev.getUTCDate()).padStart(2,'0')}`
+  }, [weekStart])
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        if (!lastMonday || !Array.isArray(levels) || levels.length === 0) {
+          if (alive) setTeams([]); return
+        }
+        // マネージャー定例のスコープ (= all-teams = depth=2)
+        const managerMtg = getMeeting('manager')
+        const wkly = managerMtg?.weeklyMTG
+        const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
+        if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
+
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
+        if (objsRes.error) throw objsRes.error
+        const objs = objsRes.data || []
+        const objIds = objs.map(o => o.id)
+        const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+
+        let kas = []
+        if (objIds.length > 0) {
+          const kasRes = await supabase.from('weekly_reports')
+            .select('id, ka_title, owner, status, good, more, focus_output, objective_id, kr_id')
+            .in('objective_id', objIds)
+            .eq('week_start', lastMonday)
+            .neq('status', 'done')
+            .range(0, 49999)
+          if (kasRes.error) throw kasRes.error
+          kas = kasRes.data || []
+        }
+
+        // チーム単位で集計
+        const teamMap = new Map(scopeLevelIds.map(id => [Number(id), {
+          kaCount: 0, ownerSet: new Set(),
+          good: [], more: [], focus: [],
+        }]))
+        for (const ka of kas) {
+          const lvlId = objToLevel.get(Number(ka.objective_id))
+          if (!lvlId) continue
+          const td = teamMap.get(Number(lvlId))
+          if (!td) continue
+          td.kaCount++
+          if (ka.owner) td.ownerSet.add(ka.owner)
+          const goodTrim  = (ka.good || '').trim()
+          const moreTrim  = (ka.more || '').trim()
+          const focusTrim = (ka.focus_output || '').trim()
+          if (goodTrim)  td.good.push({  owner: ka.owner, ka_title: ka.ka_title, text: goodTrim })
+          if (moreTrim)  td.more.push({  owner: ka.owner, ka_title: ka.ka_title, text: moreTrim })
+          if (focusTrim) td.focus.push({ owner: ka.owner, ka_title: ka.ka_title, text: focusTrim })
+        }
+        const built = scopeLevelIds.map(id => {
+          const team = levels.find(l => Number(l.id) === Number(id)) || { id, name: '?', icon: '🏢' }
+          const td = teamMap.get(Number(id))
+          return {
+            team,
+            kaCount: td.kaCount,
+            owners: [...td.ownerSet],
+            good: td.good, more: td.more, focus: td.focus,
+            recordCount: td.good.length + td.more.length + td.focus.length,
+          }
+        }).filter(t => t.recordCount > 0 || t.kaCount > 0) // KAも記録もないチームは省略
+        if (alive) setTeams(built)
+      } catch (e) {
+        console.error('PreviousManagerSummary load error:', e)
+        if (alive) setTeams([])
+      }
+    }
+    load()
+    return () => { alive = false }
+  }, [lastMonday, levels])
+
+  if (!lastMonday) return null
+  if (teams === null) {
+    return (
+      <div style={{ marginBottom: 18, padding: '10px 14px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 12, color: T.textMuted }}>
+        先週のマネージャー定例サマリーを読み込み中...
+      </div>
+    )
+  }
+
+  const lastLabel = formatWeekRange2(lastMonday)
+  const totalRecords = teams.reduce((s, t) => s + t.recordCount, 0)
+
+  // 表示するチーム
+  const visibleTeams = activeTeamId == null ? teams : teams.filter(t => Number(t.team?.id) === Number(activeTeamId))
+
+  return (
+    <div style={{ marginBottom: 18, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
+      {/* ヘッダー */}
+      <button onClick={() => setExpanded(e => !e)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer',
+        fontFamily: 'inherit', textAlign: 'left',
+      }}>
+        <span style={{ fontSize: 16 }}>{expanded ? '▾' : '▸'}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>📊 先週のマネージャー定例サマリー</span>
+        <span style={{ fontSize: 11, color: T.textMuted }}>（{lastLabel}）</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: T.textMuted }}>
+          記録 <strong style={{ color: T.text }}>{totalRecords}</strong> 件 / {teams.length} チーム
+        </span>
+      </button>
+
+      {expanded && (
+        <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${T.border}` }}>
+          {teams.length === 0 ? (
+            <div style={{ padding: '16px 4px', fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>
+              先週はマネージャー定例の記録がありません。
+            </div>
+          ) : (
+            <>
+              {/* チームフィルタ */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '12px 0' }}>
+                <button onClick={() => setActiveTeamId(null)}
+                  style={chipStyle(T, activeTeamId == null)}>
+                  全チーム ({teams.length})
+                </button>
+                {teams.map(t => (
+                  <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
+                    style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
+                    {t.team.icon || '🤝'} {t.team.name}
+                    <span style={{ opacity: 0.65, marginLeft: 4 }}>({t.recordCount})</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* チームカード一覧 (read-only) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {visibleTeams.map(t => (
+                  <ReadOnlyTeamSummaryCard key={t.team.id} T={T} teamData={t} members={members} weekStart={lastMonday} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function chipStyle(T, active) {
+  return {
+    padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+    fontSize: 11, fontWeight: 700,
+    background: active ? T.accent : T.bgSection,
+    color: active ? '#fff' : T.textSub,
+  }
+}
+
+function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
+  const { team, kaCount, owners, good, more, focus } = teamData
+  const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
+  const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
+  const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
+  return (
+    <div style={{ background: T.bgSection, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 18 }}>{team?.icon || '🤝'}</span>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{team?.name}</div>
+        <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
+          KA {kaCount}件
+        </span>
+        {owners.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
+            {owners.slice(0, 5).map(name => {
+              const m = members.find(x => x?.name === name)
+              return <Avatar key={name} name={name} avatarUrl={m?.avatar_url} size={18} />
+            })}
+            {owners.length > 5 && <span style={{ fontSize: 10, color: T.textMuted }}>+{owners.length - 5}</span>}
+          </div>
+        )}
+      </div>
+      <ReadOnlySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} items={good} />
+      <ReadOnlySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} items={more} />
+      <ReadOnlySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} items={focus} lastSection />
+    </div>
+  )
+}
+
+function ReadOnlySection({ T, icon, label, sub, accent, items, lastSection }) {
+  if (items.length === 0) return null
+  return (
+    <div style={{ marginBottom: lastSection ? 0 : 10 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+        <span style={{ fontSize: 12 }}>{icon}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>{label}</span>
+        <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
+        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>{items.length}件</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {items.map((it, i) => (
+          <div key={i} style={{
+            padding: '6px 10px', background: T.bgCard, borderRadius: 6,
+            borderLeft: `3px solid ${accent}`, fontSize: 11, color: T.textSub, lineHeight: 1.5,
+          }}>
+            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
+              {it.owner && <strong style={{ color: avatarColor(it.owner) }}>{it.owner}</strong>}
+              {it.owner && it.ka_title && <span> ・ </span>}
+              {it.ka_title && <span style={{ color: T.textSub }}>{it.ka_title}</span>}
+            </div>
+            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.text}</div>
+          </div>
+        ))}
       </div>
     </div>
   )
