@@ -74,14 +74,48 @@ function Avatar({ name, avatarUrl, size = 22 }) {
 }
 
 // ─── 共通: ステップ定義 ─────────────────────────────────────────────────────
-function stepsForFlow(wkly) {
-  // 共通4ステップ: 0=未開始 / 1=順送り / 2=確認事項(manager: 課題・依頼も同画面) / 3=終了
-  const items = [
-    { n: 1, label: wkly?.flow === 'ka' ? 'KA順送り' : 'KR順送り', icon: wkly?.flow === 'ka' ? '📋' : '🎯' },
-    { n: 2, label: wkly?.withDiscussion ? '課題・依頼+確認事項' : '確認事項', icon: '💬' },
-    { n: 3, label: '終了', icon: '🏁' },
+function stepsForFlow(meeting) {
+  // 会議タイプごとに step を返す。各 step は { n, label, icon, kind } を持ち、
+  // kind が描画する内容を決める。
+  const wkly = meeting?.weeklyMTG
+  if (wkly?.withDiscussion) {
+    // マネージャー会議:
+    //   1. KR順送り (チーム層) → 2. チームサマリー → 3. 横断連携・確認事項 → 4. ネクストアクション → 5. 終了
+    return [
+      { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
+      { n: 2, label: 'チームサマリー',     icon: '🤝', kind: 'team_summary' },
+      { n: 3, label: '横断連携・確認事項', icon: '💬', kind: 'confirmations' },
+      { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
+  }
+  if (meeting?.key === 'director') {
+    // ディレクター確認会議:
+    //   1. KRサマリー閲覧 (マネージャー会議で書かれた内容)
+    //   2. 確認事項 → 3. ネクストアクション → 4. 終了
+    return [
+      { n: 1, label: 'KRサマリー閲覧',     icon: '📊', kind: 'team_summary_readonly' },
+      { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
+  }
+  if (wkly?.flow === 'ka') {
+    // 週次キックオフ
+    return [
+      { n: 1, label: 'KA順送り',           icon: '📋', kind: 'ka_loop' },
+      { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
+  }
+  // 経営企画会議など (KR重点だが director でも manager でもない)
+  return [
+    { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
+    { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+    { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+    { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
   ]
-  return items
 }
 
 // ─── メインコンポーネント ───────────────────────────────────────────────────
@@ -104,6 +138,13 @@ export default function WeeklyMTGFacilitation({
     if (session?.facilitator) setFacilitatorDraft(session.facilitator)
     else if (myName) setFacilitatorDraft(myName)
   }, [session?.facilitator, myName])
+  // 会議予定時間 ドラフト (分単位)
+  const [durationDraft, setDurationDraft] = useState(30)
+  useEffect(() => {
+    if (session?.duration_minutes) setDurationDraft(session.duration_minutes)
+  }, [session?.duration_minutes])
+  // 10分前アラートの抑制フラグ (一度通知したら同じセッションでは再通知しない)
+  const tenMinAlertedRef = useRef(false)
 
   // ── セッションを取得（無ければ未開始扱い） ─────────────
   useEffect(() => {
@@ -193,11 +234,13 @@ export default function WeeklyMTGFacilitation({
 
   // ── アクション ──────────────────────────────────────────
   const startMeeting = async () => {
+    tenMinAlertedRef.current = false
     const payload = {
       meeting_key: meeting.key,
       week_start: weekStart,
       step: 1,
       facilitator: facilitatorDraft || myName || null,
+      duration_minutes: Number(durationDraft) || 30,
       started_at: new Date().toISOString(),
       finished_at: null,
       current_item_id: null,
@@ -224,8 +267,9 @@ export default function WeeklyMTGFacilitation({
   const finishMeeting = async () => {
     if (!session?.id) return
     if (!window.confirm('会議を終了しますか？')) return
+    const lastStepN = stepsForFlow(meeting).slice(-1)[0]?.n ?? 4
     await supabase.from('weekly_mtg_sessions').update({
-      step: 3, finished_at: new Date().toISOString(),
+      step: lastStepN, finished_at: new Date().toISOString(),
     }).eq('id', session.id)
   }
 
@@ -244,13 +288,30 @@ export default function WeeklyMTGFacilitation({
   }
 
   const step = session?.step ?? 0
-  const stepDefs = stepsForFlow(wkly)
+  const stepDefs = stepsForFlow(meeting)
+  const currentStepDef = stepDefs.find(s => s.n === step)
+  const stepKind = currentStepDef?.kind
+  const stepNumbers = stepDefs.map(s => s.n)
+  const stepIdx = stepNumbers.indexOf(step)
+  const prevStepN = stepIdx > 0 ? stepNumbers[stepIdx - 1] : null
+  const nextStepN = stepIdx >= 0 && stepIdx < stepNumbers.length - 1 ? stepNumbers[stepIdx + 1] : null
 
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
+      {/* タイマー (進行中ステップでのみ) */}
+      {!viewingPrep && step >= 1 && step <= 3 && session?.started_at && (
+        <MeetingTimerBanner
+          T={T}
+          startedAt={session.started_at}
+          durationMinutes={session.duration_minutes || 30}
+          tenMinAlertedRef={tenMinAlertedRef}
+          meetingTitle={meeting?.title || '会議'}
+        />
+      )}
+
       {/* ステップヘッダー（準備画面表示中は出さない） */}
       {!viewingPrep && step >= 1 && (
         <div style={{
@@ -301,6 +362,8 @@ export default function WeeklyMTGFacilitation({
             scope={scopePreview} session={session}
             facilitatorDraft={facilitatorDraft}
             onFacilitatorChange={setFacilitatorDraft}
+            durationDraft={durationDraft}
+            onDurationChange={setDurationDraft}
             onStart={async () => { await startMeeting(); setViewingPrep(false) }}
             onResume={() => setViewingPrep(false)}
             onReset={resetMeeting}
@@ -308,55 +371,73 @@ export default function WeeklyMTGFacilitation({
           />
         ) : (
           <>
-            {step === 1 && wkly?.flow === 'kr' && wkly?.withDiscussion && (
-              <Step1ManagerSummary
-                T={T} meeting={meeting} weekStart={weekStart}
-                levels={levels} members={members}
-                session={session}
-                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-                onAdvanceToStep2={() => goToStep(2)}
-                onPrev={() => setViewingPrep(true)}
-                onBackToPrep={() => setViewingPrep(true)}
-              />
-            )}
-            {step === 1 && wkly?.flow === 'kr' && !wkly?.withDiscussion && (
+            {/* kind に応じて該当コンポーネントをレンダー */}
+            {stepKind === 'kr_loop' && (
               <Step1KRLoop
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
                 onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-                onAdvanceToStep2={() => goToStep(2)}
-                onPrev={() => setViewingPrep(true)}
+                onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
                 onBackToPrep={() => setViewingPrep(true)}
               />
             )}
-            {step === 1 && wkly?.flow === 'ka' && (
+            {stepKind === 'ka_loop' && (
               <Step1KALoop
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
                 onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-                onAdvanceToStep2={() => goToStep(2)}
-                onPrev={() => setViewingPrep(true)}
+                onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
                 onBackToPrep={() => setViewingPrep(true)}
               />
             )}
-            {step === 2 && (
+            {stepKind === 'team_summary' && (
+              <Step1ManagerSummary
+                T={T} meeting={meeting} weekStart={weekStart}
+                levels={levels} members={members}
+                session={session}
+                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
+                onBackToPrep={() => setViewingPrep(true)}
+              />
+            )}
+            {stepKind === 'team_summary_readonly' && (
+              <Step1DirectorReview
+                T={T} meeting={meeting} weekStart={weekStart}
+                levels={levels} members={members}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
+                onNext={() => nextStepN != null && goToStep(nextStepN)}
+                onBackToPrep={() => setViewingPrep(true)}
+              />
+            )}
+            {stepKind === 'confirmations' && (
               <Step2Confirmations
                 T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
-                onPrev={() => goToStep(1)}
+                onPrev={() => prevStepN != null && goToStep(prevStepN)}
+                onNext={() => nextStepN != null && goToStep(nextStepN)}
+              />
+            )}
+            {stepKind === 'next_actions' && (
+              <Step3NextActions
+                T={T} meeting={meeting} weekStart={weekStart} session={session}
+                myName={myName} members={members} levels={levels}
+                onPrev={() => prevStepN != null && goToStep(prevStepN)}
                 onFinish={finishMeeting}
               />
             )}
-            {step === 3 && (
-              <Step3Done
+            {stepKind === 'done' && (
+              <Step4Done
                 T={T} session={session} scope={scopePreview} meeting={meeting}
                 onReset={async () => { await resetMeeting(); setViewingPrep(true) }}
                 onSwitchToList={onSwitchToList}
               />
             )}
             {/* セッション未開始(step=0) なのに viewingPrep=false になった保険：準備に戻す */}
-            {step === 0 && (
+            {(step === 0 || !stepKind) && (
               <div style={{ padding: 40, textAlign: 'center' }}>
                 <button onClick={() => setViewingPrep(true)} style={primaryBtn(T)}>
                   会議準備画面に戻る →
@@ -370,8 +451,83 @@ export default function WeeklyMTGFacilitation({
   )
 }
 
+// ─── タイマーバナー: 残り時間 + 10分前アラート + 超過警告 ─────────────────
+function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, meetingTitle }) {
+  const [now, setNow] = useState(() => Date.now())
+  // 30秒ごとに更新（電池に優しい間隔）
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30 * 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const startMs   = new Date(startedAt).getTime()
+  const endMs     = startMs + durationMinutes * 60 * 1000
+  const remaining = Math.max(-99999, endMs - now)            // 負なら超過
+  const remainingMin = Math.floor(remaining / 60000)
+  const elapsedMin   = Math.floor((now - startMs) / 60000)
+  const totalMin     = durationMinutes
+  const ratio        = Math.max(0, Math.min(1, (now - startMs) / (durationMinutes * 60 * 1000)))
+
+  const isOver  = remaining < 0
+  const isTen   = !isOver && remainingMin <= 10
+  const isFive  = !isOver && remainingMin <= 5
+
+  // 10分前に1度だけブラウザ通知（許可がある場合）
+  useEffect(() => {
+    if (!isTen || isOver) return
+    if (tenMinAlertedRef.current) return
+    tenMinAlertedRef.current = true
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('⏰ 残り10分', { body: `${meetingTitle} の終了予定まで残り 10 分です` })
+      }
+    } catch {}
+  }, [isTen, isOver, meetingTitle, tenMinAlertedRef])
+
+  const bg     = isOver ? `${T.danger}18` : isFive ? `${T.danger}10` : isTen ? `${T.warn}15` : T.bgCard
+  const border = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.border
+  const accent = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.accent
+
+  const fmt = (mm) => {
+    const m = Math.abs(mm)
+    return `${Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}時間` : ''}${m % 60}分`
+  }
+
+  return (
+    <div style={{
+      padding: '8px 16px', background: bg, borderBottom: `2px solid ${border}`, flexShrink: 0,
+    }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 14 }}>{isOver ? '🚨' : isTen ? '⚠️' : '⏱'}</span>
+        <span style={{ fontSize: 12, color: T.textMuted }}>
+          {isOver ? (
+            <span style={{ color: T.danger, fontWeight: 700 }}>
+              終了予定時刻を <strong>{fmt(remainingMin)}</strong> 過ぎています
+            </span>
+          ) : isFive ? (
+            <span style={{ color: T.danger, fontWeight: 700 }}>残り {fmt(remainingMin)}！ そろそろまとめへ</span>
+          ) : isTen ? (
+            <span style={{ color: T.warn, fontWeight: 700 }}>残り {fmt(remainingMin)} ・ 10分前です</span>
+          ) : (
+            <>残り <strong style={{ color: T.text }}>{fmt(remainingMin)}</strong></>
+          )}
+        </span>
+        <span style={{ fontSize: 11, color: T.textMuted }}>
+          経過 {elapsedMin}分 / 予定 {totalMin}分
+        </span>
+        <div style={{ flex: 1, height: 4, background: T.bgSection, borderRadius: 99, overflow: 'hidden', minWidth: 80 }}>
+          <div style={{
+            height: '100%', width: `${Math.min(100, ratio * 100)}%`,
+            background: accent, transition: 'width 0.3s',
+          }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, onStart, onResume, onReset, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点' : 'KR重点'
   const scopeLabel = wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
@@ -473,11 +629,6 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
         )}
       </div>
 
-      {/* ディレクター確認会議の場合: 先週のマネージャー定例サマリーを Step 0 で参照可能に */}
-      {meeting?.key === 'director' && (
-        <PreviousManagerSummary T={T} weekStart={weekStart} levels={levels} members={members} />
-      )}
-
       {/* ファシリテーター選択 */}
       <div style={{
         marginBottom: 18, padding: '12px 16px', background: T.bgCard,
@@ -502,6 +653,55 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
         </div>
         <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
           会議開始時に記録されます。会議中に変更したい場合は「リセット」してから選び直してください。
+        </div>
+      </div>
+
+      {/* 会議予定時間 */}
+      <div style={{
+        marginBottom: 18, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          会議予定時間
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {[15, 30, 45, 60, 90].map(m => {
+            const active = Number(durationDraft) === m
+            return (
+              <button key={m}
+                onClick={() => onDurationChange && onDurationChange(m)}
+                style={{
+                  padding: '6px 14px', borderRadius: 7, border: `1px solid ${active ? T.accent : T.borderMid}`,
+                  background: active ? `${T.accent}15` : 'transparent',
+                  color: active ? T.accent : T.textSub,
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
+                }}>{m}分</button>
+            )
+          })}
+          <input type="number" min={5} max={300} step={5}
+            value={durationDraft || 30}
+            onChange={e => onDurationChange && onDurationChange(Number(e.target.value) || 30)}
+            style={{
+              width: 70, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 7,
+              padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+            }} />
+          <span style={{ fontSize: 11, color: T.textMuted }}>分</span>
+          {/* ブラウザ通知の許可 */}
+          <button onClick={() => {
+              if (typeof Notification === 'undefined') { alert('お使いのブラウザは通知に対応していません'); return }
+              if (Notification.permission === 'granted') { alert('通知は既に許可されています'); return }
+              Notification.requestPermission().then(p => {
+                alert(p === 'granted' ? '通知が許可されました（10分前にデスクトップ通知が出ます）' : '通知は許可されませんでした')
+              })
+            }}
+            style={{
+              marginLeft: 'auto', padding: '5px 10px', borderRadius: 6,
+              border: `1px dashed ${T.borderMid}`, background: 'transparent',
+              color: T.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+            }}>🔔 10分前通知を許可</button>
+        </div>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
+          会議開始から {durationDraft}分で「終了予定」。残り10分でアラートが出ます。
         </div>
       </div>
 
@@ -1051,6 +1251,209 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
 // ─── 過去のマネージャー定例サマリー（ディレクター確認会議の準備画面用） ─────
 // 直前回のマネージャー定例で記録されたチーム別 Good/More/Focus を read-only 表示。
 // データソースは Step1ManagerSummary と同じ weekly_reports (先週分)。
+// ─── Step 1 (ディレクター確認会議): KRサマリー閲覧 (read-only) ────────────────
+// マネージャー会議で書かれた今週分のチームサマリーを閲覧。編集はしない。
+function Step1DirectorReview({ T, meeting, weekStart, levels, members, onPrev, onNext, onBackToPrep }) {
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      {onBackToPrep && (
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={onBackToPrep} style={{
+            padding: '6px 12px', borderRadius: 7, border: `1px solid ${T.borderMid}`,
+            background: 'transparent', color: T.textSub, cursor: 'pointer',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+          }}>↩ 会議準備に戻る</button>
+        </div>
+      )}
+
+      <div style={{
+        marginBottom: 16, padding: '14px 18px',
+        background: `${T.accent}10`, border: `1px solid ${T.accent}40`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent, marginBottom: 4 }}>
+          📊 マネージャー会議で記録されたチーム別 KRサマリーを確認
+        </div>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
+          各チームのマネージャーが書き込んだ今週分の Good/More/Focus を読み、
+          ディレクター視点で気になる点を <strong>確認事項</strong> や <strong>ネクストアクション</strong> として
+          次のステップで記録してください。
+        </div>
+      </div>
+
+      {/* 同じ週 (= weekStart) の team_weekly_summary を直接読む */}
+      <DirectorSummaryList T={T} weekStart={weekStart} levels={levels} members={members} />
+
+      <div style={{ marginTop: 18, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onNext} style={primaryBtn(T)}>確認事項へ →</button>
+      </div>
+    </div>
+  )
+}
+
+// 今週分の team_weekly_summary を全チーム読み込み、read-only で並べる
+function DirectorSummaryList({ T, weekStart, levels, members }) {
+  const [teams, setTeams] = useState(null)
+  const [activeTeamId, setActiveTeamId] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        if (!weekStart || !Array.isArray(levels) || levels.length === 0) {
+          if (alive) setTeams([]); return
+        }
+        // マネージャー会議のスコープ (= all-teams = depth=2)
+        const managerMtg = getMeeting('manager')
+        const scopeLevelIds = resolveScopeLevelIds(managerMtg?.weeklyMTG, levels)
+        if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
+
+        // 今週分の team_weekly_summary
+        const summariesRes = await supabase.from('team_weekly_summary')
+          .select('level_id, good, more, focus')
+          .in('level_id', scopeLevelIds)
+          .eq('week_start', weekStart)
+          .range(0, 49999)
+        const summaryMap = new Map((summariesRes.data || []).map(s => [Number(s.level_id), s]))
+
+        // 補助: 今週のKA件数 + 担当アバター
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = objsRes.data || []
+        const objIds = objs.map(o => o.id)
+        const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+        let kas = []
+        if (objIds.length > 0) {
+          const kasRes = await supabase.from('weekly_reports')
+            .select('id, owner, status, objective_id')
+            .in('objective_id', objIds)
+            .eq('week_start', weekStart)
+            .neq('status', 'done')
+            .range(0, 49999)
+          kas = kasRes.data || []
+        }
+        const kaCountByLevel = new Map(scopeLevelIds.map(id => [Number(id), 0]))
+        const ownerSetByLevel = new Map(scopeLevelIds.map(id => [Number(id), new Set()]))
+        for (const ka of kas) {
+          const lvlId = objToLevel.get(Number(ka.objective_id))
+          if (!lvlId) continue
+          kaCountByLevel.set(Number(lvlId), (kaCountByLevel.get(Number(lvlId)) || 0) + 1)
+          if (ka.owner) ownerSetByLevel.get(Number(lvlId)).add(ka.owner)
+        }
+
+        // KR + kr_weekly_reviews を取得 (チーム単位で並べる用)
+        let krs = []
+        let reviews = []
+        if (objIds.length > 0) {
+          const krsRes = await supabase.from('key_results')
+            .select('id, title, objective_id, target, current, unit, lower_is_better, owner')
+            .in('objective_id', objIds)
+            .range(0, 49999)
+          krs = krsRes.data || []
+          const krIds = krs.map(k => k.id)
+          if (krIds.length > 0) {
+            const revRes = await supabase.from('kr_weekly_reviews')
+              .select('kr_id, weather, good, more, focus')
+              .in('kr_id', krIds)
+              .eq('week_start', weekStart)
+              .range(0, 49999)
+            reviews = revRes.data || []
+          }
+        }
+        const reviewByKr = new Map(reviews.map(r => [Number(r.kr_id), r]))
+        const krsByLevel = new Map(scopeLevelIds.map(id => [Number(id), []]))
+        for (const kr of krs) {
+          const lvlId = objToLevel.get(Number(kr.objective_id))
+          if (!lvlId) continue
+          const list = krsByLevel.get(Number(lvlId))
+          if (!list) continue
+          const rv = reviewByKr.get(Number(kr.id))
+          list.push({
+            id: kr.id,
+            title: kr.title,
+            target: kr.target,
+            current: kr.current,
+            unit: kr.unit,
+            lower_is_better: kr.lower_is_better,
+            owner: kr.owner,
+            weather: rv?.weather || 0,
+            good:  (rv?.good  || '').trim(),
+            more:  (rv?.more  || '').trim(),
+            focus: (rv?.focus || '').trim(),
+          })
+        }
+
+        const built = scopeLevelIds.map(id => {
+          const team = levels.find(l => Number(l.id) === Number(id)) || { id, name: '?', icon: '🤝' }
+          const sum = summaryMap.get(Number(id))
+          const teamKrs = (krsByLevel.get(Number(id)) || []).sort((a, b) => a.id - b.id)
+          return {
+            team,
+            kaCount: kaCountByLevel.get(Number(id)) || 0,
+            owners: [...(ownerSetByLevel.get(Number(id)) || [])],
+            good:  (sum?.good || '').trim(),
+            more:  (sum?.more || '').trim(),
+            focus: (sum?.focus || '').trim(),
+            hasSummary: !!(sum && (sum.good || sum.more || sum.focus)),
+            krs: teamKrs,
+          }
+        })
+        if (alive) setTeams(built)
+      } catch (e) {
+        console.error('DirectorSummaryList load error:', e)
+        if (alive) setTeams([])
+      }
+    }
+    load()
+    return () => { alive = false }
+  }, [weekStart, levels])
+
+  if (teams === null) {
+    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>読み込み中…</div>
+  }
+  if (teams.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>
+        対象チームが見つかりません。
+      </div>
+    )
+  }
+
+  const writtenTeams = teams.filter(t => t.hasSummary).length
+  const visibleTeams = activeTeamId == null ? teams : teams.filter(t => Number(t.team?.id) === Number(activeTeamId))
+
+  return (
+    <div>
+      <div style={{ marginBottom: 12, fontSize: 11, color: T.textMuted }}>
+        記入済 <strong style={{ color: T.text }}>{writtenTeams}</strong> / {teams.length} チーム
+      </div>
+
+      {/* チームフィルタ */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+        <button onClick={() => setActiveTeamId(null)}
+          style={chipStyle(T, activeTeamId == null)}>
+          全チーム ({teams.length})
+        </button>
+        {teams.map(t => (
+          <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
+            style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
+            {t.team.icon || '🤝'} {t.team.name}
+            {t.hasSummary && <span style={{ marginLeft: 4 }}>✓</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* チームカード一覧 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {visibleTeams.map(t => (
+          <ReadOnlyTeamSummaryCard key={t.team.id} T={T} teamData={t} members={members} weekStart={weekStart} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PreviousManagerSummary({ T, weekStart, levels, members }) {
   const [teams, setTeams] = useState(null)
   const [expanded, setExpanded] = useState(true)
@@ -1077,55 +1480,52 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
 
+        // 先週の team_weekly_summary を取得 (チームサマリー本体)
+        const summariesRes = await supabase.from('team_weekly_summary')
+          .select('level_id, good, more, focus')
+          .in('level_id', scopeLevelIds)
+          .eq('week_start', lastMonday)
+          .range(0, 49999)
+        const summaryMap = new Map((summariesRes.data || []).map(s => [Number(s.level_id), s]))
+
+        // 参考: 先週のKA件数 (補助情報として表示)
         const objsRes = await supabase.from('objectives')
           .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
-        if (objsRes.error) throw objsRes.error
         const objs = objsRes.data || []
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
-
         let kas = []
         if (objIds.length > 0) {
           const kasRes = await supabase.from('weekly_reports')
-            .select('id, ka_title, owner, status, good, more, focus_output, objective_id, kr_id')
+            .select('id, owner, status, objective_id')
             .in('objective_id', objIds)
             .eq('week_start', lastMonday)
             .neq('status', 'done')
             .range(0, 49999)
-          if (kasRes.error) throw kasRes.error
           kas = kasRes.data || []
         }
-
-        // チーム単位で集計
-        const teamMap = new Map(scopeLevelIds.map(id => [Number(id), {
-          kaCount: 0, ownerSet: new Set(),
-          good: [], more: [], focus: [],
-        }]))
+        const kaCountByLevel = new Map(scopeLevelIds.map(id => [Number(id), 0]))
+        const ownerSetByLevel = new Map(scopeLevelIds.map(id => [Number(id), new Set()]))
         for (const ka of kas) {
           const lvlId = objToLevel.get(Number(ka.objective_id))
           if (!lvlId) continue
-          const td = teamMap.get(Number(lvlId))
-          if (!td) continue
-          td.kaCount++
-          if (ka.owner) td.ownerSet.add(ka.owner)
-          const goodTrim  = (ka.good || '').trim()
-          const moreTrim  = (ka.more || '').trim()
-          const focusTrim = (ka.focus_output || '').trim()
-          if (goodTrim)  td.good.push({  owner: ka.owner, ka_title: ka.ka_title, text: goodTrim })
-          if (moreTrim)  td.more.push({  owner: ka.owner, ka_title: ka.ka_title, text: moreTrim })
-          if (focusTrim) td.focus.push({ owner: ka.owner, ka_title: ka.ka_title, text: focusTrim })
+          kaCountByLevel.set(Number(lvlId), (kaCountByLevel.get(Number(lvlId)) || 0) + 1)
+          if (ka.owner) ownerSetByLevel.get(Number(lvlId)).add(ka.owner)
         }
+
         const built = scopeLevelIds.map(id => {
           const team = levels.find(l => Number(l.id) === Number(id)) || { id, name: '?', icon: '🏢' }
-          const td = teamMap.get(Number(id))
+          const sum = summaryMap.get(Number(id))
           return {
             team,
-            kaCount: td.kaCount,
-            owners: [...td.ownerSet],
-            good: td.good, more: td.more, focus: td.focus,
-            recordCount: td.good.length + td.more.length + td.focus.length,
+            kaCount: kaCountByLevel.get(Number(id)) || 0,
+            owners: [...(ownerSetByLevel.get(Number(id)) || [])],
+            good:  (sum?.good || '').trim(),
+            more:  (sum?.more || '').trim(),
+            focus: (sum?.focus || '').trim(),
+            hasSummary: !!(sum && (sum.good || sum.more || sum.focus)),
           }
-        }).filter(t => t.recordCount > 0 || t.kaCount > 0) // KAも記録もないチームは省略
+        }).filter(t => t.hasSummary || t.kaCount > 0) // 何もないチームは省略
         if (alive) setTeams(built)
       } catch (e) {
         console.error('PreviousManagerSummary load error:', e)
@@ -1146,7 +1546,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
   }
 
   const lastLabel = formatWeekRange2(lastMonday)
-  const totalRecords = teams.reduce((s, t) => s + t.recordCount, 0)
+  const writtenTeams = teams.filter(t => t.hasSummary).length
 
   // 表示するチーム
   const visibleTeams = activeTeamId == null ? teams : teams.filter(t => Number(t.team?.id) === Number(activeTeamId))
@@ -1163,7 +1563,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
         <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>📊 先週のマネージャー定例サマリー</span>
         <span style={{ fontSize: 11, color: T.textMuted }}>（{lastLabel}）</span>
         <span style={{ marginLeft: 'auto', fontSize: 10, color: T.textMuted }}>
-          記録 <strong style={{ color: T.text }}>{totalRecords}</strong> 件 / {teams.length} チーム
+          記入済 <strong style={{ color: T.text }}>{writtenTeams}</strong> / {teams.length} チーム
         </span>
       </button>
 
@@ -1185,7 +1585,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
                   <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
                     style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
                     {t.team.icon || '🤝'} {t.team.name}
-                    <span style={{ opacity: 0.65, marginLeft: 4 }}>({t.recordCount})</span>
+                    {t.hasSummary && <span style={{ marginLeft: 4 }}>✓</span>}
                   </button>
                 ))}
               </div>
@@ -1214,60 +1614,201 @@ function chipStyle(T, active) {
 }
 
 function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
-  const { team, kaCount, owners, good, more, focus } = teamData
+  const { team, kaCount, owners, good, more, focus, hasSummary, krs = [] } = teamData
+  const [krsExpanded, setKrsExpanded] = useState(true) // KR詳細の展開状態 (デフォルト展開)
+  const [expandedKR, setExpandedKR] = useState(null)   // 個別KRの展開
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
   const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
   const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
+
+  // チームの達成率平均 (target>0 のKRを対象に進捗% 平均を取る)
+  const validKrs = krs.filter(k => Number(k.target ?? 0) > 0)
+  let avgProgress = null
+  if (validKrs.length > 0) {
+    const total = validKrs.reduce((s, k) => {
+      const target = Number(k.target ?? 0)
+      const current = Number(k.current ?? 0)
+      const raw = k.lower_is_better
+        ? Math.max(0, ((target * 2 - current) / target) * 100)
+        : (current / target) * 100
+      return s + Math.min(150, Math.max(0, raw))
+    }, 0)
+    avgProgress = Math.round(total / validKrs.length)
+  }
+  const avgColor = avgProgress == null ? T.textMuted
+    : avgProgress >= 100 ? T.success
+    : avgProgress >= 60  ? T.accent
+    : T.danger
+
   return (
     <div style={{ background: T.bgSection, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 18 }}>{team?.icon || '🤝'}</span>
         <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{team?.name}</div>
-        <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
-          KA {kaCount}件
-        </span>
-        {owners.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
-            {owners.slice(0, 5).map(name => {
-              const m = members.find(x => x?.name === name)
-              return <Avatar key={name} name={name} avatarUrl={m?.avatar_url} size={18} />
-            })}
-            {owners.length > 5 && <span style={{ fontSize: 10, color: T.textMuted }}>+{owners.length - 5}</span>}
-          </div>
+        {kaCount > 0 && (
+          <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
+            KA {kaCount}件
+          </span>
         )}
+        {krs.length > 0 && (
+          <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.success}18`, color: T.success, fontWeight: 700, fontSize: 10 }}>
+            KR {krs.length}件
+          </span>
+        )}
+
+        {/* 右上: 担当アバター + 達成率リング (縦並び) */}
+        <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          {owners.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              {owners.slice(0, 5).map(name => {
+                const m = members.find(x => x?.name === name)
+                return <Avatar key={name} name={name} avatarUrl={m?.avatar_url} size={18} />
+              })}
+              {owners.length > 5 && <span style={{ fontSize: 10, color: T.textMuted }}>+{owners.length - 5}</span>}
+            </div>
+          )}
+          {avgProgress != null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ProgressRing value={avgProgress} color={avgColor} size={50} bg={T.bgCard} />
+              <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, lineHeight: 1.3, textAlign: 'right' }}>
+                KR達成率<br/>平均 ({validKrs.length}件)
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      <ReadOnlySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} items={good} />
-      <ReadOnlySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} items={more} />
-      <ReadOnlySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} items={focus} lastSection />
+
+      {/* チーム全体まとめ (team_weekly_summary) */}
+      {!hasSummary ? (
+        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0', marginBottom: krs.length > 0 ? 12 : 0 }}>
+          このチームはまだサマリーが記入されていません。
+        </div>
+      ) : (
+        <div style={{ marginBottom: krs.length > 0 ? 12 : 0 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            📝 チーム全体まとめ
+          </div>
+          <ReadOnlyBlock T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.success} text={good} />
+          <ReadOnlyBlock T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.danger} text={more} />
+          <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel}` : '今週'} accent={T.accent} text={focus} lastBlock />
+        </div>
+      )}
+
+      {/* KR詳細セクション (折りたたみ) */}
+      {krs.length > 0 && (
+        <div>
+          <button onClick={() => setKrsExpanded(e => !e)} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: '4px 0', fontFamily: 'inherit',
+            fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em',
+          }}>
+            <span style={{ fontSize: 13 }}>{krsExpanded ? '▾' : '▸'}</span>
+            📊 KR 詳細 ({krs.length}件)
+          </button>
+          {krsExpanded && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+              {krs.map(kr => (
+                <KRReadOnlyRow key={kr.id} T={T} kr={kr}
+                  expanded={expandedKR === kr.id}
+                  onToggle={() => setExpandedKR(p => p === kr.id ? null : kr.id)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function ReadOnlySection({ T, icon, label, sub, accent, items, lastSection }) {
-  if (items.length === 0) return null
+// 円グラフ風の進捗リング
+function ProgressRing({ value, color, size = 50, bg = 'rgba(0,0,0,0.06)' }) {
+  const v = Math.max(0, Math.min(150, value || 0))
+  const stroke = 5
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const dash = c * Math.min(100, v) / 100
   return (
-    <div style={{ marginBottom: lastSection ? 0 : 10 }}>
+    <svg width={size} height={size} style={{ display: 'block' }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={bg} strokeWidth={stroke} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={`${dash} ${c}`}
+        transform={`rotate(-90 ${size/2} ${size/2})`} strokeLinecap="round" />
+      <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
+        fontSize={size * 0.3} fontWeight="800" fill={color}>{v}%</text>
+    </svg>
+  )
+}
+
+// 1KRを 1行で表示。クリックで Good/More/Focus を展開。
+function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
+  const target  = Number(kr.target  ?? 0)
+  const current = Number(kr.current ?? 0)
+  const progress = target > 0
+    ? Math.min(150, Math.round(kr.lower_is_better
+        ? Math.max(0, ((target * 2 - current) / target) * 100)
+        : (current / target) * 100))
+    : 0
+  const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
+  const weatherIcons = { 1: '☀️', 2: '🌤', 3: '☁️', 4: '🌧' }
+  const hasReview = !!(kr.good || kr.more || kr.focus || kr.weather)
+
+  return (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6, overflow: 'hidden' }}>
+      <button onClick={onToggle}
+        title={hasReview ? 'クリックで Good/More/Focus を展開' : 'レビュー未記入'}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
+          fontFamily: 'inherit', textAlign: 'left',
+        }}>
+        <span style={{ fontSize: 11, color: T.textFaint }}>{expanded ? '▾' : '▸'}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {kr.title}
+        </span>
+        {kr.weather > 0 && <span style={{ fontSize: 14 }}>{weatherIcons[kr.weather]}</span>}
+        <span style={{ fontSize: 11, color: T.textMuted }}>
+          {current}{kr.unit} / {target}{kr.unit}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: progressColor, minWidth: 36, textAlign: 'right' }}>
+          {progress}%
+        </span>
+      </button>
+      {/* 進捗バー (常時表示) */}
+      <div style={{ height: 3, background: T.bgSection, marginLeft: 28, marginRight: 12, marginBottom: expanded ? 0 : 8 }}>
+        <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, background: progressColor }} />
+      </div>
+      {expanded && (
+        <div style={{ padding: '8px 12px 10px 28px', borderTop: `1px solid ${T.border}` }}>
+          {!hasReview ? (
+            <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic' }}>このKRはまだレビューが記入されていません。</div>
+          ) : (
+            <>
+              <ReadOnlyBlock T={T} icon="✅" label="Good" sub="" accent={T.success} text={kr.good} />
+              <ReadOnlyBlock T={T} icon="🔺" label="More" sub="" accent={T.danger}  text={kr.more} />
+              <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub="" accent={T.accent} text={kr.focus} lastBlock />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReadOnlyBlock({ T, icon, label, sub, accent, text, lastBlock }) {
+  if (!text) return null
+  return (
+    <div style={{ marginBottom: lastBlock ? 0 : 10 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 12 }}>{icon}</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>{label}</span>
         <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
-        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>{items.length}件</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {items.map((it, i) => (
-          <div key={i} style={{
-            padding: '6px 10px', background: T.bgCard, borderRadius: 6,
-            borderLeft: `3px solid ${accent}`, fontSize: 11, color: T.textSub, lineHeight: 1.5,
-          }}>
-            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
-              {it.owner && <strong style={{ color: avatarColor(it.owner) }}>{it.owner}</strong>}
-              {it.owner && it.ka_title && <span> ・ </span>}
-              {it.ka_title && <span style={{ color: T.textSub }}>{it.ka_title}</span>}
-            </div>
-            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.text}</div>
-          </div>
-        ))}
-      </div>
+      <div style={{
+        padding: '8px 12px', background: T.bgCard, borderRadius: 6,
+        borderLeft: `3px solid ${accent}`, fontSize: 12, color: T.textSub, lineHeight: 1.6,
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+      }}>{text}</div>
     </div>
   )
 }
@@ -1488,10 +2029,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
 }
 
 function TeamSummaryCard({ T, teamData, members, weekStart }) {
-  const { team, kaCount, owners, statusCounts, kas } = teamData
-  const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
-  const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
-  const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
+  const { team, kaCount, owners, statusCounts } = teamData
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '22px 26px' }}>
       {/* ヘッダー: チーム名 + 担当者リスト */}
@@ -1513,141 +2051,145 @@ function TeamSummaryCard({ T, teamData, members, weekStart }) {
         )}
       </div>
 
-      {/* ステータス内訳 */}
-      <div style={{
-        display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16,
-        padding: '8px 12px', background: T.bgSection, borderRadius: 8,
-      }}>
-        {Object.entries(KA_STATUS_CFG).filter(([k]) => k !== 'done').map(([k, cfg]) => (
-          <span key={k} style={{
-            padding: '3px 10px', borderRadius: 99, background: cfg.bg, color: cfg.color,
-            border: `1px solid ${cfg.border}`, fontSize: 11, fontWeight: 700,
-          }}>
-            {cfg.label} {statusCounts[k] || 0}
-          </span>
-        ))}
-      </div>
-
-      {/* Good / More / Focus 編集可能セクション (会議中にその場で記入できる) */}
-      <EditableSummarySection T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} kas={kas} fieldName="good" members={members} />
-      <EditableSummarySection T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} kas={kas} fieldName="more" members={members} />
-      <EditableSummarySection T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} kas={kas} fieldName="focus_output" members={members} lastSection />
-    </div>
-  )
-}
-
-function EditableSummarySection({ T, icon, label, sub, accent, kas, fieldName, members, lastSection }) {
-  const [showEmpty, setShowEmpty] = useState(false)
-  const withText = kas.filter(k => (k[fieldName] || '').trim())
-  const withoutText = kas.filter(k => !(k[fieldName] || '').trim())
-  const visible = showEmpty ? [...withText, ...withoutText] : withText
-
-  return (
-    <div style={{ marginBottom: lastSection ? 0 : 16 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 14 }}>{icon}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: accent }}>{label}</span>
-        <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
-        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>
-          {withText.length} / {kas.length} 件 記入済
-        </span>
-      </div>
-      {kas.length === 0 ? (
-        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0' }}>
-          (このチームには今週のKAがまだ登録されていません)
+      {/* KAステータス内訳 (参考情報) */}
+      {kaCount > 0 && (
+        <div style={{
+          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16,
+          padding: '8px 12px', background: T.bgSection, borderRadius: 8,
+        }}>
+          {Object.entries(KA_STATUS_CFG).filter(([k]) => k !== 'done').map(([k, cfg]) => (
+            <span key={k} style={{
+              padding: '3px 10px', borderRadius: 99, background: cfg.bg, color: cfg.color,
+              border: `1px solid ${cfg.border}`, fontSize: 11, fontWeight: 700,
+            }}>
+              {cfg.label} {statusCounts[k] || 0}
+            </span>
+          ))}
         </div>
-      ) : (
-        <>
-          {visible.length === 0 && (
-            <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0', marginBottom: 6 }}>
-              （まだ記入されていません。下のボタンで開いて入力できます）
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {visible.map(ka => (
-              <EditableSummaryRow key={`${ka.id}_${fieldName}`} T={T} ka={ka} fieldName={fieldName} accent={accent} members={members} />
-            ))}
-          </div>
-          {withoutText.length > 0 && (
-            <button
-              onClick={() => setShowEmpty(s => !s)}
-              style={{
-                marginTop: 8, padding: '5px 12px', borderRadius: 6,
-                border: `1px dashed ${T.borderMid}`, background: 'transparent', color: T.textMuted,
-                cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-              }}>
-              {showEmpty ? `未記入 ${withoutText.length} 件を畳む` : `+ 未記入の ${withoutText.length} 件にも追記する`}
-            </button>
-          )}
-        </>
       )}
+
+      {/* チームの Good/More/Focus サマリー（編集可能、KA有無に関係なく書ける） */}
+      <TeamSummaryEditor T={T} team={team} weekStart={weekStart} />
     </div>
   )
 }
 
-// 1KA × 1フィールド (good / more / focus_output) の編集行。autosave + Realtime同期。
-function EditableSummaryRow({ T, ka, fieldName, accent, members }) {
-  const [text, setText] = useState(ka[fieldName] || '')
-  const [focused, setFocused] = useState(false)
-  const focusedRef = useRef(focused)
-  useEffect(() => { focusedRef.current = focused }, [focused])
+// ─── チーム単位の Good/More/Focus 編集（team_weekly_summary テーブル） ────
+function TeamSummaryEditor({ T, team, weekStart }) {
+  const [summary, setSummary]   = useState({ good: '', more: '', focus: '' })
+  const [summaryId, setSummaryId] = useState(null)
+  const [focusedField, setFocusedField] = useState(null)
+  const focusedRef = useRef(focusedField)
+  useEffect(() => { focusedRef.current = focusedField }, [focusedField])
 
-  const autoSave = useAutoSave('weekly_reports', ka.id)
+  const [saving, setSaving] = useState(false)
+  const [saved,  setSaved]  = useState(false)
+  const timer = useRef(null)
+  const summaryIdRef = useRef(null)
+  useEffect(() => { summaryIdRef.current = summaryId }, [summaryId])
 
-  // Realtime: 自分が編集中でなければ最新値で上書き
+  // 取得 (チーム/週切替時に再取得)
   useEffect(() => {
-    const ch = supabase.channel(`mgr_row_${ka.id}_${fieldName}`)
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'weekly_reports', filter: `id=eq.${ka.id}` },
+    let alive = true
+    if (!team?.id || !weekStart) return
+    supabase.from('team_weekly_summary')
+      .select('*').eq('level_id', team.id).eq('week_start', weekStart)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        if (data) {
+          setSummaryId(data.id)
+          setSummary({ good: data.good || '', more: data.more || '', focus: data.focus || '' })
+        } else {
+          setSummaryId(null)
+          setSummary({ good: '', more: '', focus: '' })
+        }
+      })
+    return () => { alive = false }
+  }, [team?.id, weekStart])
+
+  // Realtime: 他クライアントの編集を即時反映 (編集中フィールドは保護)
+  useEffect(() => {
+    if (!team?.id || !weekStart) return
+    const ch = supabase.channel(`tws_${team.id}_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_weekly_summary', filter: `level_id=eq.${team.id}` },
         payload => {
-          if (!payload.new || focusedRef.current) return
-          setText(payload.new[fieldName] || '')
-        })
-      .subscribe()
+          const row = payload.new || payload.old
+          if (!row || row.week_start !== weekStart) return
+          if (payload.eventType === 'DELETE') { setSummaryId(null); return }
+          setSummaryId(row.id)
+          setSummary(prev => ({
+            good:  focusedRef.current === 'good'  ? prev.good  : (row.good  || ''),
+            more:  focusedRef.current === 'more'  ? prev.more  : (row.more  || ''),
+            focus: focusedRef.current === 'focus' ? prev.focus : (row.focus || ''),
+          }))
+        }).subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [ka.id, fieldName])
+  }, [team?.id, weekStart])
 
-  // ka prop 自体が変わったら同期 (週切替 / KR切替時)
-  useEffect(() => {
-    if (!focusedRef.current) setText(ka[fieldName] || '')
-  }, [ka.id, ka[fieldName]]) // eslint-disable-line
+  const persist = useCallback(async (newSummary) => {
+    setSaving(true)
+    const payload = { ...newSummary, updated_at: new Date().toISOString() }
+    if (summaryIdRef.current) {
+      await supabase.from('team_weekly_summary').update(payload).eq('id', summaryIdRef.current)
+    } else {
+      const { data } = await supabase.from('team_weekly_summary')
+        .insert({ level_id: team.id, week_start: weekStart, ...payload })
+        .select().single()
+      if (data) { setSummaryId(data.id); summaryIdRef.current = data.id }
+    }
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1200)
+  }, [team?.id, weekStart])
 
-  const ownerMember = ka.owner ? members.find(m => m?.name === ka.owner) : null
+  const schedule = (newSummary) => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => persist(newSummary), 800)
+  }
+  const flush = (newSummary) => {
+    if (timer.current) clearTimeout(timer.current)
+    persist(newSummary)
+  }
+
+  const change = (field, value) => {
+    const next = { ...summary, [field]: value }
+    setSummary(next); schedule(next)
+  }
+
+  const prevWeek  = weekStart ? getPrevMondayStr(weekStart) : null
+  const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
+  const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
 
   return (
-    <div style={{
-      padding: '8px 10px', background: T.bgSection, borderRadius: 7,
-      borderLeft: `3px solid ${accent}`,
-    }}>
-      <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-        {ka.owner ? <Avatar name={ka.owner} avatarUrl={ownerMember?.avatar_url} size={16} /> : null}
-        <strong style={{ color: ka.owner ? avatarColor(ka.owner) : T.textMuted }}>
-          {ka.owner || '(未割当)'}
-        </strong>
-        {ka.ka_title && (
-          <span style={{ color: T.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            ・ {ka.ka_title}
-          </span>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 9 }}>
-          {autoSave.saving && <span style={{ color: T.accent }}>⟳</span>}
-          {autoSave.saved && !autoSave.saving && <span style={{ color: T.success }}>✓</span>}
-        </span>
+    <div>
+      {/* 保存インジケータ */}
+      <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 6, textAlign: 'right', minHeight: 14 }}>
+        {saving && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
+        {saved && !saving && <span style={{ color: T.success }}>✓ 保存済</span>}
       </div>
-      <textarea
-        value={text}
-        onChange={e => { setText(e.target.value); autoSave.save(fieldName, e.target.value) }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => { setFocused(false); autoSave.saveNow(fieldName, text) }}
-        placeholder="(クリックして入力)"
-        rows={1}
-        style={{
-          width: '100%', boxSizing: 'border-box',
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 5,
-          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.5,
-          outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 32,
-        }}
-      />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        <ReviewBox T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success}
+          value={summary.good}
+          onChange={v => change('good', v)}
+          onFocus={() => setFocusedField('good')}
+          onBlur={() => { setFocusedField(null); flush(summary) }}
+          placeholder="チームの良かったこと・続けたいこと"
+        />
+        <ReviewBox T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger}
+          value={summary.more}
+          onChange={v => change('more', v)}
+          onFocus={() => setFocusedField('more')}
+          onBlur={() => { setFocusedField(null); flush(summary) }}
+          placeholder="チームの課題・改善点"
+        />
+        <ReviewBox T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent}
+          value={summary.focus}
+          onChange={v => change('focus', v)}
+          onFocus={() => setFocusedField('focus')}
+          onBlur={() => { setFocusedField(null); flush(summary) }}
+          placeholder="今週の重点・注力"
+        />
+      </div>
     </div>
   )
 }
@@ -2065,7 +2607,20 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
   )
 }
 
-function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBlur, placeholder }) {
+// テキストエリアの高さを内容に合わせて自動拡張
+function autoGrowTextarea(el, minRows = 6) {
+  if (!el) return
+  el.style.height = 'auto'
+  // fontSize 12 / lineHeight 1.6 → 1行 ≒ 19.2px。パディング 14px 込み
+  const minH = minRows * 20 + 14
+  el.style.height = Math.max(el.scrollHeight, minH) + 'px'
+}
+
+function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBlur, placeholder, minRows = 6 }) {
+  const ref = useRef(null)
+  // 値が外部から変わった時 (初期表示・他クライアント編集の反映) も再計算
+  useEffect(() => { autoGrowTextarea(ref.current, minRows) }, [value, minRows])
+
   return (
     <div style={{
       background: T.bgSection, borderRadius: 8, border: `1px solid ${T.border}`,
@@ -2077,17 +2632,19 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
         <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
       </div>
       <textarea
+        ref={ref}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => { onChange(e.target.value); autoGrowTextarea(e.target, minRows) }}
         onFocus={onFocus}
         onBlur={onBlur}
         placeholder={placeholder}
-        rows={3}
+        rows={minRows}
         style={{
           width: '100%', boxSizing: 'border-box',
           background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6,
-          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.5,
-          outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 60,
+          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.6,
+          outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden',
+          minHeight: minRows * 20 + 14,
         }}
       />
     </div>
@@ -2097,7 +2654,7 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
 // ─── Step 2: 確認事項（Phase 5 = "C"） ───────────────────────────────────────
 // withDiscussion=true (マネージャー定例) は別途専用UIを協議中。
 // 当面は ConfirmationsTab を全社モードで表示するシンプル実装。
-function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onFinish }) {
+function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onNext }) {
   // ConfirmationsTab に渡す T を拡張（sectionBg / successBg が必要）
   const extendedT = useMemo(() => ({
     ...T,
@@ -2135,7 +2692,7 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onFini
       }}>
         <button onClick={onPrev} style={secondaryBtn(T)}>← Step 1 に戻る</button>
         <div style={{ flex: 1 }} />
-        <button onClick={onFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
+        <button onClick={onNext} style={primaryBtn(T)}>ネクストアクションへ →</button>
       </div>
     </div>
   )
@@ -2155,8 +2712,301 @@ function secondaryBtn(T) {
   }
 }
 
-// ─── Step 3: 終了画面 ────────────────────────────────────────────────────────
-function Step3Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
+// ─── Step 3: ネクストアクション ─────────────────────────────────────────────
+// 「誰がいつまでに何をやるか」を必ず確認するステップ。
+// meeting_action_items テーブル に保存。会議終了時に0件なら警告。
+function Step3NextActions({ T, meeting, weekStart, session, myName, members, levels = [], onPrev, onFinish }) {
+  const [items, setItems] = useState(null)
+  const [scopeKAs, setScopeKAs] = useState([]) // 任意紐付け用のKA選択肢
+  const [loadError, setLoadError] = useState(null)
+
+  // 既存タスク取得 (ka_tasks; meeting_key + week_start で会議スコープを識別)
+  useEffect(() => {
+    let alive = true
+    if (!meeting?.key) return
+    supabase.from('ka_tasks')
+      .select('*')
+      .eq('meeting_key', meeting.key)
+      .eq('week_start', weekStart || null)
+      .order('id', { ascending: true })
+      .range(0, 49999)
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) { setLoadError(error.message); setItems([]); return }
+        setItems(data || [])
+      })
+    return () => { alive = false }
+  }, [meeting?.key, weekStart])
+
+  // 会議スコープ内のKA一覧 (任意紐付け用)
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        if (!Array.isArray(levels) || levels.length === 0) return
+        const wkly = meeting?.weeklyMTG
+        const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
+        if (scopeLevelIds.length === 0) { if (alive) setScopeKAs([]); return }
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id, title').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = objsRes.data || []
+        const objIds = objs.map(o => o.id)
+        if (objIds.length === 0) { if (alive) setScopeKAs([]); return }
+        const kasRes = await supabase.from('weekly_reports')
+          .select('id, ka_title, owner, kr_id, objective_id, level_id, week_start, status')
+          .in('objective_id', objIds)
+          .eq('week_start', weekStart)
+          .neq('status', 'done')
+          .range(0, 49999)
+        const kas = kasRes.data || []
+        // ラベル組み立て: 「[チーム] KAタイトル (担当)」
+        const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+        const lvlToName  = new Map(levels.map(l => [Number(l?.id), l?.name || '']))
+        const list = kas.map(ka => {
+          const lvlId = objToLevel.get(Number(ka.objective_id))
+          const teamName = lvlToName.get(Number(lvlId)) || ''
+          return { ...ka, _label: `[${teamName}] ${ka.ka_title || '(無題)'}${ka.owner ? ` (${ka.owner})` : ''}` }
+        }).sort((a, b) => a._label.localeCompare(b._label))
+        if (alive) setScopeKAs(list)
+      } catch (e) {
+        console.error('Step3NextActions scope KA load error:', e)
+      }
+    }
+    load()
+    return () => { alive = false }
+  }, [meeting?.key, weekStart, levels])
+
+  // Realtime購読 (ka_tasks 変更を監視; この会議の行のみ反映)
+  useEffect(() => {
+    if (!meeting?.key) return
+    const ch = supabase.channel(`mtg_tasks_${meeting.key}_${weekStart}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'ka_tasks' },
+        payload => {
+          const row = payload.new || payload.old
+          if (!row) return
+          // この会議スコープのレコードだけ扱う
+          if ((row.meeting_key || null) !== meeting.key) return
+          if ((row.week_start || null) !== (weekStart || null)) return
+          if (payload.eventType === 'INSERT') {
+            setItems(p => (p || []).some(x => x.id === payload.new.id) ? p : [...(p || []), payload.new])
+          } else if (payload.eventType === 'UPDATE') {
+            setItems(p => (p || []).map(x => x.id === payload.new.id ? { ...x, ...payload.new } : x))
+          } else if (payload.eventType === 'DELETE') {
+            setItems(p => (p || []).filter(x => x.id !== payload.old.id))
+          }
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [meeting?.key, weekStart])
+
+  const addItem = async () => {
+    const payload = {
+      meeting_key: meeting.key, week_start: weekStart, session_id: session?.id ?? null,
+      assignee: '', due_date: null, title: '', done: false,
+      report_id: null, ka_key: null,
+    }
+    const { data, error } = await supabase.from('ka_tasks').insert(payload).select().single()
+    if (error) { alert('追加失敗: ' + error.message); return }
+    if (data) setItems(p => (p || []).some(x => x.id === data.id) ? p : [...(p || []), data])
+  }
+
+  const deleteItem = async (id) => {
+    if (!window.confirm('このネクストアクションを削除しますか？')) return
+    await supabase.from('ka_tasks').delete().eq('id', id)
+    setItems(p => (p || []).filter(x => x.id !== id))
+  }
+
+  const handleFinish = () => {
+    const count = (items || []).length
+    const filled = (items || []).filter(it => (it.title || '').trim()).length
+    if (count === 0) {
+      if (!window.confirm('ネクストアクションが0件です。本当に会議を終了しますか？\n（誰がいつまでに何をやるかが決まらない会議は意味がありません）')) return
+    } else if (filled < count) {
+      if (!window.confirm(`内容が空のアクションが ${count - filled} 件あります。このまま終了しますか？`)) return
+    }
+    onFinish()
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      <div style={{
+        marginBottom: 16, padding: '14px 18px',
+        background: `${T.warn}10`, border: `1px solid ${T.warn}40`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.warn, marginBottom: 4 }}>
+          ✅ ネクストアクションを確定
+        </div>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
+          <strong>誰がいつまでに何をやるか</strong>を記録します。決まらない会議は意味がありません。<br />
+          会議で出た決定事項・宿題・依頼を全て書き出してから終了してください。
+        </div>
+      </div>
+
+      {/* テーブルヘッダー */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '140px 130px 1fr 180px 32px',
+        gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
+        border: `1px solid ${T.border}`, marginBottom: 6, fontSize: 11,
+        color: T.textMuted, fontWeight: 700,
+      }}>
+        <div>担当</div>
+        <div>期日</div>
+        <div>内容</div>
+        <div>KA紐付け（任意）</div>
+        <div></div>
+      </div>
+
+      {/* 行 */}
+      {items === null ? (
+        <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>読み込み中…</div>
+      ) : items.length === 0 ? (
+        <div style={{
+          padding: '24px 16px', background: T.bgCard, border: `1px dashed ${T.borderMid}`,
+          borderRadius: 8, fontSize: 12, color: T.textMuted, textAlign: 'center', marginBottom: 8,
+        }}>
+          まだネクストアクションが登録されていません。下のボタンから追加してください。
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+          {items.map(it => (
+            <NextActionRow key={it.id} T={T} item={it} members={members} scopeKAs={scopeKAs} onDelete={() => deleteItem(it.id)} />
+          ))}
+        </div>
+      )}
+
+      {loadError && (
+        <div style={{ marginBottom: 8, padding: '8px 12px', background: `${T.danger}10`, border: `1px solid ${T.danger}40`, borderRadius: 6, color: T.danger, fontSize: 11 }}>
+          取得エラー: {loadError}
+        </div>
+      )}
+
+      <button onClick={addItem} style={{
+        padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
+        background: 'transparent', color: T.accent, cursor: 'pointer',
+        fontSize: 12, fontWeight: 700, fontFamily: 'inherit', marginBottom: 24,
+      }}>＋ アクションを追加</button>
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={onPrev} style={secondaryBtn(T)}>← Step 2 に戻る</button>
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 11, color: T.textMuted, marginRight: 8 }}>
+          記録: <strong style={{ color: T.text }}>{(items || []).filter(it => (it.title || '').trim()).length}</strong> 件
+        </div>
+        <button onClick={handleFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
+      </div>
+    </div>
+  )
+}
+
+function NextActionRow({ T, item, members, scopeKAs = [], onDelete }) {
+  const [assignee, setAssignee] = useState(item.assignee || '')
+  const [dueDate,  setDueDate]  = useState(item.due_date || '')
+  const [title,    setTitle]    = useState(item.title || '')
+  const [reportId, setReportId] = useState(item.report_id || '')
+  const [focusedField, setFocusedField] = useState(null)
+  const focusedRef = useRef(null)
+  useEffect(() => { focusedRef.current = focusedField }, [focusedField])
+
+  // タスクテーブルは ka_tasks に統一
+  const autoSave = useAutoSave('ka_tasks', item.id)
+
+  // Realtime: 編集中フィールドは保護
+  useEffect(() => {
+    const ch = supabase.channel(`mtg_task_row_${item.id}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ka_tasks', filter: `id=eq.${item.id}` },
+        payload => {
+          if (!payload.new) return
+          if (focusedRef.current !== 'assignee')  setAssignee(payload.new.assignee || '')
+          if (focusedRef.current !== 'due_date')  setDueDate(payload.new.due_date || '')
+          if (focusedRef.current !== 'title')     setTitle(payload.new.title || '')
+          if (focusedRef.current !== 'report_id') setReportId(payload.new.report_id || '')
+        }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [item.id])
+
+  // KA を変更したら ka_key も追従して保存
+  const handleKAChange = (newReportId) => {
+    setReportId(newReportId)
+    if (!newReportId) {
+      autoSave.save('report_id', null)
+      autoSave.save('ka_key', null)
+    } else {
+      const ka = scopeKAs.find(k => Number(k.id) === Number(newReportId))
+      const kaKey = ka ? computeKAKey(ka) : null
+      autoSave.save('report_id', Number(newReportId))
+      autoSave.save('ka_key', kaKey)
+    }
+  }
+
+  const ownerMember = assignee ? members.find(m => m?.name === assignee) : null
+
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: '140px 130px 1fr 180px 32px',
+      gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
+      border: `1px solid ${T.border}`, alignItems: 'center',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <Avatar name={assignee} avatarUrl={ownerMember?.avatar_url} size={20} />
+        <select value={assignee}
+          onFocus={() => setFocusedField('assignee')}
+          onBlur={() => { setFocusedField(null); autoSave.saveNow('assignee', assignee) }}
+          onChange={e => { setAssignee(e.target.value); autoSave.save('assignee', e.target.value) }}
+          style={{
+            flex: 1, background: 'transparent', border: 'none',
+            color: assignee ? avatarColor(assignee) : T.textMuted,
+            fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+            fontWeight: 700, minWidth: 0,
+          }}>
+          <option value="">--</option>
+          {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+        </select>
+      </div>
+      <input type="date"
+        value={dueDate || ''}
+        onFocus={() => setFocusedField('due_date')}
+        onBlur={() => { setFocusedField(null); autoSave.saveNow('due_date', dueDate || null) }}
+        onChange={e => { setDueDate(e.target.value); autoSave.save('due_date', e.target.value || null) }}
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '4px 6px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+        }} />
+      <input
+        value={title}
+        onFocus={() => setFocusedField('title')}
+        onBlur={() => { setFocusedField(null); autoSave.saveNow('title', title) }}
+        onChange={e => { setTitle(e.target.value); autoSave.save('title', e.target.value) }}
+        placeholder="内容（何をやるか）"
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '6px 8px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+        }} />
+      {/* KA 紐付け (任意) */}
+      <select value={reportId || ''}
+        onChange={e => handleKAChange(e.target.value || null)}
+        title="関連するKAを選ぶと、個人のタスク一覧でもそのKA配下に表示されます"
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '4px 6px', color: reportId ? T.text : T.textMuted,
+          fontSize: 11, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
+        }}>
+        <option value="">-- KAなし --</option>
+        {scopeKAs.map(ka => (
+          <option key={ka.id} value={ka.id}>{ka._label}</option>
+        ))}
+      </select>
+      <button onClick={onDelete} title="削除" style={{
+        background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer',
+        fontSize: 14, padding: '0 4px', fontFamily: 'inherit',
+      }}>✕</button>
+    </div>
+  )
+}
+
+// ─── Step 4: 終了画面 ────────────────────────────────────────────────────────
+function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
