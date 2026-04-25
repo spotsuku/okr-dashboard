@@ -74,25 +74,47 @@ function Avatar({ name, avatarUrl, size = 22 }) {
 }
 
 // ─── 共通: ステップ定義 ─────────────────────────────────────────────────────
-function stepsForFlow(wkly) {
-  // 5ステップ: 0=未開始 / 1=本編 / 2=確認事項 / 3=ネクストアクション / 4=終了
-  // 本編 (Step 1) のラベルは会議タイプに応じて切替:
-  //   manager (withDiscussion) → チームサマリー
-  //   KA重点                    → KA順送り
-  //   KR重点                    → KR順送り
-  let firstLabel, firstIcon
+function stepsForFlow(meeting) {
+  // 会議タイプごとに step を返す。各 step は { n, label, icon, kind } を持ち、
+  // kind が描画する内容を決める。
+  const wkly = meeting?.weeklyMTG
   if (wkly?.withDiscussion) {
-    firstLabel = 'チームサマリー'; firstIcon = '🤝'
-  } else if (wkly?.flow === 'ka') {
-    firstLabel = 'KA順送り'; firstIcon = '📋'
-  } else {
-    firstLabel = 'KR順送り'; firstIcon = '🎯'
+    // マネージャー会議:
+    //   1. KR順送り (チーム層) → 2. チームサマリー → 3. 横断連携・確認事項 → 4. ネクストアクション → 5. 終了
+    return [
+      { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
+      { n: 2, label: 'チームサマリー',     icon: '🤝', kind: 'team_summary' },
+      { n: 3, label: '横断連携・確認事項', icon: '💬', kind: 'confirmations' },
+      { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
   }
+  if (meeting?.key === 'director') {
+    // ディレクター確認会議:
+    //   1. KRサマリー閲覧 (マネージャー会議で書かれた内容)
+    //   2. 確認事項 → 3. ネクストアクション → 4. 終了
+    return [
+      { n: 1, label: 'KRサマリー閲覧',     icon: '📊', kind: 'team_summary_readonly' },
+      { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
+  }
+  if (wkly?.flow === 'ka') {
+    // 週次キックオフ
+    return [
+      { n: 1, label: 'KA順送り',           icon: '📋', kind: 'ka_loop' },
+      { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
+  }
+  // 経営企画会議など (KR重点だが director でも manager でもない)
   return [
-    { n: 1, label: firstLabel, icon: firstIcon },
-    { n: 2, label: wkly?.withDiscussion ? '横断連携・確認事項' : '確認事項', icon: '💬' },
-    { n: 3, label: 'ネクストアクション', icon: '✅' },
-    { n: 4, label: '終了', icon: '🏁' },
+    { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
+    { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+    { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+    { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
   ]
 }
 
@@ -245,8 +267,9 @@ export default function WeeklyMTGFacilitation({
   const finishMeeting = async () => {
     if (!session?.id) return
     if (!window.confirm('会議を終了しますか？')) return
+    const lastStepN = stepsForFlow(meeting).slice(-1)[0]?.n ?? 4
     await supabase.from('weekly_mtg_sessions').update({
-      step: 4, finished_at: new Date().toISOString(),
+      step: lastStepN, finished_at: new Date().toISOString(),
     }).eq('id', session.id)
   }
 
@@ -265,7 +288,13 @@ export default function WeeklyMTGFacilitation({
   }
 
   const step = session?.step ?? 0
-  const stepDefs = stepsForFlow(wkly)
+  const stepDefs = stepsForFlow(meeting)
+  const currentStepDef = stepDefs.find(s => s.n === step)
+  const stepKind = currentStepDef?.kind
+  const stepNumbers = stepDefs.map(s => s.n)
+  const stepIdx = stepNumbers.indexOf(step)
+  const prevStepN = stepIdx > 0 ? stepNumbers[stepIdx - 1] : null
+  const nextStepN = stepIdx >= 0 && stepIdx < stepNumbers.length - 1 ? stepNumbers[stepIdx + 1] : null
 
   return (
     <div style={{
@@ -342,55 +371,65 @@ export default function WeeklyMTGFacilitation({
           />
         ) : (
           <>
-            {step === 1 && wkly?.flow === 'kr' && wkly?.withDiscussion && (
-              <Step1ManagerSummary
-                T={T} meeting={meeting} weekStart={weekStart}
-                levels={levels} members={members}
-                session={session}
-                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-                onAdvanceToStep2={() => goToStep(2)}
-                onPrev={() => setViewingPrep(true)}
-                onBackToPrep={() => setViewingPrep(true)}
-              />
-            )}
-            {step === 1 && wkly?.flow === 'kr' && !wkly?.withDiscussion && (
+            {/* kind に応じて該当コンポーネントをレンダー */}
+            {stepKind === 'kr_loop' && (
               <Step1KRLoop
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
                 onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-                onAdvanceToStep2={() => goToStep(2)}
-                onPrev={() => setViewingPrep(true)}
+                onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
                 onBackToPrep={() => setViewingPrep(true)}
               />
             )}
-            {step === 1 && wkly?.flow === 'ka' && (
+            {stepKind === 'ka_loop' && (
               <Step1KALoop
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
                 onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
-                onAdvanceToStep2={() => goToStep(2)}
-                onPrev={() => setViewingPrep(true)}
+                onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
                 onBackToPrep={() => setViewingPrep(true)}
               />
             )}
-            {step === 2 && (
-              <Step2Confirmations
-                T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
-                onPrev={() => goToStep(1)}
-                onNext={() => goToStep(3)}
+            {stepKind === 'team_summary' && (
+              <Step1ManagerSummary
+                T={T} meeting={meeting} weekStart={weekStart}
+                levels={levels} members={members}
+                session={session}
+                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
+                onBackToPrep={() => setViewingPrep(true)}
               />
             )}
-            {step === 3 && (
+            {stepKind === 'team_summary_readonly' && (
+              <Step1DirectorReview
+                T={T} meeting={meeting} weekStart={weekStart}
+                levels={levels} members={members}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
+                onNext={() => nextStepN != null && goToStep(nextStepN)}
+                onBackToPrep={() => setViewingPrep(true)}
+              />
+            )}
+            {stepKind === 'confirmations' && (
+              <Step2Confirmations
+                T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
+                onPrev={() => prevStepN != null && goToStep(prevStepN)}
+                onNext={() => nextStepN != null && goToStep(nextStepN)}
+              />
+            )}
+            {stepKind === 'next_actions' && (
               <Step3NextActions
                 T={T} meeting={meeting} weekStart={weekStart} session={session}
                 myName={myName} members={members} levels={levels}
-                onPrev={() => goToStep(2)}
+                onPrev={() => prevStepN != null && goToStep(prevStepN)}
                 onFinish={finishMeeting}
               />
             )}
-            {step === 4 && (
+            {stepKind === 'done' && (
               <Step4Done
                 T={T} session={session} scope={scopePreview} meeting={meeting}
                 onReset={async () => { await resetMeeting(); setViewingPrep(true) }}
@@ -398,7 +437,7 @@ export default function WeeklyMTGFacilitation({
               />
             )}
             {/* セッション未開始(step=0) なのに viewingPrep=false になった保険：準備に戻す */}
-            {step === 0 && (
+            {(step === 0 || !stepKind) && (
               <div style={{ padding: 40, textAlign: 'center' }}>
                 <button onClick={() => setViewingPrep(true)} style={primaryBtn(T)}>
                   会議準備画面に戻る →
@@ -589,11 +628,6 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
           </>
         )}
       </div>
-
-      {/* ディレクター確認会議の場合: 先週のマネージャー定例サマリーを Step 0 で参照可能に */}
-      {meeting?.key === 'director' && (
-        <PreviousManagerSummary T={T} weekStart={weekStart} levels={levels} members={members} />
-      )}
 
       {/* ファシリテーター選択 */}
       <div style={{
@@ -1217,6 +1251,165 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
 // ─── 過去のマネージャー定例サマリー（ディレクター確認会議の準備画面用） ─────
 // 直前回のマネージャー定例で記録されたチーム別 Good/More/Focus を read-only 表示。
 // データソースは Step1ManagerSummary と同じ weekly_reports (先週分)。
+// ─── Step 1 (ディレクター確認会議): KRサマリー閲覧 (read-only) ────────────────
+// マネージャー会議で書かれた今週分のチームサマリーを閲覧。編集はしない。
+function Step1DirectorReview({ T, meeting, weekStart, levels, members, onPrev, onNext, onBackToPrep }) {
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      {onBackToPrep && (
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={onBackToPrep} style={{
+            padding: '6px 12px', borderRadius: 7, border: `1px solid ${T.borderMid}`,
+            background: 'transparent', color: T.textSub, cursor: 'pointer',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+          }}>↩ 会議準備に戻る</button>
+        </div>
+      )}
+
+      <div style={{
+        marginBottom: 16, padding: '14px 18px',
+        background: `${T.accent}10`, border: `1px solid ${T.accent}40`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent, marginBottom: 4 }}>
+          📊 マネージャー会議で記録されたチーム別 KRサマリーを確認
+        </div>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
+          各チームのマネージャーが書き込んだ今週分の Good/More/Focus を読み、
+          ディレクター視点で気になる点を <strong>確認事項</strong> や <strong>ネクストアクション</strong> として
+          次のステップで記録してください。
+        </div>
+      </div>
+
+      {/* 同じ週 (= weekStart) の team_weekly_summary を直接読む */}
+      <DirectorSummaryList T={T} weekStart={weekStart} levels={levels} members={members} />
+
+      <div style={{ marginTop: 18, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onNext} style={primaryBtn(T)}>確認事項へ →</button>
+      </div>
+    </div>
+  )
+}
+
+// 今週分の team_weekly_summary を全チーム読み込み、read-only で並べる
+function DirectorSummaryList({ T, weekStart, levels, members }) {
+  const [teams, setTeams] = useState(null)
+  const [activeTeamId, setActiveTeamId] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        if (!weekStart || !Array.isArray(levels) || levels.length === 0) {
+          if (alive) setTeams([]); return
+        }
+        // マネージャー会議のスコープ (= all-teams = depth=2)
+        const managerMtg = getMeeting('manager')
+        const scopeLevelIds = resolveScopeLevelIds(managerMtg?.weeklyMTG, levels)
+        if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
+
+        // 今週分の team_weekly_summary
+        const summariesRes = await supabase.from('team_weekly_summary')
+          .select('level_id, good, more, focus')
+          .in('level_id', scopeLevelIds)
+          .eq('week_start', weekStart)
+          .range(0, 49999)
+        const summaryMap = new Map((summariesRes.data || []).map(s => [Number(s.level_id), s]))
+
+        // 補助: 今週のKA件数 + 担当アバター
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = objsRes.data || []
+        const objIds = objs.map(o => o.id)
+        const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+        let kas = []
+        if (objIds.length > 0) {
+          const kasRes = await supabase.from('weekly_reports')
+            .select('id, owner, status, objective_id')
+            .in('objective_id', objIds)
+            .eq('week_start', weekStart)
+            .neq('status', 'done')
+            .range(0, 49999)
+          kas = kasRes.data || []
+        }
+        const kaCountByLevel = new Map(scopeLevelIds.map(id => [Number(id), 0]))
+        const ownerSetByLevel = new Map(scopeLevelIds.map(id => [Number(id), new Set()]))
+        for (const ka of kas) {
+          const lvlId = objToLevel.get(Number(ka.objective_id))
+          if (!lvlId) continue
+          kaCountByLevel.set(Number(lvlId), (kaCountByLevel.get(Number(lvlId)) || 0) + 1)
+          if (ka.owner) ownerSetByLevel.get(Number(lvlId)).add(ka.owner)
+        }
+
+        const built = scopeLevelIds.map(id => {
+          const team = levels.find(l => Number(l.id) === Number(id)) || { id, name: '?', icon: '🤝' }
+          const sum = summaryMap.get(Number(id))
+          return {
+            team,
+            kaCount: kaCountByLevel.get(Number(id)) || 0,
+            owners: [...(ownerSetByLevel.get(Number(id)) || [])],
+            good:  (sum?.good || '').trim(),
+            more:  (sum?.more || '').trim(),
+            focus: (sum?.focus || '').trim(),
+            hasSummary: !!(sum && (sum.good || sum.more || sum.focus)),
+          }
+        })
+        if (alive) setTeams(built)
+      } catch (e) {
+        console.error('DirectorSummaryList load error:', e)
+        if (alive) setTeams([])
+      }
+    }
+    load()
+    return () => { alive = false }
+  }, [weekStart, levels])
+
+  if (teams === null) {
+    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>読み込み中…</div>
+  }
+  if (teams.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>
+        対象チームが見つかりません。
+      </div>
+    )
+  }
+
+  const writtenTeams = teams.filter(t => t.hasSummary).length
+  const visibleTeams = activeTeamId == null ? teams : teams.filter(t => Number(t.team?.id) === Number(activeTeamId))
+
+  return (
+    <div>
+      <div style={{ marginBottom: 12, fontSize: 11, color: T.textMuted }}>
+        記入済 <strong style={{ color: T.text }}>{writtenTeams}</strong> / {teams.length} チーム
+      </div>
+
+      {/* チームフィルタ */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+        <button onClick={() => setActiveTeamId(null)}
+          style={chipStyle(T, activeTeamId == null)}>
+          全チーム ({teams.length})
+        </button>
+        {teams.map(t => (
+          <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
+            style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
+            {t.team.icon || '🤝'} {t.team.name}
+            {t.hasSummary && <span style={{ marginLeft: 4 }}>✓</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* チームカード一覧 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {visibleTeams.map(t => (
+          <ReadOnlyTeamSummaryCard key={t.team.id} T={T} teamData={t} members={members} weekStart={weekStart} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PreviousManagerSummary({ T, weekStart, levels, members }) {
   const [teams, setTeams] = useState(null)
   const [expanded, setExpanded] = useState(true)
