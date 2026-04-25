@@ -303,11 +303,14 @@ export default function WeeklyMTGFacilitation({
           />
         )}
         {step === 1 && wkly?.flow === 'ka' && (
-          <PlaceholderStep
-            T={T} title="Step 1: KA順送り（実装中）"
-            note="KAを1つずつ確認するUIは Phase 4 で実装します。"
+          <Step1KALoop
+            T={T} meeting={meeting} weekStart={weekStart}
+            levels={levels} members={members}
+            session={session}
+            onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+            onAdvanceToStep2={() => goToStep(2)}
             onPrev={() => goToStep(0)}
-            onNext={() => goToStep(2)}
+            onBackToPrep={() => goToStep(0)}
           />
         )}
         {step === 2 && (
@@ -691,6 +694,407 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
             )
           })}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── KA ステータス定義 ─────────────────────────────────────────────────────
+const KA_STATUS_CFG = {
+  focus:  { label: '🎯 注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
+  good:   { label: '✅ Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
+  more:   { label: '🔺 More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
+  normal: { label: '未分類',  color: '#606880', bg: 'rgba(128,128,128,0.08)', border: 'rgba(128,128,128,0.2)' },
+  done:   { label: '✓ 完了',  color: '#a0a8be', bg: 'rgba(160,168,190,0.08)', border: 'rgba(160,168,190,0.2)' },
+}
+const KA_STATUS_ORDER = ['normal','focus','good','more','done']
+
+// ─── Step 1: KA順送り（Phase 4） ───────────────────────────────────────────
+function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
+  const wkly = meeting?.weeklyMTG
+  const [items, setItems] = useState(null) // [{ team, objective, kr, ka }]
+  const [loadError, setLoadError] = useState(null)
+
+  // scope内のチーム配下の KA を順序付きで取得（当週・status!=done）
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        if (!weekStart || typeof weekStart !== 'string' || weekStart.length < 7) {
+          if (alive) setItems([]); return
+        }
+        if (!Array.isArray(levels) || levels.length === 0) {
+          if (alive) setItems([]); return
+        }
+        const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
+        if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
+
+        // Objective を取得
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id, period, title, owner')
+          .in('level_id', scopeLevelIds)
+          .range(0, 49999)
+        if (objsRes.error) throw objsRes.error
+        const objs = objsRes.data || []
+        const allObjIds = objs.map(o => o.id)
+        if (allObjIds.length === 0) { if (alive) setItems([]); return }
+
+        // 当週のKA (weekly_reports)
+        const kasRes = await supabase.from('weekly_reports')
+          .select('*')
+          .in('objective_id', allObjIds)
+          .eq('week_start', weekStart)
+          .neq('status', 'done')
+          .range(0, 49999)
+        if (kasRes.error) throw kasRes.error
+        const kas = kasRes.data || []
+
+        // KR を取得（コンテキスト表示用）
+        const krsRes = await supabase.from('key_results')
+          .select('id, title, objective_id')
+          .in('objective_id', allObjIds)
+          .range(0, 49999)
+        if (krsRes.error) throw krsRes.error
+        const krs = krsRes.data || []
+
+        // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
+        const built = []
+        for (const lvlId of scopeLevelIds) {
+          const team = levels.find(l => Number(l?.id) === Number(lvlId)) || { id: lvlId, name: '?', icon: '🏢' }
+          const teamObjs = objs.filter(o => Number(o.level_id) === Number(lvlId)).sort((a, b) => a.id - b.id)
+          for (const o of teamObjs) {
+            const objKas = kas
+              .filter(k => Number(k.objective_id) === Number(o.id))
+              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
+            for (const ka of objKas) {
+              const kr = krs.find(k => Number(k.id) === Number(ka.kr_id)) || null
+              built.push({ team, objective: o, kr, ka })
+            }
+          }
+        }
+        if (alive) { setItems(built); setLoadError(null) }
+      } catch (e) {
+        console.error('Step1KALoop load error:', e)
+        if (alive) { setItems([]); setLoadError(e?.message || String(e)) }
+      }
+    }
+    load()
+    return () => { alive = false }
+  }, [wkly?.scope, wkly?.parentLevelName, weekStart, levels])
+
+  if (items === null) {
+    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KA一覧を読み込み中...</div>
+  }
+  if (loadError) {
+    return (
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 24px' }}>
+        <div style={{ background: `${T.danger}15`, border: `1px solid ${T.danger}40`, borderRadius: 10, padding: 16, color: T.danger, fontSize: 13 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>KA一覧の取得でエラー</div>
+          <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: 'pre-wrap' }}>{loadError}</div>
+        </div>
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+        </div>
+      </div>
+    )
+  }
+  if (items.length === 0) {
+    return (
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>🤷</div>
+        <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに今週のKAがありません</div>
+        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>「次へ」で確認事項ステップへ進めます</div>
+        <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
+      </div>
+    )
+  }
+
+  const completed = new Set(session?.completed_item_ids || [])
+  let currentIdx = items.findIndex(it => Number(it.ka?.id) === Number(session?.current_item_id))
+  if (currentIdx === -1 || currentIdx >= items.length) currentIdx = 0
+  const current = items[currentIdx]
+  if (!current || !current.ka) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: T.danger, fontSize: 13 }}>
+        現在のKAが見つかりません。
+        <button onClick={onPrev} style={{ ...secondaryBtn(T), marginLeft: 12 }}>← 会議準備に戻る</button>
+      </div>
+    )
+  }
+
+  const goNext = async () => {
+    const nextCompleted = [...new Set([...completed, current.ka.id])]
+    if (currentIdx + 1 < items.length) {
+      const next = items[currentIdx + 1]
+      await onUpdateSession({ current_item_id: next.ka.id, completed_item_ids: nextCompleted })
+    } else {
+      await onUpdateSession({ current_item_id: null, completed_item_ids: nextCompleted, step: 2 })
+    }
+  }
+  const goBack = async () => {
+    if (currentIdx > 0) {
+      const prev = items[currentIdx - 1]
+      await onUpdateSession({ current_item_id: prev.ka.id })
+    } else {
+      onPrev()
+    }
+  }
+  const skipCurrent = async () => {
+    if (currentIdx + 1 < items.length) {
+      const next = items[currentIdx + 1]
+      await onUpdateSession({ current_item_id: next.ka.id })
+    } else {
+      await onUpdateSession({ current_item_id: null, step: 2 })
+    }
+  }
+  const jumpTo = async (idx) => {
+    if (items[idx]?.ka?.id) {
+      await onUpdateSession({ current_item_id: items[idx].ka.id })
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      {onBackToPrep && (
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={onBackToPrep} style={{
+            padding: '6px 12px', borderRadius: 7, border: `1px solid ${T.borderMid}`,
+            background: 'transparent', color: T.textSub, cursor: 'pointer',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+          }}>↩ 会議準備に戻る</button>
+        </div>
+      )}
+
+      {/* 進行ナビ */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
+        padding: '10px 14px', background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+      }}>
+        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>進捗</div>
+        <div style={{ fontSize: 14, color: T.text, fontWeight: 800 }}>
+          {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 11 }}>/ {items.length}</span>
+        </div>
+        <div style={{ flex: 1, height: 6, background: T.bgSection, borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${(completed.size / items.length) * 100}%`, background: T.success, transition: 'width 0.3s' }} />
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted }}>
+          完了 <strong style={{ color: T.success }}>{completed.size}</strong> / 残 <strong style={{ color: T.text }}>{Math.max(0, items.length - currentIdx - 1)}</strong>
+        </div>
+      </div>
+
+      {/* KA編集カード */}
+      <KAEditCard
+        key={current.ka.id}
+        T={T} ka={current.ka} team={current.team} objective={current.objective} kr={current.kr}
+        members={members}
+      />
+
+      {/* 次へ/前へ/スキップ */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={goBack} style={secondaryBtn(T)}>
+          ← {currentIdx === 0 ? '会議準備に戻る' : '前のKA'}
+        </button>
+        <button onClick={skipCurrent} style={secondaryBtn(T)}>スキップ</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={goNext} style={primaryBtn(T)}>
+          {currentIdx + 1 < items.length ? '次のKA →' : '確認事項へ →'}
+        </button>
+      </div>
+
+      {/* チーム別 ジャンプリスト */}
+      <div style={{
+        marginTop: 18, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          KA 一覧（クリックでジャンプ・チーム別）
+        </div>
+        {(() => {
+          // チーム単位でグループ化
+          const byTeam = new Map()
+          items.forEach((it, i) => {
+            const tid = it.team?.id ?? '0'
+            if (!byTeam.has(tid)) byTeam.set(tid, { team: it.team, items: [] })
+            byTeam.get(tid).items.push({ idx: i, item: it })
+          })
+          return [...byTeam.values()].map(g => (
+            <div key={g.team?.id ?? '0'} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: T.textSub, fontWeight: 700, marginBottom: 4 }}>
+                {g.team?.icon || '🏢'} {g.team?.name || '?'} <span style={{ color: T.textMuted, fontWeight: 500 }}>（{g.items.length}件）</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {g.items.map(({ idx, item }) => {
+                  const isDone = completed.has(item.ka.id)
+                  const isActive = idx === currentIdx
+                  return (
+                    <button key={item.ka.id} onClick={() => jumpTo(idx)}
+                      title={item.ka.ka_title || '(無題)'}
+                      style={{
+                        padding: '3px 8px', borderRadius: 5, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                        background: isActive ? T.accent : isDone ? `${T.success}25` : T.bgSection,
+                        color: isActive ? '#fff' : isDone ? T.success : T.textSub,
+                        fontWeight: 700, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                      {isDone && '✓ '}{(item.ka.ka_title || '(無題)').slice(0, 14)}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        })()}
+      </div>
+    </div>
+  )
+}
+
+// ─── KA編集カード（Phase 4） ────────────────────────────────────────────────
+function KAEditCard({ T, ka, team, objective, kr, members }) {
+  const [kaTitle,     setKaTitle]     = useState(ka.ka_title || '')
+  const [ownerDraft,  setOwnerDraft]  = useState(ka.owner || '')
+  const [status,      setStatus]      = useState(ka.status || 'normal')
+  const [good,        setGood]        = useState(ka.good || '')
+  const [more,        setMore]        = useState(ka.more || '')
+  const [focusOutput, setFocusOutput] = useState(ka.focus_output || '')
+  const [editingTitle, setEditingTitle] = useState(false)
+
+  const [focusedField, setFocusedField] = useState(null)
+  const focusedRef = useRef(null)
+  useEffect(() => { focusedRef.current = focusedField }, [focusedField])
+
+  const autoSave = useAutoSave('weekly_reports', ka.id)
+
+  // Realtime: 自分以外のクライアントの編集を反映 (focusedField は上書きしない)
+  useEffect(() => {
+    const ch = supabase.channel(`ka_facil_${ka.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'weekly_reports', filter: `id=eq.${ka.id}` }, payload => {
+        if (!payload.new) return
+        if (focusedRef.current !== 'ka_title' && !editingTitle) setKaTitle(payload.new.ka_title || '')
+        if (focusedRef.current !== 'owner')        setOwnerDraft(payload.new.owner || '')
+        if (focusedRef.current !== 'status')       setStatus(payload.new.status || 'normal')
+        if (focusedRef.current !== 'good')         setGood(payload.new.good || '')
+        if (focusedRef.current !== 'more')         setMore(payload.new.more || '')
+        if (focusedRef.current !== 'focus_output') setFocusOutput(payload.new.focus_output || '')
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [ka.id]) // eslint-disable-line
+
+  const cycleStatus = () => {
+    const idx = KA_STATUS_ORDER.indexOf(status)
+    const next = KA_STATUS_ORDER[(idx + 1) % KA_STATUS_ORDER.length]
+    setStatus(next)
+    autoSave.saveNow('status', next)
+  }
+
+  const handleTitleBlur = () => {
+    setEditingTitle(false)
+    setFocusedField(null)
+    const trimmed = kaTitle.trim()
+    if (trimmed && trimmed !== (ka.ka_title || '')) {
+      autoSave.saveNow('ka_title', trimmed)
+    } else if (!trimmed) {
+      setKaTitle(ka.ka_title || '')
+    }
+  }
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Escape') { setKaTitle(ka.ka_title || ''); setEditingTitle(false); setFocusedField(null); return }
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); e.target.blur() }
+  }
+
+  const cfg = KA_STATUS_CFG[status] || KA_STATUS_CFG.normal
+  const ownerMember = ownerDraft ? members.find(m => m?.name === ownerDraft) : null
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+      padding: '22px 26px', marginBottom: 18, position: 'relative',
+    }}>
+      {/* 階層パンくず */}
+      <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span>{team?.icon || '🏢'}</span>
+        <strong style={{ color: T.textSub }}>{team?.name}</strong>
+        <span>›</span>
+        <span style={{ color: T.textSub }}>{objective?.title}</span>
+        {kr && (
+          <>
+            <span>›</span>
+            <span style={{ color: T.textMuted, fontSize: 10 }}>KR: {kr.title}</span>
+          </>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 10 }}>
+          {autoSave.saving && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
+          {autoSave.saved && !autoSave.saving && <span style={{ color: T.success }}>✓ 保存済</span>}
+        </span>
+      </div>
+
+      {/* KAタイトル + ステータス */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
+        <span onClick={cycleStatus} title="クリックでステータス切替"
+          style={{
+            fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 99, cursor: 'pointer',
+            background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, whiteSpace: 'nowrap', flexShrink: 0,
+          }}>{cfg.label}</span>
+        {editingTitle ? (
+          <textarea autoFocus value={kaTitle}
+            onChange={e => setKaTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            onKeyDown={handleTitleKeyDown}
+            rows={1}
+            style={{
+              flex: 1, fontSize: 18, fontWeight: 800, color: T.text, lineHeight: 1.4,
+              background: T.bgCard2 || T.bgSection, border: `1px solid ${T.accent}80`, borderRadius: 6,
+              padding: '6px 10px', outline: 'none', fontFamily: 'inherit', resize: 'vertical',
+            }} />
+        ) : (
+          <div onClick={() => { setEditingTitle(true); setFocusedField('ka_title') }}
+            title="クリックで編集"
+            style={{ flex: 1, fontSize: 18, fontWeight: 800, color: T.text, lineHeight: 1.4, cursor: 'text', minHeight: 24, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {kaTitle || '(無題)'}
+          </div>
+        )}
+      </div>
+
+      {/* 担当 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <Avatar name={ownerDraft} avatarUrl={ownerMember?.avatar_url} size={26} />
+        <select value={ownerDraft}
+          onFocus={() => setFocusedField('owner')}
+          onBlur={() => { setFocusedField(null); autoSave.saveNow('owner', ownerDraft) }}
+          onChange={e => { setOwnerDraft(e.target.value); autoSave.save('owner', e.target.value) }}
+          style={{
+            background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6,
+            padding: '5px 10px', fontSize: 13, color: avatarColor(ownerDraft) || T.textMuted,
+            cursor: 'pointer', fontFamily: 'inherit', outline: 'none', fontWeight: 700, minWidth: 140,
+          }}>
+          <option value="">-- 担当 --</option>
+          {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+        </select>
+      </div>
+
+      {/* good / more / focus */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        <ReviewBox T={T} icon="✅" label="Good" sub="先週の良かったこと" accent={T.success}
+          value={good}
+          onChange={v => { setGood(v); autoSave.save('good', v) }}
+          onFocus={() => setFocusedField('good')}
+          onBlur={() => { setFocusedField(null); autoSave.saveNow('good', good) }}
+          placeholder="良かったこと・続けたいこと"
+        />
+        <ReviewBox T={T} icon="🔺" label="More" sub="先週の改善点" accent={T.danger}
+          value={more}
+          onChange={v => { setMore(v); autoSave.save('more', v) }}
+          onFocus={() => setFocusedField('more')}
+          onBlur={() => { setFocusedField(null); autoSave.saveNow('more', more) }}
+          placeholder="課題・改善点"
+        />
+        <ReviewBox T={T} icon="🎯" label="Focus" sub="今週の重点" accent={T.accent}
+          value={focusOutput}
+          onChange={v => { setFocusOutput(v); autoSave.save('focus_output', v) }}
+          onFocus={() => setFocusedField('focus_output')}
+          onBlur={() => { setFocusedField(null); autoSave.saveNow('focus_output', focusOutput) }}
+          placeholder="今週の重点アクション"
+        />
       </div>
     </div>
   )
