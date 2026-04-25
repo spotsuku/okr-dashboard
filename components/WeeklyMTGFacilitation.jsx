@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
+import ConfirmationsTab from './ConfirmationsTab'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 const DARK_T = {
@@ -314,13 +315,10 @@ export default function WeeklyMTGFacilitation({
           />
         )}
         {step === 2 && (
-          <PlaceholderStep
-            T={T}
-            title={wkly?.withDiscussion ? 'Step 2: 課題・依頼事項 + 確認事項（実装中）' : 'Step 2: 確認事項（実装中）'}
-            note="このステップは Phase 5 で実装します。"
+          <Step2Confirmations
+            T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
             onPrev={() => goToStep(1)}
-            onNext={finishMeeting}
-            nextLabel="会議を終了 →"
+            onFinish={finishMeeting}
           />
         )}
         {step === 3 && (
@@ -1383,6 +1381,50 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
           outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 60,
         }}
       />
+    </div>
+  )
+}
+
+// ─── Step 2: 確認事項（Phase 5 = "C"） ───────────────────────────────────────
+// withDiscussion=true (マネージャー定例) は別途専用UIを協議中。
+// 当面は ConfirmationsTab を全社モードで表示するシンプル実装。
+function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onFinish }) {
+  // ConfirmationsTab に渡す T を拡張（sectionBg / successBg が必要）
+  const extendedT = useMemo(() => ({
+    ...T,
+    sectionBg: T.bgSection || T.bgCard2 || 'rgba(128,128,128,0.06)',
+    successBg: T.success ? `${T.success}20` : 'rgba(0,214,143,0.12)',
+  }), [T])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* 上部ヘッダー（withDiscussion の案内） */}
+      {withDiscussion && (
+        <div style={{
+          maxWidth: 900, width: '100%', margin: '12px auto 0', padding: '10px 16px',
+          background: `${T.warn}15`, border: `1px solid ${T.warn}40`, borderRadius: 8,
+          fontSize: 11, color: T.warn,
+        }}>
+          💡 マネージャー定例の「部署間の課題連携／解決策議論」専用UIは別途設計予定。
+          ひとまず確認事項として記録してください。
+        </div>
+      )}
+
+      {/* ConfirmationsTab を全社モードで埋め込み */}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <ConfirmationsTab T={extendedT} myName={myName} members={members} companyWide />
+      </div>
+
+      {/* フッターナビ */}
+      <div style={{
+        position: 'sticky', bottom: 0, background: T.bg,
+        borderTop: `1px solid ${T.border}`, padding: '12px 20px',
+        display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+      }}>
+        <button onClick={onPrev} style={secondaryBtn(T)}>← Step 1 に戻る</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
+      </div>
     </div>
   )
 }
