@@ -16,6 +16,44 @@ const LIGHT_T = {
   accent: '#3B82C4', success: '#15A977', warn: '#D97A1F', danger: '#DC6B6B',
 }
 
+// ─── 階層 ヘルパー ────────────────────────────────────────────────────────
+// 全社 (depth=0) → 事業部 (depth=1) → チーム (depth=2)
+function getDepth(levelId, levels) {
+  let d = 0
+  let cur = levels.find(l => Number(l?.id) === Number(levelId))
+  while (cur && cur.parent_id) {
+    d++
+    cur = levels.find(l => Number(l?.id) === Number(cur.parent_id))
+  }
+  return d
+}
+
+// scope に応じた対象レベルIDの配列を返す（depthベース）
+function resolveScopeLevelIds(wkly, levels) {
+  if (!Array.isArray(levels) || levels.length === 0) return []
+  if (wkly?.scope === 'teams-of') {
+    const parent = levels.find(l => l?.name === wkly.parentLevelName)
+    if (!parent) return []
+    return levels
+      .filter(l => Number(l?.parent_id) === Number(parent.id))
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      .map(l => l.id)
+  }
+  if (wkly?.scope === 'all-teams') {
+    return levels
+      .filter(l => getDepth(l?.id, levels) === 2)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      .map(l => l.id)
+  }
+  if (wkly?.scope === 'all-departments') {
+    return levels
+      .filter(l => getDepth(l?.id, levels) === 1)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      .map(l => l.id)
+  }
+  return []
+}
+
 // ─── アバター ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
@@ -95,28 +133,9 @@ export default function WeeklyMTGFacilitation({
   const loadScopePreview = useCallback(async () => {
     if (!wkly || !levels?.length) return
 
-    let scopeLevels = []
-    if (wkly.scope === 'teams-of') {
-      const parent = levels.find(l => l.name === wkly.parentLevelName)
-      if (!parent) { setScopePreview({ perLevel: [], total: 0 }); return }
-      scopeLevels = levels
-        .filter(l => Number(l.parent_id) === Number(parent.id))
-        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-    } else if (wkly.scope === 'all-teams') {
-      // depth=2 = 親が depth=1 (= parent_id が null の事業部)
-      scopeLevels = levels.filter(l => {
-        if (l.parent_id == null) return false
-        const p = levels.find(x => Number(x.id) === Number(l.parent_id))
-        return p && p.parent_id == null
-      }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-    } else if (wkly.scope === 'all-departments') {
-      scopeLevels = levels
-        .filter(l => l.parent_id == null)
-        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-    }
-
-    const levelIds = scopeLevels.map(l => l.id)
+    const levelIds = resolveScopeLevelIds(wkly, levels)
     if (levelIds.length === 0) { setScopePreview({ perLevel: [], total: 0 }); return }
+    const scopeLevels = levelIds.map(id => levels.find(l => Number(l.id) === Number(id))).filter(Boolean)
 
     const { data: objs } = await supabase.from('objectives')
       .select('id, level_id').in('level_id', levelIds)
@@ -279,6 +298,7 @@ export default function WeeklyMTGFacilitation({
             onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
             onAdvanceToStep2={() => goToStep(2)}
             onPrev={() => goToStep(0)}
+            onBackToPrep={() => goToStep(0)}
           />
         )}
         {step === 1 && wkly?.flow === 'ka' && (
@@ -446,12 +466,12 @@ function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onSta
 }
 
 // ─── Step 1: KR順送り（Phase 3-1: ナビ枠 + 現在KR表示） ─────────────────────
-function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev }) {
+function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
   const [items, setItems] = useState(null) // [{ level, objective, kr }, ...] in order
   const [loadError, setLoadError] = useState(null)
 
-  // scope 内の KR を順序付きで集める（depth=2 全チーム or depth=1 全事業部、当四半期）
+  // scope 内の KR を順序付きで集める（depth で正確に判定）
   useEffect(() => {
     let alive = true
     const load = async () => {
@@ -463,18 +483,8 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           if (alive) setItems([]); return
         }
 
-        // 1) スコープ内の levels
-        let scopeLevelIds = []
-        if (wkly?.scope === 'all-teams') {
-          scopeLevelIds = levels.filter(l => {
-            if (l == null || l.parent_id == null) return false
-            const p = levels.find(x => Number(x?.id) === Number(l.parent_id))
-            return !!p && p.parent_id == null
-          }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
-        } else if (wkly?.scope === 'all-departments') {
-          scopeLevelIds = levels.filter(l => l != null && l.parent_id == null)
-            .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
-        }
+        // 1) スコープ内の levels を depth ベースで取得
+        const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
 
         // 2) 当四半期の Objective を取得
@@ -620,6 +630,17 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      {/* トップアクション (準備に戻る) */}
+      {onBackToPrep && (
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={onBackToPrep} style={{
+            padding: '6px 12px', borderRadius: 7, border: `1px solid ${T.borderMid}`,
+            background: 'transparent', color: T.textSub, cursor: 'pointer',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+          }}>↩ 会議準備に戻る</button>
+        </div>
+      )}
+
       {/* 進行ナビ */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
