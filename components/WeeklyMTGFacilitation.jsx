@@ -255,13 +255,22 @@ export default function WeeklyMTGFacilitation({
             onSwitchToList={onSwitchToList}
           />
         )}
-        {step === 1 && (
+        {step === 1 && wkly?.flow === 'kr' && (
+          <Step1KRLoop
+            T={T} meeting={meeting} weekStart={weekStart}
+            levels={levels} members={members}
+            session={session}
+            onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+            onAdvanceToStep2={() => goToStep(2)}
+            onPrev={() => goToStep(0)}
+          />
+        )}
+        {step === 1 && wkly?.flow === 'ka' && (
           <PlaceholderStep
-            T={T} title="Step 1: 順送り（実装中）"
-            note={wkly?.flow === 'ka' ? 'KAを1つずつ確認するUIは Phase 4 で実装します。' : 'KRを1つずつ確認するUIは Phase 3 で実装します。'}
+            T={T} title="Step 1: KA順送り（実装中）"
+            note="KAを1つずつ確認するUIは Phase 4 で実装します。"
             onPrev={() => goToStep(0)}
             onNext={() => goToStep(2)}
-            T_={T}
           />
         )}
         {step === 2 && (
@@ -418,6 +427,263 @@ function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onSta
       )}
     </div>
   )
+}
+
+// ─── Step 1: KR順送り（Phase 3-1: ナビ枠 + 現在KR表示） ─────────────────────
+function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev }) {
+  const wkly = meeting?.weeklyMTG
+  const [items, setItems] = useState(null) // [{ level, objective, kr }, ...] in order
+
+  // scope 内の KR を順序付きで集める（depth=2 全チーム or depth=1 全事業部、当四半期）
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      // 1) スコープ内の levels
+      let scopeLevelIds = []
+      if (wkly?.scope === 'all-teams') {
+        scopeLevelIds = levels.filter(l => {
+          if (l.parent_id == null) return false
+          const p = levels.find(x => Number(x.id) === Number(l.parent_id))
+          return p && p.parent_id == null
+        }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
+      } else if (wkly?.scope === 'all-departments') {
+        scopeLevelIds = levels.filter(l => l.parent_id == null)
+          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(l => l.id)
+      }
+      if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
+
+      // 2) 当四半期の Objective を取得
+      const fy = weekStart.slice(0, 4) // 年度近似(粗いが現状の派生でOK)
+      const month = Number(weekStart.slice(5, 7))
+      const q = month >= 4 && month <= 6 ? 'q1' : month >= 7 && month <= 9 ? 'q2' : month >= 10 && month <= 12 ? 'q3' : 'q4'
+      const periodKeys = [q, `${fy}_${q}`] // 年度プレフィックスあり/なし両対応
+
+      const { data: objs } = await supabase.from('objectives')
+        .select('id, level_id, period, title, owner, parent_objective_id')
+        .in('level_id', scopeLevelIds)
+        .in('period', periodKeys)
+        .range(0, 49999)
+
+      const objIds = (objs || []).map(o => o.id)
+      let krs = []
+      if (objIds.length > 0) {
+        const { data } = await supabase.from('key_results')
+          .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
+          .in('objective_id', objIds)
+          .range(0, 49999)
+        krs = data || []
+      }
+
+      // 3) 順序組み立て: level 順 → objective 順 → kr 順
+      const byLevel = new Map(scopeLevelIds.map(id => [id, []]))
+      ;(objs || []).forEach(o => {
+        if (byLevel.has(o.level_id)) byLevel.get(o.level_id).push(o)
+      })
+      const built = []
+      for (const lvlId of scopeLevelIds) {
+        const lvl = levels.find(l => Number(l.id) === Number(lvlId))
+        const lvlObjs = (byLevel.get(lvlId) || []).sort((a, b) => a.id - b.id)
+        for (const o of lvlObjs) {
+          const objKrs = krs.filter(k => Number(k.objective_id) === Number(o.id)).sort((a, b) => a.id - b.id)
+          for (const kr of objKrs) {
+            built.push({ level: lvl, objective: o, kr })
+          }
+        }
+      }
+      if (alive) setItems(built)
+    }
+    load()
+    return () => { alive = false }
+  }, [wkly?.scope, weekStart, levels])
+
+  if (items === null) {
+    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KR一覧を読み込み中...</div>
+  }
+  if (items.length === 0) {
+    return (
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>🤷</div>
+        <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに今四半期のKRがありません</div>
+        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>「次へ」で確認事項ステップへ進めます</div>
+        <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
+      </div>
+    )
+  }
+
+  // 現在位置: session.current_item_id を items から探す。なければ先頭。
+  const completed = new Set(session?.completed_item_ids || [])
+  let currentIdx = items.findIndex(it => Number(it.kr.id) === Number(session?.current_item_id))
+  if (currentIdx === -1) currentIdx = 0
+  const current = items[currentIdx]
+  const currentKR = current.kr
+  const currentObj = current.objective
+  const currentLevel = current.level
+
+  const goNext = async () => {
+    const nextCompleted = [...new Set([...completed, currentKR.id])]
+    if (currentIdx + 1 < items.length) {
+      const next = items[currentIdx + 1]
+      await onUpdateSession({ current_item_id: next.kr.id, completed_item_ids: nextCompleted })
+    } else {
+      await onUpdateSession({ current_item_id: null, completed_item_ids: nextCompleted, step: 2 })
+    }
+  }
+  const goBack = async () => {
+    if (currentIdx > 0) {
+      const prev = items[currentIdx - 1]
+      await onUpdateSession({ current_item_id: prev.kr.id })
+    } else {
+      onPrev() // Step 0 に戻る
+    }
+  }
+  const skipCurrent = async () => {
+    if (currentIdx + 1 < items.length) {
+      const next = items[currentIdx + 1]
+      await onUpdateSession({ current_item_id: next.kr.id })
+    } else {
+      await onUpdateSession({ current_item_id: null, step: 2 })
+    }
+  }
+  const jumpTo = async (idx) => {
+    await onUpdateSession({ current_item_id: items[idx].kr.id })
+  }
+
+  // 進捗計算
+  const progress = currentKR.target > 0
+    ? Math.min(150, Math.round((currentKR.lower_is_better
+        ? Math.max(0, ((currentKR.target * 2 - currentKR.current) / currentKR.target) * 100)
+        : (currentKR.current / currentKR.target) * 100)))
+    : 0
+  const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
+
+  const ownerMember = members.find(m => m.name === currentKR.owner)
+  const ownerColor = avatarColor(currentKR.owner)
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      {/* 進行ナビ */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
+        padding: '10px 14px', background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+      }}>
+        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>進捗</div>
+        <div style={{ fontSize: 14, color: T.text, fontWeight: 800 }}>
+          {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 11 }}>/ {items.length}</span>
+        </div>
+        <div style={{ flex: 1, height: 6, background: T.bgSection, borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${((currentIdx) / items.length) * 100}%`, background: T.accent, transition: 'width 0.3s' }} />
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted }}>
+          完了 <strong style={{ color: T.success }}>{completed.size}</strong> / 残 <strong style={{ color: T.text }}>{items.length - currentIdx - 1}</strong>
+        </div>
+      </div>
+
+      {/* 現在のKR カード */}
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+        padding: '22px 26px', marginBottom: 18, position: 'relative',
+      }}>
+        {/* 階層パンくず */}
+        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span>{currentLevel?.icon || '🏢'}</span>
+          <strong style={{ color: T.textSub }}>{currentLevel?.name}</strong>
+          <span>›</span>
+          <span style={{ color: T.textSub }}>{currentObj?.title}</span>
+          <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 99, background: `${T.accent}20`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
+            {(currentObj?.period || '').replace(/^.+_/, '').toUpperCase()}
+          </span>
+        </div>
+
+        {/* KRタイトル */}
+        <div style={{ fontSize: 20, fontWeight: 800, color: T.text, lineHeight: 1.4, marginBottom: 14 }}>
+          {currentKR.title}
+        </div>
+
+        {/* 担当 + 数値 + 進捗 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Avatar name={currentKR.owner} avatarUrl={ownerMember?.avatar_url} size={28} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: ownerColor }}>{currentKR.owner || '(担当未設定)'}</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 22, fontWeight: 800, color: progressColor }}>{currentKR.current ?? 0}</span>
+            <span style={{ fontSize: 12, color: T.textMuted }}>{currentKR.unit}</span>
+            <span style={{ fontSize: 12, color: T.textMuted }}>/</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: T.textSub }}>{currentKR.target ?? 0}</span>
+            <span style={{ fontSize: 12, color: T.textMuted }}>{currentKR.unit}</span>
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: progressColor, minWidth: 60, textAlign: 'right' }}>{progress}%</div>
+        </div>
+
+        {/* 進捗バー */}
+        <div style={{ height: 8, background: T.bgSection, borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+          <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, background: progressColor, transition: 'width 0.3s' }} />
+        </div>
+
+        {/* Phase 3-2 で天気 / good / more / focus 編集を入れる予定 */}
+        <div style={{
+          marginTop: 16, padding: '10px 14px', background: T.bgSection,
+          borderRadius: 8, fontSize: 11, color: T.textMuted, fontStyle: 'italic',
+        }}>
+          💡 数値・天気・good/more/focus の編集UIは Phase 3-2 で追加予定。今は表示のみ。
+        </div>
+      </div>
+
+      {/* 次へ/前へ/スキップ */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={goBack} style={secondaryBtn(T)}>
+          ← {currentIdx === 0 ? '会議準備に戻る' : '前のKR'}
+        </button>
+        <button onClick={skipCurrent} style={secondaryBtn(T)}>スキップ</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={goNext} style={primaryBtn(T)}>
+          {currentIdx + 1 < items.length ? '次のKR →' : '確認事項へ →'}
+        </button>
+      </div>
+
+      {/* 進捗ジャンプリスト */}
+      <div style={{
+        marginTop: 18, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          KR 一覧（クリックでジャンプ）
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {items.map((it, i) => {
+            const isDone = completed.has(it.kr.id)
+            const isActive = i === currentIdx
+            return (
+              <button key={it.kr.id} onClick={() => jumpTo(i)} title={`${it.level?.name} / ${it.kr.title}`}
+                style={{
+                  padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                  background: isActive ? T.accent : isDone ? `${T.success}25` : T.bgSection,
+                  color: isActive ? '#fff' : isDone ? T.success : T.textSub,
+                  fontWeight: 700,
+                }}>
+                {isDone && '✓ '}{i + 1}. {it.level?.name?.slice(0, 8)}{it.level?.name?.length > 8 ? '…' : ''}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── 共通ボタンスタイル ────────────────────────────────────────────────────
+function primaryBtn(T) {
+  return {
+    padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer',
+    background: T.accent, color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+  }
+}
+function secondaryBtn(T) {
+  return {
+    padding: '10px 18px', borderRadius: 8, border: `1px solid ${T.borderMid}`, cursor: 'pointer',
+    background: 'transparent', color: T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+  }
 }
 
 // ─── Step 3: 終了画面 ────────────────────────────────────────────────────────
