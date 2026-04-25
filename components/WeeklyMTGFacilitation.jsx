@@ -96,6 +96,13 @@ export default function WeeklyMTGFacilitation({
   const [scopePreview, setScopePreview] = useState(null) // { perLevel: [{level, count}], total }
   // 会議に入ったとき、セッションがすでに進行中でも一度はスタートページを表示する
   const [viewingPrep, setViewingPrep] = useState(true)
+  // ファシリテーター ドラフト (会議開始時に session.facilitator として保存)
+  const [facilitatorDraft, setFacilitatorDraft] = useState('')
+  useEffect(() => {
+    // session が読み込まれた / ユーザー名が確定した時点で初期値を反映
+    if (session?.facilitator) setFacilitatorDraft(session.facilitator)
+    else if (myName) setFacilitatorDraft(myName)
+  }, [session?.facilitator, myName])
 
   // ── セッションを取得（無ければ未開始扱い） ─────────────
   useEffect(() => {
@@ -189,7 +196,7 @@ export default function WeeklyMTGFacilitation({
       meeting_key: meeting.key,
       week_start: weekStart,
       step: 1,
-      facilitator: myName || null,
+      facilitator: facilitatorDraft || myName || null,
       started_at: new Date().toISOString(),
       finished_at: null,
       current_item_id: null,
@@ -288,8 +295,10 @@ export default function WeeklyMTGFacilitation({
       <div style={{ flex: 1 }}>
         {viewingPrep ? (
           <Step0Preparation
-            T={T} meeting={meeting} weekStart={weekStart} myName={myName}
+            T={T} meeting={meeting} weekStart={weekStart} myName={myName} members={members}
             scope={scopePreview} session={session}
+            facilitatorDraft={facilitatorDraft}
+            onFacilitatorChange={setFacilitatorDraft}
             onStart={async () => { await startMeeting(); setViewingPrep(false) }}
             onResume={() => setViewingPrep(false)}
             onReset={resetMeeting}
@@ -297,7 +306,18 @@ export default function WeeklyMTGFacilitation({
           />
         ) : (
           <>
-            {step === 1 && wkly?.flow === 'kr' && (
+            {step === 1 && wkly?.flow === 'kr' && wkly?.withDiscussion && (
+              <Step1ManagerSummary
+                T={T} meeting={meeting} weekStart={weekStart}
+                levels={levels} members={members}
+                session={session}
+                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onAdvanceToStep2={() => goToStep(2)}
+                onPrev={() => setViewingPrep(true)}
+                onBackToPrep={() => setViewingPrep(true)}
+              />
+            )}
+            {step === 1 && wkly?.flow === 'kr' && !wkly?.withDiscussion && (
               <Step1KRLoop
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
@@ -349,7 +369,7 @@ export default function WeeklyMTGFacilitation({
 }
 
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onStart, onResume, onReset, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], scope, session, facilitatorDraft, onFacilitatorChange, onStart, onResume, onReset, onSwitchToList }) {
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点' : 'KR重点'
   const scopeLabel = wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
@@ -449,6 +469,33 @@ function Step0Preparation({ T, meeting, weekStart, myName, scope, session, onSta
             </div>
           </>
         )}
+      </div>
+
+      {/* ファシリテーター選択 */}
+      <div style={{
+        marginBottom: 18, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          本日のファシリテーター
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Avatar name={facilitatorDraft} avatarUrl={members.find(m => m?.name === facilitatorDraft)?.avatar_url} size={32} />
+          <select
+            value={facilitatorDraft || ''}
+            onChange={e => onFacilitatorChange && onFacilitatorChange(e.target.value)}
+            style={{
+              flex: 1, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 7,
+              padding: '8px 10px', fontSize: 13, color: avatarColor(facilitatorDraft) || T.text,
+              cursor: 'pointer', fontFamily: 'inherit', outline: 'none', fontWeight: 700,
+            }}>
+            <option value="">-- ファシリ未選択 --</option>
+            {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+          </select>
+        </div>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
+          会議開始時に記録されます。会議中に変更したい場合は「リセット」してから選び直してください。
+        </div>
       </div>
 
       {/* 開始 / 再開 / リセット / 一覧モード切替 */}
@@ -994,6 +1041,304 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
   )
 }
 
+// ─── Step 1 (マネージャー定例): チーム別 Good/More/Focus サマリー ─────────────
+// 各チームのマネージャーが順番にチーム成果(Good)/課題(More)/注力(Focus) を共有。
+// 横断連携の確認は次の Step 2 (確認事項) で扱う。
+function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
+  const wkly = meeting?.weeklyMTG
+  const [teams, setTeams] = useState(null) // [{ team, kaCount, owners, statusCounts, good, more, focus }]
+  const [loadError, setLoadError] = useState(null)
+
+  // チーム別に当週KAを集計
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        if (!weekStart || !Array.isArray(levels) || levels.length === 0) {
+          if (alive) setTeams([]); return
+        }
+        const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
+        if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
+
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
+        if (objsRes.error) throw objsRes.error
+        const objs = objsRes.data || []
+        const objIds = objs.map(o => o.id)
+        const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+
+        let kas = []
+        if (objIds.length > 0) {
+          const kasRes = await supabase.from('weekly_reports')
+            .select('id, ka_title, owner, status, good, more, focus_output, objective_id, kr_id')
+            .in('objective_id', objIds)
+            .eq('week_start', weekStart)
+            .neq('status', 'done')
+            .range(0, 49999)
+          if (kasRes.error) throw kasRes.error
+          kas = kasRes.data || []
+        }
+
+        // チーム単位で集計
+        const teamMap = new Map(scopeLevelIds.map(id => [Number(id), {
+          kaCount: 0, ownerSet: new Set(),
+          statusCounts: { focus: 0, good: 0, more: 0, normal: 0 },
+          good: [], more: [], focus: [],
+        }]))
+        for (const ka of kas) {
+          const lvlId = objToLevel.get(Number(ka.objective_id))
+          if (!lvlId) continue
+          const td = teamMap.get(Number(lvlId))
+          if (!td) continue
+          td.kaCount++
+          if (ka.owner) td.ownerSet.add(ka.owner)
+          const st = KA_STATUS_ORDER.includes(ka.status) ? ka.status : 'normal'
+          td.statusCounts[st] = (td.statusCounts[st] || 0) + 1
+          const goodTrim  = (ka.good || '').trim()
+          const moreTrim  = (ka.more || '').trim()
+          const focusTrim = (ka.focus_output || '').trim()
+          if (goodTrim)  td.good.push({  owner: ka.owner, ka_title: ka.ka_title, text: goodTrim })
+          if (moreTrim)  td.more.push({  owner: ka.owner, ka_title: ka.ka_title, text: moreTrim })
+          if (focusTrim) td.focus.push({ owner: ka.owner, ka_title: ka.ka_title, text: focusTrim })
+        }
+
+        const built = scopeLevelIds.map(id => {
+          const team = levels.find(l => Number(l.id) === Number(id)) || { id, name: '?', icon: '🏢' }
+          const td = teamMap.get(Number(id))
+          return {
+            team,
+            kaCount: td.kaCount,
+            owners: [...td.ownerSet],
+            statusCounts: td.statusCounts,
+            good: td.good, more: td.more, focus: td.focus,
+          }
+        })
+        if (alive) { setTeams(built); setLoadError(null) }
+      } catch (e) {
+        console.error('Step1ManagerSummary load error:', e)
+        if (alive) { setTeams([]); setLoadError(e?.message || String(e)) }
+      }
+    }
+    load()
+    return () => { alive = false }
+  }, [wkly?.scope, weekStart, levels])
+
+  if (teams === null) {
+    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>チーム別サマリーを集計中...</div>
+  }
+  if (loadError) {
+    return (
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 24px' }}>
+        <div style={{ background: `${T.danger}15`, border: `1px solid ${T.danger}40`, borderRadius: 10, padding: 16, color: T.danger, fontSize: 13 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>サマリー取得エラー</div>
+          <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: 'pre-wrap' }}>{loadError}</div>
+        </div>
+      </div>
+    )
+  }
+  if (teams.length === 0) {
+    return (
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>🤷</div>
+        <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>対象チームが見つかりません</div>
+        <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
+      </div>
+    )
+  }
+
+  // 現在チーム判定
+  const completed = new Set(session?.completed_item_ids || [])
+  let currentIdx = teams.findIndex(t => Number(t.team?.id) === Number(session?.current_team_id))
+  if (currentIdx === -1 || currentIdx >= teams.length) currentIdx = 0
+  const current = teams[currentIdx]
+
+  const goNext = async () => {
+    const nextCompleted = [...new Set([...(session?.completed_item_ids || []), current.team.id])]
+    if (currentIdx + 1 < teams.length) {
+      await onUpdateSession({ current_team_id: teams[currentIdx + 1].team.id, completed_item_ids: nextCompleted })
+    } else {
+      await onUpdateSession({ current_team_id: null, completed_item_ids: nextCompleted, step: 2 })
+    }
+  }
+  const goBack = async () => {
+    if (currentIdx > 0) {
+      await onUpdateSession({ current_team_id: teams[currentIdx - 1].team.id })
+    } else {
+      onPrev()
+    }
+  }
+  const skip = async () => {
+    if (currentIdx + 1 < teams.length) {
+      await onUpdateSession({ current_team_id: teams[currentIdx + 1].team.id })
+    } else {
+      await onUpdateSession({ current_team_id: null, step: 2 })
+    }
+  }
+  const jumpTo = async (idx) => {
+    if (teams[idx]?.team?.id) await onUpdateSession({ current_team_id: teams[idx].team.id })
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      {onBackToPrep && (
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={onBackToPrep} style={{
+            padding: '6px 12px', borderRadius: 7, border: `1px solid ${T.borderMid}`,
+            background: 'transparent', color: T.textSub, cursor: 'pointer',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+          }}>↩ 会議準備に戻る</button>
+        </div>
+      )}
+
+      {/* 進行ナビ */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
+        padding: '10px 14px', background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+      }}>
+        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>進捗</div>
+        <div style={{ fontSize: 14, color: T.text, fontWeight: 800 }}>
+          {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 11 }}>/ {teams.length} チーム</span>
+        </div>
+        <div style={{ flex: 1, height: 6, background: T.bgSection, borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${(completed.size / teams.length) * 100}%`, background: T.success, transition: 'width 0.3s' }} />
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted }}>
+          完了 <strong style={{ color: T.success }}>{completed.size}</strong>
+        </div>
+      </div>
+
+      {/* 現在チームのサマリーカード */}
+      <TeamSummaryCard T={T} teamData={current} members={members} />
+
+      {/* 次へ / 前へ / スキップ */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 18 }}>
+        <button onClick={goBack} style={secondaryBtn(T)}>
+          ← {currentIdx === 0 ? '会議準備に戻る' : '前のチーム'}
+        </button>
+        <button onClick={skip} style={secondaryBtn(T)}>スキップ</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={goNext} style={primaryBtn(T)}>
+          {currentIdx + 1 < teams.length ? '次のチーム →' : '横断連携の確認へ →'}
+        </button>
+      </div>
+
+      {/* チームジャンプリスト */}
+      <div style={{
+        marginTop: 18, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          チーム一覧（クリックでジャンプ）
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {teams.map((t, i) => {
+            const isDone = completed.has(t.team.id)
+            const isActive = i === currentIdx
+            return (
+              <button key={t.team.id} onClick={() => jumpTo(i)}
+                title={`${t.team.name} (KA ${t.kaCount}件)`}
+                style={{
+                  padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                  background: isActive ? T.accent : isDone ? `${T.success}25` : T.bgSection,
+                  color: isActive ? '#fff' : isDone ? T.success : T.textSub, fontWeight: 700,
+                }}>
+                {isDone && '✓ '}{t.team.icon || '🏢'} {t.team.name} <span style={{ opacity: 0.65 }}>({t.kaCount})</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 横断連携への誘導 */}
+      <div style={{
+        marginTop: 18, padding: '12px 16px', background: `${T.warn}10`,
+        border: `1px solid ${T.warn}40`, borderRadius: 10, fontSize: 12, color: T.textSub,
+      }}>
+        💡 各チーム共有が一巡したら「横断連携の確認へ →」で Step 2 へ。<br />
+        曖昧な業務の引き取り、チーム間の依頼・連携は「確認事項」として記録します。
+      </div>
+    </div>
+  )
+}
+
+function TeamSummaryCard({ T, teamData, members }) {
+  const { team, kaCount, owners, statusCounts, good, more, focus } = teamData
+  return (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '22px 26px' }}>
+      {/* ヘッダー: チーム名 + 担当者リスト */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 24 }}>{team?.icon || '🤝'}</span>
+        <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{team?.name}</div>
+        <span style={{
+          padding: '3px 10px', borderRadius: 99, background: `${T.accent}18`,
+          color: T.accent, fontWeight: 700, fontSize: 11,
+        }}>KA {kaCount}件</span>
+        {owners.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+            {owners.slice(0, 5).map(name => {
+              const m = members.find(x => x?.name === name)
+              return <Avatar key={name} name={name} avatarUrl={m?.avatar_url} size={22} />
+            })}
+            {owners.length > 5 && <span style={{ fontSize: 11, color: T.textMuted }}>+{owners.length - 5}</span>}
+          </div>
+        )}
+      </div>
+
+      {/* ステータス内訳 */}
+      <div style={{
+        display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16,
+        padding: '8px 12px', background: T.bgSection, borderRadius: 8,
+      }}>
+        {Object.entries(KA_STATUS_CFG).filter(([k]) => k !== 'done').map(([k, cfg]) => (
+          <span key={k} style={{
+            padding: '3px 10px', borderRadius: 99, background: cfg.bg, color: cfg.color,
+            border: `1px solid ${cfg.border}`, fontSize: 11, fontWeight: 700,
+          }}>
+            {cfg.label} {statusCounts[k] || 0}
+          </span>
+        ))}
+      </div>
+
+      {/* Good / More / Focus セクション */}
+      <SummarySection T={T} icon="✅" label="Good" sub="今週の成果" accent={T.success} items={good} emptyText="（記入されたGoodはまだありません）" />
+      <SummarySection T={T} icon="🔺" label="More" sub="課題・改善点" accent={T.danger} items={more} emptyText="（記入されたMoreはまだありません）" />
+      <SummarySection T={T} icon="🎯" label="Focus" sub="今週の注力" accent={T.accent} items={focus} emptyText="（記入されたFocusはまだありません）" lastSection />
+    </div>
+  )
+}
+
+function SummarySection({ T, icon, label, sub, accent, items, emptyText, lastSection }) {
+  return (
+    <div style={{ marginBottom: lastSection ? 0 : 16 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: accent }}>{label}</span>
+        <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
+        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>{items.length}件</span>
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0' }}>{emptyText}</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map((it, i) => (
+            <div key={i} style={{
+              padding: '8px 10px', background: T.bgSection, borderRadius: 7,
+              borderLeft: `3px solid ${accent}`, fontSize: 12, color: T.textSub, lineHeight: 1.5,
+            }}>
+              <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
+                {it.owner && <strong style={{ color: avatarColor(it.owner) }}>{it.owner}</strong>}
+                {it.owner && it.ka_title && <span> ・ </span>}
+                {it.ka_title && <span style={{ color: T.textSub }}>{it.ka_title}</span>}
+              </div>
+              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{it.text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── KA編集カード（Phase 4） ────────────────────────────────────────────────
 function KAEditCard({ T, ka, team, objective, kr, members }) {
   const [kaTitle,     setKaTitle]     = useState(ka.ka_title || '')
@@ -1449,12 +1794,15 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onFini
       {/* 上部ヘッダー（withDiscussion の案内） */}
       {withDiscussion && (
         <div style={{
-          maxWidth: 900, width: '100%', margin: '12px auto 0', padding: '10px 16px',
+          maxWidth: 900, width: '100%', margin: '12px auto 0', padding: '12px 16px',
           background: `${T.warn}15`, border: `1px solid ${T.warn}40`, borderRadius: 8,
-          fontSize: 11, color: T.warn,
+          fontSize: 12, color: T.textSub,
         }}>
-          💡 マネージャー定例の「部署間の課題連携／解決策議論」専用UIは別途設計予定。
-          ひとまず確認事項として記録してください。
+          <div style={{ fontWeight: 700, color: T.warn, marginBottom: 4 }}>🤝 横断連携の確認</div>
+          各チームの共有を踏まえ、以下を「確認事項」として記録してください：<br />
+          ・<strong>担当が曖昧な業務</strong>（どのチームが拾うか）<br />
+          ・<strong>引き継ぎ・依頼事項</strong>（チーム間でボールを渡したいもの）<br />
+          ・<strong>連携が必要な案件</strong>（複数チームで連動する作業）
         </div>
       )}
 
