@@ -374,7 +374,7 @@ export default function WeeklyMTGFacilitation({
             {step === 3 && (
               <Step3NextActions
                 T={T} meeting={meeting} weekStart={weekStart} session={session}
-                myName={myName} members={members}
+                myName={myName} members={members} levels={levels}
                 onPrev={() => goToStep(2)}
                 onFinish={finishMeeting}
               />
@@ -2325,19 +2325,21 @@ function secondaryBtn(T) {
 // ─── Step 3: ネクストアクション ─────────────────────────────────────────────
 // 「誰がいつまでに何をやるか」を必ず確認するステップ。
 // meeting_action_items テーブル に保存。会議終了時に0件なら警告。
-function Step3NextActions({ T, meeting, weekStart, session, myName, members, onPrev, onFinish }) {
+function Step3NextActions({ T, meeting, weekStart, session, myName, members, levels = [], onPrev, onFinish }) {
   const [items, setItems] = useState(null)
+  const [scopeKAs, setScopeKAs] = useState([]) // 任意紐付け用のKA選択肢
   const [loadError, setLoadError] = useState(null)
 
-  // 取得 (会議スコープ: meeting_key + week_start)
+  // 既存タスク取得 (ka_tasks; meeting_key + week_start で会議スコープを識別)
   useEffect(() => {
     let alive = true
     if (!meeting?.key) return
-    supabase.from('meeting_action_items')
+    supabase.from('ka_tasks')
       .select('*')
       .eq('meeting_key', meeting.key)
       .eq('week_start', weekStart || null)
       .order('created_at', { ascending: true })
+      .range(0, 49999)
       .then(({ data, error }) => {
         if (!alive) return
         if (error) { setLoadError(error.message); setItems([]); return }
@@ -2346,15 +2348,56 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, onP
     return () => { alive = false }
   }, [meeting?.key, weekStart])
 
-  // Realtime購読
+  // 会議スコープ内のKA一覧 (任意紐付け用)
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        if (!Array.isArray(levels) || levels.length === 0) return
+        const wkly = meeting?.weeklyMTG
+        const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
+        if (scopeLevelIds.length === 0) { if (alive) setScopeKAs([]); return }
+        const objsRes = await supabase.from('objectives')
+          .select('id, level_id, title').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = objsRes.data || []
+        const objIds = objs.map(o => o.id)
+        if (objIds.length === 0) { if (alive) setScopeKAs([]); return }
+        const kasRes = await supabase.from('weekly_reports')
+          .select('id, ka_title, owner, kr_id, objective_id, level_id, week_start, status')
+          .in('objective_id', objIds)
+          .eq('week_start', weekStart)
+          .neq('status', 'done')
+          .range(0, 49999)
+        const kas = kasRes.data || []
+        // ラベル組み立て: 「[チーム] KAタイトル (担当)」
+        const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+        const lvlToName  = new Map(levels.map(l => [Number(l?.id), l?.name || '']))
+        const list = kas.map(ka => {
+          const lvlId = objToLevel.get(Number(ka.objective_id))
+          const teamName = lvlToName.get(Number(lvlId)) || ''
+          return { ...ka, _label: `[${teamName}] ${ka.ka_title || '(無題)'}${ka.owner ? ` (${ka.owner})` : ''}` }
+        }).sort((a, b) => a._label.localeCompare(b._label))
+        if (alive) setScopeKAs(list)
+      } catch (e) {
+        console.error('Step3NextActions scope KA load error:', e)
+      }
+    }
+    load()
+    return () => { alive = false }
+  }, [meeting?.key, weekStart, levels])
+
+  // Realtime購読 (ka_tasks 変更を監視; この会議の行のみ反映)
   useEffect(() => {
     if (!meeting?.key) return
-    const ch = supabase.channel(`mai_${meeting.key}_${weekStart}`)
+    const ch = supabase.channel(`mtg_tasks_${meeting.key}_${weekStart}`)
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_action_items', filter: `meeting_key=eq.${meeting.key}` },
+        { event: '*', schema: 'public', table: 'ka_tasks' },
         payload => {
           const row = payload.new || payload.old
-          if (!row || row.week_start !== weekStart) return
+          if (!row) return
+          // この会議スコープのレコードだけ扱う
+          if ((row.meeting_key || null) !== meeting.key) return
+          if ((row.week_start || null) !== (weekStart || null)) return
           if (payload.eventType === 'INSERT') {
             setItems(p => (p || []).some(x => x.id === payload.new.id) ? p : [...(p || []), payload.new])
           } else if (payload.eventType === 'UPDATE') {
@@ -2370,22 +2413,23 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, onP
   const addItem = async () => {
     const payload = {
       meeting_key: meeting.key, week_start: weekStart, session_id: session?.id ?? null,
-      assignee: '', due_date: null, content: '', created_by: myName || null,
+      assignee: '', due_date: null, title: '', done: false,
+      report_id: null, ka_key: null,
     }
-    const { data, error } = await supabase.from('meeting_action_items').insert(payload).select().single()
+    const { data, error } = await supabase.from('ka_tasks').insert(payload).select().single()
     if (error) { alert('追加失敗: ' + error.message); return }
     if (data) setItems(p => (p || []).some(x => x.id === data.id) ? p : [...(p || []), data])
   }
 
   const deleteItem = async (id) => {
     if (!window.confirm('このネクストアクションを削除しますか？')) return
-    await supabase.from('meeting_action_items').delete().eq('id', id)
+    await supabase.from('ka_tasks').delete().eq('id', id)
     setItems(p => (p || []).filter(x => x.id !== id))
   }
 
   const handleFinish = () => {
     const count = (items || []).length
-    const filled = (items || []).filter(it => (it.content || '').trim()).length
+    const filled = (items || []).filter(it => (it.title || '').trim()).length
     if (count === 0) {
       if (!window.confirm('ネクストアクションが0件です。本当に会議を終了しますか？\n（誰がいつまでに何をやるかが決まらない会議は意味がありません）')) return
     } else if (filled < count) {
@@ -2411,7 +2455,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, onP
 
       {/* テーブルヘッダー */}
       <div style={{
-        display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
+        display: 'grid', gridTemplateColumns: '140px 130px 1fr 180px 32px',
         gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
         border: `1px solid ${T.border}`, marginBottom: 6, fontSize: 11,
         color: T.textMuted, fontWeight: 700,
@@ -2419,6 +2463,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, onP
         <div>担当</div>
         <div>期日</div>
         <div>内容</div>
+        <div>KA紐付け（任意）</div>
         <div></div>
       </div>
 
@@ -2435,7 +2480,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, onP
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
           {items.map(it => (
-            <NextActionRow key={it.id} T={T} item={it} members={members} onDelete={() => deleteItem(it.id)} />
+            <NextActionRow key={it.id} T={T} item={it} members={members} scopeKAs={scopeKAs} onDelete={() => deleteItem(it.id)} />
           ))}
         </div>
       )}
@@ -2456,7 +2501,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, onP
         <button onClick={onPrev} style={secondaryBtn(T)}>← Step 2 に戻る</button>
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 11, color: T.textMuted, marginRight: 8 }}>
-          記録: <strong style={{ color: T.text }}>{(items || []).filter(it => (it.content || '').trim()).length}</strong> 件
+          記録: <strong style={{ color: T.text }}>{(items || []).filter(it => (it.title || '').trim()).length}</strong> 件
         </div>
         <button onClick={handleFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
       </div>
@@ -2464,36 +2509,52 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, onP
   )
 }
 
-function NextActionRow({ T, item, members, onDelete }) {
+function NextActionRow({ T, item, members, scopeKAs = [], onDelete }) {
   const [assignee, setAssignee] = useState(item.assignee || '')
   const [dueDate,  setDueDate]  = useState(item.due_date || '')
-  const [content,  setContent]  = useState(item.content || '')
+  const [title,    setTitle]    = useState(item.title || '')
+  const [reportId, setReportId] = useState(item.report_id || '')
   const [focusedField, setFocusedField] = useState(null)
   const focusedRef = useRef(null)
   useEffect(() => { focusedRef.current = focusedField }, [focusedField])
 
-  // ka_tasks ではなく meeting_action_items 用の useAutoSave
-  const autoSave = useAutoSave('meeting_action_items', item.id)
+  // タスクテーブルは ka_tasks に統一
+  const autoSave = useAutoSave('ka_tasks', item.id)
 
   // Realtime: 編集中フィールドは保護
   useEffect(() => {
-    const ch = supabase.channel(`mai_row_${item.id}`)
+    const ch = supabase.channel(`mtg_task_row_${item.id}`)
       .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'meeting_action_items', filter: `id=eq.${item.id}` },
+        { event: 'UPDATE', schema: 'public', table: 'ka_tasks', filter: `id=eq.${item.id}` },
         payload => {
           if (!payload.new) return
-          if (focusedRef.current !== 'assignee') setAssignee(payload.new.assignee || '')
-          if (focusedRef.current !== 'due_date') setDueDate(payload.new.due_date || '')
-          if (focusedRef.current !== 'content')  setContent(payload.new.content || '')
+          if (focusedRef.current !== 'assignee')  setAssignee(payload.new.assignee || '')
+          if (focusedRef.current !== 'due_date')  setDueDate(payload.new.due_date || '')
+          if (focusedRef.current !== 'title')     setTitle(payload.new.title || '')
+          if (focusedRef.current !== 'report_id') setReportId(payload.new.report_id || '')
         }).subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [item.id])
+
+  // KA を変更したら ka_key も追従して保存
+  const handleKAChange = (newReportId) => {
+    setReportId(newReportId)
+    if (!newReportId) {
+      autoSave.save('report_id', null)
+      autoSave.save('ka_key', null)
+    } else {
+      const ka = scopeKAs.find(k => Number(k.id) === Number(newReportId))
+      const kaKey = ka ? computeKAKey(ka) : null
+      autoSave.save('report_id', Number(newReportId))
+      autoSave.save('ka_key', kaKey)
+    }
+  }
 
   const ownerMember = assignee ? members.find(m => m?.name === assignee) : null
 
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
+      display: 'grid', gridTemplateColumns: '140px 130px 1fr 180px 32px',
       gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
       border: `1px solid ${T.border}`, alignItems: 'center',
     }}>
@@ -2523,15 +2584,29 @@ function NextActionRow({ T, item, members, onDelete }) {
           padding: '4px 6px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
         }} />
       <input
-        value={content}
-        onFocus={() => setFocusedField('content')}
-        onBlur={() => { setFocusedField(null); autoSave.saveNow('content', content) }}
-        onChange={e => { setContent(e.target.value); autoSave.save('content', e.target.value) }}
+        value={title}
+        onFocus={() => setFocusedField('title')}
+        onBlur={() => { setFocusedField(null); autoSave.saveNow('title', title) }}
+        onChange={e => { setTitle(e.target.value); autoSave.save('title', e.target.value) }}
         placeholder="内容（何をやるか）"
         style={{
           background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
           padding: '6px 8px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
         }} />
+      {/* KA 紐付け (任意) */}
+      <select value={reportId || ''}
+        onChange={e => handleKAChange(e.target.value || null)}
+        title="関連するKAを選ぶと、個人のタスク一覧でもそのKA配下に表示されます"
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '4px 6px', color: reportId ? T.text : T.textMuted,
+          fontSize: 11, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
+        }}>
+        <option value="">-- KAなし --</option>
+        {scopeKAs.map(ka => (
+          <option key={ka.id} value={ka.id}>{ka._label}</option>
+        ))}
+      </select>
       <button onClick={onDelete} title="削除" style={{
         background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer',
         fontSize: 14, padding: '0 4px', fontFamily: 'inherit',

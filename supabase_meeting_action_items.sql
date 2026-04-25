@@ -1,49 +1,45 @@
 -- ─────────────────────────────────────────────
--- meeting_action_items: 会議で決まったネクストアクション (誰がいつまでに何をやるか)
--- 週次MTG / 朝会など全会議共通で使う前提。
--- 加えて、weekly_mtg_sessions の step を 0..4 に拡張
--- (3 = ネクストアクション / 4 = 終了 に再定義)
+-- ka_tasks に会議コンテキスト列を追加し、meeting_action_items を統合
+-- 設計方針: タスクは ka_tasks 1テーブルで管理する。
+-- 会議で作ったタスクは meeting_key/week_start/session_id を埋めるだけ。
+-- KA との紐付けは ka_key/report_id で従来通り任意 (NULL 可)。
 -- ─────────────────────────────────────────────
 
--- ① meeting_action_items テーブル
-CREATE TABLE IF NOT EXISTS meeting_action_items (
-  id          BIGSERIAL PRIMARY KEY,
-  meeting_key TEXT   NOT NULL,                  -- 'kickoff-partner' / 'manager' / 'morning' 等
-  week_start  DATE,                             -- 週次MTGの場合は対象週月曜
-  meeting_date DATE,                            -- 朝会など日次会議の場合の開催日
-  session_id  BIGINT,                           -- weekly_mtg_sessions.id への参照 (nullable)
-  assignee    TEXT,                             -- 担当者 (members.name)
-  due_date    DATE,                             -- 期日
-  content     TEXT   NOT NULL DEFAULT '',       -- 内容
-  done        BOOLEAN NOT NULL DEFAULT false,
-  done_at     TIMESTAMPTZ,
-  created_by  TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- ① ka_tasks に会議コンテキスト用の列を追加
+ALTER TABLE ka_tasks
+  ADD COLUMN IF NOT EXISTS meeting_key TEXT,
+  ADD COLUMN IF NOT EXISTS week_start  DATE,
+  ADD COLUMN IF NOT EXISTS session_id  BIGINT;
 
-CREATE INDEX IF NOT EXISTS meeting_action_items_session_idx
-  ON meeting_action_items (meeting_key, week_start, meeting_date);
-CREATE INDEX IF NOT EXISTS meeting_action_items_assignee_idx
-  ON meeting_action_items (assignee, done, due_date);
+CREATE INDEX IF NOT EXISTS ka_tasks_meeting_idx
+  ON ka_tasks (meeting_key, week_start);
 
-ALTER TABLE meeting_action_items ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_all_meeting_action_items" ON meeting_action_items;
-CREATE POLICY "allow_all_meeting_action_items"
-  ON meeting_action_items FOR ALL TO authenticated, anon
-  USING (true) WITH CHECK (true);
-
+-- ② meeting_action_items が存在すればデータを移行 → ドロップ
 DO $$
 BEGIN
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.meeting_action_items;
-  EXCEPTION WHEN duplicate_object THEN NULL;
-  END;
-END $$;
+  IF to_regclass('public.meeting_action_items') IS NOT NULL THEN
+    INSERT INTO ka_tasks (
+      title, assignee, due_date, done,
+      meeting_key, week_start, session_id,
+      created_at, updated_at
+    )
+    SELECT
+      COALESCE(NULLIF(TRIM(content), ''), '(未記入)') AS title,
+      assignee,
+      due_date,
+      done,
+      meeting_key,
+      week_start,
+      session_id,
+      created_at,
+      updated_at
+    FROM meeting_action_items;
 
--- ② weekly_mtg_sessions の step 値を 0..4 に拡張
---    既存 finished_at が入っている step=3 行は新しい意味の「終了 (=4)」に移行
-UPDATE weekly_mtg_sessions SET step = 4
- WHERE step = 3 AND finished_at IS NOT NULL;
+    DROP TABLE meeting_action_items;
+    RAISE NOTICE 'meeting_action_items のデータを ka_tasks に移行し、テーブルを削除しました';
+  ELSE
+    RAISE NOTICE 'meeting_action_items は存在しません (新環境)';
+  END IF;
+END $$;
 
 NOTIFY pgrst, 'reload schema';
