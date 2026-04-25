@@ -1423,7 +1423,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12 }}>
                 {WEEKLY_MTG_MEETINGS.map(m => {
-                  const viewBadge = m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
+                  // マネージャー定例 (withDiscussion) はチーム単位のサマリー会議
+                  const viewBadge = m.weeklyMTG.withDiscussion ? 'チームサマリー'
+                    : m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
                     : m.weeklyMTG.viewMode === 'ka' ? 'KA重点'
                     : '両方'
                   const scope = m.weeklyMTG.levelName || (m.weeklyMTG.levelSelect === 'department' ? '事業部選択' : '全社')
@@ -1504,11 +1506,18 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
 
         <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}
-          title={meetingViewMode === 'kr' ? 'KR詳細(天気/Good/More/Focus)が展開、KAテーブルは折り畳み表示' : meetingViewMode === 'ka' ? 'KAテーブルを常時表示、KR詳細は折り畳み' : 'KRとKA両方表示'}>
-          {meetingViewMode === 'kr' ? '🎯 KR重点' : meetingViewMode === 'ka' ? '📋 KA重点' : '📊 両方'}
+          title={currentMeeting?.weeklyMTG?.withDiscussion ? 'チーム別の Good/More/Focus サマリー + 横断連携の確認'
+            : meetingViewMode === 'kr' ? 'KR詳細(天気/Good/More/Focus)が展開、KAテーブルは折り畳み表示'
+            : meetingViewMode === 'ka' ? 'KAテーブルを常時表示、KR詳細は折り畳み'
+            : 'KRとKA両方表示'}>
+          {currentMeeting?.weeklyMTG?.withDiscussion ? '🤝 チームサマリー'
+            : meetingViewMode === 'kr' ? '🎯 KR重点'
+            : meetingViewMode === 'ka' ? '📋 KA重点'
+            : '📊 両方'}
         </span>
         <span style={{ fontSize:10, color:wT().textMuted, fontStyle:'italic', display:'inline-block', minWidth:0 }}>
-          {meetingViewMode === 'kr' ? 'KRレビュー中心・KAは折り畳み'
+          {currentMeeting?.weeklyMTG?.withDiscussion ? 'チーム別 Good/More/Focus サマリー + 横断連携'
+            : meetingViewMode === 'kr' ? 'KRレビュー中心・KAは折り畳み'
             : meetingViewMode === 'ka' ? 'KA進捗中心・KR詳細は折り畳み'
             : 'KR・KA両方表示'}
         </span>

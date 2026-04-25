@@ -75,14 +75,25 @@ function Avatar({ name, avatarUrl, size = 22 }) {
 
 // ─── 共通: ステップ定義 ─────────────────────────────────────────────────────
 function stepsForFlow(wkly) {
-  // 5ステップ: 0=未開始 / 1=順送り / 2=確認事項 / 3=ネクストアクション / 4=終了
-  const items = [
-    { n: 1, label: wkly?.flow === 'ka' ? 'KA順送り' : 'KR順送り', icon: wkly?.flow === 'ka' ? '📋' : '🎯' },
-    { n: 2, label: wkly?.withDiscussion ? '課題・依頼+確認事項' : '確認事項', icon: '💬' },
+  // 5ステップ: 0=未開始 / 1=本編 / 2=確認事項 / 3=ネクストアクション / 4=終了
+  // 本編 (Step 1) のラベルは会議タイプに応じて切替:
+  //   manager (withDiscussion) → チームサマリー
+  //   KA重点                    → KA順送り
+  //   KR重点                    → KR順送り
+  let firstLabel, firstIcon
+  if (wkly?.withDiscussion) {
+    firstLabel = 'チームサマリー'; firstIcon = '🤝'
+  } else if (wkly?.flow === 'ka') {
+    firstLabel = 'KA順送り'; firstIcon = '📋'
+  } else {
+    firstLabel = 'KR順送り'; firstIcon = '🎯'
+  }
+  return [
+    { n: 1, label: firstLabel, icon: firstIcon },
+    { n: 2, label: wkly?.withDiscussion ? '横断連携・確認事項' : '確認事項', icon: '💬' },
     { n: 3, label: 'ネクストアクション', icon: '✅' },
     { n: 4, label: '終了', icon: '🏁' },
   ]
-  return items
 }
 
 // ─── メインコンポーネント ───────────────────────────────────────────────────
