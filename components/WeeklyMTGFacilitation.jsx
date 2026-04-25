@@ -105,6 +105,13 @@ export default function WeeklyMTGFacilitation({
     if (session?.facilitator) setFacilitatorDraft(session.facilitator)
     else if (myName) setFacilitatorDraft(myName)
   }, [session?.facilitator, myName])
+  // 会議予定時間 ドラフト (分単位)
+  const [durationDraft, setDurationDraft] = useState(30)
+  useEffect(() => {
+    if (session?.duration_minutes) setDurationDraft(session.duration_minutes)
+  }, [session?.duration_minutes])
+  // 10分前アラートの抑制フラグ (一度通知したら同じセッションでは再通知しない)
+  const tenMinAlertedRef = useRef(false)
 
   // ── セッションを取得（無ければ未開始扱い） ─────────────
   useEffect(() => {
@@ -194,11 +201,13 @@ export default function WeeklyMTGFacilitation({
 
   // ── アクション ──────────────────────────────────────────
   const startMeeting = async () => {
+    tenMinAlertedRef.current = false
     const payload = {
       meeting_key: meeting.key,
       week_start: weekStart,
       step: 1,
       facilitator: facilitatorDraft || myName || null,
+      duration_minutes: Number(durationDraft) || 30,
       started_at: new Date().toISOString(),
       finished_at: null,
       current_item_id: null,
@@ -252,6 +261,17 @@ export default function WeeklyMTGFacilitation({
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
+      {/* タイマー (進行中ステップでのみ) */}
+      {!viewingPrep && step >= 1 && step <= 3 && session?.started_at && (
+        <MeetingTimerBanner
+          T={T}
+          startedAt={session.started_at}
+          durationMinutes={session.duration_minutes || 30}
+          tenMinAlertedRef={tenMinAlertedRef}
+          meetingTitle={meeting?.title || '会議'}
+        />
+      )}
+
       {/* ステップヘッダー（準備画面表示中は出さない） */}
       {!viewingPrep && step >= 1 && (
         <div style={{
@@ -302,6 +322,8 @@ export default function WeeklyMTGFacilitation({
             scope={scopePreview} session={session}
             facilitatorDraft={facilitatorDraft}
             onFacilitatorChange={setFacilitatorDraft}
+            durationDraft={durationDraft}
+            onDurationChange={setDurationDraft}
             onStart={async () => { await startMeeting(); setViewingPrep(false) }}
             onResume={() => setViewingPrep(false)}
             onReset={resetMeeting}
@@ -379,8 +401,83 @@ export default function WeeklyMTGFacilitation({
   )
 }
 
+// ─── タイマーバナー: 残り時間 + 10分前アラート + 超過警告 ─────────────────
+function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, meetingTitle }) {
+  const [now, setNow] = useState(() => Date.now())
+  // 30秒ごとに更新（電池に優しい間隔）
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30 * 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const startMs   = new Date(startedAt).getTime()
+  const endMs     = startMs + durationMinutes * 60 * 1000
+  const remaining = Math.max(-99999, endMs - now)            // 負なら超過
+  const remainingMin = Math.floor(remaining / 60000)
+  const elapsedMin   = Math.floor((now - startMs) / 60000)
+  const totalMin     = durationMinutes
+  const ratio        = Math.max(0, Math.min(1, (now - startMs) / (durationMinutes * 60 * 1000)))
+
+  const isOver  = remaining < 0
+  const isTen   = !isOver && remainingMin <= 10
+  const isFive  = !isOver && remainingMin <= 5
+
+  // 10分前に1度だけブラウザ通知（許可がある場合）
+  useEffect(() => {
+    if (!isTen || isOver) return
+    if (tenMinAlertedRef.current) return
+    tenMinAlertedRef.current = true
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('⏰ 残り10分', { body: `${meetingTitle} の終了予定まで残り 10 分です` })
+      }
+    } catch {}
+  }, [isTen, isOver, meetingTitle, tenMinAlertedRef])
+
+  const bg     = isOver ? `${T.danger}18` : isFive ? `${T.danger}10` : isTen ? `${T.warn}15` : T.bgCard
+  const border = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.border
+  const accent = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.accent
+
+  const fmt = (mm) => {
+    const m = Math.abs(mm)
+    return `${Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}時間` : ''}${m % 60}分`
+  }
+
+  return (
+    <div style={{
+      padding: '8px 16px', background: bg, borderBottom: `2px solid ${border}`, flexShrink: 0,
+    }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 14 }}>{isOver ? '🚨' : isTen ? '⚠️' : '⏱'}</span>
+        <span style={{ fontSize: 12, color: T.textMuted }}>
+          {isOver ? (
+            <span style={{ color: T.danger, fontWeight: 700 }}>
+              終了予定時刻を <strong>{fmt(remainingMin)}</strong> 過ぎています
+            </span>
+          ) : isFive ? (
+            <span style={{ color: T.danger, fontWeight: 700 }}>残り {fmt(remainingMin)}！ そろそろまとめへ</span>
+          ) : isTen ? (
+            <span style={{ color: T.warn, fontWeight: 700 }}>残り {fmt(remainingMin)} ・ 10分前です</span>
+          ) : (
+            <>残り <strong style={{ color: T.text }}>{fmt(remainingMin)}</strong></>
+          )}
+        </span>
+        <span style={{ fontSize: 11, color: T.textMuted }}>
+          経過 {elapsedMin}分 / 予定 {totalMin}分
+        </span>
+        <div style={{ flex: 1, height: 4, background: T.bgSection, borderRadius: 99, overflow: 'hidden', minWidth: 80 }}>
+          <div style={{
+            height: '100%', width: `${Math.min(100, ratio * 100)}%`,
+            background: accent, transition: 'width 0.3s',
+          }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, onStart, onResume, onReset, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点' : 'KR重点'
   const scopeLabel = wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
@@ -511,6 +608,55 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
         </div>
         <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
           会議開始時に記録されます。会議中に変更したい場合は「リセット」してから選び直してください。
+        </div>
+      </div>
+
+      {/* 会議予定時間 */}
+      <div style={{
+        marginBottom: 18, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          会議予定時間
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {[15, 30, 45, 60, 90].map(m => {
+            const active = Number(durationDraft) === m
+            return (
+              <button key={m}
+                onClick={() => onDurationChange && onDurationChange(m)}
+                style={{
+                  padding: '6px 14px', borderRadius: 7, border: `1px solid ${active ? T.accent : T.borderMid}`,
+                  background: active ? `${T.accent}15` : 'transparent',
+                  color: active ? T.accent : T.textSub,
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
+                }}>{m}分</button>
+            )
+          })}
+          <input type="number" min={5} max={300} step={5}
+            value={durationDraft || 30}
+            onChange={e => onDurationChange && onDurationChange(Number(e.target.value) || 30)}
+            style={{
+              width: 70, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 7,
+              padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+            }} />
+          <span style={{ fontSize: 11, color: T.textMuted }}>分</span>
+          {/* ブラウザ通知の許可 */}
+          <button onClick={() => {
+              if (typeof Notification === 'undefined') { alert('お使いのブラウザは通知に対応していません'); return }
+              if (Notification.permission === 'granted') { alert('通知は既に許可されています'); return }
+              Notification.requestPermission().then(p => {
+                alert(p === 'granted' ? '通知が許可されました（10分前にデスクトップ通知が出ます）' : '通知は許可されませんでした')
+              })
+            }}
+            style={{
+              marginLeft: 'auto', padding: '5px 10px', borderRadius: 6,
+              border: `1px dashed ${T.borderMid}`, background: 'transparent',
+              color: T.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+            }}>🔔 10分前通知を許可</button>
+        </div>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
+          会議開始から {durationDraft}分で「終了予定」。残り10分でアラートが出ます。
         </div>
       </div>
 
