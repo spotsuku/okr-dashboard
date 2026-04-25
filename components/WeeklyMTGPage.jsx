@@ -6,6 +6,7 @@ import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
+import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 
 const DARK_T = {
   bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
@@ -1014,6 +1015,17 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   // 週次MTGに来るたびに必ず会議選択画面から始まる (localStorage保存しない)
   const [activeMeetingKey, setActiveMeetingKey] = useState(null)
 
+  // ファシリ / 一覧 モード切替 (会議選択後)
+  // localStorage で保存して同じ会議に戻った時の好みを記憶
+  const [mtgMode, setMtgMode] = useState(() => {
+    if (typeof window === 'undefined') return 'facilitation'
+    return localStorage.getItem('weeklyMTG_mode') || 'facilitation'
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('weeklyMTG_mode', mtgMode)
+  }, [mtgMode])
+
   // 会議名で levels から該当レベルを検索
   const findLevelByName = (name) => {
     if (!name || !levels?.length) return null
@@ -1470,6 +1482,27 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,
         }}>{currentMeeting?.icon || '📋'}</div>
         <div style={{ fontSize:14, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
+
+        {/* ファシリ / 一覧 モード切替トグル */}
+        <div style={{ display:'flex', gap:0, padding:2, background:wT().bgCard, borderRadius:7, border:`1px solid ${wT().border}` }}>
+          <button onClick={() => setMtgMode('facilitation')}
+            title="進行ガイド付きステップ式 (ファシリが変わっても会議が進めやすい)"
+            style={{
+              padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
+              background: mtgMode === 'facilitation' ? meetingColor : 'transparent',
+              color: mtgMode === 'facilitation' ? '#fff' : wT().textSub,
+              fontSize:11, fontWeight:700,
+            }}>🧭 ファシリ</button>
+          <button onClick={() => setMtgMode('list')}
+            title="従来の3ペイン表形式（KR/KAを一覧編集）"
+            style={{
+              padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
+              background: mtgMode === 'list' ? meetingColor : 'transparent',
+              color: mtgMode === 'list' ? '#fff' : wT().textSub,
+              fontSize:11, fontWeight:700,
+            }}>📋 一覧</button>
+        </div>
+
         <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}
           title={meetingViewMode === 'kr' ? 'KR詳細(天気/Good/More/Focus)が展開、KAテーブルは折り畳み表示' : meetingViewMode === 'ka' ? 'KAテーブルを常時表示、KR詳細は折り畳み' : 'KRとKA両方表示'}>
           {meetingViewMode === 'kr' ? '🎯 KR重点' : meetingViewMode === 'ka' ? '📋 KA重点' : '📊 両方'}
@@ -1498,6 +1531,19 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
       </div>
 
+      {/* ── ファシリモードならステップ式UI、一覧モードなら従来3ペイン ── */}
+      {mtgMode === 'facilitation' ? (
+        <WeeklyMTGFacilitation
+          meeting={currentMeeting}
+          weekStart={activeWeek}
+          levels={levels}
+          members={members}
+          myName={myName}
+          themeKey={themeKey}
+          onSwitchToList={() => setMtgMode('list')}
+        />
+      ) : (
+      <>
       {/* 週タブ：会議日を主表示 */}
       <div style={{ display:'flex', gap:4, padding: isMobile ? '5px 8px' : '7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
         <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>会議日：</span>
@@ -1696,6 +1742,8 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           )}
         </div>
       </div>
+      </>
+      )}
 
     </div>
   )
