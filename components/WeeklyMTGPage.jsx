@@ -1058,19 +1058,19 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
 
   useEffect(() => {
-    supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').then(({data})=>setObjectives(data||[]))
-    supabase.from('key_results').select('*').order('objective_id').then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
+    supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').range(0, 49999).then(({data})=>setObjectives(data||[]))
+    supabase.from('key_results').select('*').order('objective_id').range(0, 49999).then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
     supabase.from('members').select('*').order('name').then(({data, error})=>{ if(error) console.error('members load error:', error); setMembers(data||[]) })
   }, [])
 
   useEffect(() => {
     setLoading(true)
     // PostgREST のデフォルト上限 (1000) を超える本番データ量を想定し range() で拡張
-    supabase.from('weekly_reports').select('*').order('sort_order').order('id').range(0, 9999)
+    supabase.from('weekly_reports').select('*').order('sort_order').order('id').range(0, 49999)
       .then(({data, error}) => {
         if (error) {
           console.warn('sort_order order failed, falling back:', error.message)
-          return supabase.from('weekly_reports').select('*').order('id').range(0, 9999)
+          return supabase.from('weekly_reports').select('*').order('id').range(0, 49999)
         }
         return { data, error: null }
       })
@@ -1103,9 +1103,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const reload = async () => {
     const thisId = ++reloadIdRef.current
     // PostgREST の 1000 行上限を超えるデータでも全件取得する
-    let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id').range(0, 9999)
+    let { data, error } = await supabase.from('weekly_reports').select('*').order('sort_order').order('id').range(0, 49999)
     if (error) {
-      const res = await supabase.from('weekly_reports').select('*').order('id').range(0, 9999)
+      const res = await supabase.from('weekly_reports').select('*').order('id').range(0, 49999)
       data = res.data
     }
     // このリクエスト中に後続の reload が始まっていたら、古い結果は捨てる

@@ -90,7 +90,7 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
   const load = async () => {
     setLoading(true)
     const { data } = await supabase.from('weekly_reports')
-      .select('*').eq('kr_id', krId).range(0, 9999)
+      .select('*').eq('kr_id', krId).range(0, 49999)
     setReports(data || [])
     setLoading(false)
   }

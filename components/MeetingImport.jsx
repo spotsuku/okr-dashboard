@@ -36,8 +36,8 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
       const [ntRes, kasRes, objsRes] = await Promise.all([
         fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&_t=${ts}`, { cache: 'no-store' }),
         supabase.from('weekly_reports').select('id,ka_title,kr_id,objective_id,owner,status,week_start')
-          .neq('status','done').order('week_start', { ascending: false }).order('ka_title'),
-        supabase.from('objectives').select('id,title'),
+          .neq('status','done').order('week_start', { ascending: false }).order('ka_title').range(0, 49999),
+        supabase.from('objectives').select('id,title').range(0, 49999),
       ])
       const nt = await ntRes.json()
       setLoading(false)

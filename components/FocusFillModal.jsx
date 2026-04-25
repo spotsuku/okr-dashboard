@@ -136,11 +136,11 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const nextMon = new Date(Date.UTC(cy, cm - 1, cd + 7)).toISOString().split('T')[0]
 
     const [krsRes, krReviewsRes, kasRes, objsRes] = await Promise.all([
-      supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName),
-      supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart),
+      supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName).range(0, 49999),
+      supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart).range(0, 49999),
       supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start')
-        .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done'),
-      supabase.from('objectives').select('id, title, period, level_id'),
+        .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done').range(0, 49999),
+      supabase.from('objectives').select('id, title, period, level_id').range(0, 49999),
     ])
 
     // KA の対象週を決定

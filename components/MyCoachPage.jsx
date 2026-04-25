@@ -118,7 +118,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     const validPeriods = ['q1','q2','q3','q4','annual'].map(p => toPeriodKey(p, fiscalYear))
 
     const [objRes, taskRes, doneRes, kaRes, doneKARes, msRes, jdRes, orgTaskRes, premRes, logRes] = await Promise.all([
-      supabase.from('objectives').select('*').eq('owner', myName).in('period', validPeriods),
+      supabase.from('objectives').select('*').eq('owner', myName).in('period', validPeriods).range(0, 49999),
       supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).order('due_date').order('id'),
       supabase.from('ka_tasks').select('id,created_at,done').eq('assignee', myName).eq('done', true).gte('created_at', fourWeeksAgo),
       supabase.from('weekly_reports').select('*').eq('owner', myName),
@@ -137,7 +137,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     // KRs
     const objIds = objs.map(o => o.id)
     if (objIds.length > 0) {
-      const { data: krs } = await supabase.from('key_results').select('*').in('objective_id', objIds)
+      const { data: krs } = await supabase.from('key_results').select('*').in('objective_id', objIds).range(0, 49999)
       setKeyResults(krs || [])
     }
 

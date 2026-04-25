@@ -153,6 +153,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       .select('id,level_id,period,title,owner,parent_objective_id')
       .eq('period', annualKey)
       .order('level_id,id')
+      .range(0, 49999)
 
     if (!annObjs?.length) { setAnnualObjs([]); setQuarterMap({}); setLoading(false); return }
 
@@ -161,6 +162,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       .from('key_results')
       .select('id,objective_id,title,target,current,unit,lower_is_better,owner')
       .in('objective_id', annIds)
+      .range(0, 49999)
 
     const annKRMap = {}
     ;(annKRs || []).forEach(kr => {
@@ -178,6 +180,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       .select('id,level_id,period,title,owner,parent_objective_id')
       .in('period', allQKeys)
       .order('id')
+      .range(0, 49999)
 
     if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
 
@@ -186,6 +189,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       .from('key_results')
       .select('id,objective_id,title,target,current,unit,lower_is_better,owner')
       .in('objective_id', qIds)
+      .range(0, 49999)
 
     const qKRMap = {}
     ;(qKRs || []).forEach(kr => {
