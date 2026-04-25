@@ -75,11 +75,12 @@ function Avatar({ name, avatarUrl, size = 22 }) {
 
 // ─── 共通: ステップ定義 ─────────────────────────────────────────────────────
 function stepsForFlow(wkly) {
-  // 共通4ステップ: 0=未開始 / 1=順送り / 2=確認事項(manager: 課題・依頼も同画面) / 3=終了
+  // 5ステップ: 0=未開始 / 1=順送り / 2=確認事項 / 3=ネクストアクション / 4=終了
   const items = [
     { n: 1, label: wkly?.flow === 'ka' ? 'KA順送り' : 'KR順送り', icon: wkly?.flow === 'ka' ? '📋' : '🎯' },
     { n: 2, label: wkly?.withDiscussion ? '課題・依頼+確認事項' : '確認事項', icon: '💬' },
-    { n: 3, label: '終了', icon: '🏁' },
+    { n: 3, label: 'ネクストアクション', icon: '✅' },
+    { n: 4, label: '終了', icon: '🏁' },
   ]
   return items
 }
@@ -225,7 +226,7 @@ export default function WeeklyMTGFacilitation({
     if (!session?.id) return
     if (!window.confirm('会議を終了しますか？')) return
     await supabase.from('weekly_mtg_sessions').update({
-      step: 3, finished_at: new Date().toISOString(),
+      step: 4, finished_at: new Date().toISOString(),
     }).eq('id', session.id)
   }
 
@@ -345,11 +346,19 @@ export default function WeeklyMTGFacilitation({
               <Step2Confirmations
                 T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
                 onPrev={() => goToStep(1)}
-                onFinish={finishMeeting}
+                onNext={() => goToStep(3)}
               />
             )}
             {step === 3 && (
-              <Step3Done
+              <Step3NextActions
+                T={T} meeting={meeting} weekStart={weekStart} session={session}
+                myName={myName} members={members}
+                onPrev={() => goToStep(2)}
+                onFinish={finishMeeting}
+              />
+            )}
+            {step === 4 && (
+              <Step4Done
                 T={T} session={session} scope={scopePreview} meeting={meeting}
                 onReset={async () => { await resetMeeting(); setViewingPrep(true) }}
                 onSwitchToList={onSwitchToList}
@@ -2094,7 +2103,7 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
 // ─── Step 2: 確認事項（Phase 5 = "C"） ───────────────────────────────────────
 // withDiscussion=true (マネージャー定例) は別途専用UIを協議中。
 // 当面は ConfirmationsTab を全社モードで表示するシンプル実装。
-function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onFinish }) {
+function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onNext }) {
   // ConfirmationsTab に渡す T を拡張（sectionBg / successBg が必要）
   const extendedT = useMemo(() => ({
     ...T,
@@ -2132,7 +2141,7 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onFini
       }}>
         <button onClick={onPrev} style={secondaryBtn(T)}>← Step 1 に戻る</button>
         <div style={{ flex: 1 }} />
-        <button onClick={onFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
+        <button onClick={onNext} style={primaryBtn(T)}>ネクストアクションへ →</button>
       </div>
     </div>
   )
@@ -2152,8 +2161,226 @@ function secondaryBtn(T) {
   }
 }
 
-// ─── Step 3: 終了画面 ────────────────────────────────────────────────────────
-function Step3Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
+// ─── Step 3: ネクストアクション ─────────────────────────────────────────────
+// 「誰がいつまでに何をやるか」を必ず確認するステップ。
+// meeting_action_items テーブル に保存。会議終了時に0件なら警告。
+function Step3NextActions({ T, meeting, weekStart, session, myName, members, onPrev, onFinish }) {
+  const [items, setItems] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+
+  // 取得 (会議スコープ: meeting_key + week_start)
+  useEffect(() => {
+    let alive = true
+    if (!meeting?.key) return
+    supabase.from('meeting_action_items')
+      .select('*')
+      .eq('meeting_key', meeting.key)
+      .eq('week_start', weekStart || null)
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) { setLoadError(error.message); setItems([]); return }
+        setItems(data || [])
+      })
+    return () => { alive = false }
+  }, [meeting?.key, weekStart])
+
+  // Realtime購読
+  useEffect(() => {
+    if (!meeting?.key) return
+    const ch = supabase.channel(`mai_${meeting.key}_${weekStart}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_action_items', filter: `meeting_key=eq.${meeting.key}` },
+        payload => {
+          const row = payload.new || payload.old
+          if (!row || row.week_start !== weekStart) return
+          if (payload.eventType === 'INSERT') {
+            setItems(p => (p || []).some(x => x.id === payload.new.id) ? p : [...(p || []), payload.new])
+          } else if (payload.eventType === 'UPDATE') {
+            setItems(p => (p || []).map(x => x.id === payload.new.id ? { ...x, ...payload.new } : x))
+          } else if (payload.eventType === 'DELETE') {
+            setItems(p => (p || []).filter(x => x.id !== payload.old.id))
+          }
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [meeting?.key, weekStart])
+
+  const addItem = async () => {
+    const payload = {
+      meeting_key: meeting.key, week_start: weekStart, session_id: session?.id ?? null,
+      assignee: '', due_date: null, content: '', created_by: myName || null,
+    }
+    const { data, error } = await supabase.from('meeting_action_items').insert(payload).select().single()
+    if (error) { alert('追加失敗: ' + error.message); return }
+    if (data) setItems(p => (p || []).some(x => x.id === data.id) ? p : [...(p || []), data])
+  }
+
+  const deleteItem = async (id) => {
+    if (!window.confirm('このネクストアクションを削除しますか？')) return
+    await supabase.from('meeting_action_items').delete().eq('id', id)
+    setItems(p => (p || []).filter(x => x.id !== id))
+  }
+
+  const handleFinish = () => {
+    const count = (items || []).length
+    const filled = (items || []).filter(it => (it.content || '').trim()).length
+    if (count === 0) {
+      if (!window.confirm('ネクストアクションが0件です。本当に会議を終了しますか？\n（誰がいつまでに何をやるかが決まらない会議は意味がありません）')) return
+    } else if (filled < count) {
+      if (!window.confirm(`内容が空のアクションが ${count - filled} 件あります。このまま終了しますか？`)) return
+    }
+    onFinish()
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+      <div style={{
+        marginBottom: 16, padding: '14px 18px',
+        background: `${T.warn}10`, border: `1px solid ${T.warn}40`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.warn, marginBottom: 4 }}>
+          ✅ ネクストアクションを確定
+        </div>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
+          <strong>誰がいつまでに何をやるか</strong>を記録します。決まらない会議は意味がありません。<br />
+          会議で出た決定事項・宿題・依頼を全て書き出してから終了してください。
+        </div>
+      </div>
+
+      {/* テーブルヘッダー */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
+        gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
+        border: `1px solid ${T.border}`, marginBottom: 6, fontSize: 11,
+        color: T.textMuted, fontWeight: 700,
+      }}>
+        <div>担当</div>
+        <div>期日</div>
+        <div>内容</div>
+        <div></div>
+      </div>
+
+      {/* 行 */}
+      {items === null ? (
+        <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>読み込み中…</div>
+      ) : items.length === 0 ? (
+        <div style={{
+          padding: '24px 16px', background: T.bgCard, border: `1px dashed ${T.borderMid}`,
+          borderRadius: 8, fontSize: 12, color: T.textMuted, textAlign: 'center', marginBottom: 8,
+        }}>
+          まだネクストアクションが登録されていません。下のボタンから追加してください。
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+          {items.map(it => (
+            <NextActionRow key={it.id} T={T} item={it} members={members} onDelete={() => deleteItem(it.id)} />
+          ))}
+        </div>
+      )}
+
+      {loadError && (
+        <div style={{ marginBottom: 8, padding: '8px 12px', background: `${T.danger}10`, border: `1px solid ${T.danger}40`, borderRadius: 6, color: T.danger, fontSize: 11 }}>
+          取得エラー: {loadError}
+        </div>
+      )}
+
+      <button onClick={addItem} style={{
+        padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
+        background: 'transparent', color: T.accent, cursor: 'pointer',
+        fontSize: 12, fontWeight: 700, fontFamily: 'inherit', marginBottom: 24,
+      }}>＋ アクションを追加</button>
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={onPrev} style={secondaryBtn(T)}>← Step 2 に戻る</button>
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 11, color: T.textMuted, marginRight: 8 }}>
+          記録: <strong style={{ color: T.text }}>{(items || []).filter(it => (it.content || '').trim()).length}</strong> 件
+        </div>
+        <button onClick={handleFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
+      </div>
+    </div>
+  )
+}
+
+function NextActionRow({ T, item, members, onDelete }) {
+  const [assignee, setAssignee] = useState(item.assignee || '')
+  const [dueDate,  setDueDate]  = useState(item.due_date || '')
+  const [content,  setContent]  = useState(item.content || '')
+  const [focusedField, setFocusedField] = useState(null)
+  const focusedRef = useRef(null)
+  useEffect(() => { focusedRef.current = focusedField }, [focusedField])
+
+  // ka_tasks ではなく meeting_action_items 用の useAutoSave
+  const autoSave = useAutoSave('meeting_action_items', item.id)
+
+  // Realtime: 編集中フィールドは保護
+  useEffect(() => {
+    const ch = supabase.channel(`mai_row_${item.id}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'meeting_action_items', filter: `id=eq.${item.id}` },
+        payload => {
+          if (!payload.new) return
+          if (focusedRef.current !== 'assignee') setAssignee(payload.new.assignee || '')
+          if (focusedRef.current !== 'due_date') setDueDate(payload.new.due_date || '')
+          if (focusedRef.current !== 'content')  setContent(payload.new.content || '')
+        }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [item.id])
+
+  const ownerMember = assignee ? members.find(m => m?.name === assignee) : null
+
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
+      gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
+      border: `1px solid ${T.border}`, alignItems: 'center',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <Avatar name={assignee} avatarUrl={ownerMember?.avatar_url} size={20} />
+        <select value={assignee}
+          onFocus={() => setFocusedField('assignee')}
+          onBlur={() => { setFocusedField(null); autoSave.saveNow('assignee', assignee) }}
+          onChange={e => { setAssignee(e.target.value); autoSave.save('assignee', e.target.value) }}
+          style={{
+            flex: 1, background: 'transparent', border: 'none',
+            color: assignee ? avatarColor(assignee) : T.textMuted,
+            fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+            fontWeight: 700, minWidth: 0,
+          }}>
+          <option value="">--</option>
+          {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+        </select>
+      </div>
+      <input type="date"
+        value={dueDate || ''}
+        onFocus={() => setFocusedField('due_date')}
+        onBlur={() => { setFocusedField(null); autoSave.saveNow('due_date', dueDate || null) }}
+        onChange={e => { setDueDate(e.target.value); autoSave.save('due_date', e.target.value || null) }}
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '4px 6px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+        }} />
+      <input
+        value={content}
+        onFocus={() => setFocusedField('content')}
+        onBlur={() => { setFocusedField(null); autoSave.saveNow('content', content) }}
+        onChange={e => { setContent(e.target.value); autoSave.save('content', e.target.value) }}
+        placeholder="内容（何をやるか）"
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '6px 8px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+        }} />
+      <button onClick={onDelete} title="削除" style={{
+        background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer',
+        fontSize: 14, padding: '0 4px', fontFamily: 'inherit',
+      }}>✕</button>
+    </div>
+  )
+}
+
+// ─── Step 4: 終了画面 ────────────────────────────────────────────────────────
+function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
