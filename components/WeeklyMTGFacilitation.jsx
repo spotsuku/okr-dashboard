@@ -1342,9 +1342,52 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
           if (ka.owner) ownerSetByLevel.get(Number(lvlId)).add(ka.owner)
         }
 
+        // KR + kr_weekly_reviews を取得 (チーム単位で並べる用)
+        let krs = []
+        let reviews = []
+        if (objIds.length > 0) {
+          const krsRes = await supabase.from('key_results')
+            .select('id, title, objective_id, target, current, unit, lower_is_better, owner')
+            .in('objective_id', objIds)
+            .range(0, 49999)
+          krs = krsRes.data || []
+          const krIds = krs.map(k => k.id)
+          if (krIds.length > 0) {
+            const revRes = await supabase.from('kr_weekly_reviews')
+              .select('kr_id, weather, good, more, focus')
+              .in('kr_id', krIds)
+              .eq('week_start', weekStart)
+              .range(0, 49999)
+            reviews = revRes.data || []
+          }
+        }
+        const reviewByKr = new Map(reviews.map(r => [Number(r.kr_id), r]))
+        const krsByLevel = new Map(scopeLevelIds.map(id => [Number(id), []]))
+        for (const kr of krs) {
+          const lvlId = objToLevel.get(Number(kr.objective_id))
+          if (!lvlId) continue
+          const list = krsByLevel.get(Number(lvlId))
+          if (!list) continue
+          const rv = reviewByKr.get(Number(kr.id))
+          list.push({
+            id: kr.id,
+            title: kr.title,
+            target: kr.target,
+            current: kr.current,
+            unit: kr.unit,
+            lower_is_better: kr.lower_is_better,
+            owner: kr.owner,
+            weather: rv?.weather || 0,
+            good:  (rv?.good  || '').trim(),
+            more:  (rv?.more  || '').trim(),
+            focus: (rv?.focus || '').trim(),
+          })
+        }
+
         const built = scopeLevelIds.map(id => {
           const team = levels.find(l => Number(l.id) === Number(id)) || { id, name: '?', icon: '🤝' }
           const sum = summaryMap.get(Number(id))
+          const teamKrs = (krsByLevel.get(Number(id)) || []).sort((a, b) => a.id - b.id)
           return {
             team,
             kaCount: kaCountByLevel.get(Number(id)) || 0,
@@ -1353,6 +1396,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
             more:  (sum?.more || '').trim(),
             focus: (sum?.focus || '').trim(),
             hasSummary: !!(sum && (sum.good || sum.more || sum.focus)),
+            krs: teamKrs,
           }
         })
         if (alive) setTeams(built)
@@ -1570,7 +1614,9 @@ function chipStyle(T, active) {
 }
 
 function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
-  const { team, kaCount, owners, good, more, focus, hasSummary } = teamData
+  const { team, kaCount, owners, good, more, focus, hasSummary, krs = [] } = teamData
+  const [krsExpanded, setKrsExpanded] = useState(true) // KR詳細の展開状態 (デフォルト展開)
+  const [expandedKR, setExpandedKR] = useState(null)   // 個別KRの展開
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
   const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
   const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
@@ -1584,6 +1630,11 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
             KA {kaCount}件
           </span>
         )}
+        {krs.length > 0 && (
+          <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.success}18`, color: T.success, fontWeight: 700, fontSize: 10 }}>
+            KR {krs.length}件
+          </span>
+        )}
         {owners.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
             {owners.slice(0, 5).map(name => {
@@ -1594,16 +1645,100 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
           </div>
         )}
       </div>
+
+      {/* チーム全体まとめ (team_weekly_summary) */}
       {!hasSummary ? (
-        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0' }}>
+        <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic', padding: '4px 0', marginBottom: krs.length > 0 ? 12 : 0 }}>
           このチームはまだサマリーが記入されていません。
         </div>
       ) : (
-        <>
-          <ReadOnlyBlock T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success} text={good} />
-          <ReadOnlyBlock T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger} text={more} />
-          <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent} text={focus} lastBlock />
-        </>
+        <div style={{ marginBottom: krs.length > 0 ? 12 : 0 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            📝 チーム全体まとめ
+          </div>
+          <ReadOnlyBlock T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.success} text={good} />
+          <ReadOnlyBlock T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.danger} text={more} />
+          <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel}` : '今週'} accent={T.accent} text={focus} lastBlock />
+        </div>
+      )}
+
+      {/* KR詳細セクション (折りたたみ) */}
+      {krs.length > 0 && (
+        <div>
+          <button onClick={() => setKrsExpanded(e => !e)} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: '4px 0', fontFamily: 'inherit',
+            fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em',
+          }}>
+            <span style={{ fontSize: 13 }}>{krsExpanded ? '▾' : '▸'}</span>
+            📊 KR 詳細 ({krs.length}件)
+          </button>
+          {krsExpanded && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+              {krs.map(kr => (
+                <KRReadOnlyRow key={kr.id} T={T} kr={kr}
+                  expanded={expandedKR === kr.id}
+                  onToggle={() => setExpandedKR(p => p === kr.id ? null : kr.id)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 1KRを 1行で表示。クリックで Good/More/Focus を展開。
+function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
+  const target  = Number(kr.target  ?? 0)
+  const current = Number(kr.current ?? 0)
+  const progress = target > 0
+    ? Math.min(150, Math.round(kr.lower_is_better
+        ? Math.max(0, ((target * 2 - current) / target) * 100)
+        : (current / target) * 100))
+    : 0
+  const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
+  const weatherIcons = { 1: '☀️', 2: '🌤', 3: '☁️', 4: '🌧' }
+  const hasReview = !!(kr.good || kr.more || kr.focus || kr.weather)
+
+  return (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6, overflow: 'hidden' }}>
+      <button onClick={onToggle}
+        title={hasReview ? 'クリックで Good/More/Focus を展開' : 'レビュー未記入'}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
+          fontFamily: 'inherit', textAlign: 'left',
+        }}>
+        <span style={{ fontSize: 11, color: T.textFaint }}>{expanded ? '▾' : '▸'}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {kr.title}
+        </span>
+        {kr.weather > 0 && <span style={{ fontSize: 14 }}>{weatherIcons[kr.weather]}</span>}
+        <span style={{ fontSize: 11, color: T.textMuted }}>
+          {current}{kr.unit} / {target}{kr.unit}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: progressColor, minWidth: 36, textAlign: 'right' }}>
+          {progress}%
+        </span>
+      </button>
+      {/* 進捗バー (常時表示) */}
+      <div style={{ height: 3, background: T.bgSection, marginLeft: 28, marginRight: 12, marginBottom: expanded ? 0 : 8 }}>
+        <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, background: progressColor }} />
+      </div>
+      {expanded && (
+        <div style={{ padding: '8px 12px 10px 28px', borderTop: `1px solid ${T.border}` }}>
+          {!hasReview ? (
+            <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic' }}>このKRはまだレビューが記入されていません。</div>
+          ) : (
+            <>
+              <ReadOnlyBlock T={T} icon="✅" label="Good" sub="" accent={T.success} text={kr.good} />
+              <ReadOnlyBlock T={T} icon="🔺" label="More" sub="" accent={T.danger}  text={kr.more} />
+              <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub="" accent={T.accent} text={kr.focus} lastBlock />
+            </>
+          )}
+        </div>
       )}
     </div>
   )
