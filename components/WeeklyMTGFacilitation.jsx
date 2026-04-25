@@ -2217,7 +2217,20 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
   )
 }
 
-function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBlur, placeholder }) {
+// テキストエリアの高さを内容に合わせて自動拡張
+function autoGrowTextarea(el, minRows = 6) {
+  if (!el) return
+  el.style.height = 'auto'
+  // fontSize 12 / lineHeight 1.6 → 1行 ≒ 19.2px。パディング 14px 込み
+  const minH = minRows * 20 + 14
+  el.style.height = Math.max(el.scrollHeight, minH) + 'px'
+}
+
+function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBlur, placeholder, minRows = 6 }) {
+  const ref = useRef(null)
+  // 値が外部から変わった時 (初期表示・他クライアント編集の反映) も再計算
+  useEffect(() => { autoGrowTextarea(ref.current, minRows) }, [value, minRows])
+
   return (
     <div style={{
       background: T.bgSection, borderRadius: 8, border: `1px solid ${T.border}`,
@@ -2229,17 +2242,19 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
         <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
       </div>
       <textarea
+        ref={ref}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => { onChange(e.target.value); autoGrowTextarea(e.target, minRows) }}
         onFocus={onFocus}
         onBlur={onBlur}
         placeholder={placeholder}
-        rows={3}
+        rows={minRows}
         style={{
           width: '100%', boxSizing: 'border-box',
           background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6,
-          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.5,
-          outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 60,
+          padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.6,
+          outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden',
+          minHeight: minRows * 20 + 14,
         }}
       />
     </div>
