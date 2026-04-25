@@ -1620,9 +1620,29 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
   const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
   const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
+
+  // チームの達成率平均 (target>0 のKRを対象に進捗% 平均を取る)
+  const validKrs = krs.filter(k => Number(k.target ?? 0) > 0)
+  let avgProgress = null
+  if (validKrs.length > 0) {
+    const total = validKrs.reduce((s, k) => {
+      const target = Number(k.target ?? 0)
+      const current = Number(k.current ?? 0)
+      const raw = k.lower_is_better
+        ? Math.max(0, ((target * 2 - current) / target) * 100)
+        : (current / target) * 100
+      return s + Math.min(150, Math.max(0, raw))
+    }, 0)
+    avgProgress = Math.round(total / validKrs.length)
+  }
+  const avgColor = avgProgress == null ? T.textMuted
+    : avgProgress >= 100 ? T.success
+    : avgProgress >= 60  ? T.accent
+    : T.danger
+
   return (
     <div style={{ background: T.bgSection, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 18 }}>{team?.icon || '🤝'}</span>
         <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{team?.name}</div>
         {kaCount > 0 && (
@@ -1635,15 +1655,27 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
             KR {krs.length}件
           </span>
         )}
-        {owners.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
-            {owners.slice(0, 5).map(name => {
-              const m = members.find(x => x?.name === name)
-              return <Avatar key={name} name={name} avatarUrl={m?.avatar_url} size={18} />
-            })}
-            {owners.length > 5 && <span style={{ fontSize: 10, color: T.textMuted }}>+{owners.length - 5}</span>}
-          </div>
-        )}
+
+        {/* 右上: 担当アバター + 達成率リング (縦並び) */}
+        <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          {owners.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              {owners.slice(0, 5).map(name => {
+                const m = members.find(x => x?.name === name)
+                return <Avatar key={name} name={name} avatarUrl={m?.avatar_url} size={18} />
+              })}
+              {owners.length > 5 && <span style={{ fontSize: 10, color: T.textMuted }}>+{owners.length - 5}</span>}
+            </div>
+          )}
+          {avgProgress != null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ProgressRing value={avgProgress} color={avgColor} size={50} bg={T.bgCard} />
+              <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, lineHeight: 1.3, textAlign: 'right' }}>
+                KR達成率<br/>平均 ({validKrs.length}件)
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* チーム全体まとめ (team_weekly_summary) */}
@@ -1686,6 +1718,25 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
         </div>
       )}
     </div>
+  )
+}
+
+// 円グラフ風の進捗リング
+function ProgressRing({ value, color, size = 50, bg = 'rgba(0,0,0,0.06)' }) {
+  const v = Math.max(0, Math.min(150, value || 0))
+  const stroke = 5
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const dash = c * Math.min(100, v) / 100
+  return (
+    <svg width={size} height={size} style={{ display: 'block' }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={bg} strokeWidth={stroke} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={`${dash} ${c}`}
+        transform={`rotate(-90 ${size/2} ${size/2})`} strokeLinecap="round" />
+      <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
+        fontSize={size * 0.3} fontWeight="800" fill={color}>{v}%</text>
+    </svg>
   )
 }
 
