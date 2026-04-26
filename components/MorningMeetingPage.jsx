@@ -75,6 +75,12 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
   const [facilitatorDraft, setFacilitatorDraft] = useState('')
   const [durationDraft, setDurationDraft]       = useState(30)
   useEffect(() => { if (myName && !facilitatorDraft) setFacilitatorDraft(myName) }, [myName, facilitatorDraft])
+  // 既存レコードがあれば値をプリフィル (step=0 の準備画面で再編集できる)
+  useEffect(() => {
+    if (!meeting) return
+    if (meeting.facilitator) setFacilitatorDraft(meeting.facilitator)
+    if (meeting.duration_minutes) setDurationDraft(meeting.duration_minutes)
+  }, [meeting?.id])
 
   // 10分前アラート (1度だけ通知) の制御
   const tenMinAlertedRef = useRef(false)
@@ -107,14 +113,28 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
   const startMeeting = async () => {
     const firstSpeaker = sortedMembers[0]?.name || null
     const dur = Math.max(5, Math.min(180, Number(durationDraft) || 30))
-    const { error } = await supabase.from('morning_meetings').insert({
-      meeting_date: meetingDate, step: 1,
-      current_speaker: firstSpeaker, completed_speakers: [],
-      facilitator: facilitatorDraft || null,
-      duration_minutes: dur,
-      started_at: new Date().toISOString(),
-    })
-    if (error) { alert('朝会開始に失敗: ' + error.message); return }
+    const nowIso = new Date().toISOString()
+    if (meeting && meeting.id) {
+      // 既存レコード (step=0 や step=4 から開始) を step=1 に更新
+      const { error } = await supabase.from('morning_meetings').update({
+        step: 1,
+        current_speaker: firstSpeaker, completed_speakers: [],
+        facilitator: facilitatorDraft || null,
+        duration_minutes: dur,
+        started_at: nowIso,
+        finished_at: null,
+      }).eq('id', meeting.id)
+      if (error) { alert('朝会開始に失敗: ' + error.message); return }
+    } else {
+      const { error } = await supabase.from('morning_meetings').insert({
+        meeting_date: meetingDate, step: 1,
+        current_speaker: firstSpeaker, completed_speakers: [],
+        facilitator: facilitatorDraft || null,
+        duration_minutes: dur,
+        started_at: nowIso,
+      })
+      if (error) { alert('朝会開始に失敗: ' + error.message); return }
+    }
     loadMeeting()
   }
 
@@ -183,12 +203,12 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
     loadMeeting()
   }
 
+  // リセット: 開始ページ (step=0) に戻す
   const resetMeeting = async () => {
     if (!meeting) return
-    if (!window.confirm('朝会をリセットして最初から始めますか?')) return
-    const firstSpeaker = sortedMembers[0]?.name || null
+    if (!window.confirm('朝会をリセットして開始ページに戻りますか?')) return
     const { error } = await supabase.from('morning_meetings').update({
-      step: 1, current_speaker: firstSpeaker, completed_speakers: [], finished_at: null,
+      step: 0, current_speaker: null, completed_speakers: [], finished_at: null,
     }).eq('id', meeting.id)
     if (error) { alert('リセット失敗: ' + error.message); return }
     loadMeeting()
@@ -206,95 +226,28 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
           <h1 style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0 }}>🌅 朝会</h1>
           <span style={{ fontSize: 12, color: T.textMuted }}>{todayLabel}</span>
           <div style={{ flex: 1 }} />
-          {meeting && meeting.step < 4 && (
+          {meeting && meeting.step >= 1 && meeting.step < 4 && (
             <button onClick={resetMeeting} style={btnSt(T)}>↻ リセット</button>
           )}
         </div>
 
-        {/* 未開始 */}
-        {!meeting && (
-          <div style={{
-            background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-            padding: '32px 24px', textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 48, marginBottom: 14 }}>🌅</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8 }}>
-              今日の朝会はまだ始まっていません
-            </div>
-            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>
-              開始するとメンバー {sortedMembers.length} 人で順に昨日の振り返りと今日のタスクを共有します
-            </div>
-
-            {/* Notion議事録の案内 */}
-            <div style={{
-              maxWidth: 460, margin: '0 auto 22px',
-              padding: '12px 14px',
-              background: 'rgba(77,159,255,0.08)', border: '1px solid rgba(77,159,255,0.30)', borderRadius: 8,
-              textAlign: 'left',
-            }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, marginBottom: 6 }}>
-                🎙 Notionで録音議事録をとってください
-              </div>
-              <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, marginBottom: 8 }}>
-                朝会のNotionページを開いて、録音と議事録の作成を開始してください。
-                会議の最後に、この議事録からネクストアクションを取り込めます。
-              </div>
-              <button onClick={() => {
-                const url = MEETING_URLS['morning']
-                if (!url) { alert('朝会のNotion URLが設定されていません'); return }
-                openNotionUrl(url)
-              }} style={{
-                padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.accent}80`,
-                background: 'transparent', color: T.accent, fontSize: 11, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}>📝 Notionを開く ↗</button>
-            </div>
-
-            {/* ファシリ + 予定時間 */}
-            <div style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
-              maxWidth: 460, margin: '0 auto 22px',
-              textAlign: 'left',
-            }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>👤 ファシリ担当</span>
-                <select value={facilitatorDraft}
-                  onChange={e => setFacilitatorDraft(e.target.value)}
-                  style={{
-                    padding: '8px 10px', borderRadius: 7,
-                    background: T.bg, border: `1px solid ${T.border}`,
-                    color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
-                  }}>
-                  <option value="">-- 未指定 --</option>
-                  {sortedMembers.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
-                </select>
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>⏱ 予定時間 (分)</span>
-                <input type="number" min={5} max={180} step={5}
-                  value={durationDraft}
-                  onChange={e => setDurationDraft(e.target.value)}
-                  style={{
-                    padding: '8px 10px', borderRadius: 7,
-                    background: T.bg, border: `1px solid ${T.border}`,
-                    color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
-                  }} />
-              </label>
-            </div>
-
-            <button onClick={startMeeting} disabled={sortedMembers.length === 0} style={{
-              padding: '10px 28px', borderRadius: 10,
-              background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
-              color: '#fff', border: 'none',
-              fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-              cursor: sortedMembers.length ? 'pointer' : 'not-allowed',
-              boxShadow: '0 4px 14px rgba(249,115,22,0.3)',
-            }}>🌅 朝会を開始する</button>
-          </div>
+        {/* 開始ページ (未開始 or step=0) */}
+        {(!meeting || meeting.step === 0) && (
+          <MorningStartScreen
+            T={T}
+            todayLabel={todayLabel}
+            members={sortedMembers}
+            meeting={meeting}
+            facilitatorDraft={facilitatorDraft}
+            onFacilitatorChange={setFacilitatorDraft}
+            durationDraft={durationDraft}
+            onDurationChange={setDurationDraft}
+            onStart={startMeeting}
+          />
         )}
 
         {/* 開催中 (step 1〜3) */}
-        {meeting && meeting.step < 4 && (
+        {meeting && meeting.step >= 1 && meeting.step < 4 && (
           <>
             {/* 残り時間バナー */}
             <MorningTimerBanner T={T}
@@ -356,9 +309,206 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
               {meeting.facilitator && <>ファシリ: {meeting.facilitator}　</>}
               {meeting.finished_at && `終了時刻: ${jstHHMM(meeting.finished_at)}`}
             </div>
-            <button onClick={resetMeeting} style={btnSt(T, T.accent)}>↻ もう一度始める</button>
+            <button onClick={resetMeeting} style={btnSt(T, T.accent)}>↻ 開始ページに戻る</button>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── 開始ページ (準備画面) ───────────────────────────────────
+// 他の会議 (週次MTG Step0) 同様の作りで、ファシリ・予定時間・アジェンダ・
+// 参加メンバー・Notion議事録案内をまとめて表示。
+// !meeting (本日まだ無し) と meeting.step===0 (リセット後) の両方で使う。
+function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorDraft, onFacilitatorChange, durationDraft, onDurationChange, onStart }) {
+  const isResume = !!(meeting && meeting.id) // リセット後 (記録あり) かどうか
+  const noMembers = members.length === 0
+
+  return (
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '8px 0 40px' }}>
+      {/* ヘッダーカード */}
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 12,
+          padding: '14px 24px', background: T.bgCard, borderRadius: 14,
+          border: `1px solid ${T.borderMid}`,
+        }}>
+          <span style={{ fontSize: 36 }}>🌅</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>平日毎日</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>朝会</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 12, fontSize: 13, color: T.textMuted }}>
+          📅 本日: <strong style={{ color: T.text }}>{todayLabel}</strong>
+          {isResume && (
+            <span style={{ marginLeft: 10, padding: '2px 10px', borderRadius: 99, background: T.warnBg, color: T.warn, fontSize: 11, fontWeight: 700 }}>
+              リセット済み
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Notion 議事録案内 */}
+      <div style={{
+        marginBottom: 18, padding: '14px 18px',
+        background: T.accentBg, border: `1px solid ${T.accent}40`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 4 }}>
+          🎙 Notionで録音議事録をとってください
+        </div>
+        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, marginBottom: 8 }}>
+          朝会のNotionページを開いて、録音と議事録の作成を開始してください。
+          会議の最後に、この議事録からネクストアクションを取り込めます。
+        </div>
+        <button onClick={() => {
+          const url = MEETING_URLS['morning']
+          if (!url) { alert('朝会のNotion URLが設定されていません'); return }
+          openNotionUrl(url)
+        }} style={{
+          padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.accent}80`,
+          background: 'transparent', color: T.accent, fontSize: 11, fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>📝 Notionを開く ↗</button>
+      </div>
+
+      {/* 進行アジェンダ */}
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
+        padding: 18, marginBottom: 18,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 10, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          会議の流れ
+        </div>
+        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: T.textSub, lineHeight: 1.8 }}>
+          <li><strong style={{ color: T.text }}>個別報告</strong>：メンバーが順に「昨日の振り返り (KPT) と今日のタスク」を共有</li>
+          <li><strong style={{ color: T.text }}>確認事項タイム</strong>：未解決の確認事項を返信・解決化</li>
+          <li><strong style={{ color: T.text }}>ネクストアクション</strong>：誰がいつまでに何をやるかを記録</li>
+          <li><strong style={{ color: T.text }}>会議終了</strong>：サマリー確認 → クローズ</li>
+        </ol>
+      </div>
+
+      {/* 参加メンバー */}
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
+        padding: 18, marginBottom: 18,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 10, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          参加メンバー ({members.length}人)
+        </div>
+        {noMembers ? (
+          <div style={{ fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>
+            メンバーが登録されていません。組織設定からメンバーを追加してください。
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {members.map((m, idx) => (
+              <span key={m.name} style={{
+                padding: '4px 10px', borderRadius: 99,
+                background: T.sectionBg, color: T.textSub,
+                fontSize: 11, fontWeight: 600,
+              }}>
+                <span style={{ color: T.textMuted, marginRight: 4 }}>{idx + 1}.</span>{m.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ファシリテーター */}
+      <div style={{
+        marginBottom: 16, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          本日のファシリテーター
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: '#ff9f43', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 800, flexShrink: 0,
+          }}>{(facilitatorDraft || '?').charAt(0)}</div>
+          <select value={facilitatorDraft || ''}
+            onChange={e => onFacilitatorChange && onFacilitatorChange(e.target.value)}
+            style={{
+              flex: 1, background: T.bg, border: `1px solid ${T.borderMid}`, borderRadius: 7,
+              padding: '8px 10px', fontSize: 13, color: T.text,
+              cursor: 'pointer', fontFamily: 'inherit', outline: 'none', fontWeight: 700,
+            }}>
+            <option value="">-- ファシリ未選択 --</option>
+            {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* 予定時間 */}
+      <div style={{
+        marginBottom: 22, padding: '12px 16px', background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          会議予定時間
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {[15, 30, 45, 60, 90].map(m => {
+            const active = Number(durationDraft) === m
+            return (
+              <button key={m}
+                onClick={() => onDurationChange && onDurationChange(m)}
+                style={{
+                  padding: '6px 14px', borderRadius: 7, border: `1px solid ${active ? T.accent : T.borderMid}`,
+                  background: active ? T.accentBg : 'transparent',
+                  color: active ? T.accent : T.textSub,
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
+                }}>{m}分</button>
+            )
+          })}
+          <input type="number" min={5} max={300} step={5}
+            value={durationDraft || 30}
+            onChange={e => onDurationChange && onDurationChange(Number(e.target.value) || 30)}
+            style={{
+              width: 70, background: T.bg, border: `1px solid ${T.borderMid}`, borderRadius: 7,
+              padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+            }} />
+          <span style={{ fontSize: 11, color: T.textMuted }}>分</span>
+          <button onClick={() => {
+              if (typeof Notification === 'undefined') { alert('お使いのブラウザは通知に対応していません'); return }
+              if (Notification.permission === 'granted') { alert('通知は既に許可されています'); return }
+              Notification.requestPermission().then(p => {
+                alert(p === 'granted' ? '通知が許可されました（10分前にデスクトップ通知が出ます）' : '通知は許可されませんでした')
+              })
+            }}
+            style={{
+              marginLeft: 'auto', padding: '5px 10px', borderRadius: 6,
+              border: `1px dashed ${T.borderMid}`, background: 'transparent',
+              color: T.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+            }}>🔔 10分前通知を許可</button>
+        </div>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
+          会議開始から {durationDraft || 30}分で「終了予定」。残り10分でアラートが出ます。
+        </div>
+      </div>
+
+      {/* 開始ボタン */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <button onClick={onStart} disabled={noMembers} style={{
+          padding: '14px 40px', borderRadius: 10, border: 'none',
+          background: noMembers
+            ? T.borderMid
+            : 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          color: '#fff',
+          fontSize: 15, fontWeight: 800, fontFamily: 'inherit',
+          cursor: noMembers ? 'not-allowed' : 'pointer',
+          boxShadow: noMembers ? 'none' : '0 4px 14px rgba(249,115,22,0.3)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>▶️</span>
+          {isResume ? '朝会をもう一度開始する' : '朝会を開始する'}
+          {facilitatorDraft && <span style={{ fontSize: 11, opacity: 0.85, fontWeight: 600 }}>（ファシリ: {facilitatorDraft}）</span>}
+        </button>
       </div>
     </div>
   )
