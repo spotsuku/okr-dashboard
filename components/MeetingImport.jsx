@@ -12,7 +12,7 @@ import { openNotionUrl } from '../lib/notionLink'
 //     meetingTitle: string (表示用)
 //     members: Array<{name: string}>
 //     T: themeオブジェクト
-export default function MeetingImport({ open, onClose, meetingKey = 'morning', meetingTitle = '朝会', members = [], T }) {
+export default function MeetingImport({ open, onClose, meetingKey = 'morning', meetingTitle = '朝会', members = [], T, weekStart = null, sessionId = null, onImported }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [pages, setPages] = useState([])
@@ -107,12 +107,17 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
         done: false,
         report_id: ka?.id || null,
         ka_key: computeKAKey(ka),
+        // 会議コンテキストを保存 (Step3 のリストにそのまま並ぶように)
+        meeting_key: meetingKey || null,
+        week_start: weekStart || null,
+        session_id: sessionId || null,
       }
     })
     const { error: e } = await supabase.from('ka_tasks').insert(payloads)
     setSaving(false)
     if (e) { setError('取り込みに失敗: ' + e.message); return }
     setSaved({ count: payloads.length })
+    if (typeof onImported === 'function') { try { onImported(payloads.length) } catch {} }
     setTimeout(() => { onClose(); }, 1200)
   }
 

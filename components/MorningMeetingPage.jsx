@@ -1,6 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { MEETING_URLS } from '../lib/meetings'
+import { openNotionUrl } from '../lib/notionLink'
+import MeetingImport from './MeetingImport'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -220,6 +223,31 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
             </div>
             <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>
               開始するとメンバー {sortedMembers.length} 人で順に昨日の振り返りと今日のタスクを共有します
+            </div>
+
+            {/* Notion議事録の案内 */}
+            <div style={{
+              maxWidth: 460, margin: '0 auto 22px',
+              padding: '12px 14px',
+              background: 'rgba(77,159,255,0.08)', border: '1px solid rgba(77,159,255,0.30)', borderRadius: 8,
+              textAlign: 'left',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, marginBottom: 6 }}>
+                🎙 Notionで録音議事録をとってください
+              </div>
+              <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, marginBottom: 8 }}>
+                朝会のNotionページを開いて、録音と議事録の作成を開始してください。
+                会議の最後に、この議事録からネクストアクションを取り込めます。
+              </div>
+              <button onClick={() => {
+                const url = MEETING_URLS['morning']
+                if (!url) { alert('朝会のNotion URLが設定されていません'); return }
+                openNotionUrl(url)
+              }} style={{
+                padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.accent}80`,
+                background: 'transparent', color: T.accent, fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>📝 Notionを開く ↗</button>
             </div>
 
             {/* ファシリ + 予定時間 */}
@@ -855,6 +883,7 @@ function MorningTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef })
 function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
   const [items, setItems] = useState(null)
   const [loadError, setLoadError] = useState(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const meetingKey = 'morning'
   const weekStart  = meeting.meeting_date  // ka_tasks.week_start (DATE) は朝会の場合その日付を使う
@@ -977,11 +1006,20 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
         </div>
       )}
 
-      <button onClick={addItem} style={{
-        padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
-        background: 'transparent', color: T.accent, cursor: 'pointer',
-        fontSize: 12, fontWeight: 700, fontFamily: 'inherit', marginBottom: 18,
-      }}>＋ アクションを追加</button>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+        <button onClick={addItem} style={{
+          padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
+          background: 'transparent', color: T.accent, cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+        }}>＋ アクションを追加</button>
+        <button onClick={() => setImportOpen(true)} style={{
+          padding: '8px 14px', borderRadius: 7, border: 'none',
+          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          color: '#fff', cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          boxShadow: '0 2px 8px rgba(249,115,22,0.25)',
+        }}>📋 Notionから取り込み</button>
+      </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={onBack} style={btnSt(T)}>⏮ ステップ2に戻る</button>
@@ -994,6 +1032,18 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
           fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
         }}>🏁 朝会を終了</button>
       </div>
+
+      {/* Notion議事録 取り込みモーダル */}
+      <MeetingImport
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        meetingKey="morning"
+        meetingTitle="朝会"
+        members={members}
+        weekStart={weekStart}
+        sessionId={meeting.id}
+        T={{ bgCard: T.bgCard, text: T.text, textMuted: T.textMuted, borderMid: T.border, borderLight: T.border, bgCard2: T.sectionBg }}
+      />
     </>
   )
 }

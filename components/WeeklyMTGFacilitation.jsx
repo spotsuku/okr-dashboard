@@ -2,8 +2,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
-import { getMeeting } from '../lib/meetings'
+import { getMeeting, MEETING_URLS } from '../lib/meetings'
+import { openNotionUrl } from '../lib/notionLink'
 import ConfirmationsTab from './ConfirmationsTab'
+import MeetingImport from './MeetingImport'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 const DARK_T = {
@@ -559,6 +561,29 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
         <Badge T={T} bg={`${T.success}20`} fg={T.success}>{flowLabel}</Badge>
         <Badge T={T} bg={T.bgSection} fg={T.textSub}>👥 {scopeLabel}</Badge>
         {wkly?.withDiscussion && <Badge T={T} bg={`${T.warn}20`} fg={T.warn}>💬 課題・依頼セクション有</Badge>}
+      </div>
+
+      {/* Notion議事録 案内 */}
+      <div style={{
+        marginBottom: 20, padding: '14px 18px',
+        background: `${T.accent}10`, border: `1px solid ${T.accent}40`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 4 }}>
+          🎙 Notionで録音議事録をとってください
+        </div>
+        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, marginBottom: 8 }}>
+          会議のNotionページを開いて、録音と議事録の作成を開始してください。
+          会議の最後に、この議事録からネクストアクションを取り込めます。
+        </div>
+        <button onClick={() => {
+          const url = MEETING_URLS[meeting?.key]
+          if (!url) { alert(`${meeting?.title} のNotion URLが設定されていません`); return }
+          openNotionUrl(url)
+        }} style={{
+          padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.accent}80`,
+          background: 'transparent', color: T.accent, fontSize: 11, fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit',
+        }}>📝 Notionを開く ↗</button>
       </div>
 
       {/* 進行アジェンダ */}
@@ -2719,6 +2744,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
   const [items, setItems] = useState(null)
   const [scopeKAs, setScopeKAs] = useState([]) // 任意紐付け用のKA選択肢
   const [loadError, setLoadError] = useState(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   // 既存タスク取得 (ka_tasks; meeting_key + week_start で会議スコープを識別)
   useEffect(() => {
@@ -2881,11 +2907,19 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
         </div>
       )}
 
-      <button onClick={addItem} style={{
-        padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
-        background: 'transparent', color: T.accent, cursor: 'pointer',
-        fontSize: 12, fontWeight: 700, fontFamily: 'inherit', marginBottom: 24,
-      }}>＋ アクションを追加</button>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+        <button onClick={addItem} style={{
+          padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
+          background: 'transparent', color: T.accent, cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+        }}>＋ アクションを追加</button>
+        <button onClick={() => setImportOpen(true)} style={{
+          padding: '8px 14px', borderRadius: 7, border: 'none',
+          background: T.accent, color: '#fff', cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          boxShadow: `0 2px 8px ${T.accent}40`,
+        }}>📋 Notionから取り込み</button>
+      </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={onPrev} style={secondaryBtn(T)}>← Step 2 に戻る</button>
@@ -2895,6 +2929,18 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
         </div>
         <button onClick={handleFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
       </div>
+
+      {/* Notion議事録 取り込みモーダル */}
+      <MeetingImport
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        meetingKey={meeting?.key}
+        meetingTitle={meeting?.title}
+        members={members}
+        weekStart={weekStart}
+        sessionId={session?.id ?? null}
+        T={{ bgCard: T.bgCard, text: T.text, textMuted: T.textMuted, borderMid: T.borderMid, borderLight: T.border, bgCard2: T.bgSection }}
+      />
     </div>
   )
 }
