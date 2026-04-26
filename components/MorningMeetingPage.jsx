@@ -1,10 +1,15 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { MEETING_URLS } from '../lib/meetings'
+import { openNotionUrl } from '../lib/notionLink'
+import MeetingImport from './MeetingImport'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
 //   ステップ2: 確認事項タイム
+//   ステップ3: ネクストアクション (誰がいつまでに何をやるか) — ka_tasks に保存
+//   ステップ4: 終了
 //   進行状態は morning_meetings テーブルで全員同期
 
 // ─── テーマ ─────────────────────────────────────────────────
@@ -66,6 +71,20 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
   const [meeting, setMeeting] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // 開始画面で選ぶファシリ + 予定時間 (開始時にDBへ保存)
+  const [facilitatorDraft, setFacilitatorDraft] = useState('')
+  const [durationDraft, setDurationDraft]       = useState(30)
+  useEffect(() => { if (myName && !facilitatorDraft) setFacilitatorDraft(myName) }, [myName, facilitatorDraft])
+
+  // 10分前アラート (1度だけ通知) の制御
+  const tenMinAlertedRef = useRef(false)
+  useEffect(() => { tenMinAlertedRef.current = false }, [meeting?.id])
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      try { Notification.requestPermission() } catch {}
+    }
+  }, [])
+
   const loadMeeting = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('morning_meetings')
@@ -87,9 +106,13 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
   // 朝会開始 (まだレコード無ければ作成)
   const startMeeting = async () => {
     const firstSpeaker = sortedMembers[0]?.name || null
+    const dur = Math.max(5, Math.min(180, Number(durationDraft) || 30))
     const { error } = await supabase.from('morning_meetings').insert({
       meeting_date: meetingDate, step: 1,
       current_speaker: firstSpeaker, completed_speakers: [],
+      facilitator: facilitatorDraft || null,
+      duration_minutes: dur,
+      started_at: new Date().toISOString(),
     })
     if (error) { alert('朝会開始に失敗: ' + error.message); return }
     loadMeeting()
@@ -138,25 +161,23 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
     loadMeeting()
   }
 
-  const goStep2 = async () => {
+  const setStep = async (s) => {
     if (!meeting) return
-    const { error } = await supabase.from('morning_meetings').update({ step: 2 }).eq('id', meeting.id)
-    if (error) { alert('ステップ2遷移失敗: ' + error.message); return }
+    const { error } = await supabase.from('morning_meetings').update({ step: s }).eq('id', meeting.id)
+    if (error) { alert(`ステップ${s} 遷移失敗: ` + error.message); return }
     loadMeeting()
   }
 
-  const backToStep1 = async () => {
-    if (!meeting) return
-    const { error } = await supabase.from('morning_meetings').update({ step: 1 }).eq('id', meeting.id)
-    if (error) { alert('ステップ1戻り失敗: ' + error.message); return }
-    loadMeeting()
-  }
+  const goStep2     = () => setStep(2)
+  const backToStep1 = () => setStep(1)
+  const goStep3     = () => setStep(3)
+  const backToStep2 = () => setStep(2)
 
   const finishMeeting = async () => {
     if (!meeting) return
     if (!window.confirm('朝会を終了してよろしいですか?')) return
     const { error } = await supabase.from('morning_meetings').update({
-      step: 3, finished_at: new Date().toISOString(),
+      step: 4, finished_at: new Date().toISOString(),
     }).eq('id', meeting.id)
     if (error) { alert('終了失敗: ' + error.message); return }
     loadMeeting()
@@ -185,7 +206,7 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
           <h1 style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0 }}>🌅 朝会</h1>
           <span style={{ fontSize: 12, color: T.textMuted }}>{todayLabel}</span>
           <div style={{ flex: 1 }} />
-          {meeting && meeting.step < 3 && (
+          {meeting && meeting.step < 4 && (
             <button onClick={resetMeeting} style={btnSt(T)}>↻ リセット</button>
           )}
         </div>
@@ -194,7 +215,7 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
         {!meeting && (
           <div style={{
             background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-            padding: 40, textAlign: 'center',
+            padding: '32px 24px', textAlign: 'center',
           }}>
             <div style={{ fontSize: 48, marginBottom: 14 }}>🌅</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8 }}>
@@ -203,6 +224,64 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
             <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>
               開始するとメンバー {sortedMembers.length} 人で順に昨日の振り返りと今日のタスクを共有します
             </div>
+
+            {/* Notion議事録の案内 */}
+            <div style={{
+              maxWidth: 460, margin: '0 auto 22px',
+              padding: '12px 14px',
+              background: 'rgba(77,159,255,0.08)', border: '1px solid rgba(77,159,255,0.30)', borderRadius: 8,
+              textAlign: 'left',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, marginBottom: 6 }}>
+                🎙 Notionで録音議事録をとってください
+              </div>
+              <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, marginBottom: 8 }}>
+                朝会のNotionページを開いて、録音と議事録の作成を開始してください。
+                会議の最後に、この議事録からネクストアクションを取り込めます。
+              </div>
+              <button onClick={() => {
+                const url = MEETING_URLS['morning']
+                if (!url) { alert('朝会のNotion URLが設定されていません'); return }
+                openNotionUrl(url)
+              }} style={{
+                padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.accent}80`,
+                background: 'transparent', color: T.accent, fontSize: 11, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>📝 Notionを開く ↗</button>
+            </div>
+
+            {/* ファシリ + 予定時間 */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
+              maxWidth: 460, margin: '0 auto 22px',
+              textAlign: 'left',
+            }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>👤 ファシリ担当</span>
+                <select value={facilitatorDraft}
+                  onChange={e => setFacilitatorDraft(e.target.value)}
+                  style={{
+                    padding: '8px 10px', borderRadius: 7,
+                    background: T.bg, border: `1px solid ${T.border}`,
+                    color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+                  }}>
+                  <option value="">-- 未指定 --</option>
+                  {sortedMembers.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>⏱ 予定時間 (分)</span>
+                <input type="number" min={5} max={180} step={5}
+                  value={durationDraft}
+                  onChange={e => setDurationDraft(e.target.value)}
+                  style={{
+                    padding: '8px 10px', borderRadius: 7,
+                    background: T.bg, border: `1px solid ${T.border}`,
+                    color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+                  }} />
+              </label>
+            </div>
+
             <button onClick={startMeeting} disabled={sortedMembers.length === 0} style={{
               padding: '10px 28px', borderRadius: 10,
               background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
@@ -214,13 +293,31 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
           </div>
         )}
 
-        {/* 開催中 (step 1 or 2) */}
-        {meeting && meeting.step < 3 && (
+        {/* 開催中 (step 1〜3) */}
+        {meeting && meeting.step < 4 && (
           <>
+            {/* 残り時間バナー */}
+            <MorningTimerBanner T={T}
+              startedAt={meeting.started_at}
+              durationMinutes={meeting.duration_minutes ?? 30}
+              tenMinAlertedRef={tenMinAlertedRef} />
+
+            {/* ファシリ表示 */}
+            {meeting.facilitator && (
+              <div style={{
+                marginBottom: 12, padding: '6px 12px',
+                background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+                fontSize: 11, color: T.textMuted,
+              }}>
+                👤 ファシリ: <strong style={{ color: T.text }}>{meeting.facilitator}</strong>
+              </div>
+            )}
+
             {/* 進行ステップ表示 */}
             <StepHeader T={T} step={meeting.step} onJumpToStep={async (s) => {
               if (s === 1) await backToStep1()
               else if (s === 2) await goStep2()
+              else if (s === 3) await goStep3()
             }} />
 
             {/* ステップ1 */}
@@ -233,13 +330,20 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
             {/* ステップ2 */}
             {meeting.step === 2 && (
               <Step2Confirmations T={T} members={sortedMembers} myName={myName}
-                onBack={backToStep1} onFinish={finishMeeting} />
+                onBack={backToStep1} onNext={goStep3} />
+            )}
+
+            {/* ステップ3: ネクストアクション */}
+            {meeting.step === 3 && (
+              <Step3NextActionsMorning T={T} meeting={meeting}
+                members={sortedMembers}
+                onBack={backToStep2} onFinish={finishMeeting} />
             )}
           </>
         )}
 
         {/* 終了 */}
-        {meeting && meeting.step === 3 && (
+        {meeting && meeting.step === 4 && (
           <div style={{
             background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
             padding: 40, textAlign: 'center',
@@ -249,6 +353,7 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
               今日の朝会は終了しました
             </div>
             <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 20 }}>
+              {meeting.facilitator && <>ファシリ: {meeting.facilitator}　</>}
               {meeting.finished_at && `終了時刻: ${jstHHMM(meeting.finished_at)}`}
             </div>
             <button onClick={resetMeeting} style={btnSt(T, T.accent)}>↻ もう一度始める</button>
@@ -281,6 +386,7 @@ function StepHeader({ T, step, onJumpToStep }) {
   const steps = [
     { n: 1, label: '個別報告' },
     { n: 2, label: '確認事項タイム' },
+    { n: 3, label: 'ネクストアクション' },
   ]
   return (
     <div style={{
@@ -530,7 +636,7 @@ function KPTRow({ T, label, color, text }) {
 }
 
 // ─── ステップ2: 確認事項タイム ────────────────────────────────
-function Step2Confirmations({ T, members, myName, onBack, onFinish }) {
+function Step2Confirmations({ T, members, myName, onBack, onNext }) {
   const [items, setItems] = useState([])
   const [replies, setReplies] = useState({})
   const [loading, setLoading] = useState(true)
@@ -621,11 +727,11 @@ function Step2Confirmations({ T, members, myName, onBack, onFinish }) {
       {/* 進行ボタン */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', marginTop: 14 }}>
         <button onClick={onBack} style={btnSt(T)}>⏮ ステップ1に戻る</button>
-        <button onClick={onFinish} style={{
+        <button onClick={onNext} style={{
           padding: '8px 22px', borderRadius: 8,
-          background: T.success, color: '#fff', border: 'none',
+          background: T.accent, color: '#fff', border: 'none',
           fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>🏁 朝会を終了</button>
+        }}>ステップ3 (ネクストアクション) へ →</button>
       </div>
     </>
   )
@@ -698,6 +804,317 @@ function MeetingConfirmCard({ T, item, replies, myName, onResolve, onReplied }) 
         {!replyOpen && <button onClick={() => setReplyOpen(true)} style={btnSt(T)}>💬 返信</button>}
         <button onClick={onResolve} style={btnSt(T, T.success)}>✓ 確認済みにする</button>
       </div>
+    </div>
+  )
+}
+
+// ─── 残り時間バナー (10分前にブラウザ通知) ─────────────────────
+function MorningTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30 * 1000)
+    return () => clearInterval(id)
+  }, [])
+  if (!startedAt) return null
+
+  const startMs   = new Date(startedAt).getTime()
+  const endMs     = startMs + (durationMinutes || 30) * 60 * 1000
+  const remaining = endMs - now
+  const remainingMin = Math.floor(remaining / 60000)
+  const elapsedMin   = Math.floor((now - startMs) / 60000)
+  const isOver  = remaining < 0
+  const isTen   = !isOver && remainingMin <= 10
+  const isFive  = !isOver && remainingMin <= 5
+  const ratio   = Math.max(0, Math.min(1, (now - startMs) / ((durationMinutes || 30) * 60 * 1000)))
+
+  useEffect(() => {
+    if (!isTen || isOver) return
+    if (tenMinAlertedRef.current) return
+    tenMinAlertedRef.current = true
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('⏰ 朝会 残り10分', { body: '朝会の終了予定まで残り 10 分です' })
+      }
+    } catch {}
+  }, [isTen, isOver, tenMinAlertedRef])
+
+  const bg     = isOver ? T.dangerBg : isFive ? T.dangerBg : isTen ? T.warnBg : T.bgCard
+  const border = isOver ? T.danger   : isFive ? T.danger   : isTen ? T.warn   : T.border
+  const accent = isOver ? T.danger   : isFive ? T.danger   : isTen ? T.warn   : T.accent
+  const fmt = (mm) => {
+    const m = Math.abs(mm)
+    return `${Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}時間` : ''}${m % 60}分`
+  }
+
+  return (
+    <div style={{
+      marginBottom: 12, padding: '8px 14px',
+      background: bg, border: `1px solid ${border}`, borderRadius: 8,
+      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+    }}>
+      <span style={{ fontSize: 14 }}>{isOver ? '🚨' : isTen ? '⚠️' : '⏱'}</span>
+      <span style={{ fontSize: 12, color: T.textMuted }}>
+        {isOver ? (
+          <span style={{ color: T.danger, fontWeight: 700 }}>
+            終了予定時刻を <strong>{fmt(remainingMin)}</strong> 過ぎています
+          </span>
+        ) : isFive ? (
+          <span style={{ color: T.danger, fontWeight: 700 }}>残り {fmt(remainingMin)}！ そろそろまとめへ</span>
+        ) : isTen ? (
+          <span style={{ color: T.warn, fontWeight: 700 }}>残り {fmt(remainingMin)} ・ 10分前です</span>
+        ) : (
+          <>残り <strong style={{ color: T.text }}>{fmt(remainingMin)}</strong></>
+        )}
+      </span>
+      <span style={{ fontSize: 11, color: T.textMuted }}>
+        経過 {elapsedMin}分 / 予定 {durationMinutes || 30}分
+      </span>
+      <div style={{ flex: 1, height: 4, background: T.sectionBg, borderRadius: 99, overflow: 'hidden', minWidth: 80 }}>
+        <div style={{
+          height: '100%', width: `${Math.min(100, ratio * 100)}%`,
+          background: accent, transition: 'width 0.3s',
+        }} />
+      </div>
+    </div>
+  )
+}
+
+// ─── ステップ3: ネクストアクション (ka_tasks に保存; meeting_key='morning') ───
+function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
+  const [items, setItems] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+  const [importOpen, setImportOpen] = useState(false)
+
+  const meetingKey = 'morning'
+  const weekStart  = meeting.meeting_date  // ka_tasks.week_start (DATE) は朝会の場合その日付を使う
+
+  // 既存タスク取得
+  useEffect(() => {
+    let alive = true
+    supabase.from('ka_tasks')
+      .select('*')
+      .eq('meeting_key', meetingKey)
+      .eq('week_start', weekStart)
+      .order('id', { ascending: true })
+      .range(0, 49999)
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) { setLoadError(error.message); setItems([]); return }
+        setItems(data || [])
+      })
+    return () => { alive = false }
+  }, [weekStart])
+
+  // Realtime
+  useEffect(() => {
+    const ch = supabase.channel(`morning_tasks_${weekStart}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'ka_tasks' },
+        payload => {
+          const row = payload.new || payload.old
+          if (!row) return
+          if ((row.meeting_key || null) !== meetingKey) return
+          if ((row.week_start || null) !== (weekStart || null)) return
+          if (payload.eventType === 'INSERT') {
+            setItems(p => (p || []).some(x => x.id === payload.new.id) ? p : [...(p || []), payload.new])
+          } else if (payload.eventType === 'UPDATE') {
+            setItems(p => (p || []).map(x => x.id === payload.new.id ? { ...x, ...payload.new } : x))
+          } else if (payload.eventType === 'DELETE') {
+            setItems(p => (p || []).filter(x => x.id !== payload.old.id))
+          }
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [weekStart])
+
+  const addItem = async () => {
+    const payload = {
+      meeting_key: meetingKey, week_start: weekStart, session_id: meeting.id,
+      assignee: '', due_date: null, title: '', done: false,
+      report_id: null, ka_key: null,
+    }
+    const { data, error } = await supabase.from('ka_tasks').insert(payload).select().single()
+    if (error) { alert('追加失敗: ' + error.message); return }
+    if (data) setItems(p => (p || []).some(x => x.id === data.id) ? p : [...(p || []), data])
+  }
+
+  const deleteItem = async (id) => {
+    if (!window.confirm('このネクストアクションを削除しますか？')) return
+    await supabase.from('ka_tasks').delete().eq('id', id)
+    setItems(p => (p || []).filter(x => x.id !== id))
+  }
+
+  const handleFinish = () => {
+    const count = (items || []).length
+    const filled = (items || []).filter(it => (it.title || '').trim()).length
+    if (count === 0) {
+      if (!window.confirm('ネクストアクションが0件です。本当に朝会を終了しますか？')) return
+    } else if (filled < count) {
+      if (!window.confirm(`内容が空のアクションが ${count - filled} 件あります。このまま終了しますか？`)) return
+    }
+    onFinish()
+  }
+
+  return (
+    <>
+      <div style={{
+        marginBottom: 12, padding: '12px 14px',
+        background: T.warnBg, border: `1px solid ${T.warn}40`, borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.warn, marginBottom: 4 }}>
+          ✅ ネクストアクションを確定
+        </div>
+        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
+          朝会で出た決定事項・依頼を <strong>誰がいつまでに何をやるか</strong> 記録します。
+        </div>
+      </div>
+
+      {/* テーブルヘッダ */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
+        gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
+        border: `1px solid ${T.border}`, marginBottom: 6, fontSize: 11,
+        color: T.textMuted, fontWeight: 700,
+      }}>
+        <div>担当</div>
+        <div>期日</div>
+        <div>内容</div>
+        <div></div>
+      </div>
+
+      {/* 行 */}
+      {items === null ? (
+        <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中…</div>
+      ) : items.length === 0 ? (
+        <div style={{
+          padding: '20px 14px', background: T.bgCard, border: `1px dashed ${T.borderMid}`,
+          borderRadius: 8, fontSize: 12, color: T.textMuted, textAlign: 'center', marginBottom: 8,
+        }}>
+          まだネクストアクションが登録されていません。下のボタンから追加してください。
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+          {items.map(it => (
+            <MorningNextActionRow key={it.id} T={T} item={it} members={members} onDelete={() => deleteItem(it.id)} />
+          ))}
+        </div>
+      )}
+
+      {loadError && (
+        <div style={{ marginBottom: 8, padding: '6px 10px', background: T.dangerBg, border: `1px solid ${T.danger}40`, borderRadius: 6, color: T.danger, fontSize: 11 }}>
+          取得エラー: {loadError}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+        <button onClick={addItem} style={{
+          padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
+          background: 'transparent', color: T.accent, cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+        }}>＋ アクションを追加</button>
+        <button onClick={() => setImportOpen(true)} style={{
+          padding: '8px 14px', borderRadius: 7, border: 'none',
+          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          color: '#fff', cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          boxShadow: '0 2px 8px rgba(249,115,22,0.25)',
+        }}>📋 Notionから取り込み</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={onBack} style={btnSt(T)}>⏮ ステップ2に戻る</button>
+        <div style={{ fontSize: 11, color: T.textMuted }}>
+          記録: <strong style={{ color: T.text }}>{(items || []).filter(it => (it.title || '').trim()).length}</strong> 件
+        </div>
+        <button onClick={handleFinish} style={{
+          padding: '8px 22px', borderRadius: 8,
+          background: T.success, color: '#fff', border: 'none',
+          fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+        }}>🏁 朝会を終了</button>
+      </div>
+
+      {/* Notion議事録 取り込みモーダル */}
+      <MeetingImport
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        meetingKey="morning"
+        meetingTitle="朝会"
+        members={members}
+        weekStart={weekStart}
+        sessionId={meeting.id}
+        T={{ bgCard: T.bgCard, text: T.text, textMuted: T.textMuted, borderMid: T.border, borderLight: T.border, bgCard2: T.sectionBg }}
+      />
+    </>
+  )
+}
+
+// ネクストアクション 1行 (autoSave なしのシンプル版; onBlur で保存)
+function MorningNextActionRow({ T, item, members, onDelete }) {
+  const [assignee, setAssignee] = useState(item.assignee || '')
+  const [dueDate,  setDueDate]  = useState(item.due_date || '')
+  const [title,    setTitle]    = useState(item.title || '')
+  const focusedRef = useRef(null)
+
+  // Realtime: 編集中フィールドは保護
+  useEffect(() => {
+    const ch = supabase.channel(`morning_task_row_${item.id}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ka_tasks', filter: `id=eq.${item.id}` },
+        payload => {
+          if (!payload.new) return
+          if (focusedRef.current !== 'assignee') setAssignee(payload.new.assignee || '')
+          if (focusedRef.current !== 'due_date') setDueDate(payload.new.due_date || '')
+          if (focusedRef.current !== 'title')    setTitle(payload.new.title || '')
+        }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [item.id])
+
+  const saveField = async (field, value) => {
+    const { error } = await supabase.from('ka_tasks').update({ [field]: value }).eq('id', item.id)
+    if (error) console.warn(`morning task ${field} 保存失敗`, error)
+  }
+
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
+      gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
+      border: `1px solid ${T.border}`, alignItems: 'center',
+    }}>
+      <select value={assignee}
+        onFocus={() => { focusedRef.current = 'assignee' }}
+        onBlur={() => { focusedRef.current = null; saveField('assignee', assignee) }}
+        onChange={e => { setAssignee(e.target.value); saveField('assignee', e.target.value) }}
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '4px 6px', color: assignee ? T.text : T.textMuted,
+          fontSize: 12, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', fontWeight: 700,
+        }}>
+        <option value="">--</option>
+        {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+      </select>
+      <input type="date"
+        value={dueDate || ''}
+        onFocus={() => { focusedRef.current = 'due_date' }}
+        onBlur={() => { focusedRef.current = null; saveField('due_date', dueDate || null) }}
+        onChange={e => setDueDate(e.target.value)}
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '4px 6px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+        }} />
+      <input
+        value={title}
+        onFocus={() => { focusedRef.current = 'title' }}
+        onBlur={() => { focusedRef.current = null; saveField('title', title) }}
+        onChange={e => setTitle(e.target.value)}
+        placeholder="内容（何をやるか）"
+        style={{
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
+          padding: '6px 8px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+        }} />
+      <button onClick={onDelete} title="削除" style={{
+        background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer',
+        fontSize: 14, padding: '0 4px', fontFamily: 'inherit',
+      }}>✕</button>
     </div>
   )
 }
