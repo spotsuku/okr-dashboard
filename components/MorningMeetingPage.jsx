@@ -39,6 +39,16 @@ function toJSTDateStr(d) {
   const jst = new Date(d.getTime() + 9 * 3600 * 1000)
   return jst.toISOString().split('T')[0]
 }
+// 「04:00 JST 境界」でのJST日付。深夜0〜4時は前日扱いにする
+// (例: 火曜 1:00 に書いた振り返りは「月曜の振り返り」とみなす)
+function toBoundaryJSTDateStr(d) {
+  const ms = d.getTime() + 9 * 3600 * 1000
+  const jst = new Date(ms)
+  if (jst.getUTCHours() < 4) {
+    return new Date(ms - 86400000).toISOString().split('T')[0]
+  }
+  return jst.toISOString().split('T')[0]
+}
 function jstWeekday(d) {
   const jst = new Date(d.getTime() + 9 * 3600 * 1000)
   return ['日','月','火','水','木','金','土'][jst.getUTCDay()]
@@ -680,10 +690,11 @@ function SpeakerReport({ T, member }) {
     ;(async () => {
       setLoading(true)
       // 範囲内の KPT (coaching_logs) を全件取得 (新しい順)
+      // 上限を「今日 00:00」で切ると、今朝入力した KPT が範囲外で取れないため
+      // 上限なし (= NOW まで) にして、今日入力したものも拾う。
       const { data: kpts } = await supabase.from('coaching_logs')
         .select('*').eq('owner', member.name).eq('log_type', 'kpt')
         .gte('created_at', yesterday + 'T00:00:00+09:00')
-        .lt('created_at', today + 'T00:00:00+09:00')
         .order('created_at', { ascending: false }).limit(20)
       // 今日のタスク
       const { data: ts } = await supabase.from('ka_tasks')
@@ -692,9 +703,10 @@ function SpeakerReport({ T, member }) {
         .order('id', { ascending: false })
       if (!alive) return
       // 日付ごとに最新1件だけ採用 (同じ日に複数KPTがあれば直近のみ)
+      // 04:00 JST 境界: 深夜0〜4時に書かれた振り返りは「前日の振り返り」として扱う
       const byDate = new Map()
       for (const row of (kpts || [])) {
-        const dateStr = toJSTDateStr(new Date(row.created_at))
+        const dateStr = toBoundaryJSTDateStr(new Date(row.created_at))
         if (byDate.has(dateStr)) continue
         const c = parseLogContent(row.content)
         byDate.set(dateStr, {
