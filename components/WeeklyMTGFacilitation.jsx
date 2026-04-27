@@ -2322,12 +2322,14 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
       background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
       padding: '22px 26px', marginBottom: 18, position: 'relative',
     }}>
+      {/* 期間バナー (通期/Q期 を一目で判別) */}
+      <PeriodBanner T={T} period={objective?.period} />
+
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{team?.icon || '🏢'}</span>
         <strong style={{ color: T.textSub }}>{team?.name}</strong>
         <span>›</span>
-        <PeriodBadge T={T} period={objective?.period} />
         <span style={{ color: T.textSub }}>{objective?.title}</span>
         {kr && (
           <>
@@ -2562,12 +2564,14 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
       background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
       padding: '22px 26px', marginBottom: 18, position: 'relative',
     }}>
+      {/* 期間バナー (通期/Q期 を一目で判別) */}
+      <PeriodBanner T={T} period={objective?.period} />
+
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{level?.icon || '🏢'}</span>
         <strong style={{ color: T.textSub }}>{level?.name}</strong>
         <span>›</span>
-        <PeriodBadge T={T} period={objective?.period} />
         <span style={{ color: T.textSub }}>{objective?.title}</span>
         {/* 保存インジケータ */}
         <span style={{ marginLeft: 'auto', fontSize: 10 }}>
@@ -3173,26 +3177,62 @@ function getPeriodLabel(periodKey) {
   const base = periodKey.includes('_') ? periodKey.split('_').pop() : periodKey
   return { annual: '通期', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }[base] || periodKey
 }
-// 通期 (annual) は控えめのグレー、Q期は色付きで目立たせる
+function getPeriodBase(periodKey) {
+  if (!periodKey) return ''
+  return periodKey.includes('_') ? periodKey.split('_').pop() : periodKey
+}
+// Q1〜Q4 は強い色、通期は控えめ。サイズ大きめに。
+const PERIOD_THEME = {
+  annual: { bg: '#9ca3af20', fg: '#6b7280', border: '#9ca3af55', icon: '🌐', label: '通期', sub: '(週次更新は任意)' },
+  q1:     { bg: '#4d9fff22', fg: '#1d4ed8', border: '#4d9fff90', icon: '🔵', label: 'Q1',  sub: '集中期' },
+  q2:     { bg: '#00d68f22', fg: '#0a8f5a', border: '#00d68f90', icon: '🟢', label: 'Q2',  sub: '集中期' },
+  q3:     { bg: '#ff9f4322', fg: '#c2410c', border: '#ff9f4390', icon: '🟠', label: 'Q3',  sub: '集中期' },
+  q4:     { bg: '#a855f722', fg: '#7e22ce', border: '#a855f790', icon: '🟣', label: 'Q4',  sub: '集中期' },
+}
+// パンくず用 (省略バージョン)
 function PeriodBadge({ T, period }) {
-  const label = getPeriodLabel(period)
-  if (!label) return null
-  const isAnnual = label === '通期'
-  const color = isAnnual ? T.textMuted : T.accent
-  const bg = isAnnual ? T.bgSection : `${T.accent}1a`
-  const border = isAnnual ? T.border : `${T.accent}55`
+  const base = getPeriodBase(period)
+  const cfg = PERIOD_THEME[base]
+  if (!cfg) return null
   return (
-    <span title={isAnnual ? '通期目標 - その週に更新が不要ならスキップしてOK' : `${label} 期目標`}
+    <span title={base === 'annual' ? '通期目標 - 週次更新が不要ならスキップ可' : `${cfg.label} 集中期`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
-        padding: '2px 8px', borderRadius: 5,
-        background: bg, color, border: `1px solid ${border}`,
-        fontSize: 10, fontWeight: 800, letterSpacing: '0.04em',
+        padding: '3px 10px', borderRadius: 6,
+        background: cfg.bg, color: cfg.fg, border: `1px solid ${cfg.border}`,
+        fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
         flexShrink: 0,
       }}>
-      {!isAnnual && <span>📍</span>}
-      {label}
+      <span>{cfg.icon}</span>{cfg.label}
     </span>
+  )
+}
+// カードトップに置く大きい帯バナー
+function PeriodBanner({ T, period }) {
+  const base = getPeriodBase(period)
+  const cfg = PERIOD_THEME[base]
+  if (!cfg) return null
+  const isAnnual = base === 'annual'
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '8px 16px', marginBottom: 14,
+      background: cfg.bg, border: `2px solid ${cfg.border}`, borderLeft: `6px solid ${cfg.fg}`,
+      borderRadius: 8,
+    }}>
+      <span style={{ fontSize: 22, lineHeight: 1 }}>{cfg.icon}</span>
+      <span style={{ fontSize: 18, fontWeight: 900, color: cfg.fg, letterSpacing: '0.04em' }}>
+        {cfg.label}
+      </span>
+      <span style={{ fontSize: 12, color: cfg.fg, opacity: 0.85, fontWeight: 700 }}>
+        {cfg.sub}
+      </span>
+      {isAnnual && (
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: T.textMuted, fontStyle: 'italic' }}>
+          その週に更新が不要なら「スキップ」して下さい
+        </span>
+      )}
+    </div>
   )
 }
 
