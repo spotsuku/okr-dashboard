@@ -867,6 +867,24 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     return () => { alive = false }
   }, [wkly?.scope, weekStart, levels])
 
+  // key_results の変更を items に反映 (KR編集後の再mountで値が消える問題対策)
+  useEffect(() => {
+    if (!Array.isArray(items) || items.length === 0) return
+    const ids = items.map(it => it.kr?.id).filter(Boolean)
+    if (ids.length === 0) return
+    const idSet = new Set(ids.map(Number))
+    const ch = supabase.channel(`mtg_kr_loop_${weekStart}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'key_results' }, payload => {
+        const row = payload.new
+        if (!row || !idSet.has(Number(row.id))) return
+        setItems(prev => prev?.map(it =>
+          Number(it.kr?.id) === Number(row.id) ? { ...it, kr: { ...it.kr, ...row } } : it
+        ) || prev)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [items?.length, weekStart])
+
   if (items === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KR一覧を読み込み中...</div>
   }
@@ -1106,6 +1124,26 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
     load()
     return () => { alive = false }
   }, [wkly?.scope, wkly?.parentLevelName, weekStart, levels])
+
+  // weekly_reports の変更を items に反映 (autoSave 後に items が古くなる問題を解決)
+  // KAEditCard が key={ka.id} で unmount されるため、items に新しい値を入れておかないと
+  // 戻った時に古い ka.good / more / focus_output で再 mount してしまう
+  useEffect(() => {
+    if (!Array.isArray(items) || items.length === 0) return
+    const ids = items.map(it => it.ka?.id).filter(Boolean)
+    if (ids.length === 0) return
+    const idSet = new Set(ids.map(Number))
+    const ch = supabase.channel(`mtg_ka_loop_${weekStart}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'weekly_reports' }, payload => {
+        const row = payload.new
+        if (!row || !idSet.has(Number(row.id))) return
+        setItems(prev => prev?.map(it =>
+          Number(it.ka?.id) === Number(row.id) ? { ...it, ka: { ...it.ka, ...row } } : it
+        ) || prev)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [items?.length, weekStart])
 
   if (items === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KA一覧を読み込み中...</div>
@@ -2284,6 +2322,9 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
       background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
       padding: '22px 26px', marginBottom: 18, position: 'relative',
     }}>
+      {/* 期間バナー (通期/Q期 を一目で判別) */}
+      <PeriodBanner T={T} period={objective?.period} />
+
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{team?.icon || '🏢'}</span>
@@ -2523,17 +2564,15 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
       background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
       padding: '22px 26px', marginBottom: 18, position: 'relative',
     }}>
+      {/* 期間バナー (通期/Q期 を一目で判別) */}
+      <PeriodBanner T={T} period={objective?.period} />
+
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{level?.icon || '🏢'}</span>
         <strong style={{ color: T.textSub }}>{level?.name}</strong>
         <span>›</span>
         <span style={{ color: T.textSub }}>{objective?.title}</span>
-        {periodLabel && (
-          <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 99, background: `${T.accent}20`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
-            {periodLabel}
-          </span>
-        )}
         {/* 保存インジケータ */}
         <span style={{ marginLeft: 'auto', fontSize: 10 }}>
           {(krAutoSave.saving || reviewSaving) && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
@@ -3128,6 +3167,72 @@ function Badge({ T, bg, fg, children }) {
       padding: '4px 10px', borderRadius: 99, background: bg, color: fg,
       fontSize: 11, fontWeight: 700,
     }}>{children}</span>
+  )
+}
+
+// 期間バッジ用ヘルパー
+// period: 'annual' | 'q1'..'q4' | '2025_q1' 等。CompanySummaryPage と同じパース。
+function getPeriodLabel(periodKey) {
+  if (!periodKey) return ''
+  const base = periodKey.includes('_') ? periodKey.split('_').pop() : periodKey
+  return { annual: '通期', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }[base] || periodKey
+}
+function getPeriodBase(periodKey) {
+  if (!periodKey) return ''
+  return periodKey.includes('_') ? periodKey.split('_').pop() : periodKey
+}
+// Q1〜Q4 は強い色、通期は控えめ。サイズ大きめに。
+const PERIOD_THEME = {
+  annual: { bg: '#9ca3af20', fg: '#6b7280', border: '#9ca3af55', icon: '🌐', label: '通期', sub: '(週次更新は任意)' },
+  q1:     { bg: '#4d9fff22', fg: '#1d4ed8', border: '#4d9fff90', icon: '🔵', label: 'Q1',  sub: '集中期' },
+  q2:     { bg: '#00d68f22', fg: '#0a8f5a', border: '#00d68f90', icon: '🟢', label: 'Q2',  sub: '集中期' },
+  q3:     { bg: '#ff9f4322', fg: '#c2410c', border: '#ff9f4390', icon: '🟠', label: 'Q3',  sub: '集中期' },
+  q4:     { bg: '#a855f722', fg: '#7e22ce', border: '#a855f790', icon: '🟣', label: 'Q4',  sub: '集中期' },
+}
+// パンくず用 (省略バージョン)
+function PeriodBadge({ T, period }) {
+  const base = getPeriodBase(period)
+  const cfg = PERIOD_THEME[base]
+  if (!cfg) return null
+  return (
+    <span title={base === 'annual' ? '通期目標 - 週次更新が不要ならスキップ可' : `${cfg.label} 集中期`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '3px 10px', borderRadius: 6,
+        background: cfg.bg, color: cfg.fg, border: `1px solid ${cfg.border}`,
+        fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+        flexShrink: 0,
+      }}>
+      <span>{cfg.icon}</span>{cfg.label}
+    </span>
+  )
+}
+// カードトップに置く大きい帯バナー
+function PeriodBanner({ T, period }) {
+  const base = getPeriodBase(period)
+  const cfg = PERIOD_THEME[base]
+  if (!cfg) return null
+  const isAnnual = base === 'annual'
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '8px 16px', marginBottom: 14,
+      background: cfg.bg, border: `2px solid ${cfg.border}`, borderLeft: `6px solid ${cfg.fg}`,
+      borderRadius: 8,
+    }}>
+      <span style={{ fontSize: 22, lineHeight: 1 }}>{cfg.icon}</span>
+      <span style={{ fontSize: 18, fontWeight: 900, color: cfg.fg, letterSpacing: '0.04em' }}>
+        {cfg.label}
+      </span>
+      <span style={{ fontSize: 12, color: cfg.fg, opacity: 0.85, fontWeight: 700 }}>
+        {cfg.sub}
+      </span>
+      {isAnnual && (
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: T.textMuted, fontStyle: 'italic' }}>
+          その週に更新が不要なら「スキップ」して下さい
+        </span>
+      )}
+    </div>
   )
 }
 
