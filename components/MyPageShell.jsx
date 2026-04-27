@@ -824,6 +824,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   const [pendingYesterdayLog, setPendingYesterdayLog] = useState(null)
 
   // 昨日未終業の work_log を検出 (自分閲覧 & 平日 & 今日未始業 の時のみ)
+  // 月曜の場合は週末ログを飛ばして金曜分まで遡るため、最新N件取得して平日のみ抽出する
   useEffect(() => {
     if (!isViewingSelf || !myName || !isWeekday || st !== 'none') {
       setPendingYesterdayLog(false)
@@ -839,13 +840,18 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         .eq('log_type', 'work_log')
         .lt('created_at', boundary)
         .order('created_at', { ascending: false })
-        .limit(1)
+        .limit(10)
       if (!alive) return
-      const row = (data || [])[0]
-      if (!row) { setPendingYesterdayLog(false); return }
-      const c = parseLogContent(row.content)
+      // 平日 (月〜金 JST) の最新ログを採用 (土日のログは始業ゲートでは無視)
+      const weekdayRow = (data || []).find(row => {
+        const j = new Date(new Date(row.created_at).getTime() + 9 * 3600 * 1000)
+        const dow = j.getUTCDay()  // 0=日 ... 6=土
+        return dow >= 1 && dow <= 5
+      })
+      if (!weekdayRow) { setPendingYesterdayLog(false); return }
+      const c = parseLogContent(weekdayRow.content)
       if (c.start_at && !c.end_at) {
-        setPendingYesterdayLog(row)
+        setPendingYesterdayLog(weekdayRow)
       } else {
         setPendingYesterdayLog(false)
       }
@@ -876,9 +882,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.id)
     if (e1) { setBusy(false); alert('昨日の終業記録に失敗しました: ' + e1.message); return }
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
+      // KPT の created_at は work_log の日付 + 終業時刻にする (朝会の前回振り返りクエリで拾われるように)
       await supabase.from('coaching_logs').insert({
         owner: myName, log_type: 'kpt',
         week_start: getMondayJSTStr(new Date(pendingYesterdayLog.created_at)),
+        created_at: endUtc.toISOString(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
       })
     }
