@@ -46,6 +46,22 @@ function getYesterdayJSTDateStr() {
   const d = new Date(Date.now() - 86400000)
   return toJSTDateStr(d)
 }
+// 「前回の振り返り」を引く起点日 (JST)。月曜は金曜まで遡る。
+function getPrevReviewJSTDateStr() {
+  const now = new Date()
+  const jstNow = new Date(now.getTime() + 9 * 3600 * 1000)
+  const dow = jstNow.getUTCDay()  // 0=日, 1=月, ..., 6=土
+  // 月曜は金曜 (3日前)、日曜は金曜 (2日前)、土曜は金曜 (1日前) まで遡る
+  const daysBack = dow === 1 ? 3 : dow === 0 ? 2 : 1
+  const d = new Date(now.getTime() - daysBack * 86400000)
+  return toJSTDateStr(d)
+}
+function formatJSTMonthDay(dateStr) {
+  // 'YYYY-MM-DD' → 'M/D(曜)'
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  const dow = ['日','月','火','水','木','金','土'][new Date(y, mo - 1, d).getDay()]
+  return `${mo}/${d}(${dow})`
+}
 function parseLogContent(s) { try { return JSON.parse(s) } catch { return {} } }
 
 // ─── メイン ──────────────────────────────────────────────────
@@ -652,8 +668,10 @@ function SpeakerReport({ T, member }) {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const yesterday = getYesterdayJSTDateStr()
+  // 月曜は金曜まで遡って KPT を取得 (週末で前日が休みのケースに対応)
+  const yesterday = getPrevReviewJSTDateStr()
   const today = toJSTDateStr(new Date())
+  const reviewLabel = formatJSTMonthDay(yesterday)
 
   useEffect(() => {
     let alive = true
@@ -710,10 +728,13 @@ function SpeakerReport({ T, member }) {
         <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
       ) : (
         <>
-          {/* 昨日の振り返り */}
+          {/* 前回の振り返り (月曜は金曜分を表示) */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8 }}>
-              📝 昨日の振り返り
+              📝 前回の振り返り
+              <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: T.textMuted }}>
+                ({reviewLabel})
+              </span>
             </div>
             {kpt ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
