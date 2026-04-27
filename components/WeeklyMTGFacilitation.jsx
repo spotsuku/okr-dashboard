@@ -867,6 +867,24 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     return () => { alive = false }
   }, [wkly?.scope, weekStart, levels])
 
+  // key_results の変更を items に反映 (KR編集後の再mountで値が消える問題対策)
+  useEffect(() => {
+    if (!Array.isArray(items) || items.length === 0) return
+    const ids = items.map(it => it.kr?.id).filter(Boolean)
+    if (ids.length === 0) return
+    const idSet = new Set(ids.map(Number))
+    const ch = supabase.channel(`mtg_kr_loop_${weekStart}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'key_results' }, payload => {
+        const row = payload.new
+        if (!row || !idSet.has(Number(row.id))) return
+        setItems(prev => prev?.map(it =>
+          Number(it.kr?.id) === Number(row.id) ? { ...it, kr: { ...it.kr, ...row } } : it
+        ) || prev)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [items?.length, weekStart])
+
   if (items === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KR一覧を読み込み中...</div>
   }
@@ -1106,6 +1124,26 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
     load()
     return () => { alive = false }
   }, [wkly?.scope, wkly?.parentLevelName, weekStart, levels])
+
+  // weekly_reports の変更を items に反映 (autoSave 後に items が古くなる問題を解決)
+  // KAEditCard が key={ka.id} で unmount されるため、items に新しい値を入れておかないと
+  // 戻った時に古い ka.good / more / focus_output で再 mount してしまう
+  useEffect(() => {
+    if (!Array.isArray(items) || items.length === 0) return
+    const ids = items.map(it => it.ka?.id).filter(Boolean)
+    if (ids.length === 0) return
+    const idSet = new Set(ids.map(Number))
+    const ch = supabase.channel(`mtg_ka_loop_${weekStart}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'weekly_reports' }, payload => {
+        const row = payload.new
+        if (!row || !idSet.has(Number(row.id))) return
+        setItems(prev => prev?.map(it =>
+          Number(it.ka?.id) === Number(row.id) ? { ...it, ka: { ...it.ka, ...row } } : it
+        ) || prev)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [items?.length, weekStart])
 
   if (items === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KA一覧を読み込み中...</div>
@@ -2289,6 +2327,7 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
         <span>{team?.icon || '🏢'}</span>
         <strong style={{ color: T.textSub }}>{team?.name}</strong>
         <span>›</span>
+        <PeriodBadge T={T} period={objective?.period} />
         <span style={{ color: T.textSub }}>{objective?.title}</span>
         {kr && (
           <>
@@ -2528,12 +2567,8 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
         <span>{level?.icon || '🏢'}</span>
         <strong style={{ color: T.textSub }}>{level?.name}</strong>
         <span>›</span>
+        <PeriodBadge T={T} period={objective?.period} />
         <span style={{ color: T.textSub }}>{objective?.title}</span>
-        {periodLabel && (
-          <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 99, background: `${T.accent}20`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
-            {periodLabel}
-          </span>
-        )}
         {/* 保存インジケータ */}
         <span style={{ marginLeft: 'auto', fontSize: 10 }}>
           {(krAutoSave.saving || reviewSaving) && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
@@ -3128,6 +3163,36 @@ function Badge({ T, bg, fg, children }) {
       padding: '4px 10px', borderRadius: 99, background: bg, color: fg,
       fontSize: 11, fontWeight: 700,
     }}>{children}</span>
+  )
+}
+
+// 期間バッジ用ヘルパー
+// period: 'annual' | 'q1'..'q4' | '2025_q1' 等。CompanySummaryPage と同じパース。
+function getPeriodLabel(periodKey) {
+  if (!periodKey) return ''
+  const base = periodKey.includes('_') ? periodKey.split('_').pop() : periodKey
+  return { annual: '通期', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }[base] || periodKey
+}
+// 通期 (annual) は控えめのグレー、Q期は色付きで目立たせる
+function PeriodBadge({ T, period }) {
+  const label = getPeriodLabel(period)
+  if (!label) return null
+  const isAnnual = label === '通期'
+  const color = isAnnual ? T.textMuted : T.accent
+  const bg = isAnnual ? T.bgSection : `${T.accent}1a`
+  const border = isAnnual ? T.border : `${T.accent}55`
+  return (
+    <span title={isAnnual ? '通期目標 - その週に更新が不要ならスキップしてOK' : `${label} 期目標`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 8px', borderRadius: 5,
+        background: bg, color, border: `1px solid ${border}`,
+        fontSize: 10, fontWeight: 800, letterSpacing: '0.04em',
+        flexShrink: 0,
+      }}>
+      {!isAnnual && <span>📍</span>}
+      {label}
+    </span>
   )
 }
 
