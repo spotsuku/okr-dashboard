@@ -2447,36 +2447,37 @@ function RetrospectSummary({ T, stats, kpt, range }) {
       gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(320px, 2fr)',
       gap: isMobile ? 14 : 16,
     }}>
-      {/* 左: 成果 (タスク統計) — モバイルは3つの統計を横3列並びに */}
-      <div style={{
-        display: isMobile ? 'grid' : 'flex',
-        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : undefined,
-        flexDirection: isMobile ? undefined : 'column',
-        gap: 10,
-      }}>
+      {/* 左: 成果 (タスク統計) — モバイルは3カードを1行並び */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
           📊 {rangeLabel}の成果
         </div>
         <div style={{
-          padding: 14, background: 'rgba(0,214,143,0.10)', border: '1px solid rgba(0,214,143,0.3)',
-          borderRadius: 8, textAlign: 'center',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: isMobile ? 6 : 10,
         }}>
-          <div style={{ fontSize: 30, fontWeight: 800, color: '#00d68f', lineHeight: 1 }}>{stats.onTime}</div>
-          <div style={{ fontSize: 11, color: T.textSub, marginTop: 5, fontWeight: 600 }}>✅ 完了タスク</div>
-        </div>
-        <div style={{
-          padding: 14, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.3)',
-          borderRadius: 8, textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 30, fontWeight: 800, color: '#ff6b6b', lineHeight: 1 }}>{stats.overdue}</div>
-          <div style={{ fontSize: 11, color: T.textSub, marginTop: 5, fontWeight: 600 }}>🚨 遅延タスク</div>
-        </div>
-        <div style={{
-          padding: 14, background: 'rgba(77,159,255,0.10)', border: '1px solid rgba(77,159,255,0.3)',
-          borderRadius: 8, textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 30, fontWeight: 800, color: '#4d9fff', lineHeight: 1 }}>{completionPct}%</div>
-          <div style={{ fontSize: 11, color: T.textSub, marginTop: 5, fontWeight: 600 }}>📈 期限内達成率</div>
+          <div style={{
+            padding: isMobile ? '10px 6px' : 14, background: 'rgba(0,214,143,0.10)', border: '1px solid rgba(0,214,143,0.3)',
+            borderRadius: 8, textAlign: 'center', minWidth: 0,
+          }}>
+            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 800, color: '#00d68f', lineHeight: 1 }}>{stats.onTime}</div>
+            <div style={{ fontSize: isMobile ? 10 : 11, color: T.textSub, marginTop: 5, fontWeight: 600, whiteSpace: 'nowrap' }}>✅ 完了</div>
+          </div>
+          <div style={{
+            padding: isMobile ? '10px 6px' : 14, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.3)',
+            borderRadius: 8, textAlign: 'center', minWidth: 0,
+          }}>
+            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 800, color: '#ff6b6b', lineHeight: 1 }}>{stats.overdue}</div>
+            <div style={{ fontSize: isMobile ? 10 : 11, color: T.textSub, marginTop: 5, fontWeight: 600, whiteSpace: 'nowrap' }}>🚨 遅延</div>
+          </div>
+          <div style={{
+            padding: isMobile ? '10px 6px' : 14, background: 'rgba(77,159,255,0.10)', border: '1px solid rgba(77,159,255,0.3)',
+            borderRadius: 8, textAlign: 'center', minWidth: 0,
+          }}>
+            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 800, color: '#4d9fff', lineHeight: 1 }}>{completionPct}%</div>
+            <div style={{ fontSize: isMobile ? 10 : 11, color: T.textSub, marginTop: 5, fontWeight: 600, whiteSpace: 'nowrap' }}>📈 達成率</div>
+          </div>
         </div>
       </div>
 
@@ -3173,25 +3174,38 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
           </div>
         ) : (
           <>
-            {/* カテゴリタブ */}
+            {/* カテゴリタブ (横スクロール対応で改行を防ぐ) */}
             <div style={{
-              display: 'flex', gap: 6, marginBottom: 14,
+              display: 'flex', gap: 4, marginBottom: 14,
               borderBottom: `1px solid ${T.border}`, paddingBottom: 0,
+              overflowX: 'auto', overflowY: 'hidden',
+              flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
             }}>
               {CATS.map(c => (
                 <button
                   key={c.key}
                   onClick={() => setActiveCat(c.key)}
                   style={{
-                    padding: '8px 14px',
+                    padding: '8px 12px',
                     background: activeCat === c.key ? T.bgCard : 'transparent',
                     color: activeCat === c.key ? c.color : T.textMuted,
                     border: 'none',
                     borderBottom: activeCat === c.key ? `3px solid ${c.color}` : '3px solid transparent',
                     borderRadius: '8px 8px 0 0',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    whiteSpace: 'nowrap', flexShrink: 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
                   }}
-                >{c.label} ({c.items.length})</button>
+                >
+                  <span>{c.label}</span>
+                  <span style={{
+                    padding: '1px 7px', borderRadius: 99,
+                    background: activeCat === c.key ? `${c.color}22` : T.bgSection,
+                    color: activeCat === c.key ? c.color : T.textMuted,
+                    fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
+                  }}>{c.items.length}</span>
+                </button>
               ))}
             </div>
 
