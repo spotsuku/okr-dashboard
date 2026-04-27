@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { MEETING_URLS } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import MeetingImport from './MeetingImport'
+import { ComposeModal } from './ConfirmationsTab'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -664,33 +665,48 @@ function Step1Report({ T, members, meeting, onNext, onPrev, onJump, onSkipToStep
 
 // ─── 発表者の昨日の振り返り + 今日のタスク ─────────────────────
 function SpeakerReport({ T, member }) {
-  const [kpt, setKpt] = useState(null)
+  // kptList: { dateLabel, keep, problem, try }[]  (新しい順 = 直近が上)
+  const [kptList, setKptList] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
 
   // 月曜は金曜まで遡って KPT を取得 (週末で前日が休みのケースに対応)
+  // 範囲が複数日にまたがる場合は範囲内の全KPT (土日含む) を表示する
   const yesterday = getPrevReviewJSTDateStr()
   const today = toJSTDateStr(new Date())
-  const reviewLabel = formatJSTMonthDay(yesterday)
 
   useEffect(() => {
     let alive = true
     ;(async () => {
       setLoading(true)
-      // 昨日の KPT (coaching_logs)
+      // 範囲内の KPT (coaching_logs) を全件取得 (新しい順)
       const { data: kpts } = await supabase.from('coaching_logs')
         .select('*').eq('owner', member.name).eq('log_type', 'kpt')
         .gte('created_at', yesterday + 'T00:00:00+09:00')
         .lt('created_at', today + 'T00:00:00+09:00')
-        .order('created_at', { ascending: false }).limit(1)
+        .order('created_at', { ascending: false }).limit(20)
       // 今日のタスク
       const { data: ts } = await supabase.from('ka_tasks')
         .select('id, title, due_date, done, status')
         .eq('assignee', member.name).eq('due_date', today)
         .order('id', { ascending: false })
       if (!alive) return
-      const kptContent = kpts?.[0] ? parseLogContent(kpts[0].content) : null
-      setKpt(kptContent)
+      // 日付ごとに最新1件だけ採用 (同じ日に複数KPTがあれば直近のみ)
+      const byDate = new Map()
+      for (const row of (kpts || [])) {
+        const dateStr = toJSTDateStr(new Date(row.created_at))
+        if (byDate.has(dateStr)) continue
+        const c = parseLogContent(row.content)
+        byDate.set(dateStr, {
+          dateStr,
+          dateLabel: formatJSTMonthDay(dateStr),
+          keep: c.keep, problem: c.problem, try: c.try,
+        })
+      }
+      // 新しい日付が上に来るように
+      const list = Array.from(byDate.values())
+        .sort((a, b) => (a.dateStr < b.dateStr ? 1 : -1))
+      setKptList(list)
       setTasks(ts || [])
       setLoading(false)
     })()
@@ -728,25 +744,34 @@ function SpeakerReport({ T, member }) {
         <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
       ) : (
         <>
-          {/* 前回の振り返り (月曜は金曜分を表示) */}
+          {/* 前回の振り返り (月曜は金〜日の全KPTを表示) */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8 }}>
               📝 前回の振り返り
-              <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: T.textMuted }}>
-                ({reviewLabel})
-              </span>
             </div>
-            {kpt ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <KPTRow T={T} label="Keep"    color={T.success} text={kpt.keep} />
-                <KPTRow T={T} label="Problem" color={T.warn}    text={kpt.problem} />
-                <KPTRow T={T} label="Try"     color={T.accent}  text={kpt.try} />
-              </div>
-            ) : (
+            {kptList.length === 0 ? (
               <div style={{
                 padding: 10, fontSize: 11, color: T.textMuted, fontStyle: 'italic',
                 background: T.sectionBg, borderRadius: 6,
               }}>振り返りが未入力です</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {kptList.map(k => (
+                  <div key={k.dateStr} style={{
+                    padding: '10px 12px',
+                    background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 6 }}>
+                      📅 {k.dateLabel}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <KPTRow T={T} label="Keep"    color={T.success} text={k.keep} />
+                      <KPTRow T={T} label="Problem" color={T.warn}    text={k.problem} />
+                      <KPTRow T={T} label="Try"     color={T.accent}  text={k.try} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -812,6 +837,7 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
   const [replies, setReplies] = useState({})
   const [loading, setLoading] = useState(true)
   const [filterTo, setFilterTo] = useState('') // '' = 全員
+  const [composing, setComposing] = useState(false) // 新規追加モーダル
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -854,7 +880,7 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
 
   return (
     <>
-      {/* フィルタ + 件数 */}
+      {/* フィルタ + 件数 + 追加 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap',
         padding: '8px 12px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
@@ -862,6 +888,11 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
           🟠 未解決の確認事項 {filtered.length}件
         </span>
+        <button onClick={() => setComposing(true)} style={{
+          padding: '5px 12px', borderRadius: 6, border: 'none',
+          background: T.accent, color: '#fff',
+          fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+        }}>＋ 追加</button>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: T.textMuted }}>宛先:</span>
         <select value={filterTo} onChange={e => setFilterTo(e.target.value)} style={{
@@ -873,6 +904,12 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
           {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
         </select>
       </div>
+
+      {composing && (
+        <ComposeModal T={{ ...T, borderMid: T.border }} myName={myName} members={members}
+          onClose={() => setComposing(false)}
+          onSaved={() => { setComposing(false); load() }} />
+      )}
 
       {/* リスト */}
       {loading ? (
