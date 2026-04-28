@@ -516,13 +516,21 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           </div>
         )}
 
-        {/* サブタブバー (PCのみ表示。モバイルは下メニュー + サイドバーの「その他」で代替) */}
+        {/* サブタブバー (iOS 風セグメンテッドコントロール: グレー背景 + 白ピル状アクティブ) */}
         <div style={{
-          display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 4,
-          padding: '8px 14px',
+          display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 20px',
           borderBottom: `1px solid ${T.border}`,
-          background: T.bgCard, flexShrink: 0,
+          background: 'rgba(255,255,255,0.65)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          flexShrink: 0, overflowX: 'auto',
         }}>
+          <div style={{
+            display: 'inline-flex', gap: 2,
+            background: 'rgba(120,120,128,0.10)',
+            padding: 3, borderRadius: 11,
+          }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
             { key: 'confirm',      icon: '📬', label: '確認'           },
@@ -532,26 +540,31 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
             { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
+            { key: 'okr_edit',     icon: '🎯', label: 'OKR'           },
+            { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => {
-            // 📬確認 タブのみ未解決件数バッジを表示 (個人モード時、0件なら非表示)
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
+            const active = activeTab === t.key
             return (
               <button
                 key={t.key}
                 onClick={() => setActiveTab(t.key)}
                 style={{
-                  padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: activeTab === t.key ? T.navActiveBg : 'transparent',
-                  color: activeTab === t.key ? T.navActiveText : T.textSub,
-                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: active ? T.bgCard : 'transparent',
+                  color: active ? T.text : T.textSub,
+                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap',
                   display: 'inline-flex', alignItems: 'center', gap: 6,
+                  boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <span>{t.icon} {t.label}</span>
+                <span style={{ fontSize: 14, lineHeight: 1 }}>{t.icon}</span>
+                <span>{t.label}</span>
                 {showBadge && (
                   <span style={{
                     padding: '1px 6px', borderRadius: 99,
-                    background: '#ff6b6b', color: '#fff',
+                    background: T.danger, color: '#fff',
                     fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
                     lineHeight: 1.4,
                   }}>{unresolvedConfirmCount}</span>
@@ -559,41 +572,22 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               </button>
             )
           })}
-
-          {/* OKR (旧マイOKR、ドロップダウンは撤廃)
-              モードによって中身が切替わる:
-                全体サマリー → CompanySummaryPage (全社OKRサマリー)
-                メンバー     → MyOKRPageNew (OKR記入) */}
-          <button
-            onClick={() => setActiveTab('okr_edit')}
-            style={{
-              padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: activeTab === 'okr_edit' ? T.navActiveBg : 'transparent',
-              color: activeTab === 'okr_edit' ? T.navActiveText : T.textSub,
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-            }}
-          >🎯 OKR</button>
-
-          {/* 連携 */}
-          <button
-            onClick={() => setActiveTab('integrations')}
-            style={{
-              padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: activeTab === 'integrations' ? T.navActiveBg : 'transparent',
-              color: activeTab === 'integrations' ? T.navActiveText : T.textSub,
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-            }}
-          >🔌 連携</button>
+          </div>
           <div style={{ flex: 1 }} />
           {!isMobile && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: T.textMuted, padding: '4px 10px',
-              background: T.sectionBg, borderRadius: 7,
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 11, color: T.textMuted, padding: '6px 12px',
+              background: T.sectionBg, borderRadius: 99,
+              border: `1px solid ${T.border}`,
             }}>
               <Avatar member={viewingMember} size={20} />
               <span style={{ fontWeight: 700, color: T.text }}>{viewingName || '(未選択)'}</span>
-              <span style={{ color: isViewingSelf ? T.accent : T.textMuted, fontWeight: 600 }}>
+              <span style={{
+                color: isViewingSelf ? T.success : T.textMuted, fontWeight: 700,
+                padding: '2px 8px', borderRadius: 99,
+                background: isViewingSelf ? T.successBg : 'transparent',
+              }}>
                 {isViewingSelf ? '✏️ 編集可' : '👁 閲覧のみ'}
               </span>
             </div>
@@ -1210,45 +1204,71 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       <ConfirmationsBanner T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
         onGoToTab={onGoToTab} />
 
-      {/* 挨拶バー + 始業/終業ボタン + 設定 */}
+      {/* 挨拶バー (iOS 風グラスバー: 半透明 + backdrop-blur + ドット型ステータス) */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        padding: isMobile ? '10px 12px' : '10px 16px',
-        background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
-        flexShrink: 0, position: 'relative',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        padding: isMobile ? '12px 16px' : '14px 20px',
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        borderBottom: `1px solid ${T.border}`,
+        flexShrink: 0, position: 'relative', zIndex: 5,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar member={viewingMember} size={36} />
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <Avatar member={viewingMember} size={42} />
+            {/* 状態ドット (右下に色付きで重ねる) */}
+            <span style={{
+              position: 'absolute', right: -2, bottom: -2,
+              width: 14, height: 14, borderRadius: '50%',
+              border: `2px solid ${T.bgCard}`,
+              background: st === 'on' ? T.success : st === 'off' ? T.info : T.textFaint,
+              boxShadow: st === 'on' ? `0 0 0 3px ${T.success}33` : 'none',
+            }} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
               {greet}、{viewingName}さん
             </div>
-            <div style={{ fontSize: 11, color: T.textMuted }}>
-              {dateStr} ·
-              {st === 'on'  && content.start_at ? ` 🟢 稼働中 (${jstHHMM(content.start_at)}〜)` :
-               st === 'off' && content.end_at   ? ` 🔵 本日終業済み (${jstHHMM(content.start_at)}–${jstHHMM(content.end_at)})` :
-                                                  ' ⚪ 未始業'}
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span>{dateStr}</span>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '2px 8px', borderRadius: 99,
+                background: st === 'on' ? T.successBg : st === 'off' ? T.infoBg : T.sectionBg,
+                color: st === 'on' ? T.success : st === 'off' ? T.info : T.textMuted,
+                fontWeight: 700,
+              }}>
+                {st === 'on'  && content.start_at ? `稼働中 ${jstHHMM(content.start_at)}〜` :
+                 st === 'off' && content.end_at   ? `終業済 ${jstHHMM(content.start_at)}–${jstHHMM(content.end_at)}` :
+                                                    '未始業'}
+              </span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {isViewingSelf && st === 'on' && (
             <button onClick={() => setKptOpen(true)} disabled={busy} style={{
-              background: T.info, color: '#fff', border: 'none', borderRadius: 8,
-              padding: '8px 16px', fontSize: 13, fontWeight: 700,
+              background: `linear-gradient(135deg, ${T.info} 0%, ${T.info}d0 100%)`,
+              color: '#fff', border: 'none', borderRadius: 10,
+              padding: '9px 18px', fontSize: 13, fontWeight: 800,
               cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+              boxShadow: `0 2px 6px ${T.info}55, 0 1px 2px rgba(0,0,0,0.08)`,
               opacity: busy ? 0.6 : 1,
+              letterSpacing: '0.01em',
             }}>🌙 終業する</button>
           )}
           {isViewingSelf && st === 'off' && (
-            <div style={{ fontSize: 11, color: T.textMuted, padding: '8px 12px' }}>お疲れさまでした</div>
+            <div style={{
+              fontSize: 12, color: T.success, padding: '6px 12px', fontWeight: 700,
+              background: T.successBg, borderRadius: 99,
+            }}>お疲れさまでした 🎉</div>
           )}
-          {/* 設定ボタン (ウィジェット表示切替) */}
           <button onClick={() => setSettingsOpen(v => !v)} title="ウィジェットの表示設定" style={{
-            background: settingsOpen ? T.accentBg : 'transparent',
-            border: `1px solid ${T.border}`, color: T.textSub,
-            borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer',
+            background: settingsOpen ? T.accentBg : 'rgba(120,120,128,0.12)',
+            border: 'none', color: settingsOpen ? T.accent : T.textSub,
+            borderRadius: 10, padding: '8px 12px', fontSize: 14, cursor: 'pointer',
             fontFamily: 'inherit',
           }}>⚙️</button>
         </div>
