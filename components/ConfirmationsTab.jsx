@@ -404,21 +404,39 @@ function ComposeModal({ T, myName, members, onClose, onSaved, presetTo = '' }) {
 
   return (
     <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.35)',
+      backdropFilter: 'blur(20px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      animation: 'composeModalFade 0.2s ease',
     }}>
+      <style>{`
+        @keyframes composeModalFade { from {opacity:0} to {opacity:1} }
+        @keyframes composeModalSlide { from {transform:translateY(20px); opacity:0} to {transform:translateY(0); opacity:1} }
+      `}</style>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
-        padding: 22, width: '100%', maxWidth: 520,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        background: T.bgCard, borderRadius: 18,
+        padding: 24, width: '100%', maxWidth: 540,
+        boxShadow: '0 24px 60px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.08)',
+        animation: 'composeModalSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <span style={{ fontSize: 20 }}>📬</span>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>確認事項を送る</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}c0 100%)`,
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${T.accent}55`,
+          }}>📬</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>確認事項を送る</div>
           <div style={{ flex: 1 }} />
           <button onClick={onClose} style={{
-            background: 'transparent', border: 'none', color: T.textSub,
-            fontSize: 22, cursor: 'pointer', padding: '0 8px',
+            background: 'rgba(120,120,128,0.16)', border: 'none',
+            width: 30, height: 30, borderRadius: '50%',
+            color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'inherit', lineHeight: 1,
           }}>×</button>
         </div>
 

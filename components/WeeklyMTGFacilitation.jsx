@@ -2392,16 +2392,17 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-      padding: '22px 26px', marginBottom: 18, position: 'relative',
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 18,
+      padding: '24px 28px', marginBottom: 18, position: 'relative',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
     }}>
       {/* 期間バナー (通期/Q期 を一目で判別) */}
       <PeriodBanner T={T} period={objective?.period} />
 
       {/* 階層パンくず */}
-      <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span>{team?.icon || '🏢'}</span>
-        <strong style={{ color: T.textSub }}>{team?.name}</strong>
+      <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 14 }}>{team?.icon || '🏢'}</span>
+        <strong style={{ color: T.textSub, fontWeight: 700 }}>{team?.name}</strong>
         <span>›</span>
         <span style={{ color: T.textSub }}>{objective?.title}</span>
         {kr && (
@@ -2634,8 +2635,9 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-      padding: '22px 26px', marginBottom: 18, position: 'relative',
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 18,
+      padding: '24px 28px', marginBottom: 18, position: 'relative',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
     }}>
       {/* 期間バナー (通期/Q期 を一目で判別) */}
       <PeriodBanner T={T} period={objective?.period} />

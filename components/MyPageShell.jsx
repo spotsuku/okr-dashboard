@@ -2866,42 +2866,55 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
     <div
       onClick={() => onGoToTab && onGoToTab('confirm')}
       style={{
-        background: `linear-gradient(90deg, ${T.accentBg} 0%, ${T.accent}15 100%)`,
-        borderBottom: `2px solid ${T.accent}`,
-        padding: '10px 16px',
+        background: `linear-gradient(135deg, ${T.accent}f0 0%, ${T.accent}b0 100%)`,
+        padding: '12px 18px',
         cursor: 'pointer',
         flexShrink: 0,
+        color: '#fff',
+        boxShadow: `0 2px 8px ${T.accent}33`,
+        position: 'relative', overflow: 'hidden',
       }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: -50, right: -30, width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 60%)',
+        pointerEvents: 'none', borderRadius: '50%',
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
         <span style={{ fontSize: 18 }}>📬</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>
           {isViewingSelf
             ? `未解決の確認事項が ${count}件 あります`
             : `${viewingName}さん宛の未解決 確認事項が ${count}件 あります`}
         </span>
         <div style={{ flex: 1 }} />
         <span style={{
-          padding: '4px 12px', borderRadius: 6,
-          background: T.accent, color: '#fff',
+          padding: '5px 12px', borderRadius: 99,
+          background: 'rgba(255,255,255,0.25)',
+          backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+          color: '#fff',
           fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+          border: '1px solid rgba(255,255,255,0.30)',
         }}>📬 確認タブで返信 →</span>
       </div>
       {items.length > 0 && (
         <div style={{
-          display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap',
+          display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap',
+          position: 'relative', zIndex: 1,
         }}>
           {items.map(it => (
             <div key={it.id} style={{
               flex: '1 1 240px', minWidth: 0,
-              padding: '6px 10px', borderRadius: 6,
-              background: T.bgCard, border: `1px solid ${T.border}`,
-              fontSize: 11,
+              padding: '8px 12px', borderRadius: 9,
+              background: 'rgba(255,255,255,0.22)',
+              backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.28)',
+              fontSize: 11, color: '#fff',
             }}>
-              <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
-                from <b style={{ color: T.textSub }}>{it.from_name}</b>
+              <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 2 }}>
+                from <b>{it.from_name}</b>
               </div>
               <div style={{
-                color: T.text, lineHeight: 1.5,
+                color: '#fff', lineHeight: 1.5, fontWeight: 600,
                 overflow: 'hidden', display: '-webkit-box',
                 WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
               }}>{it.content}</div>
