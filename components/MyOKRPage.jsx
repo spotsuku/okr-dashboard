@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { SegmentedControl } from './iosUI'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
 
@@ -964,12 +965,11 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         </div>
       </div>
 
-      {/* 期間タブ */}
-      <div style={{ display:'flex', gap:4, padding:'7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0 }}>
-        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4 }}>期間：</span>
-        {periodTabs.map(([key,lbl])=>(
-          <button key={key} onClick={()=>{setActivePeriod(key);setActiveObjId(null)}} style={{ padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:activePeriod===key?(key==='all'?wT().borderMid:'rgba(77,159,255,0.15)'):'transparent', border:`1px solid ${activePeriod===key?(key==='all'?wT().border:'rgba(77,159,255,0.4)'):wT().borderMid}`, color:activePeriod===key?(key==='all'?wT().text:'#4d9fff'):wT().textMuted }}>{lbl}</button>
-        ))}
+      {/* 期間タブ (iOS SegmentedControl) */}
+      <div style={{ display:'flex', gap:8, padding:'10px 20px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center' }}>
+        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700 }}>期間</span>
+        <SegmentedControl T={wT()} value={activePeriod} onChange={key => { setActivePeriod(key); setActiveObjId(null) }}
+          items={periodTabs.map(([key, label]) => ({ key, label }))} size="sm" />
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
@@ -1001,19 +1001,37 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             const avgPct = myKRs.length > 0 ? Math.round(myKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/myKRs.length) : 0
             const pctColor = avgPct>=100?'#00d68f':avgPct>=60?'#4d9fff':'#ff6b6b'
             return (
-              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{periodLabel(obj.period)}</span>
+              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{
+                padding:'12px 14px', borderRadius:12, marginBottom:8, cursor:'pointer',
+                border:`1px solid ${isActive?color+'4d':color+'1a'}`,
+                background: isActive
+                  ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${color}0d 100%)`
+                  : wT().bgCard,
+                boxShadow: isActive
+                  ? `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${color}26`
+                  : '0 1px 2px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.03)',
+                transition:'all 0.2s ease',
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                  <span style={{
+                    fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:6,
+                    background:`linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`, color:'#fff',
+                    boxShadow: `0 1px 2px ${color}55`,
+                  }}>{periodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
                 </div>
-                <div style={{ fontSize:12, fontWeight:600, lineHeight:1.4, marginBottom:6, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
-                <div style={{ height:3, borderRadius:2, background:wT().borderLight, overflow:'hidden', marginBottom:5 }}>
-                  <div style={{ height:'100%', width:`${Math.min(avgPct,100)}%`, background:pctColor, borderRadius:2 }} />
+                <div style={{ fontSize:13, fontWeight:700, lineHeight:1.4, marginBottom:8, color:wT().text, letterSpacing:'-0.01em' }}>{obj.title}</div>
+                <div style={{ height:5, borderRadius:99, background:'rgba(0,0,0,0.05)', overflow:'hidden', marginBottom:7 }}>
+                  <div style={{
+                    height:'100%', width:`${Math.min(avgPct,100)}%`,
+                    background:`linear-gradient(90deg, ${pctColor} 0%, ${pctColor}cc 100%)`,
+                    borderRadius:99, transition:'width 0.4s',
+                  }} />
                 </div>
-                <div style={{ display:'flex', gap:8, fontSize:10, color:wT().textMuted }}>
-                  <span style={{ color:pctColor, fontWeight:700 }}>{avgPct}%</span>
-                  <span>KR {objKRsCount}件</span>
-                  <span style={{ color:objKAsCount>0?'#4d9fff':wT().textFaint }}>KA {objKAsCount}件</span>
+                <div style={{ display:'flex', gap:8, fontSize:10, color:wT().textMuted, alignItems:'center' }}>
+                  <span style={{ color:pctColor, fontWeight:800, fontSize:12 }}>{avgPct}%</span>
+                  <span style={{ padding:'1px 7px', borderRadius:99, background:'rgba(0,0,0,0.04)', fontWeight:700 }}>KR {objKRsCount}</span>
+                  <span style={{ padding:'1px 7px', borderRadius:99, background: objKAsCount>0?wT().accentBg:'rgba(0,0,0,0.04)', color:objKAsCount>0?wT().accent:wT().textFaint, fontWeight:700 }}>KA {objKAsCount}</span>
                 </div>
               </div>
             )
@@ -1036,12 +1054,26 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 const d = getDepth(selectedObj.level_id, levels)
                 const color = LAYER_COLORS[d] || '#a0a8be'
                 return (
-                  <div style={{ padding:'12px 14px', background:`${color}0e`, border:`1px solid ${color}30`, borderLeft:`4px solid ${color}`, borderRadius:10, marginBottom:14 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${color}20`, color }}>{periodLabel(selectedObj.period)}</span>
-                      <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
+                  <div style={{
+                    position:'relative', overflow:'hidden',
+                    padding:'18px 22px',
+                    background:`linear-gradient(135deg, ${color}f0 0%, ${color}b0 100%)`,
+                    color:'#fff',
+                    borderRadius:16, marginBottom:16,
+                    boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${color}33`,
+                  }}>
+                    <div aria-hidden style={{
+                      position:'absolute', top:-50, right:-30, width:180, height:180,
+                      background:'radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 60%)',
+                      borderRadius:'50%', pointerEvents:'none',
+                    }} />
+                    <div style={{ position:'relative', zIndex:1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:99, background:'rgba(255,255,255,0.25)', color:'#fff', backdropFilter:'blur(10px)' }}>{periodLabel(selectedObj.period)}</span>
+                        <span style={{ fontSize:10, opacity:0.85, letterSpacing:'0.18em', textTransform:'uppercase', fontWeight:700 }}>Objective</span>
+                      </div>
+                      <div style={{ fontSize:17, fontWeight:800, color:'#fff', lineHeight:1.4, letterSpacing:'-0.01em' }}>{selectedObj.title}</div>
                     </div>
-                    <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
                   </div>
                 )
               })()}
