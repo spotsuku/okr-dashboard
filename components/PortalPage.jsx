@@ -57,6 +57,14 @@ const DASHBOARDS = [
     color: '#ffd166',
     url: 'https://neo-youth.vercel.app/dashboard',
   },
+  {
+    id: 'invitation',
+    title: 'イベント招待ダッシュボード',
+    description: 'イベント招待・参加管理',
+    icon: '✉️',
+    color: '#ec4899',
+    url: 'https://invitation-ruby-psi.vercel.app/',
+  },
 ]
 
 const THEMES = {
