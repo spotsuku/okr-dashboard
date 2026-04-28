@@ -1706,47 +1706,57 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
         position: 'fixed', inset: 0, zIndex: 100, background: 'transparent',
       }} />
       <div style={{
-        position: 'absolute', right: 16, top: '100%', marginTop: 6,
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
-        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-        zIndex: 101, padding: 12, minWidth: 240, maxHeight: '70vh', overflowY: 'auto',
+        position: 'absolute', right: 16, top: '100%', marginTop: 8,
+        background: 'rgba(255,255,255,0.95)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        borderRadius: 14,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.10), 0 24px 56px rgba(0,0,0,0.10)',
+        zIndex: 101, padding: 14, minWidth: 260, maxHeight: '70vh', overflowY: 'auto',
+        border: `1px solid ${T.border}`,
       }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.text, flex: 1 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
             ⚙️ 表示するウィジェット
           </div>
           <button
             onClick={() => { if (window.confirm('初期状態に戻しますか?')) resetPrefs() }}
             title="全ての表示/非表示設定を初期値に戻す"
             style={{
-              background: 'transparent', border: `1px solid ${T.borderMid}`,
-              color: T.textMuted, borderRadius: 5, padding: '3px 8px',
-              fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+              background: 'rgba(120,120,128,0.12)', border: 'none',
+              color: T.textSub, borderRadius: 7, padding: '4px 10px',
+              fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
             }}
           >↻ リセット</button>
         </div>
         {groups.map(g => (
-          <div key={g.title} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, marginBottom: 4, letterSpacing: 0.5 }}>
+          <div key={g.title} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 800, marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               {g.title}
             </div>
-            {g.items.map(it => (
+            <div style={{
+              background: T.bgCard, borderRadius: 10,
+              border: `1px solid ${T.border}`, overflow: 'hidden',
+            }}>
+            {g.items.map((it, i) => (
               <label key={it.key} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px',
-                cursor: 'pointer', borderRadius: 5, fontSize: 12, color: T.text,
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                cursor: 'pointer', fontSize: 13, color: T.text,
+                borderBottom: i < g.items.length - 1 ? `0.5px solid ${T.border}` : 'none',
               }}
-                onMouseEnter={e => e.currentTarget.style.background = T.sectionBg}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <input
                   type="checkbox"
                   checked={prefs[it.key] !== false}
                   onChange={() => togglePref(it.key)}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', accentColor: T.accent }}
                 />
                 <span>{it.label}</span>
               </label>
             ))}
+            </div>
           </div>
         ))}
         <div style={{ fontSize: 9, color: T.textMuted, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
@@ -1866,37 +1876,58 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
     <div
       onClick={force ? undefined : onCancel}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.35)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 9999, padding: 20,
+        animation: 'kptModalFadeIn 0.2s ease',
       }}
     >
+      <style>{`
+        @keyframes kptModalFadeIn { from {opacity:0} to {opacity:1} }
+        @keyframes kptModalSlide { from {transform:translateY(20px); opacity:0} to {transform:translateY(0); opacity:1} }
+      `}</style>
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
-          padding: 20, width: '100%', maxWidth: 520, maxHeight: '90vh',
-          overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+          background: T.bgCard, borderRadius: 18,
+          padding: 24, width: '100%', maxWidth: 540, maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.08)',
+          animation: 'kptModalSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ width: '100%' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
-              {force ? '⚠️ 昨日の振り返りを入力してください' : '🌙 今日の振り返り'}
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-              {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
-            </div>
-            {force && (
-              <div style={{
-                marginTop: 8, padding: '6px 10px',
-                background: T.warnBg, color: T.warn,
-                fontSize: 11, borderRadius: 6, lineHeight: 1.5,
-              }}>
-                昨日の業務が終業されていません。振り返りを入力してから今日を始業できます。
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+              background: force
+                ? `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`
+                : `linear-gradient(135deg, ${T.info} 0%, ${T.info}c0 100%)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18, color: '#fff',
+              boxShadow: force ? `0 2px 6px ${T.warn}55` : `0 2px 6px ${T.info}55`,
+            }}>{force ? '⚠️' : '🌙'}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
+                {force ? '昨日の振り返りを入力してください' : '今日の振り返り'}
               </div>
-            )}
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>
+                {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
+              </div>
+            </div>
           </div>
+          {force && (
+            <div style={{
+              marginTop: 10, padding: '8px 12px',
+              background: T.warnBg, color: T.warn,
+              fontSize: 12, borderRadius: 9, lineHeight: 1.5, fontWeight: 600,
+            }}>
+              昨日の業務が終業されていません。振り返りを入力してから今日を始業できます。
+            </div>
+          )}
         </div>
 
         {force && (

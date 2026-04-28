@@ -1018,18 +1018,30 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
 
       {/* 進行ナビ */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
-        padding: '10px 14px', background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18,
+        padding: '14px 18px',
+        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)`,
+        borderRadius: 14,
+        border: `1px solid ${T.accent}1f`,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>進捗</div>
-        <div style={{ fontSize: 14, color: T.text, fontWeight: 800 }}>
-          {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 11 }}>/ {items.length}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>進捗</div>
+          <div style={{ fontSize: 18, color: T.text, fontWeight: 900, letterSpacing: '-0.02em' }}>
+            {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 12, fontWeight: 600 }}>/ {items.length}</span>
+          </div>
         </div>
-        <div style={{ flex: 1, height: 6, background: T.bgSection, borderRadius: 99, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${((currentIdx) / items.length) * 100}%`, background: T.accent, transition: 'width 0.3s' }} />
+        <div style={{ flex: 1, height: 8, background: 'rgba(0,0,0,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${((currentIdx) / items.length) * 100}%`,
+            background: `linear-gradient(90deg, ${T.accent} 0%, ${T.accent}cc 100%)`,
+            transition: 'width 0.4s cubic-bezier(0.4,0,0.2,1)',
+            borderRadius: 99,
+          }} />
         </div>
-        <div style={{ fontSize: 11, color: T.textMuted }}>
-          完了 <strong style={{ color: T.success }}>{completed.size}</strong> / 残 <strong style={{ color: T.text }}>{items.length - currentIdx - 1}</strong>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 99, background: T.successBg, color: T.success }}>完了 {completed.size}</span>
+          <span style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.text }}>残 {items.length - currentIdx - 1}</span>
         </div>
       </div>
 
@@ -1270,18 +1282,30 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
 
       {/* 進行ナビ */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
-        padding: '10px 14px', background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18,
+        padding: '14px 18px',
+        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.success}06 100%)`,
+        borderRadius: 14,
+        border: `1px solid ${T.success}1f`,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>進捗</div>
-        <div style={{ fontSize: 14, color: T.text, fontWeight: 800 }}>
-          {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 11 }}>/ {items.length}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>進捗</div>
+          <div style={{ fontSize: 18, color: T.text, fontWeight: 900, letterSpacing: '-0.02em' }}>
+            {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 12, fontWeight: 600 }}>/ {items.length}</span>
+          </div>
         </div>
-        <div style={{ flex: 1, height: 6, background: T.bgSection, borderRadius: 99, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${(completed.size / items.length) * 100}%`, background: T.success, transition: 'width 0.3s' }} />
+        <div style={{ flex: 1, height: 8, background: 'rgba(0,0,0,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${(completed.size / items.length) * 100}%`,
+            background: `linear-gradient(90deg, ${T.success} 0%, ${T.success}cc 100%)`,
+            transition: 'width 0.4s cubic-bezier(0.4,0,0.2,1)',
+            borderRadius: 99,
+          }} />
         </div>
-        <div style={{ fontSize: 11, color: T.textMuted }}>
-          完了 <strong style={{ color: T.success }}>{completed.size}</strong> / 残 <strong style={{ color: T.text }}>{Math.max(0, items.length - currentIdx - 1)}</strong>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 99, background: T.successBg, color: T.success }}>完了 {completed.size}</span>
+          <span style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.text }}>残 {Math.max(0, items.length - currentIdx - 1)}</span>
         </div>
       </div>
 
@@ -2062,15 +2086,24 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
 
       {/* 進行ナビ */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
-        padding: '10px 14px', background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18,
+        padding: '14px 18px',
+        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.success}06 100%)`,
+        borderRadius: 14, border: `1px solid ${T.success}1f`,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>進捗</div>
-        <div style={{ fontSize: 14, color: T.text, fontWeight: 800 }}>
-          {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 11 }}>/ {teams.length} チーム</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>進捗 (チーム)</div>
+          <div style={{ fontSize: 18, color: T.text, fontWeight: 900, letterSpacing: '-0.02em' }}>
+            {currentIdx + 1} <span style={{ color: T.textMuted, fontSize: 12, fontWeight: 600 }}>/ {teams.length}</span>
+          </div>
         </div>
-        <div style={{ flex: 1, height: 6, background: T.bgSection, borderRadius: 99, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${(completed.size / teams.length) * 100}%`, background: T.success, transition: 'width 0.3s' }} />
+        <div style={{ flex: 1, height: 8, background: 'rgba(0,0,0,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${(completed.size / teams.length) * 100}%`,
+            background: `linear-gradient(90deg, ${T.success} 0%, ${T.success}cc 100%)`,
+            transition: 'width 0.4s cubic-bezier(0.4,0,0.2,1)', borderRadius: 99,
+          }} />
         </div>
         <div style={{ fontSize: 11, color: T.textMuted }}>
           完了 <strong style={{ color: T.success }}>{completed.size}</strong>
