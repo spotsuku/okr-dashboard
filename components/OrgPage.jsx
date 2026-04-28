@@ -374,19 +374,26 @@ function UserListTab({ members, currentUser, isAdmin }) {
       {/* 紐付けモーダル */}
       {linkModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setLinkModal(null)}>
-          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 440, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>組織図メンバーと紐付け</div>
-            <div style={{ fontSize: 12, color: T().accent, marginBottom: 16 }}>{linkModal.authUser.email}</div>
-            <div style={{ fontSize: 12, color: T().textMuted, marginBottom: 16 }}>紐付けるメンバーを選択してください（変更すると旧紐付けは解除されます）</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+            <div style={{ fontSize: 12, color: T().accent, marginBottom: 8 }}>{linkModal.authUser.email}</div>
+            {/* ヘルプ説明 */}
+            <div style={{
+              padding: '10px 12px', borderRadius: 8, marginBottom: 12,
+              background: T().accentBg, fontSize: 11, color: T().textSub, lineHeight: 1.6,
+            }}>
+              💡 ここで選んだメンバーの <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> を
+              <strong style={{ color: T().accent }}> {linkModal.authUser.email}</strong> に書き換えます (JD・ロール・名前等は保持)。<br />
+              「⚠ AUTH 切替」=他の AUTH と連携中だがこの AUTH に切り替えたい場合に使う (旧側は未紐付けに戻る)。
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
               <div onClick={() => handleLink(linkModal.authUser, null)}
                 style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 12, fontWeight: 600 }}>
                 🔗 紐付けを解除する
               </div>
               {members.map(m => {
                 const alreadyLinked = m.email === linkModal.authUser.email
-                // 「他のアカウントと連携中」= members.email が AUTH に実在するユーザーのメールと一致するときだけ
-                // 単に古い・存在しないメールが入っているだけのケースは紐付け可能 (上書き)
+                // 他の AUTH と連携している? (実在するもの)
                 const otherAuthUser = m.email && m.email !== linkModal.authUser.email
                   ? authUsers.find(u => u.email === m.email)
                   : null
@@ -396,13 +403,29 @@ function UserListTab({ members, currentUser, isAdmin }) {
                 return (
                   <div key={m.id}
                     onClick={() => {
-                      if (linkedToOther) return
+                      if (alreadyLinked) return
+                      if (linkedToOther) {
+                        if (!window.confirm(
+                          `${m.name} は現在 "${m.email}" の AUTH アカウントと連携中です。\n` +
+                          `この紐付けを "${linkModal.authUser.email}" に切り替えますか?\n\n` +
+                          `→ ${m.name} のメンバー情報 (JD/ロール/管理者権限) は保持されます。\n` +
+                          `→ 旧 AUTH "${m.email}" は「未紐付け」に戻ります。`
+                        )) return
+                        handleLink(linkModal.authUser, m.id)
+                        return
+                      }
                       if (hasStaleEmail) {
-                        if (!window.confirm(`${m.name} は現在 "${m.email}" のメールが設定されています。\n紐付けを進めるとこのメールは "${linkModal.authUser.email}" に上書きされます (JD やロール等の他の情報は保持されます)。\n進めますか?`)) return
+                        if (!window.confirm(`${m.name} のメンバーには現在 "${m.email}" のメールが入っています (AUTH 側にこのアカウントは存在しません)。\n紐付けを進めるとこのメールは "${linkModal.authUser.email}" に上書きされます。進めますか?`)) return
                       }
                       handleLink(linkModal.authUser, m.id)
                     }}
-                    style={{ padding: '10px 14px', borderRadius: 8, cursor: linkedToOther ? 'not-allowed' : 'pointer', border: `1px solid ${alreadyLinked ? T().badgeBorder : hasStaleEmail ? T().warn + '60' : T().border}`, background: alreadyLinked ? T().badgeBg : hasStaleEmail ? T().warnBg : linkedToOther ? T().bgHover : T().bgCard, display: 'flex', alignItems: 'center', gap: 10, opacity: linkedToOther ? 0.4 : 1 }}>
+                    style={{
+                      padding: '10px 14px', borderRadius: 8,
+                      cursor: alreadyLinked ? 'default' : 'pointer',
+                      border: `1px solid ${alreadyLinked ? T().badgeBorder : hasStaleEmail ? T().warn + '60' : linkedToOther ? T().warn + '40' : T().border}`,
+                      background: alreadyLinked ? T().badgeBg : hasStaleEmail ? T().warnBg : T().bgCard,
+                      display: 'flex', alignItems: 'center', gap: 10,
+                    }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${c}20`, border: `1.5px solid ${c}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: c, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: T().text }}>{m.name}</div>
@@ -411,7 +434,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
                       </div>
                     </div>
                     {alreadyLinked && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700, flexShrink: 0 }}>現在</span>}
-                    {linkedToOther && <span style={{ fontSize: 10, color: T().textMuted, flexShrink: 0 }}>他のアカウントと連携中</span>}
+                    {linkedToOther && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0 }}>⚠ AUTH 切替</span>}
                     {hasStaleEmail && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0 }}>⚠ メール上書き</span>}
                   </div>
                 )
