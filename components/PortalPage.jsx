@@ -67,18 +67,21 @@ const DASHBOARDS = [
   },
 ]
 
+// iOS/iPadOS 風のシステムカラー
 const THEMES = {
   dark: {
-    bg: '#0F1117', bgCard: '#1A1D27', border: 'rgba(255,255,255,0.10)',
-    text: '#E8ECF0', textSub: '#B0BAC8', textMuted: '#7a8599',
-    accent: '#4d9fff', cardHover: 'rgba(255,255,255,0.04)',
+    bg: '#000000', bgCard: '#1C1C1E', border: 'rgba(255,255,255,0.10)',
+    text: '#F5F5F7', textSub: '#C7C7CC', textMuted: '#8E8E93',
+    accent: '#0A84FF', cardHover: 'rgba(255,255,255,0.04)',
   },
   light: {
-    bg: '#EEF2F5', bgCard: '#FFFFFF', border: '#E2E8F0',
-    text: '#2D3748', textSub: '#4A5568', textMuted: '#718096',
-    accent: '#3B82C4', cardHover: 'rgba(0,0,0,0.02)',
+    bg: '#F2F2F7', bgCard: '#FFFFFF', border: 'rgba(0,0,0,0.06)',
+    text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93',
+    accent: '#007AFF', cardHover: 'rgba(0,0,0,0.02)',
   },
 }
+// iOS 風の柔らかい 2層シャドウ
+const IOS_SHADOW = '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)'
 
 export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
   const T = THEMES[themeKey] || THEMES.dark
@@ -119,16 +122,17 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
                 style={{
                   background: T.bgCard,
                   border: `1px solid ${T.border}`,
-                  borderRadius: 14,
+                  borderRadius: 16,
                   padding: '24px 20px',
                   cursor: isAvailable ? 'pointer' : 'default',
                   opacity: isAvailable ? 1 : 0.5,
-                  transition: 'all 0.15s',
+                  transition: 'all 0.2s ease',
                   position: 'relative',
                   overflow: 'hidden',
+                  boxShadow: IOS_SHADOW,
                 }}
-                onMouseEnter={e => { if (isAvailable) { e.currentTarget.style.borderColor = db.color + '60'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 24px ${db.color}15` } }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+                onMouseEnter={e => { if (isAvailable) { e.currentTarget.style.borderColor = db.color + '60'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 8px rgba(0,0,0,0.05), 0 12px 32px ${db.color}22` } }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = IOS_SHADOW }}
               >
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: db.color }} />
 

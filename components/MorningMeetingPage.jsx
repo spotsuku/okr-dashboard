@@ -14,23 +14,24 @@ import { ComposeModal } from './ConfirmationsTab'
 //   進行状態は morning_meetings テーブルで全員同期
 
 // ─── テーマ ─────────────────────────────────────────────────
+// iOS/iPadOS 風のシステムカラー
 const DARK_T = {
-  bg:'#090d18', bgCard:'#0e1420', bgCard2:'#141b2b', sectionBg:'rgba(255,255,255,0.03)',
-  border:'rgba(255,255,255,0.09)', borderMid:'rgba(255,255,255,0.15)',
-  text:'#e8eaf0', textSub:'#a0a8be', textMuted:'#606880', textFaint:'#404660',
-  accent:'#4d9fff', accentBg:'rgba(77,159,255,0.13)',
-  success:'#00d68f', successBg:'rgba(0,214,143,0.13)',
-  warn:'#ffd166', warnBg:'rgba(255,209,102,0.13)',
-  danger:'#ff6b6b', dangerBg:'rgba(255,107,107,0.13)',
+  bg:'#000000', bgCard:'#1C1C1E', bgCard2:'#2C2C2E', sectionBg:'rgba(255,255,255,0.04)',
+  border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
+  text:'#F5F5F7', textSub:'#C7C7CC', textMuted:'#8E8E93', textFaint:'#48484A',
+  accent:'#0A84FF', accentBg:'rgba(10,132,255,0.16)',
+  success:'#30D158', successBg:'rgba(48,209,88,0.16)',
+  warn:'#FF9F0A', warnBg:'rgba(255,159,10,0.16)',
+  danger:'#FF453A', dangerBg:'rgba(255,69,58,0.16)',
 }
 const LIGHT_T = {
-  bg:'#f5f7fb', bgCard:'#ffffff', bgCard2:'#f7f9fc', sectionBg:'rgba(0,0,0,0.03)',
-  border:'rgba(0,0,0,0.08)', borderMid:'rgba(0,0,0,0.12)',
-  text:'#1a1f36', textSub:'#4a5270', textMuted:'#7080a0', textFaint:'#90a0bc',
-  accent:'#4d9fff', accentBg:'rgba(77,159,255,0.13)',
-  success:'#00a871', successBg:'rgba(0,214,143,0.13)',
-  warn:'#d39e00', warnBg:'rgba(255,209,102,0.13)',
-  danger:'#d64545', dangerBg:'rgba(255,107,107,0.13)',
+  bg:'#F2F2F7', bgCard:'#FFFFFF', bgCard2:'#FAFAFC', sectionBg:'rgba(0,0,0,0.03)',
+  border:'rgba(0,0,0,0.06)', borderMid:'rgba(0,0,0,0.12)',
+  text:'#1C1C1E', textSub:'#3A3A3C', textMuted:'#8E8E93', textFaint:'#C7C7CC',
+  accent:'#007AFF', accentBg:'rgba(0,122,255,0.10)',
+  success:'#34C759', successBg:'rgba(52,199,89,0.10)',
+  warn:'#FF9500', warnBg:'rgba(255,149,0,0.10)',
+  danger:'#FF3B30', dangerBg:'rgba(255,59,48,0.10)',
 }
 const M_THEMES = { dark: DARK_T, light: LIGHT_T }
 

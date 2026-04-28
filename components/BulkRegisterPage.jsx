@@ -822,18 +822,19 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
 
 // ─── メインコンポーネント ──────────────────────────────────────────────────────
 export default function BulkRegisterPage({ levels, themeKey = 'dark', fiscalYear = '2026' }) {
+  // iOS/iPadOS 風のシステムカラー
   const W_THEMES = {
     dark: {
-      bg: '#090d18', bgCard: '#0e1420', bgCard2: '#111828', bgSidebar: '#0e1420',
-      border: 'rgba(255,255,255,0.07)', borderLight: 'rgba(255,255,255,0.04)',
-      borderMid: 'rgba(255,255,255,0.1)', text: '#e8eaf0', textSub: '#a0a8be',
-      textMuted: '#606880', textFaint: '#404660', textFaintest: '#303450',
+      bg: '#000000', bgCard: '#1C1C1E', bgCard2: '#2C2C2E', bgSidebar: '#1C1C1E',
+      border: 'rgba(255,255,255,0.10)', borderLight: 'rgba(255,255,255,0.04)',
+      borderMid: 'rgba(255,255,255,0.16)', text: '#F5F5F7', textSub: '#C7C7CC',
+      textMuted: '#8E8E93', textFaint: '#48484A', textFaintest: '#3A3A3C',
     },
     light: {
-      bg: '#f0f2f7', bgCard: '#ffffff', bgCard2: '#f7f8fc', bgSidebar: '#ffffff',
-      border: 'rgba(0,0,0,0.08)', borderLight: 'rgba(0,0,0,0.05)',
-      borderMid: 'rgba(0,0,0,0.12)', text: '#1a1f36', textSub: '#4a5270',
-      textMuted: '#7080a0', textFaint: '#90a0bc', textFaintest: '#b0bcd0',
+      bg: '#F2F2F7', bgCard: '#FFFFFF', bgCard2: '#FAFAFC', bgSidebar: '#FFFFFF',
+      border: 'rgba(0,0,0,0.06)', borderLight: 'rgba(0,0,0,0.04)',
+      borderMid: 'rgba(0,0,0,0.12)', text: '#1C1C1E', textSub: '#3A3A3C',
+      textMuted: '#8E8E93', textFaint: '#C7C7CC', textFaintest: 'rgba(0,0,0,0.06)',
     },
   }
   const wT = W_THEMES[themeKey] || W_THEMES.dark

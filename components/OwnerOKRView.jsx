@@ -33,15 +33,16 @@ const THEMES = {
     btnDelBg: 'rgba(255,107,107,0.1)', btnDelBorder: 'rgba(255,107,107,0.2)', btnDelColor: '#ff6b6b',
     sectionBg: 'rgba(255,255,255,0.02)',
   },
+  // iOS/iPadOS 風のシステムカラー (light)
   light: {
-    bg: '#EEF2F5', bgCard: '#FFFFFF', bgKr: '#F5F7FA',
-    text: '#2D3748', textSub: '#2D3748', textMuted: '#5A6577',
-    textFaint: '#A0AEC0', textFaintest: '#DDE4EA',
-    border: '#E2E8F0', borderDash: '#CBD5E0',
-    progressBg: '#E8EEF2',
-    btnEditBg: '#EBF4FF', btnEditBorder: '#B3D4FC', btnEditColor: '#3B82C4',
-    btnDelBg: '#FFF1F0', btnDelBorder: '#FECACA', btnDelColor: '#DC6B6B',
-    sectionBg: '#F8FAFC',
+    bg: '#F2F2F7', bgCard: '#FFFFFF', bgKr: 'rgba(0,0,0,0.03)',
+    text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93',
+    textFaint: '#C7C7CC', textFaintest: 'rgba(0,0,0,0.06)',
+    border: 'rgba(0,0,0,0.06)', borderDash: 'rgba(0,0,0,0.10)',
+    progressBg: 'rgba(0,0,0,0.06)',
+    btnEditBg: 'rgba(0,122,255,0.10)', btnEditBorder: 'rgba(0,122,255,0.30)', btnEditColor: '#007AFF',
+    btnDelBg: 'rgba(255,59,48,0.10)', btnDelBorder: 'rgba(255,59,48,0.30)', btnDelColor: '#FF3B30',
+    sectionBg: 'rgba(0,0,0,0.03)',
   },
 }
 

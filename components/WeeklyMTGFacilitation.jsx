@@ -8,17 +8,18 @@ import ConfirmationsTab from './ConfirmationsTab'
 import MeetingImport from './MeetingImport'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
+// iOS/iPadOS 風のシステムカラー
 const DARK_T = {
-  bg: '#0F1117', bgCard: '#111828', bgCard2: '#1a2030', bgSection: 'rgba(255,255,255,0.03)',
-  border: 'rgba(255,255,255,0.08)', borderMid: 'rgba(255,255,255,0.12)',
-  text: '#E8ECF0', textSub: '#cfd6e8', textMuted: '#7a8499', textFaint: '#4a5266',
-  accent: '#4d9fff', success: '#00d68f', warn: '#ff9f43', danger: '#ff6b6b',
+  bg: '#000000', bgCard: '#1C1C1E', bgCard2: '#2C2C2E', bgSection: 'rgba(255,255,255,0.04)',
+  border: 'rgba(255,255,255,0.10)', borderMid: 'rgba(255,255,255,0.16)',
+  text: '#F5F5F7', textSub: '#C7C7CC', textMuted: '#8E8E93', textFaint: '#48484A',
+  accent: '#0A84FF', success: '#30D158', warn: '#FF9F0A', danger: '#FF453A',
 }
 const LIGHT_T = {
-  bg: '#EEF2F5', bgCard: '#FFFFFF', bgCard2: '#F5F7FA', bgSection: '#F8FAFC',
-  border: '#E2E8F0', borderMid: '#CBD5E0',
-  text: '#2D3748', textSub: '#4A5568', textMuted: '#718096', textFaint: '#A0AEC0',
-  accent: '#3B82C4', success: '#15A977', warn: '#D97A1F', danger: '#DC6B6B',
+  bg: '#F2F2F7', bgCard: '#FFFFFF', bgCard2: '#FAFAFC', bgSection: 'rgba(0,0,0,0.03)',
+  border: 'rgba(0,0,0,0.06)', borderMid: 'rgba(0,0,0,0.12)',
+  text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93', textFaint: '#C7C7CC',
+  accent: '#007AFF', success: '#34C759', warn: '#FF9500', danger: '#FF3B30',
 }
 
 // ─── 階層 ヘルパー ────────────────────────────────────────────────────────

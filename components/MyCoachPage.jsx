@@ -35,22 +35,23 @@ function isMonthInRange(month, start, end) {
   return start <= end ? month >= start && month <= end : month >= start || month <= end
 }
 
+// iOS/iPadOS 風のシステムカラー
 const THEMES = {
   dark: {
-    bg:'#0F1117', bgCard:'#1A1D27', border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
-    text:'#E8ECF0', textSub:'#B0BAC8', textMuted:'#7a8599', textFaint:'#4A5468',
-    accent:'#4d9fff', accentBg:'rgba(77,159,255,0.12)', sectionBg:'rgba(255,255,255,0.03)',
-    doneBg:'rgba(0,214,143,0.06)', doneBorder:'rgba(0,214,143,0.15)',
-    overdueBg:'rgba(255,107,107,0.06)', overdueBorder:'rgba(255,107,107,0.2)',
-    chatBg:'#0e1420', chatBorder:'rgba(255,255,255,0.08)',
+    bg:'#000000', bgCard:'#1C1C1E', border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
+    text:'#F5F5F7', textSub:'#C7C7CC', textMuted:'#8E8E93', textFaint:'#48484A',
+    accent:'#0A84FF', accentBg:'rgba(10,132,255,0.16)', sectionBg:'rgba(255,255,255,0.04)',
+    doneBg:'rgba(48,209,88,0.10)', doneBorder:'rgba(48,209,88,0.20)',
+    overdueBg:'rgba(255,69,58,0.10)', overdueBorder:'rgba(255,69,58,0.30)',
+    chatBg:'#1C1C1E', chatBorder:'rgba(255,255,255,0.10)',
   },
   light: {
-    bg:'#EEF2F5', bgCard:'#FFFFFF', border:'#E2E8F0', borderMid:'#CBD5E0',
-    text:'#2D3748', textSub:'#4A5568', textMuted:'#718096', textFaint:'#A0AEC0',
-    accent:'#3B82C4', accentBg:'rgba(59,130,196,0.1)', sectionBg:'#F8FAFC',
-    doneBg:'rgba(0,214,143,0.06)', doneBorder:'rgba(0,214,143,0.2)',
-    overdueBg:'rgba(255,107,107,0.06)', overdueBorder:'rgba(255,107,107,0.2)',
-    chatBg:'#F7F9FB', chatBorder:'#E2E8F0',
+    bg:'#F2F2F7', bgCard:'#FFFFFF', border:'rgba(0,0,0,0.06)', borderMid:'rgba(0,0,0,0.12)',
+    text:'#1C1C1E', textSub:'#3A3A3C', textMuted:'#8E8E93', textFaint:'#C7C7CC',
+    accent:'#007AFF', accentBg:'rgba(0,122,255,0.10)', sectionBg:'rgba(0,0,0,0.03)',
+    doneBg:'rgba(52,199,89,0.10)', doneBorder:'rgba(52,199,89,0.30)',
+    overdueBg:'rgba(255,59,48,0.08)', overdueBorder:'rgba(255,59,48,0.30)',
+    chatBg:'#FFFFFF', chatBorder:'rgba(0,0,0,0.06)',
   },
 }
 

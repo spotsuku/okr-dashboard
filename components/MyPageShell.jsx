@@ -13,30 +13,31 @@ import ConfirmationsTab from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
+// iOS/iPadOS 風のシステムカラー
 const THEMES = {
   dark: {
-    bg: '#0F1117', bgCard: '#1A1D27', bgSidebar: '#14172A',
+    bg: '#000000', bgCard: '#1C1C1E', bgSidebar: '#1C1C1E',
     border: 'rgba(255,255,255,0.10)', borderMid: 'rgba(255,255,255,0.16)',
-    text: '#E8ECF0', textSub: '#B0BAC8', textMuted: '#7a8599', textFaint: '#4A5468',
-    accent: '#4d9fff', accentBg: 'rgba(77,159,255,0.14)', accentSolid: '#4d9fff',
-    sectionBg: 'rgba(255,255,255,0.03)',
-    navActiveBg: 'rgba(77,159,255,0.16)', navActiveText: '#7ab4ff',
-    success: '#00d68f', successBg: 'rgba(0,214,143,0.14)',
-    warn: '#ffd166', warnBg: 'rgba(255,209,102,0.14)',
-    danger: '#ff6b6b', dangerBg: 'rgba(255,107,107,0.14)',
-    info: '#4d9fff', infoBg: 'rgba(77,159,255,0.12)',
+    text: '#F5F5F7', textSub: '#C7C7CC', textMuted: '#8E8E93', textFaint: '#48484A',
+    accent: '#0A84FF', accentBg: 'rgba(10,132,255,0.16)', accentSolid: '#0A84FF',
+    sectionBg: 'rgba(255,255,255,0.04)',
+    navActiveBg: 'rgba(10,132,255,0.18)', navActiveText: '#5EB3FF',
+    success: '#30D158', successBg: 'rgba(48,209,88,0.16)',
+    warn: '#FF9F0A', warnBg: 'rgba(255,159,10,0.16)',
+    danger: '#FF453A', dangerBg: 'rgba(255,69,58,0.16)',
+    info: '#0A84FF', infoBg: 'rgba(10,132,255,0.14)',
   },
   light: {
-    bg: '#EEF2F5', bgCard: '#FFFFFF', bgSidebar: '#F7F9FC',
-    border: '#E2E8F0', borderMid: '#CBD5E0',
-    text: '#2D3748', textSub: '#4A5568', textMuted: '#718096', textFaint: '#A0AEC0',
-    accent: '#3B82C4', accentBg: 'rgba(59,130,196,0.10)', accentSolid: '#3B82C4',
-    sectionBg: '#F8FAFC',
-    navActiveBg: 'rgba(59,130,196,0.14)', navActiveText: '#2563EB',
-    success: '#059669', successBg: 'rgba(5,150,105,0.10)',
-    warn: '#D97706', warnBg: 'rgba(217,119,6,0.10)',
-    danger: '#DC2626', dangerBg: 'rgba(220,38,38,0.10)',
-    info: '#3B82C4', infoBg: 'rgba(59,130,196,0.10)',
+    bg: '#F2F2F7', bgCard: '#FFFFFF', bgSidebar: '#FFFFFF',
+    border: 'rgba(0,0,0,0.06)', borderMid: 'rgba(0,0,0,0.12)',
+    text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93', textFaint: '#C7C7CC',
+    accent: '#007AFF', accentBg: 'rgba(0,122,255,0.10)', accentSolid: '#007AFF',
+    sectionBg: 'rgba(0,0,0,0.03)',
+    navActiveBg: 'rgba(0,122,255,0.12)', navActiveText: '#0062CC',
+    success: '#34C759', successBg: 'rgba(52,199,89,0.10)',
+    warn: '#FF9500', warnBg: 'rgba(255,149,0,0.10)',
+    danger: '#FF3B30', dangerBg: 'rgba(255,59,48,0.10)',
+    info: '#007AFF', infoBg: 'rgba(0,122,255,0.10)',
   },
 }
 
