@@ -190,6 +190,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
   const [linkModal, setLinkModal] = useState(null)
   const [roleModal, setRoleModal] = useState(null)
   const [processing, setProcessing] = useState(false)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -270,9 +271,25 @@ function UserListTab({ members, currentUser, isAdmin }) {
     </div>
   )
 
-  const getUserMember = (email) => members.find(m => m.email === email)
+  // メール比較は大小文字・前後空白を無視 (Supabase では実際は小文字に正規化されるが、
+  // members.email に手入力で混入したケースを救うため)
+  const normEmail = (e) => (e || '').trim().toLowerCase()
+  const getUserMember = (email) => members.find(m => normEmail(m.email) === normEmail(email))
   const linkedCount = authUsers.filter(u => getUserMember(u.email)).length
   const unlinkedCount = authUsers.length - linkedCount
+
+  // メンバー側で AUTH に対応がない (= members.email が AUTH に存在しない)
+  const memberEmailsSet = new Set(authUsers.map(u => normEmail(u.email)))
+  const orphanedMembers = members.filter(m => m.email && !memberEmailsSet.has(normEmail(m.email)))
+
+  // 検索フィルタ (email / 名前 / role)
+  const fq = filter.trim().toLowerCase()
+  const filteredAuthUsers = !fq ? authUsers : authUsers.filter(u => {
+    const m = getUserMember(u.email)
+    return (u.email || '').toLowerCase().includes(fq)
+      || (m?.name || '').toLowerCase().includes(fq)
+      || (m?.role || '').toLowerCase().includes(fq)
+  })
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -293,9 +310,54 @@ function UserListTab({ members, currentUser, isAdmin }) {
         ))}
       </div>
 
+      {/* 検索バー */}
+      <div style={{ marginBottom: 14, position: 'relative' }}>
+        <input
+          type="text" value={filter} onChange={e => setFilter(e.target.value)}
+          placeholder="🔍 名前・メール・ロールで検索 (例: 元 / mickey / マネージャー)"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            padding: '10px 14px 10px 14px', borderRadius: 10,
+            border: `1px solid ${T().border}`, background: T().bgInput || T().bgCard,
+            color: T().text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+          }}
+        />
+        {filter && (
+          <button onClick={() => setFilter('')} style={{
+            position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+            background: 'rgba(120,120,128,0.30)', color: '#fff', border: 'none',
+            width: 18, height: 18, borderRadius: '50%', fontSize: 11, cursor: 'pointer',
+            fontFamily: 'inherit', lineHeight: 1, padding: 0,
+          }}>×</button>
+        )}
+      </div>
+
+      {/* メンバーに該当 AUTH が無い場合の警告 (例: 元さんが mickey.xxx で登録されているが
+          実は AUTH 側に存在しない、というスタンス違いを発見できる) */}
+      {orphanedMembers.length > 0 && !filter && (
+        <div style={{
+          marginBottom: 14, padding: '12px 14px',
+          background: T().warnBg, border: `1px solid ${T().warn}40`, borderRadius: 10,
+          fontSize: 12, color: T().warn,
+        }}>
+          ⚠ {orphanedMembers.length}件のメンバーは <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> が設定されているが、AUTH ユーザーが存在しません。
+          <div style={{ marginTop: 6, color: T().textSub, fontWeight: 500 }}>
+            {orphanedMembers.map(m => `${m.name}（${m.email}）`).join(' / ')}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: T().textMuted }}>
+            これらは AUTH 一覧には現れません。本人にダッシュボードでログインしてもらうか、AUTH 側で手動作成して紐付けてください。
+          </div>
+        </div>
+      )}
+
       {/* ユーザーリスト */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {authUsers.map(u => {
+        {filter && filteredAuthUsers.length === 0 && (
+          <div style={{ padding: '20px', textAlign: 'center', color: T().textMuted, fontSize: 12 }}>
+            「{filter}」に一致する AUTH ユーザーが見つかりません
+          </div>
+        )}
+        {filteredAuthUsers.map(u => {
           const member = getUserMember(u.email)
           const isMe = u.email === currentUser?.email
           const color = member ? avatarColor(member.name) : T().textMuted
@@ -374,19 +436,26 @@ function UserListTab({ members, currentUser, isAdmin }) {
       {/* 紐付けモーダル */}
       {linkModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setLinkModal(null)}>
-          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 440, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 16, padding: '24px', width: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>組織図メンバーと紐付け</div>
-            <div style={{ fontSize: 12, color: T().accent, marginBottom: 16 }}>{linkModal.authUser.email}</div>
-            <div style={{ fontSize: 12, color: T().textMuted, marginBottom: 16 }}>紐付けるメンバーを選択してください（変更すると旧紐付けは解除されます）</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+            <div style={{ fontSize: 12, color: T().accent, marginBottom: 8 }}>{linkModal.authUser.email}</div>
+            {/* ヘルプ説明 */}
+            <div style={{
+              padding: '10px 12px', borderRadius: 8, marginBottom: 12,
+              background: T().accentBg, fontSize: 11, color: T().textSub, lineHeight: 1.6,
+            }}>
+              💡 ここで選んだメンバーの <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> を
+              <strong style={{ color: T().accent }}> {linkModal.authUser.email}</strong> に書き換えます (JD・ロール・名前等は保持)。<br />
+              「⚠ AUTH 切替」=他の AUTH と連携中だがこの AUTH に切り替えたい場合に使う (旧側は未紐付けに戻る)。
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
               <div onClick={() => handleLink(linkModal.authUser, null)}
                 style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 12, fontWeight: 600 }}>
                 🔗 紐付けを解除する
               </div>
               {members.map(m => {
                 const alreadyLinked = m.email === linkModal.authUser.email
-                // 「他のアカウントと連携中」= members.email が AUTH に実在するユーザーのメールと一致するときだけ
-                // 単に古い・存在しないメールが入っているだけのケースは紐付け可能 (上書き)
+                // 他の AUTH と連携している? (実在するもの)
                 const otherAuthUser = m.email && m.email !== linkModal.authUser.email
                   ? authUsers.find(u => u.email === m.email)
                   : null
@@ -396,13 +465,29 @@ function UserListTab({ members, currentUser, isAdmin }) {
                 return (
                   <div key={m.id}
                     onClick={() => {
-                      if (linkedToOther) return
+                      if (alreadyLinked) return
+                      if (linkedToOther) {
+                        if (!window.confirm(
+                          `${m.name} は現在 "${m.email}" の AUTH アカウントと連携中です。\n` +
+                          `この紐付けを "${linkModal.authUser.email}" に切り替えますか?\n\n` +
+                          `→ ${m.name} のメンバー情報 (JD/ロール/管理者権限) は保持されます。\n` +
+                          `→ 旧 AUTH "${m.email}" は「未紐付け」に戻ります。`
+                        )) return
+                        handleLink(linkModal.authUser, m.id)
+                        return
+                      }
                       if (hasStaleEmail) {
-                        if (!window.confirm(`${m.name} は現在 "${m.email}" のメールが設定されています。\n紐付けを進めるとこのメールは "${linkModal.authUser.email}" に上書きされます (JD やロール等の他の情報は保持されます)。\n進めますか?`)) return
+                        if (!window.confirm(`${m.name} のメンバーには現在 "${m.email}" のメールが入っています (AUTH 側にこのアカウントは存在しません)。\n紐付けを進めるとこのメールは "${linkModal.authUser.email}" に上書きされます。進めますか?`)) return
                       }
                       handleLink(linkModal.authUser, m.id)
                     }}
-                    style={{ padding: '10px 14px', borderRadius: 8, cursor: linkedToOther ? 'not-allowed' : 'pointer', border: `1px solid ${alreadyLinked ? T().badgeBorder : hasStaleEmail ? T().warn + '60' : T().border}`, background: alreadyLinked ? T().badgeBg : hasStaleEmail ? T().warnBg : linkedToOther ? T().bgHover : T().bgCard, display: 'flex', alignItems: 'center', gap: 10, opacity: linkedToOther ? 0.4 : 1 }}>
+                    style={{
+                      padding: '10px 14px', borderRadius: 8,
+                      cursor: alreadyLinked ? 'default' : 'pointer',
+                      border: `1px solid ${alreadyLinked ? T().badgeBorder : hasStaleEmail ? T().warn + '60' : linkedToOther ? T().warn + '40' : T().border}`,
+                      background: alreadyLinked ? T().badgeBg : hasStaleEmail ? T().warnBg : T().bgCard,
+                      display: 'flex', alignItems: 'center', gap: 10,
+                    }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${c}20`, border: `1.5px solid ${c}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: c, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: T().text }}>{m.name}</div>
@@ -411,7 +496,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
                       </div>
                     </div>
                     {alreadyLinked && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700, flexShrink: 0 }}>現在</span>}
-                    {linkedToOther && <span style={{ fontSize: 10, color: T().textMuted, flexShrink: 0 }}>他のアカウントと連携中</span>}
+                    {linkedToOther && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0 }}>⚠ AUTH 切替</span>}
                     {hasStaleEmail && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0 }}>⚠ メール上書き</span>}
                   </div>
                 )
