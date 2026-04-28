@@ -355,10 +355,12 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
   return (
     <div style={{
       display: 'flex', alignItems: compact ? 'center' : 'flex-start', gap: 10,
-      padding: compact ? '8px 12px' : '10px 14px',
+      padding: compact ? '10px 12px' : '12px 14px',
       background: isDone ? T.doneBg : isOverdue ? T.overdueBg : T.bgCard,
       border: `1px solid ${isDone ? T.doneBorder : isOverdue ? T.overdueBorder : T.border}`,
-      borderRadius: 10, marginBottom: 6, opacity: isDone ? 0.7 : 1,
+      borderRadius: 12, marginBottom: 8, opacity: isDone ? 0.6 : 1,
+      boxShadow: isDone ? 'none' : '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)',
+      transition: 'all 0.2s ease',
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         {isEditing ? (
@@ -558,18 +560,33 @@ function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             onDrop={(e) => handleDrop(e, s)}
             style={{
               flex: 1, minWidth: 240, maxWidth: 400, display: 'flex', flexDirection: 'column',
-              background: isOver ? cfg.bg : T.sectionBg,
-              border: `1px solid ${isOver ? cfg.border : T.border}`,
-              borderRadius: 12, padding: 12, transition: 'background 0.15s, border-color 0.15s',
+              background: isOver
+                ? `linear-gradient(180deg, ${cfg.bg} 0%, ${cfg.color}10 100%)`
+                : `linear-gradient(180deg, ${T.bgCard} 0%, ${cfg.color}06 100%)`,
+              border: `1px solid ${isOver ? cfg.color + '60' : cfg.color + '1a'}`,
+              borderRadius: 16, padding: 14,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+              transition: 'all 0.2s ease',
             }}
           >
-            {/* カラムヘッダー */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${cfg.border}` }}>
-              <span style={{ fontSize: 14, color: cfg.color }}>{cfg.icon}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.textFaint, background: T.bgCard, padding: '1px 8px', borderRadius: 99, border: `1px solid ${T.border}` }}>
-                {colTasks.length}
-              </span>
+            {/* カラムヘッダー (iOS 風) */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 10,
+              borderBottom: `1px solid ${cfg.color}26`,
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.color}c0 100%)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, color: '#fff', fontWeight: 800,
+                boxShadow: `0 2px 4px ${cfg.color}55`,
+              }}>{cfg.icon}</div>
+              <span style={{ fontSize: 14, fontWeight: 800, color: cfg.color, letterSpacing: '-0.01em' }}>{cfg.label}</span>
+              <span style={{
+                marginLeft: 'auto',
+                fontSize: 11, fontWeight: 800, color: cfg.color,
+                background: `${cfg.color}1f`, padding: '2px 10px', borderRadius: 99,
+              }}>{colTasks.length}</span>
             </div>
             {/* カード */}
             <div style={{ flex: 1, overflowY: 'auto' }}>

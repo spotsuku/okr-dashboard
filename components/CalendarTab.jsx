@@ -274,31 +274,40 @@ function CalendarHeader({ T, weekStart, mobileDay, isMobile, onPrev, onNext, onT
   const end = addDays(weekStart, 6)
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      padding: '10px 14px', borderBottom: `1px solid ${T.border}`,
-      background: T.bgCard, flexShrink: 0,
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
+      background: 'rgba(255,255,255,0.65)',
+      backdropFilter: 'blur(20px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      flexShrink: 0,
     }}>
-      <button onClick={onPrev} style={btnSm(T)}>← {isMobile ? '前日' : '前週'}</button>
-      <button onClick={onToday} style={btnSm(T, true)}>{isMobile ? '今日' : '今週'}</button>
-      <button onClick={onNext} style={btnSm(T)}>{isMobile ? '翌日' : '翌週'} →</button>
-      <div style={{ marginLeft: 6, fontSize: 13, fontWeight: 700, color: T.text, flex: isMobile ? 1 : 'none' }}>
+      <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 9 }}>
+        <button onClick={onPrev} style={btnSm(T)}>← {isMobile ? '前日' : '前週'}</button>
+        <button onClick={onToday} style={btnSm(T, true)}>{isMobile ? '今日' : '今週'}</button>
+        <button onClick={onNext} style={btnSm(T)}>{isMobile ? '翌日' : '翌週'} →</button>
+      </div>
+      <div style={{ marginLeft: 6, fontSize: 14, fontWeight: 800, color: T.text, flex: isMobile ? 1 : 'none', letterSpacing: '-0.01em' }}>
         {isMobile ? jstLabel(mobileDay) : `${jstLabel(weekStart)} 〜 ${jstLabel(end)}`}
       </div>
       {!isMobile && <div style={{ flex: 1 }} />}
-      <button onClick={onReload} disabled={loading} style={btnSm(T)}>
-        {loading ? '…' : '🔄'}
-      </button>
+      <button onClick={onReload} disabled={loading} style={{
+        padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
+        background: 'rgba(120,120,128,0.12)', color: T.textSub,
+        fontSize: 13, fontFamily: 'inherit',
+      }}>{loading ? '…' : '🔄'}</button>
     </div>
   )
 }
 
 function btnSm(T, active = false) {
   return {
-    padding: '5px 11px', borderRadius: 6,
-    background: active ? T.accent : 'transparent',
-    color: active ? '#fff' : T.textSub,
-    border: `1px solid ${active ? T.accent : T.border}`,
-    fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+    padding: '6px 12px', borderRadius: 7,
+    background: active ? T.bgCard : 'transparent',
+    color: active ? T.text : T.textSub,
+    border: 'none',
+    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
+    fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+    transition: 'all 0.15s ease', whiteSpace: 'nowrap',
   }
 }
 
