@@ -6,6 +6,7 @@ import { openNotionUrl } from '../lib/notionLink'
 import MeetingImport from './MeetingImport'
 import { ComposeModal } from './ConfirmationsTab'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { HeroCard } from './iosUI'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -339,29 +340,14 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
   const noMembers = members.length === 0
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '8px 0 40px' }}>
-      {/* ヘッダーカード */}
-      <div style={{ textAlign: 'center', marginBottom: 24 }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 12,
-          padding: '14px 24px', background: T.bgCard, borderRadius: 14,
-          border: `1px solid ${T.borderMid}`,
-        }}>
-          <span style={{ fontSize: 36 }}>🌅</span>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>平日毎日</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>朝会</div>
-          </div>
-        </div>
-        <div style={{ marginTop: 12, fontSize: 13, color: T.textMuted }}>
-          📅 本日: <strong style={{ color: T.text }}>{todayLabel}</strong>
-          {isResume && (
-            <span style={{ marginLeft: 10, padding: '2px 10px', borderRadius: 99, background: T.warnBg, color: T.warn, fontSize: 11, fontWeight: 700 }}>
-              リセット済み
-            </span>
-          )}
-        </div>
-      </div>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 40px' }}>
+      {/* ヒーローカード (iPad 風) */}
+      <HeroCard T={T}
+        eyebrow="平日毎日"
+        title="🌅 朝会"
+        subtitle={`本日 ${todayLabel}${isResume ? ' ・ リセット済み' : ''}`}
+        color="#FF9500"
+      />
 
       {/* Notion 議事録案内 */}
       <div style={{

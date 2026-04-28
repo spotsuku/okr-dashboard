@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理
@@ -570,35 +571,41 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   const currentColIndex = MONTH_ORDER.indexOf(currentMonth)
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
-      {/* ヘッダー */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 18, fontWeight: 500, color: T.text, margin: 0 }}>年間マイルストーン</h1>
-        <span style={{ fontSize: 12, color: T.textMuted }}>{fiscalYear}年度（4月〜翌3月）</span>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-            <button
-              onClick={() => setShowAllOrgs(v => !v)}
-              style={{
-                padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: 6,
-                cursor: 'pointer', background: showAllOrgs ? hexWithAlpha('#4d9fff', 0.12) : 'transparent',
-                fontSize: 12, color: T.textSub, fontFamily: 'inherit',
-              }}
-            >{showAllOrgs ? '全組織表示中' : '全組織を表示'}</button>
-            <button
-              onClick={() => setShowAddOrg(true)}
-              style={{
-                padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: 6,
-                cursor: 'pointer', background: 'transparent',
-                fontSize: 12, color: T.textSub, fontFamily: 'inherit',
-              }}
-            >+ 事業部を追加</button>
+    <div style={{ flex: 1, overflowY: 'auto', padding: 24, position: 'relative' }}>
+      <BgGlow T={T} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+      <LargeTitle T={T}
+        title="年間マイルストーン"
+        subtitle={`${fiscalYear}年度（4月〜翌3月）`}
+        right={isAdmin ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setShowAllOrgs(v => !v)} style={{
+              padding: '7px 14px', border: `1px solid ${T.borderMid}`, borderRadius: 9,
+              cursor: 'pointer', background: showAllOrgs ? T.accentBg : 'transparent',
+              fontSize: 12, fontWeight: 600, color: showAllOrgs ? T.accent : T.textSub, fontFamily: 'inherit',
+            }}>{showAllOrgs ? '全組織表示中' : '全組織を表示'}</button>
+            <button onClick={() => setShowAddOrg(true)} style={{
+              padding: '7px 14px', border: 'none', borderRadius: 9,
+              cursor: 'pointer', background: T.accent, color: '#fff',
+              fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              boxShadow: `0 2px 6px ${T.accent}40`,
+            }}>＋ 事業部を追加</button>
           </div>
-        )}
-      </div>
+        ) : null}
+      />
 
-      {/* ビュー切替タブ */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 16, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.borderMid}`, alignSelf: 'flex-start', width: 'fit-content' }}>
+      {/* ビュー切替タブ (SegmentedControl) */}
+      <div style={{ marginBottom: 16 }}>
+        <SegmentedControl T={T} value={viewMode} onChange={setViewMode}
+          items={[
+            { key: 'annual', label: '年間' },
+            { key: 'q1',     label: 'Q1' },
+            { key: 'q2',     label: 'Q2' },
+            { key: 'q3',     label: 'Q3' },
+            { key: 'q4',     label: 'Q4' },
+          ]} />
+      </div>
+      <div style={{ display: 'none' }}>
         {[
           { key: 'annual', label: '年間' },
           { key: 'q1',     label: 'Q1（4〜6月）' },
@@ -784,6 +791,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
           T={T}
         />
       )}
+      </div>
     </div>
   )
 }

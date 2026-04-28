@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { HeroCard } from './iosUI'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { computeKAKey } from '../lib/kaKey'
@@ -1406,13 +1407,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           ) : (
             // 会議選択モード
             <>
-              <div style={{ textAlign:'center', marginBottom:24 }}>
-                <div style={{ fontSize:11, color:'#4d9fff', letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:6 }}>Weekly MTG</div>
-                <h1 style={{ fontSize:22, fontWeight:700, margin:0, marginBottom:6 }}>今週の会議を選択</h1>
-                <p style={{ fontSize:12, color:wT().textMuted, margin:0 }}>
-                  会議ごとに対象の部署・チーム・観点が自動で絞り込まれます
-                </p>
-              </div>
+              <HeroCard T={wT()}
+                eyebrow="Weekly MTG"
+                title="今週の会議を選択"
+                subtitle="会議ごとに対象の部署・チーム・観点が自動で絞り込まれます"
+                color="#007AFF"
+              />
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12 }}>
                 {WEEKLY_MTG_MEETINGS.map(m => {
                   // マネージャー定例 (withDiscussion) はチーム単位のサマリー会議

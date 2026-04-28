@@ -114,6 +114,122 @@ export function LargeTitle({ T, title, subtitle, right }) {
   )
 }
 
+// ─── ヒーローカード (大きいグラデーション ヘッダー) ───────────────────────
+// title (大文字), subtitle, eyebrow (上の小さなラベル), color (System Blue 等)
+export function HeroCard({ T, eyebrow, title, subtitle, color = '#007AFF', right, children }) {
+  return (
+    <div style={{
+      marginTop: 16, marginBottom: 22,
+      padding: '26px 26px 22px',
+      background: `linear-gradient(135deg, ${color}f5 0%, ${color}c0 60%, ${color}80 100%)`,
+      borderRadius: 22,
+      color: '#FFFFFF',
+      position: 'relative', overflow: 'hidden',
+      boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${color}33, 0 24px 56px ${color}26`,
+    }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: -80, right: -60, width: 280, height: 280,
+        background: 'radial-gradient(circle, rgba(255,255,255,0.30) 0%, transparent 60%)',
+        borderRadius: '50%', pointerEvents: 'none',
+      }} />
+      <div aria-hidden style={{
+        position: 'absolute', bottom: -100, left: -40, width: 240, height: 240,
+        background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 65%)',
+        borderRadius: '50%', pointerEvents: 'none',
+      }} />
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {eyebrow && (
+            <div style={{
+              fontSize: 11, fontWeight: 800, letterSpacing: '0.18em',
+              opacity: 0.85, textTransform: 'uppercase', marginBottom: 8,
+            }}>{eyebrow}</div>
+          )}
+          <div style={{
+            fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em',
+            lineHeight: 1.15, marginBottom: subtitle ? 6 : 0,
+          }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 13, opacity: 0.92 }}>{subtitle}</div>}
+        </div>
+        {right && <div style={{ flexShrink: 0 }}>{right}</div>}
+      </div>
+      {children && (
+        <div style={{ position: 'relative', zIndex: 1, marginTop: 16 }}>{children}</div>
+      )}
+    </div>
+  )
+}
+
+// ─── 立体感のある カード (汎用ラッパー) ───────────────────────────────────
+// padding / background / border / shadow を iOS 風で統一。
+// 普通のカードコンテナとして全画面で使い回す。
+export function Card({ T, children, padding = 18, accent, style, onClick, hoverable = false, fullHeight = false }) {
+  const accentBg = accent ? `linear-gradient(180deg, ${T.bgCard} 0%, ${accent}05 100%)` : T.bgCard
+  const accentBorder = accent ? `${accent}1f` : T.border
+  const shadow = `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)`
+  const shadowHover = accent
+    ? `0 1px 2px rgba(0,0,0,0.06), 0 6px 16px ${accent}1a, 0 24px 56px ${accent}26`
+    : `0 1px 2px rgba(0,0,0,0.06), 0 8px 20px rgba(0,0,0,0.06), 0 24px 48px rgba(0,0,0,0.08)`
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        position: 'relative', overflow: 'hidden',
+        background: accentBg,
+        border: `1px solid ${accentBorder}`,
+        borderRadius: 16, padding,
+        boxShadow: shadow,
+        height: fullHeight ? '100%' : undefined,
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'all 0.2s ease',
+        ...style,
+      }}
+      onMouseEnter={hoverable && onClick ? e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = shadowHover } : undefined}
+      onMouseLeave={hoverable && onClick ? e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = shadow } : undefined}
+    >
+      {/* 上端ハイライト (微妙なガラス感) */}
+      {accent && (
+        <div aria-hidden style={{
+          position: 'absolute', top: 0, left: 12, right: 12, height: 1,
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)',
+          pointerEvents: 'none',
+        }} />
+      )}
+      {children}
+    </div>
+  )
+}
+
+// ─── セクションヘッダー (label + sub の組) ──────────────────────────────
+export function SectionHeader({ T, label, sub, right, marginTop = 0 }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'baseline', gap: 10,
+      padding: '0 4px 12px', marginTop,
+    }}>
+      <h2 style={{
+        fontSize: 18, fontWeight: 800, color: T.text, margin: 0,
+        letterSpacing: '-0.01em',
+      }}>{label}</h2>
+      {sub && <span style={{ fontSize: 12, color: T.textMuted }}>{sub}</span>}
+      {right && (<><div style={{ flex: 1 }} /><div style={{ flexShrink: 0 }}>{right}</div></>)}
+    </div>
+  )
+}
+
+// ─── 背景の青グロウ (画面トップに置くやわらかい光) ──────────────────────
+export function BgGlow({ T, color }) {
+  const c = color || T.accent || '#007AFF'
+  return (
+    <div aria-hidden style={{
+      position: 'absolute', top: -200, left: '50%', transform: 'translateX(-50%)',
+      width: 800, height: 600,
+      background: `radial-gradient(ellipse, ${c}18 0%, transparent 60%)`,
+      pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
+    }} />
+  )
+}
+
 // ─── シート型モーダル ───────────────────────────────────────────────────
 // 背景 backdrop-blur、下から (またはモバイルでは下スクロール) 滑り込み
 export function SheetModal({ T, open, onClose, title, children, footer, maxWidth = 560 }) {
