@@ -1,5 +1,16 @@
 'use client'
 // iOS / iPadOS 風の汎用 UI 部品 (Plan B)
+//
+// スタイル値は lib/iosStyles.js のファクトリから取得 → トンマナの中央管理。
+// このファイルの style={{...}} の値はファクトリ呼び出しに置き換え推奨。
+import {
+  cardStyle, cardHover, heroStyle, sectionHeaderStyle,
+  pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger,
+  inputStyle, glassBarStyle, accentRingStyle,
+  kpiNumber, largeTitle as ts_largeTitle, pageSubtitle,
+} from '../lib/iosStyles'
+import { SHADOWS, RADIUS, SPACING, TYPO, GLASS, TRANSITION } from '../lib/themeTokens'
+// （以下の本体はまだ inline 値を一部残していますが、新規利用は上記ファクトリに統一）
 // - SegmentedControl: 「今週/今月/全期間」のような3〜5択タブ
 // - Toggle: チェックボックスの代替となる丸いトグル
 // - LargeTitle: ページ最上部の大型タイトル (Text-2xl Font-bold)
