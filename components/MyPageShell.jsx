@@ -1295,7 +1295,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           minHeight: isMobile ? 'auto' : 0,
         }}>
           {showW('today') && (
-            <Section T={T} icon="⚡" title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
+            <Section T={T} icon="⚡" accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
               <button onClick={loadTasks} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1308,7 +1308,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             </Section>
           )}
           {showW('week') && (
-            <Section T={T} icon="📅" title="今週やること" flex={1}>
+            <Section T={T} icon="📅" accent={T.success} title="今週やること" flex={1}>
               {taskBoard.loading ? <Loading T={T} /> : (
                 <WeekTasks T={T} byWeekday={taskBoard.byWeekday} canEdit={isViewingSelf} onToggle={toggleTaskDone} />
               )}
@@ -1323,7 +1323,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
           {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
-          <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
+          <Section T={T} icon="📊" accent={T.warn} title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
               borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1424,7 +1424,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             />
           )}
           {showW('achievements') && (
-            <Section T={T} icon="🏆" title="今週の成果" flex={0} headerRight={
+            <Section T={T} icon="🏆" accent={T.warn} title="今週の成果" flex={0} headerRight={
               <button onClick={loadAchievements} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -2229,30 +2229,47 @@ function Stat({ T, label, value, color }) {
   )
 }
 
-function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
+function Section({ T, icon, title, children, flex = 1, headerRight = null, accent }) {
   const isMobile = useIsMobile()
   // flex=0 の場合は内容に合わせて自動サイズ (flex-basis:0 の罠を回避)
   // flex>=1 の場合は grow して親の残りスペースを埋める
   // モバイルでは常に自動サイズ (外側スクロール + 中身フルハイト)
   const isAutoSize = isMobile || flex === 0 || flex === 'none'
+  // iOS 風: 立体感 (3層シャドウ) + サブカラー (accent 渡されたら微妙にチント)
+  const baseStyle = {
+    background: accent ? `linear-gradient(180deg, ${T.bgCard} 0%, ${accent}06 100%)` : T.bgCard,
+    border: `1px solid ${accent ? accent + '1f' : T.border}`,
+    borderRadius: 14,
+    overflow: 'hidden',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.03)',
+    display: 'flex', flexDirection: 'column',
+  }
   const outerStyle = isAutoSize
-    ? { flex: '0 0 auto', display: 'flex', flexDirection: 'column',
-        background: T.bgCard, border: `1px solid ${T.border}`,
-        borderRadius: 10, overflow: 'hidden' }
-    : { flex, display: 'flex', flexDirection: 'column', minHeight: 0,
-        background: T.bgCard, border: `1px solid ${T.border}`,
-        borderRadius: 10, overflow: 'hidden' }
+    ? { ...baseStyle, flex: '0 0 auto' }
+    : { ...baseStyle, flex, minHeight: 0 }
   const innerStyle = isAutoSize
-    ? { padding: isMobile ? '10px 14px' : '8px 12px' }
-    : { flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }
+    ? { padding: isMobile ? '12px 14px' : '10px 14px' }
+    : { flex: 1, overflowY: 'auto', padding: '10px 14px', minHeight: 0 }
   return (
     <div style={outerStyle}>
       <div style={{
-        padding: '8px 12px', borderBottom: `1px solid ${T.border}`,
-        fontSize: 12, fontWeight: 700, color: T.text, display: 'flex', alignItems: 'center', gap: 6,
-        flexShrink: 0, background: T.sectionBg,
+        padding: '10px 14px',
+        borderBottom: `1px solid ${T.border}`,
+        fontSize: 12, fontWeight: 800, color: T.text,
+        display: 'flex', alignItems: 'center', gap: 8,
+        flexShrink: 0,
+        background: accent ? `${accent}0d` : T.sectionBg,
+        letterSpacing: '-0.01em',
       }}>
-        <span>{icon}</span><span style={{ flex: 1 }}>{title}</span>
+        {icon && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 24, height: 24, borderRadius: 7,
+            background: accent ? `${accent}1f` : 'rgba(0,0,0,0.05)',
+            fontSize: 14, lineHeight: 1,
+          }}>{icon}</span>
+        )}
+        <span style={{ flex: 1 }}>{title}</span>
         {headerRight}
       </div>
       <div style={innerStyle}>
@@ -2897,7 +2914,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
   const extra = Math.max(0, items.length - visible.length)
 
   return (
-    <Section T={T} icon="📅" title="Google カレンダー (直近8時間)" flex={0}>
+    <Section T={T} icon="📅" accent={T.info} title="Google カレンダー (直近8時間)" flex={0}>
       {loading ? (
         <div style={{ padding: 12, color: T.textMuted, fontSize: 11 }}>読み込み中...</div>
       ) : isUnconnected ? (
@@ -2994,7 +3011,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 
   return (
     <Section
-      T={T} icon="📧" title="Gmail (要対応 5件)" flex={0}
+      T={T} icon="📧" accent="#FF3B30" title="Gmail (要対応 5件)" flex={0}
       headerRight={
         !isUnconnected && !error ? (
           <button onClick={() => onGoToTab?.('mail')} style={{
