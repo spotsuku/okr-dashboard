@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildQuarterMap } from '../lib/objectiveMatching'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import KASection from './KASection'
 
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
@@ -24,38 +25,37 @@ function makeKATheme(t) {
 }
 
 // ─── themes ────────────────────────────────────────────────────────────────
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg: '#0F1117', bgCard: '#111828', bgExpanded: 'rgba(0,0,0,0.2)',
+    ...COMMON_TOKENS.dark,
+    bgExpanded: 'rgba(0,0,0,0.2)',
     bgInner: 'rgba(255,255,255,0.03)', bgKr: 'rgba(255,255,255,0.03)',
     bgKrOuter: 'rgba(255,255,255,0.02)',
-    text: '#E8ECF0', textSub: '#dde0ec', textMuted: '#606880',
-    textFaint: '#404660', textFaintest: '#303650',
-    border: 'rgba(255,255,255,0.06)', borderDash: 'rgba(255,255,255,0.08)',
-    borderLight: 'rgba(255,255,255,0.07)', borderKr: 'rgba(255,255,255,0.06)',
+    borderDash: 'rgba(255,255,255,0.08)',
+    borderKr: 'rgba(255,255,255,0.06)',
     progressBg: 'rgba(255,255,255,0.06)',
-    btnEditBg: 'rgba(77,159,255,0.12)', btnEditBorder: 'rgba(77,159,255,0.25)', btnEditColor: '#4d9fff',
-    btnDelBg: 'rgba(255,107,107,0.1)', btnDelBorder: 'rgba(255,107,107,0.2)', btnDelColor: '#ff6b6b',
+    btnEditBg: 'rgba(10,132,255,0.16)', btnEditBorder: 'rgba(10,132,255,0.30)', btnEditColor: '#0A84FF',
+    btnDelBg: 'rgba(255,69,58,0.16)', btnDelBorder: 'rgba(255,69,58,0.30)', btnDelColor: '#FF453A',
     tabActiveBg: 'rgba(255,255,255,0.05)',
     badgePeriodBg: 'rgba(255,255,255,0.06)',
-    addBtnBg: '#4d9fff',
-    refBg: 'rgba(255,255,255,0.03)', refBorder: 'rgba(255,255,255,0.08)',
+    addBtnBg: '#0A84FF',
+    refBg: 'rgba(48,209,88,0.16)', refBorder: 'rgba(48,209,88,0.30)',
   },
   light: {
-    bg: '#EEF2F5', bgCard: '#FFFFFF', bgExpanded: '#F5F7FA',
-    bgInner: '#F8FAFC', bgKr: '#F5F7FA',
-    bgKrOuter: '#F8FAFC',
-    text: '#2D3748', textSub: '#2D3748', textMuted: '#5A6577',
-    textFaint: '#A0AEC0', textFaintest: '#DDE4EA',
-    border: '#E2E8F0', borderDash: '#CBD5E0',
-    borderLight: '#E2E8F0', borderKr: '#E2E8F0',
-    progressBg: '#E8EEF2',
-    btnEditBg: '#EBF4FF', btnEditBorder: '#B3D4FC', btnEditColor: '#3B82C4',
-    btnDelBg: '#FFF1F0', btnDelBorder: '#FECACA', btnDelColor: '#DC6B6B',
-    tabActiveBg: '#EEF2F5',
-    badgePeriodBg: '#EEF2F5',
-    addBtnBg: '#5A8A7A',
-    refBg: '#F0F7F4', refBorder: '#D4E8DE',
+    ...COMMON_TOKENS.light,
+    bgExpanded: 'rgba(0,0,0,0.03)',
+    bgInner: 'rgba(0,0,0,0.02)', bgKr: 'rgba(0,0,0,0.03)',
+    bgKrOuter: 'rgba(0,0,0,0.02)',
+    borderDash: 'rgba(0,0,0,0.10)',
+    borderKr: 'rgba(0,0,0,0.06)',
+    progressBg: 'rgba(0,0,0,0.06)',
+    btnEditBg: 'rgba(0,122,255,0.10)', btnEditBorder: 'rgba(0,122,255,0.30)', btnEditColor: '#007AFF',
+    btnDelBg: 'rgba(255,59,48,0.10)', btnDelBorder: 'rgba(255,59,48,0.30)', btnDelColor: '#FF3B30',
+    tabActiveBg: '#F2F2F7',
+    badgePeriodBg: '#F2F2F7',
+    addBtnBg: '#007AFF',
+    refBg: 'rgba(52,199,89,0.08)', refBorder: 'rgba(52,199,89,0.30)',
   },
 }
 
@@ -233,15 +233,22 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   )
 
   return (
-    <div style={{ padding: '24px 24px', maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: T().text }}>年間ブレイクダウン</div>
-          <div style={{ fontSize: 13, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg, border: `1px solid ${T().addBtnBg}40` }}>
+    <div style={{ padding: '0 24px 24px', maxWidth: 900, margin: '0 auto', position: 'relative' }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: -150, left: '50%', transform: 'translateX(-50%)',
+        width: 600, height: 400,
+        background: `radial-gradient(ellipse, ${T().addBtnBg}18 0%, transparent 60%)`,
+        pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
+      }} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ marginBottom: 22, padding: '20px 0 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: T().text, margin: 0, letterSpacing: '-0.02em' }}>年間ブレイクダウン</h1>
+          <div style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg }}>
             📅 {fiscalYear}年度
           </div>
         </div>
-        <div style={{ fontSize: 13, color: T().textMuted }}>通期OKRをクリックして四半期への展開を確認・管理できます</div>
+        <div style={{ fontSize: 13, color: T().textMuted, fontWeight: 500 }}>通期OKRをクリックして四半期への展開を確認・管理できます</div>
       </div>
 
       {filteredObjs.map(ann => {
@@ -257,20 +264,45 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         const qData = quarterMap[ann.id] || { q1: [], q2: [], q3: [], q4: [] }
 
         return (
-          <div key={ann.id} style={{ marginBottom: 16, background: T().bgCard, border: `1px solid ${isOpen ? lColor + '40' : lColor + '18'}`, borderRadius: 16, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+          <div key={ann.id} style={{
+            marginBottom: 18,
+            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${lColor}05 100%)`,
+            border: `1px solid ${isOpen ? lColor + '40' : lColor + '15'}`,
+            borderRadius: 18, overflow: 'hidden',
+            position: 'relative',
+            boxShadow: isOpen
+              ? `0 1px 2px rgba(0,0,0,0.05), 0 8px 24px ${lColor}26, 0 16px 40px rgba(0,0,0,0.04)`
+              : '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+            transition: 'all 0.25s ease',
+          }}>
+            {/* 上端に薄い色グラデ帯 (左の太線の代わり) */}
+            <div aria-hidden style={{
+              position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+              background: `linear-gradient(90deg, ${lColor} 0%, ${lColor}80 100%)`,
+            }} />
+            {/* 右上に放射状グロウ */}
+            <div aria-hidden style={{
+              position: 'absolute', top: -40, right: -40, width: 200, height: 200,
+              background: `radial-gradient(circle, ${lColor}10 0%, transparent 65%)`,
+              pointerEvents: 'none',
+            }} />
 
             {/* 通期ヘッダー */}
-            <div onClick={() => toggleExpand(ann.id)} style={{ padding: '18px 20px', cursor: 'pointer', borderLeft: `4px solid ${lColor}`, display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div onClick={() => toggleExpand(ann.id)} style={{
+              padding: '20px 24px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 14,
+              position: 'relative', zIndex: 1,
+            }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${lColor}15`, color: lColor, fontWeight: 600 }}>{levelIcon} {levelName}</span>
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().badgePeriodBg, color: T().textMuted }}>通期</span>
-                  {r && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${r.color}18`, color: r.color, fontWeight: 700 }}>{r.label}</span>}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${lColor}1f`, color: lColor, fontWeight: 700 }}>{levelIcon} {levelName}</span>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700 }}>通期</span>
+                  {r && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${r.color}1f`, color: r.color, fontWeight: 800 }}>{r.label}</span>}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T().textSub, lineHeight: 1.4, marginBottom: ann.owner ? 6 : 10 }}>{ann.title}</div>
-                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={18} />
-                  <span>担当：{ann.owner}</span>
+                <div style={{ fontSize: 16, fontWeight: 800, color: T().text, lineHeight: 1.45, marginBottom: ann.owner ? 8 : 12, letterSpacing: '-0.01em' }}>{ann.title}</div>
+                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={20} />
+                  <span style={{ fontWeight: 600 }}>担当：{ann.owner}</span>
                 </div>}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {Q_KEYS.map(qKey => {
@@ -278,19 +310,23 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
                     const qr = qProg != null ? getRating(qProg) : null
                     return (
-                      <div key={qKey} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, fontWeight: 600, background: qr ? `${qr.color}15` : T().badgePeriodBg, color: qr ? qr.color : T().textFaintest, border: `1px solid ${qr ? qr.color + '30' : T().borderLight}` }}>
+                      <div key={qKey} style={{
+                        fontSize: 11, padding: '4px 12px', borderRadius: 8, fontWeight: 700,
+                        background: qr ? `${qr.color}15` : 'rgba(0,0,0,0.04)',
+                        color: qr ? qr.color : T().textFaintest,
+                      }}>
                         {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '未設定'}
                       </div>
                     )
                   })}
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: r?.color || T().textFaint }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: `1px solid ${T().btnEditBorder}`, color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: `1px solid ${T().btnDelBorder}`, color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
-                  <div style={{ fontSize: 16, color: isOpen ? T().btnEditColor : T().textFaint, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                <div style={{ fontSize: 32, fontWeight: 900, color: r?.color || T().textFaint, letterSpacing: '-0.02em' }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                  <div style={{ fontSize: 18, color: isOpen ? lColor : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
                 </div>
               </div>
             </div>
@@ -413,6 +449,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
           </div>
         )
       })}
+      </div>
     </div>
   )
 }

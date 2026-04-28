@@ -1,22 +1,13 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
-const DARK_T = {
-  bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
-  border:'rgba(255,255,255,0.07)', borderLight:'rgba(255,255,255,0.04)',
-  borderMid:'rgba(255,255,255,0.1)', text:'#e8eaf0', textSub:'#a0a8be',
-  textMuted:'#606880', textFaint:'#404660', textFaintest:'#303450',
-  headerBg:'rgba(9,13,24,0.95)',
-}
-const LIGHT_T = {
-  bg:'#f0f2f7', bgCard:'#ffffff', bgCard2:'#f7f8fc', bgSidebar:'#ffffff',
-  border:'rgba(0,0,0,0.08)', borderLight:'rgba(0,0,0,0.05)',
-  borderMid:'rgba(0,0,0,0.12)', text:'#1a1f36', textSub:'#4a5270',
-  textMuted:'#7080a0', textFaint:'#90a0bc', textFaintest:'#b0bcd0',
-  headerBg:'rgba(240,242,247,0.95)',
-}
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
+const DARK_T  = { ...COMMON_TOKENS.dark,  headerBg: 'rgba(0,0,0,0.85)' }
+const LIGHT_T = { ...COMMON_TOKENS.light, headerBg: 'rgba(242,242,247,0.85)' }
 const W_THEMES = { dark: DARK_T, light: LIGHT_T }
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────────
@@ -245,25 +236,14 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
   if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', fontFamily: 'system-ui,sans-serif' }}>
-
-      {/* ─── フィルタバー ─── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: wT().textMuted }}>期間：</span>
-        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${wT().border}` }}>
-          {periodTabs.map(p => (
-            <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
-              padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: activePeriod === p.key ? '#a855f7' : 'transparent',
-              color: activePeriod === p.key ? '#fff' : wT().textMuted,
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-            }}>{p.label}</button>
-          ))}
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, marginLeft: 'auto', background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}` }}>
-          {fiscalYear}年度
-        </div>
-      </div>
+    <div style={{ padding: '0 24px 24px', maxWidth: 1100, margin: '0 auto', position: 'relative' }}>
+      <BgGlow T={wT()} color="#AF52DE" />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+      <LargeTitle T={wT()}
+        title="📊 全社サマリー"
+        subtitle={`${fiscalYear}年度 ・ 期間別 OKR 進捗の全社集計`}
+        right={<SegmentedControl T={wT()} value={activePeriod} onChange={setActivePeriod} items={periodTabs} />}
+      />
 
       {/* ─── 全社サマリーヘッダー ─── */}
       <div style={{
@@ -413,6 +393,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }

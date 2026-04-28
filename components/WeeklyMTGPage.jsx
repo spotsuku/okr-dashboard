@@ -2,24 +2,17 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { HeroCard, DashboardTile } from './iosUI'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 
-const DARK_T = {
-  bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
-  border:'rgba(255,255,255,0.07)', borderLight:'rgba(255,255,255,0.04)',
-  borderMid:'rgba(255,255,255,0.1)', text:'#e8eaf0', textSub:'#a0a8be',
-  textMuted:'#606880', textFaint:'#404660', textFaintest:'#303450',
-}
-const LIGHT_T = {
-  bg:'#f0f2f7', bgCard:'#ffffff', bgCard2:'#f7f8fc', bgSidebar:'#ffffff',
-  border:'rgba(0,0,0,0.08)', borderLight:'rgba(0,0,0,0.05)',
-  borderMid:'rgba(0,0,0,0.12)', text:'#1a1f36', textSub:'#4a5270',
-  textMuted:'#7080a0', textFaint:'#90a0bc', textFaintest:'#b0bcd0',
-}
+// テーマは lib/themeTokens.js で一元管理
+const DARK_T  = { ...COMMON_TOKENS.dark }
+const LIGHT_T = { ...COMMON_TOKENS.light }
 const W_THEMES = { dark: DARK_T, light: LIGHT_T }
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
@@ -1414,47 +1407,29 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           ) : (
             // 会議選択モード
             <>
-              <div style={{ textAlign:'center', marginBottom:24 }}>
-                <div style={{ fontSize:11, color:'#4d9fff', letterSpacing:'0.18em', textTransform:'uppercase', marginBottom:6 }}>Weekly MTG</div>
-                <h1 style={{ fontSize:22, fontWeight:700, margin:0, marginBottom:6 }}>今週の会議を選択</h1>
-                <p style={{ fontSize:12, color:wT().textMuted, margin:0 }}>
-                  会議ごとに対象の部署・チーム・観点が自動で絞り込まれます
-                </p>
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12 }}>
+              <HeroCard T={wT()}
+                eyebrow="Weekly MTG"
+                title="今週の会議を選択"
+                subtitle="会議ごとに対象の部署・チーム・観点が自動で絞り込まれます"
+                color="#007AFF"
+              />
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:14 }}>
                 {WEEKLY_MTG_MEETINGS.map(m => {
-                  // マネージャー定例 (withDiscussion) はチーム単位のサマリー会議
                   const viewBadge = m.weeklyMTG.withDiscussion ? 'チームサマリー'
                     : m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
                     : m.weeklyMTG.viewMode === 'ka' ? 'KA重点'
                     : '両方'
                   const scope = m.weeklyMTG.levelName || (m.weeklyMTG.levelSelect === 'department' ? '事業部選択' : '全社')
                   return (
-                    <button key={m.key} onClick={() => selectMeeting(m.key)} style={{
-                      padding:'16px 18px', borderRadius:12, border:`1px solid ${wT().borderMid}`,
-                      background:wT().bgCard, color:wT().text, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                      position:'relative', overflow:'hidden', transition:'all 0.15s',
-                    }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = m.color; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${m.color}22` }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = wT().borderMid; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
-                    >
-                      <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:m.color }} />
-                      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-                        <div style={{
-                          width:36, height:36, borderRadius:10, background:`${m.color}15`,
-                          border:`1px solid ${m.color}30`, display:'flex', alignItems:'center',
-                          justifyContent:'center', fontSize:18, flexShrink:0,
-                        }}>{m.icon}</div>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.title}</div>
-                          <div style={{ fontSize:10, color:wT().textMuted }}>{m.schedule}</div>
-                        </div>
-                      </div>
-                      <div style={{ display:'flex', gap:6, fontSize:10 }}>
-                        <span style={{ padding:'2px 8px', borderRadius:99, background:`${m.color}15`, color:m.color, fontWeight:600 }}>{viewBadge}</span>
-                        <span style={{ padding:'2px 8px', borderRadius:99, background:wT().borderLight || 'rgba(128,128,128,0.1)', color:wT().textMuted, fontWeight:600 }}>{scope}</span>
-                      </div>
-                    </button>
+                    <DashboardTile key={m.key} T={wT()}
+                      icon={m.icon}
+                      title={m.title}
+                      sub={`${m.schedule} ・ ${scope}`}
+                      color={m.color}
+                      badge={viewBadge}
+                      status="会議を開始"
+                      onClick={() => selectMeeting(m.key)}
+                    />
                   )
                 })}
               </div>

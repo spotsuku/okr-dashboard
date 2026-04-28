@@ -14,41 +14,36 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 
 // ─────────────────────────────────────────────────
 // テーマ
 // ─────────────────────────────────────────────────
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg: '#0F1117', bgCard: '#1A1D27', bgCard2: '#12151F',
-    bgInput: 'rgba(255,255,255,0.07)', bgHover: 'rgba(255,255,255,0.05)',
-    border: 'rgba(255,255,255,0.10)', borderMid: 'rgba(255,255,255,0.18)',
-    borderDash: 'rgba(255,255,255,0.13)',
-    text: '#E8ECF0', textSub: '#B0BAC8', textMuted: '#7a8599',
-    textFaint: '#4A5468', textFaintest: '#2E3347',
-    accent: '#5DCAA5', accentSolid: '#2F7A78',
-    warn: '#F0997B', warnBg: 'rgba(240,153,123,0.15)',
-    green: '#3D7A6A', greenBg: 'rgba(61,122,106,0.14)', greenBorder: 'rgba(61,122,106,0.35)',
-    link: '#5B9AEF', linkBg: 'rgba(91,154,239,0.12)', linkBorder: 'rgba(91,154,239,0.32)',
-    navActiveBg: 'rgba(47,122,120,0.18)', navBorder: '#2F7A78', navText: '#5DCAA5',
-    badgeBg: 'rgba(47,122,120,0.22)', badgeBorder: 'rgba(47,122,120,0.45)',
-    editRing: '#3B82F6',
-    errorBg: 'rgba(240,153,123,0.12)', errorBorder: 'rgba(240,153,123,0.35)', errorText: '#F0997B',
+    ...COMMON_TOKENS.dark,
+    bgCard2: '#1C1C1E',
+    bgInput: 'rgba(255,255,255,0.06)', bgHover: 'rgba(255,255,255,0.05)',
+    borderDash: 'rgba(255,255,255,0.12)',
+    green: '#30D158', greenBg: 'rgba(48,209,88,0.16)', greenBorder: 'rgba(48,209,88,0.35)',
+    link: '#0A84FF', linkBg: 'rgba(10,132,255,0.16)', linkBorder: 'rgba(10,132,255,0.35)',
+    navActiveBg: 'rgba(10,132,255,0.18)', navBorder: '#0A84FF', navText: '#5EB3FF',
+    badgeBg: 'rgba(10,132,255,0.18)', badgeBorder: 'rgba(10,132,255,0.40)',
+    editRing: '#0A84FF',
+    errorBg: 'rgba(255,69,58,0.16)', errorBorder: 'rgba(255,69,58,0.30)', errorText: '#FF453A',
   },
   light: {
-    bg: '#EEF2F5', bgCard: '#FFFFFF', bgCard2: '#F4F7FA',
-    bgInput: '#F0F3F6', bgHover: '#EBF0F5',
-    border: '#DDE4EA', borderMid: '#B8C8D4', borderDash: '#C8D4DE',
-    text: '#2D3748', textSub: '#4A5568', textMuted: '#8090A4',
-    textFaint: '#A8B8C8', textFaintest: '#C8D4DE',
-    accent: '#5A8A7A', accentSolid: '#5A8A7A',
-    warn: '#E8875A', warnBg: 'rgba(232,135,90,0.10)',
-    green: '#3D6B5E', greenBg: 'rgba(61,107,94,0.10)', greenBorder: 'rgba(61,107,94,0.30)',
-    link: '#2563EB', linkBg: '#EFF6FF', linkBorder: '#BFDBFE',
-    navActiveBg: '#EEF7F3', navBorder: '#5A8A7A', navText: '#3D6B5E',
-    badgeBg: 'rgba(90,138,122,0.12)', badgeBorder: 'rgba(90,138,122,0.30)',
-    editRing: '#3B82F6',
-    errorBg: '#FFF1EE', errorBorder: '#FECACA', errorText: '#DC4A2A',
+    ...COMMON_TOKENS.light,
+    bgCard2: '#FAFAFC',
+    bgInput: '#F2F2F7', bgHover: 'rgba(0,0,0,0.03)',
+    borderDash: 'rgba(0,0,0,0.10)',
+    green: '#34C759', greenBg: 'rgba(52,199,89,0.10)', greenBorder: 'rgba(52,199,89,0.30)',
+    link: '#007AFF', linkBg: 'rgba(0,122,255,0.10)', linkBorder: 'rgba(0,122,255,0.30)',
+    navActiveBg: 'rgba(0,122,255,0.10)', navBorder: '#007AFF', navText: '#0062CC',
+    badgeBg: 'rgba(0,122,255,0.10)', badgeBorder: 'rgba(0,122,255,0.30)',
+    editRing: '#007AFF',
+    errorBg: 'rgba(255,59,48,0.10)', errorBorder: 'rgba(255,59,48,0.30)', errorText: '#FF3B30',
   },
 }
 

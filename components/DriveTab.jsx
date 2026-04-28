@@ -140,18 +140,26 @@ function DriveChat({ T, owner }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
       <div style={{
-        padding: '10px 14px', borderBottom: `1px solid ${T.border}`,
-        display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
-        background: T.bgCard,
+        padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       }}>
-        <span style={{ fontSize: 15 }}>🤖</span>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+          background: `linear-gradient(135deg, #5AC8FA 0%, #007AFF 100%)`,
+          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px rgba(0,122,255,0.45)',
+        }}>🤖</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
           ドライブ AI
         </div>
         <button onClick={() => setHistory([])} disabled={busy} style={{
-          padding: '4px 10px', borderRadius: 6,
-          background: 'transparent', color: T.textSub,
-          border: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700,
+          padding: '6px 12px', borderRadius: 9,
+          background: 'rgba(120,120,128,0.12)', color: T.textSub,
+          border: 'none', fontSize: 11, fontWeight: 700,
           cursor: 'pointer', fontFamily: 'inherit',
         }}>クリア</button>
       </div>
@@ -159,8 +167,12 @@ function DriveChat({ T, owner }) {
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
         {history.length === 0 && (
           <div style={{
-            padding: 16, background: T.sectionBg, borderRadius: 8,
-            fontSize: 12, color: T.textMuted, lineHeight: 1.7,
+            padding: 18,
+            background: `linear-gradient(180deg, ${T.bgCard} 0%, rgba(0,122,255,0.05) 100%)`,
+            border: '1px solid rgba(0,122,255,0.18)',
+            borderRadius: 14,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+            fontSize: 12, color: T.textSub, lineHeight: 1.7,
           }}>
             ネオ福岡 共有ドライブ内の資料を検索できます。<br />
             例:
@@ -362,13 +374,22 @@ function DriveBrowser({ T, owner }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
       {/* ヘッダ + 検索 */}
       <div style={{
-        padding: '10px 12px', borderBottom: `1px solid ${T.border}`,
-        background: T.bgCard, flexShrink: 0,
+        padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 15 }}>📂</span>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>
-            {searchMode ? `🔍 「${searchQ}」の検索結果` : folderName}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+            background: `linear-gradient(135deg, #FFCC00 0%, #FF9500 100%)`,
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px rgba(255,149,0,0.45)',
+          }}>📂</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
+            {searchMode ? `「${searchQ}」の検索結果` : folderName}
           </div>
           <button onClick={() => load(folderId)} disabled={loading} title="再読込" style={{
             padding: '4px 8px', borderRadius: 6,

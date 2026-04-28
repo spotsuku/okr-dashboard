@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { SheetModal } from './iosUI'
 import { computeKAKey } from '../lib/kaKey'
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
@@ -37,29 +39,27 @@ function formatDate(ds) {
 }
 
 // ステータス定義
+// iOS システムカラー
 const STATUS_CONFIG = {
-  not_started: { label: '未着手', color: '#7a8599', bg: 'rgba(122,133,153,0.08)', border: 'rgba(122,133,153,0.2)', icon: '○' },
-  in_progress: { label: '進行中', color: '#4d9fff', bg: 'rgba(77,159,255,0.08)', border: 'rgba(77,159,255,0.2)', icon: '◐' },
-  done:        { label: '完了',   color: '#00d68f', bg: 'rgba(0,214,143,0.08)', border: 'rgba(0,214,143,0.2)', icon: '●' },
+  not_started: { label: '未着手', color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.25)', icon: '○' },
+  in_progress: { label: '進行中', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',   border: 'rgba(0,122,255,0.30)',   icon: '◐' },
+  done:        { label: '完了',   color: '#34C759', bg: 'rgba(52,199,89,0.10)',   border: 'rgba(52,199,89,0.30)',   icon: '●' },
 }
 const STATUS_ORDER = ['not_started', 'in_progress', 'done']
 
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg:'#0F1117', bgCard:'#1A1D27', border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
-    text:'#E8ECF0', textSub:'#B0BAC8', textMuted:'#7a8599', textFaint:'#4A5468',
-    accent:'#4d9fff', accentBg:'rgba(77,159,255,0.12)', sectionBg:'rgba(255,255,255,0.03)',
-    doneBg:'rgba(0,214,143,0.06)', doneBorder:'rgba(0,214,143,0.15)',
-    overdueBg:'rgba(255,107,107,0.06)', overdueBorder:'rgba(255,107,107,0.2)',
-    sidebarBg:'#141620', sidebarActive:'rgba(77,159,255,0.15)', sidebarHover:'rgba(255,255,255,0.04)',
+    ...COMMON_TOKENS.dark,
+    doneBg:'rgba(48,209,88,0.10)', doneBorder:'rgba(48,209,88,0.20)',
+    overdueBg:'rgba(255,69,58,0.10)', overdueBorder:'rgba(255,69,58,0.30)',
+    sidebarBg:'#1C1C1E', sidebarActive:'rgba(10,132,255,0.18)', sidebarHover:'rgba(255,255,255,0.04)',
   },
   light: {
-    bg:'#EEF2F5', bgCard:'#FFFFFF', border:'#E2E8F0', borderMid:'#CBD5E0',
-    text:'#2D3748', textSub:'#4A5568', textMuted:'#718096', textFaint:'#A0AEC0',
-    accent:'#3B82C4', accentBg:'rgba(59,130,196,0.1)', sectionBg:'#F8FAFC',
-    doneBg:'rgba(0,214,143,0.06)', doneBorder:'rgba(0,214,143,0.2)',
-    overdueBg:'rgba(255,107,107,0.06)', overdueBorder:'rgba(255,107,107,0.2)',
-    sidebarBg:'#F7F9FB', sidebarActive:'rgba(59,130,196,0.12)', sidebarHover:'rgba(0,0,0,0.03)',
+    ...COMMON_TOKENS.light,
+    doneBg:'rgba(52,199,89,0.10)', doneBorder:'rgba(52,199,89,0.30)',
+    overdueBg:'rgba(255,59,48,0.08)', overdueBorder:'rgba(255,59,48,0.30)',
+    sidebarBg:'#FFFFFF', sidebarActive:'rgba(0,122,255,0.10)', sidebarHover:'rgba(0,0,0,0.03)',
   },
 }
 
@@ -231,10 +231,15 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
   const inputSt = { width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 22px', boxSizing: 'border-box', width: '92%', maxWidth: 560, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 20 }}>タスクを追加</div>
-
+    <SheetModal T={T} open onClose={onClose} title="タスクを追加" maxWidth={560}
+      footer={<>
+        <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 9, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+        <button onClick={save} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: canSave && !saving ? T.accent : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 700, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+          {saving ? '保存中...' : '作成する'}
+        </button>
+      </>}
+    >
+      <>
         {/* タイトル */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>タイトル <span style={{ color: '#ff6b6b' }}>*</span></div>
@@ -310,15 +315,8 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
           )}
         </div>
 
-        {/* ボタン */}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-          <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 8, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-          <button onClick={save} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: canSave && !saving ? '#00d68f' : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 600, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-            {saving ? '保存中...' : '作成する'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </>
+    </SheetModal>
   )
 }
 
@@ -358,10 +356,12 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
   return (
     <div style={{
       display: 'flex', alignItems: compact ? 'center' : 'flex-start', gap: 10,
-      padding: compact ? '8px 12px' : '10px 14px',
+      padding: compact ? '10px 12px' : '12px 14px',
       background: isDone ? T.doneBg : isOverdue ? T.overdueBg : T.bgCard,
       border: `1px solid ${isDone ? T.doneBorder : isOverdue ? T.overdueBorder : T.border}`,
-      borderRadius: 10, marginBottom: 6, opacity: isDone ? 0.7 : 1,
+      borderRadius: 12, marginBottom: 8, opacity: isDone ? 0.6 : 1,
+      boxShadow: isDone ? 'none' : '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)',
+      transition: 'all 0.2s ease',
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         {isEditing ? (
@@ -561,18 +561,33 @@ function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             onDrop={(e) => handleDrop(e, s)}
             style={{
               flex: 1, minWidth: 240, maxWidth: 400, display: 'flex', flexDirection: 'column',
-              background: isOver ? cfg.bg : T.sectionBg,
-              border: `1px solid ${isOver ? cfg.border : T.border}`,
-              borderRadius: 12, padding: 12, transition: 'background 0.15s, border-color 0.15s',
+              background: isOver
+                ? `linear-gradient(180deg, ${cfg.bg} 0%, ${cfg.color}10 100%)`
+                : `linear-gradient(180deg, ${T.bgCard} 0%, ${cfg.color}06 100%)`,
+              border: `1px solid ${isOver ? cfg.color + '60' : cfg.color + '1a'}`,
+              borderRadius: 16, padding: 14,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+              transition: 'all 0.2s ease',
             }}
           >
-            {/* カラムヘッダー */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottom: `2px solid ${cfg.border}` }}>
-              <span style={{ fontSize: 14, color: cfg.color }}>{cfg.icon}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.textFaint, background: T.bgCard, padding: '1px 8px', borderRadius: 99, border: `1px solid ${T.border}` }}>
-                {colTasks.length}
-              </span>
+            {/* カラムヘッダー (iOS 風) */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 10,
+              borderBottom: `1px solid ${cfg.color}26`,
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.color}c0 100%)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, color: '#fff', fontWeight: 800,
+                boxShadow: `0 2px 4px ${cfg.color}55`,
+              }}>{cfg.icon}</div>
+              <span style={{ fontSize: 14, fontWeight: 800, color: cfg.color, letterSpacing: '-0.01em' }}>{cfg.label}</span>
+              <span style={{
+                marginLeft: 'auto',
+                fontSize: 11, fontWeight: 800, color: cfg.color,
+                background: `${cfg.color}1f`, padding: '2px 10px', borderRadius: 99,
+              }}>{colTasks.length}</span>
             </div>
             {/* カード */}
             <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1122,8 +1137,9 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
               </div>
               {/* タスク追加 */}
               <button onClick={() => setShowCreateModal(true)} style={{
-                padding: isMobile ? '10px 14px' : '6px 14px', borderRadius: 8, border: 'none',
-                background: '#00d68f', color: '#fff',
+                padding: isMobile ? '10px 16px' : '8px 16px', borderRadius: 9, border: 'none',
+                background: T.accent, color: '#fff',
+                boxShadow: `0 2px 6px ${T.accent}40`,
                 fontSize: isMobile ? 14 : 12, fontWeight: 700,
                 cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
                 display: 'flex', alignItems: 'center', gap: 4,

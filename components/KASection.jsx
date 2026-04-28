@@ -17,12 +17,13 @@ import { useAutoSave } from '../lib/useAutoSave'
 //   theme       : テーマオブジェクト (accent, text, bgCard などのカラー定義)
 //                 未指定時は明色テーマのデフォルトを適用
 
+// iOS システムカラーに統一
 const STATUS_CFG = {
-  focus:  { label: '🎯 注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
-  good:   { label: '✅ Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
-  more:   { label: '🔺 More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
-  normal: { label: '未分類',  color: '#606880', bg: 'rgba(128,128,128,0.08)', border: 'rgba(128,128,128,0.2)' },
-  done:   { label: '✓ 完了',  color: '#a0a8be', bg: 'rgba(160,168,190,0.08)', border: 'rgba(160,168,190,0.2)' },
+  focus:  { label: '🎯 注力', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',  border: 'rgba(0,122,255,0.30)' },
+  good:   { label: '✅ Good', color: '#34C759', bg: 'rgba(52,199,89,0.10)',  border: 'rgba(52,199,89,0.30)' },
+  more:   { label: '🔺 More', color: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  border: 'rgba(255,59,48,0.30)' },
+  normal: { label: '未分類',  color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.20)' },
+  done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
 }
 const STATUS_ORDER = ['normal','focus','good','more','done']
 

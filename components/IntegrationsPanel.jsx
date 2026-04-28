@@ -111,10 +111,10 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', background: T.bg }}>
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: T.text, margin: 0, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, color: T.text, margin: 0, marginBottom: 4, letterSpacing: '-0.02em' }}>
           🔌 外部サービス連携
         </h2>
-        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>
+        <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 22 }}>
           Google アカウントを連携すると、Gmail の重要メールと Google カレンダーの予定がダッシュボードに表示され、AI返信も使えるようになります。
           {!isViewingSelf && ' (自分を選択中のみ操作可能)'}
         </div>
@@ -153,10 +153,11 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
           </div>
         ) : (
           <div style={{
-            background: T.bgCard,
-            border: `1px solid ${T.border}`,
+            background: `linear-gradient(180deg, ${T.bgCard} 0%, #4285F406 100%)`,
+            border: '1px solid #4285F41a',
             borderLeft: '4px solid #4285F4',
-            borderRadius: 12, padding: 18,
+            borderRadius: 16, padding: 20,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05)',
             display: 'flex', flexDirection: 'column', gap: 12,
           }}>
             {/* ヘッダ */}

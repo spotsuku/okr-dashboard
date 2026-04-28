@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { LargeTitle, BgGlow } from './iosUI'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -822,19 +824,10 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
 
 // ─── メインコンポーネント ──────────────────────────────────────────────────────
 export default function BulkRegisterPage({ levels, themeKey = 'dark', fiscalYear = '2026' }) {
+  // テーマは lib/themeTokens.js で一元管理
   const W_THEMES = {
-    dark: {
-      bg: '#090d18', bgCard: '#0e1420', bgCard2: '#111828', bgSidebar: '#0e1420',
-      border: 'rgba(255,255,255,0.07)', borderLight: 'rgba(255,255,255,0.04)',
-      borderMid: 'rgba(255,255,255,0.1)', text: '#e8eaf0', textSub: '#a0a8be',
-      textMuted: '#606880', textFaint: '#404660', textFaintest: '#303450',
-    },
-    light: {
-      bg: '#f0f2f7', bgCard: '#ffffff', bgCard2: '#f7f8fc', bgSidebar: '#ffffff',
-      border: 'rgba(0,0,0,0.08)', borderLight: 'rgba(0,0,0,0.05)',
-      borderMid: 'rgba(0,0,0,0.12)', text: '#1a1f36', textSub: '#4a5270',
-      textMuted: '#7080a0', textFaint: '#90a0bc', textFaintest: '#b0bcd0',
-    },
+    dark:  { ...COMMON_TOKENS.dark },
+    light: { ...COMMON_TOKENS.light },
   }
   const wT = W_THEMES[themeKey] || W_THEMES.dark
 
@@ -852,19 +845,14 @@ export default function BulkRegisterPage({ levels, themeKey = 'dark', fiscalYear
   ]
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: wT.bg, color: wT.text, fontFamily: 'system-ui,sans-serif' }}>
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 28px' }}>
-        {/* ヘッダー */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: '#a855f7', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Bulk Register</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>一括登録</div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.4)' : 'rgba(255,159,67,0.4)'}`, borderRadius: 8, padding: '4px 12px', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', fontSize: 13, fontWeight: 700 }}>
-              📅 {fiscalYear}年度
-            </div>
-          </div>
-          <div style={{ fontSize: 13, color: wT.textMuted, marginTop: 4 }}>OKR・KAを複数件まとめて入力・プレビュー確認後に一括登録できます</div>
-        </div>
+    <div style={{ flex: 1, overflowY: 'auto', background: wT.bg, color: wT.text, position: 'relative' }}>
+      <BgGlow T={wT} color="#AF52DE" />
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 28px 28px', position: 'relative', zIndex: 1 }}>
+        <LargeTitle T={wT}
+          title="一括登録"
+          subtitle={`${fiscalYear}年度 ・ OKR・KA・Notion を複数件まとめて入力`}
+          right={<span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: wT.accentBg, color: wT.accent }}>📅 {fiscalYear}年度</span>}
+        />
 
         {/* タブ */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: 'rgba(255,255,255,0.04)', padding: 4, borderRadius: 12, border: `1px solid ${wT.border}` }}>

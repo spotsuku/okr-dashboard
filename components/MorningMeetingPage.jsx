@@ -5,6 +5,8 @@ import { MEETING_URLS } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import MeetingImport from './MeetingImport'
 import { ComposeModal } from './ConfirmationsTab'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { HeroCard } from './iosUI'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -14,24 +16,9 @@ import { ComposeModal } from './ConfirmationsTab'
 //   進行状態は morning_meetings テーブルで全員同期
 
 // ─── テーマ ─────────────────────────────────────────────────
-const DARK_T = {
-  bg:'#090d18', bgCard:'#0e1420', bgCard2:'#141b2b', sectionBg:'rgba(255,255,255,0.03)',
-  border:'rgba(255,255,255,0.09)', borderMid:'rgba(255,255,255,0.15)',
-  text:'#e8eaf0', textSub:'#a0a8be', textMuted:'#606880', textFaint:'#404660',
-  accent:'#4d9fff', accentBg:'rgba(77,159,255,0.13)',
-  success:'#00d68f', successBg:'rgba(0,214,143,0.13)',
-  warn:'#ffd166', warnBg:'rgba(255,209,102,0.13)',
-  danger:'#ff6b6b', dangerBg:'rgba(255,107,107,0.13)',
-}
-const LIGHT_T = {
-  bg:'#f5f7fb', bgCard:'#ffffff', bgCard2:'#f7f9fc', sectionBg:'rgba(0,0,0,0.03)',
-  border:'rgba(0,0,0,0.08)', borderMid:'rgba(0,0,0,0.12)',
-  text:'#1a1f36', textSub:'#4a5270', textMuted:'#7080a0', textFaint:'#90a0bc',
-  accent:'#4d9fff', accentBg:'rgba(77,159,255,0.13)',
-  success:'#00a871', successBg:'rgba(0,214,143,0.13)',
-  warn:'#d39e00', warnBg:'rgba(255,209,102,0.13)',
-  danger:'#d64545', dangerBg:'rgba(255,107,107,0.13)',
-}
+// テーマは lib/themeTokens.js で一元管理
+const DARK_T  = { ...COMMON_TOKENS.dark }
+const LIGHT_T = { ...COMMON_TOKENS.light }
 const M_THEMES = { dark: DARK_T, light: LIGHT_T }
 
 // ─── JST 日付ユーティリティ ──────────────────────────────────
@@ -353,29 +340,14 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
   const noMembers = members.length === 0
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '8px 0 40px' }}>
-      {/* ヘッダーカード */}
-      <div style={{ textAlign: 'center', marginBottom: 24 }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 12,
-          padding: '14px 24px', background: T.bgCard, borderRadius: 14,
-          border: `1px solid ${T.borderMid}`,
-        }}>
-          <span style={{ fontSize: 36 }}>🌅</span>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>平日毎日</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>朝会</div>
-          </div>
-        </div>
-        <div style={{ marginTop: 12, fontSize: 13, color: T.textMuted }}>
-          📅 本日: <strong style={{ color: T.text }}>{todayLabel}</strong>
-          {isResume && (
-            <span style={{ marginLeft: 10, padding: '2px 10px', borderRadius: 99, background: T.warnBg, color: T.warn, fontSize: 11, fontWeight: 700 }}>
-              リセット済み
-            </span>
-          )}
-        </div>
-      </div>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 40px' }}>
+      {/* ヒーローカード (iPad 風) */}
+      <HeroCard T={T}
+        eyebrow="平日毎日"
+        title="🌅 朝会"
+        subtitle={`本日 ${todayLabel}${isResume ? ' ・ リセット済み' : ''}`}
+        color="#FF9500"
+      />
 
       {/* Notion 議事録案内 */}
       <div style={{
@@ -729,26 +701,42 @@ function SpeakerReport({ T, member }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`,
-      borderLeft: `4px solid #ff9f43`,
-      borderRadius: 12, padding: 20, marginBottom: 14,
+      background: `linear-gradient(180deg, ${T.bgCard} 0%, #ff9f4308 100%)`,
+      border: `1px solid #ff9f4326`,
+      borderRadius: 18, padding: '22px 24px', marginBottom: 14,
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(255,159,67,0.10), 0 16px 40px rgba(0,0,0,0.04)',
+      position: 'relative', overflow: 'hidden',
     }}>
+      {/* 上端に色グラデ帯 (左太線の代わり) */}
+      <div aria-hidden style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+        background: 'linear-gradient(90deg, #ff9f43 0%, #f9731680 100%)',
+      }} />
+      <div aria-hidden style={{
+        position: 'absolute', top: -50, right: -30, width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(255,159,67,0.10) 0%, transparent 60%)',
+        pointerEvents: 'none', borderRadius: '50%',
+      }} />
       {/* 発表者ヘッダ */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, position: 'relative', zIndex: 1 }}>
         <div style={{
-          width: 48, height: 48, borderRadius: '50%',
-          background: '#ff9f43', color: '#fff',
+          width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 20, fontWeight: 800,
+          fontSize: 24, fontWeight: 900,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px rgba(255,159,67,0.45)',
         }}>{member.name.charAt(0)}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{member.name}</div>
-          <div style={{ fontSize: 11, color: T.textMuted }}>{member.role || ''}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>{member.name}</div>
+          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{member.role || ''}</div>
         </div>
         <div style={{
-          padding: '4px 12px', borderRadius: 99,
-          background: 'rgba(255,159,67,0.15)', color: '#ff9f43',
-          fontSize: 11, fontWeight: 700,
+          padding: '5px 14px', borderRadius: 99,
+          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          color: '#fff',
+          fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+          boxShadow: '0 2px 6px rgba(255,159,67,0.45)',
         }}>🎤 発表中</div>
       </div>
 

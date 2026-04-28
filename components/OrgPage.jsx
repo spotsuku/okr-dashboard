@@ -1,74 +1,51 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { LargeTitle, BgGlow } from './iosUI'
 import TaskManualPage from './TaskManualPage'
 
 // ══════════════════════════════════════════════════
 // テーマ定義
 // ══════════════════════════════════════════════════
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg:          '#0F1117',
-    bgCard:      '#1A1D27',
-    bgCard2:     '#1A1D27',
-    bgInput:     'rgba(255,255,255,0.07)',
+    ...COMMON_TOKENS.dark,
+    bgCard2:     '#1C1C1E',
+    bgInput:     'rgba(255,255,255,0.06)',
     bgHover:     'rgba(255,255,255,0.05)',
     bgTable:     'rgba(255,255,255,0.04)',
-    border:      'rgba(255,255,255,0.10)',
-    borderMid:   'rgba(255,255,255,0.16)',
-    borderEdit:  'rgba(93,202,165,0.6)',
-    text:        '#E8ECF0',
-    textSub:     '#B0BAC8',
-    textMuted:   '#7a8599',
-    textFaint:   '#4A5468',
-    textFaintest:'#333b4d',
-    inputBg:     '#1A1D27',
-    inputText:   '#E8ECF0',
-    selectBg:    '#1A1D27',
-    accent:      '#5DCAA5',
-    accentDark:  '#0F6E56',
-    accentSolid: '#2F7A78',
-    warn:        '#F0997B',
-    warnBg:      'rgba(216,90,48,0.2)',
-    badgeBg:     'rgba(47,122,120,0.25)',
-    badgeBorder: 'rgba(47,122,120,0.3)',
-    navActiveBg: 'rgba(47,122,120,0.15)',
-    navActiveText:'#5DCAA5',
-    progressBg:  'rgba(255,255,255,0.08)',
-    progressFill:'#2F7A78',
-    eventBandBg: '#0F6E56',
-    eventBandText:'#E1F5EE',
+    borderEdit:  '#0A84FF',
+    inputBg:     '#1C1C1E',
+    inputText:   '#F5F5F7',
+    selectBg:    '#1C1C1E',
+    badgeBg:     'rgba(10,132,255,0.18)',
+    badgeBorder: 'rgba(10,132,255,0.40)',
+    navActiveBg: 'rgba(10,132,255,0.18)',
+    navActiveText:'#5EB3FF',
+    progressBg:  'rgba(255,255,255,0.10)',
+    progressFill:'#0A84FF',
+    eventBandBg: '#0A84FF',
+    eventBandText:'#FFFFFF',
   },
   light: {
-    bg:          '#EEF2F5',
-    bgCard:      '#FFFFFF',
+    ...COMMON_TOKENS.light,
     bgCard2:     '#FFFFFF',
-    bgInput:     '#F3F4F6',
-    bgHover:     '#F7FAFC',
+    bgInput:     '#F2F2F7',
+    bgHover:     'rgba(0,0,0,0.03)',
     bgTable:     '#FFFFFF',
-    border:      '#DDE4EA',
-    borderMid:   '#B0C0CC',
-    borderEdit:  '#5A8A7A',
-    text:        '#2D3748',
-    textSub:     '#5A6577',
-    textMuted:   '#A0AEC0',
-    textFaint:   '#A0AEC0',
-    textFaintest:'#DDE4EA',
+    borderEdit:  '#007AFF',
     inputBg:     '#FFFFFF',
-    inputText:   '#2D3748',
+    inputText:   '#1C1C1E',
     selectBg:    '#FFFFFF',
-    accent:      '#5A8A7A',
-    accentDark:  '#3D6B5E',
-    accentSolid: '#5A8A7A',
-    warn:        '#E8875A',
-    warnBg:      'rgba(232,135,90,0.1)',
-    badgeBg:     'rgba(90,138,122,0.15)',
-    badgeBorder: 'rgba(90,138,122,0.3)',
-    navActiveBg: '#EEF7F3',
-    navActiveText:'#3D6B5E',
-    progressBg:  '#E8EEF2',
-    progressFill:'#5A8A7A',
-    eventBandBg: '#3D6B5E',
+    badgeBg:     'rgba(0,122,255,0.10)',
+    badgeBorder: 'rgba(0,122,255,0.30)',
+    navActiveBg: 'rgba(0,122,255,0.10)',
+    navActiveText:'#0062CC',
+    progressBg:  'rgba(0,0,0,0.06)',
+    progressFill:'#007AFF',
+    eventBandBg: '#007AFF',
     eventBandText:'#FFFFFF',
   },
 }
@@ -844,10 +821,25 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
       {depts.map(dept => {
         const color = getDeptColor(dept.name)
         return (
-          <div key={dept.id} style={{ marginBottom: 24, border: `2px solid ${color}60`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ background: `${color}15`, borderBottom: `2px solid ${color}80`, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 4, height: 24, borderRadius: 2, background: color }} />
-              <span style={{ fontSize: 16, fontWeight: 700, color }}>{dept.icon} {dept.name}</span>
+          <div key={dept.id} style={{
+            marginBottom: 24,
+            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${color}06 100%)`,
+            border: `1px solid ${color}33`, borderRadius: 18, overflow: 'hidden',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
+          }}>
+            <div style={{
+              background: `linear-gradient(135deg, ${color}1f 0%, ${color}10 100%)`,
+              borderBottom: `1px solid ${color}33`,
+              padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                background: `linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`,
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 18,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${color}55`,
+              }}>{dept.icon}</div>
+              <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: '-0.01em' }}>{dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
               {isAdmin && (
                 <button onClick={() => setWebhookEdit({ levelId: dept.id, url: dept.slack_webhook_url || '' })}
@@ -3277,27 +3269,26 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T().bg, color: T().textMuted, fontSize: 14 }}>読み込み中...</div>
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 28px' }}>
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: T().accent, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: T().text }}>🏢 組織</div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? T().badgeBg : T().warnBg, color: fiscalYear === '2026' ? T().accent : T().warn, border: `1px solid ${fiscalYear === '2026' ? T().badgeBorder : T().warn}` }}>{fiscalYear}年度</span>
-            {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>👑 管理者</span>}
-            <button onClick={() => setShowOrgManage(true)} style={{ padding: '5px 14px', borderRadius: 8, border: `1px solid ${T().accent}40`, background: T().accentBg, color: T().accent, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>🏗️ 組織を管理</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <div style={{ fontSize: 13, color: T().textFaint }}>NEO福岡の組織図・業務一覧・業務マニュアル・メンバー別JDを確認できます</div>
-            <span style={{
-              fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
-              background: syncStatus === 'synced' ? T().badgeBg : syncStatus === 'error' ? T().warnBg : T().warnBg,
-              color: syncStatus === 'synced' ? T().accent : syncStatus === 'error' ? T().warn : T().warn,
-              border: `1px solid ${syncStatus === 'synced' ? T().badgeBorder : T().warn}`,
-            }}>
-              {syncStatus === 'synced' ? '🟢 リアルタイム同期中' : syncStatus === 'error' ? '🔴 同期エラー' : '🟡 接続中...'}
-            </span>
-          </div>
+    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, position: 'relative' }}>
+      <BgGlow T={T()} />
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 28px 28px', position: 'relative', zIndex: 1 }}>
+        <LargeTitle T={T()}
+          title="🏢 組織"
+          subtitle={`${fiscalYear}年度 ・ NEO福岡の組織図・業務一覧・業務マニュアル・メンバー別JD`}
+          right={
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: T().accentBg, color: T().accent }}>{fiscalYear}年度</span>
+              {isAdmin && <span style={{ fontSize: 11, padding: '4px 12px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700 }}>👑 管理者</span>}
+              <button onClick={() => setShowOrgManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: 'none', background: T().accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 2px 6px ${T().accent}40` }}>🏗️ 組織を管理</button>
+            </div>
+          }
+        />
+        <div style={{ marginBottom: 16, fontSize: 11, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+            background: syncStatus === 'synced' ? '#34C759' : '#FF9500',
+          }} />
+          {syncStatus === 'synced' ? 'リアルタイム同期中' : syncStatus === 'error' ? '同期エラー' : '接続中...'}
         </div>
 
         <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${T().border}`, marginBottom: 24 }}>

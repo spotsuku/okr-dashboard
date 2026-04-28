@@ -62,17 +62,27 @@ export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
-      {/* ヘッダー */}
+      {/* ヘッダー (iOS グラスバー) */}
       <div style={{
-        padding: '10px 14px', borderBottom: `1px solid ${T.border}`,
-        display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: T.bgCard,
+        padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 18 }}>🐸</span>
-        <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>ぺろっぺ</div>
-        <div style={{ fontSize: 11, color: T.textMuted }}>三木CEOの右腕 AIコーチ</div>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+          background: 'linear-gradient(135deg, #34C759 0%, #30D158c0 100%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, boxShadow: '0 2px 6px rgba(52,199,89,0.4)',
+        }}>🐸</div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>ぺろっぺ</div>
+          <div style={{ fontSize: 11, color: T.textMuted }}>三木CEOの右腕 AIコーチ</div>
+        </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 4, background: T.sectionBg, padding: 3, borderRadius: 7, border: `1px solid ${T.border}` }}>
+        <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 9 }}>
           {[
             { key: 'coach', label: '🎯 コーチ', desc: 'GROWで深掘り' },
             { key: 'speed', label: '⚡ スピード', desc: '即答' },
@@ -80,10 +90,12 @@ export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings
             <button key={m.key} onClick={() => setMode(m.key)}
               title={m.desc}
               style={{
-                padding: '4px 10px', borderRadius: 5, border: 'none', cursor: 'pointer',
-                background: mode === m.key ? T.accent : 'transparent',
-                color: mode === m.key ? '#fff' : T.textSub,
-                fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                background: mode === m.key ? T.bgCard : 'transparent',
+                color: mode === m.key ? T.text : T.textSub,
+                boxShadow: mode === m.key ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
+                fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                transition: 'all 0.15s ease',
               }}>{m.label}</button>
           ))}
         </div>

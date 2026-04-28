@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
 import FocusFillModal from './FocusFillModal'
@@ -13,30 +15,15 @@ import ConfirmationsTab from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
 const THEMES = {
   dark: {
-    bg: '#0F1117', bgCard: '#1A1D27', bgSidebar: '#14172A',
-    border: 'rgba(255,255,255,0.10)', borderMid: 'rgba(255,255,255,0.16)',
-    text: '#E8ECF0', textSub: '#B0BAC8', textMuted: '#7a8599', textFaint: '#4A5468',
-    accent: '#4d9fff', accentBg: 'rgba(77,159,255,0.14)', accentSolid: '#4d9fff',
-    sectionBg: 'rgba(255,255,255,0.03)',
-    navActiveBg: 'rgba(77,159,255,0.16)', navActiveText: '#7ab4ff',
-    success: '#00d68f', successBg: 'rgba(0,214,143,0.14)',
-    warn: '#ffd166', warnBg: 'rgba(255,209,102,0.14)',
-    danger: '#ff6b6b', dangerBg: 'rgba(255,107,107,0.14)',
-    info: '#4d9fff', infoBg: 'rgba(77,159,255,0.12)',
+    ...COMMON_TOKENS.dark,
+    navActiveBg: 'rgba(10,132,255,0.18)', navActiveText: '#5EB3FF',
   },
   light: {
-    bg: '#EEF2F5', bgCard: '#FFFFFF', bgSidebar: '#F7F9FC',
-    border: '#E2E8F0', borderMid: '#CBD5E0',
-    text: '#2D3748', textSub: '#4A5568', textMuted: '#718096', textFaint: '#A0AEC0',
-    accent: '#3B82C4', accentBg: 'rgba(59,130,196,0.10)', accentSolid: '#3B82C4',
-    sectionBg: '#F8FAFC',
-    navActiveBg: 'rgba(59,130,196,0.14)', navActiveText: '#2563EB',
-    success: '#059669', successBg: 'rgba(5,150,105,0.10)',
-    warn: '#D97706', warnBg: 'rgba(217,119,6,0.10)',
-    danger: '#DC2626', dangerBg: 'rgba(220,38,38,0.10)',
-    info: '#3B82C4', infoBg: 'rgba(59,130,196,0.10)',
+    ...COMMON_TOKENS.light,
+    navActiveBg: 'rgba(0,122,255,0.12)', navActiveText: '#0062CC',
   },
 }
 
@@ -529,13 +516,21 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           </div>
         )}
 
-        {/* サブタブバー (PCのみ表示。モバイルは下メニュー + サイドバーの「その他」で代替) */}
+        {/* サブタブバー (iOS 風セグメンテッドコントロール: グレー背景 + 白ピル状アクティブ) */}
         <div style={{
-          display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 4,
-          padding: '8px 14px',
+          display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 20px',
           borderBottom: `1px solid ${T.border}`,
-          background: T.bgCard, flexShrink: 0,
+          background: 'rgba(255,255,255,0.65)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          flexShrink: 0, overflowX: 'auto',
         }}>
+          <div style={{
+            display: 'inline-flex', gap: 2,
+            background: 'rgba(120,120,128,0.10)',
+            padding: 3, borderRadius: 11,
+          }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
             { key: 'confirm',      icon: '📬', label: '確認'           },
@@ -545,26 +540,31 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             { key: 'drive',        icon: '📁', label: 'ドライブ'       },
             { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
             { key: 'retrospect',   icon: '💭', label: '振り返り'       },
+            { key: 'okr_edit',     icon: '🎯', label: 'OKR'           },
+            { key: 'integrations', icon: '🔌', label: '連携'           },
           ].map(t => {
-            // 📬確認 タブのみ未解決件数バッジを表示 (個人モード時、0件なら非表示)
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
+            const active = activeTab === t.key
             return (
               <button
                 key={t.key}
                 onClick={() => setActiveTab(t.key)}
                 style={{
-                  padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: activeTab === t.key ? T.navActiveBg : 'transparent',
-                  color: activeTab === t.key ? T.navActiveText : T.textSub,
-                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: active ? T.bgCard : 'transparent',
+                  color: active ? T.text : T.textSub,
+                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap',
                   display: 'inline-flex', alignItems: 'center', gap: 6,
+                  boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <span>{t.icon} {t.label}</span>
+                <span style={{ fontSize: 14, lineHeight: 1 }}>{t.icon}</span>
+                <span>{t.label}</span>
                 {showBadge && (
                   <span style={{
                     padding: '1px 6px', borderRadius: 99,
-                    background: '#ff6b6b', color: '#fff',
+                    background: T.danger, color: '#fff',
                     fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
                     lineHeight: 1.4,
                   }}>{unresolvedConfirmCount}</span>
@@ -572,41 +572,22 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               </button>
             )
           })}
-
-          {/* OKR (旧マイOKR、ドロップダウンは撤廃)
-              モードによって中身が切替わる:
-                全体サマリー → CompanySummaryPage (全社OKRサマリー)
-                メンバー     → MyOKRPageNew (OKR記入) */}
-          <button
-            onClick={() => setActiveTab('okr_edit')}
-            style={{
-              padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: activeTab === 'okr_edit' ? T.navActiveBg : 'transparent',
-              color: activeTab === 'okr_edit' ? T.navActiveText : T.textSub,
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-            }}
-          >🎯 OKR</button>
-
-          {/* 連携 */}
-          <button
-            onClick={() => setActiveTab('integrations')}
-            style={{
-              padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: activeTab === 'integrations' ? T.navActiveBg : 'transparent',
-              color: activeTab === 'integrations' ? T.navActiveText : T.textSub,
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-            }}
-          >🔌 連携</button>
+          </div>
           <div style={{ flex: 1 }} />
           {!isMobile && (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: T.textMuted, padding: '4px 10px',
-              background: T.sectionBg, borderRadius: 7,
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 11, color: T.textMuted, padding: '6px 12px',
+              background: T.sectionBg, borderRadius: 99,
+              border: `1px solid ${T.border}`,
             }}>
               <Avatar member={viewingMember} size={20} />
               <span style={{ fontWeight: 700, color: T.text }}>{viewingName || '(未選択)'}</span>
-              <span style={{ color: isViewingSelf ? T.accent : T.textMuted, fontWeight: 600 }}>
+              <span style={{
+                color: isViewingSelf ? T.success : T.textMuted, fontWeight: 700,
+                padding: '2px 8px', borderRadius: 99,
+                background: isViewingSelf ? T.successBg : 'transparent',
+              }}>
                 {isViewingSelf ? '✏️ 編集可' : '👁 閲覧のみ'}
               </span>
             </div>
@@ -1218,50 +1199,77 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   const showW = (key) => prefs[key] !== false  // デフォルト未設定はtrue扱い
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflowX: 'hidden' }}>
       {/* 📬 表示対象宛に未解決の確認事項がある時だけ最上部に出るバナー */}
       <ConfirmationsBanner T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
         onGoToTab={onGoToTab} />
 
-      {/* 挨拶バー + 始業/終業ボタン + 設定 */}
+      {/* 挨拶バー (iOS 風グラスバー: 半透明 + backdrop-blur + ドット型ステータス) */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        padding: isMobile ? '10px 12px' : '10px 16px',
-        background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
-        flexShrink: 0, position: 'relative',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        padding: isMobile ? '12px 16px' : '14px 20px',
+        flexWrap: 'wrap',
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        borderBottom: `1px solid ${T.border}`,
+        flexShrink: 0, position: 'relative', zIndex: 5,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar member={viewingMember} size={36} />
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <Avatar member={viewingMember} size={42} />
+            {/* 状態ドット (右下に色付きで重ねる) */}
+            <span style={{
+              position: 'absolute', right: -2, bottom: -2,
+              width: 14, height: 14, borderRadius: '50%',
+              border: `2px solid ${T.bgCard}`,
+              background: st === 'on' ? T.success : st === 'off' ? T.info : T.textFaint,
+              boxShadow: st === 'on' ? `0 0 0 3px ${T.success}33` : 'none',
+            }} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
               {greet}、{viewingName}さん
             </div>
-            <div style={{ fontSize: 11, color: T.textMuted }}>
-              {dateStr} ·
-              {st === 'on'  && content.start_at ? ` 🟢 稼働中 (${jstHHMM(content.start_at)}〜)` :
-               st === 'off' && content.end_at   ? ` 🔵 本日終業済み (${jstHHMM(content.start_at)}–${jstHHMM(content.end_at)})` :
-                                                  ' ⚪ 未始業'}
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span>{dateStr}</span>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '2px 8px', borderRadius: 99,
+                background: st === 'on' ? T.successBg : st === 'off' ? T.infoBg : T.sectionBg,
+                color: st === 'on' ? T.success : st === 'off' ? T.info : T.textMuted,
+                fontWeight: 700,
+              }}>
+                {st === 'on'  && content.start_at ? `稼働中 ${jstHHMM(content.start_at)}〜` :
+                 st === 'off' && content.end_at   ? `終業済 ${jstHHMM(content.start_at)}–${jstHHMM(content.end_at)}` :
+                                                    '未始業'}
+              </span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {isViewingSelf && st === 'on' && (
             <button onClick={() => setKptOpen(true)} disabled={busy} style={{
-              background: T.info, color: '#fff', border: 'none', borderRadius: 8,
-              padding: '8px 16px', fontSize: 13, fontWeight: 700,
+              background: `linear-gradient(135deg, ${T.info} 0%, ${T.info}d0 100%)`,
+              color: '#fff', border: 'none', borderRadius: 10,
+              padding: '9px 18px', fontSize: 13, fontWeight: 800,
               cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+              boxShadow: `0 2px 6px ${T.info}55, 0 1px 2px rgba(0,0,0,0.08)`,
               opacity: busy ? 0.6 : 1,
+              letterSpacing: '0.01em',
             }}>🌙 終業する</button>
           )}
           {isViewingSelf && st === 'off' && (
-            <div style={{ fontSize: 11, color: T.textMuted, padding: '8px 12px' }}>お疲れさまでした</div>
+            <div style={{
+              fontSize: 12, color: T.success, padding: '6px 12px', fontWeight: 700,
+              background: T.successBg, borderRadius: 99,
+            }}>お疲れさまでした 🎉</div>
           )}
-          {/* 設定ボタン (ウィジェット表示切替) */}
           <button onClick={() => setSettingsOpen(v => !v)} title="ウィジェットの表示設定" style={{
-            background: settingsOpen ? T.accentBg : 'transparent',
-            border: `1px solid ${T.border}`, color: T.textSub,
-            borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer',
+            background: settingsOpen ? T.accentBg : 'rgba(120,120,128,0.12)',
+            border: 'none', color: settingsOpen ? T.accent : T.textSub,
+            borderRadius: 10, padding: '8px 12px', fontSize: 14, cursor: 'pointer',
             fontFamily: 'inherit',
           }}>⚙️</button>
         </div>
@@ -1276,7 +1284,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       {/* 3カラム本体 (スマホは1カラム縦積み) */}
       <div style={{
         flex: 1, display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+        // minmax(0, ...) を入れないと長い子要素 (KR名など) でグリッド全体が
+        // 画面幅を超える "auto" 拡張を起こすことがあるため必須
+        gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)',
         gap: isMobile ? 14 : 10, padding: isMobile ? 14 : 10,
         paddingBottom: isMobile ? 80 : 10,  /* 下メニュー分 */
         minHeight: 0,
@@ -1286,9 +1296,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
+          minWidth: 0,
         }}>
           {showW('today') && (
-            <Section T={T} icon="⚡" title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
+            <Section T={T} icon="⚡" accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
               <button onClick={loadTasks} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1301,7 +1312,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             </Section>
           )}
           {showW('week') && (
-            <Section T={T} icon="📅" title="今週やること" flex={1}>
+            <Section T={T} icon="📅" accent={T.success} title="今週やること" flex={1}>
               {taskBoard.loading ? <Loading T={T} /> : (
                 <WeekTasks T={T} byWeekday={taskBoard.byWeekday} canEdit={isViewingSelf} onToggle={toggleTaskDone} />
               )}
@@ -1313,10 +1324,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
+          minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
           {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
-          <Section T={T} icon="📊" title="OKR・KA記入漏れ" flex={0} headerRight={
+          <Section T={T} icon="📊" accent={T.warn} title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
               borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1384,6 +1396,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
+          minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
           {showW('goal_month_main') && (
@@ -1417,7 +1430,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             />
           )}
           {showW('achievements') && (
-            <Section T={T} icon="🏆" title="今週の成果" flex={0} headerRight={
+            <Section T={T} icon="🏆" accent={T.warn} title="今週の成果" flex={0} headerRight={
               <button onClick={loadAchievements} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1699,47 +1712,57 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
         position: 'fixed', inset: 0, zIndex: 100, background: 'transparent',
       }} />
       <div style={{
-        position: 'absolute', right: 16, top: '100%', marginTop: 6,
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
-        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-        zIndex: 101, padding: 12, minWidth: 240, maxHeight: '70vh', overflowY: 'auto',
+        position: 'absolute', right: 16, top: '100%', marginTop: 8,
+        background: 'rgba(255,255,255,0.95)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        borderRadius: 14,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.10), 0 24px 56px rgba(0,0,0,0.10)',
+        zIndex: 101, padding: 14, minWidth: 260, maxHeight: '70vh', overflowY: 'auto',
+        border: `1px solid ${T.border}`,
       }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.text, flex: 1 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
             ⚙️ 表示するウィジェット
           </div>
           <button
             onClick={() => { if (window.confirm('初期状態に戻しますか?')) resetPrefs() }}
             title="全ての表示/非表示設定を初期値に戻す"
             style={{
-              background: 'transparent', border: `1px solid ${T.borderMid}`,
-              color: T.textMuted, borderRadius: 5, padding: '3px 8px',
-              fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+              background: 'rgba(120,120,128,0.12)', border: 'none',
+              color: T.textSub, borderRadius: 7, padding: '4px 10px',
+              fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
             }}
           >↻ リセット</button>
         </div>
         {groups.map(g => (
-          <div key={g.title} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, marginBottom: 4, letterSpacing: 0.5 }}>
+          <div key={g.title} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 800, marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               {g.title}
             </div>
-            {g.items.map(it => (
+            <div style={{
+              background: T.bgCard, borderRadius: 10,
+              border: `1px solid ${T.border}`, overflow: 'hidden',
+            }}>
+            {g.items.map((it, i) => (
               <label key={it.key} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px',
-                cursor: 'pointer', borderRadius: 5, fontSize: 12, color: T.text,
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                cursor: 'pointer', fontSize: 13, color: T.text,
+                borderBottom: i < g.items.length - 1 ? `0.5px solid ${T.border}` : 'none',
               }}
-                onMouseEnter={e => e.currentTarget.style.background = T.sectionBg}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <input
                   type="checkbox"
                   checked={prefs[it.key] !== false}
                   onChange={() => togglePref(it.key)}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', accentColor: T.accent }}
                 />
                 <span>{it.label}</span>
               </label>
             ))}
+            </div>
           </div>
         ))}
         <div style={{ fontSize: 9, color: T.textMuted, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
@@ -1859,37 +1882,58 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
     <div
       onClick={force ? undefined : onCancel}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.35)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 9999, padding: 20,
+        animation: 'kptModalFadeIn 0.2s ease',
       }}
     >
+      <style>{`
+        @keyframes kptModalFadeIn { from {opacity:0} to {opacity:1} }
+        @keyframes kptModalSlide { from {transform:translateY(20px); opacity:0} to {transform:translateY(0); opacity:1} }
+      `}</style>
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
-          padding: 20, width: '100%', maxWidth: 520, maxHeight: '90vh',
-          overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+          background: T.bgCard, borderRadius: 18,
+          padding: 24, width: '100%', maxWidth: 540, maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.08)',
+          animation: 'kptModalSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ width: '100%' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
-              {force ? '⚠️ 昨日の振り返りを入力してください' : '🌙 今日の振り返り'}
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-              {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
-            </div>
-            {force && (
-              <div style={{
-                marginTop: 8, padding: '6px 10px',
-                background: T.warnBg, color: T.warn,
-                fontSize: 11, borderRadius: 6, lineHeight: 1.5,
-              }}>
-                昨日の業務が終業されていません。振り返りを入力してから今日を始業できます。
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+              background: force
+                ? `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`
+                : `linear-gradient(135deg, ${T.info} 0%, ${T.info}c0 100%)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18, color: '#fff',
+              boxShadow: force ? `0 2px 6px ${T.warn}55` : `0 2px 6px ${T.info}55`,
+            }}>{force ? '⚠️' : '🌙'}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
+                {force ? '昨日の振り返りを入力してください' : '今日の振り返り'}
               </div>
-            )}
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>
+                {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
+              </div>
+            </div>
           </div>
+          {force && (
+            <div style={{
+              marginTop: 10, padding: '8px 12px',
+              background: T.warnBg, color: T.warn,
+              fontSize: 12, borderRadius: 9, lineHeight: 1.5, fontWeight: 600,
+            }}>
+              昨日の業務が終業されていません。振り返りを入力してから今日を始業できます。
+            </div>
+          )}
         </div>
 
         {force && (
@@ -2222,30 +2266,47 @@ function Stat({ T, label, value, color }) {
   )
 }
 
-function Section({ T, icon, title, children, flex = 1, headerRight = null }) {
+function Section({ T, icon, title, children, flex = 1, headerRight = null, accent }) {
   const isMobile = useIsMobile()
   // flex=0 の場合は内容に合わせて自動サイズ (flex-basis:0 の罠を回避)
   // flex>=1 の場合は grow して親の残りスペースを埋める
   // モバイルでは常に自動サイズ (外側スクロール + 中身フルハイト)
   const isAutoSize = isMobile || flex === 0 || flex === 'none'
+  // iOS 風: 立体感 (3層シャドウ) + サブカラー (accent 渡されたら微妙にチント)
+  const baseStyle = {
+    background: accent ? `linear-gradient(180deg, ${T.bgCard} 0%, ${accent}06 100%)` : T.bgCard,
+    border: `1px solid ${accent ? accent + '1f' : T.border}`,
+    borderRadius: 14,
+    overflow: 'hidden',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.03)',
+    display: 'flex', flexDirection: 'column',
+  }
   const outerStyle = isAutoSize
-    ? { flex: '0 0 auto', display: 'flex', flexDirection: 'column',
-        background: T.bgCard, border: `1px solid ${T.border}`,
-        borderRadius: 10, overflow: 'hidden' }
-    : { flex, display: 'flex', flexDirection: 'column', minHeight: 0,
-        background: T.bgCard, border: `1px solid ${T.border}`,
-        borderRadius: 10, overflow: 'hidden' }
+    ? { ...baseStyle, flex: '0 0 auto' }
+    : { ...baseStyle, flex, minHeight: 0 }
   const innerStyle = isAutoSize
-    ? { padding: isMobile ? '10px 14px' : '8px 12px' }
-    : { flex: 1, overflowY: 'auto', padding: '8px 12px', minHeight: 0 }
+    ? { padding: isMobile ? '12px 14px' : '10px 14px' }
+    : { flex: 1, overflowY: 'auto', padding: '10px 14px', minHeight: 0 }
   return (
     <div style={outerStyle}>
       <div style={{
-        padding: '8px 12px', borderBottom: `1px solid ${T.border}`,
-        fontSize: 12, fontWeight: 700, color: T.text, display: 'flex', alignItems: 'center', gap: 6,
-        flexShrink: 0, background: T.sectionBg,
+        padding: '10px 14px',
+        borderBottom: `1px solid ${T.border}`,
+        fontSize: 12, fontWeight: 800, color: T.text,
+        display: 'flex', alignItems: 'center', gap: 8,
+        flexShrink: 0,
+        background: accent ? `${accent}0d` : T.sectionBg,
+        letterSpacing: '-0.01em',
       }}>
-        <span>{icon}</span><span style={{ flex: 1 }}>{title}</span>
+        {icon && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 24, height: 24, borderRadius: 7,
+            background: accent ? `${accent}1f` : 'rgba(0,0,0,0.05)',
+            fontSize: 14, lineHeight: 1,
+          }}>{icon}</span>
+        )}
+        <span style={{ flex: 1 }}>{title}</span>
         {headerRight}
       </div>
       <div style={innerStyle}>
@@ -2364,20 +2425,12 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
             {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
           </div>
         )}
-        <div style={{ display: 'flex', gap: 2, background: T.bgCard, padding: 3, borderRadius: 8, border: `1px solid ${T.border}`, flexShrink: 0 }}>
-          {[
+        <SegmentedControl T={T} size="sm" value={range} onChange={setRange}
+          items={[
             { key: 'week',  label: '今週' },
             { key: 'month', label: '今月' },
             { key: 'all',   label: '全期間' },
-          ].map(r => (
-            <button key={r.key} onClick={() => setRange(r.key)} style={{
-              padding: isMobile ? '5px 9px' : '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              background: range === r.key ? T.navActiveBg : 'transparent',
-              color: range === r.key ? T.navActiveText : T.textMuted,
-              fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
-            }}>{r.label}</button>
-          ))}
-        </div>
+          ]} />
         <button onClick={load} title="再読み込み" style={{
           background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
           borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
@@ -2508,14 +2561,15 @@ function RetrospectDay({ T, day }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden',
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 14px', background: T.sectionBg,
+        padding: '10px 16px', background: T.sectionBg,
         borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{dateLabel}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>{dateLabel}</div>
         <div style={{ flex: 1 }} />
         {start_at && (
           <div style={{ fontSize: 10, color: T.textMuted }}>
@@ -2628,10 +2682,11 @@ function ThemeEditor({ T, icon, title, value, loading, canEdit, placeholder, onS
 }
 
 // 既存の MyTasksPage.jsx STATUS_CONFIG と合わせる (not_started / in_progress / done)
+// iOS システムカラー
 const TASK_STATUS_CONFIG = {
-  not_started: { icon: '○', color: '#7a8599', label: '未着手' },
-  in_progress: { icon: '◐', color: '#4d9fff', label: '進行中' },
-  done:        { icon: '●', color: '#00d68f', label: '完了' },
+  not_started: { icon: '○', color: '#8E8E93', label: '未着手' },
+  in_progress: { icon: '◐', color: '#007AFF', label: '進行中' },
+  done:        { icon: '●', color: '#34C759', label: '完了' },
 }
 
 function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
@@ -2740,9 +2795,10 @@ function ReminderList({ T, items, emptyText, maxVisible, detailLabel, onDetail }
           background: sevBg(it.sev),
           border: `1px solid ${sevColor(it.sev)}33`,
           fontSize: 11, color: T.text, lineHeight: 1.5,
+          minWidth: 0,
         }}>
           <span style={{ flexShrink: 0 }}>{it.icon}</span>
-          <span style={{ flex: 1 }}>{it.text}</span>
+          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{it.text}</span>
         </div>
       ))}
       {(hidden > 0 || (items.length > 0 && detailLabel)) && onDetail && (
@@ -2818,42 +2874,55 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
     <div
       onClick={() => onGoToTab && onGoToTab('confirm')}
       style={{
-        background: `linear-gradient(90deg, ${T.accentBg} 0%, ${T.accent}15 100%)`,
-        borderBottom: `2px solid ${T.accent}`,
-        padding: '10px 16px',
+        background: `linear-gradient(135deg, ${T.accent}f0 0%, ${T.accent}b0 100%)`,
+        padding: '12px 18px',
         cursor: 'pointer',
         flexShrink: 0,
+        color: '#fff',
+        boxShadow: `0 2px 8px ${T.accent}33`,
+        position: 'relative', overflow: 'hidden',
       }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: -50, right: -30, width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 60%)',
+        pointerEvents: 'none', borderRadius: '50%',
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
         <span style={{ fontSize: 18 }}>📬</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>
           {isViewingSelf
             ? `未解決の確認事項が ${count}件 あります`
             : `${viewingName}さん宛の未解決 確認事項が ${count}件 あります`}
         </span>
         <div style={{ flex: 1 }} />
         <span style={{
-          padding: '4px 12px', borderRadius: 6,
-          background: T.accent, color: '#fff',
+          padding: '5px 12px', borderRadius: 99,
+          background: 'rgba(255,255,255,0.25)',
+          backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+          color: '#fff',
           fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+          border: '1px solid rgba(255,255,255,0.30)',
         }}>📬 確認タブで返信 →</span>
       </div>
       {items.length > 0 && (
         <div style={{
-          display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap',
+          display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap',
+          position: 'relative', zIndex: 1,
         }}>
           {items.map(it => (
             <div key={it.id} style={{
               flex: '1 1 240px', minWidth: 0,
-              padding: '6px 10px', borderRadius: 6,
-              background: T.bgCard, border: `1px solid ${T.border}`,
-              fontSize: 11,
+              padding: '8px 12px', borderRadius: 9,
+              background: 'rgba(255,255,255,0.22)',
+              backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.28)',
+              fontSize: 11, color: '#fff',
             }}>
-              <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
-                from <b style={{ color: T.textSub }}>{it.from_name}</b>
+              <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 2 }}>
+                from <b>{it.from_name}</b>
               </div>
               <div style={{
-                color: T.text, lineHeight: 1.5,
+                color: '#fff', lineHeight: 1.5, fontWeight: 600,
                 overflow: 'hidden', display: '-webkit-box',
                 WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
               }}>{it.content}</div>
@@ -2898,7 +2967,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
   const extra = Math.max(0, items.length - visible.length)
 
   return (
-    <Section T={T} icon="📅" title="Google カレンダー (直近8時間)" flex={0}>
+    <Section T={T} icon="📅" accent={T.info} title="Google カレンダー (直近8時間)" flex={0}>
       {loading ? (
         <div style={{ padding: 12, color: T.textMuted, fontSize: 11 }}>読み込み中...</div>
       ) : isUnconnected ? (
@@ -2995,7 +3064,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 
   return (
     <Section
-      T={T} icon="📧" title="Gmail (要対応 5件)" flex={0}
+      T={T} icon="📧" accent="#FF3B30" title="Gmail (要対応 5件)" flex={0}
       headerRight={
         !isUnconnected && !error ? (
           <button onClick={() => onGoToTab?.('mail')} style={{
@@ -3211,9 +3280,9 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
 
             {/* メール一覧 */}
             {current.items.length === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
-                ✨ メールはありません
-              </div>
+              <EmptyState T={T} icon="✨"
+                title="メールはありません"
+                description={`「${current.label}」のメールはまだ来ていません。`} />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {current.items.map(m => (
@@ -3281,10 +3350,13 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`,
-      borderLeft: `3px solid ${color}`, borderRadius: 8, padding: '12px 14px',
+      background: `linear-gradient(180deg, ${T.bgCard} 0%, ${color}05 100%)`,
+      border: `1px solid ${color}1a`,
+      borderLeft: `4px solid ${color}`,
+      borderRadius: 12, padding: '14px 16px',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 10px rgba(0,0,0,0.03)',
       opacity: dimmed ? 0.55 : 1,
-      transition: 'opacity 0.15s ease',
+      transition: 'all 0.2s ease',
     }}>
       {/* 返信済み / 既読バッジ */}
       {(mail.replied || readMarked) && (

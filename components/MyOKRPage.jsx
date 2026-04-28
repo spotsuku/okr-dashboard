@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { COMMON_TOKENS } from '../lib/themeTokens'
+import { SegmentedControl } from './iosUI'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
 
@@ -68,10 +70,10 @@ const WEATHER_CFG = [
   { score:5, icon:'☀️', label:'快晴',         color:'#ff9f43' },
 ]
 const STATUS_CFG = {
-  focus:  { label:'🎯 注力', color:'#4d9fff', bg:'rgba(77,159,255,0.12)', border:'rgba(77,159,255,0.3)' },
-  good:   { label:'✅ Good', color:'#00d68f', bg:'rgba(0,214,143,0.1)',   border:'rgba(0,214,143,0.3)'  },
-  more:   { label:'🔺 More', color:'#ff6b6b', bg:'rgba(255,107,107,0.1)', border:'rgba(255,107,107,0.3)'},
-  normal: { label:'未分類',  color:'#606880', bg:'rgba(255,255,255,0.04)',border:'rgba(255,255,255,0.1)'},
+  focus:  { label:'🎯 注力', color:'#007AFF', bg:'rgba(0,122,255,0.10)', border:'rgba(0,122,255,0.30)' },
+  good:   { label:'✅ Good', color:'#34C759', bg:'rgba(52,199,89,0.10)', border:'rgba(52,199,89,0.30)' },
+  more:   { label:'🔺 More', color:'#FF3B30', bg:'rgba(255,59,48,0.10)', border:'rgba(255,59,48,0.30)' },
+  normal: { label:'未分類',  color:'#8E8E93', bg:'rgba(142,142,147,0.10)', border:'rgba(142,142,147,0.20)' },
 }
 
 // ─── Avatar（画像 or イニシャル） ─────────────────────────────────────────────
@@ -174,8 +176,27 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
 
   return (
-    <div style={{ border:`1px solid ${open ? pctColor+'50' : wT().border}`, borderRadius:10, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
-      <div onClick={() => setOpen(p=>!p)} style={{ padding:'10px 14px', background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none' }}>
+    <div style={{
+      border:`1px solid ${open ? pctColor+'40' : pctColor+'15'}`,
+      borderRadius:14, marginBottom:10, overflow:'hidden',
+      position: 'relative',
+      boxShadow: open
+        ? `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${pctColor}26`
+        : '0 1px 2px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.03)',
+      transition:'all 0.2s ease',
+    }}>
+      {/* 上端に色グラデ帯 (左太線の代わり) */}
+      <div aria-hidden style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        background: `linear-gradient(90deg, ${pctColor} 0%, ${pctColor}80 100%)`,
+      }} />
+      <div onClick={() => setOpen(p=>!p)} style={{
+        padding:'14px 16px',
+        background: open
+          ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${pctColor}08 100%)`
+          : wT().bgCard,
+        cursor:'pointer', userSelect:'none',
+      }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
           <span style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4 }}>{pct}%</span>
           <span style={{ fontSize:13, fontWeight:600, color:wT().text, flex:1, lineHeight:1.4 }}>{kr.title}</span>
@@ -632,19 +653,10 @@ function KATableHeader({ wT }) {
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
   const { isMobile, isTablet } = useResponsive()
+  // テーマは lib/themeTokens.js で一元管理
   const W_THEMES = {
-    dark: {
-      bg:'#090d18', bgCard:'#0e1420', bgCard2:'#111828', bgSidebar:'#0e1420',
-      border:'rgba(255,255,255,0.07)', borderLight:'rgba(255,255,255,0.04)',
-      borderMid:'rgba(255,255,255,0.1)', text:'#e8eaf0', textSub:'#a0a8be',
-      textMuted:'#606880', textFaint:'#404660', textFaintest:'#303450',
-    },
-    light: {
-      bg:'#f0f2f7', bgCard:'#ffffff', bgCard2:'#f7f8fc', bgSidebar:'#ffffff',
-      border:'rgba(0,0,0,0.08)', borderLight:'rgba(0,0,0,0.05)',
-      borderMid:'rgba(0,0,0,0.12)', text:'#1a1f36', textSub:'#4a5270',
-      textMuted:'#7080a0', textFaint:'#90a0bc', textFaintest:'#b0bcd0',
-    }
+    dark:  { ...COMMON_TOKENS.dark },
+    light: { ...COMMON_TOKENS.light },
   }
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
 
@@ -912,10 +924,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text }}>
 
-      {/* ヘッダー */}
-      <div style={{ padding:'11px 16px', borderBottom:`1px solid ${wT().border}`, display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+      {/* ヘッダー (iOS 風グラスバー) */}
+      <div style={{
+        padding:'14px 20px', borderBottom:`1px solid ${wT().border}`,
+        display:'flex', alignItems:'center', gap:12, flexShrink:0,
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      }}>
         {/* ユーザーアバター（画像 or イニシャル） */}
         {myMember?.avatar_url ? (
           <img
@@ -966,12 +984,11 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         </div>
       </div>
 
-      {/* 期間タブ */}
-      <div style={{ display:'flex', gap:4, padding:'7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0 }}>
-        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4 }}>期間：</span>
-        {periodTabs.map(([key,lbl])=>(
-          <button key={key} onClick={()=>{setActivePeriod(key);setActiveObjId(null)}} style={{ padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600, background:activePeriod===key?(key==='all'?wT().borderMid:'rgba(77,159,255,0.15)'):'transparent', border:`1px solid ${activePeriod===key?(key==='all'?wT().border:'rgba(77,159,255,0.4)'):wT().borderMid}`, color:activePeriod===key?(key==='all'?wT().text:'#4d9fff'):wT().textMuted }}>{lbl}</button>
-        ))}
+      {/* 期間タブ (iOS SegmentedControl) */}
+      <div style={{ display:'flex', gap:8, padding:'10px 20px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center' }}>
+        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700 }}>期間</span>
+        <SegmentedControl T={wT()} value={activePeriod} onChange={key => { setActivePeriod(key); setActiveObjId(null) }}
+          items={periodTabs.map(([key, label]) => ({ key, label }))} size="sm" />
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
@@ -1003,19 +1020,37 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             const avgPct = myKRs.length > 0 ? Math.round(myKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/myKRs.length) : 0
             const pctColor = avgPct>=100?'#00d68f':avgPct>=60?'#4d9fff':'#ff6b6b'
             return (
-              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{periodLabel(obj.period)}</span>
+              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{
+                padding:'12px 14px', borderRadius:12, marginBottom:8, cursor:'pointer',
+                border:`1px solid ${isActive?color+'4d':color+'1a'}`,
+                background: isActive
+                  ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${color}0d 100%)`
+                  : wT().bgCard,
+                boxShadow: isActive
+                  ? `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${color}26`
+                  : '0 1px 2px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.03)',
+                transition:'all 0.2s ease',
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                  <span style={{
+                    fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:6,
+                    background:`linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`, color:'#fff',
+                    boxShadow: `0 1px 2px ${color}55`,
+                  }}>{periodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
                 </div>
-                <div style={{ fontSize:12, fontWeight:600, lineHeight:1.4, marginBottom:6, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
-                <div style={{ height:3, borderRadius:2, background:wT().borderLight, overflow:'hidden', marginBottom:5 }}>
-                  <div style={{ height:'100%', width:`${Math.min(avgPct,100)}%`, background:pctColor, borderRadius:2 }} />
+                <div style={{ fontSize:13, fontWeight:700, lineHeight:1.4, marginBottom:8, color:wT().text, letterSpacing:'-0.01em' }}>{obj.title}</div>
+                <div style={{ height:5, borderRadius:99, background:'rgba(0,0,0,0.05)', overflow:'hidden', marginBottom:7 }}>
+                  <div style={{
+                    height:'100%', width:`${Math.min(avgPct,100)}%`,
+                    background:`linear-gradient(90deg, ${pctColor} 0%, ${pctColor}cc 100%)`,
+                    borderRadius:99, transition:'width 0.4s',
+                  }} />
                 </div>
-                <div style={{ display:'flex', gap:8, fontSize:10, color:wT().textMuted }}>
-                  <span style={{ color:pctColor, fontWeight:700 }}>{avgPct}%</span>
-                  <span>KR {objKRsCount}件</span>
-                  <span style={{ color:objKAsCount>0?'#4d9fff':wT().textFaint }}>KA {objKAsCount}件</span>
+                <div style={{ display:'flex', gap:8, fontSize:10, color:wT().textMuted, alignItems:'center' }}>
+                  <span style={{ color:pctColor, fontWeight:800, fontSize:12 }}>{avgPct}%</span>
+                  <span style={{ padding:'1px 7px', borderRadius:99, background:'rgba(0,0,0,0.04)', fontWeight:700 }}>KR {objKRsCount}</span>
+                  <span style={{ padding:'1px 7px', borderRadius:99, background: objKAsCount>0?wT().accentBg:'rgba(0,0,0,0.04)', color:objKAsCount>0?wT().accent:wT().textFaint, fontWeight:700 }}>KA {objKAsCount}</span>
                 </div>
               </div>
             )
@@ -1038,12 +1073,26 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 const d = getDepth(selectedObj.level_id, levels)
                 const color = LAYER_COLORS[d] || '#a0a8be'
                 return (
-                  <div style={{ padding:'12px 14px', background:`${color}0e`, border:`1px solid ${color}30`, borderLeft:`4px solid ${color}`, borderRadius:10, marginBottom:14 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${color}20`, color }}>{periodLabel(selectedObj.period)}</span>
-                      <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
+                  <div style={{
+                    position:'relative', overflow:'hidden',
+                    padding:'18px 22px',
+                    background:`linear-gradient(135deg, ${color}f0 0%, ${color}b0 100%)`,
+                    color:'#fff',
+                    borderRadius:16, marginBottom:16,
+                    boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${color}33`,
+                  }}>
+                    <div aria-hidden style={{
+                      position:'absolute', top:-50, right:-30, width:180, height:180,
+                      background:'radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 60%)',
+                      borderRadius:'50%', pointerEvents:'none',
+                    }} />
+                    <div style={{ position:'relative', zIndex:1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:99, background:'rgba(255,255,255,0.25)', color:'#fff', backdropFilter:'blur(10px)' }}>{periodLabel(selectedObj.period)}</span>
+                        <span style={{ fontSize:10, opacity:0.85, letterSpacing:'0.18em', textTransform:'uppercase', fontWeight:700 }}>Objective</span>
+                      </div>
+                      <div style={{ fontSize:17, fontWeight:800, color:'#fff', lineHeight:1.4, letterSpacing:'-0.01em' }}>{selectedObj.title}</div>
                     </div>
-                    <div style={{ fontSize:14, fontWeight:700, color:wT().text, lineHeight:1.5 }}>{selectedObj.title}</div>
                   </div>
                 )
               })()}

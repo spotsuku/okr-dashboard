@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import { computeKAKey } from '../lib/kaKey'
 
 // JST基準のYYYY-MM-DDを返す
@@ -35,22 +36,19 @@ function isMonthInRange(month, start, end) {
   return start <= end ? month >= start && month <= end : month >= start || month <= end
 }
 
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg:'#0F1117', bgCard:'#1A1D27', border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
-    text:'#E8ECF0', textSub:'#B0BAC8', textMuted:'#7a8599', textFaint:'#4A5468',
-    accent:'#4d9fff', accentBg:'rgba(77,159,255,0.12)', sectionBg:'rgba(255,255,255,0.03)',
-    doneBg:'rgba(0,214,143,0.06)', doneBorder:'rgba(0,214,143,0.15)',
-    overdueBg:'rgba(255,107,107,0.06)', overdueBorder:'rgba(255,107,107,0.2)',
-    chatBg:'#0e1420', chatBorder:'rgba(255,255,255,0.08)',
+    ...COMMON_TOKENS.dark,
+    doneBg:'rgba(48,209,88,0.10)', doneBorder:'rgba(48,209,88,0.20)',
+    overdueBg:'rgba(255,69,58,0.10)', overdueBorder:'rgba(255,69,58,0.30)',
+    chatBg:'#1C1C1E', chatBorder:'rgba(255,255,255,0.10)',
   },
   light: {
-    bg:'#EEF2F5', bgCard:'#FFFFFF', border:'#E2E8F0', borderMid:'#CBD5E0',
-    text:'#2D3748', textSub:'#4A5568', textMuted:'#718096', textFaint:'#A0AEC0',
-    accent:'#3B82C4', accentBg:'rgba(59,130,196,0.1)', sectionBg:'#F8FAFC',
-    doneBg:'rgba(0,214,143,0.06)', doneBorder:'rgba(0,214,143,0.2)',
-    overdueBg:'rgba(255,107,107,0.06)', overdueBorder:'rgba(255,107,107,0.2)',
-    chatBg:'#F7F9FB', chatBorder:'#E2E8F0',
+    ...COMMON_TOKENS.light,
+    doneBg:'rgba(52,199,89,0.10)', doneBorder:'rgba(52,199,89,0.30)',
+    overdueBg:'rgba(255,59,48,0.08)', overdueBorder:'rgba(255,59,48,0.30)',
+    chatBg:'#FFFFFF', chatBorder:'rgba(0,0,0,0.06)',
   },
 }
 
@@ -61,10 +59,11 @@ const SUGGESTIONS = [
   'タスクの優先順位を整理して',
 ]
 
+// iOS システムカラー
 const TASK_STATUS_CONFIG = {
-  not_started: { label: '未着手', color: '#7a8599', bg: 'rgba(122,133,153,0.12)', border: 'rgba(122,133,153,0.35)', icon: '○' },
-  in_progress: { label: '進行中', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)', border: 'rgba(77,159,255,0.35)', icon: '◐' },
-  done:        { label: '完了',   color: '#00d68f', bg: 'rgba(0,214,143,0.12)', border: 'rgba(0,214,143,0.35)', icon: '●' },
+  not_started: { label: '未着手', color: '#8E8E93', bg: 'rgba(142,142,147,0.12)', border: 'rgba(142,142,147,0.30)', icon: '○' },
+  in_progress: { label: '進行中', color: '#007AFF', bg: 'rgba(0,122,255,0.12)',   border: 'rgba(0,122,255,0.30)',   icon: '◐' },
+  done:        { label: '完了',   color: '#34C759', bg: 'rgba(52,199,89,0.12)',   border: 'rgba(52,199,89,0.30)',   icon: '●' },
 }
 const TASK_STATUS_ORDER = ['not_started', 'in_progress', 'done']
 
