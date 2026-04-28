@@ -223,3 +223,230 @@ export function EmptyState({ T, icon = '📭', title, description, actionLabel, 
     </div>
   )
 }
+
+// ─── 検索バー (iOS 風) ──────────────────────────────────────────────────
+import { useState, useRef } from 'react'
+export function SearchBar({ T, value, onChange, placeholder = '検索', autoFocus = false, onCancel }) {
+  const [focused, setFocused] = useState(false)
+  const inputRef = useRef(null)
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
+      <div style={{
+        flex: 1, position: 'relative', display: 'flex', alignItems: 'center',
+        background: 'rgba(120,120,128,0.12)', borderRadius: 10,
+        transition: 'all 0.2s ease',
+      }}>
+        <span style={{
+          position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+          color: T.textMuted, fontSize: 14, pointerEvents: 'none',
+        }}>🔍</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value || ''}
+          onChange={e => onChange && onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          style={{
+            width: '100%', padding: '8px 12px 8px 32px', fontSize: 14,
+            background: 'transparent', border: 'none', outline: 'none',
+            color: T.text, fontFamily: 'inherit', borderRadius: 10,
+            boxSizing: 'border-box',
+          }}
+        />
+        {value && (
+          <button
+            onClick={() => { onChange && onChange(''); inputRef.current?.focus() }}
+            style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              width: 18, height: 18, borderRadius: '50%',
+              background: 'rgba(120,120,128,0.4)', color: '#FFFFFF',
+              border: 'none', fontSize: 11, lineHeight: 1, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'inherit',
+            }}>×</button>
+        )}
+      </div>
+      {focused && onCancel && (
+        <button
+          onMouseDown={e => { e.preventDefault(); onCancel() }}
+          style={{
+            background: 'transparent', border: 'none', color: T.accent,
+            fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+            padding: '0 4px', whiteSpace: 'nowrap',
+          }}>キャンセル</button>
+      )}
+    </div>
+  )
+}
+
+// ─── グループ化リスト (Settings.app 風) ────────────────────────────────
+// items: [{ key, icon?, label, sub?, color?, onClick?, right?, disabled? }]
+export function GroupedList({ T, title, items, footer }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {title && (
+        <div style={{
+          fontSize: 12, fontWeight: 700, color: T.textMuted,
+          padding: '0 14px 8px', textTransform: 'uppercase', letterSpacing: '0.06em',
+        }}>{title}</div>
+      )}
+      <div style={{
+        background: T.bgCard, borderRadius: 14,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+        overflow: 'hidden',
+      }}>
+        {items.map((it, i) => {
+          const isLast = i === items.length - 1
+          const clickable = !it.disabled && it.onClick
+          return (
+            <div
+              key={it.key}
+              onClick={() => clickable && it.onClick()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px',
+                borderBottom: isLast ? 'none' : `0.5px solid ${T.border}`,
+                cursor: clickable ? 'pointer' : 'default',
+                opacity: it.disabled ? 0.4 : 1,
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => { if (clickable) e.currentTarget.style.background = 'rgba(0,0,0,0.03)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            >
+              {it.icon && (
+                <div style={{
+                  width: 30, height: 30, borderRadius: 7,
+                  background: it.color ? `${it.color}1f` : 'rgba(0,122,255,0.10)',
+                  color: it.color || T.accent,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, flexShrink: 0,
+                }}>{it.icon}</div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 14, fontWeight: 600, color: T.text,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{it.label}</div>
+                {it.sub && (
+                  <div style={{
+                    fontSize: 11, color: T.textMuted, marginTop: 2,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{it.sub}</div>
+                )}
+              </div>
+              {it.right ? (
+                <div style={{ flexShrink: 0 }}>{it.right}</div>
+              ) : clickable ? (
+                <span style={{ color: T.textFaint, fontSize: 16, lineHeight: 1, flexShrink: 0 }}>›</span>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+      {footer && (
+        <div style={{ fontSize: 11, color: T.textMuted, padding: '6px 14px 0', lineHeight: 1.5 }}>
+          {footer}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── 立体的なダッシュボードカード (グラスモーフィズム + マルチシャドウ) ─────
+// onClick / icon / title / sub / color (アクセント) / chevron
+export function DashboardTile({ T, icon, title, sub, color = '#007AFF', onClick, badge, status }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      style={{
+        position: 'relative', overflow: 'hidden',
+        textAlign: 'left',
+        background: T.bgCard, border: 'none',
+        borderRadius: 18, padding: '20px 18px',
+        cursor: onClick ? 'pointer' : 'default',
+        fontFamily: 'inherit',
+        // 立体感: 3層シャドウ
+        boxShadow: `
+          0 1px 2px rgba(0,0,0,0.04),
+          0 4px 12px rgba(0,0,0,0.05),
+          0 16px 40px rgba(0,0,0,0.04)
+        `,
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        display: 'flex', flexDirection: 'column', gap: 14,
+        minHeight: 132,
+      }}
+      onMouseEnter={e => {
+        if (!onClick) return
+        e.currentTarget.style.transform = 'translateY(-3px)'
+        e.currentTarget.style.boxShadow = `
+          0 2px 4px rgba(0,0,0,0.06),
+          0 8px 20px rgba(0,0,0,0.06),
+          0 24px 48px ${color}26
+        `
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = 'translateY(0)'
+        e.currentTarget.style.boxShadow = `
+          0 1px 2px rgba(0,0,0,0.04),
+          0 4px 12px rgba(0,0,0,0.05),
+          0 16px 40px rgba(0,0,0,0.04)
+        `
+      }}
+      onMouseDown={e => onClick && (e.currentTarget.style.transform = 'translateY(-1px) scale(0.985)')}
+      onMouseUp={e => onClick && (e.currentTarget.style.transform = 'translateY(-3px)')}
+    >
+      {/* グラデーション帯 (色アクセント) */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 4,
+        background: `linear-gradient(90deg, ${color} 0%, ${color}aa 100%)`,
+      }} />
+      {/* 透過オーバーレイ (微妙な色味) */}
+      <div style={{
+        position: 'absolute', top: 0, right: -40, width: 160, height: 160,
+        background: `radial-gradient(circle, ${color}10 0%, transparent 70%)`,
+        pointerEvents: 'none',
+      }} />
+
+      {/* アイコン (グラスモーフィズム) */}
+      <div style={{
+        width: 50, height: 50, borderRadius: 13,
+        background: `linear-gradient(135deg, ${color}28 0%, ${color}10 100%)`,
+        border: `1px solid ${color}40`,
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 24, lineHeight: 1, flexShrink: 0,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px ${color}1f`,
+      }}>{icon}</div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 15, fontWeight: 800, color: T.text,
+          letterSpacing: '-0.01em', lineHeight: 1.3, marginBottom: 4,
+        }}>{title}</div>
+        {sub && (
+          <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.45 }}>{sub}</div>
+        )}
+      </div>
+
+      {(status || badge) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto' }}>
+          {status && (
+            <span style={{ fontSize: 11, color, fontWeight: 700 }}>{status}</span>
+          )}
+          {badge && (
+            <span style={{
+              padding: '2px 8px', borderRadius: 99,
+              background: `${color}1f`, color, fontSize: 10, fontWeight: 800,
+            }}>{badge}</span>
+          )}
+        </div>
+      )}
+    </button>
+  )
+}
