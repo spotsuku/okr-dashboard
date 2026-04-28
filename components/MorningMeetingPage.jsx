@@ -701,26 +701,38 @@ function SpeakerReport({ T, member }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`,
-      borderLeft: `4px solid #ff9f43`,
-      borderRadius: 12, padding: 20, marginBottom: 14,
+      background: `linear-gradient(180deg, ${T.bgCard} 0%, #ff9f4308 100%)`,
+      border: `1px solid #ff9f431f`,
+      borderLeft: `5px solid #ff9f43`,
+      borderRadius: 18, padding: '22px 24px', marginBottom: 14,
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(255,159,67,0.10), 0 16px 40px rgba(0,0,0,0.04)',
+      position: 'relative', overflow: 'hidden',
     }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: -50, right: -30, width: 200, height: 200,
+        background: 'radial-gradient(circle, rgba(255,159,67,0.10) 0%, transparent 60%)',
+        pointerEvents: 'none', borderRadius: '50%',
+      }} />
       {/* 発表者ヘッダ */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, position: 'relative', zIndex: 1 }}>
         <div style={{
-          width: 48, height: 48, borderRadius: '50%',
-          background: '#ff9f43', color: '#fff',
+          width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 20, fontWeight: 800,
+          fontSize: 24, fontWeight: 900,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px rgba(255,159,67,0.45)',
         }}>{member.name.charAt(0)}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{member.name}</div>
-          <div style={{ fontSize: 11, color: T.textMuted }}>{member.role || ''}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>{member.name}</div>
+          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{member.role || ''}</div>
         </div>
         <div style={{
-          padding: '4px 12px', borderRadius: 99,
-          background: 'rgba(255,159,67,0.15)', color: '#ff9f43',
-          fontSize: 11, fontWeight: 700,
+          padding: '5px 14px', borderRadius: 99,
+          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          color: '#fff',
+          fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+          boxShadow: '0 2px 6px rgba(255,159,67,0.45)',
         }}>🎤 発表中</div>
       </div>
 

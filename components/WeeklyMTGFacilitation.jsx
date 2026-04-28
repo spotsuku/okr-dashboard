@@ -2127,11 +2127,13 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
 
       {/* チームジャンプリスト */}
       <div style={{
-        marginTop: 18, padding: '12px 16px', background: T.bgCard,
-        border: `1px solid ${T.border}`, borderRadius: 10,
+        marginTop: 18, padding: '14px 18px',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          チーム一覧（クリックでジャンプ）
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🏢</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>チーム一覧（クリックでジャンプ）</div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {teams.map((t, i) => {
@@ -2141,9 +2143,13 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
               <button key={t.team.id} onClick={() => jumpTo(i)}
                 title={`${t.team.name} (KA ${t.kaCount}件)`}
                 style={{
-                  padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
-                  background: isActive ? T.accent : isDone ? `${T.success}25` : T.bgSection,
-                  color: isActive ? '#fff' : isDone ? T.success : T.textSub, fontWeight: 700,
+                  padding: '5px 12px', borderRadius: 99, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
+                  background: isActive
+                    ? `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}d0 100%)`
+                    : isDone ? T.successBg : 'rgba(120,120,128,0.10)',
+                  color: isActive ? '#fff' : isDone ? T.success : T.textSub, fontWeight: 800,
+                  boxShadow: isActive ? `0 2px 6px ${T.accent}55` : 'none',
+                  transition: 'all 0.15s ease',
                 }}>
                 {isDone && '✓ '}{t.team.icon || '🏢'} {t.team.name} <span style={{ opacity: 0.65 }}>({t.kaCount})</span>
               </button>
@@ -2154,11 +2160,19 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
 
       {/* 横断連携への誘導 */}
       <div style={{
-        marginTop: 18, padding: '12px 16px', background: `${T.warn}10`,
-        border: `1px solid ${T.warn}40`, borderRadius: 10, fontSize: 12, color: T.textSub,
+        marginTop: 18, padding: '14px 18px',
+        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
+        border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
+        borderRadius: 14, fontSize: 12, color: T.textSub,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}>
-        💡 各チーム共有が一巡したら「横断連携の確認へ →」で Step 2 へ。<br />
-        曖昧な業務の引き取り、チーム間の依頼・連携は「確認事項」として記録します。
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.warn}1f`, color: T.warn, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>💡</div>
+          <div style={{ lineHeight: 1.6 }}>
+            各チーム共有が一巡したら「横断連携の確認へ →」で Step 2 へ。<br />
+            曖昧な業務の引き取り、チーム間の依頼・連携は <strong style={{ color: T.warn }}>「確認事項」</strong>として記録します。
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -2806,15 +2820,28 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onNext
       {/* 上部ヘッダー（withDiscussion の案内） */}
       {withDiscussion && (
         <div style={{
-          maxWidth: 900, width: '100%', margin: '12px auto 0', padding: '12px 16px',
-          background: `${T.warn}15`, border: `1px solid ${T.warn}40`, borderRadius: 8,
-          fontSize: 12, color: T.textSub,
+          maxWidth: 900, width: '100%', margin: '14px auto 0', padding: '16px 20px',
+          background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
+          border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
+          borderRadius: 14, fontSize: 12, color: T.textSub,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
         }}>
-          <div style={{ fontWeight: 700, color: T.warn, marginBottom: 4 }}>🤝 横断連携の確認</div>
-          各チームの共有を踏まえ、以下を「確認事項」として記録してください：<br />
-          ・<strong>担当が曖昧な業務</strong>（どのチームが拾うか）<br />
-          ・<strong>引き継ぎ・依頼事項</strong>（チーム間でボールを渡したいもの）<br />
-          ・<strong>連携が必要な案件</strong>（複数チームで連動する作業）
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+              background: `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, color: '#fff',
+              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px ${T.warn}55`,
+            }}>🤝</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: T.warn, letterSpacing: '-0.01em' }}>横断連携の確認</div>
+          </div>
+          <div style={{ paddingLeft: 42, lineHeight: 1.7 }}>
+            各チームの共有を踏まえ、以下を「確認事項」として記録してください：<br />
+            ・<strong style={{ color: T.text }}>担当が曖昧な業務</strong>（どのチームが拾うか）<br />
+            ・<strong style={{ color: T.text }}>引き継ぎ・依頼事項</strong>（チーム間でボールを渡したいもの）<br />
+            ・<strong style={{ color: T.text }}>連携が必要な案件</strong>（複数チームで連動する作業）
+          </div>
         </div>
       )}
 
@@ -2971,24 +2998,42 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
       <div style={{
-        marginBottom: 16, padding: '14px 18px',
-        background: `${T.warn}10`, border: `1px solid ${T.warn}40`, borderRadius: 10,
+        marginBottom: 18, padding: '18px 22px',
+        background: `linear-gradient(135deg, ${T.warn}f0 0%, ${T.warn}c0 100%)`,
+        borderRadius: 18, color: '#fff',
+        position: 'relative', overflow: 'hidden',
+        boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${T.warn}33, 0 24px 56px ${T.warn}26`,
       }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: T.warn, marginBottom: 4 }}>
-          ✅ ネクストアクションを確定
+        <div aria-hidden style={{
+          position: 'absolute', top: -50, right: -30, width: 200, height: 200,
+          background: 'radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 60%)',
+          pointerEvents: 'none', borderRadius: '50%',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+            background: 'rgba(255,255,255,0.22)',
+            backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.30)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 26, color: '#fff',
+          }}>✅</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, letterSpacing: '-0.01em' }}>ネクストアクションを確定</div>
+            <div style={{ fontSize: 12, opacity: 0.95, lineHeight: 1.6 }}>
+              <strong>誰がいつまでに何をやるか</strong>を記録します。決まらない会議は意味がありません。<br />
+              会議で出た決定事項・宿題・依頼を全て書き出してから終了してください。
         </div>
-        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
-          <strong>誰がいつまでに何をやるか</strong>を記録します。決まらない会議は意味がありません。<br />
-          会議で出た決定事項・宿題・依頼を全て書き出してから終了してください。
+          </div>
         </div>
       </div>
 
       {/* テーブルヘッダー */}
       <div style={{
         display: 'grid', gridTemplateColumns: '140px 130px 1fr 180px 32px',
-        gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
-        border: `1px solid ${T.border}`, marginBottom: 6, fontSize: 11,
-        color: T.textMuted, fontWeight: 700,
+        gap: 8, padding: '10px 14px', background: T.bgCard, borderRadius: 10,
+        border: `1px solid ${T.border}`, marginBottom: 8, fontSize: 11,
+        color: T.textMuted, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase',
       }}>
         <div>担当</div>
         <div>期日</div>
