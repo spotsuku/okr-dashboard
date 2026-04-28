@@ -177,19 +177,24 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
 
   return (
     <div style={{
-      border:`1px solid ${open ? pctColor+'4d' : pctColor+'1a'}`,
+      border:`1px solid ${open ? pctColor+'40' : pctColor+'15'}`,
       borderRadius:14, marginBottom:10, overflow:'hidden',
+      position: 'relative',
       boxShadow: open
         ? `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${pctColor}26`
         : '0 1px 2px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.03)',
       transition:'all 0.2s ease',
     }}>
+      {/* 上端に色グラデ帯 (左太線の代わり) */}
+      <div aria-hidden style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        background: `linear-gradient(90deg, ${pctColor} 0%, ${pctColor}80 100%)`,
+      }} />
       <div onClick={() => setOpen(p=>!p)} style={{
-        padding:'12px 16px',
+        padding:'14px 16px',
         background: open
           ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${pctColor}08 100%)`
           : wT().bgCard,
-        borderLeft:`5px solid ${pctColor}`,
         cursor:'pointer', userSelect:'none',
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>

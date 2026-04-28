@@ -266,21 +266,32 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         return (
           <div key={ann.id} style={{
             marginBottom: 18,
-            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${lColor}06 100%)`,
-            border: `1px solid ${isOpen ? lColor + '4d' : lColor + '1f'}`,
+            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${lColor}05 100%)`,
+            border: `1px solid ${isOpen ? lColor + '40' : lColor + '15'}`,
             borderRadius: 18, overflow: 'hidden',
+            position: 'relative',
             boxShadow: isOpen
               ? `0 1px 2px rgba(0,0,0,0.05), 0 8px 24px ${lColor}26, 0 16px 40px rgba(0,0,0,0.04)`
               : '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
             transition: 'all 0.25s ease',
           }}>
+            {/* 上端に薄い色グラデ帯 (左の太線の代わり) */}
+            <div aria-hidden style={{
+              position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+              background: `linear-gradient(90deg, ${lColor} 0%, ${lColor}80 100%)`,
+            }} />
+            {/* 右上に放射状グロウ */}
+            <div aria-hidden style={{
+              position: 'absolute', top: -40, right: -40, width: 200, height: 200,
+              background: `radial-gradient(circle, ${lColor}10 0%, transparent 65%)`,
+              pointerEvents: 'none',
+            }} />
 
             {/* 通期ヘッダー */}
             <div onClick={() => toggleExpand(ann.id)} style={{
-              padding: '20px 22px', cursor: 'pointer',
-              borderLeft: `5px solid ${lColor}`,
+              padding: '20px 24px', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 14,
-              position: 'relative',
+              position: 'relative', zIndex: 1,
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>

@@ -702,12 +702,16 @@ function SpeakerReport({ T, member }) {
   return (
     <div style={{
       background: `linear-gradient(180deg, ${T.bgCard} 0%, #ff9f4308 100%)`,
-      border: `1px solid #ff9f431f`,
-      borderLeft: `5px solid #ff9f43`,
+      border: `1px solid #ff9f4326`,
       borderRadius: 18, padding: '22px 24px', marginBottom: 14,
       boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(255,159,67,0.10), 0 16px 40px rgba(0,0,0,0.04)',
       position: 'relative', overflow: 'hidden',
     }}>
+      {/* 上端に色グラデ帯 (左太線の代わり) */}
+      <div aria-hidden style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+        background: 'linear-gradient(90deg, #ff9f43 0%, #f9731680 100%)',
+      }} />
       <div aria-hidden style={{
         position: 'absolute', top: -50, right: -30, width: 200, height: 200,
         background: 'radial-gradient(circle, rgba(255,159,67,0.10) 0%, transparent 60%)',
