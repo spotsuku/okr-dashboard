@@ -5,16 +5,16 @@ import { LargeTitle, SearchBar, DashboardTile } from './iosUI'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
 const DASHBOARDS = [
-  { id: 'okr',         title: 'OKR ダッシュボード',         description: 'OKR・KA・タスク管理',          icon: '🎯', color: '#007AFF', internal: true,  group: 'main',     keywords: 'okr ka タスク 目標' },
+  { id: 'okr',         title: 'OKR ダッシュボード',         description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true,  group: 'main',     keywords: 'okr ka タスク 目標' },
 
-  { id: 'cs',          title: 'CS ダッシュボード',          description: '顧客対応・満足度管理',           icon: '🤝', color: '#34C759', url: 'https://neo-cs.vercel.app/',                       group: 'business', keywords: 'cs 顧客 満足度' },
-  { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: '💰', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', group: 'business', keywords: 'sales 営業 商談' },
-  { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: '🏛',  color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',  group: 'business', keywords: 'community コミュニティ' },
-  { id: 'youth',       title: 'ユース ダッシュボード',      description: 'ユース活動管理',                 icon: '🌱', color: '#FFCC00', url: 'https://neo-youth.vercel.app/dashboard',           group: 'business', keywords: 'youth ユース' },
+  { id: 'cs',          title: 'CS ダッシュボード',          description: '顧客対応・満足度管理',           icon: 'users',      color: '#34C759', url: 'https://neo-cs.vercel.app/',                       group: 'business', keywords: 'cs 顧客 満足度' },
+  { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: 'trendingUp', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', group: 'business', keywords: 'sales 営業 商談' },
+  { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: 'building',   color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',  group: 'business', keywords: 'community コミュニティ' },
+  { id: 'youth',       title: 'ユース ダッシュボード',      description: 'ユース活動管理',                 icon: 'sprout',     color: '#FFCC00', url: 'https://neo-youth.vercel.app/dashboard',           group: 'business', keywords: 'youth ユース' },
 
-  { id: 'seisaku',     title: '制作物管理',                 description: '制作物の進行・管理',             icon: '🎨', color: '#5AC8FA', url: 'https://seisaku-kanri-blond.vercel.app/',           group: 'tools',    keywords: '制作 デザイン' },
-  { id: 'budget',      title: '予算管理 ダッシュボード',     description: '予算策定・実績管理',             icon: '📊', color: '#AF52DE', url: 'https://neobudget-liard.vercel.app/#',              group: 'tools',    keywords: '予算 管理 実績' },
-  { id: 'invitation',  title: 'イベント招待 ダッシュボード', description: 'イベント招待・参加管理',         icon: '✉️', color: '#FF2D55', url: 'https://invitation-ruby-psi.vercel.app/',           group: 'tools',    keywords: 'invitation イベント招待' },
+  { id: 'seisaku',     title: '制作物管理',                 description: '制作物の進行・管理',             icon: 'palette',    color: '#5AC8FA', url: 'https://seisaku-kanri-blond.vercel.app/',           group: 'tools',    keywords: '制作 デザイン' },
+  { id: 'budget',      title: '予算管理 ダッシュボード',     description: '予算策定・実績管理',             icon: 'chartPie',   color: '#AF52DE', url: 'https://neobudget-liard.vercel.app/#',              group: 'tools',    keywords: '予算 管理 実績' },
+  { id: 'invitation',  title: 'イベント招待 ダッシュボード', description: 'イベント招待・参加管理',         icon: 'envelope',   color: '#FF2D55', url: 'https://invitation-ruby-psi.vercel.app/',           group: 'tools',    keywords: 'invitation イベント招待' },
 ]
 
 // テーマは lib/themeTokens.js で一元管理
