@@ -821,10 +821,25 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
       {depts.map(dept => {
         const color = getDeptColor(dept.name)
         return (
-          <div key={dept.id} style={{ marginBottom: 24, border: `2px solid ${color}60`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ background: `${color}15`, borderBottom: `2px solid ${color}80`, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 4, height: 24, borderRadius: 2, background: color }} />
-              <span style={{ fontSize: 16, fontWeight: 700, color }}>{dept.icon} {dept.name}</span>
+          <div key={dept.id} style={{
+            marginBottom: 24,
+            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${color}06 100%)`,
+            border: `1px solid ${color}33`, borderRadius: 18, overflow: 'hidden',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
+          }}>
+            <div style={{
+              background: `linear-gradient(135deg, ${color}1f 0%, ${color}10 100%)`,
+              borderBottom: `1px solid ${color}33`,
+              padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                background: `linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`,
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 18,
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${color}55`,
+              }}>{dept.icon}</div>
+              <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: '-0.01em' }}>{dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
               {isAdmin && (
                 <button onClick={() => setWebhookEdit({ levelId: dept.id, url: dept.slack_webhook_url || '' })}

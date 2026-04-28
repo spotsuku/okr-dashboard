@@ -377,15 +377,24 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 
   return (
     <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.35)',
+      backdropFilter: 'blur(20px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 20,
+      animation: 'focusFillFade 0.2s ease',
     }}>
+      <style>{`
+        @keyframes focusFillFade { from {opacity:0} to {opacity:1} }
+        @keyframes focusFillSlide { from {transform:translateY(20px); opacity:0} to {transform:translateY(0); opacity:1} }
+      `}</style>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 14,
+        background: T.bgCard, borderRadius: 18,
         width: '100%', maxWidth: 720, maxHeight: '92vh',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.08)',
+        animation: 'focusFillSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
       }}>
         {/* ─── モード切替タブ ─── */}
         <div style={{

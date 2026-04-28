@@ -176,8 +176,22 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
 
   return (
-    <div style={{ border:`1px solid ${open ? pctColor+'50' : wT().border}`, borderRadius:10, marginBottom:10, overflow:'hidden', transition:'border-color 0.15s' }}>
-      <div onClick={() => setOpen(p=>!p)} style={{ padding:'10px 14px', background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none' }}>
+    <div style={{
+      border:`1px solid ${open ? pctColor+'4d' : pctColor+'1a'}`,
+      borderRadius:14, marginBottom:10, overflow:'hidden',
+      boxShadow: open
+        ? `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${pctColor}26`
+        : '0 1px 2px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.03)',
+      transition:'all 0.2s ease',
+    }}>
+      <div onClick={() => setOpen(p=>!p)} style={{
+        padding:'12px 16px',
+        background: open
+          ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${pctColor}08 100%)`
+          : wT().bgCard,
+        borderLeft:`5px solid ${pctColor}`,
+        cursor:'pointer', userSelect:'none',
+      }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
           <span style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4 }}>{pct}%</span>
           <span style={{ fontSize:13, fontWeight:600, color:wT().text, flex:1, lineHeight:1.4 }}>{kr.title}</span>
