@@ -500,28 +500,45 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
                   )
                 })}
 
-                {/* イベント (重ね描画 = 半透明) */}
-                {dayEvents.map(ev => {
-                  const top = minToPx(ev.startMin)
-                  const h = Math.max(SLOT_PX - 2, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 1)
-                  return (
-                    <div key={ev.id} style={{
-                      position: 'absolute', left: 4, right: 4,
-                      top, height: h,
-                      background: `${ev.color}55`,
-                      borderLeft: `3px solid ${ev.color}`,
-                      borderRadius: 4, padding: '2px 4px',
-                      fontSize: 10, color: T.text,
-                      overflow: 'hidden', cursor: 'pointer',
-                    }} title={`${ev.memberName}: ${ev.title}\n${formatMin(ev.startMin)}–${formatMin(ev.endMin)}`}
-                       onClick={() => ev.htmlLink && window.open(ev.htmlLink, '_blank')}>
-                      <div style={{ fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {ev.title}
-                      </div>
-                      <div style={{ color: T.textMuted, fontSize: 9 }}>{ev.memberName}</div>
-                    </div>
-                  )
-                })}
+                {/* イベント (重ね合わせは横に並べてレーン化) */}
+                {(() => {
+                  // ── レーン計算: 開始順にソートして、衝突しないレーンを順番に割り当て
+                  const sorted = [...dayEvents].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin)
+                  const columns = []
+                  for (const ev of sorted) {
+                    let placed = false
+                    for (let i = 0; i < columns.length; i++) {
+                      const last = columns[i][columns[i].length - 1]
+                      if (last.endMin <= ev.startMin) {
+                        columns[i].push(ev); ev._col = i; placed = true; break
+                      }
+                    }
+                    if (!placed) { columns.push([ev]); ev._col = columns.length - 1 }
+                  }
+                  // 重なるイベントが使うレーン総数を各 ev に
+                  for (const ev of sorted) {
+                    let maxCols = ev._col + 1
+                    for (const ev2 of sorted) {
+                      if (ev === ev2) continue
+                      if (ev2.startMin < ev.endMin && ev2.endMin > ev.startMin) {
+                        maxCols = Math.max(maxCols, ev2._col + 1)
+                      }
+                    }
+                    ev._cols = maxCols
+                  }
+                  return sorted.map(ev => {
+                    const top = minToPx(ev.startMin)
+                    const h = Math.max(SLOT_PX - 2, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 1)
+                    const widthPct = 100 / ev._cols
+                    const leftPct = ev._col * widthPct
+                    const isNarrow = ev._cols > 1
+                    return (
+                      <CalendarEvent key={ev.id} ev={ev} T={T} top={top} h={h}
+                        leftPct={leftPct} widthPct={widthPct} isNarrow={isNarrow}
+                        formatMin={formatMin} />
+                    )
+                  })
+                })()}
 
                 {/* 現在時刻ライン */}
                 {nowTopPx != null && (
@@ -537,6 +554,73 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
       </div>
       {/* 凡例 + 未連携リスト */}
       <UnconnectedFooter T={T} dataMembers={dataMembers} selected={selected} />
+    </div>
+  )
+}
+
+// ─── 1イベントを描画 (ホバーで詳細ポップアップ) ──────────────────────────
+function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }) {
+  const [hover, setHover] = useState(false)
+  // 細いとき (重なりレーン化された時) はタイトルを省略 / アイコンドットだけ
+  const minimal = isNarrow && widthPct < 50
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: `calc(${leftPct}% + 2px)`,
+        width: `calc(${widthPct}% - 4px)`,
+        top, height: h,
+        background: hover ? `${ev.color}88` : `${ev.color}55`,
+        borderLeft: `3px solid ${ev.color}`,
+        borderRadius: 5, padding: minimal ? '2px 3px' : '3px 5px',
+        fontSize: 10, color: T.text,
+        overflow: 'hidden', cursor: 'pointer',
+        boxShadow: hover ? `0 4px 12px ${ev.color}55, 0 0 0 1px ${ev.color}80` : 'none',
+        zIndex: hover ? 5 : 1,
+        transition: 'all 0.15s ease',
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={() => ev.htmlLink && window.open(ev.htmlLink, '_blank')}
+    >
+      <div style={{
+        fontWeight: 700, lineHeight: 1.2,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>
+        {ev.title || '(無題)'}
+      </div>
+      {!minimal && (
+        <div style={{ color: T.textMuted, fontSize: 9, lineHeight: 1.2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {ev.memberName}
+        </div>
+      )}
+      {/* ホバー時の詳細ポップアップ */}
+      {hover && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0,
+          marginTop: 4, padding: '10px 12px',
+          background: 'rgba(28,28,30,0.95)',
+          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+          color: '#fff', borderRadius: 10,
+          fontSize: 11, lineHeight: 1.5, whiteSpace: 'nowrap',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.30), 0 12px 32px rgba(0,0,0,0.20)',
+          zIndex: 100, minWidth: 200, maxWidth: 320,
+          pointerEvents: 'none',
+        }}>
+          <div style={{ fontWeight: 800, marginBottom: 4, fontSize: 12,
+            whiteSpace: 'normal', wordBreak: 'break-word' }}>{ev.title || '(無題)'}</div>
+          <div style={{ opacity: 0.85, marginBottom: 2 }}>
+            👤 <strong>{ev.memberName}</strong>
+          </div>
+          <div style={{ opacity: 0.85 }}>
+            🕐 {formatMin(ev.startMin)}–{formatMin(ev.endMin)}
+          </div>
+          {ev.hangoutLink && (
+            <div style={{ marginTop: 6, fontSize: 10, opacity: 0.7 }}>📹 Meet あり</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
