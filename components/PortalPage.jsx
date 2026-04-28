@@ -1,5 +1,6 @@
 'use client'
 import { COMMON_TOKENS, IOS_SHADOW } from '../lib/themeTokens'
+import { LargeTitle } from './iosUI'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
 const DASHBOARDS = [
@@ -87,16 +88,11 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
   }
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: T.bg, fontFamily: 'system-ui,sans-serif' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
-        {/* ヘッダー */}
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 8 }}>NEO Management</div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: T.text, margin: 0, marginBottom: 8 }}>NEO 運営DB</h1>
-          <p style={{ fontSize: 14, color: T.textMuted, margin: 0 }}>
-            {user?.email && <span>{user.email} としてログイン中</span>}
-          </p>
-        </div>
+    <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px 32px' }}>
+        {/* iOS Large Title */}
+        <LargeTitle T={T} title="NEO 運営DB"
+          subtitle={user?.email ? `${user.email} としてログイン中` : 'NEO Management'} />
 
         {/* ダッシュボードグリッド */}
         <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, letterSpacing: '0.08em', marginBottom: 10, textTransform: 'uppercase' }}>📊 ダッシュボード</div>

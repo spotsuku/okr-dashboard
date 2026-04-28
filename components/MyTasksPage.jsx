@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { SheetModal } from './iosUI'
 import { computeKAKey } from '../lib/kaKey'
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
@@ -229,10 +230,15 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
   const inputSt = { width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 22px', boxSizing: 'border-box', width: '92%', maxWidth: 560, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 20 }}>タスクを追加</div>
-
+    <SheetModal T={T} open onClose={onClose} title="タスクを追加" maxWidth={560}
+      footer={<>
+        <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 9, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+        <button onClick={save} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: canSave && !saving ? T.accent : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 700, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+          {saving ? '保存中...' : '作成する'}
+        </button>
+      </>}
+    >
+      <>
         {/* タイトル */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>タイトル <span style={{ color: '#ff6b6b' }}>*</span></div>
@@ -308,15 +314,8 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
           )}
         </div>
 
-        {/* ボタン */}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-          <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 8, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-          <button onClick={save} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: canSave && !saving ? '#00d68f' : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 600, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-            {saving ? '保存中...' : '作成する'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </>
+    </SheetModal>
   )
 }
 

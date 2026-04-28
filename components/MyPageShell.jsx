@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
 import FocusFillModal from './FocusFillModal'
@@ -2350,20 +2351,12 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
             {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
           </div>
         )}
-        <div style={{ display: 'flex', gap: 2, background: T.bgCard, padding: 3, borderRadius: 8, border: `1px solid ${T.border}`, flexShrink: 0 }}>
-          {[
+        <SegmentedControl T={T} size="sm" value={range} onChange={setRange}
+          items={[
             { key: 'week',  label: '今週' },
             { key: 'month', label: '今月' },
             { key: 'all',   label: '全期間' },
-          ].map(r => (
-            <button key={r.key} onClick={() => setRange(r.key)} style={{
-              padding: isMobile ? '5px 9px' : '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              background: range === r.key ? T.navActiveBg : 'transparent',
-              color: range === r.key ? T.navActiveText : T.textMuted,
-              fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
-            }}>{r.label}</button>
-          ))}
-        </div>
+          ]} />
         <button onClick={load} title="再読み込み" style={{
           background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
           borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
@@ -3197,9 +3190,9 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
 
             {/* メール一覧 */}
             {current.items.length === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
-                ✨ メールはありません
-              </div>
+              <EmptyState T={T} icon="✨"
+                title="メールはありません"
+                description={`「${current.label}」のメールはまだ来ていません。`} />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {current.items.map(m => (
