@@ -385,18 +385,34 @@ function UserListTab({ members, currentUser, isAdmin }) {
               </div>
               {members.map(m => {
                 const alreadyLinked = m.email === linkModal.authUser.email
-                const linkedToOther = m.email && m.email !== linkModal.authUser.email
+                // 「他のアカウントと連携中」= members.email が AUTH に実在するユーザーのメールと一致するときだけ
+                // 単に古い・存在しないメールが入っているだけのケースは紐付け可能 (上書き)
+                const otherAuthUser = m.email && m.email !== linkModal.authUser.email
+                  ? authUsers.find(u => u.email === m.email)
+                  : null
+                const linkedToOther = !!otherAuthUser
+                const hasStaleEmail = m.email && m.email !== linkModal.authUser.email && !otherAuthUser
                 const c = avatarColor(m.name)
                 return (
-                  <div key={m.id} onClick={() => !linkedToOther && handleLink(linkModal.authUser, m.id)}
-                    style={{ padding: '10px 14px', borderRadius: 8, cursor: linkedToOther ? 'not-allowed' : 'pointer', border: `1px solid ${alreadyLinked ? T().badgeBorder : linkedToOther ? T().border : T().border}`, background: alreadyLinked ? T().badgeBg : linkedToOther ? T().bgHover : T().bgCard, display: 'flex', alignItems: 'center', gap: 10, opacity: linkedToOther ? 0.4 : 1 }}>
+                  <div key={m.id}
+                    onClick={() => {
+                      if (linkedToOther) return
+                      if (hasStaleEmail) {
+                        if (!window.confirm(`${m.name} は現在 "${m.email}" のメールが設定されています。\n紐付けを進めるとこのメールは "${linkModal.authUser.email}" に上書きされます (JD やロール等の他の情報は保持されます)。\n進めますか?`)) return
+                      }
+                      handleLink(linkModal.authUser, m.id)
+                    }}
+                    style={{ padding: '10px 14px', borderRadius: 8, cursor: linkedToOther ? 'not-allowed' : 'pointer', border: `1px solid ${alreadyLinked ? T().badgeBorder : hasStaleEmail ? T().warn + '60' : T().border}`, background: alreadyLinked ? T().badgeBg : hasStaleEmail ? T().warnBg : linkedToOther ? T().bgHover : T().bgCard, display: 'flex', alignItems: 'center', gap: 10, opacity: linkedToOther ? 0.4 : 1 }}>
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${c}20`, border: `1.5px solid ${c}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: c, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: T().text }}>{m.name}</div>
-                      <div style={{ fontSize: 11, color: T().textMuted }}>{m.role} {m.email ? `（${m.email}）` : '（メール未設定）'}</div>
+                      <div style={{ fontSize: 11, color: T().textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {m.role} {m.email ? `（${m.email}）` : '（メール未設定）'}
+                      </div>
                     </div>
-                    {alreadyLinked && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700 }}>現在</span>}
-                    {linkedToOther && <span style={{ fontSize: 10, color: T().textMuted }}>他のアカウントと連携中</span>}
+                    {alreadyLinked && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700, flexShrink: 0 }}>現在</span>}
+                    {linkedToOther && <span style={{ fontSize: 10, color: T().textMuted, flexShrink: 0 }}>他のアカウントと連携中</span>}
+                    {hasStaleEmail && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0 }}>⚠ メール上書き</span>}
                   </div>
                 )
               })}
