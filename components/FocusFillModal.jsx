@@ -184,13 +184,15 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const krReviewsMap = Object.fromEntries((krReviewsRes.data || []).map(r => [r.kr_id, r]))
     const om = {}; (objsRes.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
 
-    // 該当Q（通期と他Qは除外）
+    // 該当Q + 通期 を表示 (Q集中の人にも通期があることを意識させる)
     const curQ = getCurrentQuarter()
     const inCurrentQ = (objId) => om[objId]?.period === curQ
+    const isAnnualObj = (objId) => om[objId]?.period === 'annual'
+    const inScope = (objId) => inCurrentQ(objId) || isAnnualObj(objId)
 
-    // KR キュー: 今Q、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
+    // KR キュー: 今Q + 通期、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
     const krQueue = krs
-      .filter(kr => inCurrentQ(kr.objective_id))
+      .filter(kr => inScope(kr.objective_id))
       .filter(kr => {
         if (showAll) return true
         const r = krReviewsMap[kr.id]
@@ -206,9 +208,9 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         objective: om[kr.objective_id] || null,
       }))
 
-    // KA キュー: 今Q、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
+    // KA キュー: 今Q + 通期、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
     const kaQueue = chosenKas
-      .filter(ka => inCurrentQ(ka.objective_id))
+      .filter(ka => inScope(ka.objective_id))
       .filter(ka => {
         if (showAll) return true
         return !((ka.good || '').trim() || (ka.more || '').trim() || (ka.focus_output || '').trim())
@@ -590,18 +592,34 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
       {/* コンテキスト: 部署·チーム → Objective → タイトル */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+          {/* 期間バッジ (通期 / Q1〜Q4 を一目で分ける) */}
+          {obj && (() => {
+            const periodBase = (obj.period || '').toString().includes('_')
+              ? obj.period.split('_').pop()
+              : obj.period
+            const periodCfg = {
+              annual: { label: '🌐 通期', bg: 'rgba(142,142,147,0.18)', fg: '#6b7280', border: 'rgba(142,142,147,0.40)' },
+              q1:     { label: '🔵 Q1',  bg: 'rgba(0,122,255,0.18)',   fg: '#1d4ed8', border: 'rgba(0,122,255,0.45)' },
+              q2:     { label: '🟢 Q2',  bg: 'rgba(52,199,89,0.18)',   fg: '#0a8f5a', border: 'rgba(52,199,89,0.45)' },
+              q3:     { label: '🟠 Q3',  bg: 'rgba(255,149,0,0.18)',   fg: '#c2410c', border: 'rgba(255,149,0,0.45)' },
+              q4:     { label: '🟣 Q4',  bg: 'rgba(175,82,222,0.18)',  fg: '#7e22ce', border: 'rgba(175,82,222,0.45)' },
+            }[periodBase] || { label: (obj.period || '?').toUpperCase(), bg: 'rgba(0,0,0,0.06)', fg: T.textSub, border: 'rgba(0,0,0,0.10)' }
+            return (
+              <span style={{
+                fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 8,
+                background: periodCfg.bg, color: periodCfg.fg,
+                border: `1px solid ${periodCfg.border}`,
+                letterSpacing: '0.04em',
+              }}>{periodCfg.label}</span>
+            )
+          })()}
           {deptLabel && (
             <span style={{
-              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+              fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 99,
               background: 'rgba(122,133,153,0.15)', color: T.textSub, letterSpacing: 0.3,
             }}>🏢 {deptLabel}</span>
           )}
-          {obj && !isAnnual && (
-            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: 0.5 }}>
-              {obj.period?.toUpperCase()} · OBJECTIVE {obj.title && <span style={{ color: T.textSub, fontWeight: 500, marginLeft: 4 }}>{obj.title}</span>}
-            </span>
-          )}
-          {obj && isAnnual && (
+          {obj && (
             <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: 0.5 }}>
               OBJECTIVE {obj.title && <span style={{ color: T.textSub, fontWeight: 500, marginLeft: 4 }}>{obj.title}</span>}
             </span>
