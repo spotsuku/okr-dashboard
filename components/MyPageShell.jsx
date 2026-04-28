@@ -2676,10 +2676,11 @@ function ThemeEditor({ T, icon, title, value, loading, canEdit, placeholder, onS
 }
 
 // 既存の MyTasksPage.jsx STATUS_CONFIG と合わせる (not_started / in_progress / done)
+// iOS システムカラー
 const TASK_STATUS_CONFIG = {
-  not_started: { icon: '○', color: '#7a8599', label: '未着手' },
-  in_progress: { icon: '◐', color: '#4d9fff', label: '進行中' },
-  done:        { icon: '●', color: '#00d68f', label: '完了' },
+  not_started: { icon: '○', color: '#8E8E93', label: '未着手' },
+  in_progress: { icon: '◐', color: '#007AFF', label: '進行中' },
+  done:        { icon: '●', color: '#34C759', label: '完了' },
 }
 
 function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {

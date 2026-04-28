@@ -1095,12 +1095,13 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
 }
 
 // ─── KA ステータス定義 ─────────────────────────────────────────────────────
+// iOS システムカラーに統一
 const KA_STATUS_CFG = {
-  focus:  { label: '🎯 注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
-  good:   { label: '✅ Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
-  more:   { label: '🔺 More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
-  normal: { label: '未分類',  color: '#606880', bg: 'rgba(128,128,128,0.08)', border: 'rgba(128,128,128,0.2)' },
-  done:   { label: '✓ 完了',  color: '#a0a8be', bg: 'rgba(160,168,190,0.08)', border: 'rgba(160,168,190,0.2)' },
+  focus:  { label: '🎯 注力', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',  border: 'rgba(0,122,255,0.30)' },
+  good:   { label: '✅ Good', color: '#34C759', bg: 'rgba(52,199,89,0.10)',  border: 'rgba(52,199,89,0.30)' },
+  more:   { label: '🔺 More', color: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  border: 'rgba(255,59,48,0.30)' },
+  normal: { label: '未分類',  color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.20)' },
+  done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
 }
 const KA_STATUS_ORDER = ['normal','focus','good','more','done']
 
@@ -3212,42 +3213,64 @@ function NextActionRow({ T, item, members, scopeKAs = [], onDelete }) {
 
 // ─── Step 4: 終了画面 ────────────────────────────────────────────────────────
 function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
+  const meetColor = meeting?.color || T.success
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-      <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0, marginBottom: 8 }}>
-        お疲れ様でした！
-      </h2>
-      <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 24 }}>
-        {meeting?.title} を完了しました
-      </div>
-
-      <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: 20, marginBottom: 24, textAlign: 'left',
-      }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>サマリー</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <SummaryItem T={T} label="ファシリ" value={session?.facilitator || '—'} />
-          <SummaryItem T={T} label="開始" value={session?.started_at ? formatTime(session.started_at) : '—'} />
-          <SummaryItem T={T} label="終了" value={session?.finished_at ? formatTime(session.finished_at) : '—'} />
-          <SummaryItem T={T} label="所要" value={formatDuration(session?.started_at, session?.finished_at)} />
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 24px', textAlign: 'center', position: 'relative' }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+        width: 700, height: 500,
+        background: `radial-gradient(ellipse, ${meetColor}1f 0%, transparent 60%)`,
+        pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
+      }} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{
+          width: 96, height: 96, borderRadius: 28, margin: '0 auto 20px',
+          background: `linear-gradient(135deg, ${meetColor} 0%, ${meetColor}c0 100%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 50, color: '#fff',
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.3), 0 8px 24px ${meetColor}55, 0 16px 40px ${meetColor}33`,
+        }}>🎉</div>
+        <h2 style={{ fontSize: 28, fontWeight: 900, color: T.text, margin: 0, marginBottom: 8, letterSpacing: '-0.02em' }}>
+          お疲れ様でした！
+        </h2>
+        <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 28, fontWeight: 500 }}>
+          {meeting?.title} を完了しました
         </div>
-      </div>
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-        <button onClick={onReset} style={{
-          padding: '10px 20px', borderRadius: 8, border: `1px solid ${T.borderMid}`,
-          background: 'transparent', color: T.textSub, cursor: 'pointer',
-          fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-        }}>↺ もう一度開始</button>
-        {onSwitchToList && (
-          <button onClick={onSwitchToList} style={{
-            padding: '10px 20px', borderRadius: 8, border: `1px solid ${T.borderMid}`,
-            background: 'transparent', color: T.textSub, cursor: 'pointer',
-            fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-          }}>📋 一覧モードで詳細確認</button>
-        )}
+        <div style={{
+          background: T.bgCard,
+          border: `1px solid ${T.border}`, borderRadius: 18,
+          padding: 24, marginBottom: 24, textAlign: 'left',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${meetColor}1f`, color: meetColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📊</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>サマリー</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <SummaryItem T={T} label="ファシリ" value={session?.facilitator || '—'} />
+            <SummaryItem T={T} label="開始" value={session?.started_at ? formatTime(session.started_at) : '—'} />
+            <SummaryItem T={T} label="終了" value={session?.finished_at ? formatTime(session.finished_at) : '—'} />
+            <SummaryItem T={T} label="所要" value={formatDuration(session?.started_at, session?.finished_at)} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button onClick={onReset} style={{
+            padding: '10px 22px', borderRadius: 10, border: 'none',
+            background: 'rgba(120,120,128,0.12)', color: T.textSub, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+          }}>↺ もう一度開始</button>
+          {onSwitchToList && (
+            <button onClick={onSwitchToList} style={{
+              padding: '10px 22px', borderRadius: 10, border: 'none',
+              background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}d0 100%)`,
+              color: '#fff', cursor: 'pointer',
+              fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
+              boxShadow: `0 2px 6px ${T.accent}55`,
+            }}>📋 一覧モードで詳細確認</button>
+          )}
+        </div>
       </div>
     </div>
   )

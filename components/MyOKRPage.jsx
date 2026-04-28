@@ -70,10 +70,10 @@ const WEATHER_CFG = [
   { score:5, icon:'☀️', label:'快晴',         color:'#ff9f43' },
 ]
 const STATUS_CFG = {
-  focus:  { label:'🎯 注力', color:'#4d9fff', bg:'rgba(77,159,255,0.12)', border:'rgba(77,159,255,0.3)' },
-  good:   { label:'✅ Good', color:'#00d68f', bg:'rgba(0,214,143,0.1)',   border:'rgba(0,214,143,0.3)'  },
-  more:   { label:'🔺 More', color:'#ff6b6b', bg:'rgba(255,107,107,0.1)', border:'rgba(255,107,107,0.3)'},
-  normal: { label:'未分類',  color:'#606880', bg:'rgba(255,255,255,0.04)',border:'rgba(255,255,255,0.1)'},
+  focus:  { label:'🎯 注力', color:'#007AFF', bg:'rgba(0,122,255,0.10)', border:'rgba(0,122,255,0.30)' },
+  good:   { label:'✅ Good', color:'#34C759', bg:'rgba(52,199,89,0.10)', border:'rgba(52,199,89,0.30)' },
+  more:   { label:'🔺 More', color:'#FF3B30', bg:'rgba(255,59,48,0.10)', border:'rgba(255,59,48,0.30)' },
+  normal: { label:'未分類',  color:'#8E8E93', bg:'rgba(142,142,147,0.10)', border:'rgba(142,142,147,0.20)' },
 }
 
 // ─── Avatar（画像 or イニシャル） ─────────────────────────────────────────────

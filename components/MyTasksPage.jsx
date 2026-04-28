@@ -39,10 +39,11 @@ function formatDate(ds) {
 }
 
 // ステータス定義
+// iOS システムカラー
 const STATUS_CONFIG = {
-  not_started: { label: '未着手', color: '#7a8599', bg: 'rgba(122,133,153,0.08)', border: 'rgba(122,133,153,0.2)', icon: '○' },
-  in_progress: { label: '進行中', color: '#4d9fff', bg: 'rgba(77,159,255,0.08)', border: 'rgba(77,159,255,0.2)', icon: '◐' },
-  done:        { label: '完了',   color: '#00d68f', bg: 'rgba(0,214,143,0.08)', border: 'rgba(0,214,143,0.2)', icon: '●' },
+  not_started: { label: '未着手', color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.25)', icon: '○' },
+  in_progress: { label: '進行中', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',   border: 'rgba(0,122,255,0.30)',   icon: '◐' },
+  done:        { label: '完了',   color: '#34C759', bg: 'rgba(52,199,89,0.10)',   border: 'rgba(52,199,89,0.30)',   icon: '●' },
 }
 const STATUS_ORDER = ['not_started', 'in_progress', 'done']
 
