@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
 import { COMMON_TOKENS } from '../lib/themeTokens'
-import { getMeeting, MEETING_URLS } from '../lib/meetings'
+import { getMeeting, MEETING_URLS, SALES_DASHBOARD_URL } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import ConfirmationsTab from './ConfirmationsTab'
 import MeetingImport from './MeetingImport'
@@ -28,6 +28,11 @@ function getDepth(levelId, levels) {
 // scope に応じた対象レベルIDの配列を返す（depthベース）
 function resolveScopeLevelIds(wkly, levels) {
   if (!Array.isArray(levels) || levels.length === 0) return []
+  if (wkly?.scope === 'specific-team') {
+    // 特定チームのみ (例: セールスチームの定例)
+    const team = levels.find(l => l?.name === wkly.teamName)
+    return team ? [team.id] : []
+  }
   if (wkly?.scope === 'teams-of') {
     const parent = levels.find(l => l?.name === wkly.parentLevelName)
     if (!parent) return []
@@ -90,6 +95,16 @@ function stepsForFlow(meeting) {
     return [
       { n: 1, label: 'KRサマリー閲覧',     icon: '📊', kind: 'team_summary_readonly' },
       { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
+  }
+  if (wkly?.flow === 'sales') {
+    // 営業定例:
+    //   1. セールスチーム進捗確認 (営業ダッシュボード) → 2. KA確認 → 3. ネクストアクション → 4. 終了
+    return [
+      { n: 1, label: 'セールス進捗',       icon: '📈', kind: 'sales_progress' },
+      { n: 2, label: 'KA確認',            icon: '📋', kind: 'ka_loop' },
       { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
       { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
     ]
@@ -205,7 +220,7 @@ export default function WeeklyMTGFacilitation({
         const ids = new Set(objsByLevel[l.id] || [])
         return { level: l, count: krs.filter(k => ids.has(k.objective_id)).length }
       })
-    } else if (wkly.flow === 'ka') {
+    } else if (wkly.flow === 'ka' || wkly.flow === 'sales') {
       let kas = []
       if (allObjIds.length > 0) {
         const { data } = await supabase.from('weekly_reports')
@@ -216,7 +231,7 @@ export default function WeeklyMTGFacilitation({
       }
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
-        return { level: l, count: kas.filter(k => ids.has(k.objective_id)).length }
+        return { level: l, count: kas.filter(k => ids.has(k.objective_id)).length}
       })
     }
 
@@ -388,6 +403,14 @@ export default function WeeklyMTGFacilitation({
                 onBackToPrep={() => setViewingPrep(true)}
               />
             )}
+            {stepKind === 'sales_progress' && (
+              <Step1SalesProgress
+                T={T} meeting={meeting}
+                onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
+                onNext={() => nextStepN != null && goToStep(nextStepN)}
+                onBackToPrep={() => setViewingPrep(true)}
+              />
+            )}
             {stepKind === 'team_summary' && (
               <Step1ManagerSummary
                 T={T} meeting={meeting} weekStart={weekStart}
@@ -523,8 +546,11 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
 function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
   const wkly = meeting?.weeklyMTG
-  const flowLabel = wkly?.flow === 'ka' ? 'KA重点' : 'KR重点'
-  const scopeLabel = wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
+  const flowLabel = wkly?.flow === 'ka' ? 'KA重点'
+    : wkly?.flow === 'sales' ? '営業フォーカス'
+    : 'KR重点'
+  const scopeLabel = wkly?.scope === 'specific-team' ? `${wkly.teamName} チーム`
+    : wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
     : wkly?.scope === 'all-teams' ? '全チーム合同'
     : wkly?.scope === 'all-departments' ? '全事業部合同' : '未定義'
 
@@ -621,15 +647,26 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>会議の流れ</div>
         </div>
         <ol style={{ margin: 0, paddingLeft: 24, fontSize: 13, color: T.textSub, lineHeight: 1.8 }}>
-          <li><strong style={{ color: T.text }}>{wkly?.flow === 'ka' ? 'KA順送り' : 'KR順送り'}</strong>
-            ：{wkly?.flow === 'ka'
-              ? '担当が KA ごとに 先週good / 先週more / 今週focus を共有'
-              : 'KR担当が current 値 / 天気 / 今週フォーカスを共有'}</li>
-          {wkly?.withDiscussion && (
-            <li><strong style={{ color: T.text }}>課題・依頼事項</strong>：チーム間の確認・依頼を入力</li>
+          {wkly?.flow === 'sales' ? (
+            <>
+              <li><strong style={{ color: T.text }}>セールスチーム進捗</strong>：営業ダッシュボードで先週〜今週の活動・商談状況を確認</li>
+              <li><strong style={{ color: T.text }}>KA確認</strong>：セールスチームの今週の KA を順送りで確認</li>
+              <li><strong style={{ color: T.text }}>ネクストアクション</strong>：誰がいつまでに何をやるかを記録</li>
+              <li><strong style={{ color: T.text }}>会議終了</strong>：サマリー確認 → クローズ</li>
+            </>
+          ) : (
+            <>
+              <li><strong style={{ color: T.text }}>{wkly?.flow === 'ka' ? 'KA順送り' : 'KR順送り'}</strong>
+                ：{wkly?.flow === 'ka'
+                  ? '担当が KA ごとに 先週good / 先週more / 今週focus を共有'
+                  : 'KR担当が current 値 / 天気 / 今週フォーカスを共有'}</li>
+              {wkly?.withDiscussion && (
+                <li><strong style={{ color: T.text }}>課題・依頼事項</strong>：チーム間の確認・依頼を入力</li>
+              )}
+              <li><strong style={{ color: T.text }}>確認事項</strong>：会議全体での確認事項を整理</li>
+              <li><strong style={{ color: T.text }}>会議終了</strong>：サマリー確認 → クローズ</li>
+            </>
           )}
-          <li><strong style={{ color: T.text }}>確認事項</strong>：会議全体での確認事項を整理</li>
-          <li><strong style={{ color: T.text }}>会議終了</strong>：サマリー確認 → クローズ</li>
         </ol>
       </div>
 
@@ -642,7 +679,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.success}1f`, color: T.success, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🎯</div>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
-            今回確認する {wkly?.flow === 'ka' ? 'KA' : 'KR'}
+            今回確認する {wkly?.flow === 'ka' ? 'KA' : wkly?.flow === 'sales' ? 'KA' : 'KR'}
           </div>
         </div>
         {!scope ? (
@@ -1104,6 +1141,99 @@ const KA_STATUS_CFG = {
   done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
 }
 const KA_STATUS_ORDER = ['normal','focus','good','more','done']
+
+// ─── Step 1 (営業定例): セールスチーム進捗確認 + 営業ダッシュボード ─────────
+function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
+  const meetColor = meeting?.color || '#FF9500'
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px' }}>
+      {onBackToPrep && (
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={onBackToPrep} style={{
+            padding: '6px 12px', borderRadius: 7, border: 'none',
+            background: 'rgba(120,120,128,0.12)', color: T.textSub, cursor: 'pointer',
+            fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+          }}>↩ 会議準備に戻る</button>
+        </div>
+      )}
+
+      {/* ヒーロー: セールスチーム進捗 */}
+      <div style={{
+        marginBottom: 18, padding: '20px 24px',
+        background: `linear-gradient(135deg, ${meetColor}f0 0%, ${meetColor}c0 100%)`,
+        borderRadius: 18, color: '#fff',
+        position: 'relative', overflow: 'hidden',
+        boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${meetColor}33, 0 24px 56px ${meetColor}26`,
+      }}>
+        <div aria-hidden style={{
+          position: 'absolute', top: -50, right: -30, width: 220, height: 220,
+          background: 'radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 60%)',
+          borderRadius: '50%', pointerEvents: 'none',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+            background: 'rgba(255,255,255,0.22)',
+            backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.30)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 28, color: '#fff',
+          }}>📈</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4, letterSpacing: '-0.01em' }}>セールスチームの進捗確認</div>
+            <div style={{ fontSize: 12, opacity: 0.95, lineHeight: 1.6 }}>
+              営業ダッシュボードで先週〜今週の活動・商談状況を確認します。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 営業ダッシュボード ボタン (大型 CTA) */}
+      <div style={{
+        marginBottom: 18, padding: '24px 26px',
+        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${meetColor}08 100%)`,
+        border: `1px solid ${meetColor}33`, borderRadius: 16,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 18, margin: '0 auto 14px',
+          background: `linear-gradient(135deg, ${meetColor} 0%, ${meetColor}c0 100%)`,
+          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 30,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 14px ${meetColor}55, 0 2px 4px ${meetColor}33`,
+        }}>💰</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4, letterSpacing: '-0.01em' }}>営業ダッシュボード</div>
+        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16, lineHeight: 1.6, maxWidth: 480, margin: '0 auto 16px' }}>
+          別タブで開いて以下を確認してください:<br />
+          📊 商談一覧・進捗　・　🎯 受注見込み　・　📈 KPI ダッシュボード
+        </div>
+        <a href={SALES_DASHBOARD_URL} target="_blank" rel="noopener noreferrer" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '12px 28px', borderRadius: 11, border: 'none',
+          background: `linear-gradient(135deg, ${meetColor} 0%, ${meetColor}d0 100%)`,
+          color: '#fff', textDecoration: 'none',
+          fontSize: 14, fontWeight: 800, fontFamily: 'inherit',
+          boxShadow: `0 4px 12px ${meetColor}55, 0 2px 4px ${meetColor}33`,
+          transition: 'transform 0.15s ease',
+        }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+        >📈 営業ダッシュボードを別タブで開く ↗</a>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 12, fontStyle: 'italic' }}>
+          ※ Google アカウントでログインが必要です（このページ内には埋め込めません）
+        </div>
+      </div>
+
+      {/* ナビボタン */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onNext} style={primaryBtn(T)}>セールス KA確認 →</button>
+      </div>
+    </div>
+  )
+}
 
 // ─── Step 1: KA順送り（Phase 4） ───────────────────────────────────────────
 function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
