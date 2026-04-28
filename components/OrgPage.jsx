@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { LargeTitle, BgGlow } from './iosUI'
 import TaskManualPage from './TaskManualPage'
 
 // ══════════════════════════════════════════════════
@@ -3253,27 +3254,26 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   if (loading) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T().bg, color: T().textMuted, fontSize: 14 }}>読み込み中...</div>
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 28px' }}>
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: T().accent, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Organization</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: T().text }}>🏢 組織</div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: fiscalYear === '2026' ? T().badgeBg : T().warnBg, color: fiscalYear === '2026' ? T().accent : T().warn, border: `1px solid ${fiscalYear === '2026' ? T().badgeBorder : T().warn}` }}>{fiscalYear}年度</span>
-            {isAdmin && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>👑 管理者</span>}
-            <button onClick={() => setShowOrgManage(true)} style={{ padding: '5px 14px', borderRadius: 8, border: `1px solid ${T().accent}40`, background: T().accentBg, color: T().accent, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>🏗️ 組織を管理</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <div style={{ fontSize: 13, color: T().textFaint }}>NEO福岡の組織図・業務一覧・業務マニュアル・メンバー別JDを確認できます</div>
-            <span style={{
-              fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
-              background: syncStatus === 'synced' ? T().badgeBg : syncStatus === 'error' ? T().warnBg : T().warnBg,
-              color: syncStatus === 'synced' ? T().accent : syncStatus === 'error' ? T().warn : T().warn,
-              border: `1px solid ${syncStatus === 'synced' ? T().badgeBorder : T().warn}`,
-            }}>
-              {syncStatus === 'synced' ? '🟢 リアルタイム同期中' : syncStatus === 'error' ? '🔴 同期エラー' : '🟡 接続中...'}
-            </span>
-          </div>
+    <div style={{ flex: 1, overflowY: 'auto', background: T().bg, color: T().text, position: 'relative' }}>
+      <BgGlow T={T()} />
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 28px 28px', position: 'relative', zIndex: 1 }}>
+        <LargeTitle T={T()}
+          title="🏢 組織"
+          subtitle={`${fiscalYear}年度 ・ NEO福岡の組織図・業務一覧・業務マニュアル・メンバー別JD`}
+          right={
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: T().accentBg, color: T().accent }}>{fiscalYear}年度</span>
+              {isAdmin && <span style={{ fontSize: 11, padding: '4px 12px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700 }}>👑 管理者</span>}
+              <button onClick={() => setShowOrgManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: 'none', background: T().accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 2px 6px ${T().accent}40` }}>🏗️ 組織を管理</button>
+            </div>
+          }
+        />
+        <div style={{ marginBottom: 16, fontSize: 11, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+            background: syncStatus === 'synced' ? '#34C759' : '#FF9500',
+          }} />
+          {syncStatus === 'synced' ? 'リアルタイム同期中' : syncStatus === 'error' ? '同期エラー' : '接続中...'}
         </div>
 
         <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${T().border}`, marginBottom: 24 }}>

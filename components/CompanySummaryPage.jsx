@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
@@ -235,25 +236,14 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
   if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', fontFamily: 'system-ui,sans-serif' }}>
-
-      {/* ─── フィルタバー ─── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: wT().textMuted }}>期間：</span>
-        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${wT().border}` }}>
-          {periodTabs.map(p => (
-            <button key={p.key} onClick={() => setActivePeriod(p.key)} style={{
-              padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: activePeriod === p.key ? '#a855f7' : 'transparent',
-              color: activePeriod === p.key ? '#fff' : wT().textMuted,
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s',
-            }}>{p.label}</button>
-          ))}
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, marginLeft: 'auto', background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.3)' : 'rgba(255,159,67,0.3)'}` }}>
-          {fiscalYear}年度
-        </div>
-      </div>
+    <div style={{ padding: '0 24px 24px', maxWidth: 1100, margin: '0 auto', position: 'relative' }}>
+      <BgGlow T={wT()} color="#AF52DE" />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+      <LargeTitle T={wT()}
+        title="📊 全社サマリー"
+        subtitle={`${fiscalYear}年度 ・ 期間別 OKR 進捗の全社集計`}
+        right={<SegmentedControl T={wT()} value={activePeriod} onChange={setActivePeriod} items={periodTabs} />}
+      />
 
       {/* ─── 全社サマリーヘッダー ─── */}
       <div style={{
@@ -403,6 +393,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }
