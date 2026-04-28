@@ -528,65 +528,99 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
     : wkly?.scope === 'all-teams' ? '全チーム合同'
     : wkly?.scope === 'all-departments' ? '全事業部合同' : '未定義'
 
+  const meetColor = meeting.color || T.accent
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 12,
-          padding: '14px 24px', background: T.bgCard, borderRadius: 14,
-          border: `1px solid ${T.borderMid}`,
-        }}>
-          <span style={{ fontSize: 36 }}>{meeting.icon}</span>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700 }}>{meeting.schedule}</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{meeting.title}</div>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 24px 40px', position: 'relative' }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: -150, left: '50%', transform: 'translateX(-50%)',
+        width: 600, height: 400,
+        background: `radial-gradient(ellipse, ${meetColor}1f 0%, transparent 60%)`,
+        pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
+      }} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+
+      {/* ヒーローカード (会議名) */}
+      <div style={{
+        marginTop: 20, marginBottom: 22, padding: '26px 26px 22px',
+        background: `linear-gradient(135deg, ${meetColor}f5 0%, ${meetColor}c0 60%, ${meetColor}80 100%)`,
+        borderRadius: 22, color: '#FFFFFF',
+        position: 'relative', overflow: 'hidden',
+        boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${meetColor}33, 0 24px 56px ${meetColor}26`,
+      }}>
+        <div aria-hidden style={{ position: 'absolute', top: -80, right: -60, width: 280, height: 280, background: 'radial-gradient(circle, rgba(255,255,255,0.30) 0%, transparent 60%)', borderRadius: '50%', pointerEvents: 'none' }} />
+        <div aria-hidden style={{ position: 'absolute', bottom: -100, left: -40, width: 240, height: 240, background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 65%)', borderRadius: '50%', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+            background: 'rgba(255,255,255,0.22)',
+            backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.30)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 30, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4)',
+          }}>{meeting.icon}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', opacity: 0.85, textTransform: 'uppercase', marginBottom: 4 }}>{meeting.schedule}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2 }}>{meeting.title}</div>
+            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.95 }}>📅 対象週: <strong>{formatWeekRange(weekStart)}</strong></div>
           </div>
-        </div>
-        <div style={{ marginTop: 14, fontSize: 13, color: T.textMuted }}>
-          📅 対象週: <strong style={{ color: T.text }}>{formatWeekRange(weekStart)}</strong>
         </div>
       </div>
 
-      {/* 観点バッジ */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
-        <Badge T={T} bg={`${T.accent}20`} fg={T.accent}>🧭 ファシリモード</Badge>
-        <Badge T={T} bg={`${T.success}20`} fg={T.success}>{flowLabel}</Badge>
-        <Badge T={T} bg={T.bgSection} fg={T.textSub}>👥 {scopeLabel}</Badge>
-        {wkly?.withDiscussion && <Badge T={T} bg={`${T.warn}20`} fg={T.warn}>💬 課題・依頼セクション有</Badge>}
+      {/* 観点ピル */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+        <Badge T={T} bg={`${T.accent}1f`} fg={T.accent}>🧭 ファシリモード</Badge>
+        <Badge T={T} bg={`${T.success}1f`} fg={T.success}>{flowLabel}</Badge>
+        <Badge T={T} bg={'rgba(0,0,0,0.05)'} fg={T.textSub}>👥 {scopeLabel}</Badge>
+        {wkly?.withDiscussion && <Badge T={T} bg={`${T.warn}1f`} fg={T.warn}>💬 課題・依頼セクション有</Badge>}
       </div>
 
       {/* Notion議事録 案内 */}
       <div style={{
-        marginBottom: 20, padding: '14px 18px',
-        background: `${T.accent}10`, border: `1px solid ${T.accent}40`, borderRadius: 10,
+        marginBottom: 18, padding: '16px 20px',
+        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)`,
+        border: `1px solid ${T.accent}26`, borderLeft: `4px solid ${T.accent}`, borderRadius: 14,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 4 }}>
-          🎙 Notionで録音議事録をとってください
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}c0 100%)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px ${T.accent}55`,
+          }}>🎙</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.accent, letterSpacing: '-0.01em' }}>
+            Notionで録音議事録をとってください
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6, marginBottom: 10, paddingLeft: 42 }}>
           会議のNotionページを開いて、録音と議事録の作成を開始してください。
           会議の最後に、この議事録からネクストアクションを取り込めます。
         </div>
-        <button onClick={() => {
-          const url = MEETING_URLS[meeting?.key]
-          if (!url) { alert(`${meeting?.title} のNotion URLが設定されていません`); return }
-          openNotionUrl(url)
-        }} style={{
-          padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.accent}80`,
-          background: 'transparent', color: T.accent, fontSize: 11, fontWeight: 700,
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}>📝 Notionを開く ↗</button>
+        <div style={{ paddingLeft: 42 }}>
+          <button onClick={() => {
+            const url = MEETING_URLS[meeting?.key]
+            if (!url) { alert(`${meeting?.title} のNotion URLが設定されていません`); return }
+            openNotionUrl(url)
+          }} style={{
+            padding: '7px 14px', borderRadius: 9, border: 'none',
+            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}d0 100%)`,
+            color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            boxShadow: `0 2px 6px ${T.accent}55`,
+          }}>📝 Notionを開く ↗</button>
+        </div>
       </div>
 
       {/* 進行アジェンダ */}
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: 20, marginBottom: 20,
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
+        padding: '18px 22px', marginBottom: 18,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700, marginBottom: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          会議の流れ
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📋</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>会議の流れ</div>
         </div>
-        <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: T.textSub, lineHeight: 1.8 }}>
+        <ol style={{ margin: 0, paddingLeft: 24, fontSize: 13, color: T.textSub, lineHeight: 1.8 }}>
           <li><strong style={{ color: T.text }}>{wkly?.flow === 'ka' ? 'KA順送り' : 'KR順送り'}</strong>
             ：{wkly?.flow === 'ka'
               ? '担当が KA ごとに 先週good / 先週more / 今週focus を共有'
@@ -601,11 +635,15 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
 
       {/* スコープ内訳 */}
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: 20, marginBottom: 24,
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
+        padding: '18px 22px', marginBottom: 22,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 700, marginBottom: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          今回確認する {wkly?.flow === 'ka' ? 'KA' : 'KR'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.success}1f`, color: T.success, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🎯</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
+            今回確認する {wkly?.flow === 'ka' ? 'KA' : 'KR'}
+          </div>
         </div>
         {!scope ? (
           <div style={{ fontSize: 12, color: T.textMuted }}>集計中...</div>
@@ -615,21 +653,23 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {scope.perLevel.map(({ level, count }) => (
                 <div key={level.id} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '8px 12px', background: T.bgSection, borderRadius: 7,
-                  border: `1px solid ${T.border}`,
+                  padding: '10px 14px',
+                  background: count > 0 ? `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)` : T.bgSection,
+                  borderRadius: 10,
+                  border: `1px solid ${count > 0 ? T.accent + '1a' : T.border}`,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>{level.icon || '📁'}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{level.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 16 }}>{level.icon || '📁'}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{level.name}</span>
                   </div>
                   <span style={{
-                    fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 99,
-                    background: count > 0 ? `${T.accent}20` : T.bgSection,
-                    color: count > 0 ? T.accent : T.textMuted,
+                    fontSize: 12, fontWeight: 800, padding: '3px 12px', borderRadius: 99,
+                    background: count > 0 ? T.accent : 'rgba(0,0,0,0.06)',
+                    color: count > 0 ? '#fff' : T.textMuted,
                   }}>
                     {count} 件
                   </span>
@@ -648,62 +688,69 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
 
       {/* ファシリテーター選択 */}
       <div style={{
-        marginBottom: 18, padding: '12px 16px', background: T.bgCard,
-        border: `1px solid ${T.border}`, borderRadius: 10,
+        marginBottom: 14, padding: '14px 18px',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          本日のファシリテーター
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>👤</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>本日のファシリテーター</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar name={facilitatorDraft} avatarUrl={members.find(m => m?.name === facilitatorDraft)?.avatar_url} size={32} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Avatar name={facilitatorDraft} avatarUrl={members.find(m => m?.name === facilitatorDraft)?.avatar_url} size={38} />
           <select
             value={facilitatorDraft || ''}
             onChange={e => onFacilitatorChange && onFacilitatorChange(e.target.value)}
             style={{
-              flex: 1, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 7,
-              padding: '8px 10px', fontSize: 13, color: avatarColor(facilitatorDraft) || T.text,
+              flex: 1, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
+              padding: '10px 12px', fontSize: 13, color: avatarColor(facilitatorDraft) || T.text,
               cursor: 'pointer', fontFamily: 'inherit', outline: 'none', fontWeight: 700,
             }}>
             <option value="">-- ファシリ未選択 --</option>
             {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
         </div>
-        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>
           会議開始時に記録されます。会議中に変更したい場合は「リセット」してから選び直してください。
         </div>
       </div>
 
       {/* 会議予定時間 */}
       <div style={{
-        marginBottom: 18, padding: '12px 16px', background: T.bgCard,
-        border: `1px solid ${T.border}`, borderRadius: 10,
+        marginBottom: 18, padding: '14px 18px',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
       }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          会議予定時間
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.warn}1f`, color: T.warn, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>⏱</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>会議予定時間</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {[15, 30, 45, 60, 90].map(m => {
-            const active = Number(durationDraft) === m
-            return (
-              <button key={m}
-                onClick={() => onDurationChange && onDurationChange(m)}
-                style={{
-                  padding: '6px 14px', borderRadius: 7, border: `1px solid ${active ? T.accent : T.borderMid}`,
-                  background: active ? `${T.accent}15` : 'transparent',
-                  color: active ? T.accent : T.textSub,
-                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
-                }}>{m}分</button>
-            )
-          })}
+          <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 10 }}>
+            {[15, 30, 45, 60, 90].map(m => {
+              const active = Number(durationDraft) === m
+              return (
+                <button key={m}
+                  onClick={() => onDurationChange && onDurationChange(m)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 8, border: 'none',
+                    background: active ? T.bgCard : 'transparent',
+                    color: active ? T.text : T.textSub,
+                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
+                    cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
+                    transition: 'all 0.15s ease',
+                  }}>{m}分</button>
+              )
+            })}
+          </div>
           <input type="number" min={5} max={300} step={5}
             value={durationDraft || 30}
             onChange={e => onDurationChange && onDurationChange(Number(e.target.value) || 30)}
             style={{
-              width: 70, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 7,
-              padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+              width: 70, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 9,
+              padding: '7px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
             }} />
           <span style={{ fontSize: 11, color: T.textMuted }}>分</span>
-          {/* ブラウザ通知の許可 */}
           <button onClick={() => {
               if (typeof Notification === 'undefined') { alert('お使いのブラウザは通知に対応していません'); return }
               if (Notification.permission === 'granted') { alert('通知は既に許可されています'); return }
@@ -712,12 +759,12 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
               })
             }}
             style={{
-              marginLeft: 'auto', padding: '5px 10px', borderRadius: 6,
-              border: `1px dashed ${T.borderMid}`, background: 'transparent',
-              color: T.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-            }}>🔔 10分前通知を許可</button>
+              marginLeft: 'auto', padding: '6px 12px', borderRadius: 9,
+              border: 'none', background: 'rgba(120,120,128,0.12)',
+              color: T.textSub, cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+            }}>🔔 10分前通知</button>
         </div>
-        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>
           会議開始から {durationDraft}分で「終了予定」。残り10分でアラートが出ます。
         </div>
       </div>
@@ -782,6 +829,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
           </>
         )
       })()}
+      </div>
     </div>
   )
 }
