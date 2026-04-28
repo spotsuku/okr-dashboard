@@ -904,10 +904,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text }}>
 
-      {/* ヘッダー */}
-      <div style={{ padding:'11px 16px', borderBottom:`1px solid ${wT().border}`, display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+      {/* ヘッダー (iOS 風グラスバー) */}
+      <div style={{
+        padding:'14px 20px', borderBottom:`1px solid ${wT().border}`,
+        display:'flex', alignItems:'center', gap:12, flexShrink:0,
+        background: 'rgba(255,255,255,0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      }}>
         {/* ユーザーアバター（画像 or イニシャル） */}
         {myMember?.avatar_url ? (
           <img
