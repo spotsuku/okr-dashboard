@@ -14,36 +14,30 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 
 // ─────────────────────────────────────────────────
 // テーマ
 // ─────────────────────────────────────────────────
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg: '#0F1117', bgCard: '#1A1D27', bgCard2: '#12151F',
-    bgInput: 'rgba(255,255,255,0.07)', bgHover: 'rgba(255,255,255,0.05)',
-    border: 'rgba(255,255,255,0.10)', borderMid: 'rgba(255,255,255,0.18)',
-    borderDash: 'rgba(255,255,255,0.13)',
-    text: '#E8ECF0', textSub: '#B0BAC8', textMuted: '#7a8599',
-    textFaint: '#4A5468', textFaintest: '#2E3347',
-    accent: '#5DCAA5', accentSolid: '#2F7A78',
-    warn: '#F0997B', warnBg: 'rgba(240,153,123,0.15)',
-    green: '#3D7A6A', greenBg: 'rgba(61,122,106,0.14)', greenBorder: 'rgba(61,122,106,0.35)',
-    link: '#5B9AEF', linkBg: 'rgba(91,154,239,0.12)', linkBorder: 'rgba(91,154,239,0.32)',
-    navActiveBg: 'rgba(47,122,120,0.18)', navBorder: '#2F7A78', navText: '#5DCAA5',
-    badgeBg: 'rgba(47,122,120,0.22)', badgeBorder: 'rgba(47,122,120,0.45)',
-    editRing: '#3B82F6',
-    errorBg: 'rgba(240,153,123,0.12)', errorBorder: 'rgba(240,153,123,0.35)', errorText: '#F0997B',
+    ...COMMON_TOKENS.dark,
+    bgCard2: '#1C1C1E',
+    bgInput: 'rgba(255,255,255,0.06)', bgHover: 'rgba(255,255,255,0.05)',
+    borderDash: 'rgba(255,255,255,0.12)',
+    green: '#30D158', greenBg: 'rgba(48,209,88,0.16)', greenBorder: 'rgba(48,209,88,0.35)',
+    link: '#0A84FF', linkBg: 'rgba(10,132,255,0.16)', linkBorder: 'rgba(10,132,255,0.35)',
+    navActiveBg: 'rgba(10,132,255,0.18)', navBorder: '#0A84FF', navText: '#5EB3FF',
+    badgeBg: 'rgba(10,132,255,0.18)', badgeBorder: 'rgba(10,132,255,0.40)',
+    editRing: '#0A84FF',
+    errorBg: 'rgba(255,69,58,0.16)', errorBorder: 'rgba(255,69,58,0.30)', errorText: '#FF453A',
   },
-  // iOS/iPadOS 風のシステムカラー (light)
   light: {
-    bg: '#F2F2F7', bgCard: '#FFFFFF', bgCard2: '#FAFAFC',
+    ...COMMON_TOKENS.light,
+    bgCard2: '#FAFAFC',
     bgInput: '#F2F2F7', bgHover: 'rgba(0,0,0,0.03)',
-    border: 'rgba(0,0,0,0.06)', borderMid: 'rgba(0,0,0,0.12)', borderDash: 'rgba(0,0,0,0.10)',
-    text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93',
-    textFaint: '#C7C7CC', textFaintest: 'rgba(0,0,0,0.06)',
-    accent: '#007AFF', accentSolid: '#007AFF',
-    warn: '#FF9500', warnBg: 'rgba(255,149,0,0.10)',
+    borderDash: 'rgba(0,0,0,0.10)',
     green: '#34C759', greenBg: 'rgba(52,199,89,0.10)', greenBorder: 'rgba(52,199,89,0.30)',
     link: '#007AFF', linkBg: 'rgba(0,122,255,0.10)', linkBorder: 'rgba(0,122,255,0.30)',
     navActiveBg: 'rgba(0,122,255,0.10)', navBorder: '#007AFF', navText: '#0062CC',

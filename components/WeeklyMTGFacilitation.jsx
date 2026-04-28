@@ -2,25 +2,16 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import { getMeeting, MEETING_URLS } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import ConfirmationsTab from './ConfirmationsTab'
 import MeetingImport from './MeetingImport'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
-// iOS/iPadOS 風のシステムカラー
-const DARK_T = {
-  bg: '#000000', bgCard: '#1C1C1E', bgCard2: '#2C2C2E', bgSection: 'rgba(255,255,255,0.04)',
-  border: 'rgba(255,255,255,0.10)', borderMid: 'rgba(255,255,255,0.16)',
-  text: '#F5F5F7', textSub: '#C7C7CC', textMuted: '#8E8E93', textFaint: '#48484A',
-  accent: '#0A84FF', success: '#30D158', warn: '#FF9F0A', danger: '#FF453A',
-}
-const LIGHT_T = {
-  bg: '#F2F2F7', bgCard: '#FFFFFF', bgCard2: '#FAFAFC', bgSection: 'rgba(0,0,0,0.03)',
-  border: 'rgba(0,0,0,0.06)', borderMid: 'rgba(0,0,0,0.12)',
-  text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93', textFaint: '#C7C7CC',
-  accent: '#007AFF', success: '#34C759', warn: '#FF9500', danger: '#FF3B30',
-}
+// テーマは lib/themeTokens.js で一元管理。bgSection は sectionBg のエイリアス。
+const DARK_T  = { ...COMMON_TOKENS.dark,  bgSection: COMMON_TOKENS.dark.sectionBg  }
+const LIGHT_T = { ...COMMON_TOKENS.light, bgSection: COMMON_TOKENS.light.sectionBg }
 
 // ─── 階層 ヘルパー ────────────────────────────────────────────────────────
 // 全社 (depth=0) → 事業部 (depth=1) → チーム (depth=2)

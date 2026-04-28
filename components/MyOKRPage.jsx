@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
 
@@ -632,20 +633,10 @@ function KATableHeader({ wT }) {
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
   const { isMobile, isTablet } = useResponsive()
-  // iOS/iPadOS 風のシステムカラー
+  // テーマは lib/themeTokens.js で一元管理
   const W_THEMES = {
-    dark: {
-      bg:'#000000', bgCard:'#1C1C1E', bgCard2:'#2C2C2E', bgSidebar:'#1C1C1E',
-      border:'rgba(255,255,255,0.10)', borderLight:'rgba(255,255,255,0.04)',
-      borderMid:'rgba(255,255,255,0.16)', text:'#F5F5F7', textSub:'#C7C7CC',
-      textMuted:'#8E8E93', textFaint:'#48484A', textFaintest:'#3A3A3C',
-    },
-    light: {
-      bg:'#F2F2F7', bgCard:'#FFFFFF', bgCard2:'#FAFAFC', bgSidebar:'#FFFFFF',
-      border:'rgba(0,0,0,0.06)', borderLight:'rgba(0,0,0,0.04)',
-      borderMid:'rgba(0,0,0,0.12)', text:'#1C1C1E', textSub:'#3A3A3C',
-      textMuted:'#8E8E93', textFaint:'#C7C7CC', textFaintest:'rgba(0,0,0,0.06)',
-    }
+    dark:  { ...COMMON_TOKENS.dark },
+    light: { ...COMMON_TOKENS.light },
   }
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
 

@@ -1,4 +1,6 @@
 'use client'
+import { COMMON_TOKENS, IOS_SHADOW } from '../lib/themeTokens'
+
 // ─── ダッシュボード定義 ─────────────────────────────────
 const DASHBOARDS = [
   {
@@ -67,21 +69,11 @@ const DASHBOARDS = [
   },
 ]
 
-// iOS/iPadOS 風のシステムカラー
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
 const THEMES = {
-  dark: {
-    bg: '#000000', bgCard: '#1C1C1E', border: 'rgba(255,255,255,0.10)',
-    text: '#F5F5F7', textSub: '#C7C7CC', textMuted: '#8E8E93',
-    accent: '#0A84FF', cardHover: 'rgba(255,255,255,0.04)',
-  },
-  light: {
-    bg: '#F2F2F7', bgCard: '#FFFFFF', border: 'rgba(0,0,0,0.06)',
-    text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93',
-    accent: '#007AFF', cardHover: 'rgba(0,0,0,0.02)',
-  },
+  dark:  { ...COMMON_TOKENS.dark,  cardHover: 'rgba(255,255,255,0.04)' },
+  light: { ...COMMON_TOKENS.light, cardHover: 'rgba(0,0,0,0.02)' },
 }
-// iOS 風の柔らかい 2層シャドウ
-const IOS_SHADOW = '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)'
 
 export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
   const T = THEMES[themeKey] || THEMES.dark

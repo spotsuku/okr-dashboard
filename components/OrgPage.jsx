@@ -1,36 +1,24 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import TaskManualPage from './TaskManualPage'
 
 // ══════════════════════════════════════════════════
 // テーマ定義
 // ══════════════════════════════════════════════════
-// iOS/iPadOS 風のシステムカラー
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg:          '#000000',
-    bgCard:      '#1C1C1E',
+    ...COMMON_TOKENS.dark,
     bgCard2:     '#1C1C1E',
     bgInput:     'rgba(255,255,255,0.06)',
     bgHover:     'rgba(255,255,255,0.05)',
     bgTable:     'rgba(255,255,255,0.04)',
-    border:      'rgba(255,255,255,0.10)',
-    borderMid:   'rgba(255,255,255,0.16)',
     borderEdit:  '#0A84FF',
-    text:        '#F5F5F7',
-    textSub:     '#C7C7CC',
-    textMuted:   '#8E8E93',
-    textFaint:   '#48484A',
-    textFaintest:'#3A3A3C',
     inputBg:     '#1C1C1E',
     inputText:   '#F5F5F7',
     selectBg:    '#1C1C1E',
-    accent:      '#0A84FF',
-    accentDark:  '#0062CC',
-    accentSolid: '#0A84FF',
-    warn:        '#FF9F0A',
-    warnBg:      'rgba(255,159,10,0.16)',
     badgeBg:     'rgba(10,132,255,0.18)',
     badgeBorder: 'rgba(10,132,255,0.40)',
     navActiveBg: 'rgba(10,132,255,0.18)',
@@ -40,30 +28,16 @@ const THEMES = {
     eventBandBg: '#0A84FF',
     eventBandText:'#FFFFFF',
   },
-  // iOS/iPadOS 風のシステムカラー (light)
   light: {
-    bg:          '#F2F2F7',
-    bgCard:      '#FFFFFF',
+    ...COMMON_TOKENS.light,
     bgCard2:     '#FFFFFF',
     bgInput:     '#F2F2F7',
     bgHover:     'rgba(0,0,0,0.03)',
     bgTable:     '#FFFFFF',
-    border:      'rgba(0,0,0,0.06)',
-    borderMid:   'rgba(0,0,0,0.12)',
     borderEdit:  '#007AFF',
-    text:        '#1C1C1E',
-    textSub:     '#3A3A3C',
-    textMuted:   '#8E8E93',
-    textFaint:   '#C7C7CC',
-    textFaintest:'rgba(0,0,0,0.06)',
     inputBg:     '#FFFFFF',
     inputText:   '#1C1C1E',
     selectBg:    '#FFFFFF',
-    accent:      '#007AFF',
-    accentDark:  '#0062CC',
-    accentSolid: '#007AFF',
-    warn:        '#FF9500',
-    warnBg:      'rgba(255,149,0,0.10)',
     badgeBg:     'rgba(0,122,255,0.10)',
     badgeBorder: 'rgba(0,122,255,0.30)',
     navActiveBg: 'rgba(0,122,255,0.10)',

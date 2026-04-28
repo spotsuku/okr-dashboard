@@ -5,6 +5,7 @@ import { MEETING_URLS } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import MeetingImport from './MeetingImport'
 import { ComposeModal } from './ConfirmationsTab'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -14,25 +15,9 @@ import { ComposeModal } from './ConfirmationsTab'
 //   進行状態は morning_meetings テーブルで全員同期
 
 // ─── テーマ ─────────────────────────────────────────────────
-// iOS/iPadOS 風のシステムカラー
-const DARK_T = {
-  bg:'#000000', bgCard:'#1C1C1E', bgCard2:'#2C2C2E', sectionBg:'rgba(255,255,255,0.04)',
-  border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
-  text:'#F5F5F7', textSub:'#C7C7CC', textMuted:'#8E8E93', textFaint:'#48484A',
-  accent:'#0A84FF', accentBg:'rgba(10,132,255,0.16)',
-  success:'#30D158', successBg:'rgba(48,209,88,0.16)',
-  warn:'#FF9F0A', warnBg:'rgba(255,159,10,0.16)',
-  danger:'#FF453A', dangerBg:'rgba(255,69,58,0.16)',
-}
-const LIGHT_T = {
-  bg:'#F2F2F7', bgCard:'#FFFFFF', bgCard2:'#FAFAFC', sectionBg:'rgba(0,0,0,0.03)',
-  border:'rgba(0,0,0,0.06)', borderMid:'rgba(0,0,0,0.12)',
-  text:'#1C1C1E', textSub:'#3A3A3C', textMuted:'#8E8E93', textFaint:'#C7C7CC',
-  accent:'#007AFF', accentBg:'rgba(0,122,255,0.10)',
-  success:'#34C759', successBg:'rgba(52,199,89,0.10)',
-  warn:'#FF9500', warnBg:'rgba(255,149,0,0.10)',
-  danger:'#FF3B30', dangerBg:'rgba(255,59,48,0.10)',
-}
+// テーマは lib/themeTokens.js で一元管理
+const DARK_T  = { ...COMMON_TOKENS.dark }
+const LIGHT_T = { ...COMMON_TOKENS.light }
 const M_THEMES = { dark: DARK_T, light: LIGHT_T }
 
 // ─── JST 日付ユーティリティ ──────────────────────────────────

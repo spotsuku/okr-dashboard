@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
@@ -20,29 +21,13 @@ import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
-// iOS/iPadOS 風のシステムカラー
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
 const THEMES = {
   dark: {
-    bg:           '#000000',
-    bgCard:       '#1C1C1E',
-    bgCard2:      '#1C1C1E',
-    bgSidebar:    '#1C1C1E',
-    border:       'rgba(255,255,255,0.10)',
-    borderLight:  'rgba(255,255,255,0.04)',
-    borderMid:    'rgba(255,255,255,0.16)',
-    text:         '#F5F5F7',
-    textSub:      '#C7C7CC',
-    textMuted:    '#8E8E93',
-    textFaint:    '#48484A',
-    textFaintest: '#3A3A3C',
+    ...COMMON_TOKENS.dark,
     headerBg:     '#1C1C1E',
     connector:    'rgba(255,255,255,0.10)',
     connectorArrow:'rgba(255,255,255,0.18)',
-    accent:       '#0A84FF',
-    accentDark:   '#0062CC',
-    accentSolid:  '#0A84FF',
-    warn:         '#FF9F0A',
-    warnBg:       'rgba(255,159,10,0.16)',
     badgeBg:      'rgba(10,132,255,0.18)',
     badgeBorder:  'rgba(10,132,255,0.40)',
     navActiveBg:  'rgba(10,132,255,0.18)',
@@ -59,28 +44,12 @@ const THEMES = {
     eventBandText:'#FFFFFF',
     eventBandBorder:'rgba(10,132,255,0.30)',
   },
-  // iOS/iPadOS 風のシステムカラー (light)
   light: {
-    bg:           '#F2F2F7',
-    bgCard:       '#FFFFFF',
-    bgCard2:      '#FFFFFF',
-    bgSidebar:    '#FFFFFF',
-    border:       'rgba(0,0,0,0.06)',
-    borderLight:  'rgba(0,0,0,0.04)',
-    borderMid:    'rgba(0,0,0,0.12)',
-    text:         '#1C1C1E',
-    textSub:      '#3A3A3C',
-    textMuted:    '#8E8E93',
-    textFaint:    '#C7C7CC',
-    textFaintest: 'rgba(0,0,0,0.06)',
+    ...COMMON_TOKENS.light,
+    bgCard2:      '#FFFFFF',  // Dashboard 専用: card2 を card と揃える
     headerBg:     '#FFFFFF',
     connector:    'rgba(0,0,0,0.06)',
     connectorArrow:'#8E8E93',
-    accent:       '#007AFF',
-    accentDark:   '#0062CC',
-    accentSolid:  '#007AFF',
-    warn:         '#FF9500',
-    warnBg:       'rgba(255,149,0,0.10)',
     badgeBg:      '#007AFF',
     badgeBorder:  '#007AFF',
     navActiveBg:  'rgba(0,122,255,0.10)',

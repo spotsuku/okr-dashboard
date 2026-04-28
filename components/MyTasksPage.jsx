@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import { computeKAKey } from '../lib/kaKey'
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
@@ -44,20 +45,16 @@ const STATUS_CONFIG = {
 }
 const STATUS_ORDER = ['not_started', 'in_progress', 'done']
 
-// iOS/iPadOS 風のシステムカラー
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
 const THEMES = {
   dark: {
-    bg:'#000000', bgCard:'#1C1C1E', border:'rgba(255,255,255,0.10)', borderMid:'rgba(255,255,255,0.16)',
-    text:'#F5F5F7', textSub:'#C7C7CC', textMuted:'#8E8E93', textFaint:'#48484A',
-    accent:'#0A84FF', accentBg:'rgba(10,132,255,0.16)', sectionBg:'rgba(255,255,255,0.04)',
+    ...COMMON_TOKENS.dark,
     doneBg:'rgba(48,209,88,0.10)', doneBorder:'rgba(48,209,88,0.20)',
     overdueBg:'rgba(255,69,58,0.10)', overdueBorder:'rgba(255,69,58,0.30)',
     sidebarBg:'#1C1C1E', sidebarActive:'rgba(10,132,255,0.18)', sidebarHover:'rgba(255,255,255,0.04)',
   },
   light: {
-    bg:'#F2F2F7', bgCard:'#FFFFFF', border:'rgba(0,0,0,0.06)', borderMid:'rgba(0,0,0,0.12)',
-    text:'#1C1C1E', textSub:'#3A3A3C', textMuted:'#8E8E93', textFaint:'#C7C7CC',
-    accent:'#007AFF', accentBg:'rgba(0,122,255,0.10)', sectionBg:'rgba(0,0,0,0.03)',
+    ...COMMON_TOKENS.light,
     doneBg:'rgba(52,199,89,0.10)', doneBorder:'rgba(52,199,89,0.30)',
     overdueBg:'rgba(255,59,48,0.08)', overdueBorder:'rgba(255,59,48,0.30)',
     sidebarBg:'#FFFFFF', sidebarActive:'rgba(0,122,255,0.10)', sidebarHover:'rgba(0,0,0,0.03)',

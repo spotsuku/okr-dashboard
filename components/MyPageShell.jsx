@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
 import FocusFillModal from './FocusFillModal'
@@ -13,31 +14,15 @@ import ConfirmationsTab from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
-// iOS/iPadOS 風のシステムカラー
+// テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
 const THEMES = {
   dark: {
-    bg: '#000000', bgCard: '#1C1C1E', bgSidebar: '#1C1C1E',
-    border: 'rgba(255,255,255,0.10)', borderMid: 'rgba(255,255,255,0.16)',
-    text: '#F5F5F7', textSub: '#C7C7CC', textMuted: '#8E8E93', textFaint: '#48484A',
-    accent: '#0A84FF', accentBg: 'rgba(10,132,255,0.16)', accentSolid: '#0A84FF',
-    sectionBg: 'rgba(255,255,255,0.04)',
+    ...COMMON_TOKENS.dark,
     navActiveBg: 'rgba(10,132,255,0.18)', navActiveText: '#5EB3FF',
-    success: '#30D158', successBg: 'rgba(48,209,88,0.16)',
-    warn: '#FF9F0A', warnBg: 'rgba(255,159,10,0.16)',
-    danger: '#FF453A', dangerBg: 'rgba(255,69,58,0.16)',
-    info: '#0A84FF', infoBg: 'rgba(10,132,255,0.14)',
   },
   light: {
-    bg: '#F2F2F7', bgCard: '#FFFFFF', bgSidebar: '#FFFFFF',
-    border: 'rgba(0,0,0,0.06)', borderMid: 'rgba(0,0,0,0.12)',
-    text: '#1C1C1E', textSub: '#3A3A3C', textMuted: '#8E8E93', textFaint: '#C7C7CC',
-    accent: '#007AFF', accentBg: 'rgba(0,122,255,0.10)', accentSolid: '#007AFF',
-    sectionBg: 'rgba(0,0,0,0.03)',
+    ...COMMON_TOKENS.light,
     navActiveBg: 'rgba(0,122,255,0.12)', navActiveText: '#0062CC',
-    success: '#34C759', successBg: 'rgba(52,199,89,0.10)',
-    warn: '#FF9500', warnBg: 'rgba(255,149,0,0.10)',
-    danger: '#FF3B30', dangerBg: 'rgba(255,59,48,0.10)',
-    info: '#007AFF', infoBg: 'rgba(0,122,255,0.10)',
   },
 }
 

@@ -2,25 +2,16 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { COMMON_TOKENS } from '../lib/themeTokens'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 
-// iOS/iPadOS 風のシステムカラー
-const DARK_T = {
-  bg:'#000000', bgCard:'#1C1C1E', bgCard2:'#2C2C2E', bgSidebar:'#1C1C1E',
-  border:'rgba(255,255,255,0.10)', borderLight:'rgba(255,255,255,0.04)',
-  borderMid:'rgba(255,255,255,0.16)', text:'#F5F5F7', textSub:'#C7C7CC',
-  textMuted:'#8E8E93', textFaint:'#48484A', textFaintest:'#3A3A3C',
-}
-const LIGHT_T = {
-  bg:'#F2F2F7', bgCard:'#FFFFFF', bgCard2:'#FAFAFC', bgSidebar:'#FFFFFF',
-  border:'rgba(0,0,0,0.06)', borderLight:'rgba(0,0,0,0.04)',
-  borderMid:'rgba(0,0,0,0.12)', text:'#1C1C1E', textSub:'#3A3A3C',
-  textMuted:'#8E8E93', textFaint:'#C7C7CC', textFaintest:'rgba(0,0,0,0.06)',
-}
+// テーマは lib/themeTokens.js で一元管理
+const DARK_T  = { ...COMMON_TOKENS.dark }
+const LIGHT_T = { ...COMMON_TOKENS.light }
 const W_THEMES = { dark: DARK_T, light: LIGHT_T }
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
