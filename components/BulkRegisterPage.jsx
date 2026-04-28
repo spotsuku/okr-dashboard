@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { LargeTitle, BgGlow } from './iosUI'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -844,19 +845,14 @@ export default function BulkRegisterPage({ levels, themeKey = 'dark', fiscalYear
   ]
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: wT.bg, color: wT.text, fontFamily: 'system-ui,sans-serif' }}>
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 28px' }}>
-        {/* ヘッダー */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: '#a855f7', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Bulk Register</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>一括登録</div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', border: `1px solid ${fiscalYear === '2026' ? 'rgba(77,159,255,0.4)' : 'rgba(255,159,67,0.4)'}`, borderRadius: 8, padding: '4px 12px', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43', fontSize: 13, fontWeight: 700 }}>
-              📅 {fiscalYear}年度
-            </div>
-          </div>
-          <div style={{ fontSize: 13, color: wT.textMuted, marginTop: 4 }}>OKR・KAを複数件まとめて入力・プレビュー確認後に一括登録できます</div>
-        </div>
+    <div style={{ flex: 1, overflowY: 'auto', background: wT.bg, color: wT.text, position: 'relative' }}>
+      <BgGlow T={wT} color="#AF52DE" />
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 28px 28px', position: 'relative', zIndex: 1 }}>
+        <LargeTitle T={wT}
+          title="一括登録"
+          subtitle={`${fiscalYear}年度 ・ OKR・KA・Notion を複数件まとめて入力`}
+          right={<span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: wT.accentBg, color: wT.accent }}>📅 {fiscalYear}年度</span>}
+        />
 
         {/* タブ */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: 'rgba(255,255,255,0.04)', padding: 4, borderRadius: 12, border: `1px solid ${wT.border}` }}>
