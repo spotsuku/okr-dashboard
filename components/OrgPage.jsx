@@ -190,6 +190,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
   const [linkModal, setLinkModal] = useState(null)
   const [roleModal, setRoleModal] = useState(null)
   const [processing, setProcessing] = useState(false)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -270,9 +271,25 @@ function UserListTab({ members, currentUser, isAdmin }) {
     </div>
   )
 
-  const getUserMember = (email) => members.find(m => m.email === email)
+  // メール比較は大小文字・前後空白を無視 (Supabase では実際は小文字に正規化されるが、
+  // members.email に手入力で混入したケースを救うため)
+  const normEmail = (e) => (e || '').trim().toLowerCase()
+  const getUserMember = (email) => members.find(m => normEmail(m.email) === normEmail(email))
   const linkedCount = authUsers.filter(u => getUserMember(u.email)).length
   const unlinkedCount = authUsers.length - linkedCount
+
+  // メンバー側で AUTH に対応がない (= members.email が AUTH に存在しない)
+  const memberEmailsSet = new Set(authUsers.map(u => normEmail(u.email)))
+  const orphanedMembers = members.filter(m => m.email && !memberEmailsSet.has(normEmail(m.email)))
+
+  // 検索フィルタ (email / 名前 / role)
+  const fq = filter.trim().toLowerCase()
+  const filteredAuthUsers = !fq ? authUsers : authUsers.filter(u => {
+    const m = getUserMember(u.email)
+    return (u.email || '').toLowerCase().includes(fq)
+      || (m?.name || '').toLowerCase().includes(fq)
+      || (m?.role || '').toLowerCase().includes(fq)
+  })
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -293,9 +310,54 @@ function UserListTab({ members, currentUser, isAdmin }) {
         ))}
       </div>
 
+      {/* 検索バー */}
+      <div style={{ marginBottom: 14, position: 'relative' }}>
+        <input
+          type="text" value={filter} onChange={e => setFilter(e.target.value)}
+          placeholder="🔍 名前・メール・ロールで検索 (例: 元 / mickey / マネージャー)"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            padding: '10px 14px 10px 14px', borderRadius: 10,
+            border: `1px solid ${T().border}`, background: T().bgInput || T().bgCard,
+            color: T().text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+          }}
+        />
+        {filter && (
+          <button onClick={() => setFilter('')} style={{
+            position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+            background: 'rgba(120,120,128,0.30)', color: '#fff', border: 'none',
+            width: 18, height: 18, borderRadius: '50%', fontSize: 11, cursor: 'pointer',
+            fontFamily: 'inherit', lineHeight: 1, padding: 0,
+          }}>×</button>
+        )}
+      </div>
+
+      {/* メンバーに該当 AUTH が無い場合の警告 (例: 元さんが mickey.xxx で登録されているが
+          実は AUTH 側に存在しない、というスタンス違いを発見できる) */}
+      {orphanedMembers.length > 0 && !filter && (
+        <div style={{
+          marginBottom: 14, padding: '12px 14px',
+          background: T().warnBg, border: `1px solid ${T().warn}40`, borderRadius: 10,
+          fontSize: 12, color: T().warn,
+        }}>
+          ⚠ {orphanedMembers.length}件のメンバーは <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> が設定されているが、AUTH ユーザーが存在しません。
+          <div style={{ marginTop: 6, color: T().textSub, fontWeight: 500 }}>
+            {orphanedMembers.map(m => `${m.name}（${m.email}）`).join(' / ')}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: T().textMuted }}>
+            これらは AUTH 一覧には現れません。本人にダッシュボードでログインしてもらうか、AUTH 側で手動作成して紐付けてください。
+          </div>
+        </div>
+      )}
+
       {/* ユーザーリスト */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {authUsers.map(u => {
+        {filter && filteredAuthUsers.length === 0 && (
+          <div style={{ padding: '20px', textAlign: 'center', color: T().textMuted, fontSize: 12 }}>
+            「{filter}」に一致する AUTH ユーザーが見つかりません
+          </div>
+        )}
+        {filteredAuthUsers.map(u => {
           const member = getUserMember(u.email)
           const isMe = u.email === currentUser?.email
           const color = member ? avatarColor(member.name) : T().textMuted
