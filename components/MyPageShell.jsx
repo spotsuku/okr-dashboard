@@ -2524,14 +2524,15 @@ function RetrospectDay({ T, day }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden',
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 14px', background: T.sectionBg,
+        padding: '10px 16px', background: T.sectionBg,
         borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{dateLabel}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>{dateLabel}</div>
         <div style={{ flex: 1 }} />
         {start_at && (
           <div style={{ fontSize: 10, color: T.textMuted }}>
@@ -3297,10 +3298,13 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`,
-      borderLeft: `3px solid ${color}`, borderRadius: 8, padding: '12px 14px',
+      background: `linear-gradient(180deg, ${T.bgCard} 0%, ${color}05 100%)`,
+      border: `1px solid ${color}1a`,
+      borderLeft: `4px solid ${color}`,
+      borderRadius: 12, padding: '14px 16px',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 10px rgba(0,0,0,0.03)',
       opacity: dimmed ? 0.55 : 1,
-      transition: 'opacity 0.15s ease',
+      transition: 'all 0.2s ease',
     }}>
       {/* 返信済み / 既読バッジ */}
       {(mail.replied || readMarked) && (

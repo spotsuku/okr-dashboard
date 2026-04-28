@@ -225,11 +225,17 @@ function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, 
 
   return (
     <div style={{
-      background: isResolved ? T.sectionBg : T.bgCard,
-      border: `1px solid ${isResolved ? T.border : ((!companyWide && isReceived) ? T.accent + '40' : T.border)}`,
-      borderLeft: (!companyWide && isReceived && !isResolved) ? `3px solid ${T.accent}` : `1px solid ${T.border}`,
-      borderRadius: 8, padding: 12,
-      opacity: isResolved ? 0.7 : 1,
+      background: isResolved
+        ? T.sectionBg
+        : (!companyWide && isReceived)
+          ? `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)`
+          : T.bgCard,
+      border: `1px solid ${isResolved ? T.border : ((!companyWide && isReceived) ? T.accent + '33' : T.border)}`,
+      borderLeft: (!companyWide && isReceived && !isResolved) ? `4px solid ${T.accent}` : `1px solid ${T.border}`,
+      borderRadius: 12, padding: '14px 16px',
+      boxShadow: isResolved ? 'none' : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+      opacity: isResolved ? 0.6 : 1,
+      transition: 'all 0.2s ease',
     }}>
       {/* ヘッダ行 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
