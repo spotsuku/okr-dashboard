@@ -1199,7 +1199,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   const showW = (key) => prefs[key] !== false  // デフォルト未設定はtrue扱い
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflowX: 'hidden' }}>
       {/* 📬 表示対象宛に未解決の確認事項がある時だけ最上部に出るバナー */}
       <ConfirmationsBanner T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
         onGoToTab={onGoToTab} />
@@ -1208,6 +1208,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         padding: isMobile ? '12px 16px' : '14px 20px',
+        flexWrap: 'wrap',
         background: 'rgba(255,255,255,0.65)',
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
@@ -1283,7 +1284,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       {/* 3カラム本体 (スマホは1カラム縦積み) */}
       <div style={{
         flex: 1, display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+        // minmax(0, ...) を入れないと長い子要素 (KR名など) でグリッド全体が
+        // 画面幅を超える "auto" 拡張を起こすことがあるため必須
+        gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)',
         gap: isMobile ? 14 : 10, padding: isMobile ? 14 : 10,
         paddingBottom: isMobile ? 80 : 10,  /* 下メニュー分 */
         minHeight: 0,
@@ -1293,6 +1296,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
+          minWidth: 0,
         }}>
           {showW('today') && (
             <Section T={T} icon="⚡" accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
@@ -1320,6 +1324,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
+          minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
           {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
@@ -1391,6 +1396,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
+          minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
           {showW('goal_month_main') && (
@@ -2789,9 +2795,10 @@ function ReminderList({ T, items, emptyText, maxVisible, detailLabel, onDetail }
           background: sevBg(it.sev),
           border: `1px solid ${sevColor(it.sev)}33`,
           fontSize: 11, color: T.text, lineHeight: 1.5,
+          minWidth: 0,
         }}>
           <span style={{ flexShrink: 0 }}>{it.icon}</span>
-          <span style={{ flex: 1 }}>{it.text}</span>
+          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{it.text}</span>
         </div>
       ))}
       {(hidden > 0 || (items.length > 0 && detailLabel)) && onDetail && (
