@@ -1188,60 +1188,41 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
         </div>
       </div>
 
-      {/* 営業ダッシュボード ボタン */}
+      {/* 営業ダッシュボード ボタン (大型 CTA) */}
       <div style={{
-        marginBottom: 18, padding: '18px 22px',
-        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${meetColor}06 100%)`,
-        border: `1px solid ${meetColor}26`, borderRadius: 14,
+        marginBottom: 18, padding: '24px 26px',
+        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${meetColor}08 100%)`,
+        border: `1px solid ${meetColor}33`, borderRadius: 16,
         boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
-        display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        textAlign: 'center',
       }}>
         <div style={{
-          width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+          width: 64, height: 64, borderRadius: 18, margin: '0 auto 14px',
           background: `linear-gradient(135deg, ${meetColor} 0%, ${meetColor}c0 100%)`,
           color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 22, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${meetColor}55`,
+          fontSize: 30,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 14px ${meetColor}55, 0 2px 4px ${meetColor}33`,
         }}>💰</div>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2, letterSpacing: '-0.01em' }}>営業ダッシュボード</div>
-          <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5 }}>
-            別タブで開きます。商談一覧・受注状況・KPI を確認してください。
-          </div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4, letterSpacing: '-0.01em' }}>営業ダッシュボード</div>
+        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16, lineHeight: 1.6, maxWidth: 480, margin: '0 auto 16px' }}>
+          別タブで開いて以下を確認してください:<br />
+          📊 商談一覧・進捗　・　🎯 受注見込み　・　📈 KPI ダッシュボード
         </div>
         <a href={SALES_DASHBOARD_URL} target="_blank" rel="noopener noreferrer" style={{
-          padding: '10px 22px', borderRadius: 10, border: 'none',
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '12px 28px', borderRadius: 11, border: 'none',
           background: `linear-gradient(135deg, ${meetColor} 0%, ${meetColor}d0 100%)`,
           color: '#fff', textDecoration: 'none',
-          fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
-          boxShadow: `0 2px 6px ${meetColor}55`,
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-        }}>📈 ダッシュボードを開く ↗</a>
-      </div>
-
-      {/* 埋め込みプレビュー (iframe) */}
-      <div style={{
-        marginBottom: 18,
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-        overflow: 'hidden',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05)',
-      }}>
-        <div style={{
-          padding: '10px 14px', borderBottom: `1px solid ${T.border}`,
-          fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: '0.04em', textTransform: 'uppercase',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          🖥 ダッシュボード プレビュー
-          <a href={SALES_DASHBOARD_URL} target="_blank" rel="noopener noreferrer"
-            style={{ marginLeft: 'auto', fontSize: 11, color: meetColor, fontWeight: 700, textDecoration: 'none' }}>
-            別タブで開く ↗
-          </a>
+          fontSize: 14, fontWeight: 800, fontFamily: 'inherit',
+          boxShadow: `0 4px 12px ${meetColor}55, 0 2px 4px ${meetColor}33`,
+          transition: 'transform 0.15s ease',
+        }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+        >📈 営業ダッシュボードを別タブで開く ↗</a>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 12, fontStyle: 'italic' }}>
+          ※ Google アカウントでログインが必要です（このページ内には埋め込めません）
         </div>
-        <iframe
-          src={SALES_DASHBOARD_URL}
-          title="営業ダッシュボード"
-          style={{ width: '100%', height: 600, border: 'none', display: 'block', background: T.bg }}
-          loading="lazy"
-        />
       </div>
 
       {/* ナビボタン */}
