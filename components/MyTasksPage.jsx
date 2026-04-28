@@ -1119,8 +1119,9 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
               </div>
               {/* タスク追加 */}
               <button onClick={() => setShowCreateModal(true)} style={{
-                padding: isMobile ? '10px 14px' : '6px 14px', borderRadius: 8, border: 'none',
-                background: '#00d68f', color: '#fff',
+                padding: isMobile ? '10px 16px' : '8px 16px', borderRadius: 9, border: 'none',
+                background: T.accent, color: '#fff',
+                boxShadow: `0 2px 6px ${T.accent}40`,
                 fontSize: isMobile ? 14 : 12, fontWeight: 700,
                 cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
                 display: 'flex', alignItems: 'center', gap: 4,
