@@ -233,15 +233,22 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   )
 
   return (
-    <div style={{ padding: '24px 24px', maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: T().text }}>年間ブレイクダウン</div>
-          <div style={{ fontSize: 13, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg, border: `1px solid ${T().addBtnBg}40` }}>
+    <div style={{ padding: '0 24px 24px', maxWidth: 900, margin: '0 auto', position: 'relative' }}>
+      <div aria-hidden style={{
+        position: 'absolute', top: -150, left: '50%', transform: 'translateX(-50%)',
+        width: 600, height: 400,
+        background: `radial-gradient(ellipse, ${T().addBtnBg}18 0%, transparent 60%)`,
+        pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
+      }} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ marginBottom: 22, padding: '20px 0 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: T().text, margin: 0, letterSpacing: '-0.02em' }}>年間ブレイクダウン</h1>
+          <div style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg }}>
             📅 {fiscalYear}年度
           </div>
         </div>
-        <div style={{ fontSize: 13, color: T().textMuted }}>通期OKRをクリックして四半期への展開を確認・管理できます</div>
+        <div style={{ fontSize: 13, color: T().textMuted, fontWeight: 500 }}>通期OKRをクリックして四半期への展開を確認・管理できます</div>
       </div>
 
       {filteredObjs.map(ann => {
@@ -257,20 +264,34 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         const qData = quarterMap[ann.id] || { q1: [], q2: [], q3: [], q4: [] }
 
         return (
-          <div key={ann.id} style={{ marginBottom: 16, background: T().bgCard, border: `1px solid ${isOpen ? lColor + '40' : lColor + '18'}`, borderRadius: 16, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+          <div key={ann.id} style={{
+            marginBottom: 18,
+            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${lColor}06 100%)`,
+            border: `1px solid ${isOpen ? lColor + '4d' : lColor + '1f'}`,
+            borderRadius: 18, overflow: 'hidden',
+            boxShadow: isOpen
+              ? `0 1px 2px rgba(0,0,0,0.05), 0 8px 24px ${lColor}26, 0 16px 40px rgba(0,0,0,0.04)`
+              : '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+            transition: 'all 0.25s ease',
+          }}>
 
             {/* 通期ヘッダー */}
-            <div onClick={() => toggleExpand(ann.id)} style={{ padding: '18px 20px', cursor: 'pointer', borderLeft: `4px solid ${lColor}`, display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div onClick={() => toggleExpand(ann.id)} style={{
+              padding: '20px 22px', cursor: 'pointer',
+              borderLeft: `5px solid ${lColor}`,
+              display: 'flex', alignItems: 'center', gap: 14,
+              position: 'relative',
+            }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${lColor}15`, color: lColor, fontWeight: 600 }}>{levelIcon} {levelName}</span>
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().badgePeriodBg, color: T().textMuted }}>通期</span>
-                  {r && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${r.color}18`, color: r.color, fontWeight: 700 }}>{r.label}</span>}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${lColor}1f`, color: lColor, fontWeight: 700 }}>{levelIcon} {levelName}</span>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700 }}>通期</span>
+                  {r && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${r.color}1f`, color: r.color, fontWeight: 800 }}>{r.label}</span>}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T().textSub, lineHeight: 1.4, marginBottom: ann.owner ? 6 : 10 }}>{ann.title}</div>
-                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={18} />
-                  <span>担当：{ann.owner}</span>
+                <div style={{ fontSize: 16, fontWeight: 800, color: T().text, lineHeight: 1.45, marginBottom: ann.owner ? 8 : 12, letterSpacing: '-0.01em' }}>{ann.title}</div>
+                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={20} />
+                  <span style={{ fontWeight: 600 }}>担当：{ann.owner}</span>
                 </div>}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {Q_KEYS.map(qKey => {
@@ -278,19 +299,23 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
                     const qr = qProg != null ? getRating(qProg) : null
                     return (
-                      <div key={qKey} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, fontWeight: 600, background: qr ? `${qr.color}15` : T().badgePeriodBg, color: qr ? qr.color : T().textFaintest, border: `1px solid ${qr ? qr.color + '30' : T().borderLight}` }}>
+                      <div key={qKey} style={{
+                        fontSize: 11, padding: '4px 12px', borderRadius: 8, fontWeight: 700,
+                        background: qr ? `${qr.color}15` : 'rgba(0,0,0,0.04)',
+                        color: qr ? qr.color : T().textFaintest,
+                      }}>
                         {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '未設定'}
                       </div>
                     )
                   })}
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: r?.color || T().textFaint }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: `1px solid ${T().btnEditBorder}`, color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: `1px solid ${T().btnDelBorder}`, color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
-                  <div style={{ fontSize: 16, color: isOpen ? T().btnEditColor : T().textFaint, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                <div style={{ fontSize: 32, fontWeight: 900, color: r?.color || T().textFaint, letterSpacing: '-0.02em' }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                  <div style={{ fontSize: 18, color: isOpen ? lColor : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
                 </div>
               </div>
             </div>
@@ -413,6 +438,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
           </div>
         )
       })}
+      </div>
     </div>
   )
 }
