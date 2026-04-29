@@ -22,6 +22,31 @@
 | `SLACK_CLIENT_SECRET` | 同上 |
 | `LINE_CHANNEL_ID` | LINE OAuth + リフレッシュ |
 | `LINE_CHANNEL_SECRET` | 同上 |
+| `NEXT_PUBLIC_MGMT_SUPABASE_URL` | 経営ダッシュボード (neo_mg) Supabase URL — 組織ページ「工数管理」タブで使用 |
+| `NEXT_PUBLIC_MGMT_SUPABASE_ANON_KEY` | 同 Supabase anon key (RLS allow_all なので公開可) |
+
+---
+
+## 0. 経営ダッシュボード (neo_mg) との工数管理連携
+
+組織ページの「工数管理」タブで、別アプリ `neo-mg.vercel.app` の工数管理データをリアルタイム同期表示・編集します。
+
+### Vercel 環境変数
+
+| 環境変数 | 値の取り方 |
+|---|---|
+| `NEXT_PUBLIC_MGMT_SUPABASE_URL` | `https://neo-mg.vercel.app/api/config` を GET → `supabaseUrl` |
+| `NEXT_PUBLIC_MGMT_SUPABASE_ANON_KEY` | 同 GET の `anonKey` |
+
+### データの流れ
+
+- 接続先テーブル: neo_mg 側の `workforce_versions`
+- 同期対象行: `version_id = 0`（autosave / 下書きスロット）
+- リアルタイム購読: Supabase Realtime (postgres_changes)
+- 書込時: 1.5秒 debounce + 3秒 echo 防止
+- 仕様詳細: `https://github.com/spotsuku/neo_mg/blob/main/docs/workforce-sync-spec.md`
+
+未設定の場合は工数管理タブにエラーメッセージが表示され、他タブの動作には影響しません。
 
 ---
 
