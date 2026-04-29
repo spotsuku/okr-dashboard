@@ -2,7 +2,7 @@
 // POST /api/coo/knowledge/<id>/refresh?owner=<name>
 //
 // 該当エントリが drive_file の場合、Drive API で取得 → cached_text に保存
-// 対応形式: Google Docs / Sheets / Slides (export)、PDF (alt=media + pdf-parse)
+// 対応形式: Google Docs / Sheets / Slides (export)、PDF (alt=media + unpdf)
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -25,15 +25,11 @@ function isSupportedMime(mimeType) {
 }
 
 async function extractPdfText(arrayBuffer) {
-  // pdf-parse は ESM。Next.js Node ランタイムで動的 import で読み込む
-  const { PDFParse } = await import('pdf-parse')
-  const parser = new PDFParse({ data: new Uint8Array(arrayBuffer) })
-  try {
-    const result = await parser.getText()
-    return result?.text || ''
-  } finally {
-    try { await parser.destroy() } catch { /* noop */ }
-  }
+  // unpdf はサーバーレス向けの pdfjs ラッパー
+  // (DOMMatrix 等のブラウザ API ポリフィル込み)
+  const { extractText } = await import('unpdf')
+  const { text } = await extractText(new Uint8Array(arrayBuffer), { mergePages: true })
+  return text || ''
 }
 
 async function isAdmin(supabase, ownerName) {
@@ -101,7 +97,7 @@ export async function POST(request, { params }) {
 
     let text = ''
     if (meta.mimeType === 'application/pdf') {
-      // PDF: alt=media で原本ダウンロード → pdf-parse で抽出
+      // PDF: alt=media で原本ダウンロード → unpdf で抽出
       const dlUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`)
       dlUrl.searchParams.set('alt', 'media')
       dlUrl.searchParams.set('supportsAllDrives', 'true')
