@@ -25,15 +25,11 @@ function isSupportedMime(mimeType) {
 }
 
 async function extractPdfText(arrayBuffer) {
-  // pdf-parse は ESM。Next.js Node ランタイムで動的 import で読み込む
-  const { PDFParse } = await import('pdf-parse')
-  const parser = new PDFParse({ data: new Uint8Array(arrayBuffer) })
-  try {
-    const result = await parser.getText()
-    return result?.text || ''
-  } finally {
-    try { await parser.destroy() } catch { /* noop */ }
-  }
+  // unpdf はサーバーレス向けの pdfjs ラッパー
+  // (DOMMatrix 等のブラウザ API ポリフィル込み)
+  const { extractText } = await import('unpdf')
+  const { text } = await extractText(new Uint8Array(arrayBuffer), { mergePages: true })
+  return text || ''
 }
 
 async function isAdmin(supabase, ownerName) {
