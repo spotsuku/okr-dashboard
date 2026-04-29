@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 // ぺろっぺの組織知識を CRUD する admin 用パネル (モーダル形式で開く)
 // Props: { T, owner (=自分の名前), onClose }
@@ -204,6 +204,7 @@ function KnowledgeForm({ T, owner, initial, onCancel, onSaved }) {
   const [priority, setPriority] = useState(initial?.priority ?? 50)
   const [enabled, setEnabled] = useState(initial?.enabled ?? true)
   const [saving, setSaving] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const driveFileId = extractDriveFileId(driveInput)
   const canSave = title.trim() && (
@@ -287,17 +288,34 @@ function KnowledgeForm({ T, owner, initial, onCancel, onSaved }) {
 
       {kind === 'drive_file' && (
         <div style={{ marginBottom: 10 }}>
-          <label style={labelSt}>Drive ファイル URL または ID *</label>
-          <input value={driveInput} onChange={e => setDriveInput(e.target.value)}
-            placeholder="https://drive.google.com/file/d/XXX/view または ID 直接" style={inputSt} />
+          <label style={labelSt}>Drive ファイル *</label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={driveInput} onChange={e => setDriveInput(e.target.value)}
+              placeholder="URL / ID を貼り付け、または右のボタンから選択"
+              style={{ ...inputSt, flex: 1 }} />
+            <button type="button" onClick={() => setPickerOpen(true)} style={{
+              padding: '0 14px', borderRadius: 6, whiteSpace: 'nowrap',
+              background: T.accent, color: '#fff', border: 'none',
+              fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+            }}>📁 Drive から選択</button>
+          </div>
           {driveInput && (
             <div style={{ marginTop: 4, fontSize: 10, color: driveFileId ? T.success : T.danger }}>
-              {driveFileId ? `✓ 抽出した ID: ${driveFileId}` : '⚠️ 有効な ID/URL ではありません'}
+              {driveFileId ? `✓ ID: ${driveFileId}` : '⚠️ 有効な ID/URL ではありません'}
             </div>
           )}
           <div style={{ marginTop: 6, fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>
             ※ Google Docs / Sheets / Slides のみ本文取得可。保存時に自動で Drive から取得します。
           </div>
+          {pickerOpen && (
+            <DrivePicker T={T} owner={owner}
+              onClose={() => setPickerOpen(false)}
+              onSelect={(file) => {
+                setDriveInput(file.id)
+                if (!title.trim()) setTitle(file.name)
+                setPickerOpen(false)
+              }} />
+          )}
         </div>
       )}
 
@@ -325,6 +343,201 @@ function KnowledgeForm({ T, owner, initial, onCancel, onSaved }) {
           fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
           cursor: saving || !canSave ? 'not-allowed' : 'pointer',
         }}>{saving ? '保存中…' : '保存'}</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Drive ファイル選択モーダル ─────────────────────────────────
+// 共有ドライブを browse / search してファイルを選択する
+
+const SUPPORTED_DRIVE_MIMES = new Set([
+  'application/vnd.google-apps.document',
+  'application/vnd.google-apps.spreadsheet',
+  'application/vnd.google-apps.presentation',
+])
+
+function driveIcon(mimeType, isFolder) {
+  if (isFolder) return '📁'
+  if (!mimeType) return '📄'
+  if (mimeType.includes('document')) return '📝'
+  if (mimeType.includes('spreadsheet')) return '📊'
+  if (mimeType.includes('presentation')) return '🖼️'
+  if (mimeType.includes('pdf')) return '📕'
+  return '📄'
+}
+
+function DrivePicker({ T, owner, onClose, onSelect }) {
+  const [folderId, setFolderId] = useState('')  // 空 = ルート
+  const [folder, setFolder] = useState(null)
+  const [breadcrumb, setBreadcrumb] = useState([])
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [searchMode, setSearchMode] = useState(false)
+  const searchTimer = useRef(null)
+
+  // ブラウズ取得
+  const browse = useCallback(async (fid) => {
+    setLoading(true); setError('')
+    try {
+      const u = new URL('/api/integrations/drive/list', window.location.origin)
+      u.searchParams.set('owner', owner)
+      if (fid) u.searchParams.set('folder_id', fid)
+      const r = await fetch(u.toString())
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setFolder(j.folder || null)
+      setBreadcrumb(j.breadcrumb || [])
+      setItems(j.items || [])
+    } catch (e) {
+      setError(e.message)
+    } finally { setLoading(false) }
+  }, [owner])
+
+  // 検索
+  const search = useCallback(async (q) => {
+    if (!q.trim()) { setSearchMode(false); browse(folderId); return }
+    setSearchMode(true)
+    setLoading(true); setError('')
+    try {
+      const u = new URL('/api/integrations/drive/search', window.location.origin)
+      u.searchParams.set('owner', owner)
+      u.searchParams.set('q', q.trim())
+      const r = await fetch(u.toString())
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setItems(j.items || [])
+    } catch (e) {
+      setError(e.message)
+    } finally { setLoading(false) }
+  }, [owner, folderId, browse])
+
+  useEffect(() => { browse(folderId) }, [browse, folderId])
+
+  // 検索の debounce
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => { search(query) }, 350)
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+  }, [query, search])
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 10000, padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
+        width: '100%', maxWidth: 640, maxHeight: '88vh',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{
+          padding: '12px 16px', borderBottom: `1px solid ${T.border}`,
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 16 }}>📁</span>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, flex: 1 }}>Drive ファイル選択</div>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', color: T.textSub,
+            fontSize: 20, cursor: 'pointer', padding: '0 6px',
+          }}>×</button>
+        </div>
+
+        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
+          <input value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="🔍 ファイル名/本文で検索 (空欄でブラウズに戻る)"
+            style={{
+              width: '100%', padding: '8px 10px', fontSize: 13,
+              background: T.bg, border: `1px solid ${T.border}`,
+              borderRadius: 6, color: T.text, fontFamily: 'inherit',
+              outline: 'none', boxSizing: 'border-box',
+            }} />
+        </div>
+
+        {!searchMode && breadcrumb.length > 0 && (
+          <div style={{
+            padding: '8px 16px', borderBottom: `1px solid ${T.border}`,
+            display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
+            fontSize: 11, color: T.textMuted,
+          }}>
+            {breadcrumb.map((c, i) => (
+              <span key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {i > 0 && <span>/</span>}
+                <button onClick={() => setFolderId(c.isRoot ? '' : c.id)} style={{
+                  background: 'transparent', border: 'none', padding: '2px 4px',
+                  color: i === breadcrumb.length - 1 ? T.text : T.accent,
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>{c.name}</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 8, minHeight: 200 }}>
+          {loading ? (
+            <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
+          ) : error ? (
+            <div style={{ margin: 8, padding: 10, color: T.danger, fontSize: 12, background: T.dangerBg, borderRadius: 6 }}>
+              ⚠️ {error}
+            </div>
+          ) : items.length === 0 ? (
+            <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+              {searchMode ? '一致するファイルがありません' : 'このフォルダは空です'}
+            </div>
+          ) : (
+            items.map(it => {
+              const supported = it.isFolder || SUPPORTED_DRIVE_MIMES.has(it.mimeType)
+              return (
+                <div key={it.id}
+                  onClick={() => {
+                    if (it.isFolder) { setFolderId(it.id); setQuery(''); setSearchMode(false); return }
+                    if (!supported) return
+                    onSelect(it)
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 12px', borderRadius: 6, marginBottom: 2,
+                    cursor: supported ? 'pointer' : 'not-allowed',
+                    opacity: supported ? 1 : 0.45,
+                    background: 'transparent',
+                  }}
+                  onMouseEnter={e => { if (supported) e.currentTarget.style.background = T.sectionBg }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: 18 }}>{driveIcon(it.mimeType, it.isFolder)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13, color: T.text, fontWeight: it.isFolder ? 700 : 500,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>{it.name}</div>
+                    <div style={{ fontSize: 10, color: T.textMuted }}>
+                      {it.isFolder ? 'フォルダ' : (
+                        supported
+                          ? (it.owner || '') + (it.modifiedTime ? ` · ${it.modifiedTime.slice(0, 10)}` : '')
+                          : '本文取得不可 (Docs/Sheets/Slides のみ対応)'
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <div style={{
+          padding: '10px 16px', borderTop: `1px solid ${T.border}`,
+          display: 'flex', justifyContent: 'flex-end', gap: 8,
+        }}>
+          <button onClick={onClose} style={{
+            padding: '7px 14px', borderRadius: 7,
+            background: 'transparent', color: T.textSub, border: `1px solid ${T.border}`,
+            fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+          }}>キャンセル</button>
+        </div>
       </div>
     </div>
   )
