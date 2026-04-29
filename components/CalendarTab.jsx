@@ -900,7 +900,7 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
             resize: 'vertical', outline: 'none',
           }}
         />
-        <button onClick={send} disabled={busy || !input.trim()} style={{
+        <button onClick={() => send()} disabled={busy || !input.trim()} style={{
           padding: '0 14px', borderRadius: 6,
           background: busy ? T.border : T.accent, color: '#fff',
           border: 'none', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
