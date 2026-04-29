@@ -2,7 +2,7 @@
 // POST /api/coo/knowledge/<id>/refresh?owner=<name>
 //
 // 該当エントリが drive_file の場合、Drive API で取得 → cached_text に保存
-// 対応形式: Google Docs / Sheets / Slides (export)、PDF (alt=media + pdf-parse)
+// 対応形式: Google Docs / Sheets / Slides (export)、PDF (alt=media + unpdf)
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -97,7 +97,7 @@ export async function POST(request, { params }) {
 
     let text = ''
     if (meta.mimeType === 'application/pdf') {
-      // PDF: alt=media で原本ダウンロード → pdf-parse で抽出
+      // PDF: alt=media で原本ダウンロード → unpdf で抽出
       const dlUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`)
       dlUrl.searchParams.set('alt', 'media')
       dlUrl.searchParams.set('supportsAllDrives', 'true')
