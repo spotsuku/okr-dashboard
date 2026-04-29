@@ -1,9 +1,11 @@
 // Drive ファイル本文の再取得 (admin のみ)
 // POST /api/coo/knowledge/<id>/refresh?owner=<name>
 //
-// 該当エントリが drive_file の場合、Drive API で text export → cached_text に保存
+// 該当エントリが drive_file の場合、Drive API で取得 → cached_text に保存
+// 対応形式: Google Docs / Sheets / Slides (export)、PDF (alt=media + pdf-parse)
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 import { getAdminClient, getIntegration, callGoogleApiWithRetry, json } from '../../../../integrations/_shared'
 
@@ -15,6 +17,22 @@ function exportMimeFor(mimeType) {
     case 'application/vnd.google-apps.spreadsheet':   return 'text/csv'
     case 'application/vnd.google-apps.presentation':  return 'text/plain'
     default: return null
+  }
+}
+
+function isSupportedMime(mimeType) {
+  return !!exportMimeFor(mimeType) || mimeType === 'application/pdf'
+}
+
+async function extractPdfText(arrayBuffer) {
+  // pdf-parse は ESM。Next.js Node ランタイムで動的 import で読み込む
+  const { PDFParse } = await import('pdf-parse')
+  const parser = new PDFParse({ data: new Uint8Array(arrayBuffer) })
+  try {
+    const result = await parser.getText()
+    return result?.text || ''
+  } finally {
+    try { await parser.destroy() } catch { /* noop */ }
   }
 }
 
@@ -72,8 +90,7 @@ export async function POST(request, { params }) {
       return json({ error: err }, { status: mr.status })
     }
     const meta = await mr.json()
-    const exportMime = exportMimeFor(meta.mimeType)
-    if (!exportMime) {
+    if (!isSupportedMime(meta.mimeType)) {
       const err = `${meta.name} はテキスト変換に非対応 (${meta.mimeType})`
       await supabase.from('coo_knowledge').update({
         drive_cached_text: null, drive_cache_error: err,
@@ -82,22 +99,52 @@ export async function POST(request, { params }) {
       return json({ error: err }, { status: 400 })
     }
 
-    // export
-    const exportUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export`)
-    exportUrl.searchParams.set('mimeType', exportMime)
-    exportUrl.searchParams.set('supportsAllDrives', 'true')
-    const { response: er } = await callGoogleApiWithRetry(integration, async (token) => {
-      return fetch(exportUrl.toString(), { headers: { Authorization: `Bearer ${token}` } })
-    })
-    if (!er.ok) {
-      const body = await er.text()
-      const err = `Drive 本文取得失敗: ${er.status} ${body.slice(0, 200)}`
-      await supabase.from('coo_knowledge').update({
-        drive_cache_error: err, drive_cached_at: new Date().toISOString(),
-      }).eq('id', params.id)
-      return json({ error: err }, { status: er.status })
+    let text = ''
+    if (meta.mimeType === 'application/pdf') {
+      // PDF: alt=media で原本ダウンロード → pdf-parse で抽出
+      const dlUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`)
+      dlUrl.searchParams.set('alt', 'media')
+      dlUrl.searchParams.set('supportsAllDrives', 'true')
+      const { response: dr } = await callGoogleApiWithRetry(integration, async (token) => {
+        return fetch(dlUrl.toString(), { headers: { Authorization: `Bearer ${token}` } })
+      })
+      if (!dr.ok) {
+        const body = await dr.text()
+        const err = `PDF ダウンロード失敗: ${dr.status} ${body.slice(0, 200)}`
+        await supabase.from('coo_knowledge').update({
+          drive_cache_error: err, drive_cached_at: new Date().toISOString(),
+        }).eq('id', params.id)
+        return json({ error: err }, { status: dr.status })
+      }
+      try {
+        const ab = await dr.arrayBuffer()
+        text = await extractPdfText(ab)
+      } catch (e) {
+        const err = `PDF テキスト抽出失敗: ${e.message || e}`
+        await supabase.from('coo_knowledge').update({
+          drive_cache_error: err, drive_cached_at: new Date().toISOString(),
+        }).eq('id', params.id)
+        return json({ error: err }, { status: 500 })
+      }
+    } else {
+      // Google Docs / Sheets / Slides: export
+      const exportMime = exportMimeFor(meta.mimeType)
+      const exportUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export`)
+      exportUrl.searchParams.set('mimeType', exportMime)
+      exportUrl.searchParams.set('supportsAllDrives', 'true')
+      const { response: er } = await callGoogleApiWithRetry(integration, async (token) => {
+        return fetch(exportUrl.toString(), { headers: { Authorization: `Bearer ${token}` } })
+      })
+      if (!er.ok) {
+        const body = await er.text()
+        const err = `Drive 本文取得失敗: ${er.status} ${body.slice(0, 200)}`
+        await supabase.from('coo_knowledge').update({
+          drive_cache_error: err, drive_cached_at: new Date().toISOString(),
+        }).eq('id', params.id)
+        return json({ error: err }, { status: er.status })
+      }
+      text = await er.text()
     }
-    let text = await er.text()
     const fullLen = text.length
     if (fullLen > MAX_CHARS) text = text.slice(0, MAX_CHARS) + `\n\n... (全${fullLen}文字中 ${MAX_CHARS}文字)`
 

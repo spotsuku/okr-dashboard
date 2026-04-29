@@ -305,7 +305,7 @@ function KnowledgeForm({ T, owner, initial, onCancel, onSaved }) {
             </div>
           )}
           <div style={{ marginTop: 6, fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>
-            ※ Google Docs / Sheets / Slides のみ本文取得可。保存時に自動で Drive から取得します。
+            ※ Google Docs / Sheets / Slides / PDF の本文取得に対応。保存時に自動で Drive から取得します。
           </div>
           {pickerOpen && (
             <DrivePicker T={T} owner={owner}
@@ -355,6 +355,7 @@ const SUPPORTED_DRIVE_MIMES = new Set([
   'application/vnd.google-apps.document',
   'application/vnd.google-apps.spreadsheet',
   'application/vnd.google-apps.presentation',
+  'application/pdf',
 ])
 
 function driveIcon(mimeType, isFolder) {
@@ -518,7 +519,7 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
                       {it.isFolder ? 'フォルダ' : (
                         supported
                           ? (it.owner || '') + (it.modifiedTime ? ` · ${it.modifiedTime.slice(0, 10)}` : '')
-                          : '本文取得不可 (Docs/Sheets/Slides のみ対応)'
+                          : '本文取得不可 (Docs/Sheets/Slides/PDF のみ対応)'
                       )}
                     </div>
                   </div>
