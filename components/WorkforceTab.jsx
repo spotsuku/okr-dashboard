@@ -285,9 +285,20 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
   // 列: メンバー (sticky) + (biz × role) で合計 businesses.length * 6 列
 
   const cellW = 56
-  const memberColW = 130
+  const memberColW = 180
 
   const totalFTE = (biz, role) => investedFTE(members, biz, role)
+
+  // メンバー個人の配分%合計 (全事業×全役割)
+  const memberTotalPct = (m) => {
+    let s = 0
+    for (const biz of businesses) {
+      for (const role of ROLES) {
+        s += m.allocMatrix?.[biz]?.[role] || 0
+      }
+    }
+    return s
+  }
 
   return (
     <div style={{
@@ -376,7 +387,27 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
         <tbody>
           {members.map(m => (
             <tr key={m.name}>
-              <td style={{ ...tdSticky(T, memberColW), background: T.bgCard, fontWeight: 700, padding: '6px 10px', textAlign: 'left' }}>{m.name}</td>
+              <td style={{ ...tdSticky(T, memberColW), background: T.bgCard, fontWeight: 700, padding: '6px 10px', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                  {(() => {
+                    const tot = memberTotalPct(m)
+                    const color = tot === 0 ? T.textFaint
+                      : tot > 100 ? T.danger
+                      : tot >= 80 ? T.success
+                      : tot >= 50 ? T.warn
+                      : T.textMuted
+                    return (
+                      <span style={{
+                        flexShrink: 0,
+                        fontSize: 10, fontWeight: 800,
+                        padding: '2px 7px', borderRadius: 99,
+                        background: color + '18', color, border: `1px solid ${color}30`,
+                      }}>合計 {tot}%</span>
+                    )
+                  })()}
+                </div>
+              </td>
               {businesses.map(biz => ROLES.map((role, ri) => {
                 const v = m.allocMatrix?.[biz]?.[role] ?? 0
                 return (
