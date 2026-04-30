@@ -668,11 +668,11 @@ function SpeakerReport({ T, member }) {
         .select('*').eq('owner', member.name).eq('log_type', 'kpt')
         .gte('created_at', yesterday + 'T00:00:00+09:00')
         .order('created_at', { ascending: false }).limit(20)
-      // 今日のタスク
+      // 今日のタスク + 期限切れの未完了タスク
       const { data: ts } = await supabase.from('ka_tasks')
         .select('id, title, due_date, done, status')
-        .eq('assignee', member.name).eq('due_date', today)
-        .order('id', { ascending: false })
+        .eq('assignee', member.name).lte('due_date', today)
+        .order('due_date', { ascending: true })
       if (!alive) return
       // 日付ごとに最新1件だけ採用 (同じ日に複数KPTがあれば直近のみ)
       // 04:00 JST 境界: 深夜0〜4時に書かれた振り返りは「前日の振り返り」として扱う
@@ -691,13 +691,19 @@ function SpeakerReport({ T, member }) {
       const list = Array.from(byDate.values())
         .sort((a, b) => (a.dateStr < b.dateStr ? 1 : -1))
       setKptList(list)
-      setTasks(ts || [])
+      // 過去日の完了済みタスクは除外 (= 今日 or 期限切れ未完了 のみ残す)
+      const filtered = (ts || []).filter(t => {
+        const isDone = t.done || t.status === 'done'
+        return t.due_date === today || !isDone
+      })
+      setTasks(filtered)
       setLoading(false)
     })()
     return () => { alive = false }
   }, [member.name, yesterday, today])
 
   const doneCnt = tasks.filter(t => t.done || t.status === 'done').length
+  const overdueCnt = tasks.filter(t => t.due_date < today && !(t.done || t.status === 'done')).length
 
   return (
     <div style={{
@@ -775,13 +781,18 @@ function SpeakerReport({ T, member }) {
             )}
           </div>
 
-          {/* 今日のタスク */}
+          {/* 今日のタスク + 期限切れ */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8 }}>
               📅 今日のタスク
               <span style={{ marginLeft: 8, padding: '1px 8px', borderRadius: 99,
                 background: T.sectionBg, color: T.textMuted,
                 fontSize: 10, fontWeight: 700 }}>完了 {doneCnt} / 全 {tasks.length}</span>
+              {overdueCnt > 0 && (
+                <span style={{ marginLeft: 6, padding: '1px 8px', borderRadius: 99,
+                  background: T.dangerBg, color: T.danger,
+                  fontSize: 10, fontWeight: 700 }}>⚠️ 期限切れ {overdueCnt}</span>
+              )}
             </div>
             {tasks.length === 0 ? (
               <div style={{
@@ -792,17 +803,26 @@ function SpeakerReport({ T, member }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {tasks.map(t => {
                   const isDone = t.done || t.status === 'done'
+                  const isOverdue = t.due_date < today && !isDone
                   return (
                     <div key={t.id} style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '6px 10px',
-                      background: isDone ? T.successBg : T.sectionBg,
+                      background: isDone ? T.successBg : (isOverdue ? T.dangerBg : T.sectionBg),
+                      border: isOverdue ? `1px solid ${T.danger}40` : 'none',
                       borderRadius: 6, fontSize: 12,
                       color: isDone ? T.textMuted : T.text,
                       textDecoration: isDone ? 'line-through' : 'none',
                     }}>
                       <span>{isDone ? '✅' : '⬜'}</span>
-                      <span>{t.title || '(無題)'}</span>
+                      <span style={{ flex: 1 }}>{t.title || '(無題)'}</span>
+                      {isOverdue && (
+                        <span style={{
+                          flexShrink: 0, fontSize: 10, fontWeight: 700,
+                          padding: '1px 6px', borderRadius: 4,
+                          background: T.danger, color: '#fff',
+                        }}>{formatJSTMonthDay(t.due_date)} 期限切れ</span>
+                      )}
                     </div>
                   )
                 })}
