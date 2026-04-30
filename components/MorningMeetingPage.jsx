@@ -7,6 +7,7 @@ import MeetingImport from './MeetingImport'
 import { ComposeModal } from './ConfirmationsTab'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { HeroCard } from './iosUI'
+import { isJpNonBusinessDay } from '../lib/jpHolidays'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -44,15 +45,23 @@ function getYesterdayJSTDateStr() {
   const d = new Date(Date.now() - 86400000)
   return toJSTDateStr(d)
 }
-// 「前回の振り返り」を引く起点日 (JST)。月曜は金曜まで遡る。
+// 「前回の振り返り」を引く起点日 (JST)。
+// 前日が土日 or 祝日の場合、直近の平日 (非祝日) まで遡る。
+// 例:
+//  - 火 (前日=月曜が祝日) → 金まで遡る (金 + 土日 + 月の4日分)
+//  - 月 (前日=日) → 金まで遡る (金 + 土 + 日の3日分)
+//  - 水 (前日=火が平日) → 火のみ
 function getPrevReviewJSTDateStr() {
-  const now = new Date()
-  const jstNow = new Date(now.getTime() + 9 * 3600 * 1000)
-  const dow = jstNow.getUTCDay()  // 0=日, 1=月, ..., 6=土
-  // 月曜は金曜 (3日前)、日曜は金曜 (2日前)、土曜は金曜 (1日前) まで遡る
-  const daysBack = dow === 1 ? 3 : dow === 0 ? 2 : 1
-  const d = new Date(now.getTime() - daysBack * 86400000)
-  return toJSTDateStr(d)
+  // まず前日から開始
+  let d = new Date(Date.now() - 86400000)
+  let dateStr = toJSTDateStr(d)
+  // 前日が休日 (土日祝) なら、平日が見つかるまでさらに遡る
+  // 最大10日 (連休が長引く想定)
+  for (let i = 0; i < 10 && isJpNonBusinessDay(dateStr); i++) {
+    d = new Date(d.getTime() - 86400000)
+    dateStr = toJSTDateStr(d)
+  }
+  return dateStr
 }
 function formatJSTMonthDay(dateStr) {
   // 'YYYY-MM-DD' → 'M/D(曜)'
