@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { LargeTitle, BgGlow } from './iosUI'
 import TaskManualPage from './TaskManualPage'
+import WorkforceTab from './WorkforceTab'
 
 // ══════════════════════════════════════════════════
 // テーマ定義
@@ -3360,6 +3361,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
 
   const tabs = [
     { id: 'chart',    icon: '🏗', label: '組織図' },
+    { id: 'workforce',icon: '📊', label: '工数管理' },
     { id: 'tasks',    icon: '📋', label: '業務一覧' },
     { id: 'taskflow', icon: '🔄', label: '業務マニュアル' },
     { id: 'members',  icon: '👤', label: 'メンバーJD' },
@@ -3398,7 +3400,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             return (
               <button key={t.id}
                 onClick={() => { setActiveTab(t.id); if (t.id !== 'members') setJumpMemberName(null) }}
-                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 500, color: isA ? T().accent : T().textFaint, borderBottom: `3px solid ${isA ? T().accent : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? T().navActiveBg : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
+                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 600, color: isA ? T().accent : T().textSub, borderBottom: `3px solid ${isA ? T().accent : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? T().navActiveBg : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
                 {t.icon} {t.label}
               </button>
             )
@@ -3407,6 +3409,9 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
 
         {activeTab === 'chart' && (
           <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate} onWebhookSave={(levelId, url) => setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, slack_webhook_url: url } : l))} />
+        )}
+        {activeTab === 'workforce' && (
+          <WorkforceTab T={T()} />
         )}
         {activeTab === 'tasks' && (
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}

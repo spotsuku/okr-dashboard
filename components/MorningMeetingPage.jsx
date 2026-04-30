@@ -7,6 +7,7 @@ import MeetingImport from './MeetingImport'
 import { ComposeModal } from './ConfirmationsTab'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { HeroCard } from './iosUI'
+import { isJpNonBusinessDay } from '../lib/jpHolidays'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -44,15 +45,23 @@ function getYesterdayJSTDateStr() {
   const d = new Date(Date.now() - 86400000)
   return toJSTDateStr(d)
 }
-// 「前回の振り返り」を引く起点日 (JST)。月曜は金曜まで遡る。
+// 「前回の振り返り」を引く起点日 (JST)。
+// 前日が土日 or 祝日の場合、直近の平日 (非祝日) まで遡る。
+// 例:
+//  - 火 (前日=月曜が祝日) → 金まで遡る (金 + 土日 + 月の4日分)
+//  - 月 (前日=日) → 金まで遡る (金 + 土 + 日の3日分)
+//  - 水 (前日=火が平日) → 火のみ
 function getPrevReviewJSTDateStr() {
-  const now = new Date()
-  const jstNow = new Date(now.getTime() + 9 * 3600 * 1000)
-  const dow = jstNow.getUTCDay()  // 0=日, 1=月, ..., 6=土
-  // 月曜は金曜 (3日前)、日曜は金曜 (2日前)、土曜は金曜 (1日前) まで遡る
-  const daysBack = dow === 1 ? 3 : dow === 0 ? 2 : 1
-  const d = new Date(now.getTime() - daysBack * 86400000)
-  return toJSTDateStr(d)
+  // まず前日から開始
+  let d = new Date(Date.now() - 86400000)
+  let dateStr = toJSTDateStr(d)
+  // 前日が休日 (土日祝) なら、平日が見つかるまでさらに遡る
+  // 最大10日 (連休が長引く想定)
+  for (let i = 0; i < 10 && isJpNonBusinessDay(dateStr); i++) {
+    d = new Date(d.getTime() - 86400000)
+    dateStr = toJSTDateStr(d)
+  }
+  return dateStr
 }
 function formatJSTMonthDay(dateStr) {
   // 'YYYY-MM-DD' → 'M/D(曜)'
@@ -668,11 +677,11 @@ function SpeakerReport({ T, member }) {
         .select('*').eq('owner', member.name).eq('log_type', 'kpt')
         .gte('created_at', yesterday + 'T00:00:00+09:00')
         .order('created_at', { ascending: false }).limit(20)
-      // 今日のタスク
+      // 今日のタスク + 期限切れの未完了タスク
       const { data: ts } = await supabase.from('ka_tasks')
         .select('id, title, due_date, done, status')
-        .eq('assignee', member.name).eq('due_date', today)
-        .order('id', { ascending: false })
+        .eq('assignee', member.name).lte('due_date', today)
+        .order('due_date', { ascending: true })
       if (!alive) return
       // 日付ごとに最新1件だけ採用 (同じ日に複数KPTがあれば直近のみ)
       // 04:00 JST 境界: 深夜0〜4時に書かれた振り返りは「前日の振り返り」として扱う
@@ -691,13 +700,19 @@ function SpeakerReport({ T, member }) {
       const list = Array.from(byDate.values())
         .sort((a, b) => (a.dateStr < b.dateStr ? 1 : -1))
       setKptList(list)
-      setTasks(ts || [])
+      // 過去日の完了済みタスクは除外 (= 今日 or 期限切れ未完了 のみ残す)
+      const filtered = (ts || []).filter(t => {
+        const isDone = t.done || t.status === 'done'
+        return t.due_date === today || !isDone
+      })
+      setTasks(filtered)
       setLoading(false)
     })()
     return () => { alive = false }
   }, [member.name, yesterday, today])
 
   const doneCnt = tasks.filter(t => t.done || t.status === 'done').length
+  const overdueCnt = tasks.filter(t => t.due_date < today && !(t.done || t.status === 'done')).length
 
   return (
     <div style={{
@@ -775,13 +790,21 @@ function SpeakerReport({ T, member }) {
             )}
           </div>
 
-          {/* 今日のタスク */}
+          {/* 共有事項 (自由記入 + 任意URL) */}
+          <SharingSection T={T} memberName={member.name} today={today} />
+
+          {/* 今日のタスク + 期限切れ */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8 }}>
               📅 今日のタスク
               <span style={{ marginLeft: 8, padding: '1px 8px', borderRadius: 99,
                 background: T.sectionBg, color: T.textMuted,
                 fontSize: 10, fontWeight: 700 }}>完了 {doneCnt} / 全 {tasks.length}</span>
+              {overdueCnt > 0 && (
+                <span style={{ marginLeft: 6, padding: '1px 8px', borderRadius: 99,
+                  background: T.dangerBg, color: T.danger,
+                  fontSize: 10, fontWeight: 700 }}>⚠️ 期限切れ {overdueCnt}</span>
+              )}
             </div>
             {tasks.length === 0 ? (
               <div style={{
@@ -792,17 +815,26 @@ function SpeakerReport({ T, member }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {tasks.map(t => {
                   const isDone = t.done || t.status === 'done'
+                  const isOverdue = t.due_date < today && !isDone
                   return (
                     <div key={t.id} style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '6px 10px',
-                      background: isDone ? T.successBg : T.sectionBg,
+                      background: isDone ? T.successBg : (isOverdue ? T.dangerBg : T.sectionBg),
+                      border: isOverdue ? `1px solid ${T.danger}40` : 'none',
                       borderRadius: 6, fontSize: 12,
                       color: isDone ? T.textMuted : T.text,
                       textDecoration: isDone ? 'line-through' : 'none',
                     }}>
                       <span>{isDone ? '✅' : '⬜'}</span>
-                      <span>{t.title || '(無題)'}</span>
+                      <span style={{ flex: 1 }}>{t.title || '(無題)'}</span>
+                      {isOverdue && (
+                        <span style={{
+                          flexShrink: 0, fontSize: 10, fontWeight: 700,
+                          padding: '1px 6px', borderRadius: 4,
+                          background: T.danger, color: '#fff',
+                        }}>{formatJSTMonthDay(t.due_date)} 期限切れ</span>
+                      )}
                     </div>
                   )
                 })}
@@ -811,6 +843,139 @@ function SpeakerReport({ T, member }) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// ─── 共有事項 (自由記入 + 任意URL) — coaching_logs に保存 ─────────────
+function SharingSection({ T, memberName, today }) {
+  const [text, setText] = useState('')
+  const [url, setUrl] = useState('')
+  const [logId, setLogId] = useState(null)
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const saveTimer = useRef(null)
+  const dirtyRef = useRef(false)
+
+  // 切替時に読み込み
+  useEffect(() => {
+    let alive = true
+    setLoaded(false)
+    setText(''); setUrl(''); setLogId(null); dirtyRef.current = false
+    ;(async () => {
+      const { data } = await supabase.from('coaching_logs')
+        .select('id, content')
+        .eq('owner', memberName)
+        .eq('log_type', 'morning_share')
+        .eq('week_start', today)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (!alive) return
+      if (data) {
+        const c = parseLogContent(data.content)
+        setText(c.text || '')
+        setUrl(c.url || '')
+        setLogId(data.id)
+      }
+      setLoaded(true)
+    })()
+    return () => { alive = false }
+  }, [memberName, today])
+
+  // 保存 (debounced)
+  const save = useCallback(async (nextText, nextUrl, currentId) => {
+    setSaving(true)
+    const content = JSON.stringify({ text: nextText, url: nextUrl })
+    try {
+      if (currentId) {
+        await supabase.from('coaching_logs').update({ content }).eq('id', currentId)
+      } else {
+        const { data } = await supabase.from('coaching_logs').insert({
+          owner: memberName,
+          week_start: today,
+          log_type: 'morning_share',
+          content,
+        }).select().single()
+        if (data) setLogId(data.id)
+      }
+      dirtyRef.current = false
+    } finally {
+      setSaving(false)
+    }
+  }, [memberName, today])
+
+  const scheduleSave = useCallback((nextText, nextUrl) => {
+    dirtyRef.current = true
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      save(nextText, nextUrl, logId)
+    }, 700)
+  }, [save, logId])
+
+  // unmount 時に未保存ならフラッシュ
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [])
+
+  const onTextChange = (e) => { setText(e.target.value); scheduleSave(e.target.value, url) }
+  const onUrlChange  = (e) => { setUrl(e.target.value);  scheduleSave(text, e.target.value) }
+
+  // 表示用に URL を整形 (プロトコル無しなら付与)
+  const displayUrl = url ? (url.match(/^https?:\/\//) ? url : `https://${url}`) : ''
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+        📢 共有事項
+        {saving && <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 400 }}>保存中…</span>}
+        {!saving && loaded && (text || url) && (
+          <span style={{ fontSize: 10, color: T.success, fontWeight: 700 }}>✓ 保存済</span>
+        )}
+      </div>
+      <div style={{
+        padding: 10, background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+        display: 'flex', flexDirection: 'column', gap: 8,
+      }}>
+        <textarea
+          value={text}
+          onChange={onTextChange}
+          placeholder="共有したい内容を自由に記入..."
+          rows={3}
+          disabled={!loaded}
+          style={{
+            width: '100%', padding: '8px 10px', fontSize: 12, fontFamily: 'inherit',
+            background: T.bgCard, color: T.text,
+            border: `1px solid ${T.border}`, borderRadius: 6,
+            outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+            lineHeight: 1.55,
+          }}
+        />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="url"
+            value={url}
+            onChange={onUrlChange}
+            placeholder="関連URL (任意) — 例: https://docs.google.com/..."
+            disabled={!loaded}
+            style={{
+              flex: 1, padding: '7px 10px', fontSize: 11, fontFamily: 'inherit',
+              background: T.bgCard, color: T.text,
+              border: `1px solid ${T.border}`, borderRadius: 6,
+              outline: 'none', boxSizing: 'border-box',
+            }}
+          />
+          {displayUrl && (
+            <a href={displayUrl} target="_blank" rel="noopener noreferrer" style={{
+              flexShrink: 0, padding: '6px 10px', borderRadius: 6,
+              background: T.accent, color: '#fff',
+              fontSize: 11, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+            }}>🔗 開く</a>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
