@@ -55,7 +55,7 @@ function investedFTE(members, biz, role) {
 }
 
 export default function WorkforceTab({ T }) {
-  const [view, setView] = useState('numeric')  // 'numeric' | 'visual'
+  const [view, setView] = useState('visual')  // 'numeric' | 'visual'
   const [snapshot, setSnapshot] = useState(null)
   const [savedAt, setSavedAt] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -227,8 +227,8 @@ export default function WorkforceTab({ T }) {
           borderRadius: 8, padding: 3,
         }}>
           {[
-            { id: 'numeric', label: '📝 数値記入' },
             { id: 'visual',  label: '👥 担当可視化' },
+            { id: 'numeric', label: '📝 数値記入' },
           ].map(t => {
             const a = view === t.id
             return (
@@ -400,12 +400,20 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
   )
 }
 
-// ─── 担当可視化ビュー ─────────────────────────────────────
+// ─── 担当可視化ビュー (横スクロール・配分%でアイコンサイズ可変) ──────
 function VisualView({ T, members, businesses, requiredFTE }) {
+  // メンバー名の頭1文字でアバター表示。配分%に応じて 36〜76px に変化。
+  const iconSizeFor = (sum) => {
+    const clamped = Math.max(0, Math.min(100, sum))
+    return Math.round(36 + (clamped / 100) * 40)  // 36 → 76
+  }
+
+  const COLUMN_W = 290  // 1事業あたりの列幅
+
   return (
     <div style={{
-      display: 'grid', gap: 12,
-      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+      display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden',
+      paddingBottom: 8, scrollSnapType: 'x proximity',
     }}>
       {businesses.map(biz => {
         const roleTotalsRaw = ROLES.map(role => ({
@@ -415,12 +423,14 @@ function VisualView({ T, members, businesses, requiredFTE }) {
         const totalInv = roleTotalsRaw.reduce((s, r) => s + r.inv, 0)
         const overall = totalReq > 0 ? totalInv / totalReq : null
 
-        // この事業に1%以上配分されているメンバー
+        // この事業に1%以上配分されているメンバー (配分大きい順)
         const memberRows = members.map(m => {
           const cells = ROLES.map(role => ({ role, pct: m.allocMatrix?.[biz]?.[role] || 0 }))
             .filter(c => c.pct > 0)
           const sum = cells.reduce((s, c) => s + c.pct, 0)
-          return { name: m.name, cells, sum }
+          // 主役割 = 最大%のロール (アイコン背景色)
+          const primary = cells.slice().sort((a, b) => b.pct - a.pct)[0]?.role || ROLES[0]
+          return { name: m.name, cells, sum, primary }
         }).filter(r => r.sum > 0)
           .sort((a, b) => b.sum - a.sum)
 
@@ -431,10 +441,11 @@ function VisualView({ T, members, businesses, requiredFTE }) {
 
         return (
           <div key={biz} style={{
+            flex: '0 0 auto', width: COLUMN_W, scrollSnapAlign: 'start',
             border: `1px solid ${T.border}`, borderRadius: 12,
-            background: T.bgCard, padding: 14,
+            background: T.bgCard, padding: 14, display: 'flex', flexDirection: 'column',
           }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, flexShrink: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{biz}</div>
               <div style={{ flex: 1 }} />
               <div style={{ fontSize: 12, fontWeight: 800, color: overallColor }}>
@@ -448,29 +459,46 @@ function VisualView({ T, members, businesses, requiredFTE }) {
             {memberRows.length === 0 ? (
               <div style={{ fontSize: 11, color: T.textMuted, padding: '8px 0' }}>担当未設定</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {memberRows.map(r => (
-                  <div key={r.name} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 8px', borderRadius: 8,
-                    background: T.sectionBg,
-                  }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text, minWidth: 70 }}>{r.name}</div>
-                    <div style={{
-                      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
-                      background: T.bgCard, color: T.textSub,
-                    }}>合計 {r.sum}%</div>
-                    <div style={{ flex: 1 }} />
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {r.cells.map(c => (
-                        <span key={c.role} style={{
-                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
-                          background: ROLE_COLORS[c.role], color: '#fff',
-                        }}>{c.role} {c.pct}%</span>
-                      ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {memberRows.map(r => {
+                  const size = iconSizeFor(r.sum)
+                  return (
+                    <div key={r.name} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 10px', borderRadius: 10,
+                      background: T.sectionBg,
+                    }}>
+                      <div style={{
+                        flexShrink: 0, width: size, height: size, borderRadius: '50%',
+                        background: ROLE_COLORS[r.primary], color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: Math.max(11, Math.round(size * 0.34)), fontWeight: 800,
+                        boxShadow: `0 2px 6px ${ROLE_COLORS[r.primary]}50`,
+                      }}>{(r.name || '').charAt(0)}</div>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            fontSize: 13, fontWeight: 700, color: T.text,
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>{r.name}</span>
+                          <span style={{
+                            flexShrink: 0,
+                            fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                            background: T.bgCard, color: T.textSub,
+                          }}>合計 {r.sum}%</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {r.cells.map(c => (
+                            <span key={c.role} style={{
+                              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
+                              background: ROLE_COLORS[c.role], color: '#fff',
+                            }}>{c.role} {c.pct}%</span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
