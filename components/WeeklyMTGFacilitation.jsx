@@ -139,8 +139,27 @@ export default function WeeklyMTGFacilitation({
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [scopePreview, setScopePreview] = useState(null) // { perLevel: [{level, count}], total }
-  // 会議に入ったとき、セッションがすでに進行中でも一度はスタートページを表示する
-  const [viewingPrep, setViewingPrep] = useState(true)
+  // 準備画面 / ファシリ画面 の切替。
+  // sessionStorage に「このタブで facilitation に入った」フラグを置き、リロード後も復元する。
+  // これにより会議実行中にリロードしても準備画面に戻されない。
+  const facilStorageKey = meeting?.key && weekStart ? `wm_facil_${meeting.key}_${weekStart}` : null
+  const [viewingPrep, setViewingPrepState] = useState(() => {
+    if (typeof window === 'undefined' || !facilStorageKey) return true
+    return window.sessionStorage.getItem(facilStorageKey) !== '1'
+  })
+  const setViewingPrep = useCallback((v) => {
+    setViewingPrepState(v)
+    if (typeof window !== 'undefined' && facilStorageKey) {
+      if (v) window.sessionStorage.removeItem(facilStorageKey)
+      else  window.sessionStorage.setItem(facilStorageKey, '1')
+    }
+  }, [facilStorageKey])
+  // 会議切替時にキーが変わったら storage から復元
+  useEffect(() => {
+    if (typeof window === 'undefined' || !facilStorageKey) return
+    const flag = window.sessionStorage.getItem(facilStorageKey) === '1'
+    setViewingPrepState(!flag)
+  }, [facilStorageKey])
   // ファシリテーター ドラフト (会議開始時に session.facilitator として保存)
   const [facilitatorDraft, setFacilitatorDraft] = useState('')
   useEffect(() => {
@@ -214,12 +233,13 @@ export default function WeeklyMTGFacilitation({
       let krs = []
       if (allObjIds.length > 0) {
         const { data } = await supabase.from('key_results')
-          .select('id, objective_id').in('objective_id', allObjIds)
+          .select('id, objective_id, title, owner').in('objective_id', allObjIds)
         krs = data || []
       }
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
-        return { level: l, count: krs.filter(k => ids.has(k.objective_id)).length }
+        const items = krs.filter(k => ids.has(k.objective_id))
+        return { level: l, count: items.length, items: items.map(k => ({ id: k.id, title: k.title, owner: k.owner })) }
       })
     } else if (wkly.flow === 'ka' || wkly.flow === 'sales') {
       let kas = []
@@ -232,12 +252,13 @@ export default function WeeklyMTGFacilitation({
       }
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
-        return { level: l, count: kas.filter(k => ids.has(k.objective_id)).length}
+        const items = kas.filter(k => ids.has(k.objective_id))
+        return { level: l, count: items.length, items: items.map(k => ({ id: k.id, title: k.ka_title, owner: k.owner })) }
       })
     }
 
     const total = perLevel.reduce((s, x) => s + x.count, 0)
-    setScopePreview({ perLevel, total })
+    setScopePreview({ perLevel, total, flow: wkly.flow })
   }, [wkly, levels, weekStart])
 
   useEffect(() => { loadScopePreview() }, [loadScopePreview])
@@ -370,6 +391,41 @@ export default function WeeklyMTGFacilitation({
             T={T} meeting={meeting} weekStart={weekStart} myName={myName} members={members}
             levels={levels}
             scope={scopePreview} session={session}
+            onUpdateSession={async (patch) => {
+              // 楽観的更新: 先に画面を反映
+              setSession(prev => prev ? { ...prev, ...patch } : { meeting_key: meeting.key, week_start: weekStart, step: 0, ...patch })
+              // 未対応カラムを除外したペイロードで再試行できるよう、静かに失敗させる
+              const trySave = async (p) => {
+                if (session?.id) {
+                  const { data, error } = await supabase.from('weekly_mtg_sessions').update(p).eq('id', session.id).select().single()
+                  return { data, error }
+                } else {
+                  const { data, error } = await supabase.from('weekly_mtg_sessions')
+                    .insert({ meeting_key: meeting.key, week_start: weekStart, step: 0, ...p })
+                    .select().single()
+                  return { data, error }
+                }
+              }
+              const { data, error } = await trySave(patch)
+              if (error) {
+                // 列が存在しないエラー (PGRST204 等) はサイレントスキップ
+                // (excluded_level_ids 等は localStorage フォールバックで処理されるため)
+                const msg = String(error.message || error.hint || '')
+                const isMissingColumn = /Could not find the .* column|column .* does not exist|PGRST204/i.test(msg)
+                if (isMissingColumn) {
+                  console.warn('session 列未対応 — DBマイグレーション未実行のため localStorage フォールバックを使用:', msg)
+                  // 未対応列だけ取り除いて再保存を試みる
+                  const patchNoExcl = Object.fromEntries(Object.entries(patch).filter(([k]) => k !== 'excluded_level_ids'))
+                  if (Object.keys(patchNoExcl).length > 0) {
+                    await trySave(patchNoExcl)
+                  }
+                  return
+                }
+                console.error('session save error:', error)
+                return
+              }
+              if (data) setSession(data)
+            }}
             facilitatorDraft={facilitatorDraft}
             onFacilitatorChange={setFacilitatorDraft}
             durationDraft={durationDraft}
@@ -558,7 +614,54 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
 }
 
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, onUpdateSession, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
+  // 除外する組織レベル(チーム/部署) ID のセット
+  // 優先順位: localStorage (即時) > session DB
+  // (DB列 excluded_level_ids が無い環境でも動くよう localStorage を併用)
+  const lsKey = meeting?.key && weekStart ? `wm_excl_lvl_${meeting.key}_${weekStart}` : null
+  const [localExcluded, setLocalExcluded] = useState(() => {
+    if (typeof window === 'undefined' || !lsKey) return null
+    try {
+      const raw = window.localStorage.getItem(lsKey)
+      if (!raw) return null
+      const arr = JSON.parse(raw)
+      return Array.isArray(arr) ? arr.map(Number) : null
+    } catch { return null }
+  })
+  // localStorage から再読み込み (key 切替時)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !lsKey) return
+    try {
+      const raw = window.localStorage.getItem(lsKey)
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) setLocalExcluded(arr.map(Number))
+        else setLocalExcluded(null)
+      } else setLocalExcluded(null)
+    } catch { setLocalExcluded(null) }
+  }, [lsKey])
+
+  const excludedLevelIds = useMemo(() => {
+    const fromLocal = Array.isArray(localExcluded) ? localExcluded : null
+    const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : null
+    return new Set((fromLocal ?? fromSession ?? []).map(Number))
+  }, [localExcluded, session?.excluded_level_ids])
+
+  const toggleExcludedLevel = useCallback((levelId) => {
+    const next = new Set(excludedLevelIds)
+    if (next.has(Number(levelId))) next.delete(Number(levelId))
+    else next.add(Number(levelId))
+    const arr = Array.from(next)
+    // 1) localStorage (即時 / 必ず成功)
+    if (typeof window !== 'undefined' && lsKey) {
+      try { window.localStorage.setItem(lsKey, JSON.stringify(arr)) } catch { /* noop */ }
+      setLocalExcluded(arr)
+    }
+    // 2) DB (列が存在すれば永続化、無ければ静かに失敗)
+    if (onUpdateSession) {
+      onUpdateSession({ excluded_level_ids: arr })
+    }
+  }, [excludedLevelIds, onUpdateSession, lsKey])
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点'
     : wkly?.flow === 'sales' ? '営業フォーカス'
@@ -704,34 +807,48 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
           </div>
         ) : (
           <>
+            <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, lineHeight: 1.5 }}>
+              チェックを外したチーム/部署は今回の確認対象から除外されます（既定: 全て確認）。
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {scope.perLevel.map(({ level, count }) => (
-                <div key={level.id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  background: count > 0 ? `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)` : T.bgSection,
-                  borderRadius: 10,
-                  border: `1px solid ${count > 0 ? T.accent + '1a' : T.border}`,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 16 }}>{level.icon || '📁'}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{level.name}</span>
-                  </div>
-                  <span style={{
-                    fontSize: 12, fontWeight: 800, padding: '3px 12px', borderRadius: 99,
-                    background: count > 0 ? T.accent : 'rgba(0,0,0,0.06)',
-                    color: count > 0 ? '#fff' : T.textMuted,
+              {scope.perLevel.map(({ level, count }) => {
+                const excluded = excludedLevelIds.has(Number(level.id))
+                return (
+                  <label key={level.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer', userSelect: 'none',
+                    background: excluded ? T.bgSection
+                      : count > 0 ? `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)` : T.bgSection,
+                    border: `1px solid ${excluded ? T.border : count > 0 ? T.accent + '1a' : T.border}`,
+                    opacity: excluded ? 0.55 : 1,
+                    transition: 'opacity 0.1s',
                   }}>
-                    {count} 件
-                  </span>
-                </div>
-              ))}
+                    <input type="checkbox" checked={!excluded}
+                      onChange={() => toggleExcludedLevel(level.id)} />
+                    <span style={{ fontSize: 16 }}>{level.icon || '📁'}</span>
+                    <span style={{
+                      flex: 1, fontSize: 13, fontWeight: 700, color: T.text,
+                      textDecoration: excluded ? 'line-through' : 'none',
+                    }}>{level.name}</span>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800, padding: '3px 12px', borderRadius: 99,
+                      background: excluded ? 'rgba(0,0,0,0.06)' : count > 0 ? T.accent : 'rgba(0,0,0,0.06)',
+                      color: excluded ? T.textMuted : count > 0 ? '#fff' : T.textMuted,
+                    }}>{count} 件</span>
+                  </label>
+                )
+              })}
             </div>
             <div style={{
               marginTop: 12, padding: '10px 12px', background: T.bgSection, borderRadius: 7,
               fontSize: 12, color: T.textSub, textAlign: 'center',
             }}>
-              合計 <strong style={{ color: T.text, fontSize: 14 }}>{scope.total}</strong> 件 を順に確認します
+              {(() => {
+                const includedTotal = scope.perLevel
+                  .filter(lvl => !excludedLevelIds.has(Number(lvl.level.id)))
+                  .reduce((s, lvl) => s + (lvl.count || 0), 0)
+                return <>合計 <strong style={{ color: T.text, fontSize: 14 }}>{includedTotal}</strong> 件 を順に確認します {includedTotal !== scope.total && <span style={{ color: T.textMuted }}>(全 {scope.total} 件中、{scope.total - includedTotal} 件除外)</span>}</>
+              })()}
             </div>
           </>
         )}
@@ -888,8 +1005,26 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
 // ─── Step 1: KR順送り（Phase 3-1: ナビ枠 + 現在KR表示） ─────────────────────
 function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
-  const [items, setItems] = useState(null) // [{ level, objective, kr }, ...] in order
+  const [allItems, setAllItems] = useState(null) // 全候補
   const [loadError, setLoadError] = useState(null)
+  // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
+  const excludedLevels = useMemo(() => {
+    const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : []
+    let fromLocal = []
+    if (typeof window !== 'undefined' && meeting?.key && weekStart) {
+      try {
+        const raw = window.localStorage.getItem(`wm_excl_lvl_${meeting.key}_${weekStart}`)
+        const arr = raw ? JSON.parse(raw) : null
+        if (Array.isArray(arr)) fromLocal = arr.map(Number)
+      } catch { /* noop */ }
+    }
+    return new Set([...fromSession, ...fromLocal])
+  }, [session?.excluded_level_ids, meeting?.key, weekStart])
+  const items = useMemo(() => {
+    if (!Array.isArray(allItems)) return allItems
+    return allItems.filter(it => !excludedLevels.has(Number(it.level?.id)))
+  }, [allItems, excludedLevels])
+  const setItems = setAllItems
 
   // scope 内の KR を順序付きで集める（depth で正確に判定）
   useEffect(() => {
@@ -1252,7 +1387,29 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
 // ─── Step 1: KA順送り（Phase 4） ───────────────────────────────────────────
 function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
-  const [items, setItems] = useState(null) // [{ team, objective, kr, ka }]
+  const [allItems, setAllItems] = useState(null) // 全候補
+  // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
+  const excludedLevels = useMemo(() => {
+    const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : []
+    let fromLocal = []
+    if (typeof window !== 'undefined' && meeting?.key && weekStart) {
+      try {
+        const raw = window.localStorage.getItem(`wm_excl_lvl_${meeting.key}_${weekStart}`)
+        const arr = raw ? JSON.parse(raw) : null
+        if (Array.isArray(arr)) fromLocal = arr.map(Number)
+      } catch { /* noop */ }
+    }
+    return new Set([...fromSession, ...fromLocal])
+  }, [session?.excluded_level_ids, meeting?.key, weekStart])
+  const items = useMemo(() => {
+    if (!Array.isArray(allItems)) return allItems
+    // KAの所属レベルは team または objective.level_id 経由
+    return allItems.filter(it => {
+      const lvlId = Number(it.team?.id ?? it.objective?.level_id ?? it.level?.id)
+      return !excludedLevels.has(lvlId)
+    })
+  }, [allItems, excludedLevels])
+  const setItems = setAllItems
   const [loadError, setLoadError] = useState(null)
 
   // scope内のチーム配下の KA を順序付きで取得（当週・status!=done）
@@ -1568,6 +1725,20 @@ function Step1DirectorReview({ T, meeting, weekStart, levels, members, onPrev, o
 function DirectorSummaryList({ T, weekStart, levels, members }) {
   const [teams, setTeams] = useState(null)
   const [activeTeamId, setActiveTeamId] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  // team_weekly_summary の変更を Realtime で購読 → reloadKey をインクリメントして再フェッチ
+  useEffect(() => {
+    const ch = supabase.channel(`director_tws_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_weekly_summary' },
+        payload => {
+          const row = payload.new || payload.old
+          if (row?.week_start !== weekStart) return
+          setReloadKey(k => k + 1)
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [weekStart])
 
   useEffect(() => {
     let alive = true
@@ -1591,10 +1762,11 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
 
         // 補助: 今週のKA件数 + 担当アバター
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
+          .select('id, level_id, period').in('level_id', scopeLevelIds).range(0, 49999)
         const objs = objsRes.data || []
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+        const objToPeriod = new Map(objs.map(o => [Number(o.id), (o.period || '').toString().split('_').pop()]))
         let kas = []
         if (objIds.length > 0) {
           const kasRes = await supabase.from('weekly_reports')
@@ -1649,6 +1821,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
             unit: kr.unit,
             lower_is_better: kr.lower_is_better,
             owner: kr.owner,
+            period: objToPeriod.get(Number(kr.objective_id)) || null,  // 'q1'..'q4' or 'annual'
             weather: rv?.weather || 0,
             good:  (rv?.good  || '').trim(),
             more:  (rv?.more  || '').trim(),
@@ -1679,7 +1852,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
     }
     load()
     return () => { alive = false }
-  }, [weekStart, levels])
+  }, [weekStart, levels, reloadKey])
 
   if (teams === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>読み込み中…</div>
@@ -1889,6 +2062,34 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
   const { team, kaCount, owners, good, more, focus, hasSummary, krs = [] } = teamData
   const [krsExpanded, setKrsExpanded] = useState(true) // KR詳細の展開状態 (デフォルト展開)
   const [expandedKR, setExpandedKR] = useState(null)   // 個別KRの展開
+  const [activePeriod, setActivePeriod] = useState(null) // タブ選択 (null=自動)
+
+  // 期間で分類 (通期 / 各Q)。ラベル順: 通期 → Q1 → Q2 → Q3 → Q4 → 不明
+  const krGroups = useMemo(() => {
+    const order = ['annual', 'q1', 'q2', 'q3', 'q4', 'unknown']
+    const labels = {
+      annual: { label: '🌐 通期', color: '#5856d6' },
+      q1:     { label: '🔵 Q1',  color: '#1d4ed8' },
+      q2:     { label: '🟢 Q2',  color: '#0a8f5a' },
+      q3:     { label: '🟠 Q3',  color: '#c2410c' },
+      q4:     { label: '🟣 Q4',  color: '#7e22ce' },
+      unknown:{ label: '? その他', color: T.textMuted },
+    }
+    const buckets = Object.fromEntries(order.map(k => [k, []]))
+    for (const kr of krs) {
+      const p = (kr.period || '').toString().toLowerCase()
+      const key = ['annual','q1','q2','q3','q4'].includes(p) ? p : 'unknown'
+      buckets[key].push(kr)
+    }
+    return order
+      .filter(k => buckets[k].length > 0)
+      .map(k => ({ key: k, ...labels[k], items: buckets[k] }))
+  }, [krs, T.textMuted])
+
+  // 既定タブ: 通期があれば通期、なければ最初のもの
+  const defaultPeriodKey = krGroups[0]?.key || null
+  const currentPeriodKey = activePeriod ?? defaultPeriodKey
+  const currentGroup = krGroups.find(g => g.key === currentPeriodKey) || krGroups[0]
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
   const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
   const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
@@ -1979,12 +2180,44 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
             📊 KR 詳細 ({krs.length}件)
           </button>
           {krsExpanded && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
-              {krs.map(kr => (
-                <KRReadOnlyRow key={kr.id} T={T} kr={kr}
-                  expanded={expandedKR === kr.id}
-                  onToggle={() => setExpandedKR(p => p === kr.id ? null : kr.id)} />
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+              {/* 期間タブ */}
+              {krGroups.length > 1 && (
+                <div style={{
+                  display: 'flex', gap: 6, flexWrap: 'wrap',
+                  padding: 4, background: T.bgSection || 'rgba(0,0,0,0.04)',
+                  borderRadius: 8, border: `1px solid ${T.border}`,
+                }}>
+                  {krGroups.map(g => {
+                    const a = g.key === currentPeriodKey
+                    return (
+                      <button key={g.key} onClick={() => setActivePeriod(g.key)} style={{
+                        padding: '6px 12px', borderRadius: 6, border: 'none',
+                        background: a ? g.color : 'transparent',
+                        color: a ? '#fff' : T.textSub,
+                        fontSize: 11, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                      }}>
+                        {g.label}
+                        <span style={{
+                          padding: '0 7px', borderRadius: 99,
+                          background: a ? 'rgba(255,255,255,0.25)' : T.bgCard,
+                          color: a ? '#fff' : T.textSub,
+                          fontSize: 9, fontWeight: 800,
+                        }}>{g.items.length}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {/* 選択中グループのKR一覧 (編集可) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(currentGroup?.items || []).map(kr => (
+                  <KREditableRow key={kr.id} T={T} kr={kr} members={members} weekStart={weekStart}
+                    expanded={expandedKR === kr.id}
+                    onToggle={() => setExpandedKR(p => p === kr.id ? null : kr.id)} />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -2013,7 +2246,7 @@ function ProgressRing({ value, color, size = 50, bg = 'rgba(0,0,0,0.06)' }) {
 }
 
 // 1KRを 1行で表示。クリックで Good/More/Focus を展開。
-function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
+function KRReadOnlyRow({ T, kr, members = [], expanded, onToggle }) {
   const target  = Number(kr.target  ?? 0)
   const current = Number(kr.current ?? 0)
   const progress = target > 0
@@ -2024,6 +2257,7 @@ function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
   const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
   const weatherIcons = { 1: '☀️', 2: '🌤', 3: '☁️', 4: '🌧' }
   const hasReview = !!(kr.good || kr.more || kr.focus || kr.weather)
+  const ownerMember = kr.owner ? members.find(m => m?.name === kr.owner) : null
 
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6, overflow: 'hidden' }}>
@@ -2038,6 +2272,18 @@ function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {kr.title}
         </span>
+        {/* 担当者バッジ (アバター + 名前) */}
+        {kr.owner && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '2px 8px 2px 4px', borderRadius: 99,
+            background: T.bgSection || 'rgba(0,0,0,0.04)',
+            fontSize: 10, color: T.textSub, fontWeight: 700, whiteSpace: 'nowrap',
+          }}>
+            <Avatar name={kr.owner} avatarUrl={ownerMember?.avatar_url} size={16} />
+            {kr.owner}
+          </span>
+        )}
         {kr.weather > 0 && <span style={{ fontSize: 14 }}>{weatherIcons[kr.weather]}</span>}
         <span style={{ fontSize: 11, color: T.textMuted }}>
           {current}{kr.unit} / {target}{kr.unit}
@@ -2085,6 +2331,227 @@ function ReadOnlyBlock({ T, icon, label, sub, accent, text, lastBlock }) {
   )
 }
 
+// ─── 編集可能なKR行 (展開時にインライン編集 + リアルタイム同期) ─────
+function KREditableRow({ T, kr, members = [], weekStart, expanded, onToggle }) {
+  const target = Number(kr.target ?? 0)
+  // ローカル編集 state (実値は kr_weekly_reviews / key_results へ反映)
+  const [currentVal, setCurrentVal] = useState(Number(kr.current ?? 0))
+  const [weather,    setWeather]    = useState(Number(kr.weather || 0))
+  const [good,       setGood]       = useState(kr.good || '')
+  const [more,       setMore]       = useState(kr.more || '')
+  const [focusText,  setFocusText]  = useState(kr.focus || '')
+  const [reviewId, setReviewId] = useState(null)
+  const [reviewSaving, setReviewSaving] = useState(false)
+  const [reviewSaved, setReviewSaved] = useState(false)
+  const [krSaving, setKrSaving] = useState(false)
+  const [krSaved, setKrSaved] = useState(false)
+  const focusedRef = useRef(null)
+  const reviewTimer = useRef(null)
+  const krTimer = useRef(null)
+
+  // 初回 / KR・週切替時にレビューを取得
+  useEffect(() => {
+    let alive = true
+    setCurrentVal(Number(kr.current ?? 0))
+    supabase.from('kr_weekly_reviews').select('*')
+      .eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        if (data) {
+          setReviewId(data.id)
+          if (focusedRef.current !== 'weather')   setWeather(data.weather || 0)
+          if (focusedRef.current !== 'good')      setGood(data.good || '')
+          if (focusedRef.current !== 'more')      setMore(data.more || '')
+          if (focusedRef.current !== 'focus')     setFocusText(data.focus || '')
+        } else {
+          setReviewId(null)
+        }
+      })
+    return () => { alive = false }
+  }, [kr.id, weekStart, kr.current])
+
+  // Realtime: kr_weekly_reviews の変更を反映 (編集中フィールドは保護)
+  useEffect(() => {
+    const ch = supabase.channel(`krrev_row_${kr.id}_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kr_weekly_reviews', filter: `kr_id=eq.${kr.id}` }, payload => {
+        const row = payload.new || payload.old
+        if (!row || row.week_start !== weekStart) return
+        if (payload.eventType === 'DELETE') { setReviewId(null); return }
+        setReviewId(row.id)
+        if (focusedRef.current !== 'weather') setWeather(row.weather || 0)
+        if (focusedRef.current !== 'good')    setGood(row.good || '')
+        if (focusedRef.current !== 'more')    setMore(row.more || '')
+        if (focusedRef.current !== 'focus')   setFocusText(row.focus || '')
+      }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [kr.id, weekStart])
+
+  // Realtime: key_results の current 変更を反映
+  useEffect(() => {
+    const ch = supabase.channel(`kr_row_${kr.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'key_results', filter: `id=eq.${kr.id}` }, payload => {
+        if (!payload.new) return
+        if (focusedRef.current !== 'current') setCurrentVal(Number(payload.new.current ?? 0))
+      }).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [kr.id])
+
+  // 保存処理
+  const saveReview = useCallback(async (w, g, m, f) => {
+    setReviewSaving(true)
+    const payload = { kr_id: kr.id, week_start: weekStart, weather: w, good: g, more: m, focus: f, updated_at: new Date().toISOString() }
+    if (reviewId) {
+      await supabase.from('kr_weekly_reviews').update(payload).eq('id', reviewId)
+    } else {
+      const { data } = await supabase.from('kr_weekly_reviews').insert(payload).select().single()
+      if (data) setReviewId(data.id)
+    }
+    setReviewSaving(false); setReviewSaved(true)
+    setTimeout(() => setReviewSaved(false), 1200)
+  }, [kr.id, weekStart, reviewId])
+
+  const scheduleReviewSave = (w, g, m, f) => {
+    if (reviewTimer.current) clearTimeout(reviewTimer.current)
+    reviewTimer.current = setTimeout(() => saveReview(w, g, m, f), 800)
+  }
+  const saveCurrent = useCallback(async (val) => {
+    setKrSaving(true)
+    await supabase.from('key_results').update({ current: val }).eq('id', kr.id)
+    setKrSaving(false); setKrSaved(true)
+    setTimeout(() => setKrSaved(false), 1200)
+  }, [kr.id])
+  const scheduleKrSave = (val) => {
+    if (krTimer.current) clearTimeout(krTimer.current)
+    krTimer.current = setTimeout(() => saveCurrent(val), 800)
+  }
+
+  // 表示用計算
+  const progress = target > 0
+    ? Math.min(150, Math.round(kr.lower_is_better
+        ? Math.max(0, ((target * 2 - currentVal) / target) * 100)
+        : (currentVal / target) * 100))
+    : 0
+  const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
+  const weatherIcons = { 1: '☀️', 2: '🌤', 3: '☁️', 4: '🌧' }
+  const ownerMember = kr.owner ? members.find(m => m?.name === kr.owner) : null
+
+  const inputBase = {
+    border: `1px solid ${T.borderMid || T.border}`, borderRadius: 6, padding: '6px 9px',
+    fontSize: 12, fontFamily: 'inherit', outline: 'none',
+    background: T.bgCard, color: T.text, boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6, overflow: 'hidden' }}>
+      <button onClick={onToggle}
+        title="クリックで Good/More/Focus を編集"
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
+          fontFamily: 'inherit', textAlign: 'left',
+        }}>
+        <span style={{ fontSize: 11, color: T.textFaint }}>{expanded ? '▾' : '▸'}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {kr.title}
+        </span>
+        {kr.owner && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '2px 8px 2px 4px', borderRadius: 99,
+            background: T.bgSection || 'rgba(0,0,0,0.04)',
+            fontSize: 10, color: T.textSub, fontWeight: 700, whiteSpace: 'nowrap',
+          }}>
+            <Avatar name={kr.owner} avatarUrl={ownerMember?.avatar_url} size={16} />
+            {kr.owner}
+          </span>
+        )}
+        {weather > 0 && <span style={{ fontSize: 14 }}>{weatherIcons[weather]}</span>}
+        <span style={{ fontSize: 11, color: T.textMuted }}>
+          {currentVal}{kr.unit} / {target}{kr.unit}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: progressColor, minWidth: 36, textAlign: 'right' }}>
+          {progress}%
+        </span>
+      </button>
+      {/* 進捗バー */}
+      <div style={{ height: 3, background: T.bgSection, marginLeft: 28, marginRight: 12, marginBottom: expanded ? 0 : 8 }}>
+        <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, background: progressColor }} />
+      </div>
+      {expanded && (
+        <div style={{ padding: '12px 14px 14px 28px', borderTop: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* 上段: 進捗 + 天気 + 保存インジケータ */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 11, color: T.textMuted }}>進捗</span>
+              <input type="number" value={currentVal}
+                onFocus={() => { focusedRef.current = 'current' }}
+                onBlur={() => { focusedRef.current = null }}
+                onChange={e => { const v = Number(e.target.value) || 0; setCurrentVal(v); scheduleKrSave(v) }}
+                style={{ ...inputBase, width: 90, textAlign: 'right' }} />
+              <span style={{ fontSize: 11, color: T.textMuted }}>{kr.unit} / {target}{kr.unit}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, color: T.textMuted }}>天気</span>
+              {[1,2,3,4].map(w => (
+                <button key={w} type="button"
+                  onClick={() => { setWeather(w); scheduleReviewSave(w, good, more, focusText) }}
+                  style={{
+                    padding: '4px 8px', borderRadius: 6,
+                    border: `1px solid ${weather === w ? T.accent : T.border}`,
+                    background: weather === w ? T.accentBg : 'transparent',
+                    fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>{weatherIcons[w]}</button>
+              ))}
+            </div>
+            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 10 }}>
+              {(reviewSaving || krSaving) && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
+              {(reviewSaved || krSaved) && !(reviewSaving || krSaving) && <span style={{ color: T.success }}>✓ 保存済</span>}
+            </span>
+          </div>
+          {/* Good / More / Focus */}
+          <FieldRowInline T={T} icon="✅" label="Good" accent={T.success} value={good}
+            placeholder="今週うまくいったこと"
+            onFocus={() => { focusedRef.current = 'good' }}
+            onBlur={() => { focusedRef.current = null }}
+            onChange={v => { setGood(v); scheduleReviewSave(weather, v, more, focusText) }} />
+          <FieldRowInline T={T} icon="🔺" label="More" accent={T.danger} value={more}
+            placeholder="課題・改善したいこと"
+            onFocus={() => { focusedRef.current = 'more' }}
+            onBlur={() => { focusedRef.current = null }}
+            onChange={v => { setMore(v); scheduleReviewSave(weather, good, v, focusText) }} />
+          <FieldRowInline T={T} icon="🎯" label="Focus" accent={T.accent} value={focusText}
+            placeholder="来週の注力アクション"
+            onFocus={() => { focusedRef.current = 'focus' }}
+            onBlur={() => { focusedRef.current = null }}
+            onChange={v => { setFocusText(v); scheduleReviewSave(weather, good, more, v) }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FieldRowInline({ T, icon, label, accent, value, placeholder, onChange, onFocus, onBlur }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
+        <span style={{ fontSize: 12 }}>{icon}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>{label}</span>
+      </div>
+      <textarea value={value} placeholder={placeholder} rows={2}
+        onFocus={onFocus} onBlur={onBlur}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          padding: '8px 10px', fontSize: 12, fontFamily: 'inherit',
+          background: T.bgCard, color: T.text,
+          border: `1px solid ${T.border}`, borderLeft: `3px solid ${accent}`,
+          borderRadius: 6, outline: 'none', resize: 'vertical', lineHeight: 1.55,
+        }} />
+    </div>
+  )
+}
+
 // ─── Step 1 (マネージャー定例): チーム別 Good/More/Focus サマリー ─────────────
 // 各チームのマネージャーが順番にチーム成果(Good)/課題(More)/注力(Focus) を共有。
 // 横断連携の確認は次の Step 2 (確認事項) で扱う。
@@ -2092,6 +2559,20 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
   const wkly = meeting?.weeklyMTG
   const [teams, setTeams] = useState(null) // [{ team, kaCount, owners, statusCounts, good, more, focus }]
   const [loadError, setLoadError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  // team_weekly_summary の変更を Realtime で購読
+  useEffect(() => {
+    const ch = supabase.channel(`mgr_tws_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_weekly_summary' },
+        payload => {
+          const row = payload.new || payload.old
+          if (row?.week_start !== weekStart) return
+          setReloadKey(k => k + 1)
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [weekStart])
 
   // チーム別に当週KAを集計
   useEffect(() => {
@@ -2160,7 +2641,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
     }
     load()
     return () => { alive = false }
-  }, [wkly?.scope, weekStart, levels])
+  }, [wkly?.scope, weekStart, levels, reloadKey])
 
   if (teams === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>チーム別サマリーを集計中...</div>

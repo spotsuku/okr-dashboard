@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { SegmentedControl, EmptyState } from './iosUI'
@@ -533,7 +533,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
-            { key: 'confirm',      icon: '📬', label: '確認'           },
+            { key: 'confirm',      icon: '📢', label: '共有・確認'     },
             { key: 'wbs',          icon: '📅', label: 'タスク'         },
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
@@ -608,6 +608,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 viewingName={viewingName} viewingMember={viewingMember}
                 isViewingSelf={isViewingSelf} myName={myName}
                 members={members}
+                levels={levels}
+                isAdmin={isAdmin}
                 fiscalYear={fiscalYear}
                 workLog={workLogs[viewingName]}
                 onWorkLogChange={reloadWorkLogs}
@@ -783,7 +785,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
   const isMobile = useIsMobile()
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
@@ -1060,7 +1062,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     today: true, week: true,
     rem_okr: true, rem_task: true,
     calendar: true, gmail: true,
-    goal_month_main: true, goal_month_growth: true, goal_week: true, achievements: true,
+    goal_month_main: true, goal_month_growth: true, goal_week: true, team_summary: true, achievements: true,
   }
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
   useEffect(() => {
@@ -1429,6 +1431,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               onSave={(v) => saveWeekGoal(v)}
             />
           )}
+          {showW('team_summary') && (
+            <TeamWeeklySummaryCard T={T} viewingMember={viewingMember}
+              myName={myName} isAdmin={isAdmin}
+              members={members} levels={levels} isViewingSelf={isViewingSelf} />
+          )}
           {showW('achievements') && (
             <Section T={T} icon="🏆" accent={T.warn} title="今週の成果" flex={0} headerRight={
               <button onClick={loadAchievements} title="再読み込み" style={{
@@ -1737,6 +1744,7 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
       { key: 'goal_month_main',   label: '🌟 今月のメインテーマ' },
       { key: 'goal_month_growth', label: '💪 今月の成長テーマ' },
       { key: 'goal_week',         label: '🚀 今週のゴール' },
+      { key: 'team_summary',      label: '📊 今週のチームサマリー' },
       { key: 'achievements',      label: '🏆 今週の成果' },
     ]},
   ]
@@ -1805,6 +1813,306 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
         </div>
       </div>
     </>
+  )
+}
+
+// ─── 今週のチームサマリー (チーム責任者のみ編集可・Realtime同期) ─
+function TeamWeeklySummaryCard({ T, viewingMember, myName, isAdmin, members = [], levels = [], isViewingSelf }) {
+  const monday = useMemo(() => getMondayJSTStr(), [])
+
+  // 管理者は全チーム (leafレベル = 子を持たないレベル) を対象に
+  // 一般ユーザーは「自分が responsible なチーム」 + 「所属チーム」
+  const adminTeams = useMemo(() => {
+    if (!isAdmin) return []
+    const childIds = new Set((levels || []).map(l => Number(l?.parent_id)).filter(Boolean))
+    // root を除外し、葉(チーム)レベルに加えて 事業部レベルも含める
+    return (levels || []).filter(l => l && l.parent_id) // root以外
+  }, [levels, isAdmin])
+
+  const managerOfTeams = useMemo(() => {
+    if (!viewingMember?.id) return []
+    return (levels || []).filter(l => Number(l?.manager_id) === Number(viewingMember.id))
+  }, [levels, viewingMember?.id])
+
+  const memberLvlIds = useMemo(() => {
+    return Array.isArray(viewingMember?.sub_level_ids) ? viewingMember.sub_level_ids
+      : viewingMember?.level_id ? [viewingMember.level_id] : []
+  }, [viewingMember])
+
+  const memberTeams = useMemo(() => {
+    return (levels || []).filter(l => memberLvlIds.includes(Number(l?.id)))
+  }, [levels, memberLvlIds])
+
+  // タブに出すチーム (重複除外)
+  const tabTeams = useMemo(() => {
+    const seen = new Set()
+    const list = []
+    const add = arr => arr.forEach(t => {
+      if (!t || seen.has(Number(t.id))) return
+      seen.add(Number(t.id))
+      list.push(t)
+    })
+    // 自分が責任者のチーム → 所属チーム → 管理者なら全チーム
+    add(managerOfTeams)
+    if (isViewingSelf) add(memberTeams)
+    if (isAdmin) add(adminTeams)
+    return list
+  }, [managerOfTeams, memberTeams, adminTeams, isViewingSelf, isAdmin])
+
+  const [activeLevelId, setActiveLevelId] = useState(null)
+  useEffect(() => {
+    if (tabTeams.length === 0) { setActiveLevelId(null); return }
+    if (!activeLevelId || !tabTeams.some(l => Number(l.id) === Number(activeLevelId))) {
+      setActiveLevelId(tabTeams[0].id)
+    }
+  }, [tabTeams, activeLevelId])
+
+  const activeLevel = useMemo(() => (levels || []).find(l => Number(l?.id) === Number(activeLevelId)), [levels, activeLevelId])
+  const isManagerOfActive = !!activeLevel && Number(activeLevel.manager_id) === Number(viewingMember?.id)
+  // 編集可: 自分閲覧 かつ (該当チームの責任者 or 管理者)
+  const canEdit = isViewingSelf && (isManagerOfActive || isAdmin)
+
+  if (tabTeams.length === 0) return null
+
+  return (
+    <TeamSummaryEditor T={T} levelId={activeLevelId} weekStart={monday}
+      canEdit={canEdit} myName={myName} isAdmin={isAdmin}
+      level={activeLevel}
+      managerName={(() => {
+        const mgr = activeLevel?.manager_id ? members.find(mm => Number(mm.id) === Number(activeLevel.manager_id)) : null
+        return mgr?.name || null
+      })()}
+      tabs={tabTeams.length > 1 ? tabTeams : null}
+      activeLevelId={activeLevelId} onSelectLevel={setActiveLevelId}
+    />
+  )
+}
+
+function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = false, level, managerName, tabs, activeLevelId, onSelectLevel }) {
+  const [good, setGood] = useState('')
+  const [more, setMore] = useState('')
+  const [focus, setFocus] = useState('')
+  const [rowId, setRowId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState('')
+  const focusedRef = useRef(null)
+  const saveTimer = useRef(null)
+
+  // ロード + 切替時
+  useEffect(() => {
+    if (!levelId || !weekStart) return
+    let alive = true
+    setLoading(true); setRowId(null); setGood(''); setMore(''); setFocus('')
+    supabase.from('team_weekly_summary').select('*')
+      .eq('level_id', levelId).eq('week_start', weekStart).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        if (data) {
+          setRowId(data.id)
+          if (focusedRef.current !== 'good')  setGood(data.good || '')
+          if (focusedRef.current !== 'more')  setMore(data.more || '')
+          if (focusedRef.current !== 'focus') setFocus(data.focus || '')
+        }
+        setLoading(false)
+      })
+    return () => { alive = false }
+  }, [levelId, weekStart])
+
+  // Realtime 購読 (team_weekly_summary)
+  useEffect(() => {
+    if (!levelId || !weekStart) return
+    const ch = supabase.channel(`tws_${levelId}_${weekStart}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'team_weekly_summary', filter: `level_id=eq.${levelId}` },
+        payload => {
+          const row = payload.new || payload.old
+          if (!row || row.week_start !== weekStart) return
+          if (payload.eventType === 'DELETE') { setRowId(null); return }
+          setRowId(row.id)
+          if (focusedRef.current !== 'good')  setGood(row.good || '')
+          if (focusedRef.current !== 'more')  setMore(row.more || '')
+          if (focusedRef.current !== 'focus') setFocus(row.focus || '')
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [levelId, weekStart])
+
+  const save = useCallback(async (g, m, f) => {
+    setSaving(true)
+    const payload = { level_id: levelId, week_start: weekStart, good: g, more: m, focus: f, updated_by: myName, updated_at: new Date().toISOString() }
+    const { data, error } = await supabase.from('team_weekly_summary')
+      .upsert(payload, { onConflict: 'level_id,week_start' }).select().single()
+    setSaving(false)
+    if (error) { console.error('team summary save error:', error); return }
+    if (data) { setRowId(data.id); setSaved(true); setTimeout(() => setSaved(false), 1200) }
+  }, [levelId, weekStart, myName])
+
+  const scheduleSave = (g, m, f) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => save(g, m, f), 800)
+  }
+
+  // AIで サマリーを自動生成 (チーム内のKR/KA週次レビューを集約)
+  const generateAI = async () => {
+    if (!levelId || !weekStart || aiBusy) return
+    const hasContent = (good || more || focus).trim().length > 0
+    if (hasContent) {
+      const ok = window.confirm('現在の内容を AI 生成結果で上書きします。よろしいですか？')
+      if (!ok) return
+    }
+    setAiBusy(true); setAiError('')
+    try {
+      const res = await fetch('/api/ai/team-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level_id: levelId, week_start: weekStart }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)
+      if (j.message) { setAiError(j.message); return }
+      setGood(j.good || '')
+      setMore(j.more || '')
+      setFocus(j.focus || '')
+      // すぐ保存 (debounceスキップ)
+      save(j.good || '', j.more || '', j.focus || '')
+    } catch (e) {
+      setAiError(e.message || 'AI生成に失敗しました')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const inputBase = {
+    width: '100%', boxSizing: 'border-box',
+    padding: '8px 10px', fontSize: 12, fontFamily: 'inherit',
+    background: T.bgCard, color: T.text,
+    border: `1px solid ${T.border}`, borderRadius: 6,
+    outline: 'none', resize: 'vertical', lineHeight: 1.55,
+  }
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #ecfdf5 0%, #34d399 100%)',
+      borderRadius: 14, padding: '14px 16px', color: '#064e3b',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(52,211,153,0.18)',
+    }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 10, flexWrap:'wrap' }}>
+        <span style={{ fontSize: 16 }}>📊</span>
+        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing:'-0.01em' }}>今週のチームサマリー</div>
+        {level && (
+          <span style={{
+            display:'inline-flex', alignItems:'center', gap:4,
+            fontSize: 10, fontWeight: 700,
+            padding:'2px 8px', borderRadius: 99,
+            background:'rgba(255,255,255,0.55)', color:'#064e3b',
+          }}>
+            <span>{level.icon || '🤝'}</span>{level.name}
+          </span>
+        )}
+        {managerName && (
+          <span style={{
+            fontSize: 9, fontWeight: 700,
+            padding:'2px 7px', borderRadius: 99,
+            background:'rgba(255,255,255,0.4)', color:'#065f46',
+          }}>📌 {managerName}</span>
+        )}
+        <div style={{ flex:1 }} />
+        {canEdit && (
+          <button onClick={generateAI} disabled={aiBusy} title="チーム内のKR/KA週次レビューを集約してAIで自動生成"
+            style={{
+              padding: '4px 10px', borderRadius: 7,
+              background: aiBusy ? 'rgba(255,255,255,0.4)' : '#064e3b',
+              color: '#fff', border: 'none',
+              fontSize: 10, fontWeight: 800, fontFamily: 'inherit',
+              cursor: aiBusy ? 'wait' : 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}>
+            {aiBusy ? '⟳ 生成中…' : '🤖 AIで生成'}
+          </button>
+        )}
+        <span style={{ fontSize: 10 }}>
+          {saving && <span style={{ color:'#065f46' }}>⟳ 保存中…</span>}
+          {saved && !saving && <span style={{ color:'#065f46', fontWeight:800 }}>✓ 保存済</span>}
+        </span>
+      </div>
+      {aiError && (
+        <div style={{
+          marginBottom: 8, padding: '6px 10px', borderRadius: 6,
+          background: 'rgba(255,255,255,0.6)', color: '#7f1d1d',
+          fontSize: 10, fontWeight: 700,
+        }}>⚠️ {aiError}</div>
+      )}
+      {/* 複数チーム責任者の場合のタブ */}
+      {tabs && tabs.length > 1 && (
+        <div style={{ display:'flex', gap: 4, marginBottom: 10, flexWrap:'wrap' }}>
+          {tabs.map(t => {
+            const a = Number(t.id) === Number(activeLevelId)
+            return (
+              <button key={t.id} onClick={() => onSelectLevel(t.id)} style={{
+                padding: '4px 10px', borderRadius: 7, border: 'none',
+                background: a ? '#064e3b' : 'rgba(255,255,255,0.55)',
+                color: a ? '#fff' : '#065f46',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              }}>{t.icon || '🤝'} {t.name}</button>
+            )
+          })}
+        </div>
+      )}
+      {canEdit && isAdmin && managerName && Number(level?.manager_id) !== undefined && (
+        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700 }}>
+          👑 管理者として編集中 (このチームの責任者: {managerName})
+        </div>
+      )}
+      {canEdit && isAdmin && !managerName && (
+        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700 }}>
+          👑 管理者として編集中 (責任者未設定 — 組織ページで設定推奨)
+        </div>
+      )}
+      {!canEdit && (
+        <div style={{ fontSize: 10, color:'#065f46', marginBottom: 8, fontStyle:'italic' }}>
+          {managerName ? `${managerName} さんが記入します (閲覧のみ)` : '責任者未設定 — 組織ページで設定してください'}
+        </div>
+      )}
+      {loading ? (
+        <div style={{ fontSize:11, color:'#065f46', padding:'8px 0' }}>読み込み中…</div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap: 8 }}>
+          <FieldBlock T={T} label="✅ Good — チーム全体の良かったこと" disabled={!canEdit} value={good}
+            onFocus={() => { focusedRef.current = 'good' }}
+            onBlur={() => { focusedRef.current = null }}
+            onChange={v => { setGood(v); scheduleSave(v, more, focus) }}
+            placeholder="例: 評議会クロージング3社決定 / 新メンバー受け入れがスムーズだった"
+            inputBase={inputBase} />
+          <FieldBlock T={T} label="🔺 More — チーム全体の課題・改善点" disabled={!canEdit} value={more}
+            onFocus={() => { focusedRef.current = 'more' }}
+            onBlur={() => { focusedRef.current = null }}
+            onChange={v => { setMore(v); scheduleSave(good, v, focus) }}
+            placeholder="例: 商談化率が伸び悩み / オンボーディングの遅延"
+            inputBase={inputBase} />
+          <FieldBlock T={T} label="🎯 Focus — 来週のチーム注力" disabled={!canEdit} value={focus}
+            onFocus={() => { focusedRef.current = 'focus' }}
+            onBlur={() => { focusedRef.current = null }}
+            onChange={v => { setFocus(v); scheduleSave(good, more, v) }}
+            placeholder="例: 火曜の評議会で残2社クロージング / 木曜にKPI再設計"
+            inputBase={inputBase} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FieldBlock({ T, label, value, onChange, onFocus, onBlur, placeholder, disabled, inputBase }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#065f46', marginBottom: 4 }}>{label}</div>
+      <textarea value={value} placeholder={placeholder} rows={2}
+        disabled={disabled} onFocus={onFocus} onBlur={onBlur}
+        onChange={e => onChange(e.target.value)}
+        style={inputBase} />
+    </div>
   )
 }
 
@@ -2937,7 +3245,7 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
           color: '#fff',
           fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
           border: '1px solid rgba(255,255,255,0.30)',
-        }}>📬 確認タブで返信 →</span>
+        }}>📢 共有・確認タブで返信 →</span>
       </div>
       {items.length > 0 && (
         <div style={{
