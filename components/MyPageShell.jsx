@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { SegmentedControl, EmptyState } from './iosUI'
