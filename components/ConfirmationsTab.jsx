@@ -1,20 +1,30 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { MEETINGS } from '../lib/meetings'
 
-// 📬 メンバー間の確認事項タブ
-//   受信: 自分宛の未解決/解決済
-//   送信: 自分が送ったもの
-//   新規作成 / 返信 / 解決化
+// 📢 共有・確認タブ
+//   kind = 'confirmation' (確認) / 'share' (共有)
+//   to_name = '' で全体宛
+//   meeting_keys[] / reference_urls JSONB をサポート
+//
 // Props: { T, myName, members, viewingName, companyWide }
-//   companyWide=true の場合は全社の確認事項を一覧表示 (受信/送信タブなし・新規作成不可)
+//   companyWide=true の場合は全社を一覧表示 (受信/送信タブなし・新規作成不可)
 
-export default function ConfirmationsTab({ T, myName, members = [], viewingName, companyWide = false, allowCompose = false }) {
+export default function ConfirmationsTab({
+  T, myName, members = [], viewingName,
+  companyWide = false, allowCompose = false,
+  lockedKind = null,             // 'share' | 'confirmation' | null  (指定時は kindFilter を固定)
+  defaultMeetingKey = null,      // ComposeModal で初期チェックされる会議 key
+}) {
   // 表示対象: 他メンバーのページを見ている場合はそのメンバー、自分のページなら自分
   const targetName = viewingName || myName
   const isViewingSelf = !viewingName || viewingName === myName
 
   const [tab, setTab] = useState('received') // 'received' | 'sent'
+  const [kindFilter, setKindFilter] = useState(lockedKind || 'all') // 'all' | 'confirmation' | 'share'
+  // lockedKind 変更時に強制反映
+  useEffect(() => { if (lockedKind) setKindFilter(lockedKind) }, [lockedKind])
   const [showResolved, setShowResolved] = useState(false)
   const [items, setItems] = useState([])
   const [replies, setReplies] = useState({}) // confirmation_id → [replies]
@@ -30,12 +40,25 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
     let q = supabase.from('member_confirmations')
       .select('*').order('created_at', { ascending: false })
     if (!companyWide) {
-      const column = tab === 'received' ? 'to_name' : 'from_name'
-      q = q.eq(column, targetName)
+      if (tab === 'received') {
+        // 自分宛 + 全体宛 (to_name='') を含める
+        q = q.or(`to_name.eq.${targetName},to_name.eq.`)
+      } else {
+        q = q.eq('from_name', targetName)
+      }
     }
     if (!showResolved) q = q.eq('status', 'open')
+    if (kindFilter !== 'all') q = q.eq('kind', kindFilter)
     const { data } = await q
-    setItems(data || [])
+    let result = data || []
+    // 会議キー指定があれば絞り込み (会議未指定 or 指定キーを含むもののみ)
+    if (defaultMeetingKey) {
+      result = result.filter(it => {
+        const mks = Array.isArray(it.meeting_keys) ? it.meeting_keys : []
+        return mks.length === 0 || mks.includes(defaultMeetingKey)
+      })
+    }
+    setItems(result)
 
     // 返信をまとめて取得
     if (data && data.length > 0) {
@@ -53,7 +76,7 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
       setReplies({})
     }
     setLoading(false)
-  }, [targetName, tab, showResolved, companyWide])
+  }, [targetName, tab, showResolved, companyWide, kindFilter, defaultMeetingKey])
 
   // 件数バッジ用に受信 open / 受信 全 / 送信 全 を並行で取得
   const loadCounts = useCallback(async () => {
@@ -110,11 +133,13 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '20px 16px' }}>
         {/* ヘッダ */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>📬 確認</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>
+            {lockedKind === 'share' ? '📢 共有事項' : lockedKind === 'confirmation' ? '📬 確認事項' : '📢 共有・確認'}
+          </h2>
           <div style={{ fontSize: 11, color: T.textMuted }}>
             {companyWide
-              ? '全社の確認事項 (全メンバー間)'
-              : isViewingSelf ? 'メンバー間の確認事項を送受信' : `${targetName}さんの確認事項 (閲覧)`}
+              ? '全社の共有・確認事項'
+              : isViewingSelf ? 'メンバー間の共有・確認事項を送受信' : `${targetName}さんの共有・確認 (閲覧)`}
           </div>
           <div style={{ flex: 1 }} />
           {(!companyWide || allowCompose) && (
@@ -129,6 +154,8 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
         {/* 新規作成モーダル */}
         {composing && (!companyWide || allowCompose) && (
           <ComposeModal T={T} myName={myName} members={members}
+            presetKind={lockedKind || 'confirmation'}
+            presetMeetingKeys={defaultMeetingKey ? [defaultMeetingKey] : []}
             onClose={() => setComposing(false)}
             onSaved={() => { setComposing(false); load() }} />
         )}
@@ -177,6 +204,26 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
             </div>
           )}
           <div style={{ flex: 1 }} />
+          {/* 種別フィルタ (lockedKind 指定時は非表示) */}
+          {!lockedKind && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[
+                { key: 'all',          label: 'すべて' },
+                { key: 'share',        label: '📢 共有' },
+                { key: 'confirmation', label: '📬 確認' },
+              ].map(k => {
+                const a = kindFilter === k.key
+                return (
+                  <button key={k.key} onClick={() => setKindFilter(k.key)} style={{
+                    padding: '4px 10px', borderRadius: 6, border: `1px solid ${a ? T.accent : T.border}`,
+                    background: a ? T.accentBg : 'transparent',
+                    color: a ? T.accent : T.textSub,
+                    fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>{k.label}</button>
+                )
+              })}
+            </div>
+          )}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: T.textMuted, cursor: 'pointer' }}>
             <input type="checkbox" checked={showResolved} onChange={e => setShowResolved(e.target.checked)} />
             確認済みも表示
@@ -220,8 +267,15 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
 function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, members, isReplying, onStartReply, onCancelReply, onReplied, onResolve, onUnresolve, onRemove }) {
   const isResolved = item.status === 'resolved'
   const isReceived = tab === 'received'
-  const counterparty = isReceived ? item.from_name : item.to_name
+  const counterparty = isReceived ? item.from_name : (item.to_name || '全体')
   const counterpartyMember = members.find(m => m.name === counterparty)
+  const isShare = item.kind === 'share'
+  const refUrls = Array.isArray(item.reference_urls) ? item.reference_urls : []
+  const meetingKeys = Array.isArray(item.meeting_keys) ? item.meeting_keys : []
+  const meetingTitles = meetingKeys
+    .map(k => MEETINGS.find(mm => mm.key === k))
+    .filter(Boolean)
+  const isToAll = !item.to_name
 
   return (
     <div style={{
@@ -238,26 +292,44 @@ function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, 
       transition: 'all 0.2s ease',
     }}>
       {/* ヘッダ行 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        {/* 種別バッジ */}
+        <span style={{
+          padding: '1px 7px', borderRadius: 99,
+          background: isShare ? T.warnBg : T.accentBg,
+          color: isShare ? T.warn : T.accent,
+          fontSize: 9, fontWeight: 800,
+        }}>{isShare ? '📢 共有' : '📬 確認'}</span>
         {companyWide ? (
           <>
             <span style={{ fontSize: 11, color: T.textMuted }}>from</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.from_name}</span>
             <span style={{ fontSize: 11, color: T.textMuted }}>→ to</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.to_name}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+              {isToAll ? '🌐 全体' : item.to_name}
+            </span>
           </>
         ) : (
           <>
             <span style={{ fontSize: 14 }}>{isReceived ? '📥' : '📤'}</span>
             <span style={{ fontSize: 11, color: T.textMuted }}>{isReceived ? 'from' : 'to'}</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-              {counterpartyMember?.name || counterparty}
+              {isToAll ? '🌐 全体' : (counterpartyMember?.name || counterparty)}
             </span>
-            {counterpartyMember?.role && (
+            {!isToAll && counterpartyMember?.role && (
               <span style={{ fontSize: 9, color: T.textFaint }}>({counterpartyMember.role})</span>
             )}
           </>
         )}
+        {/* 会議タグ */}
+        {meetingTitles.map(m => (
+          <span key={m.key} style={{
+            padding: '1px 7px', borderRadius: 99,
+            background: T.sectionBg, color: T.textSub,
+            fontSize: 9, fontWeight: 700,
+            border: `1px solid ${T.border}`,
+          }}>{m.icon} {m.title}</span>
+        ))}
         <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>
           {formatRelTime(item.created_at)}
         </span>
@@ -275,6 +347,24 @@ function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, 
         fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6,
         padding: '6px 2px',
       }}>{item.content}</div>
+
+      {/* 参考URL */}
+      {refUrls.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          {refUrls.map((u, i) => {
+            const href = u.url?.match(/^https?:\/\//) ? u.url : (u.url ? `https://${u.url}` : '#')
+            return (
+              <a key={i} href={href} target="_blank" rel="noopener noreferrer" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', borderRadius: 6,
+                background: T.accentBg, color: T.accent,
+                fontSize: 11, fontWeight: 700, textDecoration: 'none',
+                border: `1px solid ${T.accent}30`,
+              }}>🔗 {u.label || u.url}</a>
+            )
+          })}
+        </div>
+      )}
 
       {/* 返信スレッド */}
       {replies.length > 0 && (
@@ -378,18 +468,39 @@ function ReplyForm({ T, confirmationId, myName, onCancel, onSaved }) {
 }
 
 // ─── 新規作成モーダル ────────────────────────────────────────────
-function ComposeModal({ T, myName, members, onClose, onSaved, presetTo = '' }) {
-  const [toName, setToName] = useState(presetTo)
+function ComposeModal({ T, myName, members, onClose, onSaved, presetTo = '', presetKind = 'confirmation', presetMeetingKeys = [] }) {
+  const [kind, setKind] = useState(presetKind)               // 'confirmation' | 'share'
+  const [toName, setToName] = useState(presetTo)             // 空文字 = 全体宛
+  const [toAll,  setToAll]  = useState(presetTo === '__ALL__' ? true : !presetTo && presetKind === 'share')
   const [content, setContent] = useState('')
+  const [meetingKeys, setMeetingKeys] = useState(presetMeetingKeys || [])
+  const [refUrls, setRefUrls] = useState([])                 // [{ label, url }]
   const [saving, setSaving] = useState(false)
 
-  const canSave = toName && content.trim() && !saving
+  const canSave = (toAll || toName) && content.trim() && !saving
+
+  const toggleMeeting = (key) => {
+    setMeetingKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  }
+  const addUrl    = () => setRefUrls(prev => [...prev, { label: '', url: '' }])
+  const removeUrl = (i) => setRefUrls(prev => prev.filter((_, j) => j !== i))
+  const updateUrl = (i, field, val) => setRefUrls(prev => prev.map((u, j) => j === i ? { ...u, [field]: val } : u))
 
   const save = async () => {
     if (!canSave) return
     setSaving(true)
+    const cleanUrls = refUrls
+      .map(u => ({ label: (u.label || '').trim(), url: (u.url || '').trim() }))
+      .filter(u => u.url)
     const { data, error } = await supabase.from('member_confirmations')
-      .insert({ from_name: myName, to_name: toName, content: content.trim() })
+      .insert({
+        from_name: myName,
+        to_name: toAll ? '' : toName,
+        content: content.trim(),
+        kind,
+        meeting_keys: meetingKeys,
+        reference_urls: cleanUrls,
+      })
       .select().single()
     setSaving(false)
     if (error) { alert('送信失敗: ' + error.message); return }
@@ -429,7 +540,9 @@ function ComposeModal({ T, myName, members, onClose, onSaved, presetTo = '' }) {
             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 18, boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${T.accent}55`,
           }}>📬</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>確認事項を送る</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
+            {kind === 'share' ? '共有事項を送る' : '確認事項を送る'}
+          </div>
           <div style={{ flex: 1 }} />
           <button onClick={onClose} style={{
             background: 'rgba(120,120,128,0.16)', border: 'none',
@@ -440,23 +553,111 @@ function ComposeModal({ T, myName, members, onClose, onSaved, presetTo = '' }) {
           }}>×</button>
         </div>
 
+        {/* 種別 */}
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>宛先</div>
-          <select value={toName} onChange={e => setToName(e.target.value)} style={inputSt(T)}>
-            <option value="">-- メンバーを選択 --</option>
-            {members.filter(m => m.name !== myName).map(m => (
-              <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>
-            ))}
-          </select>
+          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>種別</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[
+              { key: 'confirmation', label: '📬 確認' },
+              { key: 'share',        label: '📢 共有' },
+            ].map(k => {
+              const a = kind === k.key
+              return (
+                <button key={k.key} onClick={() => setKind(k.key)} style={{
+                  padding: '7px 14px', borderRadius: 7, border: `1px solid ${a ? T.accent : T.border}`,
+                  background: a ? T.accentBg : 'transparent',
+                  color: a ? T.accent : T.textSub,
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>{k.label}</button>
+              )
+            })}
+          </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        {/* 宛先 (個別 or 全体) */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>宛先</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.text, cursor: 'pointer' }}>
+              <input type="checkbox" checked={toAll} onChange={e => { setToAll(e.target.checked); if (e.target.checked) setToName('') }} />
+              🌐 全体宛
+            </label>
+            {!toAll && (
+              <select value={toName} onChange={e => setToName(e.target.value)}
+                style={{ ...inputSt(T), flex: 1, minWidth: 200 }}>
+                <option value="">-- メンバーを選択 --</option>
+                {members.filter(m => m.name !== myName).map(m => (
+                  <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* 内容 */}
+        <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>内容</div>
           <textarea value={content} onChange={e => setContent(e.target.value)}
-            placeholder="確認したい内容を入力..."
-            rows={5}
+            placeholder={kind === 'share' ? '共有したい内容を入力...' : '確認したい内容を入力...'}
+            rows={4}
             autoFocus
             style={{ ...inputSt(T), resize: 'vertical' }} />
+        </div>
+
+        {/* 会議選択 (複数可) */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 6 }}>
+            どの会議で {kind === 'share' ? '共有' : '確認'} する？ (複数選択可・任意)
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {MEETINGS.map(m => {
+              const a = meetingKeys.includes(m.key)
+              return (
+                <button key={m.key} type="button" onClick={() => toggleMeeting(m.key)} style={{
+                  padding: '4px 10px', borderRadius: 99,
+                  border: `1px solid ${a ? T.accent : T.border}`,
+                  background: a ? T.accentBg : 'transparent',
+                  color: a ? T.accent : T.textSub,
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>{m.icon} {m.title}</button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 参考URL (複数・ラベル付き) */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: T.textMuted }}>参考URL (任意・複数可)</div>
+            <button type="button" onClick={addUrl} style={{
+              padding: '2px 10px', borderRadius: 6,
+              background: 'transparent', color: T.accent, border: `1px solid ${T.accent}40`,
+              fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>＋ 追加</button>
+          </div>
+          {refUrls.length === 0 ? (
+            <div style={{ fontSize: 10, color: T.textFaint, padding: '4px 0' }}>
+              「＋追加」を押してURL欄を作成
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {refUrls.map((u, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input type="text" value={u.label} onChange={e => updateUrl(i, 'label', e.target.value)}
+                    placeholder="ラベル (例: 議事録)"
+                    style={{ ...inputSt(T), flex: '0 0 130px', fontSize: 11 }} />
+                  <input type="url" value={u.url} onChange={e => updateUrl(i, 'url', e.target.value)}
+                    placeholder="https://..."
+                    style={{ ...inputSt(T), flex: 1, fontSize: 11 }} />
+                  <button type="button" onClick={() => removeUrl(i)} style={{
+                    flexShrink: 0, padding: '4px 8px', borderRadius: 6,
+                    background: 'transparent', color: T.danger, border: `1px solid ${T.danger}30`,
+                    fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

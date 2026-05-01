@@ -85,12 +85,17 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
   const [loading, setLoading] = useState(true)
   const [queue, setQueue] = useState({ kr: [], ka: [] })      // カード一覧
   const [index, setIndex] = useState({ kr: 0, ka: 0 })        // 各モードの現在位置
-  const [draft, setDraft] = useState({ good: '', more: '', focus: '', weather: 0, current: 0 })
+  const [draft, setDraft] = useState({ good: '', more: '', focus: '', weather: 0, current: 0, refUrls: [] })
   const [saving, setSaving] = useState(false)
   const [showAll, setShowAll] = useState(false)               // 記入済みも含めて表示
   const [completed, setCompleted] = useState({ kr: false, ka: false })
   const [objMap, setObjMap] = useState({})
   const [swipeDelta, setSwipeDelta] = useState(0)  // D: スワイプ時のX移動量
+  // フィルタ:
+  //   periodFilter: 'auto' (現Q+通期, 既定) | 'q1' | 'q2' | 'q3' | 'q4' | 'annual' | 'all'
+  //   deptFilter:   'all'  (既定) | 事業部の level_id (string)
+  const [periodFilter, setPeriodFilter] = useState('auto')
+  const [deptFilter,   setDeptFilter]   = useState('all')
 
   // levels を id→level の map に
   const levelMap = useMemo(() => {
@@ -105,6 +110,19 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     if (parent) return `${parent.name} · ${lv.name}`
     return lv.name
   }, [levelMap])
+  // level_id から所属する「事業部」(=ルート直下のレベル) の id を返す
+  const deptIdOf = useCallback((levelId) => {
+    if (!levelId) return null
+    const lv = levelMap[String(levelId)]
+    if (!lv) return null
+    return lv.parent_id ? String(lv.parent_id) : String(lv.id)
+  }, [levelMap])
+  // 事業部の選択肢 (parent_id が無いレベル = 事業部)
+  const deptOptions = useMemo(() => {
+    return (levels || [])
+      .filter(l => !l.parent_id)
+      .map(l => ({ id: String(l.id), name: l.name }))
+  }, [levels])
 
   // KR は今週金曜のレビュー会議に反映 → weekStart = 今週月曜
   const krWeekStart = useMemo(() => getMondayJSTStr(), [])
@@ -138,7 +156,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const [krsRes, krReviewsRes, kasRes, objsRes] = await Promise.all([
       supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName).range(0, 49999),
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart).range(0, 49999),
-      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start')
+      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start, reference_urls')
         .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done').range(0, 49999),
       supabase.from('objectives').select('id, title, period, level_id').range(0, 49999),
     ])
@@ -184,11 +202,28 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const krReviewsMap = Object.fromEntries((krReviewsRes.data || []).map(r => [r.kr_id, r]))
     const om = {}; (objsRes.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
 
-    // 該当Q + 通期 を表示 (Q集中の人にも通期があることを意識させる)
+    // 期間フィルタ:
+    //   'auto'       → 現Q + 通期 (既定)
+    //   'q1'..'q4'   → そのQのみ
+    //   'annual'     → 通期のみ
+    //   'all'        → すべて
     const curQ = getCurrentQuarter()
-    const inCurrentQ = (objId) => om[objId]?.period === curQ
-    const isAnnualObj = (objId) => om[objId]?.period === 'annual'
-    const inScope = (objId) => inCurrentQ(objId) || isAnnualObj(objId)
+    const inPeriod = (objId) => {
+      const p = om[objId]?.period
+      if (!p) return false
+      if (periodFilter === 'all') return true
+      if (periodFilter === 'auto') return p === curQ || p === 'annual'
+      return p === periodFilter
+    }
+    // 事業部フィルタ:
+    //   'all' → すべて
+    //   それ以外 → その事業部 (level_id) 配下の objective のみ
+    const inDept = (objId) => {
+      if (deptFilter === 'all') return true
+      const lvId = om[objId]?.level_id
+      return deptIdOf(lvId) === deptFilter
+    }
+    const inScope = (objId) => inPeriod(objId) && inDept(objId)
 
     // KR キュー: 今Q + 通期、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
     const krQueue = krs
@@ -226,7 +261,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     setCompleted({ kr: krQueue.length === 0, ka: kaQueue.length === 0 })
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewingName, krWeekStart, showAll])  // kaWeekStart は load 内で動的決定するため依存から外す
+  }, [viewingName, krWeekStart, showAll, periodFilter, deptFilter, deptIdOf])  // kaWeekStart は load 内で動的決定するため依存から外す
 
   useEffect(() => { if (open) load() }, [open, load])
   useEffect(() => { if (open) setMode(initialMode) }, [open, initialMode])
@@ -235,7 +270,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
   const currentCard = queue[mode]?.[index[mode]]
   useEffect(() => {
     if (!currentCard) {
-      setDraft({ good: '', more: '', focus: '', weather: 0, current: 0 })
+      setDraft({ good: '', more: '', focus: '', weather: 0, current: 0, refUrls: [] })
       return
     }
     if (currentCard.kind === 'kr') {
@@ -246,6 +281,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         focus: r?.focus || '',
         weather: r?.weather || 0,
         current: currentCard.kr.current ?? 0,
+        refUrls: Array.isArray(r?.reference_urls) ? r.reference_urls : [],
       })
     } else {
       const ka = currentCard.ka
@@ -255,6 +291,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         focus: ka.focus_output || '',  // KA側では focus_output カラム
         weather: 0,  // KAには weather なし
         current: 0,  // KA には current なし
+        refUrls: Array.isArray(ka.reference_urls) ? ka.reference_urls : [],
       })
     }
   }, [currentCard?.kind, currentCard?.kr?.id, currentCard?.ka?.id])
@@ -272,6 +309,11 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
       return moveNext()
     }
 
+    // 参考URL クリーンアップ (URL未入力は除外)
+    const cleanUrls = (draft.refUrls || [])
+      .map(u => ({ label: (u.label || '').trim(), url: (u.url || '').trim() }))
+      .filter(u => u.url)
+
     setSaving(true)
     if (currentCard.kind === 'kr') {
       const payload = {
@@ -281,6 +323,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         good: draft.good || '',
         more: draft.more || '',
         focus: draft.focus || '',
+        reference_urls: cleanUrls,
       }
       // upsert on (kr_id, week_start)
       const { error } = await supabase.from('kr_weekly_reviews')
@@ -300,6 +343,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         good: draft.good || '',
         more: draft.more || '',
         focus_output: draft.focus || '',
+        reference_urls: cleanUrls,
       }
       const { error } = await supabase.from('weekly_reports')
         .update(payload).eq('id', currentCard.ka.id)
@@ -427,6 +471,37 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
             )
           })}
           <div style={{ flex: 1 }} />
+          {/* 期間フィルタ */}
+          <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value)}
+            title="期間で絞り込み" style={{
+              fontSize: 10, color: T.textSub, background: T.bgCard,
+              border: `1px solid ${T.border}`, borderRadius: 6,
+              padding: '3px 8px', marginRight: 6, marginBottom: 6,
+              cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+            }}>
+            <option value="auto">📅 自動 (現Q+通期)</option>
+            <option value="q1">Q1</option>
+            <option value="q2">Q2</option>
+            <option value="q3">Q3</option>
+            <option value="q4">Q4</option>
+            <option value="annual">通期</option>
+            <option value="all">全期間</option>
+          </select>
+          {/* 事業部フィルタ */}
+          {deptOptions.length > 0 && (
+            <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
+              title="事業部で絞り込み" style={{
+                fontSize: 10, color: T.textSub, background: T.bgCard,
+                border: `1px solid ${T.border}`, borderRadius: 6,
+                padding: '3px 8px', marginRight: 6, marginBottom: 6,
+                cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, maxWidth: 180,
+              }}>
+              <option value="all">🏢 全事業部</option>
+              {deptOptions.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          )}
           {/* 全件表示 トグル */}
           <button onClick={() => setShowAll(v => !v)} style={{
             fontSize: 10, color: showAll ? '#fff' : T.textSub,
@@ -711,6 +786,75 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
         color="#4d9fff" readOnly={readOnly}
         value={draft.focus} onChange={v => setDraft(d => ({ ...d, focus: v }))}
         placeholder="例: 月曜朝90分はSlack offで提案書作成に集中" />
+
+      {/* 参考URL (任意・複数・ラベル付き) */}
+      <RefUrlsEditor T={T} value={draft.refUrls || []}
+        onChange={urls => setDraft(d => ({ ...d, refUrls: urls }))}
+        readOnly={readOnly} />
+    </div>
+  )
+}
+
+// ─── 参考URL エディタ (label + url の複数入力) ───────────────
+function RefUrlsEditor({ T, value, onChange, readOnly }) {
+  const list = value || []
+  const add = () => onChange([...list, { label: '', url: '' }])
+  const remove = (i) => onChange(list.filter((_, j) => j !== i))
+  const update = (i, field, v) => onChange(list.map((u, j) => j === i ? { ...u, [field]: v } : u))
+  return (
+    <div style={{
+      padding: '12px 14px', background: T.sectionBg, borderRadius: 10,
+      border: `1px solid ${T.border}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub }}>🔗 参考URL (任意)</div>
+        {!readOnly && (
+          <button type="button" onClick={add} style={{
+            padding: '3px 10px', borderRadius: 6,
+            background: 'transparent', color: T.accent, border: `1px solid ${T.accent}40`,
+            fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>＋ 追加</button>
+        )}
+      </div>
+      {list.length === 0 ? (
+        <div style={{ fontSize: 10, color: T.textFaint }}>
+          {readOnly ? '(なし)' : 'URL を貼り付けると会議メモなどへリンクできます'}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {list.map((u, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="text" value={u.label || ''}
+                onChange={e => !readOnly && update(i, 'label', e.target.value)}
+                placeholder="ラベル"
+                disabled={readOnly}
+                style={{
+                  flex: '0 0 130px', padding: '6px 9px', fontSize: 11, fontFamily: 'inherit',
+                  background: T.bgCard, color: T.text,
+                  border: `1px solid ${T.border}`, borderRadius: 6,
+                  outline: 'none', boxSizing: 'border-box',
+                }} />
+              <input type="url" value={u.url || ''}
+                onChange={e => !readOnly && update(i, 'url', e.target.value)}
+                placeholder="https://..."
+                disabled={readOnly}
+                style={{
+                  flex: 1, padding: '6px 9px', fontSize: 11, fontFamily: 'inherit',
+                  background: T.bgCard, color: T.text,
+                  border: `1px solid ${T.border}`, borderRadius: 6,
+                  outline: 'none', boxSizing: 'border-box',
+                }} />
+              {!readOnly && (
+                <button type="button" onClick={() => remove(i)} style={{
+                  flexShrink: 0, padding: '4px 8px', borderRadius: 6,
+                  background: 'transparent', color: T.danger, border: `1px solid ${T.danger}30`,
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>×</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

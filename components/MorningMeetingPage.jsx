@@ -790,8 +790,7 @@ function SpeakerReport({ T, member }) {
             )}
           </div>
 
-          {/* 共有事項 (自由記入 + 任意URL) */}
-          <SharingSection T={T} memberName={member.name} today={today} />
+          {/* 共有事項は朝会のステップ2「共有事項タイム」に統合されたため、ここでは非表示 */}
 
           {/* 今日のタスク + 期限切れ */}
           <div>
@@ -996,21 +995,29 @@ function KPTRow({ T, label, color, text }) {
   )
 }
 
-// ─── ステップ2: 確認事項タイム ────────────────────────────────
+// ─── ステップ2: 共有事項タイム + 確認事項タイム (前後に並べる) ──
 function Step2Confirmations({ T, members, myName, onBack, onNext }) {
   const [items, setItems] = useState([])
   const [replies, setReplies] = useState({})
   const [loading, setLoading] = useState(true)
   const [filterTo, setFilterTo] = useState('') // '' = 全員
-  const [composing, setComposing] = useState(false) // 新規追加モーダル
+  const [composing, setComposing] = useState(false)
+  const [composingKind, setComposingKind] = useState('confirmation') // 共有/確認
+  const [phase, setPhase] = useState('share')  // 'share' (前半) | 'confirmation' (後半)
 
   const load = useCallback(async () => {
     setLoading(true)
+    // 朝会の共有/確認事項のみ取得 (meeting_keys に 'morning' を含むもの または 何も指定無し)
     const { data } = await supabase.from('member_confirmations')
       .select('*').eq('status', 'open').order('created_at', { ascending: false })
-    setItems(data || [])
-    if (data && data.length > 0) {
-      const ids = data.map(d => d.id)
+    const filtered = (data || []).filter(it => {
+      const mks = Array.isArray(it.meeting_keys) ? it.meeting_keys : []
+      // 会議未指定なら全会議で表示、指定があれば 'morning' を含むもののみ
+      return mks.length === 0 || mks.includes('morning')
+    })
+    setItems(filtered)
+    if (filtered.length > 0) {
+      const ids = filtered.map(d => d.id)
       const { data: reps } = await supabase.from('member_confirmation_replies')
         .select('*').in('confirmation_id', ids).order('created_at', { ascending: true })
       const m = {}
@@ -1041,23 +1048,58 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
     load()
   }
 
-  const filtered = filterTo ? items.filter(i => i.to_name === filterTo) : items
+  // フェーズ (share / confirmation) で絞り込み + 宛先フィルタ
+  const phaseItems = items.filter(i => (i.kind || 'confirmation') === phase)
+  const filtered = filterTo ? phaseItems.filter(i => i.to_name === filterTo) : phaseItems
+  const shareCount = items.filter(i => (i.kind || 'confirmation') === 'share').length
+  const confirmCount = items.filter(i => (i.kind || 'confirmation') === 'confirmation').length
 
   return (
     <>
+      {/* フェーズタブ: 共有事項 → 確認事項 */}
+      <div style={{
+        display: 'flex', gap: 6, marginBottom: 10,
+        padding: 4, background: T.sectionBg, borderRadius: 10,
+        border: `1px solid ${T.border}`,
+      }}>
+        {[
+          { k: 'share',        label: '📢 共有事項', count: shareCount,   color: '#ff9f43' },
+          { k: 'confirmation', label: '📬 確認事項', count: confirmCount, color: T.accent },
+        ].map(p => {
+          const a = phase === p.k
+          return (
+            <button key={p.k} onClick={() => setPhase(p.k)} style={{
+              flex: 1, padding: '9px 14px', borderRadius: 7, border: 'none',
+              background: a ? p.color : 'transparent',
+              color: a ? '#fff' : T.textSub,
+              fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              <span>{p.label}</span>
+              <span style={{
+                padding: '1px 8px', borderRadius: 99,
+                background: a ? 'rgba(255,255,255,0.25)' : T.bgCard,
+                color: a ? '#fff' : T.textSub,
+                fontSize: 10, fontWeight: 800,
+              }}>{p.count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* フィルタ + 件数 + 追加 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap',
         padding: '8px 12px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
       }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-          🟠 未解決の確認事項 {filtered.length}件
+          {phase === 'share' ? '🟠 共有事項 ' : '🟠 確認事項 '}{filtered.length}件
         </span>
-        <button onClick={() => setComposing(true)} style={{
+        <button onClick={() => { setComposingKind(phase); setComposing(true) }} style={{
           padding: '5px 12px', borderRadius: 6, border: 'none',
           background: T.accent, color: '#fff',
           fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>＋ 追加</button>
+        }}>＋ {phase === 'share' ? '共有を追加' : '確認を追加'}</button>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: T.textMuted }}>宛先:</span>
         <select value={filterTo} onChange={e => setFilterTo(e.target.value)} style={{
@@ -1072,6 +1114,8 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
 
       {composing && (
         <ComposeModal T={{ ...T, borderMid: T.border }} myName={myName} members={members}
+          presetKind={composingKind}
+          presetMeetingKeys={['morning']}
           onClose={() => setComposing(false)}
           onSaved={() => { setComposing(false); load() }} />
       )}
@@ -1085,7 +1129,7 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
           background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 10,
         }}>
           <div style={{ fontSize: 28, marginBottom: 10 }}>✨</div>
-          未解決の確認事項はありません
+          未解決の{phase === 'share' ? '共有事項' : '確認事項'}はありません
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
