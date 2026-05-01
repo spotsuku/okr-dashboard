@@ -10,6 +10,22 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 
+// 会議ごとのアイコン (SVG・currentColor を継承)
+const Ico = ({ size=22, children }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+)
+const MEETING_ICONS = {
+  'kickoff-partner':   p => <Ico {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></Ico>,                                         // パルス波形 (ローンチ)
+  'kickoff-youth':     p => <Ico {...p}><path d="M2 22c1.25-.987 2.27-1.975 3.9-2.2a5.56 5.56 0 0 1 3.8 1.5 5.56 5.56 0 0 0 3.8 1.5c1.63-.225 2.65-1.213 3.9-2.2 1.25-.987 2.27-1.975 3.9-2.2 1.96-.295 3.272.633 4.7 2.2"/><path d="M2 16c1.25-.987 2.27-1.975 3.9-2.2a5.56 5.56 0 0 1 3.8 1.5 5.56 5.56 0 0 0 3.8 1.5c1.63-.225 2.65-1.213 3.9-2.2 1.25-.987 2.27-1.975 3.9-2.2 1.96-.295 3.272.633 4.7 2.2"/><path d="M2 10c1.25-.987 2.27-1.975 3.9-2.2a5.56 5.56 0 0 1 3.8 1.5 5.56 5.56 0 0 0 3.8 1.5c1.63-.225 2.65-1.213 3.9-2.2 1.25-.987 2.27-1.975 3.9-2.2 1.96-.295 3.272.633 4.7 2.2"/></Ico>,
+  'kickoff-community': p => <Ico {...p}><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="17" cy="7" r="3"/><path d="M22 21v-1a4 4 0 0 0-3-3.87"/></Ico>,
+  'sales':             p => <Ico {...p}><path d="M22 7L13.5 15.5l-5-5L2 17"/><path d="M16 7h6v6"/></Ico>,                       // 上昇トレンド
+  'manager':           p => <Ico {...p}><circle cx="12" cy="8" r="5"/><path d="M3 21a9 9 0 0 1 18 0"/></Ico>,
+  'director':          p => <Ico {...p}><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></Ico>,
+  'planning':          p => <Ico {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="11" x2="15" y2="11"/></Ico>,
+  'board':             p => <Ico {...p}><path d="M12 2L4 7v6c0 5 3.4 9.5 8 11 4.6-1.5 8-6 8-11V7l-8-5z"/></Ico>,             // 盾 (役員)
+  _default:            p => <Ico {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></Ico>,
+}
+
 // テーマは lib/themeTokens.js で一元管理
 const DARK_T  = { ...COMMON_TOKENS.dark }
 const LIGHT_T = { ...COMMON_TOKENS.light }
@@ -1431,52 +1447,87 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
               </div>
             </>
           ) : (
-            // 会議選択モード (全会議を1画面で見渡せる密度)
+            // 会議選択モード (全画面を活用したスタイリッシュなレイアウト)
             <>
-              <div style={{ marginBottom: 14, display:'flex', alignItems:'baseline', gap:10 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#007AFF', letterSpacing:'0.08em', textTransform:'uppercase' }}>Weekly MTG</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: wT().text }}>今週の会議を選択</div>
-                <div style={{ fontSize: 11, color: wT().textMuted }}>会議ごとに対象の部署・チーム・観点が自動で絞り込まれます</div>
+              <div style={{ marginBottom: 22, display:'flex', alignItems:'baseline', gap:14, flexWrap:'wrap' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#007AFF', letterSpacing:'0.1em', textTransform:'uppercase' }}>Weekly MTG</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: wT().text, letterSpacing:'-0.01em' }}>今週の会議を選択</div>
+                <div style={{ fontSize: 12, color: wT().textMuted }}>会議ごとに対象の部署・チーム・観点が自動で絞り込まれます</div>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:8 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:14 }}>
                 {WEEKLY_MTG_MEETINGS.map(m => {
                   const viewBadge = m.weeklyMTG.withDiscussion ? 'チームサマリー'
                     : m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
                     : m.weeklyMTG.viewMode === 'ka' ? 'KA重点'
                     : '両方'
                   const scope = m.weeklyMTG.levelName || (m.weeklyMTG.levelSelect === 'department' ? '事業部選択' : '全社')
+                  const Icon = MEETING_ICONS[m.key] || MEETING_ICONS._default
                   return (
                     <button key={m.key} onClick={() => selectMeeting(m.key)}
                       style={{
                         textAlign:'left', cursor:'pointer', fontFamily:'inherit',
-                        background: `linear-gradient(180deg, ${wT().bgCard} 0%, ${m.color}06 100%)`,
-                        border: `1px solid ${m.color}26`,
-                        borderRadius: 12, padding: '10px 12px',
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        transition: 'all 0.15s ease',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                        background: wT().bgCard,
+                        border: `1px solid ${wT().border}`,
+                        borderRadius: 16, padding: '20px 22px',
+                        display: 'flex', flexDirection:'column', gap: 14,
+                        position: 'relative', overflow: 'hidden',
+                        transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.04)',
+                        minHeight: 132,
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${m.color}80`; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = `${m.color}26`; e.currentTarget.style.transform = 'translateY(0)' }}>
-                      <div style={{
-                        flexShrink:0, width:38, height:38, borderRadius:10,
-                        background: `${m.color}1a`,
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                        fontSize:20,
-                      }}>{m.icon || '📋'}</div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:13, fontWeight:800, color: wT().text, marginBottom: 2,
-                          whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.title}</div>
-                        <div style={{ fontSize:10, color: wT().textMuted,
-                          whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                          {m.schedule} ・ {scope}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = `${m.color}66`
+                        e.currentTarget.style.transform = 'translateY(-3px)'
+                        e.currentTarget.style.boxShadow = `0 1px 2px rgba(0,0,0,0.04), 0 12px 28px ${m.color}26`
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = wT().border
+                        e.currentTarget.style.transform = 'translateY(0)'
+                        e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.04)'
+                      }}>
+                      {/* 装飾: 右上に淡いカラーグロー */}
+                      <div aria-hidden style={{
+                        position: 'absolute', top: -40, right: -40, width: 140, height: 140,
+                        background: `radial-gradient(circle, ${m.color}1c 0%, transparent 65%)`,
+                        pointerEvents: 'none',
+                      }} />
+                      {/* ヘッダ行: アイコン + ビューバッジ */}
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', position:'relative', zIndex:1 }}>
+                        <div style={{
+                          flexShrink:0, width:46, height:46, borderRadius:12,
+                          background: `linear-gradient(135deg, ${m.color} 0%, ${m.color}c0 100%)`,
+                          color:'#fff',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px ${m.color}55`,
+                        }}>
+                          <Icon size={22} />
+                        </div>
+                        <span style={{
+                          flexShrink:0, fontSize:10, fontWeight:800,
+                          padding:'3px 10px', borderRadius:99,
+                          background:`${m.color}14`, color:m.color, whiteSpace:'nowrap',
+                          border: `1px solid ${m.color}30`,
+                        }}>{viewBadge}</span>
+                      </div>
+                      {/* タイトル */}
+                      <div style={{ position:'relative', zIndex:1 }}>
+                        <div style={{ fontSize:15, fontWeight:800, color: wT().text, marginBottom: 4, lineHeight:1.4 }}>{m.title}</div>
+                        <div style={{ fontSize:11, color: wT().textMuted, display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{
+                            display:'inline-flex', alignItems:'center', gap:3,
+                            padding:'1px 7px', borderRadius:99,
+                            background: wT().bgSection || 'rgba(0,0,0,0.04)', color: wT().textSub,
+                            fontSize:10, fontWeight:700,
+                          }}>{m.schedule}</span>
+                          <span>{scope}</span>
                         </div>
                       </div>
-                      <span style={{
-                        flexShrink:0, fontSize:9, fontWeight:800,
-                        padding:'2px 7px', borderRadius:99,
-                        background:`${m.color}18`, color:m.color, whiteSpace:'nowrap',
-                      }}>{viewBadge}</span>
+                      {/* CTA */}
+                      <div style={{
+                        marginTop:'auto', position:'relative', zIndex:1,
+                        display:'flex', alignItems:'center', gap:6,
+                        fontSize:11, fontWeight:800, color: m.color,
+                      }}>会議を開始 <span aria-hidden>→</span></div>
                     </button>
                   )
                 })}

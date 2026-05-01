@@ -392,20 +392,28 @@ export default function WeeklyMTGFacilitation({
             levels={levels}
             scope={scopePreview} session={session}
             onUpdateSession={async (patch) => {
+              // 楽観的更新: 先に画面を反映させ、その後 DB へ同期
+              setSession(prev => prev ? { ...prev, ...patch } : { meeting_key: meeting.key, week_start: weekStart, step: 0, ...patch })
               if (session?.id) {
-                const { data } = await supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id).select().single()
+                const { data, error } = await supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id).select().single()
+                if (error) {
+                  console.error('session update error:', error)
+                  alert('保存に失敗しました: ' + (error.message || error.hint || '原因不明') + '\n\nSQL マイグレーション (supabase_excluded_meeting_items.sql) を実行してください。')
+                  return
+                }
                 if (data) setSession(data)
               } else {
-                // セッション未作成 (=会議未開始) の場合は step=0 のドラフト行を作成
+                // セッション未作成 (=会議未開始) → step=0 のドラフト行を作成
                 const { data, error } = await supabase.from('weekly_mtg_sessions')
-                  .insert({
-                    meeting_key: meeting.key,
-                    week_start: weekStart,
-                    step: 0,
-                    ...patch,
-                  })
+                  .insert({ meeting_key: meeting.key, week_start: weekStart, step: 0, ...patch })
                   .select().single()
-                if (error) { console.error('session insert error:', error); return }
+                if (error) {
+                  console.error('session insert error:', error)
+                  alert('保存に失敗しました: ' + (error.message || error.hint || '原因不明') + '\n\nSQL マイグレーション (supabase_excluded_meeting_items.sql) を実行してください。')
+                  // 楽観的更新を取り消す
+                  setSession(null)
+                  return
+                }
                 if (data) setSession(data)
               }
             }}
