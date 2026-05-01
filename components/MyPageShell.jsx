@@ -1873,6 +1873,8 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, level, mana
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState('')
   const focusedRef = useRef(null)
   const saveTimer = useRef(null)
 
@@ -1930,6 +1932,36 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, level, mana
     saveTimer.current = setTimeout(() => save(g, m, f), 800)
   }
 
+  // AIで サマリーを自動生成 (チーム内のKR/KA週次レビューを集約)
+  const generateAI = async () => {
+    if (!levelId || !weekStart || aiBusy) return
+    const hasContent = (good || more || focus).trim().length > 0
+    if (hasContent) {
+      const ok = window.confirm('現在の内容を AI 生成結果で上書きします。よろしいですか？')
+      if (!ok) return
+    }
+    setAiBusy(true); setAiError('')
+    try {
+      const res = await fetch('/api/ai/team-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level_id: levelId, week_start: weekStart }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)
+      if (j.message) { setAiError(j.message); return }
+      setGood(j.good || '')
+      setMore(j.more || '')
+      setFocus(j.focus || '')
+      // すぐ保存 (debounceスキップ)
+      save(j.good || '', j.more || '', j.focus || '')
+    } catch (e) {
+      setAiError(e.message || 'AI生成に失敗しました')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   const inputBase = {
     width: '100%', boxSizing: 'border-box',
     padding: '8px 10px', fontSize: 12, fontFamily: 'inherit',
@@ -1965,11 +1997,31 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, level, mana
           }}>📌 {managerName}</span>
         )}
         <div style={{ flex:1 }} />
+        {canEdit && (
+          <button onClick={generateAI} disabled={aiBusy} title="チーム内のKR/KA週次レビューを集約してAIで自動生成"
+            style={{
+              padding: '4px 10px', borderRadius: 7,
+              background: aiBusy ? 'rgba(255,255,255,0.4)' : '#064e3b',
+              color: '#fff', border: 'none',
+              fontSize: 10, fontWeight: 800, fontFamily: 'inherit',
+              cursor: aiBusy ? 'wait' : 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}>
+            {aiBusy ? '⟳ 生成中…' : '🤖 AIで生成'}
+          </button>
+        )}
         <span style={{ fontSize: 10 }}>
           {saving && <span style={{ color:'#065f46' }}>⟳ 保存中…</span>}
           {saved && !saving && <span style={{ color:'#065f46', fontWeight:800 }}>✓ 保存済</span>}
         </span>
       </div>
+      {aiError && (
+        <div style={{
+          marginBottom: 8, padding: '6px 10px', borderRadius: 6,
+          background: 'rgba(255,255,255,0.6)', color: '#7f1d1d',
+          fontSize: 10, fontWeight: 700,
+        }}>⚠️ {aiError}</div>
+      )}
       {/* 複数チーム責任者の場合のタブ */}
       {tabs && tabs.length > 1 && (
         <div style={{ display:'flex', gap: 4, marginBottom: 10, flexWrap:'wrap' }}>
