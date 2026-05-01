@@ -1610,10 +1610,11 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
 
         // 補助: 今週のKA件数 + 担当アバター
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
+          .select('id, level_id, period').in('level_id', scopeLevelIds).range(0, 49999)
         const objs = objsRes.data || []
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
+        const objToPeriod = new Map(objs.map(o => [Number(o.id), (o.period || '').toString().split('_').pop()]))
         let kas = []
         if (objIds.length > 0) {
           const kasRes = await supabase.from('weekly_reports')
@@ -1668,6 +1669,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
             unit: kr.unit,
             lower_is_better: kr.lower_is_better,
             owner: kr.owner,
+            period: objToPeriod.get(Number(kr.objective_id)) || null,  // 'q1'..'q4' or 'annual'
             weather: rv?.weather || 0,
             good:  (rv?.good  || '').trim(),
             more:  (rv?.more  || '').trim(),
@@ -1908,6 +1910,28 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
   const { team, kaCount, owners, good, more, focus, hasSummary, krs = [] } = teamData
   const [krsExpanded, setKrsExpanded] = useState(true) // KR詳細の展開状態 (デフォルト展開)
   const [expandedKR, setExpandedKR] = useState(null)   // 個別KRの展開
+
+  // 期間で分類 (通期 / 現Q / その他Q)。ラベル順: 通期 → Q1 → Q2 → Q3 → Q4 → 不明
+  const krGroups = useMemo(() => {
+    const order = ['annual', 'q1', 'q2', 'q3', 'q4', 'unknown']
+    const labels = {
+      annual: { label: '🌐 通期', color: '#5856d6' },
+      q1:     { label: '🔵 Q1',  color: '#1d4ed8' },
+      q2:     { label: '🟢 Q2',  color: '#0a8f5a' },
+      q3:     { label: '🟠 Q3',  color: '#c2410c' },
+      q4:     { label: '🟣 Q4',  color: '#7e22ce' },
+      unknown:{ label: '? その他', color: T.textMuted },
+    }
+    const buckets = Object.fromEntries(order.map(k => [k, []]))
+    for (const kr of krs) {
+      const p = (kr.period || '').toString().toLowerCase()
+      const key = ['annual','q1','q2','q3','q4'].includes(p) ? p : 'unknown'
+      buckets[key].push(kr)
+    }
+    return order
+      .filter(k => buckets[k].length > 0)
+      .map(k => ({ key: k, ...labels[k], items: buckets[k] }))
+  }, [krs, T.textMuted])
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null
   const prevLabel = prevWeek ? formatWeekRange2(prevWeek) : ''
   const thisLabel = weekStart ? formatWeekRange2(weekStart) : ''
@@ -1998,11 +2022,27 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
             📊 KR 詳細 ({krs.length}件)
           </button>
           {krsExpanded && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
-              {krs.map(kr => (
-                <KRReadOnlyRow key={kr.id} T={T} kr={kr}
-                  expanded={expandedKR === kr.id}
-                  onToggle={() => setExpandedKR(p => p === kr.id ? null : kr.id)} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 }}>
+              {krGroups.map(g => (
+                <div key={g.key}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+                    fontSize: 10, fontWeight: 800, color: g.color,
+                    padding: '2px 8px', borderRadius: 99, background: `${g.color}14`,
+                    border: `1px solid ${g.color}30`,
+                    width: 'fit-content',
+                  }}>
+                    {g.label}
+                    <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700 }}>{g.items.length}件</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {g.items.map(kr => (
+                      <KRReadOnlyRow key={kr.id} T={T} kr={kr} members={members}
+                        expanded={expandedKR === kr.id}
+                        onToggle={() => setExpandedKR(p => p === kr.id ? null : kr.id)} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -2032,7 +2072,7 @@ function ProgressRing({ value, color, size = 50, bg = 'rgba(0,0,0,0.06)' }) {
 }
 
 // 1KRを 1行で表示。クリックで Good/More/Focus を展開。
-function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
+function KRReadOnlyRow({ T, kr, members = [], expanded, onToggle }) {
   const target  = Number(kr.target  ?? 0)
   const current = Number(kr.current ?? 0)
   const progress = target > 0
@@ -2043,6 +2083,7 @@ function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
   const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
   const weatherIcons = { 1: '☀️', 2: '🌤', 3: '☁️', 4: '🌧' }
   const hasReview = !!(kr.good || kr.more || kr.focus || kr.weather)
+  const ownerMember = kr.owner ? members.find(m => m?.name === kr.owner) : null
 
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6, overflow: 'hidden' }}>
@@ -2057,6 +2098,18 @@ function KRReadOnlyRow({ T, kr, expanded, onToggle }) {
         <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {kr.title}
         </span>
+        {/* 担当者バッジ (アバター + 名前) */}
+        {kr.owner && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '2px 8px 2px 4px', borderRadius: 99,
+            background: T.bgSection || 'rgba(0,0,0,0.04)',
+            fontSize: 10, color: T.textSub, fontWeight: 700, whiteSpace: 'nowrap',
+          }}>
+            <Avatar name={kr.owner} avatarUrl={ownerMember?.avatar_url} size={16} />
+            {kr.owner}
+          </span>
+        )}
         {kr.weather > 0 && <span style={{ fontSize: 14 }}>{weatherIcons[kr.weather]}</span>}
         <span style={{ fontSize: 11, color: T.textMuted }}>
           {current}{kr.unit} / {target}{kr.unit}
