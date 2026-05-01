@@ -91,6 +91,11 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
   const [completed, setCompleted] = useState({ kr: false, ka: false })
   const [objMap, setObjMap] = useState({})
   const [swipeDelta, setSwipeDelta] = useState(0)  // D: スワイプ時のX移動量
+  // フィルタ:
+  //   periodFilter: 'auto' (現Q+通期, 既定) | 'q1' | 'q2' | 'q3' | 'q4' | 'annual' | 'all'
+  //   deptFilter:   'all'  (既定) | 事業部の level_id (string)
+  const [periodFilter, setPeriodFilter] = useState('auto')
+  const [deptFilter,   setDeptFilter]   = useState('all')
 
   // levels を id→level の map に
   const levelMap = useMemo(() => {
@@ -105,6 +110,19 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     if (parent) return `${parent.name} · ${lv.name}`
     return lv.name
   }, [levelMap])
+  // level_id から所属する「事業部」(=ルート直下のレベル) の id を返す
+  const deptIdOf = useCallback((levelId) => {
+    if (!levelId) return null
+    const lv = levelMap[String(levelId)]
+    if (!lv) return null
+    return lv.parent_id ? String(lv.parent_id) : String(lv.id)
+  }, [levelMap])
+  // 事業部の選択肢 (parent_id が無いレベル = 事業部)
+  const deptOptions = useMemo(() => {
+    return (levels || [])
+      .filter(l => !l.parent_id)
+      .map(l => ({ id: String(l.id), name: l.name }))
+  }, [levels])
 
   // KR は今週金曜のレビュー会議に反映 → weekStart = 今週月曜
   const krWeekStart = useMemo(() => getMondayJSTStr(), [])
@@ -184,11 +202,28 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const krReviewsMap = Object.fromEntries((krReviewsRes.data || []).map(r => [r.kr_id, r]))
     const om = {}; (objsRes.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
 
-    // 該当Q + 通期 を表示 (Q集中の人にも通期があることを意識させる)
+    // 期間フィルタ:
+    //   'auto'       → 現Q + 通期 (既定)
+    //   'q1'..'q4'   → そのQのみ
+    //   'annual'     → 通期のみ
+    //   'all'        → すべて
     const curQ = getCurrentQuarter()
-    const inCurrentQ = (objId) => om[objId]?.period === curQ
-    const isAnnualObj = (objId) => om[objId]?.period === 'annual'
-    const inScope = (objId) => inCurrentQ(objId) || isAnnualObj(objId)
+    const inPeriod = (objId) => {
+      const p = om[objId]?.period
+      if (!p) return false
+      if (periodFilter === 'all') return true
+      if (periodFilter === 'auto') return p === curQ || p === 'annual'
+      return p === periodFilter
+    }
+    // 事業部フィルタ:
+    //   'all' → すべて
+    //   それ以外 → その事業部 (level_id) 配下の objective のみ
+    const inDept = (objId) => {
+      if (deptFilter === 'all') return true
+      const lvId = om[objId]?.level_id
+      return deptIdOf(lvId) === deptFilter
+    }
+    const inScope = (objId) => inPeriod(objId) && inDept(objId)
 
     // KR キュー: 今Q + 通期、かつ (showAll=OFF → 未記入のみ / showAll=ON → 全件)
     const krQueue = krs
@@ -226,7 +261,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     setCompleted({ kr: krQueue.length === 0, ka: kaQueue.length === 0 })
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewingName, krWeekStart, showAll])  // kaWeekStart は load 内で動的決定するため依存から外す
+  }, [viewingName, krWeekStart, showAll, periodFilter, deptFilter, deptIdOf])  // kaWeekStart は load 内で動的決定するため依存から外す
 
   useEffect(() => { if (open) load() }, [open, load])
   useEffect(() => { if (open) setMode(initialMode) }, [open, initialMode])
@@ -427,6 +462,37 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
             )
           })}
           <div style={{ flex: 1 }} />
+          {/* 期間フィルタ */}
+          <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value)}
+            title="期間で絞り込み" style={{
+              fontSize: 10, color: T.textSub, background: T.bgCard,
+              border: `1px solid ${T.border}`, borderRadius: 6,
+              padding: '3px 8px', marginRight: 6, marginBottom: 6,
+              cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+            }}>
+            <option value="auto">📅 自動 (現Q+通期)</option>
+            <option value="q1">Q1</option>
+            <option value="q2">Q2</option>
+            <option value="q3">Q3</option>
+            <option value="q4">Q4</option>
+            <option value="annual">通期</option>
+            <option value="all">全期間</option>
+          </select>
+          {/* 事業部フィルタ */}
+          {deptOptions.length > 0 && (
+            <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
+              title="事業部で絞り込み" style={{
+                fontSize: 10, color: T.textSub, background: T.bgCard,
+                border: `1px solid ${T.border}`, borderRadius: 6,
+                padding: '3px 8px', marginRight: 6, marginBottom: 6,
+                cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, maxWidth: 180,
+              }}>
+              <option value="all">🏢 全事業部</option>
+              {deptOptions.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          )}
           {/* 全件表示 トグル */}
           <button onClick={() => setShowAll(v => !v)} style={{
             fontSize: 10, color: showAll ? '#fff' : T.textSub,
