@@ -11,7 +11,7 @@ import CalendarTab from './CalendarTab'
 import DriveTab from './DriveTab'
 import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
-import ConfirmationsTab from './ConfirmationsTab'
+import ConfirmationsTab, { ComposeModal } from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
@@ -1549,6 +1549,7 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
   const [todayTasks, setTodayTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
+  const [composeKind, setComposeKind] = useState(null) // null | 'share' | 'confirmation'
   const today = toJSTDateStr(new Date())
 
   const reload = useCallback(async () => {
@@ -1650,9 +1651,31 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
             width: '100%', padding: '10px 14px', borderRadius: 8,
             background: 'transparent', border: `1px dashed ${T.accent}`,
             color: T.accent, fontSize: 13, fontWeight: 700,
-            cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14,
+            cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10,
           }}
         >+ タスクを追加</button>
+
+        {/* 共有事項 / 確認事項を任意で追加 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <button
+            onClick={() => setComposeKind('share')}
+            style={{
+              flex: 1, padding: '8px 10px', borderRadius: 8,
+              background: 'transparent', border: `1px dashed ${T.warn}`,
+              color: T.warn, fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >+ 📢 共有事項 (任意)</button>
+          <button
+            onClick={() => setComposeKind('confirmation')}
+            style={{
+              flex: 1, padding: '8px 10px', borderRadius: 8,
+              background: 'transparent', border: `1px dashed ${T.accent}`,
+              color: T.accent, fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >+ 📬 確認事項 (任意)</button>
+        </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
@@ -1681,6 +1704,18 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
           fiscalYear={fiscalYear}
           onClose={() => setAddOpen(false)}
           onCreated={() => { setAddOpen(false); reload() }}
+        />
+      )}
+
+      {/* 共有事項 / 確認事項 ComposeModal */}
+      {composeKind && (
+        <ComposeModal
+          T={T}
+          myName={viewingName}
+          members={members}
+          presetKind={composeKind}
+          onClose={() => setComposeKind(null)}
+          onSaved={() => setComposeKind(null)}
         />
       )}
     </div>
