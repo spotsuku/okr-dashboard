@@ -1400,7 +1400,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     const topDepts = (levels || []).filter(l => !l.parent_id)
     return (
       <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif', overflow:'auto' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px', width: '100%', boxSizing:'border-box' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px 24px 24px', width: '100%', boxSizing:'border-box' }}>
           {needsDeptSelect ? (
             // 事業部選択モード（マネージャー定例など）
             <>
@@ -1431,15 +1431,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
               </div>
             </>
           ) : (
-            // 会議選択モード
+            // 会議選択モード (全会議を1画面で見渡せる密度)
             <>
-              <HeroCard T={wT()}
-                eyebrow="Weekly MTG"
-                title="今週の会議を選択"
-                subtitle="会議ごとに対象の部署・チーム・観点が自動で絞り込まれます"
-                color="#007AFF"
-              />
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:10 }}>
+              <div style={{ marginBottom: 14, display:'flex', alignItems:'baseline', gap:10 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#007AFF', letterSpacing:'0.08em', textTransform:'uppercase' }}>Weekly MTG</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: wT().text }}>今週の会議を選択</div>
+                <div style={{ fontSize: 11, color: wT().textMuted }}>会議ごとに対象の部署・チーム・観点が自動で絞り込まれます</div>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:8 }}>
                 {WEEKLY_MTG_MEETINGS.map(m => {
                   const viewBadge = m.weeklyMTG.withDiscussion ? 'チームサマリー'
                     : m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
@@ -1447,15 +1446,38 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     : '両方'
                   const scope = m.weeklyMTG.levelName || (m.weeklyMTG.levelSelect === 'department' ? '事業部選択' : '全社')
                   return (
-                    <DashboardTile key={m.key} T={wT()}
-                      icon={m.icon}
-                      title={m.title}
-                      sub={`${m.schedule} ・ ${scope}`}
-                      color={m.color}
-                      badge={viewBadge}
-                      status="会議を開始"
-                      onClick={() => selectMeeting(m.key)}
-                    />
+                    <button key={m.key} onClick={() => selectMeeting(m.key)}
+                      style={{
+                        textAlign:'left', cursor:'pointer', fontFamily:'inherit',
+                        background: `linear-gradient(180deg, ${wT().bgCard} 0%, ${m.color}06 100%)`,
+                        border: `1px solid ${m.color}26`,
+                        borderRadius: 12, padding: '10px 12px',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        transition: 'all 0.15s ease',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${m.color}80`; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = `${m.color}26`; e.currentTarget.style.transform = 'translateY(0)' }}>
+                      <div style={{
+                        flexShrink:0, width:38, height:38, borderRadius:10,
+                        background: `${m.color}1a`,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize:20,
+                      }}>{m.icon || '📋'}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:800, color: wT().text, marginBottom: 2,
+                          whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.title}</div>
+                        <div style={{ fontSize:10, color: wT().textMuted,
+                          whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                          {m.schedule} ・ {scope}
+                        </div>
+                      </div>
+                      <span style={{
+                        flexShrink:0, fontSize:9, fontWeight:800,
+                        padding:'2px 7px', borderRadius:99,
+                        background:`${m.color}18`, color:m.color, whiteSpace:'nowrap',
+                      }}>{viewBadge}</span>
+                    </button>
                   )
                 })}
               </div>
