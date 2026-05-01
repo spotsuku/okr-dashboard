@@ -1819,53 +1819,76 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
 // ─── 今週のチームサマリー (チーム責任者のみ編集可・Realtime同期) ─
 function TeamWeeklySummaryCard({ T, viewingMember, myName, isAdmin, members = [], levels = [], isViewingSelf }) {
   const monday = useMemo(() => getMondayJSTStr(), [])
-  // 閲覧対象メンバーが responsible なチームを抽出 (manager_id 一致)
+
+  // 管理者は全チーム (leafレベル = 子を持たないレベル) を対象に
+  // 一般ユーザーは「自分が responsible なチーム」 + 「所属チーム」
+  const adminTeams = useMemo(() => {
+    if (!isAdmin) return []
+    const childIds = new Set((levels || []).map(l => Number(l?.parent_id)).filter(Boolean))
+    // root を除外し、葉(チーム)レベルに加えて 事業部レベルも含める
+    return (levels || []).filter(l => l && l.parent_id) // root以外
+  }, [levels, isAdmin])
+
   const managerOfTeams = useMemo(() => {
     if (!viewingMember?.id) return []
     return (levels || []).filter(l => Number(l?.manager_id) === Number(viewingMember.id))
   }, [levels, viewingMember?.id])
 
-  const [activeLevelId, setActiveLevelId] = useState(null)
-  // 表示対象 level 確定: 責任者なら最初の自分の管轄チーム / そうでなくても所属チームを表示
-  useEffect(() => {
-    if (managerOfTeams.length > 0) {
-      if (!activeLevelId || !managerOfTeams.some(l => Number(l.id) === Number(activeLevelId))) {
-        setActiveLevelId(managerOfTeams[0].id)
-      }
-      return
-    }
-    // 責任者でない場合: 所属チームを1つ表示 (sub_level_ids 含む先頭)
-    const memberLvlIds = Array.isArray(viewingMember?.sub_level_ids) ? viewingMember.sub_level_ids
+  const memberLvlIds = useMemo(() => {
+    return Array.isArray(viewingMember?.sub_level_ids) ? viewingMember.sub_level_ids
       : viewingMember?.level_id ? [viewingMember.level_id] : []
-    if (memberLvlIds.length > 0 && (!activeLevelId || !memberLvlIds.includes(Number(activeLevelId)))) {
-      setActiveLevelId(Number(memberLvlIds[0]))
+  }, [viewingMember])
+
+  const memberTeams = useMemo(() => {
+    return (levels || []).filter(l => memberLvlIds.includes(Number(l?.id)))
+  }, [levels, memberLvlIds])
+
+  // タブに出すチーム (重複除外)
+  const tabTeams = useMemo(() => {
+    const seen = new Set()
+    const list = []
+    const add = arr => arr.forEach(t => {
+      if (!t || seen.has(Number(t.id))) return
+      seen.add(Number(t.id))
+      list.push(t)
+    })
+    // 自分が責任者のチーム → 所属チーム → 管理者なら全チーム
+    add(managerOfTeams)
+    if (isViewingSelf) add(memberTeams)
+    if (isAdmin) add(adminTeams)
+    return list
+  }, [managerOfTeams, memberTeams, adminTeams, isViewingSelf, isAdmin])
+
+  const [activeLevelId, setActiveLevelId] = useState(null)
+  useEffect(() => {
+    if (tabTeams.length === 0) { setActiveLevelId(null); return }
+    if (!activeLevelId || !tabTeams.some(l => Number(l.id) === Number(activeLevelId))) {
+      setActiveLevelId(tabTeams[0].id)
     }
-  }, [managerOfTeams, viewingMember, activeLevelId])
+  }, [tabTeams, activeLevelId])
 
   const activeLevel = useMemo(() => (levels || []).find(l => Number(l?.id) === Number(activeLevelId)), [levels, activeLevelId])
   const isManagerOfActive = !!activeLevel && Number(activeLevel.manager_id) === Number(viewingMember?.id)
   // 編集可: 自分閲覧 かつ (該当チームの責任者 or 管理者)
   const canEdit = isViewingSelf && (isManagerOfActive || isAdmin)
 
-  // 表示しない条件: 所属チームも管轄チームも無い
-  const hasAnyTeam = managerOfTeams.length > 0 || (Array.isArray(viewingMember?.sub_level_ids) ? viewingMember.sub_level_ids : viewingMember?.level_id ? [viewingMember.level_id] : []).length > 0
-  if (!hasAnyTeam) return null
+  if (tabTeams.length === 0) return null
 
   return (
     <TeamSummaryEditor T={T} levelId={activeLevelId} weekStart={monday}
-      canEdit={canEdit} myName={myName}
+      canEdit={canEdit} myName={myName} isAdmin={isAdmin}
       level={activeLevel}
       managerName={(() => {
         const mgr = activeLevel?.manager_id ? members.find(mm => Number(mm.id) === Number(activeLevel.manager_id)) : null
         return mgr?.name || null
       })()}
-      tabs={managerOfTeams.length > 1 ? managerOfTeams : null}
+      tabs={tabTeams.length > 1 ? tabTeams : null}
       activeLevelId={activeLevelId} onSelectLevel={setActiveLevelId}
     />
   )
 }
 
-function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, level, managerName, tabs, activeLevelId, onSelectLevel }) {
+function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = false, level, managerName, tabs, activeLevelId, onSelectLevel }) {
   const [good, setGood] = useState('')
   const [more, setMore] = useState('')
   const [focus, setFocus] = useState('')
@@ -2036,6 +2059,16 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, level, mana
               }}>{t.icon || '🤝'} {t.name}</button>
             )
           })}
+        </div>
+      )}
+      {canEdit && isAdmin && managerName && Number(level?.manager_id) !== undefined && (
+        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700 }}>
+          👑 管理者として編集中 (このチームの責任者: {managerName})
+        </div>
+      )}
+      {canEdit && isAdmin && !managerName && (
+        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700 }}>
+          👑 管理者として編集中 (責任者未設定 — 組織ページで設定推奨)
         </div>
       )}
       {!canEdit && (
