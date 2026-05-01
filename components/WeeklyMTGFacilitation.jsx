@@ -392,30 +392,39 @@ export default function WeeklyMTGFacilitation({
             levels={levels}
             scope={scopePreview} session={session}
             onUpdateSession={async (patch) => {
-              // 楽観的更新: 先に画面を反映させ、その後 DB へ同期
+              // 楽観的更新: 先に画面を反映
               setSession(prev => prev ? { ...prev, ...patch } : { meeting_key: meeting.key, week_start: weekStart, step: 0, ...patch })
-              if (session?.id) {
-                const { data, error } = await supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id).select().single()
-                if (error) {
-                  console.error('session update error:', error)
-                  alert('保存に失敗しました: ' + (error.message || error.hint || '原因不明') + '\n\nSQL マイグレーション (supabase_excluded_meeting_items.sql) を実行してください。')
-                  return
+              // 未対応カラムを除外したペイロードで再試行できるよう、静かに失敗させる
+              const trySave = async (p) => {
+                if (session?.id) {
+                  const { data, error } = await supabase.from('weekly_mtg_sessions').update(p).eq('id', session.id).select().single()
+                  return { data, error }
+                } else {
+                  const { data, error } = await supabase.from('weekly_mtg_sessions')
+                    .insert({ meeting_key: meeting.key, week_start: weekStart, step: 0, ...p })
+                    .select().single()
+                  return { data, error }
                 }
-                if (data) setSession(data)
-              } else {
-                // セッション未作成 (=会議未開始) → step=0 のドラフト行を作成
-                const { data, error } = await supabase.from('weekly_mtg_sessions')
-                  .insert({ meeting_key: meeting.key, week_start: weekStart, step: 0, ...patch })
-                  .select().single()
-                if (error) {
-                  console.error('session insert error:', error)
-                  alert('保存に失敗しました: ' + (error.message || error.hint || '原因不明') + '\n\nSQL マイグレーション (supabase_excluded_meeting_items.sql) を実行してください。')
-                  // 楽観的更新を取り消す
-                  setSession(null)
-                  return
-                }
-                if (data) setSession(data)
               }
+              const { data, error } = await trySave(patch)
+              if (error) {
+                // 列が存在しないエラー (PGRST204 等) はサイレントスキップ
+                // (excluded_level_ids 等は localStorage フォールバックで処理されるため)
+                const msg = String(error.message || error.hint || '')
+                const isMissingColumn = /Could not find the .* column|column .* does not exist|PGRST204/i.test(msg)
+                if (isMissingColumn) {
+                  console.warn('session 列未対応 — DBマイグレーション未実行のため localStorage フォールバックを使用:', msg)
+                  // 未対応列だけ取り除いて再保存を試みる
+                  const patchNoExcl = Object.fromEntries(Object.entries(patch).filter(([k]) => k !== 'excluded_level_ids'))
+                  if (Object.keys(patchNoExcl).length > 0) {
+                    await trySave(patchNoExcl)
+                  }
+                  return
+                }
+                console.error('session save error:', error)
+                return
+              }
+              if (data) setSession(data)
             }}
             facilitatorDraft={facilitatorDraft}
             onFacilitatorChange={setFacilitatorDraft}
@@ -607,14 +616,52 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
 function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, onUpdateSession, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
   // 除外する組織レベル(チーム/部署) ID のセット
-  const excludedLevelIds = useMemo(() => new Set((session?.excluded_level_ids || []).map(Number)), [session?.excluded_level_ids])
+  // 優先順位: localStorage (即時) > session DB
+  // (DB列 excluded_level_ids が無い環境でも動くよう localStorage を併用)
+  const lsKey = meeting?.key && weekStart ? `wm_excl_lvl_${meeting.key}_${weekStart}` : null
+  const [localExcluded, setLocalExcluded] = useState(() => {
+    if (typeof window === 'undefined' || !lsKey) return null
+    try {
+      const raw = window.localStorage.getItem(lsKey)
+      if (!raw) return null
+      const arr = JSON.parse(raw)
+      return Array.isArray(arr) ? arr.map(Number) : null
+    } catch { return null }
+  })
+  // localStorage から再読み込み (key 切替時)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !lsKey) return
+    try {
+      const raw = window.localStorage.getItem(lsKey)
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) setLocalExcluded(arr.map(Number))
+        else setLocalExcluded(null)
+      } else setLocalExcluded(null)
+    } catch { setLocalExcluded(null) }
+  }, [lsKey])
+
+  const excludedLevelIds = useMemo(() => {
+    const fromLocal = Array.isArray(localExcluded) ? localExcluded : null
+    const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : null
+    return new Set((fromLocal ?? fromSession ?? []).map(Number))
+  }, [localExcluded, session?.excluded_level_ids])
+
   const toggleExcludedLevel = useCallback((levelId) => {
-    if (!onUpdateSession) return
     const next = new Set(excludedLevelIds)
     if (next.has(Number(levelId))) next.delete(Number(levelId))
     else next.add(Number(levelId))
-    onUpdateSession({ excluded_level_ids: Array.from(next) })
-  }, [excludedLevelIds, onUpdateSession])
+    const arr = Array.from(next)
+    // 1) localStorage (即時 / 必ず成功)
+    if (typeof window !== 'undefined' && lsKey) {
+      try { window.localStorage.setItem(lsKey, JSON.stringify(arr)) } catch { /* noop */ }
+      setLocalExcluded(arr)
+    }
+    // 2) DB (列が存在すれば永続化、無ければ静かに失敗)
+    if (onUpdateSession) {
+      onUpdateSession({ excluded_level_ids: arr })
+    }
+  }, [excludedLevelIds, onUpdateSession, lsKey])
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点'
     : wkly?.flow === 'sales' ? '営業フォーカス'
@@ -960,8 +1007,19 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
   const wkly = meeting?.weeklyMTG
   const [allItems, setAllItems] = useState(null) // 全候補
   const [loadError, setLoadError] = useState(null)
-  // 準備画面でチェックを外したチーム/部署を除外
-  const excludedLevels = useMemo(() => new Set((session?.excluded_level_ids || []).map(Number)), [session?.excluded_level_ids])
+  // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
+  const excludedLevels = useMemo(() => {
+    const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : []
+    let fromLocal = []
+    if (typeof window !== 'undefined' && meeting?.key && weekStart) {
+      try {
+        const raw = window.localStorage.getItem(`wm_excl_lvl_${meeting.key}_${weekStart}`)
+        const arr = raw ? JSON.parse(raw) : null
+        if (Array.isArray(arr)) fromLocal = arr.map(Number)
+      } catch { /* noop */ }
+    }
+    return new Set([...fromSession, ...fromLocal])
+  }, [session?.excluded_level_ids, meeting?.key, weekStart])
   const items = useMemo(() => {
     if (!Array.isArray(allItems)) return allItems
     return allItems.filter(it => !excludedLevels.has(Number(it.level?.id)))
@@ -1330,8 +1388,19 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
 function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
   const [allItems, setAllItems] = useState(null) // 全候補
-  // 準備画面でチェックを外したチーム/部署を除外
-  const excludedLevels = useMemo(() => new Set((session?.excluded_level_ids || []).map(Number)), [session?.excluded_level_ids])
+  // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
+  const excludedLevels = useMemo(() => {
+    const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : []
+    let fromLocal = []
+    if (typeof window !== 'undefined' && meeting?.key && weekStart) {
+      try {
+        const raw = window.localStorage.getItem(`wm_excl_lvl_${meeting.key}_${weekStart}`)
+        const arr = raw ? JSON.parse(raw) : null
+        if (Array.isArray(arr)) fromLocal = arr.map(Number)
+      } catch { /* noop */ }
+    }
+    return new Set([...fromSession, ...fromLocal])
+  }, [session?.excluded_level_ids, meeting?.key, weekStart])
   const items = useMemo(() => {
     if (!Array.isArray(allItems)) return allItems
     // KAの所属レベルは team または objective.level_id 経由
