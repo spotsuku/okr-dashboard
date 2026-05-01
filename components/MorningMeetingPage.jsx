@@ -11,8 +11,9 @@ import { isJpNonBusinessDay } from '../lib/jpHolidays'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
-//   ステップ2: 確認事項タイム
-//   ステップ3: ネクストアクション (誰がいつまでに何をやるか) — ka_tasks に保存
+//   ステップ2: 共有事項タイム
+//   ステップ3: 確認事項タイム
+//   ステップ4: ネクストアクション (誰がいつまでに何をやるか) — ka_tasks に保存
 //   ステップ4: 終了
 //   進行状態は morning_meetings テーブルで全員同期
 
@@ -211,16 +212,18 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
     loadMeeting()
   }
 
-  const goStep2     = () => setStep(2)
+  const goStep2     = () => setStep(2)   // 共有事項タイム
   const backToStep1 = () => setStep(1)
-  const goStep3     = () => setStep(3)
+  const goStep3     = () => setStep(3)   // 確認事項タイム
   const backToStep2 = () => setStep(2)
+  const goStep4     = () => setStep(4)   // ネクストアクション
+  const backToStep3 = () => setStep(3)
 
   const finishMeeting = async () => {
     if (!meeting) return
     if (!window.confirm('朝会を終了してよろしいですか?')) return
     const { error } = await supabase.from('morning_meetings').update({
-      step: 4, finished_at: new Date().toISOString(),
+      step: 5, finished_at: new Date().toISOString(),
     }).eq('id', meeting.id)
     if (error) { alert('終了失敗: ' + error.message); return }
     loadMeeting()
@@ -249,7 +252,7 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
           <h1 style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0 }}>🌅 朝会</h1>
           <span style={{ fontSize: 12, color: T.textMuted }}>{todayLabel}</span>
           <div style={{ flex: 1 }} />
-          {meeting && meeting.step >= 1 && meeting.step < 4 && (
+          {meeting && meeting.step >= 1 && meeting.step < 5 && (
             <button onClick={resetMeeting} style={btnSt(T)}>↻ リセット</button>
           )}
         </div>
@@ -294,32 +297,39 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
               if (s === 1) await backToStep1()
               else if (s === 2) await goStep2()
               else if (s === 3) await goStep3()
+              else if (s === 4) await goStep4()
             }} />
 
-            {/* ステップ1 */}
+            {/* ステップ1: 個別報告 */}
             {meeting.step === 1 && (
               <Step1Report T={T} members={sortedMembers} meeting={meeting}
                 onNext={goNextSpeaker} onPrev={goPrevSpeaker} onJump={goToSpeaker}
                 onSkipToStep2={goStep2} />
             )}
 
-            {/* ステップ2 */}
+            {/* ステップ2: 共有事項タイム */}
             {meeting.step === 2 && (
-              <Step2Confirmations T={T} members={sortedMembers} myName={myName}
+              <Step2Shares T={T} members={sortedMembers} myName={myName}
                 onBack={backToStep1} onNext={goStep3} />
             )}
 
-            {/* ステップ3: ネクストアクション */}
+            {/* ステップ3: 確認事項タイム */}
             {meeting.step === 3 && (
+              <Step2Confirmations T={T} members={sortedMembers} myName={myName}
+                onBack={backToStep2} onNext={goStep4} />
+            )}
+
+            {/* ステップ4: ネクストアクション */}
+            {meeting.step === 4 && (
               <Step3NextActionsMorning T={T} meeting={meeting}
                 members={sortedMembers}
-                onBack={backToStep2} onFinish={finishMeeting} />
+                onBack={backToStep3} onFinish={finishMeeting} />
             )}
           </>
         )}
 
         {/* 終了 */}
-        {meeting && meeting.step === 4 && (
+        {meeting && meeting.step === 5 && (
           <div style={{
             background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
             padding: 40, textAlign: 'center',
@@ -543,8 +553,9 @@ function btnSt(T, color) {
 function StepHeader({ T, step, onJumpToStep }) {
   const steps = [
     { n: 1, label: '個別報告' },
-    { n: 2, label: '確認事項タイム' },
-    { n: 3, label: 'ネクストアクション' },
+    { n: 2, label: '共有事項タイム' },
+    { n: 3, label: '確認事項タイム' },
+    { n: 4, label: 'ネクストアクション' },
   ]
   return (
     <div style={{
@@ -622,7 +633,7 @@ function Step1Report({ T, members, meeting, onNext, onPrev, onJump, onSkipToStep
         }}>
           <div style={{ fontSize: 36, marginBottom: 10 }}>🎉</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>全員の報告が完了しました</div>
-          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>ステップ2に進んで確認事項タイムへ</div>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>ステップ2に進んで共有事項タイムへ</div>
         </div>
       ) : null}
 
@@ -996,23 +1007,27 @@ function KPTRow({ T, label, color, text }) {
 }
 
 // ─── ステップ2: 共有事項タイム + 確認事項タイム (前後に並べる) ──
-function Step2Confirmations({ T, members, myName, onBack, onNext }) {
+// ─── ステップ2/3 共通: 共有事項 or 確認事項のリスト ───────────
+function MeetingItemsTime({
+  T, members, myName, kind, onBack, onNext,
+  backLabel = '⏮ 戻る', nextLabel = '次へ →',
+  emoji = '📢', noun = '共有事項',
+}) {
   const [items, setItems] = useState([])
   const [replies, setReplies] = useState({})
   const [loading, setLoading] = useState(true)
   const [filterTo, setFilterTo] = useState('') // '' = 全員
   const [composing, setComposing] = useState(false)
-  const [composingKind, setComposingKind] = useState('confirmation') // 共有/確認
-  const [phase, setPhase] = useState('share')  // 'share' (前半) | 'confirmation' (後半)
 
   const load = useCallback(async () => {
     setLoading(true)
-    // 朝会の共有/確認事項のみ取得 (meeting_keys に 'morning' を含むもの または 何も指定無し)
     const { data } = await supabase.from('member_confirmations')
       .select('*').eq('status', 'open').order('created_at', { ascending: false })
     const filtered = (data || []).filter(it => {
+      // kind 一致 (旧データは confirmation 扱い)
+      if ((it.kind || 'confirmation') !== kind) return false
+      // 朝会向け: meeting_keys 未指定 or 'morning' を含むもの
       const mks = Array.isArray(it.meeting_keys) ? it.meeting_keys : []
-      // 会議未指定なら全会議で表示、指定があれば 'morning' を含むもののみ
       return mks.length === 0 || mks.includes('morning')
     })
     setItems(filtered)
@@ -1026,20 +1041,22 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
         m[r.confirmation_id].push(r)
       }
       setReplies(m)
+    } else {
+      setReplies({})
     }
     setLoading(false)
-  }, [])
+  }, [kind])
 
   useEffect(() => { load() }, [load])
 
   // Realtime
   useEffect(() => {
-    const ch = supabase.channel('morning_step2_confirmations')
+    const ch = supabase.channel(`morning_${kind}_items`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmations' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_confirmation_replies' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [load])
+  }, [load, kind])
 
   const resolve = async (id) => {
     const { error } = await supabase.from('member_confirmations')
@@ -1048,58 +1065,23 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
     load()
   }
 
-  // フェーズ (share / confirmation) で絞り込み + 宛先フィルタ
-  const phaseItems = items.filter(i => (i.kind || 'confirmation') === phase)
-  const filtered = filterTo ? phaseItems.filter(i => i.to_name === filterTo) : phaseItems
-  const shareCount = items.filter(i => (i.kind || 'confirmation') === 'share').length
-  const confirmCount = items.filter(i => (i.kind || 'confirmation') === 'confirmation').length
+  const filtered = filterTo ? items.filter(i => i.to_name === filterTo) : items
 
   return (
     <>
-      {/* フェーズタブ: 共有事項 → 確認事項 */}
-      <div style={{
-        display: 'flex', gap: 6, marginBottom: 10,
-        padding: 4, background: T.sectionBg, borderRadius: 10,
-        border: `1px solid ${T.border}`,
-      }}>
-        {[
-          { k: 'share',        label: '📢 共有事項', count: shareCount,   color: '#ff9f43' },
-          { k: 'confirmation', label: '📬 確認事項', count: confirmCount, color: T.accent },
-        ].map(p => {
-          const a = phase === p.k
-          return (
-            <button key={p.k} onClick={() => setPhase(p.k)} style={{
-              flex: 1, padding: '9px 14px', borderRadius: 7, border: 'none',
-              background: a ? p.color : 'transparent',
-              color: a ? '#fff' : T.textSub,
-              fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-              <span>{p.label}</span>
-              <span style={{
-                padding: '1px 8px', borderRadius: 99,
-                background: a ? 'rgba(255,255,255,0.25)' : T.bgCard,
-                color: a ? '#fff' : T.textSub,
-                fontSize: 10, fontWeight: 800,
-              }}>{p.count}</span>
-            </button>
-          )
-        })}
-      </div>
-
       {/* フィルタ + 件数 + 追加 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap',
         padding: '8px 12px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
       }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-          {phase === 'share' ? '🟠 共有事項 ' : '🟠 確認事項 '}{filtered.length}件
+          {emoji} 未解決の{noun} {filtered.length}件
         </span>
-        <button onClick={() => { setComposingKind(phase); setComposing(true) }} style={{
+        <button onClick={() => setComposing(true)} style={{
           padding: '5px 12px', borderRadius: 6, border: 'none',
           background: T.accent, color: '#fff',
           fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>＋ {phase === 'share' ? '共有を追加' : '確認を追加'}</button>
+        }}>＋ {noun}を追加</button>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: T.textMuted }}>宛先:</span>
         <select value={filterTo} onChange={e => setFilterTo(e.target.value)} style={{
@@ -1114,7 +1096,7 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
 
       {composing && (
         <ComposeModal T={{ ...T, borderMid: T.border }} myName={myName} members={members}
-          presetKind={composingKind}
+          presetKind={kind}
           presetMeetingKeys={['morning']}
           onClose={() => setComposing(false)}
           onSaved={() => { setComposing(false); load() }} />
@@ -1129,7 +1111,7 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
           background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 10,
         }}>
           <div style={{ fontSize: 28, marginBottom: 10 }}>✨</div>
-          未解決の{phase === 'share' ? '共有事項' : '確認事項'}はありません
+          未解決の{noun}はありません
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
@@ -1143,14 +1125,36 @@ function Step2Confirmations({ T, members, myName, onBack, onNext }) {
 
       {/* 進行ボタン */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', marginTop: 14 }}>
-        <button onClick={onBack} style={btnSt(T)}>⏮ ステップ1に戻る</button>
+        <button onClick={onBack} style={btnSt(T)}>{backLabel}</button>
         <button onClick={onNext} style={{
           padding: '8px 22px', borderRadius: 8,
           background: T.accent, color: '#fff', border: 'none',
           fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>ステップ3 (ネクストアクション) へ →</button>
+        }}>{nextLabel}</button>
       </div>
     </>
+  )
+}
+
+// ─── ステップ2: 共有事項タイム ───────────────────────────────
+function Step2Shares({ T, members, myName, onBack, onNext }) {
+  return (
+    <MeetingItemsTime T={T} members={members} myName={myName}
+      kind="share" emoji="🟠" noun="共有事項"
+      backLabel="⏮ ステップ1 (個別報告) に戻る"
+      nextLabel="ステップ3 (確認事項タイム) へ →"
+      onBack={onBack} onNext={onNext} />
+  )
+}
+
+// ─── ステップ3: 確認事項タイム ───────────────────────────────
+function Step2Confirmations({ T, members, myName, onBack, onNext }) {
+  return (
+    <MeetingItemsTime T={T} members={members} myName={myName}
+      kind="confirmation" emoji="🟠" noun="確認事項"
+      backLabel="⏮ ステップ2 (共有事項タイム) に戻る"
+      nextLabel="ステップ4 (ネクストアクション) へ →"
+      onBack={onBack} onNext={onNext} />
   )
 }
 

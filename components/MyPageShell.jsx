@@ -533,7 +533,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           }}>
           {[
             { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
-            { key: 'confirm',      icon: '📬', label: '確認'           },
+            { key: 'confirm',      icon: '📢', label: '共有・確認'     },
             { key: 'wbs',          icon: '📅', label: 'タスク'         },
             { key: 'mail',         icon: '📧', label: 'メール'         },
             { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
@@ -2937,7 +2937,7 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
           color: '#fff',
           fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
           border: '1px solid rgba(255,255,255,0.30)',
-        }}>📬 確認タブで返信 →</span>
+        }}>📢 共有・確認タブで返信 →</span>
       </div>
       {items.length > 0 && (
         <div style={{

@@ -139,8 +139,27 @@ export default function WeeklyMTGFacilitation({
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [scopePreview, setScopePreview] = useState(null) // { perLevel: [{level, count}], total }
-  // 会議に入ったとき、セッションがすでに進行中でも一度はスタートページを表示する
-  const [viewingPrep, setViewingPrep] = useState(true)
+  // 準備画面 / ファシリ画面 の切替。
+  // sessionStorage に「このタブで facilitation に入った」フラグを置き、リロード後も復元する。
+  // これにより会議実行中にリロードしても準備画面に戻されない。
+  const facilStorageKey = meeting?.key && weekStart ? `wm_facil_${meeting.key}_${weekStart}` : null
+  const [viewingPrep, setViewingPrepState] = useState(() => {
+    if (typeof window === 'undefined' || !facilStorageKey) return true
+    return window.sessionStorage.getItem(facilStorageKey) !== '1'
+  })
+  const setViewingPrep = useCallback((v) => {
+    setViewingPrepState(v)
+    if (typeof window !== 'undefined' && facilStorageKey) {
+      if (v) window.sessionStorage.removeItem(facilStorageKey)
+      else  window.sessionStorage.setItem(facilStorageKey, '1')
+    }
+  }, [facilStorageKey])
+  // 会議切替時にキーが変わったら storage から復元
+  useEffect(() => {
+    if (typeof window === 'undefined' || !facilStorageKey) return
+    const flag = window.sessionStorage.getItem(facilStorageKey) === '1'
+    setViewingPrepState(!flag)
+  }, [facilStorageKey])
   // ファシリテーター ドラフト (会議開始時に session.facilitator として保存)
   const [facilitatorDraft, setFacilitatorDraft] = useState('')
   useEffect(() => {
