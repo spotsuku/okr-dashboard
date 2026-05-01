@@ -1004,9 +1004,18 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [activePeriod,  setActivePeriod]  = useState(initialPeriod || getCurrentQ())
   const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
 
-  // 会議別ビュー: どの会議モードで表示するか (null = 会議選択画面)
-  // 週次MTGに来るたびに必ず会議選択画面から始まる (localStorage保存しない)
-  const [activeMeetingKey, setActiveMeetingKey] = useState(null)
+  // 会議別ビュー: どの会議モードで表示するか。
+  // 起動時は最後に開いていた会議を localStorage から復元、無ければ先頭を選択。
+  const [activeMeetingKey, setActiveMeetingKey] = useState(() => {
+    if (typeof window === 'undefined') return WEEKLY_MTG_MEETINGS[0]?.key || null
+    const saved = localStorage.getItem('weeklyMTG_lastKey')
+    if (saved && WEEKLY_MTG_MEETINGS.some(m => m.key === saved)) return saved
+    return WEEKLY_MTG_MEETINGS[0]?.key || null
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined' || !activeMeetingKey) return
+    localStorage.setItem('weeklyMTG_lastKey', activeMeetingKey)
+  }, [activeMeetingKey])
 
   // ファシリ / 一覧 モード切替 (会議選択後)
   // localStorage で保存して同じ会議に戻った時の好みを記憶
@@ -1042,9 +1051,22 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   }
 
   const backToMeetingSelect = () => {
-    setActiveMeetingKey(null)
-    setActiveObjId(null)
+    // 旧仕様の「会議選択画面に戻る」ボタンは互換性のため残置するが、
+    // 新仕様では先頭の会議に戻るだけ
+    if (WEEKLY_MTG_MEETINGS[0]?.key) selectMeeting(WEEKLY_MTG_MEETINGS[0].key)
   }
+
+  // 初回マウント時に levels がロードされた段階で対象レベルを設定
+  useEffect(() => {
+    if (!activeMeetingKey || !levels?.length) return
+    const m = getMeeting(activeMeetingKey)
+    if (!m?.weeklyMTG) return
+    if (m.weeklyMTG.levelName) {
+      const lvl = findLevelByName(m.weeklyMTG.levelName)
+      if (lvl?.id && Number(activeLevelId) !== Number(lvl.id)) setActiveLevelId(lvl.id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMeetingKey, levels])
 
   const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
   // マネージャー定例などで事業部を選んでいない状態
@@ -1445,15 +1467,34 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
+      {/* 会議タブバー (常設・全会議切替) */}
+      <div style={{
+        display:'flex', gap:6, overflowX:'auto', flexWrap:'nowrap',
+        padding:'8px 12px', background: wT().bgCard, borderBottom:`1px solid ${wT().border}`,
+        flexShrink:0,
+      }}>
+        {WEEKLY_MTG_MEETINGS.map(m => {
+          const a = activeMeetingKey === m.key
+          return (
+            <button key={m.key} onClick={() => selectMeeting(m.key)} style={{
+              flexShrink:0, padding:'6px 12px', borderRadius:8,
+              border:`1px solid ${a ? m.color : wT().border}`,
+              background: a ? `${m.color}15` : 'transparent',
+              color: a ? m.color : wT().textSub,
+              cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:'inherit',
+              display:'inline-flex', alignItems:'center', gap:6, whiteSpace:'nowrap',
+            }}>
+              <span style={{ fontSize:14 }}>{m.icon}</span>
+              <span>{m.title}</span>
+            </button>
+          )
+        })}
+      </div>
       {/* 会議コンテキストバー */}
       <div style={{
         padding:'8px 16px', borderBottom:`2px solid ${meetingColor}`,
         background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap',
       }}>
-        <button onClick={backToMeetingSelect} style={{
-          padding:'5px 12px', borderRadius:7, border:`1px solid ${meetingColor}40`,
-          background:`${meetingColor}10`, color:meetingColor, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:'inherit',
-        }}>← 会議を変更</button>
         <div style={{
           width:28, height:28, borderRadius:8, background:`${meetingColor}15`,
           display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,

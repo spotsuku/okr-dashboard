@@ -233,12 +233,13 @@ export default function WeeklyMTGFacilitation({
       let krs = []
       if (allObjIds.length > 0) {
         const { data } = await supabase.from('key_results')
-          .select('id, objective_id').in('objective_id', allObjIds)
+          .select('id, objective_id, title, owner').in('objective_id', allObjIds)
         krs = data || []
       }
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
-        return { level: l, count: krs.filter(k => ids.has(k.objective_id)).length }
+        const items = krs.filter(k => ids.has(k.objective_id))
+        return { level: l, count: items.length, items: items.map(k => ({ id: k.id, title: k.title, owner: k.owner })) }
       })
     } else if (wkly.flow === 'ka' || wkly.flow === 'sales') {
       let kas = []
@@ -251,12 +252,13 @@ export default function WeeklyMTGFacilitation({
       }
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
-        return { level: l, count: kas.filter(k => ids.has(k.objective_id)).length}
+        const items = kas.filter(k => ids.has(k.objective_id))
+        return { level: l, count: items.length, items: items.map(k => ({ id: k.id, title: k.ka_title, owner: k.owner })) }
       })
     }
 
     const total = perLevel.reduce((s, x) => s + x.count, 0)
-    setScopePreview({ perLevel, total })
+    setScopePreview({ perLevel, total, flow: wkly.flow })
   }, [wkly, levels, weekStart])
 
   useEffect(() => { loadScopePreview() }, [loadScopePreview])
@@ -389,6 +391,11 @@ export default function WeeklyMTGFacilitation({
             T={T} meeting={meeting} weekStart={weekStart} myName={myName} members={members}
             levels={levels}
             scope={scopePreview} session={session}
+            onUpdateSession={async (patch) => {
+              if (!session?.id) return
+              const { data } = await supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id).select().single()
+              if (data) setSession(data)
+            }}
             facilitatorDraft={facilitatorDraft}
             onFacilitatorChange={setFacilitatorDraft}
             durationDraft={durationDraft}
@@ -577,7 +584,18 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
 }
 
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, onUpdateSession, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
+  // 除外IDのセット (KR or KA, scope.flow に従って参照)
+  const isKaFlow = scope?.flow === 'ka' || scope?.flow === 'sales'
+  const excludedField = isKaFlow ? 'excluded_ka_ids' : 'excluded_kr_ids'
+  const excludedIds = useMemo(() => new Set((session?.[excludedField] || []).map(Number)), [session, excludedField])
+  const toggleExcluded = useCallback((id) => {
+    if (!onUpdateSession) return
+    const next = new Set(excludedIds)
+    if (next.has(Number(id))) next.delete(Number(id))
+    else next.add(Number(id))
+    onUpdateSession({ [excludedField]: Array.from(next) })
+  }, [excludedIds, excludedField, onUpdateSession])
   const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点'
     : wkly?.flow === 'sales' ? '営業フォーカス'
@@ -723,34 +741,81 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {scope.perLevel.map(({ level, count }) => (
-                <div key={level.id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  background: count > 0 ? `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)` : T.bgSection,
-                  borderRadius: 10,
-                  border: `1px solid ${count > 0 ? T.accent + '1a' : T.border}`,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 16 }}>{level.icon || '📁'}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{level.name}</span>
-                  </div>
-                  <span style={{
-                    fontSize: 12, fontWeight: 800, padding: '3px 12px', borderRadius: 99,
-                    background: count > 0 ? T.accent : 'rgba(0,0,0,0.06)',
-                    color: count > 0 ? '#fff' : T.textMuted,
+            <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, lineHeight: 1.5 }}>
+              チェックを外すと「今回は確認しない」扱いになります（既定: 全て確認）。
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {scope.perLevel.map(({ level, count, items }) => {
+                const includedCount = (items || []).filter(it => !excludedIds.has(Number(it.id))).length
+                return (
+                  <div key={level.id} style={{
+                    padding: '10px 14px',
+                    background: count > 0 ? `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)` : T.bgSection,
+                    borderRadius: 10,
+                    border: `1px solid ${count > 0 ? T.accent + '1a' : T.border}`,
                   }}>
-                    {count} 件
-                  </span>
-                </div>
-              ))}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: items?.length > 0 ? 8 : 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 16 }}>{level.icon || '📁'}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{level.name}</span>
+                      </div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 800, padding: '3px 12px', borderRadius: 99,
+                        background: count > 0 ? T.accent : 'rgba(0,0,0,0.06)',
+                        color: count > 0 ? '#fff' : T.textMuted,
+                      }}>
+                        {includedCount} / {count} 件
+                      </span>
+                    </div>
+                    {(items || []).length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginLeft: 24 }}>
+                        {items.map(it => {
+                          const excluded = excludedIds.has(Number(it.id))
+                          const ownerMember = it.owner ? members.find(m => m?.name === it.owner) : null
+                          return (
+                            <label key={it.id} style={{
+                              display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '4px 6px', borderRadius: 5,
+                              cursor: 'pointer', userSelect: 'none',
+                              background: excluded ? T.bgSection : 'transparent',
+                              opacity: excluded ? 0.5 : 1,
+                              transition: 'opacity 0.1s',
+                            }}>
+                              <input type="checkbox" checked={!excluded}
+                                onChange={() => toggleExcluded(it.id)} />
+                              <span style={{
+                                flex: 1, fontSize: 11, color: T.text,
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                textDecoration: excluded ? 'line-through' : 'none',
+                              }}>{it.title || '(無題)'}</span>
+                              {it.owner && (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  padding: '1px 7px 1px 3px', borderRadius: 99,
+                                  background: T.bgSection || 'rgba(0,0,0,0.04)',
+                                  fontSize: 10, color: T.textSub, fontWeight: 700, whiteSpace: 'nowrap',
+                                }}>
+                                  <Avatar name={it.owner} avatarUrl={ownerMember?.avatar_url} size={14} />
+                                  {it.owner}
+                                </span>
+                              )}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
             <div style={{
               marginTop: 12, padding: '10px 12px', background: T.bgSection, borderRadius: 7,
               fontSize: 12, color: T.textSub, textAlign: 'center',
             }}>
-              合計 <strong style={{ color: T.text, fontSize: 14 }}>{scope.total}</strong> 件 を順に確認します
+              {(() => {
+                const includedTotal = scope.perLevel.reduce((s, lvl) => s + (lvl.items || []).filter(it => !excludedIds.has(Number(it.id))).length, 0)
+                return <>合計 <strong style={{ color: T.text, fontSize: 14 }}>{includedTotal}</strong> 件 を順に確認します {includedTotal !== scope.total && <span style={{ color: T.textMuted }}>(全 {scope.total} 件中、{scope.total - includedTotal} 件除外)</span>}</>
+              })()}
             </div>
           </>
         )}
@@ -907,8 +972,15 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
 // ─── Step 1: KR順送り（Phase 3-1: ナビ枠 + 現在KR表示） ─────────────────────
 function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
-  const [items, setItems] = useState(null) // [{ level, objective, kr }, ...] in order
+  const [allItems, setAllItems] = useState(null) // 全候補
   const [loadError, setLoadError] = useState(null)
+  // 除外IDで絞り込み
+  const excludedKr = useMemo(() => new Set((session?.excluded_kr_ids || []).map(Number)), [session?.excluded_kr_ids])
+  const items = useMemo(() => {
+    if (!Array.isArray(allItems)) return allItems
+    return allItems.filter(it => !excludedKr.has(Number(it.kr?.id)))
+  }, [allItems, excludedKr])
+  const setItems = setAllItems  // 既存コードの互換
 
   // scope 内の KR を順序付きで集める（depth で正確に判定）
   useEffect(() => {
@@ -1271,7 +1343,14 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
 // ─── Step 1: KA順送り（Phase 4） ───────────────────────────────────────────
 function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
-  const [items, setItems] = useState(null) // [{ team, objective, kr, ka }]
+  const [allItems, setAllItems] = useState(null) // 全候補
+  // 除外フィルタ (準備画面でチェックを外したKA)
+  const excludedKa = useMemo(() => new Set((session?.excluded_ka_ids || []).map(Number)), [session?.excluded_ka_ids])
+  const items = useMemo(() => {
+    if (!Array.isArray(allItems)) return allItems
+    return allItems.filter(it => !excludedKa.has(Number(it.ka?.id)))
+  }, [allItems, excludedKa])
+  const setItems = setAllItems
   const [loadError, setLoadError] = useState(null)
 
   // scope内のチーム配下の KA を順序付きで取得（当週・status!=done）
