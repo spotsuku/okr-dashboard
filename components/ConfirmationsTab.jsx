@@ -11,13 +11,20 @@ import { MEETINGS } from '../lib/meetings'
 // Props: { T, myName, members, viewingName, companyWide }
 //   companyWide=true の場合は全社を一覧表示 (受信/送信タブなし・新規作成不可)
 
-export default function ConfirmationsTab({ T, myName, members = [], viewingName, companyWide = false, allowCompose = false }) {
+export default function ConfirmationsTab({
+  T, myName, members = [], viewingName,
+  companyWide = false, allowCompose = false,
+  lockedKind = null,             // 'share' | 'confirmation' | null  (指定時は kindFilter を固定)
+  defaultMeetingKey = null,      // ComposeModal で初期チェックされる会議 key
+}) {
   // 表示対象: 他メンバーのページを見ている場合はそのメンバー、自分のページなら自分
   const targetName = viewingName || myName
   const isViewingSelf = !viewingName || viewingName === myName
 
   const [tab, setTab] = useState('received') // 'received' | 'sent'
-  const [kindFilter, setKindFilter] = useState('all') // 'all' | 'confirmation' | 'share'
+  const [kindFilter, setKindFilter] = useState(lockedKind || 'all') // 'all' | 'confirmation' | 'share'
+  // lockedKind 変更時に強制反映
+  useEffect(() => { if (lockedKind) setKindFilter(lockedKind) }, [lockedKind])
   const [showResolved, setShowResolved] = useState(false)
   const [items, setItems] = useState([])
   const [replies, setReplies] = useState({}) // confirmation_id → [replies]
@@ -43,7 +50,15 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
     if (!showResolved) q = q.eq('status', 'open')
     if (kindFilter !== 'all') q = q.eq('kind', kindFilter)
     const { data } = await q
-    setItems(data || [])
+    let result = data || []
+    // 会議キー指定があれば絞り込み (会議未指定 or 指定キーを含むもののみ)
+    if (defaultMeetingKey) {
+      result = result.filter(it => {
+        const mks = Array.isArray(it.meeting_keys) ? it.meeting_keys : []
+        return mks.length === 0 || mks.includes(defaultMeetingKey)
+      })
+    }
+    setItems(result)
 
     // 返信をまとめて取得
     if (data && data.length > 0) {
@@ -61,7 +76,7 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
       setReplies({})
     }
     setLoading(false)
-  }, [targetName, tab, showResolved, companyWide, kindFilter])
+  }, [targetName, tab, showResolved, companyWide, kindFilter, defaultMeetingKey])
 
   // 件数バッジ用に受信 open / 受信 全 / 送信 全 を並行で取得
   const loadCounts = useCallback(async () => {
@@ -118,7 +133,9 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '20px 16px' }}>
         {/* ヘッダ */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>📢 共有・確認</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>
+            {lockedKind === 'share' ? '📢 共有事項' : lockedKind === 'confirmation' ? '📬 確認事項' : '📢 共有・確認'}
+          </h2>
           <div style={{ fontSize: 11, color: T.textMuted }}>
             {companyWide
               ? '全社の共有・確認事項'
@@ -137,6 +154,8 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
         {/* 新規作成モーダル */}
         {composing && (!companyWide || allowCompose) && (
           <ComposeModal T={T} myName={myName} members={members}
+            presetKind={lockedKind || 'confirmation'}
+            presetMeetingKeys={defaultMeetingKey ? [defaultMeetingKey] : []}
             onClose={() => setComposing(false)}
             onSaved={() => { setComposing(false); load() }} />
         )}
@@ -185,24 +204,26 @@ export default function ConfirmationsTab({ T, myName, members = [], viewingName,
             </div>
           )}
           <div style={{ flex: 1 }} />
-          {/* 種別フィルタ */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            {[
-              { key: 'all',          label: 'すべて' },
-              { key: 'share',        label: '📢 共有' },
-              { key: 'confirmation', label: '📬 確認' },
-            ].map(k => {
-              const a = kindFilter === k.key
-              return (
-                <button key={k.key} onClick={() => setKindFilter(k.key)} style={{
-                  padding: '4px 10px', borderRadius: 6, border: `1px solid ${a ? T.accent : T.border}`,
-                  background: a ? T.accentBg : 'transparent',
-                  color: a ? T.accent : T.textSub,
-                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}>{k.label}</button>
-              )
-            })}
-          </div>
+          {/* 種別フィルタ (lockedKind 指定時は非表示) */}
+          {!lockedKind && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[
+                { key: 'all',          label: 'すべて' },
+                { key: 'share',        label: '📢 共有' },
+                { key: 'confirmation', label: '📬 確認' },
+              ].map(k => {
+                const a = kindFilter === k.key
+                return (
+                  <button key={k.key} onClick={() => setKindFilter(k.key)} style={{
+                    padding: '4px 10px', borderRadius: 6, border: `1px solid ${a ? T.accent : T.border}`,
+                    background: a ? T.accentBg : 'transparent',
+                    color: a ? T.accent : T.textSub,
+                    fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>{k.label}</button>
+                )
+              })}
+            </div>
+          )}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: T.textMuted, cursor: 'pointer' }}>
             <input type="checkbox" checked={showResolved} onChange={e => setShowResolved(e.target.checked)} />
             確認済みも表示

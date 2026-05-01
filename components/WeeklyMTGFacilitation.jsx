@@ -76,54 +76,55 @@ function Avatar({ name, avatarUrl, size = 22 }) {
 function stepsForFlow(meeting) {
   // 会議タイプごとに step を返す。各 step は { n, label, icon, kind } を持ち、
   // kind が描画する内容を決める。
+  // 共有事項タイム (shares) を 確認事項タイム (confirmations) の前に挿入。
+  // 確認事項タイムが存在しないフロー (sales) は ネクストアクションの前に shares を挿入。
   const wkly = meeting?.weeklyMTG
   if (wkly?.withDiscussion) {
     // マネージャー会議:
-    //   1. KR順送り (チーム層) → 2. チームサマリー → 3. 横断連携・確認事項 → 4. ネクストアクション → 5. 終了
     return [
       { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
       { n: 2, label: 'チームサマリー',     icon: '🤝', kind: 'team_summary' },
-      { n: 3, label: '横断連携・確認事項', icon: '💬', kind: 'confirmations' },
+      { n: 3, label: '共有事項',           icon: '📢', kind: 'shares' },
+      { n: 4, label: '横断連携・確認事項', icon: '💬', kind: 'confirmations' },
+      { n: 5, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 6, label: '終了',               icon: '🏁', kind: 'done' },
+    ]
+  }
+  if (meeting?.key === 'director') {
+    return [
+      { n: 1, label: 'KRサマリー閲覧',     icon: '📊', kind: 'team_summary_readonly' },
+      { n: 2, label: '共有事項',           icon: '📢', kind: 'shares' },
+      { n: 3, label: '確認事項',           icon: '💬', kind: 'confirmations' },
       { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
       { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
     ]
   }
-  if (meeting?.key === 'director') {
-    // ディレクター確認会議:
-    //   1. KRサマリー閲覧 (マネージャー会議で書かれた内容)
-    //   2. 確認事項 → 3. ネクストアクション → 4. 終了
-    return [
-      { n: 1, label: 'KRサマリー閲覧',     icon: '📊', kind: 'team_summary_readonly' },
-      { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
-      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
-    ]
-  }
   if (wkly?.flow === 'sales') {
-    // 営業定例:
-    //   1. セールスチーム進捗確認 (営業ダッシュボード) → 2. KA確認 → 3. ネクストアクション → 4. 終了
     return [
       { n: 1, label: 'セールス進捗',       icon: '📈', kind: 'sales_progress' },
       { n: 2, label: 'KA確認',            icon: '📋', kind: 'ka_loop' },
-      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+      { n: 3, label: '共有事項',           icon: '📢', kind: 'shares' },
+      { n: 4, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+      { n: 5, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 6, label: '終了',               icon: '🏁', kind: 'done' },
     ]
   }
   if (wkly?.flow === 'ka') {
-    // 週次キックオフ
     return [
       { n: 1, label: 'KA順送り',           icon: '📋', kind: 'ka_loop' },
-      { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
-      { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-      { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+      { n: 2, label: '共有事項',           icon: '📢', kind: 'shares' },
+      { n: 3, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+      { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+      { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
     ]
   }
-  // 経営企画会議など (KR重点だが director でも manager でもない)
+  // 経営企画会議・役員会議など
   return [
     { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
-    { n: 2, label: '確認事項',           icon: '💬', kind: 'confirmations' },
-    { n: 3, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-    { n: 4, label: '終了',               icon: '🏁', kind: 'done' },
+    { n: 2, label: '共有事項',           icon: '📢', kind: 'shares' },
+    { n: 3, label: '確認事項',           icon: '💬', kind: 'confirmations' },
+    { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
+    { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
   ]
 }
 
@@ -310,8 +311,8 @@ export default function WeeklyMTGFacilitation({
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      {/* タイマー (進行中ステップでのみ) */}
-      {!viewingPrep && step >= 1 && step <= 3 && session?.started_at && (
+      {/* タイマー (進行中ステップでのみ — done 以外) */}
+      {!viewingPrep && step >= 1 && stepKind !== 'done' && session?.started_at && (
         <MeetingTimerBanner
           T={T}
           startedAt={session.started_at}
@@ -431,9 +432,22 @@ export default function WeeklyMTGFacilitation({
                 onBackToPrep={() => setViewingPrep(true)}
               />
             )}
+            {stepKind === 'shares' && (
+              <Step2Confirmations
+                T={T} myName={myName} members={members}
+                withDiscussion={wkly?.withDiscussion}
+                lockedKind="share"
+                meetingKey={meeting?.key}
+                onPrev={() => prevStepN != null && goToStep(prevStepN)}
+                onNext={() => nextStepN != null && goToStep(nextStepN)}
+              />
+            )}
             {stepKind === 'confirmations' && (
               <Step2Confirmations
-                T={T} myName={myName} members={members} withDiscussion={wkly?.withDiscussion}
+                T={T} myName={myName} members={members}
+                withDiscussion={wkly?.withDiscussion}
+                lockedKind="confirmation"
+                meetingKey={meeting?.key}
                 onPrev={() => prevStepN != null && goToStep(prevStepN)}
                 onNext={() => nextStepN != null && goToStep(nextStepN)}
               />
@@ -2938,7 +2952,7 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
 // ─── Step 2: 確認事項（Phase 5 = "C"） ───────────────────────────────────────
 // withDiscussion=true (マネージャー定例) は別途専用UIを協議中。
 // 当面は ConfirmationsTab を全社モードで表示するシンプル実装。
-function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onNext }) {
+function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = 'confirmation', meetingKey = null, onPrev, onNext }) {
   // ConfirmationsTab に渡す T を拡張（sectionBg / successBg が必要）
   const extendedT = useMemo(() => ({
     ...T,
@@ -2946,10 +2960,33 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onNext
     successBg: T.success ? `${T.success}20` : 'rgba(0,214,143,0.12)',
   }), [T])
 
+  const isShare = lockedKind === 'share'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* 上部ヘッダー（withDiscussion の案内） */}
-      {withDiscussion && (
+      {/* 上部ヘッダー */}
+      {isShare ? (
+        <div style={{
+          maxWidth: 900, width: '100%', margin: '14px auto 0', padding: '14px 18px',
+          background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
+          border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
+          borderRadius: 14, fontSize: 12, color: T.textSub,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+              background: `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, color: '#fff',
+            }}>📢</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: T.warn }}>共有事項タイム</div>
+          </div>
+          <div style={{ paddingLeft: 42, lineHeight: 1.6 }}>
+            会議参加者全員に共有したいトピックを順に発表します。新規追加は「＋ 新規作成」から。
+          </div>
+        </div>
+      ) : withDiscussion ? (
         <div style={{
           maxWidth: 900, width: '100%', margin: '14px auto 0', padding: '16px 20px',
           background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
@@ -2974,11 +3011,14 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onNext
             ・<strong style={{ color: T.text }}>連携が必要な案件</strong>（複数チームで連動する作業）
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* ConfirmationsTab を全社モードで埋め込み（会議中は新規追加も可能に） */}
+      {/* ConfirmationsTab を全社モードで埋め込み (kind/meeting フィルタ付き) */}
       <div style={{ flex: 1, minHeight: 0 }}>
-        <ConfirmationsTab T={extendedT} myName={myName} members={members} companyWide allowCompose />
+        <ConfirmationsTab T={extendedT} myName={myName} members={members}
+          companyWide allowCompose
+          lockedKind={lockedKind}
+          defaultMeetingKey={meetingKey} />
       </div>
 
       {/* フッターナビ */}
@@ -2987,9 +3027,11 @@ function Step2Confirmations({ T, myName, members, withDiscussion, onPrev, onNext
         borderTop: `1px solid ${T.border}`, padding: '12px 20px',
         display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
       }}>
-        <button onClick={onPrev} style={secondaryBtn(T)}>← Step 1 に戻る</button>
+        <button onClick={onPrev} style={secondaryBtn(T)}>← 前のステップに戻る</button>
         <div style={{ flex: 1 }} />
-        <button onClick={onNext} style={primaryBtn(T)}>ネクストアクションへ →</button>
+        <button onClick={onNext} style={primaryBtn(T)}>
+          {isShare ? '確認事項へ →' : 'ネクストアクションへ →'}
+        </button>
       </div>
     </div>
   )
