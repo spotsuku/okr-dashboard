@@ -1004,18 +1004,10 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [activePeriod,  setActivePeriod]  = useState(initialPeriod || getCurrentQ())
   const [activeWeek,    setActiveWeek]    = useState(toDateStr(getMonday(new Date())))
 
-  // 会議別ビュー: どの会議モードで表示するか。
-  // 起動時は最後に開いていた会議を localStorage から復元、無ければ先頭を選択。
-  const [activeMeetingKey, setActiveMeetingKey] = useState(() => {
-    if (typeof window === 'undefined') return WEEKLY_MTG_MEETINGS[0]?.key || null
-    const saved = localStorage.getItem('weeklyMTG_lastKey')
-    if (saved && WEEKLY_MTG_MEETINGS.some(m => m.key === saved)) return saved
-    return WEEKLY_MTG_MEETINGS[0]?.key || null
-  })
-  useEffect(() => {
-    if (typeof window === 'undefined' || !activeMeetingKey) return
-    localStorage.setItem('weeklyMTG_lastKey', activeMeetingKey)
-  }, [activeMeetingKey])
+  // 会議別ビュー: どの会議モードで表示するか (null = 会議選択画面)
+  // 起動時はデフォルトで会議選択画面から開始するが、
+  // 進行中のセッションがあれば下の useEffect でその会議を自動オープンする
+  const [activeMeetingKey, setActiveMeetingKey] = useState(null)
 
   // ファシリ / 一覧 モード切替 (会議選択後)
   // localStorage で保存して同じ会議に戻った時の好みを記憶
@@ -1051,22 +1043,34 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   }
 
   const backToMeetingSelect = () => {
-    // 旧仕様の「会議選択画面に戻る」ボタンは互換性のため残置するが、
-    // 新仕様では先頭の会議に戻るだけ
-    if (WEEKLY_MTG_MEETINGS[0]?.key) selectMeeting(WEEKLY_MTG_MEETINGS[0].key)
+    setActiveMeetingKey(null)
+    setActiveObjId(null)
   }
 
-  // 初回マウント時に levels がロードされた段階で対象レベルを設定
+  // 進行中のセッションがあれば自動でその会議を開く
+  // (started_at != null かつ finished_at == null) を「進行中」とみなす
   useEffect(() => {
-    if (!activeMeetingKey || !levels?.length) return
-    const m = getMeeting(activeMeetingKey)
-    if (!m?.weeklyMTG) return
-    if (m.weeklyMTG.levelName) {
-      const lvl = findLevelByName(m.weeklyMTG.levelName)
-      if (lvl?.id && Number(activeLevelId) !== Number(lvl.id)) setActiveLevelId(lvl.id)
-    }
+    // 既に何か開いていれば何もしない
+    if (activeMeetingKey) return
+    let alive = true
+    const weekMon = toDateStr(getMonday(new Date()))
+    supabase.from('weekly_mtg_sessions')
+      .select('meeting_key, step, started_at, finished_at')
+      .eq('week_start', weekMon)
+      .not('started_at', 'is', null)
+      .is('finished_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!alive || !data) return
+        if (data.meeting_key && WEEKLY_MTG_MEETINGS.some(m => m.key === data.meeting_key)) {
+          selectMeeting(data.meeting_key)
+        }
+      })
+    return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMeetingKey, levels])
+  }, [])
 
   const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
   // マネージャー定例などで事業部を選んでいない状態
@@ -1435,7 +1439,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 subtitle="会議ごとに対象の部署・チーム・観点が自動で絞り込まれます"
                 color="#007AFF"
               />
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:14 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:10 }}>
                 {WEEKLY_MTG_MEETINGS.map(m => {
                   const viewBadge = m.weeklyMTG.withDiscussion ? 'チームサマリー'
                     : m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
@@ -1467,34 +1471,15 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
-      {/* 会議タブバー (常設・全会議切替) */}
-      <div style={{
-        display:'flex', gap:6, overflowX:'auto', flexWrap:'nowrap',
-        padding:'8px 12px', background: wT().bgCard, borderBottom:`1px solid ${wT().border}`,
-        flexShrink:0,
-      }}>
-        {WEEKLY_MTG_MEETINGS.map(m => {
-          const a = activeMeetingKey === m.key
-          return (
-            <button key={m.key} onClick={() => selectMeeting(m.key)} style={{
-              flexShrink:0, padding:'6px 12px', borderRadius:8,
-              border:`1px solid ${a ? m.color : wT().border}`,
-              background: a ? `${m.color}15` : 'transparent',
-              color: a ? m.color : wT().textSub,
-              cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:'inherit',
-              display:'inline-flex', alignItems:'center', gap:6, whiteSpace:'nowrap',
-            }}>
-              <span style={{ fontSize:14 }}>{m.icon}</span>
-              <span>{m.title}</span>
-            </button>
-          )
-        })}
-      </div>
       {/* 会議コンテキストバー */}
       <div style={{
         padding:'8px 16px', borderBottom:`2px solid ${meetingColor}`,
         background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap',
       }}>
+        <button onClick={backToMeetingSelect} style={{
+          padding:'5px 12px', borderRadius:7, border:`1px solid ${meetingColor}40`,
+          background:`${meetingColor}10`, color:meetingColor, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:'inherit',
+        }}>← 会議を変更</button>
         <div style={{
           width:28, height:28, borderRadius:8, background:`${meetingColor}15`,
           display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,
