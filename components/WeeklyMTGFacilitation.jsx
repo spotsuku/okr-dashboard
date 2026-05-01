@@ -392,9 +392,22 @@ export default function WeeklyMTGFacilitation({
             levels={levels}
             scope={scopePreview} session={session}
             onUpdateSession={async (patch) => {
-              if (!session?.id) return
-              const { data } = await supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id).select().single()
-              if (data) setSession(data)
+              if (session?.id) {
+                const { data } = await supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id).select().single()
+                if (data) setSession(data)
+              } else {
+                // セッション未作成 (=会議未開始) の場合は step=0 のドラフト行を作成
+                const { data, error } = await supabase.from('weekly_mtg_sessions')
+                  .insert({
+                    meeting_key: meeting.key,
+                    week_start: weekStart,
+                    step: 0,
+                    ...patch,
+                  })
+                  .select().single()
+                if (error) { console.error('session insert error:', error); return }
+                if (data) setSession(data)
+              }
             }}
             facilitatorDraft={facilitatorDraft}
             onFacilitatorChange={setFacilitatorDraft}
