@@ -870,17 +870,29 @@ function useOrgData(fiscalYear) {
 // ══════════════════════════════════════════════════
 // タブ1: 組織図（levelsテーブルから動的生成）
 // ══════════════════════════════════════════════════
-function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMetaUpdate, onWebhookSave }) {
+function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMetaUpdate, onWebhookSave, onManagerSave }) {
   const [editingMeta, setEditingMeta] = useState(null)
   const [metaBuf, setMetaBuf] = useState({})
   const [saving, setSaving] = useState(false)
   const [webhookEdit, setWebhookEdit] = useState(null) // { levelId, url }
+  const [managerEdit, setManagerEdit] = useState(null) // { levelId }
 
   const handleSaveWebhook = async (levelId, url) => {
     const { error } = await supabase.from('levels').update({ slack_webhook_url: url || null }).eq('id', levelId)
     if (error) { alert('保存に失敗しました: ' + error.message); return }
     if (onWebhookSave) onWebhookSave(levelId, url || null)
     setWebhookEdit(null)
+  }
+
+  const handleSaveManager = async (levelId, memberId) => {
+    const { error } = await supabase.from('levels').update({ manager_id: memberId || null }).eq('id', levelId)
+    if (error) {
+      alert('責任者の保存に失敗しました: ' + (error.message || '原因不明')
+        + '\n\nSQL マイグレーション (supabase_levels_manager.sql) を実行してください。')
+      return
+    }
+    if (onManagerSave) onManagerSave(levelId, memberId || null)
+    setManagerEdit(null)
   }
 
   // ツリー構造：root(parent_id=null) → 事業部 → チーム
@@ -1020,6 +1032,45 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                           </div>
                         ))}
                         {teamMembers.length === 0 && <span style={{ fontSize: 10, color: T().textFaintest, fontStyle: 'italic' }}>メンバーなし</span>}
+                      </div>
+
+                      {/* 📌 責任者 (週次サマリー記入担当) */}
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${T().border}` }}>
+                        {(() => {
+                          const mgr = team.manager_id ? members.find(mm => Number(mm.id) === Number(team.manager_id)) : null
+                          const isEditingMgr = managerEdit?.levelId === team.id
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 10, color: T().textFaint, fontWeight: 700 }}>📌 責任者</span>
+                              {isEditingMgr ? (
+                                <>
+                                  <select defaultValue={team.manager_id || ''}
+                                    onChange={e => handleSaveManager(team.id, e.target.value ? Number(e.target.value) : null)}
+                                    style={{ fontSize: 11, padding: '3px 6px', borderRadius: 5, background: T().selectBg, border: `1px solid ${T().borderMid}`, color: T().text, fontFamily: 'inherit', outline: 'none' }}>
+                                    <option value="">— 未設定 —</option>
+                                    {teamMembers.length > 0
+                                      ? teamMembers.map(mm => <option key={mm.id} value={mm.id}>{mm.name}</option>)
+                                      : members.map(mm => <option key={mm.id} value={mm.id}>{mm.name}</option>)}
+                                  </select>
+                                  <button onClick={() => setManagerEdit(null)}
+                                    style={{ padding: '3px 6px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                                </>
+                              ) : mgr ? (
+                                <span onClick={() => onMemberClick(mgr.name)}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 8px 2px 4px', borderRadius: 99, background: `${avatarColor(mgr.name)}1f`, border: `1px solid ${avatarColor(mgr.name)}55`, fontSize: 11, fontWeight: 700, color: avatarColor(mgr.name), cursor: 'pointer' }}>
+                                  <Avatar name={mgr.name} size={16} avatar_url={mgr.avatar_url} />
+                                  {mgr.name}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 10, color: T().textFaintest, fontStyle: 'italic' }}>未設定</span>
+                              )}
+                              {isAdmin && !isEditingMgr && (
+                                <button onClick={() => setManagerEdit({ levelId: team.id })}
+                                  style={{ marginLeft: 'auto', fontSize: 10, color: T().textMuted, background: 'transparent', border: `1px solid ${T().border}`, borderRadius: 5, padding: '2px 7px', cursor: 'pointer', fontFamily: 'inherit' }}>変更</button>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </div>
 
                       {isAdmin && !isEditing && (
@@ -3408,7 +3459,9 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
         </div>
 
         {activeTab === 'chart' && (
-          <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate} onWebhookSave={(levelId, url) => setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, slack_webhook_url: url } : l))} />
+          <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate}
+            onWebhookSave={(levelId, url) => setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, slack_webhook_url: url } : l))}
+            onManagerSave={(levelId, mid) => setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, manager_id: mid } : l))} />
         )}
         {activeTab === 'workforce' && (
           <WorkforceTab T={T()} />

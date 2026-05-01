@@ -1725,6 +1725,20 @@ function Step1DirectorReview({ T, meeting, weekStart, levels, members, onPrev, o
 function DirectorSummaryList({ T, weekStart, levels, members }) {
   const [teams, setTeams] = useState(null)
   const [activeTeamId, setActiveTeamId] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  // team_weekly_summary の変更を Realtime で購読 → reloadKey をインクリメントして再フェッチ
+  useEffect(() => {
+    const ch = supabase.channel(`director_tws_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_weekly_summary' },
+        payload => {
+          const row = payload.new || payload.old
+          if (row?.week_start !== weekStart) return
+          setReloadKey(k => k + 1)
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [weekStart])
 
   useEffect(() => {
     let alive = true
@@ -1838,7 +1852,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
     }
     load()
     return () => { alive = false }
-  }, [weekStart, levels])
+  }, [weekStart, levels, reloadKey])
 
   if (teams === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>読み込み中…</div>
@@ -2545,6 +2559,20 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
   const wkly = meeting?.weeklyMTG
   const [teams, setTeams] = useState(null) // [{ team, kaCount, owners, statusCounts, good, more, focus }]
   const [loadError, setLoadError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  // team_weekly_summary の変更を Realtime で購読
+  useEffect(() => {
+    const ch = supabase.channel(`mgr_tws_${weekStart}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_weekly_summary' },
+        payload => {
+          const row = payload.new || payload.old
+          if (row?.week_start !== weekStart) return
+          setReloadKey(k => k + 1)
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [weekStart])
 
   // チーム別に当週KAを集計
   useEffect(() => {
@@ -2613,7 +2641,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
     }
     load()
     return () => { alive = false }
-  }, [wkly?.scope, weekStart, levels])
+  }, [wkly?.scope, weekStart, levels, reloadKey])
 
   if (teams === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>チーム別サマリーを集計中...</div>
