@@ -1883,12 +1883,13 @@ function TeamWeeklySummaryCard({ T, viewingMember, myName, isAdmin, members = []
         return mgr?.name || null
       })()}
       tabs={tabTeams.length > 1 ? tabTeams : null}
+      allLevels={levels}
       activeLevelId={activeLevelId} onSelectLevel={setActiveLevelId}
     />
   )
 }
 
-function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = false, level, managerName, tabs, activeLevelId, onSelectLevel }) {
+function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = false, level, managerName, tabs, allLevels = [], activeLevelId, onSelectLevel }) {
   const [good, setGood] = useState('')
   const [more, setMore] = useState('')
   const [focus, setFocus] = useState('')
@@ -2045,21 +2046,10 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
           fontSize: 10, fontWeight: 700,
         }}>⚠️ {aiError}</div>
       )}
-      {/* 複数チーム責任者の場合のタブ */}
+      {/* 複数チーム責任者の場合のタブ (件数によって表示形態を切替) */}
       {tabs && tabs.length > 1 && (
-        <div style={{ display:'flex', gap: 4, marginBottom: 10, flexWrap:'wrap' }}>
-          {tabs.map(t => {
-            const a = Number(t.id) === Number(activeLevelId)
-            return (
-              <button key={t.id} onClick={() => onSelectLevel(t.id)} style={{
-                padding: '4px 10px', borderRadius: 7, border: 'none',
-                background: a ? '#064e3b' : 'rgba(255,255,255,0.55)',
-                color: a ? '#fff' : '#065f46',
-                fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              }}>{t.icon || '🤝'} {t.name}</button>
-            )
-          })}
-        </div>
+        <TeamTabSelector tabs={tabs} allLevels={allLevels}
+          activeLevelId={activeLevelId} onSelect={onSelectLevel} />
       )}
       {canEdit && isAdmin && managerName && Number(level?.manager_id) !== undefined && (
         <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700 }}>
@@ -2100,6 +2090,119 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
             inputBase={inputBase} />
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── タブセレクタ (件数に応じてタブ / 階層の2行 を切替) ────
+function TeamTabSelector({ tabs, allLevels = [], activeLevelId, onSelect }) {
+  // 件数が少ない場合は単純な横並びタブ
+  if (tabs.length <= 6) {
+    return (
+      <div style={{ display:'flex', gap: 4, marginBottom: 10, flexWrap:'wrap' }}>
+        {tabs.map(t => {
+          const a = Number(t.id) === Number(activeLevelId)
+          return (
+            <button key={t.id} onClick={() => onSelect(t.id)} style={{
+              padding: '4px 10px', borderRadius: 7, border: 'none',
+              background: a ? '#064e3b' : 'rgba(255,255,255,0.55)',
+              color: a ? '#fff' : '#065f46',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>{t.icon || '🤝'} {t.name}</button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // 多い場合: 事業部 (parent) でグループ化して 2 行構成
+  const levelById = useMemo(() => {
+    const m = new Map()
+    ;(allLevels || []).forEach(l => l && m.set(Number(l.id), l))
+    return m
+  }, [allLevels])
+
+  // tabs を parent_id でグルーピング (parent が tabs にあれば「事業部単位」、無ければ root直下に "その他")
+  const groups = useMemo(() => {
+    const byParent = new Map()
+    for (const t of tabs) {
+      // parent: tabs自体の parent_id を持つ levelを優先、無ければ自分自身を親グループの代表に
+      const parentId = t.parent_id ? Number(t.parent_id) : null
+      const parent = parentId ? levelById.get(parentId) : null
+      const key = parentId || `__self_${t.id}`
+      if (!byParent.has(key)) {
+        byParent.set(key, {
+          key,
+          parent,           // null なら parent 取得不能
+          parentName: parent?.name || (t.parent_id ? '?' : '事業部レベル'),
+          parentIcon: parent?.icon || '📁',
+          children: [],
+        })
+      }
+      byParent.get(key).children.push(t)
+    }
+    return Array.from(byParent.values())
+  }, [tabs, levelById])
+
+  // 選択中タブの parent group を特定
+  const activeGroupKey = useMemo(() => {
+    const found = groups.find(g => g.children.some(c => Number(c.id) === Number(activeLevelId)))
+    return found?.key || groups[0]?.key
+  }, [groups, activeLevelId])
+
+  const [openGroup, setOpenGroup] = useState(activeGroupKey)
+  useEffect(() => { setOpenGroup(activeGroupKey) }, [activeGroupKey])
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {/* 1段目: 事業部 (グループ) */}
+      <div style={{ display:'flex', gap: 4, flexWrap:'wrap', marginBottom: 6 }}>
+        {groups.map(g => {
+          const a = g.key === openGroup
+          return (
+            <button key={g.key} onClick={() => setOpenGroup(g.key)} style={{
+              padding: '4px 10px', borderRadius: 7, border: 'none',
+              background: a ? '#064e3b' : 'rgba(255,255,255,0.55)',
+              color: a ? '#fff' : '#065f46',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              display:'inline-flex', alignItems:'center', gap: 4,
+            }}>
+              <span>{g.parentIcon}</span>
+              <span>{g.parentName}</span>
+              <span style={{
+                padding: '0 6px', borderRadius: 99,
+                background: a ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.45)',
+                color: a ? '#fff' : '#065f46',
+                fontSize: 9, fontWeight: 800,
+              }}>{g.children.length}</span>
+            </button>
+          )
+        })}
+      </div>
+      {/* 2段目: 選択中グループのチーム */}
+      {(() => {
+        const group = groups.find(g => g.key === openGroup) || groups[0]
+        if (!group) return null
+        return (
+          <div style={{
+            display:'flex', gap: 4, flexWrap:'wrap',
+            padding: '6px 8px', borderRadius: 8,
+            background: 'rgba(255,255,255,0.35)',
+          }}>
+            {group.children.map(t => {
+              const a = Number(t.id) === Number(activeLevelId)
+              return (
+                <button key={t.id} onClick={() => onSelect(t.id)} style={{
+                  padding: '3px 9px', borderRadius: 6, border: 'none',
+                  background: a ? '#10b981' : 'rgba(255,255,255,0.8)',
+                  color: a ? '#fff' : '#065f46',
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}>{t.icon || '🤝'} {t.name}</button>
+              )
+            })}
+          </div>
+        )
+      })()}
     </div>
   )
 }
