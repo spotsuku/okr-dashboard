@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import { OrgProvider } from '../lib/orgContext'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
@@ -1031,7 +1032,11 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   return (
+    <OrgProvider user={user}>
     <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
+      {/* Demo モードバナー */}
+      <DemoBanner />
+      <OrgSwitcherTopBar />
       {/* Header (スマホでは非表示 - MyPageShell の下メニューでナビゲート) */}
       <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
@@ -1234,5 +1239,72 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
     </div>
+    </OrgProvider>
   )
+}
+
+// ─── Demo モードバナー ──────────────────────────────────────
+import { useCurrentOrg } from '../lib/orgContext'
+import OrgSettingsPanel from './OrgSettingsPanel'
+function DemoBanner() {
+  const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+  if (!DEMO_MODE) return null
+  return (
+    <div style={{
+      background: 'linear-gradient(90deg, #ec4899 0%, #f97316 50%, #facc15 100%)',
+      color: '#1f2937',
+      padding: '6px 16px',
+      fontSize: 12, fontWeight: 800, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+      borderBottom: '1px solid rgba(0,0,0,0.1)',
+    }}>
+      <span>🎭 デモモード — どなたでも自由に編集できます (週次リセット)</span>
+      <span style={{ opacity: 0.7, fontSize: 11 }}>※ Google連携・Slack通知などは実際には送信されません</span>
+    </div>
+  )
+}
+
+// ─── 組織切替バー (組織設定ボタン付き) ─
+function OrgSwitcherTopBar() {
+  const { currentOrg, orgs, switchOrg, loading } = useCurrentOrg()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  if (loading) return null
+  if (!currentOrg) return null
+  // 1組織のみ所属でも、組織設定ボタンを表示する
+  return (
+    <>
+      <div style={{
+        padding: '4px 16px', background: 'rgba(0,0,0,0.04)',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+        display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif',
+      }}>
+        <span style={{ color: '#666' }}>🏢 組織:</span>
+        {orgs.length > 1 ? (
+          <select value={currentOrg?.slug || ''} onChange={e => switchOrg(e.target.value)} style={{
+            padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.12)',
+            background: '#fff', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
+          }}>
+            {orgs.map(o => <option key={o.slug} value={o.slug}>{o.name} ({o.role})</option>)}
+          </select>
+        ) : (
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#333' }}>{currentOrg.name} ({currentOrg.role})</span>
+        )}
+        <button onClick={() => setSettingsOpen(true)} title="組織設定" style={{
+          padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.12)',
+          background: 'transparent', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+        }}>⚙️ 設定</button>
+      </div>
+      {settingsOpen && <OrgSettingsPanelWrapper onClose={() => setSettingsOpen(false)} />}
+    </>
+  )
+}
+
+function OrgSettingsPanelWrapper({ onClose }) {
+  const T = COMMON_TOKENS.dark
+  const [user, setUser] = useState(null)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data?.user || null))
+  }, [])
+  return <OrgSettingsPanel T={{ ...T, accentBg: 'rgba(10,132,255,0.16)', warnBg: 'rgba(255,159,10,0.16)', sectionBg: 'rgba(255,255,255,0.04)' }} myEmail={user?.email} onClose={onClose} />
 }

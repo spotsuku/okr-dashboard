@@ -7,8 +7,10 @@
 export const dynamic = 'force-dynamic'
 
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
+import { isDemoMode, demoResponse } from '../../../../../lib/demoMocks'
 
 export async function GET(request) {
+  if (isDemoMode()) return Response.json(demoResponse('calendar/multi-events'))
   const url = new URL(request.url)
   const membersParam = url.searchParams.get('members') || ''
   const startIso = url.searchParams.get('start')
