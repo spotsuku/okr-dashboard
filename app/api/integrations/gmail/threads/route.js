@@ -10,6 +10,7 @@
 export const dynamic = 'force-dynamic'
 
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
+import { isDemoMode, demoResponse } from '../../../../../lib/demoMocks'
 
 // ヘッダから値取得
 function getHeader(headers, name) {
@@ -68,6 +69,7 @@ function extractFromName(from) {
 }
 
 export async function GET(request) {
+  if (isDemoMode()) return Response.json(demoResponse('gmail/threads'))
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
   const limit = Math.max(1, Math.min(50, Number(url.searchParams.get('limit')) || 5))

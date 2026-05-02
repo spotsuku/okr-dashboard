@@ -6,12 +6,14 @@
 export const dynamic = 'force-dynamic'
 
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
+import { isDemoMode, demoResponse } from '../../../../../lib/demoMocks'
 
 function getDriveId() {
   return process.env.NEO_FUKUOKA_DRIVE_ID || ''
 }
 
 export async function GET(request) {
+  if (isDemoMode()) return Response.json(demoResponse('drive/list'))
   try {
     return await handleGet(request)
   } catch (e) {

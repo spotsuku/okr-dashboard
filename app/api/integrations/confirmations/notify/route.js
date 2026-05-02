@@ -9,6 +9,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@supabase/supabase-js'
+import { isDemoMode, demoResponse } from '../../../../../lib/demoMocks'
 
 function admin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -23,6 +24,7 @@ function json(body, init) {
 }
 
 export async function POST(request) {
+  if (isDemoMode()) return Response.json(demoResponse('slack/notify'))
   try {
     const { confirmation_id } = await request.json().catch(() => ({}))
     if (!confirmation_id) return json({ error: 'confirmation_id required' }, { status: 400 })
