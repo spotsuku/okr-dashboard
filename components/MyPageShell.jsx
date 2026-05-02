@@ -1820,13 +1820,17 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
 function TeamWeeklySummaryCard({ T, viewingMember, myName, isAdmin, members = [], levels = [], isViewingSelf }) {
   const monday = useMemo(() => getMondayJSTStr(), [])
 
-  // 管理者は全チーム (leafレベル = 子を持たないレベル) を対象に
+  // 管理者は全チーム (root直下の事業部レイヤーは除外、チームレベル以下) を対象に
   // 一般ユーザーは「自分が responsible なチーム」 + 「所属チーム」
   const adminTeams = useMemo(() => {
     if (!isAdmin) return []
-    const childIds = new Set((levels || []).map(l => Number(l?.parent_id)).filter(Boolean))
-    // root を除外し、葉(チーム)レベルに加えて 事業部レベルも含める
-    return (levels || []).filter(l => l && l.parent_id) // root以外
+    // ルートの id 集合 (parent_id が無い levels)
+    const rootIds = new Set((levels || []).filter(l => !l?.parent_id).map(l => Number(l.id)))
+    return (levels || []).filter(l => {
+      if (!l || !l.parent_id) return false           // ルート (全社) 自体は除外
+      if (rootIds.has(Number(l.parent_id))) return false  // 親がルート = 事業部レイヤー → 除外
+      return true                                     // チームレベル (depth >= 2) のみ
+    })
   }, [levels, isAdmin])
 
   const managerOfTeams = useMemo(() => {
