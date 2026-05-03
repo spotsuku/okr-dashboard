@@ -109,6 +109,61 @@ async function loadKnowledge(supabase) {
   return blocks.join('\n\n')
 }
 
+// ─── 今日の Google Calendar 予定を取得 (本日中の残予定) ───
+async function fetchTodayCalendar(owner) {
+  try {
+    const igRes = await getIntegration(owner, 'google')
+    if (igRes.error || !igRes.integration || igRes.expired) return []
+    const integration = igRes.integration
+
+    // 「今〜本日23:59 (JST)」の予定を取得
+    const now = new Date()
+    const jstOffset = 9 * 3600 * 1000
+    const jstNow = new Date(now.getTime() + jstOffset)
+    const endOfTodayJst = new Date(Date.UTC(
+      jstNow.getUTCFullYear(), jstNow.getUTCMonth(), jstNow.getUTCDate(),
+      23, 59, 59
+    ))
+    const endOfTodayUtc = new Date(endOfTodayJst.getTime() - jstOffset)
+
+    const apiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
+    apiUrl.searchParams.set('timeMin', now.toISOString())
+    apiUrl.searchParams.set('timeMax', endOfTodayUtc.toISOString())
+    apiUrl.searchParams.set('singleEvents', 'true')
+    apiUrl.searchParams.set('orderBy', 'startTime')
+    apiUrl.searchParams.set('maxResults', '20')
+
+    const { response: r } = await callGoogleApiWithRetry(integration, async (token) => {
+      return fetch(apiUrl.toString(), { headers: { Authorization: `Bearer ${token}` } })
+    })
+    if (!r.ok) return []
+    const data = await r.json()
+    return (data.items || []).map(ev => {
+      const startIso = ev.start?.dateTime || ev.start?.date
+      const endIso = ev.end?.dateTime || ev.end?.date
+      const allDay = startIso && startIso.length <= 10
+      return {
+        title: ev.summary || '(無題)',
+        start: startIso, end: endIso, allDay,
+        attendees: (ev.attendees || []).length,
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+// HH:mm (JST) フォーマット
+function fmtTime(iso) {
+  if (!iso) return ''
+  if (iso.length <= 10) return '終日'
+  const d = new Date(iso)
+  const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+  const h = String(jst.getUTCHours()).padStart(2, '0')
+  const m = String(jst.getUTCMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
 // ─── ユーザーの「いま」のコンテキスト取得 ───────────────────────────────
 async function loadUserContext(supabase, owner) {
   const today = new Date().toISOString().slice(0, 10)
@@ -120,14 +175,15 @@ async function loadUserContext(supabase, owner) {
     return m.toISOString().slice(0, 10)
   })()
 
-  // 並行取得
-  const [memberRes, krsRes, krReviewsRes, tasksRes, kptsRes, workLogRes] = await Promise.all([
+  // 並行取得 (Google Calendar も含む)
+  const [memberRes, krsRes, krReviewsRes, tasksRes, kptsRes, workLogRes, calendarEvents] = await Promise.all([
     supabase.from('members').select('name, role, is_admin').eq('name', owner).limit(1),
     supabase.from('key_results').select('id, title, owner').eq('owner', owner),
     supabase.from('kr_weekly_reviews').select('*').eq('week_start', monday),
     supabase.from('ka_tasks').select('id, title, due_date, done, status').eq('assignee', owner).neq('status', 'done').order('due_date'),
     supabase.from('coaching_logs').select('content, created_at').eq('owner', owner).eq('log_type', 'kpt').order('created_at', { ascending: false }).limit(3),
     supabase.from('coaching_logs').select('content').eq('owner', owner).eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 18 * 3600 * 1000).toISOString()).order('created_at', { ascending: false }).limit(1),
+    fetchTodayCalendar(owner),
   ])
 
   const member = memberRes.data?.[0]
@@ -157,6 +213,32 @@ async function loadUserContext(supabase, owner) {
   lines.push(`- 役職: ${member?.role || '(未登録)'}`)
   lines.push(`- 本日のステータス: ${workLogStatus}`)
 
+  // 今日の予定 (Google Calendar)
+  const events = calendarEvents || []
+  if (events.length > 0) {
+    lines.push(`\n### ${owner} さんの本日の残り予定 (Google Calendar)`)
+    let busyMinutes = 0
+    for (const ev of events) {
+      const startStr = fmtTime(ev.start)
+      const endStr = fmtTime(ev.end)
+      const range = ev.allDay ? '終日' : `${startStr}〜${endStr}`
+      const att = ev.attendees > 1 ? ` 参加者${ev.attendees}名` : ''
+      lines.push(`- ${range}: ${ev.title}${att}`)
+      // 拘束時間ざっくり計算 (allDay は除く)
+      if (!ev.allDay && ev.start && ev.end) {
+        try {
+          const dur = (new Date(ev.end).getTime() - new Date(ev.start).getTime()) / 60000
+          if (dur > 0 && dur < 24 * 60) busyMinutes += dur
+        } catch { /* noop */ }
+      }
+    }
+    if (busyMinutes > 0) {
+      lines.push(`- 拘束時間合計: 約 ${Math.round(busyMinutes)} 分 (≒${(busyMinutes / 60).toFixed(1)}時間)`)
+    }
+  } else {
+    lines.push(`\n### ${owner} さんの本日の残り予定\n(Google Calendar 未連携 or 今後の予定なし)`)
+  }
+
   if (krs.length > 0) {
     lines.push(`\n### ${owner} さんの今期 OKR / KR と今週レビュー`)
     for (const kr of krs) {
@@ -173,6 +255,10 @@ async function loadUserContext(supabase, owner) {
   if (overdueTasks.length > 0) {
     lines.push(`- 停滞中:`)
     for (const t of overdueTasks.slice(0, 5)) lines.push(`  - ${t.title} (期限 ${t.due_date})`)
+  }
+  if (todayTasks.length > 0) {
+    lines.push(`- 本日期限:`)
+    for (const t of todayTasks.slice(0, 5)) lines.push(`  - ${t.title}`)
   }
 
   if (kpts.length > 0) {
@@ -377,6 +463,7 @@ async function handle(request) {
 5. 簡潔に、フラットな口調で。ですます調。絵文字は最小限
 6. 「あなた」と呼ばずに「${owner}さん」と呼ぶ
 7. ${coachInstruction}
+8. **本日の予定 (Google Calendar) を必ず加味する** — 「本日の残り予定」セクションがあれば、それを前提に回答を組み立てる。例: 「14:00〜15:00 に経営会議があるので、その前の30分で〜できますか?」のように、空き時間と拘束時間を意識した提案・問いをする。会議の合間に物理的に入らない量のタスクを提案しない
 
 ## 現在の状況
 - 日時: ${today}
