@@ -408,49 +408,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
         </div>
       )}
 
-      {/* ─── 月間ランキング ─── */}
-      {rankings && (
-        <>
-          <SectionHeader title="月間ランキング" icon="🏆" themeKey={themeKey} />
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: 12, marginBottom: 24,
-          }}>
-            <RankingCard T={wT()}
-              title="有言実行王" emoji="🎯"
-              subtitle="期限内タスク完了率"
-              entries={rankings.promiseKeeper.map(r => ({
-                name: r.name,
-                main: `${Math.round(r.score * 100)}%`,
-                sub: `期限切れ ${r.overdue}/${r.total}件`,
-              }))} />
-            <RankingCard T={wT()}
-              title="タスク完了王" emoji="✅"
-              subtitle="過去30日の完了数"
-              entries={rankings.taskMaster.map(r => ({
-                name: r.name,
-                main: `${r.count}件`,
-                sub: '',
-              }))} />
-            <RankingCard T={wT()}
-              title="振り返り王" emoji="📝"
-              subtitle="直近4週の good/more/focus 記入"
-              entries={rankings.reflection.map(r => ({
-                name: r.name,
-                main: `${r.fullWeeks}週フル記入`,
-                sub: `${r.totalChars}文字`,
-              }))} />
-            <RankingCard T={wT()}
-              title="目標達成王" emoji="🎖"
-              subtitle="担当KR平均達成率"
-              entries={rankings.goalAchiever.map(r => ({
-                name: r.name,
-                main: `${Math.round(r.avg)}%`,
-                sub: `KR ${r.count}件`,
-              }))} />
-          </div>
-        </>
-      )}
+      {/* 月間ランキングは全社ダッシュボード (週間) に移動 */}
 
       {allObjectives.length > 0 && (
         <>
