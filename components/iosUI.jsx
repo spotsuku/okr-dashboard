@@ -558,6 +558,12 @@ const ICON_PATHS = {
       <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
     </>
   ),
+  link: (
+    <>
+      <path d="M10 14a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1" />
+      <path d="M14 10a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1" />
+    </>
+  ),
 }
 export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 1.8, style }) {
   const path = ICON_PATHS[name]

@@ -1,20 +1,13 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { COMMON_TOKENS, IOS_SHADOW } from '../lib/themeTokens'
 import { LargeTitle, SearchBar, DashboardTile } from './iosUI'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
+// 外部サービス (別タブで開く) はホームには表示しない方針に変更。
+// ユーザーが必要なURLを「カスタムリンク」として自分で登録する。
 const DASHBOARDS = [
-  { id: 'okr',         title: 'OKR ダッシュボード',         description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true,  group: 'main',     keywords: 'okr ka タスク 目標' },
-
-  { id: 'cs',          title: 'CS ダッシュボード',          description: '顧客対応・満足度管理',           icon: 'users',      color: '#34C759', url: 'https://neo-cs.vercel.app/',                       group: 'business', keywords: 'cs 顧客 満足度' },
-  { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: 'trendingUp', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', group: 'business', keywords: 'sales 営業 商談' },
-  { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: 'building',   color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',  group: 'business', keywords: 'community コミュニティ' },
-  { id: 'youth',       title: 'ユース ダッシュボード',      description: 'ユース活動管理',                 icon: 'sprout',     color: '#FFCC00', url: 'https://neo-youth.vercel.app/dashboard',           group: 'business', keywords: 'youth ユース' },
-
-  { id: 'seisaku',     title: '制作物管理',                 description: '制作物の進行・管理',             icon: 'palette',    color: '#5AC8FA', url: 'https://seisaku-kanri-blond.vercel.app/',           group: 'tools',    keywords: '制作 デザイン' },
-  { id: 'budget',      title: '予算管理 ダッシュボード',     description: '予算策定・実績管理',             icon: 'chartPie',   color: '#AF52DE', url: 'https://neobudget-liard.vercel.app/#',              group: 'tools',    keywords: '予算 管理 実績' },
-  { id: 'invitation',  title: 'イベント招待 ダッシュボード', description: 'イベント招待・参加管理',         icon: 'envelope',   color: '#FF2D55', url: 'https://invitation-ruby-psi.vercel.app/',           group: 'tools',    keywords: 'invitation イベント招待' },
+  { id: 'okr', title: 'OKR ダッシュボード', description: 'OKR・KA・タスク管理', icon: 'target', color: '#007AFF', internal: true, group: 'main', keywords: 'okr ka タスク 目標' },
 ]
 
 // テーマは lib/themeTokens.js で一元管理
@@ -24,30 +17,102 @@ const THEMES = {
 }
 
 const GROUPS = [
-  { key: 'main',     label: '主要',           sub: '全社管理'   },
-  { key: 'business', label: '事業ダッシュボード', sub: '事業部別の運営状況' },
-  { key: 'tools',    label: '管理ツール',      sub: '業務サポート系' },
+  { key: 'main',   label: '主要',         sub: '全社管理'        },
+  { key: 'custom', label: 'カスタムリンク', sub: 'よく使うURLを登録' },
 ]
+
+const CUSTOM_LINK_COLORS = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5AC8FA', '#AF52DE', '#FF2D55', '#FFCC00']
+const CUSTOM_LINKS_KEY = (email) => `portal_custom_links_v1_${email || 'guest'}`
+
+function loadCustomLinks(email) {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_LINKS_KEY(email))
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
+}
+function saveCustomLinks(email, links) {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.setItem(CUSTOM_LINKS_KEY(email), JSON.stringify(links)) } catch { /* noop */ }
+}
+function normalizeUrl(input) {
+  const t = (input || '').trim()
+  if (!t) return ''
+  if (/^https?:\/\//i.test(t)) return t
+  return `https://${t}`
+}
 
 export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
   const T = THEMES[themeKey] || THEMES.dark
   const [search, setSearch] = useState('')
+  const [customLinks, setCustomLinks] = useState([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [formTitle, setFormTitle] = useState('')
+  const [formUrl, setFormUrl] = useState('')
+  const [formError, setFormError] = useState('')
+
+  // localStorage から読み込み (ユーザーごと)
+  useEffect(() => {
+    setCustomLinks(loadCustomLinks(user?.email))
+  }, [user?.email])
+
+  const persistLinks = useCallback((next) => {
+    setCustomLinks(next)
+    saveCustomLinks(user?.email, next)
+  }, [user?.email])
+
+  function openAddDialog() {
+    setEditingId(null); setFormTitle(''); setFormUrl(''); setFormError(''); setShowAdd(true)
+  }
+  function openEditDialog(link) {
+    setEditingId(link.id); setFormTitle(link.title); setFormUrl(link.url); setFormError(''); setShowAdd(true)
+  }
+  function submitForm() {
+    const title = formTitle.trim()
+    const url = normalizeUrl(formUrl)
+    if (!title) { setFormError('タイトルを入力してください'); return }
+    if (!url)   { setFormError('URLを入力してください'); return }
+    try { new URL(url) } catch { setFormError('URLの形式が正しくありません'); return }
+    if (editingId) {
+      persistLinks(customLinks.map(l => l.id === editingId ? { ...l, title, url } : l))
+    } else {
+      const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      const color = CUSTOM_LINK_COLORS[customLinks.length % CUSTOM_LINK_COLORS.length]
+      persistLinks([...customLinks, { id, title, url, color }])
+    }
+    setShowAdd(false)
+  }
+  function deleteLink(id) {
+    if (!window.confirm('このリンクを削除しますか？')) return
+    persistLinks(customLinks.filter(l => l.id !== id))
+  }
 
   const handleClick = (db) => {
     if (db.internal) onNavigate('mycoach')
-    else if (db.url) window.open(db.url, '_blank')
+    else if (db.url) window.open(db.url, '_blank', 'noopener,noreferrer')
   }
 
-  // 検索フィルタ
+  // 検索フィルタ (内蔵 + カスタム)
+  const allItems = useMemo(() => [
+    ...DASHBOARDS,
+    ...customLinks.map(l => ({
+      id: l.id, title: l.title, description: l.url, icon: 'link', color: l.color || '#007AFF',
+      url: l.url, group: 'custom', keywords: `${l.title} ${l.url}`, custom: true,
+    })),
+  ], [customLinks])
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return DASHBOARDS
+    if (!search.trim()) return allItems
     const q = search.toLowerCase()
-    return DASHBOARDS.filter(db =>
+    return allItems.filter(db =>
       db.title.toLowerCase().includes(q) ||
-      db.description.toLowerCase().includes(q) ||
-      db.keywords.toLowerCase().includes(q)
+      (db.description || '').toLowerCase().includes(q) ||
+      (db.keywords || '').toLowerCase().includes(q)
     )
-  }, [search])
+  }, [search, allItems])
 
   // 時間帯による挨拶
   const greet = (() => {
@@ -123,11 +188,12 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
         {/* ─── グループ別ダッシュボード ─── */}
         {GROUPS.map(g => {
           const items = filtered.filter(db => db.group === g.key)
-          if (items.length === 0) return null
+          // カスタムは0件でも常時表示 (追加ボタン用)
+          if (items.length === 0 && g.key !== 'custom') return null
           return (
             <section key={g.key} style={{ marginBottom: 28 }}>
               <div style={{
-                display: 'flex', alignItems: 'baseline', gap: 10,
+                display: 'flex', alignItems: 'center', gap: 10,
                 padding: '0 4px 12px',
               }}>
                 <h2 style={{
@@ -135,37 +201,169 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
                   letterSpacing: '-0.01em',
                 }}>{g.label}</h2>
                 <span style={{ fontSize: 12, color: T.textMuted }}>{g.sub}</span>
+                {g.key === 'custom' && (
+                  <button onClick={openAddDialog} style={{
+                    marginLeft: 'auto',
+                    padding: '6px 14px', borderRadius: 8,
+                    background: T.accent, color: '#fff', border: 'none',
+                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}>＋ URLを追加</button>
+                )}
               </div>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                gap: 14,
-              }}>
-                {items.map(db => (
-                  <DashboardTile key={db.id} T={T}
-                    icon={db.icon}
-                    title={db.title}
-                    sub={db.description}
-                    color={db.color}
-                    onClick={() => handleClick(db)}
-                    status={db.internal ? 'アプリ内で開く' : '別タブで開く'} />
-                ))}
-              </div>
+              {items.length === 0 && g.key === 'custom' ? (
+                <div style={{
+                  padding: '20px 16px', textAlign: 'center', color: T.textMuted,
+                  fontSize: 12, background: T.bgCard, borderRadius: 14,
+                  border: `1px dashed ${T.border}`, lineHeight: 1.7,
+                }}>
+                  好きなURLをここに登録できます。<br />
+                  社内ツールや業務でよく使うサイトを「＋ URLを追加」から登録してください。
+                </div>
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                  gap: 14,
+                }}>
+                  {items.map(db => (
+                    <div key={db.id} style={{ position: 'relative' }}>
+                      <DashboardTile T={T}
+                        icon={db.icon}
+                        title={db.title}
+                        sub={db.description}
+                        color={db.color}
+                        onClick={() => handleClick(db)}
+                        status={db.internal ? 'アプリ内で開く' : '別タブで開く'} />
+                      {db.custom && (
+                        <div style={{
+                          position: 'absolute', top: 8, right: 8,
+                          display: 'flex', gap: 4,
+                        }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openEditDialog(customLinks.find(l => l.id === db.id)) }}
+                            title="編集"
+                            style={{
+                              width: 26, height: 26, borderRadius: 6,
+                              background: T.bgCard, color: T.textSub,
+                              border: `1px solid ${T.border}`, cursor: 'pointer',
+                              fontSize: 12, fontFamily: 'inherit',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>✎</button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteLink(db.id) }}
+                            title="削除"
+                            style={{
+                              width: 26, height: 26, borderRadius: 6,
+                              background: T.bgCard, color: T.danger,
+                              border: `1px solid ${T.danger}40`, cursor: 'pointer',
+                              fontSize: 12, fontFamily: 'inherit',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>×</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           )
         })}
 
-        {filtered.length === 0 && (
+        {filtered.length === 0 && search && (
           <div style={{
             padding: '40px 20px', textAlign: 'center', color: T.textMuted,
             fontSize: 13, background: T.bgCard, borderRadius: 14,
             boxShadow: IOS_SHADOW,
           }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>🔍</div>
-            「{search}」に一致するダッシュボードがありません
+            「{search}」に一致する項目がありません
           </div>
         )}
       </div>
+
+      {/* ─── 追加 / 編集モーダル ─── */}
+      {showAdd && (
+        <div
+          onClick={() => setShowAdd(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: T.bgCard, borderRadius: 16,
+              padding: 24, maxWidth: 460, width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              display: 'flex', flexDirection: 'column', gap: 14,
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>
+              {editingId ? 'リンクを編集' : '好きなURLを登録'}
+            </div>
+            <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>
+              業務でよく使うサイトをホームに表示できます。
+              タイトルとURLを入力してください。
+            </div>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.textSub }}>タイトル</span>
+              <input
+                type="text" value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                placeholder="例: 社内Wiki"
+                style={{
+                  padding: '10px 12px', borderRadius: 8,
+                  border: `1px solid ${T.border}`, background: T.sectionBg,
+                  color: T.text, fontSize: 13, fontFamily: 'inherit',
+                  outline: 'none',
+                }}
+              />
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.textSub }}>URL</span>
+              <input
+                type="url" value={formUrl}
+                onChange={(e) => setFormUrl(e.target.value)}
+                placeholder="例: https://example.com"
+                style={{
+                  padding: '10px 12px', borderRadius: 8,
+                  border: `1px solid ${T.border}`, background: T.sectionBg,
+                  color: T.text, fontSize: 13, fontFamily: 'inherit',
+                  outline: 'none',
+                }}
+              />
+            </label>
+
+            {formError && (
+              <div style={{
+                padding: '8px 12px', borderRadius: 6,
+                background: `${T.danger}1a`, color: T.danger,
+                fontSize: 12, fontWeight: 600,
+              }}>⚠️ {formError}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button onClick={() => setShowAdd(false)} style={{
+                flex: 1, padding: '10px 16px', borderRadius: 8,
+                background: 'transparent', color: T.textSub,
+                border: `1px solid ${T.border}`, cursor: 'pointer',
+                fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+              }}>キャンセル</button>
+              <button onClick={submitForm} style={{
+                flex: 1, padding: '10px 16px', borderRadius: 8,
+                background: T.accent, color: '#fff', border: 'none',
+                cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                fontFamily: 'inherit',
+              }}>{editingId ? '保存' : '追加'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
