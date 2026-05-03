@@ -198,10 +198,16 @@ function UserListTab({ members, currentUser, isAdmin }) {
   const fetchUsers = async () => {
     setLoading(true); setError('')
     try {
+      // 現在閲覧中の members に登録された email のみに絞る (本番ユーザーが demo に漏れないため)
+      // members[] は親から渡されており、現在の組織にRLS絞り込まれている
+      const allowedEmails = new Set(
+        (members || []).map(m => (m?.email || '').toLowerCase()).filter(Boolean)
+      )
       const res = await fetch('/api/admin-users')
       const data = await res.json()
       if (!res.ok || data.error) { setError(data.error || '取得に失敗しました'); setLoading(false); return }
-      const sorted = (data.users || []).sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0))
+      const filtered = (data.users || []).filter(u => allowedEmails.has((u.email || '').toLowerCase()))
+      const sorted = filtered.sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0))
       setAuthUsers(sorted)
     } catch (e) { setError(e.message) }
     setLoading(false)

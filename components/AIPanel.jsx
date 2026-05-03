@@ -1,19 +1,27 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 
-const SUGGESTIONS = [
+const IS_DEMO = (typeof process !== 'undefined') && process.env?.NEXT_PUBLIC_DEMO_MODE === 'true'
+
+const SUGGESTIONS = IS_DEMO ? [
+  'Humano Robotics の現在のOKRをレビューしてください',
+  'シリーズB調達に向けて、経営層が注力すべきKAは？',
+  '量産フェーズ移行で気をつけるべきリスクは？',
+  'CES2026 出展に向けたPRチームのKAを提案してください',
+] : [
   '現在のOKRにフィードバックをください',
   '経営レベルのOKRの案を提案してください',
   '目標達成率を上げるためのアドバイスをください',
   'KRの設定方法のベストプラクティスを教えてください',
 ]
 
+const WELCOME_MSG = IS_DEMO
+  ? 'こんにちは！Humano Robotics の OKR AIコーチです (デモ環境)。\n\n現在のOKRデータを参照しながら、シリーズB・量産移行・CES出展などの経営課題についてアドバイスします。お気軽に質問してください。'
+  : 'こんにちは！OKRコーチのClaudeです。\n\nOKRの案の作成、フィードバック、目標達成のアドバイスなど、何でもご相談ください。現在のOKRデータも参照しながらサポートします。'
+
 export default function AIPanel({ onClose, okrContext, initialMessage }) {
   const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'こんにちは！OKRコーチのClaudeです。\n\nOKRの案の作成、フィードバック、目標達成のアドバイスなど、何でもご相談ください。現在のOKRデータも参照しながらサポートします。',
-    },
+    { role: 'assistant', content: WELCOME_MSG },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)

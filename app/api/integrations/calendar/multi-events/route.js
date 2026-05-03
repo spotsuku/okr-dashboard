@@ -7,12 +7,16 @@
 export const dynamic = 'force-dynamic'
 
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
-import { isDemoMode, demoResponse } from '../../../../../lib/demoMocks'
+import { isDemoMode, demoResponse, shouldMock } from '../../../../../lib/demoMocks'
 
 export async function GET(request) {
-  if (isDemoMode()) return Response.json(demoResponse('calendar/multi-events'))
   const url = new URL(request.url)
   const membersParam = url.searchParams.get('members') || ''
+  // DEMO_MODE: 全メンバーが未連携なら mock、誰か1人でも連携済なら実フロー
+  if (isDemoMode()) {
+    const firstOwner = (membersParam.split(',')[0] || '').trim()
+    if (await shouldMock(firstOwner)) return Response.json(demoResponse('calendar/multi-events'))
+  }
   const startIso = url.searchParams.get('start')
   const endIso = url.searchParams.get('end')
 

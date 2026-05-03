@@ -6,7 +6,7 @@
 export const dynamic = 'force-dynamic'
 
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
-import { isDemoMode, demoResponse } from '../../../../../lib/demoMocks'
+import { isDemoMode, demoResponse, shouldMock } from '../../../../../lib/demoMocks'
 
 function getDriveId() {
   return process.env.NEO_FUKUOKA_DRIVE_ID || ''
@@ -18,7 +18,10 @@ function escapeQuery(q) {
 }
 
 export async function GET(request) {
-  if (isDemoMode()) return Response.json(demoResponse('drive/search'))
+  if (isDemoMode()) {
+    const owner = new URL(request.url).searchParams.get('owner')
+    if (await shouldMock(owner)) return Response.json(demoResponse('drive/search'))
+  }
   try { return await handleGet(request) } catch (e) {
     return json({ error: `drive/search 内部エラー: ${e?.message || e}` }, { status: 500 })
   }

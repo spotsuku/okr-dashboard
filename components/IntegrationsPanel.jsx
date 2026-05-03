@@ -23,6 +23,8 @@ function formatRelative(iso) {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+const IS_DEMO = (typeof process !== 'undefined') && process.env?.NEXT_PUBLIC_DEMO_MODE === 'true'
+
 export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
   const [integ, setInteg] = useState(null)        // { access_token, scope, expires_at, metadata, connected_at }
   const [loading, setLoading] = useState(true)
@@ -73,6 +75,12 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
   }, [load])
 
   function handleConnect() {
+    // デモ環境では Google 連携を完全に禁止 (複数ゲストが同じ owner を共有するため
+    // トークンが上書きされ、他人にメール内容が漏れるリスクがある)
+    if (IS_DEMO) {
+      setErrorMsg('デモ環境では Google 連携は無効化されています。Gmail / Calendar / Drive はサンプルデータで動作確認してください。')
+      return
+    }
     if (!myName) { setErrorMsg('ユーザー情報が取得できません'); return }
     setBusy(true)
     const u = new URL('/api/integrations/google/start', window.location.origin)
@@ -115,8 +123,10 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
           🔌 外部サービス連携
         </h2>
         <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 22 }}>
-          Google アカウントを連携すると、Gmail の重要メールと Google カレンダーの予定がダッシュボードに表示され、AI返信も使えるようになります。
-          {!isViewingSelf && ' (自分を選択中のみ操作可能)'}
+          {IS_DEMO
+            ? 'デモ環境では外部サービスとの連携は無効化されています。Gmail / Calendar / Drive タブではサンプルデータが表示されます。'
+            : 'Google アカウントを連携すると、Gmail の重要メールと Google カレンダーの予定がダッシュボードに表示され、AI返信も使えるようになります。'}
+          {!IS_DEMO && !isViewingSelf && ' (自分を選択中のみ操作可能)'}
         </div>
 
         {errorMsg && (
@@ -147,7 +157,36 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
           </div>
         )}
 
-        {loading ? (
+        {IS_DEMO ? (
+          <div style={{
+            background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
+            border: `1px solid ${T.warn}40`,
+            borderLeft: `4px solid ${T.warn}`,
+            borderRadius: 16, padding: 20,
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                fontSize: 24, width: 44, height: 44, borderRadius: 10,
+                background: `${T.warn}18`, color: T.warn,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>🚫</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>
+                  デモ環境では Google 連携は無効です
+                </div>
+                <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+                  複数の見学者が同じアカウントを共有しているため、安全のため連携機能を停止しています。
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.7, padding: '4px 2px' }}>
+              ・Gmail / Calendar / Drive タブはサンプルデータで動作します<br />
+              ・本番環境にデプロイされた際は実際の Google アカウントと連携可能になります<br />
+              ・ご自身の Google アカウントを試したい場合は、本番デプロイ後にご利用ください
+            </div>
+          </div>
+        ) : loading ? (
           <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
             読み込み中...
           </div>
@@ -268,15 +307,17 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
         )}
 
         {/* セットアップメモ */}
-        <div style={{
-          marginTop: 20, padding: 12,
-          background: T.sectionBg, border: `1px dashed ${T.border}`,
-          borderRadius: 8, fontSize: 11, color: T.textMuted, lineHeight: 1.6,
-        }}>
-          <div style={{ fontWeight: 700, color: T.textSub, marginBottom: 4 }}>💡 ヒント</div>
-          同意画面で「メールメッセージの表示」「下書きの管理とメール送信」「予定の表示」すべてにチェックを入れて「許可」してください。
-          1つでも外すと一部機能が動作しません。
-        </div>
+        {!IS_DEMO && (
+          <div style={{
+            marginTop: 20, padding: 12,
+            background: T.sectionBg, border: `1px dashed ${T.border}`,
+            borderRadius: 8, fontSize: 11, color: T.textMuted, lineHeight: 1.6,
+          }}>
+            <div style={{ fontWeight: 700, color: T.textSub, marginBottom: 4 }}>💡 ヒント</div>
+            同意画面で「メールメッセージの表示」「下書きの管理とメール送信」「予定の表示」すべてにチェックを入れて「許可」してください。
+            1つでも外すと一部機能が動作しません。
+          </div>
+        )}
       </div>
     </div>
   )

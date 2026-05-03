@@ -10,12 +10,31 @@ function getAdminClient() {
 }
 
 // ─── GET: ユーザー一覧取得 ────────────────────────────────────────────────────
-export async function GET() {
+// クエリパラメータ:
+//   ?org_slug=demo / ?org_id=123 → そのorgのmembers.emailと一致するAuth usersのみ
+//   なし → 全Auth users
+export async function GET(request) {
   try {
     const admin = getAdminClient()
+    const url = new URL(request.url)
+    const orgSlug = url.searchParams.get('org_slug')
+    const orgId   = url.searchParams.get('org_id')
+
     const { data, error } = await admin.auth.admin.listUsers({ perPage: 1000 })
     if (error) return Response.json({ error: error.message }, { status: 500 })
-    return Response.json({ users: data.users })
+
+    let users = data.users
+    if (orgSlug || orgId) {
+      let q = admin.from('members').select('email, organization_id, organizations!inner(id, slug)')
+      if (orgSlug) q = q.eq('organizations.slug', orgSlug)
+      else         q = q.eq('organizations.id', Number(orgId))
+      const { data: memberRows } = await q
+      const allowedEmails = new Set((memberRows || [])
+        .map(r => (r.email || '').toLowerCase())
+        .filter(Boolean))
+      users = users.filter(u => allowedEmails.has((u.email || '').toLowerCase()))
+    }
+    return Response.json({ users })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
   }
