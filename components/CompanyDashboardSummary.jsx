@@ -73,12 +73,27 @@ export default function CompanyDashboardSummary({
   const [submittedTeamCount, setSubmittedTeamCount] = useState({ total: 0, submitted: 0 })
   const [rankings, setRankings] = useState(null)
 
+  // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
+  const lastWeekRange = useMemo(() => {
+    const thisMon = new Date(monday + 'T00:00:00.000Z')
+    const lastMon = new Date(thisMon.getTime() - 7 * 86400000)
+    const lastSunEnd = new Date(thisMon.getTime() - 1)  // 先週日曜23:59:59.999 (今週月曜の1ms前)
+    return {
+      mondayStr: lastMon.toISOString().slice(0, 10),       // YYYY-MM-DD
+      mondayIso: lastMon.toISOString(),                     // 開始ISO
+      sundayEndIso: lastSunEnd.toISOString(),               // 終了ISO
+      label: `${lastMon.getUTCMonth() + 1}/${lastMon.getUTCDate()}〜${new Date(thisMon.getTime() - 86400000).getUTCMonth() + 1}/${new Date(thisMon.getTime() - 86400000).getUTCDate()}`,
+    }
+  }, [monday])
+
   // 一括取得 (各クエリは個別に成否を判定。1つ失敗しても他は処理する)
   useEffect(() => {
     let alive = true
     setLoading(true)
     ;(async () => {
-      const days7Ago = new Date(Date.now() - 7 * 86400000).toISOString()
+      // ランキング用: 先週月〜日 (created_at で範囲指定)
+      const lwStart = lastWeekRange.mondayIso
+      const lwEnd = lastWeekRange.sundayEndIso
       const queries = [
         ['allTasks',     supabase.from('ka_tasks').select('id, assignee, due_date, done, status, created_at').range(0, 9999)],
         ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 9999)],
@@ -87,10 +102,12 @@ export default function CompanyDashboardSummary({
         ['msRes',        supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)).range(0, 999)],
         ['workLogs',     supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).range(0, 999)],
         ['teamSums',     supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999)],
-        // 振り返り王の集計ソース: coaching_logs(log_type=kpt) — 振り返りタブと同じデータ
-        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', days7Ago).range(0, 9999)],
-        ['ka7Done',      supabase.from('ka_tasks').select('assignee').gte('created_at', days7Ago).eq('done', true).range(0, 9999)],
-        ['ka7WithDue',   supabase.from('ka_tasks').select('assignee, due_date, done, status').gte('created_at', days7Ago).not('due_date', 'is', null).range(0, 9999)],
+        // 振り返り王: 先週月〜日 の KPT ログ
+        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 9999)],
+        // タスク完了王: 先週月〜日 に created_at があり done=true のタスク
+        ['lwDone',       supabase.from('ka_tasks').select('assignee, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).eq('done', true).range(0, 9999)],
+        // 有言実行王: 先週月〜日 に作成された期限付きタスク
+        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).not('due_date', 'is', null).range(0, 9999)],
       ]
       const settled = await Promise.allSettled(queries.map(([_, p]) => p))
       if (!alive) return
@@ -182,9 +199,10 @@ export default function CompanyDashboardSummary({
         const validMembers = new Set((members || []).map(m => m.name))
         const excludeNames = new Set(['👀 ゲスト'])
 
-        // 1. 有言実行王: 過去7日の期限付きタスクのうち期限切れ未完了でない率
+        // 1. 有言実行王: 先週作成の期限付きタスクのうち、期限内に終わらなかった率
+        // (今日時点で done=false かつ due_date < today なら期限破り)
         const promiseStats = {}
-        for (const t of r.ka7WithDue?.data || []) {
+        for (const t of r.lwWithDue?.data || []) {
           if (!t.assignee || excludeNames.has(t.assignee) || !validMembers.has(t.assignee)) continue
           const ps = promiseStats[t.assignee] = promiseStats[t.assignee] || { total: 0, overdue: 0 }
           ps.total++
@@ -198,7 +216,7 @@ export default function CompanyDashboardSummary({
 
         // 2. タスク完了王: 過去7日
         const doneCount = {}
-        for (const t of r.ka7Done?.data || []) {
+        for (const t of r.lwDone?.data || []) {
           if (!t.assignee || excludeNames.has(t.assignee) || !validMembers.has(t.assignee)) continue
           doneCount[t.assignee] = (doneCount[t.assignee] || 0) + 1
         }
@@ -251,13 +269,14 @@ export default function CompanyDashboardSummary({
       // デバッグ用: クエリ別の取得件数を console に
       console.info('[全社ダッシュボード] 取得件数:', {
         全タスク: (r.allTasks?.data || []).length,
-        過去7日完了タスク: (r.ka7Done?.data || []).length,
-        過去7日期限付きタスク: (r.ka7WithDue?.data || []).length,
+        '先週完了タスク': (r.lwDone?.data || []).length,
+        '先週期限付きタスク': (r.lwWithDue?.data || []).length,
+        '先週KPT': (r.kptLogs?.data || []).length,
         KR: krList.length,
         今週KRレビュー: (r.weeklyRevs?.data || []).length,
-        今週KPT: (r.kptLogs?.data || []).length,
         今週チームサマリー: (r.teamSums?.data || []).length,
         マイルストーン: (r.msRes?.data || []).length,
+        先週範囲: lastWeekRange.label,
       })
 
       setLoading(false)
@@ -297,10 +316,10 @@ export default function CompanyDashboardSummary({
           <TodayCard T={T} todayTaskStats={todayTaskStats} workingMembers={workingMembers} />
         </div>
 
-        {/* 週間ランキング (4列) */}
+        {/* 週間ランキング (4列) — 先週月曜〜日曜の確定ランキング */}
         {rankings && (
           <>
-            <SectionTitle T={T} icon="🏆" iconColor="#FF9500" title="週間ランキング" sub="今週の Top 3" />
+            <SectionTitle T={T} icon="🏆" iconColor="#FF9500" title="週間ランキング" sub={`先週 (${lastWeekRange.label}) の Top 3`} />
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
               gap: SPACING.md, marginBottom: SPACING.xl,
