@@ -150,6 +150,12 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [activeTab, setActiveTab] = useState('dashboard')
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
+  // COOタブのチャット状態を親で保持 (タブ移動でアンマウントされても消えないように)
+  const [cooChatState, setCooChatState] = useState({
+    history: [],
+    historyLoaded: false,
+    mode: 'coach',
+  })
   // 📬 表示対象メンバー宛の未解決「確認事項」件数 (サブタブバッジ + バナー用)
   //   viewingName で絞るため、他メンバーのページを見ても件数が表示される
   const [unresolvedConfirmCount, setUnresolvedConfirmCount] = useState(0)
@@ -708,7 +714,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'coo' && (
             <COOTab T={T} myName={myName} viewingName={viewingName}
-              isAdmin={isAdmin} onOpenSettings={() => setCooSettingsOpen(true)} />
+              isAdmin={isAdmin} onOpenSettings={() => setCooSettingsOpen(true)}
+              chatState={cooChatState} setChatState={setCooChatState} />
           )}
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />

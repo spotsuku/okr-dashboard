@@ -13,16 +13,35 @@ function useIsMobile(bp = 768) {
   return m
 }
 
-export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings }) {
+export default function COOTab({
+  T, myName, viewingName, isAdmin, onOpenSettings,
+  chatState, setChatState,
+}) {
   const isMobile = useIsMobile()
   const owner = viewingName || myName
 
-  const [history, setHistory] = useState([])
-  const [historyLoaded, setHistoryLoaded] = useState(false)
+  // chatState が親から渡されていれば使う (タブ移動で消えない)
+  // 渡されていなければ COOTab 内ローカル state でフォールバック
+  const [localState, setLocalState] = useState({ history: [], historyLoaded: false, mode: 'coach' })
+  const useParent = !!setChatState
+  const stateBag = useParent ? chatState : localState
+  const setStateBag = useParent ? setChatState : setLocalState
+
+  const history = stateBag.history
+  const historyLoaded = stateBag.historyLoaded
+  const mode = stateBag.mode
+
+  const setHistory = (updater) => setStateBag(prev => ({
+    ...prev,
+    history: typeof updater === 'function' ? updater(prev.history) : updater,
+  }))
+  const setHistoryLoaded = (v) => setStateBag(prev => ({ ...prev, historyLoaded: v }))
+  const setMode = (v) => setStateBag(prev => ({ ...prev, mode: v }))
+
+  // input/busy/err/lastUserMsg はタブを離れている間に意味を失うのでローカル
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [mode, setMode] = useState('coach')
   const [lastUserMsg, setLastUserMsg] = useState('')
   const scrollRef = useRef(null)
 
