@@ -95,19 +95,22 @@ export default function CompanyDashboardSummary({
       const lwStart = lastWeekRange.mondayIso
       const lwEnd = lastWeekRange.sundayEndIso
       const queries = [
-        ['allTasks',     supabase.from('ka_tasks').select('id, assignee, due_date, done, status, created_at').range(0, 9999)],
-        ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 9999)],
-        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday).range(0, 9999)],
+        ['allTasks',     supabase.from('ka_tasks').select('id, assignee, due_date, done, status, created_at').range(0, 1999)],
+        ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 1999)],
+        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday).range(0, 1999)],
         ['openConfirms', supabase.from('member_confirmations').select('id', { count: 'exact', head: true }).eq('status', 'open')],
         ['msRes',        supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)).range(0, 999)],
         ['workLogs',     supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).range(0, 999)],
         ['teamSums',     supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999)],
         // 振り返り王: 先週月〜日 の KPT ログ
-        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 9999)],
+        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 1999)],
         // タスク完了王: 先週月〜日 に created_at があり done=true のタスク
-        ['lwDone',       supabase.from('ka_tasks').select('assignee, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).eq('done', true).range(0, 9999)],
+        ['lwDone',       supabase.from('ka_tasks').select('assignee, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).eq('done', true).range(0, 1999)],
         // 有言実行王: 先週月〜日 に作成された期限付きタスク
-        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).not('due_date', 'is', null).range(0, 9999)],
+        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).not('due_date', 'is', null).range(0, 1999)],
+        // 実践王: 先週の OKR 記入 (weekly_reports = KAレビュー / kr_weekly_reviews = KRレビュー)
+        ['lwReports',    supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 1999)],
+        ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 1999)],
       ]
       const settled = await Promise.allSettled(queries.map(([_, p]) => p))
       if (!alive) return
@@ -117,13 +120,16 @@ export default function CompanyDashboardSummary({
       settled.forEach((s, i) => {
         const key = queries[i][0]
         if (s.status !== 'fulfilled') {
-          console.warn(`[CompanyDashboardSummary] ${key} クエリ失敗:`, s.reason)
+          console.warn(`[CompanyDashboardSummary] ${key} クエリ失敗:`, s.reason?.message || s.reason)
           r[key] = { data: [], count: 0, error: s.reason }
           return
         }
         if (s.value?.error) {
-          console.warn(`[CompanyDashboardSummary] ${key} エラー:`, s.value.error)
-          r[key] = { data: [], count: 0, error: s.value.error }
+          const e = s.value.error
+          console.warn(`[CompanyDashboardSummary] ${key} エラー:`, {
+            message: e.message, code: e.code, details: e.details, hint: e.hint,
+          })
+          r[key] = { data: [], count: 0, error: e }
           return
         }
         r[key] = s.value
@@ -246,7 +252,40 @@ export default function CompanyDashboardSummary({
           .sort((a, b) => b.totalChars - a.totalChars || b.fullEntries - a.fullEntries)
           .slice(0, 3)
 
-        // 4. 目標達成王: 担当 KR の平均達成率 (逆指標対応)
+        // 4. 実践王: 先週の OKR 記入 (weekly_reports KA + kr_weekly_reviews KR の good/more/focus 網羅性 + 文字数)
+        const practiceStats = {}
+        const ensurePr = (name) => practiceStats[name] = practiceStats[name] || { entries: 0, fullEntries: 0, totalChars: 0 }
+        // KA レビュー (weekly_reports): owner = メンバー名
+        for (const row of r.lwReports?.data || []) {
+          if (!row.owner || excludeNames.has(row.owner) || !validMembers.has(row.owner)) continue
+          const g = (row.good || '').trim(), m = (row.more || '').trim(), f = (row.focus_output || '').trim()
+          if (!g && !m && !f) continue
+          const ps = ensurePr(row.owner)
+          ps.entries++
+          if (g && m && f) ps.fullEntries++
+          ps.totalChars += g.length + m.length + f.length
+        }
+        // KR レビュー (kr_weekly_reviews): kr_id → KR.owner で名前解決
+        const krOwnerMap = {}
+        krList.forEach(kr => { krOwnerMap[kr.id] = kr.owner })
+        for (const row of r.lwKrRevs?.data || []) {
+          const owner = krOwnerMap[row.kr_id]
+          if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
+          const g = (row.good || '').trim(), m = (row.more || '').trim()
+          const f = (row.focus_output || '').trim() || (row.focus || '').trim()
+          if (!g && !m && !f) continue
+          const ps = ensurePr(owner)
+          ps.entries++
+          if (g && m && f) ps.fullEntries++
+          ps.totalChars += g.length + m.length + f.length
+        }
+        const practiceMaster = Object.entries(practiceStats)
+          .map(([name, s]) => ({ name, totalChars: s.totalChars, fullEntries: s.fullEntries, entries: s.entries }))
+          .filter(p => p.totalChars >= 30)
+          .sort((a, b) => b.totalChars - a.totalChars || b.fullEntries - a.fullEntries)
+          .slice(0, 3)
+
+        // 5. 目標達成王: 担当 KR の平均達成率 (逆指標対応)
         const krProgressByOwner = {}
         for (const kr of krList) {
           const owner = kr.owner
@@ -260,7 +299,7 @@ export default function CompanyDashboardSummary({
           .map(([name, arr]) => ({ name, avg: arr.reduce((a, b) => a + b, 0) / arr.length, count: arr.length }))
           .sort((a, b) => b.avg - a.avg).slice(0, 3)
 
-        setRankings({ promiseKeeper, taskMaster, reflection, goalAchiever })
+        setRankings({ promiseKeeper, taskMaster, reflection, practiceMaster, goalAchiever })
       } catch (e) {
         console.warn('rankings calc error:', e)
         setRankings(null)
@@ -321,20 +360,27 @@ export default function CompanyDashboardSummary({
           <>
             <SectionTitle T={T} icon="🏆" iconColor="#FF9500" title="週間ランキング" sub={`先週 (${lastWeekRange.label}) の Top 3`} />
             <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
               gap: SPACING.md, marginBottom: SPACING.xl,
             }}>
               <RankingCard T={T} title="有言実行王" emoji="🎯" accent="#34C759" subtitle="期限内完了率"
                 entries={rankings.promiseKeeper.map(r => ({
                   name: r.name, main: `${Math.round(r.score * 100)}%`, sub: `${r.overdue}/${r.total}件遅延`,
                 }))} />
-              <RankingCard T={T} title="タスク完了王" emoji="✅" accent="#007AFF" subtitle="今週の完了数"
+              <RankingCard T={T} title="タスク完了王" emoji="✅" accent="#007AFF" subtitle="先週の完了数"
                 entries={rankings.taskMaster.map(r => ({ name: r.name, main: `${r.count}件`, sub: '' }))} />
-              <RankingCard T={T} title="振り返り王" emoji="📝" accent="#AF52DE" subtitle="KPT (Keep/Problem/Try) の総文字数"
+              <RankingCard T={T} title="振り返り王" emoji="📝" accent="#AF52DE" subtitle="KPT 総文字数"
                 entries={rankings.reflection.map(r => ({
                   name: r.name,
                   main: `${r.totalChars}字`,
-                  sub: `${r.entries}日記入${r.fullEntries > 0 ? ` / KPT全項目 ${r.fullEntries}日` : ''}`,
+                  sub: `${r.entries}日記入`,
+                }))} />
+              <RankingCard T={T} title="実践王" emoji="🔥" accent="#FF3B30" subtitle="OKR 記入 (KR+KA)"
+                entries={rankings.practiceMaster.map(r => ({
+                  name: r.name,
+                  main: `${r.totalChars}字`,
+                  sub: `網羅 ${r.fullEntries}/${r.entries}件`,
                 }))} />
               <RankingCard T={T} title="目標達成王" emoji="🎖" accent="#FF9500" subtitle="担当 KR 平均"
                 entries={rankings.goalAchiever.map(r => ({ name: r.name, main: `${Math.round(r.avg)}%`, sub: `KR ${r.count}件` }))} />
