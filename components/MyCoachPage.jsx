@@ -53,6 +53,7 @@ const THEMES = {
 }
 
 const SUGGESTIONS = [
+  '今日何をすればいいですか？',
   '今週やるべきことを教えて',
   'OKR達成率を上げるアドバイス',
   '最近の頑張りを褒めて',
@@ -92,6 +93,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
   const [proposedTasks, setProposedTasks] = useState([])
   const [proposingTasks, setProposingTasks] = useState(false)
   const [kaTab, setKaTab] = useState('all')
+  const [todayEvents, setTodayEvents] = useState([])  // 今日のGoogle Calendar予定
 
   // AI Chat state
   const [messages, setMessages] = useState([
@@ -183,6 +185,19 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     if (savedLog) setWeeklyCoaching(savedLog.content)
 
     setLoading(false)
+
+    // 今日のカレンダー予定を取得 (失敗・未連携時は無視。AI文脈に追加するためのもの)
+    try {
+      const r = await fetch(`/api/integrations/calendar/events?owner=${encodeURIComponent(myName)}&hours=14`)
+      if (r.ok) {
+        const data = await r.json()
+        setTodayEvents(Array.isArray(data?.items) ? data.items : [])
+      } else {
+        setTodayEvents([])
+      }
+    } catch {
+      setTodayEvents([])
+    }
   }, [myName, thisMonday, fiscalYear])
 
   useEffect(() => { loadData() }, [loadData])
@@ -227,6 +242,20 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
       jobDescription: myJd ? { role: myJd.role, roleDesc: myJd.role_desc, responsibility: myJd.responsibility, tasks: myJd.tasks } : null,
       orgTasks: orgTasks.slice(0, 20).map(t => ({ dept: t.dept, team: t.team, task: t.task })),
       premises: premises.map(p => p.content),
+      // 今日のGoogle Calendar予定 (時刻/タイトル/参加者)
+      todayCalendar: (todayEvents || []).map(ev => ({
+        title: ev.title,
+        startTime: ev.startTime || ev.start,  // route.js が startTime を返す or 元の start ISO
+        endTime: ev.endTime || ev.end,
+        allDay: !!ev.allDay,
+        attendees: Array.isArray(ev.attendees) ? ev.attendees.length : 0,
+      })),
+      // 期限切れ/今日/明日のタスクを別出ししてAIが優先付けしやすくする
+      tasksByUrgency: {
+        overdue: tasks.filter(t => t.due_date && t.due_date < today).map(t => ({ title: t.title, due: t.due_date })),
+        dueToday: tasks.filter(t => t.due_date === today).map(t => ({ title: t.title })),
+        dueThisWeek: tasks.filter(t => t.due_date && t.due_date > today && t.due_date <= thisSunday).map(t => ({ title: t.title, due: t.due_date })),
+      },
     }
   }
 

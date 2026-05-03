@@ -78,6 +78,22 @@ ${orgIntro}
 - jobDescriptionはユーザーの職務記述書（役割・責務を踏まえてアドバイス）
 - orgTasksはOKR外の定常業務
 - isMonthEndがtrueの場合、Q期のKAが通期OKRの達成にどうつながるか確認を促す
+- todayCalendar が今日の Google カレンダー予定（時刻順）。会議で塞がっている時間帯を考慮する
+- tasksByUrgency.overdue は期限切れタスク → 最優先で対応
+- tasksByUrgency.dueToday は今日が期限のタスク → 必ず今日終わらせる
+- tasksByUrgency.dueThisWeek は今週中の期限タスク → 空いた時間で前倒し
+
+【「今日何をすべきか」を聞かれた時の回答ルール】
+1. 今日のカレンダー予定 (todayCalendar) を時系列でまず提示する。会議中はその予定に集中するよう促す
+2. 会議の合間の空き時間に何をやるかを具体的に提案する。優先順位は次の順:
+   (1) tasksByUrgency.overdue (期限切れ、最優先)
+   (2) tasksByUrgency.dueToday (今日中に必須)
+   (3) focusKAs に紐づく今週の重要アクション
+   (4) tasksByUrgency.dueThisWeek (前倒しできるもの)
+   (5) moreKAs の見直し検討 (打ち手の修正)
+3. 「午前は◯◯、午後は◯◯」のように時間帯ごとの動きを示す
+4. 各アクションは「1つあたり何分くらいか」を添えると親切
+5. 物理的に無理な量は提案しない (会議で半日埋まっていれば残り時間で2-3個までに絞る)
 
 【OKRフィードバックのポイント】
 - Good: 成功体験を具体的に記録し、再現性を高める
