@@ -44,12 +44,14 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'current_org_ids') THEN
     -- マルチテナント版: 自分の所属組織内のみ
+    -- 注: current_org_ids() は SETOF を返すため、policy 式では IN (SELECT ...) でラップする必要がある
+    --     (= ANY(...) で渡すと "set-returning functions are not allowed in policy expressions" エラー)
     EXECUTE 'CREATE POLICY coaching_chats_select ON coaching_chats
-             FOR SELECT USING (organization_id = ANY(current_org_ids()))';
+             FOR SELECT USING (organization_id IN (SELECT current_org_ids()))';
     EXECUTE 'CREATE POLICY coaching_chats_insert ON coaching_chats
-             FOR INSERT WITH CHECK (organization_id = ANY(current_org_ids()))';
+             FOR INSERT WITH CHECK (organization_id IN (SELECT current_org_ids()))';
     EXECUTE 'CREATE POLICY coaching_chats_delete ON coaching_chats
-             FOR DELETE USING (organization_id = ANY(current_org_ids()))';
+             FOR DELETE USING (organization_id IN (SELECT current_org_ids()))';
   ELSE
     -- フォールバック: 認証済みなら全許可
     EXECUTE 'CREATE POLICY coaching_chats_select ON coaching_chats FOR SELECT USING (true)';
