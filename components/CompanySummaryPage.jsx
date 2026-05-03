@@ -109,6 +109,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
   const [activePeriod, setActivePeriod] = useState(getCurrentQ())
   const [loading, setLoading] = useState(true)
   const [allObjectives, setAllObjectives] = useState([])
+  const [rankings, setRankings] = useState(null)  // { promiseKeeper, taskMaster, reflection, goalAchiever }
 
   const periodTabs = [
     { key: 'q1', label: 'Q1' },
@@ -161,6 +162,142 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
       })
 
       setAllObjectives(objs.map(o => ({ ...o, key_results: krMap[o.id] || [] })))
+
+      // ─── ランキング集計 ───────────────────────────────────────
+      // 過去30日 + 直近4週の範囲で集計
+      try {
+        const today = new Date()
+        const todayStr = today.toISOString().slice(0, 10)
+        const days30Ago = new Date(today.getTime() - 30 * 86400000).toISOString()
+        const weeks4Ago = new Date(today.getTime() - 28 * 86400000).toISOString().slice(0, 10)
+        const memberNames = (members || []).filter(m => !m.is_admin || true).map(m => m.name)
+        const validMembers = new Set(memberNames)
+        // ゲスト等を除外
+        const excludeNames = new Set(['👀 ゲスト'])
+
+        const [ktAllRes, ktDoneRes, weeklyRes, krReviewRes] = await Promise.all([
+          // 過去30日に作成された期限付きタスク全部
+          supabase.from('ka_tasks')
+            .select('assignee, due_date, done, status, created_at')
+            .gte('created_at', days30Ago)
+            .not('due_date', 'is', null)
+            .range(0, 49999),
+          // 過去30日内の完了タスク (created_at が30日以内 → 完了したもの)
+          supabase.from('ka_tasks')
+            .select('assignee')
+            .gte('created_at', days30Ago)
+            .eq('done', true)
+            .range(0, 49999),
+          // 直近4週の weekly_reports
+          supabase.from('weekly_reports')
+            .select('owner, week_start, good, more, focus_output')
+            .gte('week_start', weeks4Ago)
+            .range(0, 49999),
+          // 直近4週の kr_weekly_reviews
+          supabase.from('kr_weekly_reviews')
+            .select('week_start, good, more, focus, focus_output, kr_id')
+            .gte('week_start', weeks4Ago)
+            .range(0, 49999),
+        ])
+
+        // 1. 有言実行王: 期限付きタスクのうち「期限切れ未完了」でない率
+        const promiseStats = {}
+        for (const t of ktAllRes.data || []) {
+          if (!t.assignee || excludeNames.has(t.assignee)) continue
+          if (!validMembers.has(t.assignee)) continue
+          const ps = promiseStats[t.assignee] = promiseStats[t.assignee] || { total: 0, overdue: 0 }
+          ps.total++
+          const overdue = !t.done && t.due_date && t.due_date < todayStr
+          if (overdue) ps.overdue++
+        }
+        const promiseKeeper = Object.entries(promiseStats)
+          .filter(([_, s]) => s.total >= 3)  // ノイズ除去 (3件以上)
+          .map(([name, s]) => ({ name, score: 1 - s.overdue / s.total, total: s.total, overdue: s.overdue }))
+          .sort((a, b) => b.score - a.score || b.total - a.total)
+          .slice(0, 3)
+
+        // 2. タスク完了王: 過去30日の完了数
+        const doneCount = {}
+        for (const t of ktDoneRes.data || []) {
+          if (!t.assignee || excludeNames.has(t.assignee)) continue
+          if (!validMembers.has(t.assignee)) continue
+          doneCount[t.assignee] = (doneCount[t.assignee] || 0) + 1
+        }
+        const taskMaster = Object.entries(doneCount)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 3)
+
+        // 3. 振り返り王: 直近4週の good/more/focus_output 記入の網羅性 + 文字数
+        // weekly_reports は owner ベース、kr_weekly_reviews は kr_id 経由なので KR.owner を引く
+        const reflStats = {}  // { name: { weeks: Set, fullWeeks: Set, totalChars } }
+        const ensureRefl = (name) => reflStats[name] = reflStats[name] || { weeks: new Set(), fullWeeks: new Set(), totalChars: 0 }
+
+        for (const r of weeklyRes.data || []) {
+          if (!r.owner || excludeNames.has(r.owner) || !validMembers.has(r.owner)) continue
+          const ps = ensureRefl(r.owner)
+          ps.weeks.add(r.week_start)
+          const g = (r.good || '').trim()
+          const m = (r.more || '').trim()
+          const f = (r.focus_output || '').trim()
+          if (g && m && f) ps.fullWeeks.add(r.week_start)
+          ps.totalChars += g.length + m.length + f.length
+        }
+        // KR レビュー (KR.owner と紐付け)
+        const krOwnerMap = {}
+        allKrs.forEach(kr => { krOwnerMap[kr.id] = kr.owner })
+        for (const r of krReviewRes.data || []) {
+          const owner = krOwnerMap[r.kr_id]
+          if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
+          const ps = ensureRefl(owner)
+          ps.weeks.add(r.week_start)
+          const g = (r.good || '').trim()
+          const m = (r.more || '').trim()
+          const f = (r.focus_output || '').trim() || (r.focus || '').trim()
+          if (g && m && f) ps.fullWeeks.add(r.week_start)
+          ps.totalChars += g.length + m.length + f.length
+        }
+        const reflection = Object.entries(reflStats)
+          .map(([name, s]) => ({
+            name,
+            score: s.fullWeeks.size * 100 + Math.floor(s.totalChars / 10),
+            fullWeeks: s.fullWeeks.size,
+            totalChars: s.totalChars,
+          }))
+          .filter(r => r.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3)
+
+        // 4. 目標達成王: 担当KRの平均達成率 (今期間 activePeriod)
+        const krProgressByOwner = {}
+        for (const o of objs) {
+          for (const kr of (krMap[o.id] || [])) {
+            const owner = kr.owner
+            if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
+            const arr = krProgressByOwner[owner] = krProgressByOwner[owner] || []
+            const target = Number(kr.target) || 0
+            const current = Number(kr.current) || 0
+            // KRが「逆指標」(下げる目標) は判別できないのでcap=150のまま素直計算
+            const pct = target ? Math.min(150, (current / target) * 100) : 0
+            arr.push(pct)
+          }
+        }
+        const goalAchiever = Object.entries(krProgressByOwner)
+          .filter(([_, arr]) => arr.length >= 1)
+          .map(([name, arr]) => ({
+            name,
+            avg: arr.reduce((a, b) => a + b, 0) / arr.length,
+            count: arr.length,
+          }))
+          .sort((a, b) => b.avg - a.avg)
+          .slice(0, 3)
+
+        setRankings({ promiseKeeper, taskMaster, reflection, goalAchiever })
+      } catch (e) {
+        console.warn('rankings calc error:', e)
+        setRankings(null)
+      }
+
       setLoading(false)
     }
     load()
@@ -269,6 +406,50 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
         <div style={{ textAlign: 'center', padding: 40, color: wT().textMuted, fontSize: 13 }}>
           この期間にOKRデータがありません
         </div>
+      )}
+
+      {/* ─── 月間ランキング ─── */}
+      {rankings && (
+        <>
+          <SectionHeader title="月間ランキング" icon="🏆" themeKey={themeKey} />
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: 12, marginBottom: 24,
+          }}>
+            <RankingCard T={wT()}
+              title="有言実行王" emoji="🎯"
+              subtitle="期限内タスク完了率"
+              entries={rankings.promiseKeeper.map(r => ({
+                name: r.name,
+                main: `${Math.round(r.score * 100)}%`,
+                sub: `期限切れ ${r.overdue}/${r.total}件`,
+              }))} />
+            <RankingCard T={wT()}
+              title="タスク完了王" emoji="✅"
+              subtitle="過去30日の完了数"
+              entries={rankings.taskMaster.map(r => ({
+                name: r.name,
+                main: `${r.count}件`,
+                sub: '',
+              }))} />
+            <RankingCard T={wT()}
+              title="振り返り王" emoji="📝"
+              subtitle="直近4週の good/more/focus 記入"
+              entries={rankings.reflection.map(r => ({
+                name: r.name,
+                main: `${r.fullWeeks}週フル記入`,
+                sub: `${r.totalChars}文字`,
+              }))} />
+            <RankingCard T={wT()}
+              title="目標達成王" emoji="🎖"
+              subtitle="担当KR平均達成率"
+              entries={rankings.goalAchiever.map(r => ({
+                name: r.name,
+                main: `${Math.round(r.avg)}%`,
+                sub: `KR ${r.count}件`,
+              }))} />
+          </div>
+        </>
       )}
 
       {allObjectives.length > 0 && (
@@ -405,6 +586,57 @@ function SectionHeader({ title, icon, themeKey }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
       <span style={{ fontSize: 14 }}>{icon}</span>
       <span style={{ fontSize: 13, fontWeight: 800, color: wT().text }}>{title}</span>
+    </div>
+  )
+}
+
+// 🏆 ランキングカード (Top3 表示)
+function RankingCard({ T, title, emoji, subtitle, entries }) {
+  const medals = ['🥇', '🥈', '🥉']
+  const medalBg = ['#FFD60018', '#C7C7CC18', '#FF950018']
+  const medalColor = ['#FFD60a', '#C7C7CC', '#FF9500']
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`,
+      borderRadius: 14, padding: '14px 16px',
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 18 }}>{emoji}</span>
+          <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{title}</span>
+        </div>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>{subtitle}</div>
+      </div>
+      {entries.length === 0 ? (
+        <div style={{ padding: 12, fontSize: 11, color: T.textMuted, textAlign: 'center' }}>
+          データ不足
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {entries.map((e, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 8px', borderRadius: 8,
+              background: medalBg[i],
+              border: `1px solid ${medalColor[i]}30`,
+            }}>
+              <span style={{ fontSize: 18, width: 22, textAlign: 'center' }}>{medals[i]}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {e.name}
+                </div>
+                {e.sub && (
+                  <div style={{ fontSize: 9, color: T.textMuted, marginTop: 1 }}>{e.sub}</div>
+                )}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: medalColor[i], whiteSpace: 'nowrap' }}>
+                {e.main}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
