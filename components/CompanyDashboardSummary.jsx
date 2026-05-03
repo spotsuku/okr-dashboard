@@ -22,8 +22,32 @@ function todayJSTStr() {
 }
 function fmtMonthDay(ds) {
   if (!ds) return ''
-  const d = new Date(ds + 'T00:00:00')
+  const s = String(ds).slice(0, 10)
+  const d = new Date(s + 'T00:00:00')
   return `${d.getMonth() + 1}/${d.getDate()}`
+}
+// due_date / 日付列を 'YYYY-MM-DD' 文字列に正規化 (Supabase が稀に Date 型を返す対策)
+function dateStr(v) {
+  if (!v) return ''
+  return String(v).slice(0, 10)
+}
+// KR が逆指標 (低いほど良い) か判定。タイトル末尾の表現で推定
+function isInvertedKR(title) {
+  if (!title) return false
+  const t = String(title)
+  return /以下|以内|削減|短縮|抑え|減らす|低減/.test(t)
+}
+// KR の達成率を 0〜150% で計算 (逆指標対応)
+function calcKRPct(kr) {
+  const target = Number(kr.target) || 0
+  const current = Number(kr.current) || 0
+  if (!target) return 0
+  if (isInvertedKR(kr.title)) {
+    // 逆指標: current ≤ target で 100%以上、current が大きいほど低い
+    if (current <= 0) return 150  // 完全達成 (例: 不良 0)
+    return Math.max(0, Math.min(150, (target / current) * 100))
+  }
+  return Math.min(150, (current / target) * 100)
 }
 
 const THEMES = { dark: COMMON_TOKENS.dark, light: COMMON_TOKENS.light }
@@ -74,9 +98,14 @@ export default function CompanyDashboardSummary({
         if (!alive) return
 
         const tasks = allTasks.data || []
-        const overdueTasks = tasks.filter(t => !t.done && t.due_date && t.due_date < today)
+        // due_date を defensively YYYY-MM-DD に正規化して比較
+        const overdueTasks = tasks.filter(t => {
+          if (t.done || t.status === 'done') return false
+          const d = dateStr(t.due_date)
+          return d && d < today
+        })
         setOverdueCount(overdueTasks.length)
-        const todayTasks = tasks.filter(t => t.due_date === today)
+        const todayTasks = tasks.filter(t => dateStr(t.due_date) === today)
         setTodayTaskStats({
           total: todayTasks.length,
           done: todayTasks.filter(t => t.done || t.status === 'done').length,
@@ -111,7 +140,9 @@ export default function CompanyDashboardSummary({
         const moreMap = {}
         ;(weeklyReviews.data || []).forEach(r => { if ((r.more || '').trim()) moreMap[r.kr_id] = r.more })
         const pinch = krList.filter(kr => kr.target).map(kr => ({
-          ...kr, pct: Math.min(150, (Number(kr.current) || 0) / Number(kr.target) * 100),
+          ...kr,
+          pct: calcKRPct(kr),  // 逆指標対応
+          inverted: isInvertedKR(kr.title),
           hasMore: !!moreMap[kr.id], moreText: moreMap[kr.id] || '',
         })).filter(kr => kr.pct < 70 || kr.hasMore)
         .sort((a, b) => (a.hasMore !== b.hasMore) ? (a.hasMore ? -1 : 1) : a.pct - b.pct)
@@ -138,7 +169,8 @@ export default function CompanyDashboardSummary({
             if (!t.assignee || excludeNames.has(t.assignee) || !validMembers.has(t.assignee)) continue
             const ps = promiseStats[t.assignee] = promiseStats[t.assignee] || { total: 0, overdue: 0 }
             ps.total++
-            if (!t.done && t.due_date && t.due_date < todayStr) ps.overdue++
+            const d = dateStr(t.due_date)
+            if (!t.done && t.status !== 'done' && d && d < todayStr) ps.overdue++
           }
           const promiseKeeper = Object.entries(promiseStats)
             .filter(([_, s]) => s.total >= 2)
@@ -174,21 +206,25 @@ export default function CompanyDashboardSummary({
             ps.entries++; if (g && m && f) ps.fullEntries++
             ps.totalChars += g.length + m.length + f.length
           }
+          // 総文字数を主指標、同点時は記入網羅件数で順位付け
+          // (件数が多くても1件あたり短いと低スコアになるよう、文字数を優先)
           const reflection = Object.entries(reflStats).map(([name, s]) => ({
-            name, score: s.fullEntries * 100 + Math.floor(s.totalChars / 10),
-            fullEntries: s.fullEntries, totalChars: s.totalChars,
-          })).filter(r => r.score > 0).sort((a, b) => b.score - a.score).slice(0, 3)
+            name, totalChars: s.totalChars, fullEntries: s.fullEntries,
+          })).filter(r => r.totalChars >= 50)  // 最低 50 字で参加資格
+          .sort((a, b) => b.totalChars - a.totalChars || b.fullEntries - a.fullEntries)
+          .slice(0, 3)
 
+          // 担当 KR の平均達成率 (逆指標 KR は target/current で計算)
           const krProgressByOwner = {}
           for (const kr of krList) {
             const owner = kr.owner
             if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
+            if (!Number(kr.target)) continue  // target=0 は除外 (定性 KR)
             const arr = krProgressByOwner[owner] = krProgressByOwner[owner] || []
-            const target = Number(kr.target) || 0, current = Number(kr.current) || 0
-            arr.push(target ? Math.min(150, (current / target) * 100) : 0)
+            arr.push(calcKRPct(kr))
           }
           const goalAchiever = Object.entries(krProgressByOwner)
-            .filter(([_, arr]) => arr.length >= 1)
+            .filter(([_, arr]) => arr.length >= 2)  // 1件だけだと外れ値で 150% など出やすいので 2件以上
             .map(([name, arr]) => ({ name, avg: arr.reduce((a, b) => a + b, 0) / arr.length, count: arr.length }))
             .sort((a, b) => b.avg - a.avg).slice(0, 3)
 
@@ -252,8 +288,12 @@ export default function CompanyDashboardSummary({
                 }))} />
               <RankingCard T={T} title="タスク完了王" emoji="✅" accent="#007AFF" subtitle="今週の完了数"
                 entries={rankings.taskMaster.map(r => ({ name: r.name, main: `${r.count}件`, sub: '' }))} />
-              <RankingCard T={T} title="振り返り王" emoji="📝" accent="#AF52DE" subtitle="good/more/focus 記入"
-                entries={rankings.reflection.map(r => ({ name: r.name, main: `${r.fullEntries}件`, sub: `${r.totalChars}字` }))} />
+              <RankingCard T={T} title="振り返り王" emoji="📝" accent="#AF52DE" subtitle="good/more/focus の総文字数"
+                entries={rankings.reflection.map(r => ({
+                  name: r.name,
+                  main: `${r.totalChars}字`,
+                  sub: `網羅 ${r.fullEntries}件`,
+                }))} />
               <RankingCard T={T} title="目標達成王" emoji="🎖" accent="#FF9500" subtitle="担当 KR 平均"
                 entries={rankings.goalAchiever.map(r => ({ name: r.name, main: `${Math.round(r.avg)}%`, sub: `KR ${r.count}件` }))} />
             </div>
