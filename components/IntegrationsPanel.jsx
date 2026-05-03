@@ -74,6 +74,22 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
 
   function handleConnect() {
     if (!myName) { setErrorMsg('ユーザー情報が取得できません'); return }
+    // DEMO_MODE: 連携前に強い警告を出す
+    const isDemo = (typeof process !== 'undefined') && process.env?.NEXT_PUBLIC_DEMO_MODE === 'true'
+    if (isDemo) {
+      const ok = window.confirm(
+        '⚠️ 重要: 実際にあなたの Google アカウントと連携されます\n\n'
+        + '・このデモは複数の見学者が共用しているため、\n'
+        + '  あなたの Gmail / Calendar / Drive の情報が他のデモ visitor から閲覧される可能性があります。\n'
+        + '・テスト用のサブアカウントでの連携を推奨します。\n'
+        + '・テスト終了後は必ず「🔌 連携解除」ボタンで連携を解除してください。\n'
+        + '・解除後、本アプリ側のトークンは削除されますが、\n'
+        + '  Google アカウント側 ( https://myaccount.google.com/permissions ) でも\n'
+        + '  アクセス権限を取り消すことを推奨します。\n\n'
+        + '上記を理解した上で連携を続行しますか？'
+      )
+      if (!ok) return
+    }
     setBusy(true)
     const u = new URL('/api/integrations/google/start', window.location.origin)
     u.searchParams.set('owner', myName)
