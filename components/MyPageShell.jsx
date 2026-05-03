@@ -13,6 +13,7 @@ import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
 import ConfirmationsTab, { ComposeModal } from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
+import CompanyDashboardSummary from './CompanyDashboardSummary'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -607,7 +608,12 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0 }}>
           {activeTab === 'dashboard' && (
             summaryMode ? (
-              <SummaryPlaceholder T={T} title="全体ダッシュボード" note="表示内容は検討中です。" />
+              <CompanyDashboardSummary
+                T={T} themeKey={themeKey}
+                levels={levels} members={members}
+                fiscalYear={fiscalYear}
+                myName={myName} isAdmin={isAdmin}
+              />
             ) : (
               <DashboardTab
                 T={T} themeKey={themeKey}
@@ -620,6 +626,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 workLog={workLogs[viewingName]}
                 onWorkLogChange={reloadWorkLogs}
                 onGoToTab={(key) => setActiveTab(key)}
+                onGoToSummary={() => setSummaryMode(true)}
                 onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
                 onOpenAIReply={(mail) => setAiReplyMail(mail)}
                 mailReadMarks={mailReadMarks}
@@ -792,7 +799,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onGoToSummary, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
   const isMobile = useIsMobile()
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
@@ -1439,9 +1446,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             />
           )}
           {showW('team_summary') && (
-            <TeamWeeklySummaryCard T={T} viewingMember={viewingMember}
-              myName={myName} isAdmin={isAdmin}
-              members={members} levels={levels} isViewingSelf={isViewingSelf} />
+            <TeamSummaryNotification T={T} viewingMember={viewingMember}
+              myName={myName} isAdmin={isAdmin} levels={levels}
+              isViewingSelf={isViewingSelf}
+              onGoToSummary={onGoToSummary} />
           )}
           {showW('achievements') && (
             <Section T={T} icon="🏆" accent={T.warn} title="今週の成果" flex={0} headerRight={
@@ -1820,6 +1828,102 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
         </div>
       </div>
     </>
+  )
+}
+
+// ─── 今週のチームサマリー: 個人ダッシュボード用通知行 (詳細は全社サマリーへ誘導) ─
+function TeamSummaryNotification({ T, viewingMember, myName, isAdmin, levels = [], isViewingSelf, onGoToSummary }) {
+  const monday = useMemo(() => getMondayJSTStr(), [])
+  const [stats, setStats] = useState({ total: 0, submitted: 0, myTeams: 0, myTeamsSubmitted: 0 })
+  const [loading, setLoading] = useState(true)
+
+  // 対象チーム: 自分が責任者 + 所属
+  const myTeamIds = useMemo(() => {
+    const ids = new Set()
+    ;(levels || []).forEach(l => {
+      if (Number(l?.manager_id) === Number(viewingMember?.id)) ids.add(Number(l.id))
+    })
+    const memberLvls = Array.isArray(viewingMember?.sub_level_ids) ? viewingMember.sub_level_ids
+      : viewingMember?.level_id ? [viewingMember.level_id] : []
+    memberLvls.forEach(id => ids.add(Number(id)))
+    return ids
+  }, [levels, viewingMember])
+
+  // 全社のチームレベル (事業部除く)
+  const allTeamIds = useMemo(() => {
+    const rootIds = new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id)))
+    return new Set((levels || []).filter(l => {
+      if (!l.parent_id) return false
+      if (rootIds.has(Number(l.parent_id))) return false
+      return true
+    }).map(l => Number(l.id)))
+  }, [levels])
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    ;(async () => {
+      const { data } = await supabase.from('team_weekly_summary')
+        .select('level_id, good, more, focus')
+        .eq('week_start', monday)
+      if (!alive) return
+      const submittedSet = new Set((data || []).filter(r => {
+        return (r.good || '').trim() || (r.more || '').trim() || (r.focus || '').trim()
+      }).map(r => Number(r.level_id)))
+      const submittedTotal = [...submittedSet].filter(id => allTeamIds.has(id)).length
+      const submittedMine = [...submittedSet].filter(id => myTeamIds.has(id)).length
+      setStats({
+        total: allTeamIds.size,
+        submitted: submittedTotal,
+        myTeams: myTeamIds.size,
+        myTeamsSubmitted: submittedMine,
+      })
+      setLoading(false)
+    })()
+    return () => { alive = false }
+  }, [monday, allTeamIds, myTeamIds])
+
+  const myUnsubmitted = stats.myTeams - stats.myTeamsSubmitted
+  const allUnsubmitted = stats.total - stats.submitted
+
+  return (
+    <div
+      onClick={onGoToSummary}
+      style={{
+        background: T.bgCard, border: `1px solid ${T.border}`,
+        borderLeft: `3px solid ${T.accent}`,
+        borderRadius: 10, padding: '10px 14px',
+        display: 'flex', alignItems: 'center', gap: 10,
+        cursor: 'pointer', transition: 'background 0.15s',
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.background = T.sectionBg}
+      onMouseLeave={(e) => e.currentTarget.style.background = T.bgCard}
+    >
+      <span style={{ fontSize: 18 }}>📊</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+          今週のチームサマリー
+          {!loading && stats.total > 0 && (
+            <span style={{ marginLeft: 8, fontSize: 10, color: T.textMuted, fontWeight: 600 }}>
+              {stats.submitted}/{stats.total} チーム提出済み
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
+          {loading ? '読み込み中...'
+            : myUnsubmitted > 0
+              ? `あなたの担当 ${myUnsubmitted} チーム未提出`
+              : allUnsubmitted > 0
+                ? `${allUnsubmitted} チーム未提出 (全社サマリーで確認)`
+                : '✓ 全チーム提出済み'}
+        </div>
+      </div>
+      <div style={{
+        padding: '4px 10px', borderRadius: 6,
+        background: T.accent, color: '#fff',
+        fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
+      }}>全社サマリー →</div>
+    </div>
   )
 }
 
