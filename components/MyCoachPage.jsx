@@ -96,11 +96,11 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
   const [todayEvents, setTodayEvents] = useState([])  // 今日のGoogle Calendar予定
 
   // AI Chat state
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: `こんにちは！${myName || ''}さんのOKRコーチです。\n\n目標達成に向けて、一緒に頑張りましょう！タスクの整理、OKRアドバイス、今週の計画など何でもご相談ください。` }
-  ])
+  const WELCOME_MSG = { role: 'assistant', content: `こんにちは！${myName || ''}さんのOKRコーチです。\n\n目標達成に向けて、一緒に頑張りましょう！タスクの整理、OKRアドバイス、今週の計画など何でもご相談ください。` }
+  const [messages, setMessages] = useState([WELCOME_MSG])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false)
   const [weeklyCoaching, setWeeklyCoaching] = useState(null)
   const [coachingLoading, setCoachingLoading] = useState(false)
   const bottomRef = useRef(null)
@@ -203,6 +203,55 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // チャット履歴のロード (myName 確定後に1回だけ)
+  useEffect(() => {
+    if (!myName || chatHistoryLoaded) return
+    let alive = true
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('coaching_chats')
+        .select('role, content, created_at')
+        .eq('owner', myName)
+        .order('created_at', { ascending: true })
+        .limit(200)
+      if (!alive) return
+      // テーブル未作成 (42P01) はサイレント無視
+      if (error && error.code !== '42P01') {
+        console.warn('chat history load error:', error)
+      }
+      if (data && data.length > 0) {
+        setMessages([
+          WELCOME_MSG,
+          ...data.map(r => ({ role: r.role, content: r.content })),
+        ])
+      }
+      setChatHistoryLoaded(true)
+    })()
+    return () => { alive = false }
+  }, [myName, chatHistoryLoaded]) // eslint-disable-line
+
+  // メッセージを履歴テーブルに保存
+  const saveChatMessage = async (role, content) => {
+    if (!myName || !content) return
+    try {
+      await supabase.from('coaching_chats').insert({ owner: myName, role, content })
+    } catch (e) {
+      // テーブル未作成や RLS 拒否はサイレントに無視 (機能は動作させる)
+      console.warn('chat save error:', e)
+    }
+  }
+
+  // 履歴クリア
+  const clearChatHistory = async () => {
+    if (!window.confirm('AIチャットの履歴をすべて削除しますか？\n（過去の質問とAI回答が消えます）')) return
+    try {
+      await supabase.from('coaching_chats').delete().eq('owner', myName)
+    } catch (e) {
+      console.warn('chat clear error:', e)
+    }
+    setMessages([WELCOME_MSG])
+  }
+
   // KAステータス分類
   const focusKAs = allKAs.filter(ka => ka.status === 'focus')
   const moreKAs = allKAs.filter(ka => ka.status === 'more')
@@ -267,6 +316,8 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     const newMsgs = [...messages, { role: 'user', content: userText }]
     setMessages(newMsgs)
     setChatLoading(true)
+    // ユーザー発言を履歴に保存 (await せず非同期で)
+    saveChatMessage('user', userText)
     try {
       const res = await fetch('/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -275,8 +326,11 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setMessages(prev => [...prev, { role: 'assistant', content: data.content }])
+      saveChatMessage('assistant', data.content)
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `エラー: ${e.message}` }])
+      const errMsg = `エラー: ${e.message}`
+      setMessages(prev => [...prev, { role: 'assistant', content: errMsg }])
+      // エラーメッセージは履歴に残さない (再質問を促す)
     } finally {
       setChatLoading(false)
     }
@@ -717,11 +771,25 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
         {/* Chat Header */}
         <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.chatBorder}`, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(77,159,255,0.04)', flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🤖</div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>OKR AIコーチ</div>
-            <div style={{ fontSize: 9, color: '#4d9fff' }}>パーソナルコーチング</div>
+            <div style={{ fontSize: 9, color: '#4d9fff' }}>
+              パーソナルコーチング
+              {messages.length > 1 && ` ・ 履歴 ${messages.length - 1} 件`}
+            </div>
           </div>
-          {isMobileOrTablet && <button onClick={() => setShowChat(false)} style={{ marginLeft: 'auto', background: 'transparent', border: `1px solid ${T.chatBorder}`, color: T.textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>}
+          {messages.length > 1 && (
+            <button
+              onClick={clearChatHistory}
+              title="履歴をクリア"
+              style={{
+                background: 'transparent', border: `1px solid ${T.chatBorder}`,
+                color: T.textMuted, padding: '4px 8px', borderRadius: 6,
+                cursor: 'pointer', fontSize: 10, fontFamily: 'inherit',
+              }}
+            >🗑 履歴</button>
+          )}
+          {isMobileOrTablet && <button onClick={() => setShowChat(false)} style={{ background: 'transparent', border: `1px solid ${T.chatBorder}`, color: T.textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>}
         </div>
 
         {/* Messages */}
