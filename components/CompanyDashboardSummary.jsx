@@ -73,171 +73,194 @@ export default function CompanyDashboardSummary({
   const [submittedTeamCount, setSubmittedTeamCount] = useState({ total: 0, submitted: 0 })
   const [rankings, setRankings] = useState(null)
 
-  // 一括取得
+  // 一括取得 (各クエリは個別に成否を判定。1つ失敗しても他は処理する)
   useEffect(() => {
     let alive = true
     setLoading(true)
     ;(async () => {
+      const days7Ago = new Date(Date.now() - 7 * 86400000).toISOString()
+      const queries = [
+        ['allTasks',     supabase.from('ka_tasks').select('id, assignee, due_date, done, status, created_at').range(0, 9999)],
+        ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 9999)],
+        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday).range(0, 9999)],
+        ['openConfirms', supabase.from('member_confirmations').select('id', { count: 'exact', head: true }).eq('status', 'open')],
+        ['msRes',        supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)).range(0, 999)],
+        ['workLogs',     supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).range(0, 999)],
+        ['teamSums',     supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999)],
+        // 振り返り王の集計ソース: coaching_logs(log_type=kpt) — 振り返りタブと同じデータ
+        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', days7Ago).range(0, 9999)],
+        ['ka7Done',      supabase.from('ka_tasks').select('assignee').gte('created_at', days7Ago).eq('done', true).range(0, 9999)],
+        ['ka7WithDue',   supabase.from('ka_tasks').select('assignee, due_date, done, status').gte('created_at', days7Ago).not('due_date', 'is', null).range(0, 9999)],
+      ]
+      const settled = await Promise.allSettled(queries.map(([_, p]) => p))
+      if (!alive) return
+
+      // 結果をキー名でマップ化 (失敗時は空)
+      const r = {}
+      settled.forEach((s, i) => {
+        const key = queries[i][0]
+        if (s.status !== 'fulfilled') {
+          console.warn(`[CompanyDashboardSummary] ${key} クエリ失敗:`, s.reason)
+          r[key] = { data: [], count: 0, error: s.reason }
+          return
+        }
+        if (s.value?.error) {
+          console.warn(`[CompanyDashboardSummary] ${key} エラー:`, s.value.error)
+          r[key] = { data: [], count: 0, error: s.value.error }
+          return
+        }
+        r[key] = s.value
+      })
+
+      // タスク統計
+      const tasks = r.allTasks?.data || []
+      const overdueTasks = tasks.filter(t => {
+        if (t.done || t.status === 'done') return false
+        const d = dateStr(t.due_date)
+        return d && d < today
+      })
+      setOverdueCount(overdueTasks.length)
+      const todayTasks = tasks.filter(t => dateStr(t.due_date) === today)
+      setTodayTaskStats({
+        total: todayTasks.length,
+        done: todayTasks.filter(t => t.done || t.status === 'done').length,
+        inProgress: todayTasks.filter(t => !t.done && t.status === 'in_progress').length,
+        overdue: overdueTasks.length,
+      })
+
+      // KR レビュー
+      const reviewMap = {}
+      ;(r.weeklyRevs?.data || []).forEach(rv => {
+        reviewMap[rv.kr_id] = !!((rv.good||'').trim() || (rv.more||'').trim() || (rv.focus||'').trim() || (rv.focus_output||'').trim())
+      })
+      const krList = r.krs?.data || []
+      setUnfilledKRCount(krList.filter(kr => kr.owner && !reviewMap[kr.id]).length)
+      setUnresolvedConfirmCount(r.openConfirms?.count || 0)
+
+      // 稼働状況
+      const lastByMember = new Map()
+      for (const row of r.workLogs?.data || []) if (!lastByMember.has(row.owner)) lastByMember.set(row.owner, row)
+      let active = 0, finished = 0
+      for (const [, row] of lastByMember.entries()) {
+        let c
+        try { c = typeof row.content === 'string' ? JSON.parse(row.content) : row.content } catch { c = {} }
+        if (c?.end_at) finished++
+        else if (c?.start_at) active++
+      }
+      const totalNonGuest = (members || []).filter(m => m.name !== '👀 ゲスト').length
+      setWorkingMembers({ active, finished, notStarted: Math.max(0, totalNonGuest - active - finished) })
+
+      // マイルストーン
+      const ms = (r.msRes?.data || []).filter(m => m.status !== 'done')
+      ms.sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
+      setMilestones(ms.slice(0, 5))
+
+      // KR ピンチ (逆指標対応)
+      const moreMap = {}
+      ;(r.weeklyRevs?.data || []).forEach(rv => { if ((rv.more || '').trim()) moreMap[rv.kr_id] = rv.more })
+      const pinch = krList.filter(kr => kr.target).map(kr => ({
+        ...kr, pct: calcKRPct(kr), inverted: isInvertedKR(kr.title),
+        hasMore: !!moreMap[kr.id], moreText: moreMap[kr.id] || '',
+      })).filter(kr => kr.pct < 70 || kr.hasMore)
+      .sort((a, b) => (a.hasMore !== b.hasMore) ? (a.hasMore ? -1 : 1) : a.pct - b.pct)
+      .slice(0, 5)
+      setKrPinch(pinch)
+
+      // チームサマリー件数
+      const rootIds = new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id)))
+      const teamLvlSet = new Set((levels || []).filter(l => l.parent_id && !rootIds.has(Number(l.parent_id))).map(l => Number(l.id)))
+      const submittedTeams = new Set(
+        (r.teamSums?.data || [])
+          .filter(rv => (rv.good || '').trim() || (rv.more || '').trim() || (rv.focus || '').trim())
+          .map(rv => Number(rv.level_id)).filter(id => teamLvlSet.has(id))
+      )
+      setSubmittedTeamCount({ total: teamLvlSet.size, submitted: submittedTeams.size })
+
+      // ランキング (週次)
       try {
-        const days7Ago = new Date(Date.now() - 7 * 86400000).toISOString()
-        const [
-          allTasks, krs, weeklyReviews, openConfirms, msRes, workLogsRes,
-          teamSummaryRes, weeklyReportsRes, ka7Done, ka7AllWithDue,
-        ] = await Promise.all([
-          supabase.from('ka_tasks').select('id, assignee, due_date, done, status, created_at').order('due_date', { ascending: true, nullsFirst: false }).range(0, 9999),
-          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id'),
-          supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday),
-          supabase.from('member_confirmations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-          supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)).order('due_date', { ascending: true, nullsFirst: false }).range(0, 999),
-          supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).order('created_at', { ascending: false }).range(0, 999),
-          supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999),
-          supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', monday).range(0, 9999),
-          supabase.from('ka_tasks').select('assignee').gte('created_at', days7Ago).eq('done', true).range(0, 9999),
-          supabase.from('ka_tasks').select('assignee, due_date, done, status').gte('created_at', days7Ago).not('due_date', 'is', null).range(0, 9999),
-        ])
-        if (!alive) return
+        const todayStr = today
+        const validMembers = new Set((members || []).map(m => m.name))
+        const excludeNames = new Set(['👀 ゲスト'])
 
-        const tasks = allTasks.data || []
-        // due_date を defensively YYYY-MM-DD に正規化して比較
-        const overdueTasks = tasks.filter(t => {
-          if (t.done || t.status === 'done') return false
+        // 1. 有言実行王: 過去7日の期限付きタスクのうち期限切れ未完了でない率
+        const promiseStats = {}
+        for (const t of r.ka7WithDue?.data || []) {
+          if (!t.assignee || excludeNames.has(t.assignee) || !validMembers.has(t.assignee)) continue
+          const ps = promiseStats[t.assignee] = promiseStats[t.assignee] || { total: 0, overdue: 0 }
+          ps.total++
           const d = dateStr(t.due_date)
-          return d && d < today
-        })
-        setOverdueCount(overdueTasks.length)
-        const todayTasks = tasks.filter(t => dateStr(t.due_date) === today)
-        setTodayTaskStats({
-          total: todayTasks.length,
-          done: todayTasks.filter(t => t.done || t.status === 'done').length,
-          inProgress: todayTasks.filter(t => !t.done && t.status === 'in_progress').length,
-          overdue: overdueTasks.length,
-        })
+          if (!t.done && t.status !== 'done' && d && d < todayStr) ps.overdue++
+        }
+        const promiseKeeper = Object.entries(promiseStats)
+          .filter(([_, s]) => s.total >= 2)
+          .map(([name, s]) => ({ name, score: 1 - s.overdue / s.total, total: s.total, overdue: s.overdue }))
+          .sort((a, b) => b.score - a.score || b.total - a.total).slice(0, 3)
 
-        const reviewMap = {}
-        ;(weeklyReviews.data || []).forEach(r => {
-          reviewMap[r.kr_id] = !!((r.good||'').trim() || (r.more||'').trim() || (r.focus||'').trim() || (r.focus_output||'').trim())
-        })
-        const krList = krs.data || []
-        setUnfilledKRCount(krList.filter(kr => kr.owner && !reviewMap[kr.id]).length)
-        setUnresolvedConfirmCount(openConfirms.count || 0)
+        // 2. タスク完了王: 過去7日
+        const doneCount = {}
+        for (const t of r.ka7Done?.data || []) {
+          if (!t.assignee || excludeNames.has(t.assignee) || !validMembers.has(t.assignee)) continue
+          doneCount[t.assignee] = (doneCount[t.assignee] || 0) + 1
+        }
+        const taskMaster = Object.entries(doneCount)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count).slice(0, 3)
 
-        const lastByMember = new Map()
-        for (const r of workLogsRes.data || []) if (!lastByMember.has(r.owner)) lastByMember.set(r.owner, r)
-        let active = 0, finished = 0
-        for (const [, row] of lastByMember.entries()) {
+        // 3. 振り返り王: KPT (Keep/Problem/Try) の総文字数
+        // (振り返りタブと同じ coaching_logs.log_type='kpt' のデータを使用)
+        const reflStats = {}
+        for (const row of r.kptLogs?.data || []) {
+          if (!row.owner || excludeNames.has(row.owner) || !validMembers.has(row.owner)) continue
           let c
           try { c = typeof row.content === 'string' ? JSON.parse(row.content) : row.content } catch { c = {} }
-          if (c?.end_at) finished++
-          else if (c?.start_at) active++
+          const k = (c?.keep || '').trim()
+          const p = (c?.problem || '').trim()
+          const tr = (c?.try || '').trim()
+          if (!k && !p && !tr) continue  // 空 KPT は除外
+          const ps = reflStats[row.owner] = reflStats[row.owner] || { entries: 0, fullEntries: 0, totalChars: 0 }
+          ps.entries++
+          if (k && p && tr) ps.fullEntries++
+          ps.totalChars += k.length + p.length + tr.length
         }
-        const totalNonGuest = (members || []).filter(m => m.name !== '👀 ゲスト').length
-        setWorkingMembers({ active, finished, notStarted: Math.max(0, totalNonGuest - active - finished) })
-
-        const ms = (msRes.data || []).filter(m => m.status !== 'done')
-        ms.sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
-        setMilestones(ms.slice(0, 5))
-
-        const moreMap = {}
-        ;(weeklyReviews.data || []).forEach(r => { if ((r.more || '').trim()) moreMap[r.kr_id] = r.more })
-        const pinch = krList.filter(kr => kr.target).map(kr => ({
-          ...kr,
-          pct: calcKRPct(kr),  // 逆指標対応
-          inverted: isInvertedKR(kr.title),
-          hasMore: !!moreMap[kr.id], moreText: moreMap[kr.id] || '',
-        })).filter(kr => kr.pct < 70 || kr.hasMore)
-        .sort((a, b) => (a.hasMore !== b.hasMore) ? (a.hasMore ? -1 : 1) : a.pct - b.pct)
-        .slice(0, 5)
-        setKrPinch(pinch)
-
-        const rootIds = new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id)))
-        const teamLvlSet = new Set((levels || []).filter(l => l.parent_id && !rootIds.has(Number(l.parent_id))).map(l => Number(l.id)))
-        const submittedTeams = new Set(
-          (teamSummaryRes.data || [])
-            .filter(r => (r.good || '').trim() || (r.more || '').trim() || (r.focus || '').trim())
-            .map(r => Number(r.level_id)).filter(id => teamLvlSet.has(id))
-        )
-        setSubmittedTeamCount({ total: teamLvlSet.size, submitted: submittedTeams.size })
-
-        // ランキング (週次)
-        try {
-          const todayStr = today
-          const validMembers = new Set((members || []).map(m => m.name))
-          const excludeNames = new Set(['👀 ゲスト'])
-
-          const promiseStats = {}
-          for (const t of ka7AllWithDue.data || []) {
-            if (!t.assignee || excludeNames.has(t.assignee) || !validMembers.has(t.assignee)) continue
-            const ps = promiseStats[t.assignee] = promiseStats[t.assignee] || { total: 0, overdue: 0 }
-            ps.total++
-            const d = dateStr(t.due_date)
-            if (!t.done && t.status !== 'done' && d && d < todayStr) ps.overdue++
-          }
-          const promiseKeeper = Object.entries(promiseStats)
-            .filter(([_, s]) => s.total >= 2)
-            .map(([name, s]) => ({ name, score: 1 - s.overdue / s.total, total: s.total, overdue: s.overdue }))
-            .sort((a, b) => b.score - a.score || b.total - a.total).slice(0, 3)
-
-          const doneCount = {}
-          for (const t of ka7Done.data || []) {
-            if (!t.assignee || excludeNames.has(t.assignee) || !validMembers.has(t.assignee)) continue
-            doneCount[t.assignee] = (doneCount[t.assignee] || 0) + 1
-          }
-          const taskMaster = Object.entries(doneCount)
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count).slice(0, 3)
-
-          const reflStats = {}
-          const ensureRefl = (name) => reflStats[name] = reflStats[name] || { entries: 0, fullEntries: 0, totalChars: 0 }
-          for (const r of weeklyReportsRes.data || []) {
-            if (!r.owner || excludeNames.has(r.owner) || !validMembers.has(r.owner)) continue
-            const ps = ensureRefl(r.owner)
-            const g = (r.good || '').trim(), m = (r.more || '').trim(), f = (r.focus_output || '').trim()
-            ps.entries++; if (g && m && f) ps.fullEntries++
-            ps.totalChars += g.length + m.length + f.length
-          }
-          const krOwnerMap = {}
-          krList.forEach(kr => { krOwnerMap[kr.id] = kr.owner })
-          for (const r of weeklyReviews.data || []) {
-            const owner = krOwnerMap[r.kr_id]
-            if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
-            const ps = ensureRefl(owner)
-            const g = (r.good || '').trim(), m = (r.more || '').trim()
-            const f = (r.focus_output || '').trim() || (r.focus || '').trim()
-            ps.entries++; if (g && m && f) ps.fullEntries++
-            ps.totalChars += g.length + m.length + f.length
-          }
-          // 総文字数を主指標、同点時は記入網羅件数で順位付け
-          // (件数が多くても1件あたり短いと低スコアになるよう、文字数を優先)
-          const reflection = Object.entries(reflStats).map(([name, s]) => ({
-            name, totalChars: s.totalChars, fullEntries: s.fullEntries,
-          })).filter(r => r.totalChars >= 50)  // 最低 50 字で参加資格
+        const reflection = Object.entries(reflStats)
+          .map(([name, s]) => ({ name, totalChars: s.totalChars, fullEntries: s.fullEntries, entries: s.entries }))
+          .filter(rf => rf.totalChars >= 30)  // 30字以上で参加資格
           .sort((a, b) => b.totalChars - a.totalChars || b.fullEntries - a.fullEntries)
           .slice(0, 3)
 
-          // 担当 KR の平均達成率 (逆指標 KR は target/current で計算)
-          const krProgressByOwner = {}
-          for (const kr of krList) {
-            const owner = kr.owner
-            if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
-            if (!Number(kr.target)) continue  // target=0 は除外 (定性 KR)
-            const arr = krProgressByOwner[owner] = krProgressByOwner[owner] || []
-            arr.push(calcKRPct(kr))
-          }
-          const goalAchiever = Object.entries(krProgressByOwner)
-            .filter(([_, arr]) => arr.length >= 2)  // 1件だけだと外れ値で 150% など出やすいので 2件以上
-            .map(([name, arr]) => ({ name, avg: arr.reduce((a, b) => a + b, 0) / arr.length, count: arr.length }))
-            .sort((a, b) => b.avg - a.avg).slice(0, 3)
-
-          setRankings({ promiseKeeper, taskMaster, reflection, goalAchiever })
-        } catch (e) {
-          console.warn('rankings calc error:', e)
-          setRankings(null)
+        // 4. 目標達成王: 担当 KR の平均達成率 (逆指標対応)
+        const krProgressByOwner = {}
+        for (const kr of krList) {
+          const owner = kr.owner
+          if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
+          if (!Number(kr.target)) continue
+          const arr = krProgressByOwner[owner] = krProgressByOwner[owner] || []
+          arr.push(calcKRPct(kr))
         }
+        const goalAchiever = Object.entries(krProgressByOwner)
+          .filter(([_, arr]) => arr.length >= 2)
+          .map(([name, arr]) => ({ name, avg: arr.reduce((a, b) => a + b, 0) / arr.length, count: arr.length }))
+          .sort((a, b) => b.avg - a.avg).slice(0, 3)
+
+        setRankings({ promiseKeeper, taskMaster, reflection, goalAchiever })
       } catch (e) {
-        console.warn('CompanyDashboardSummary load error:', e)
-      } finally {
-        if (alive) setLoading(false)
+        console.warn('rankings calc error:', e)
+        setRankings(null)
       }
+
+      // デバッグ用: クエリ別の取得件数を console に
+      console.info('[全社ダッシュボード] 取得件数:', {
+        全タスク: (r.allTasks?.data || []).length,
+        過去7日完了タスク: (r.ka7Done?.data || []).length,
+        過去7日期限付きタスク: (r.ka7WithDue?.data || []).length,
+        KR: krList.length,
+        今週KRレビュー: (r.weeklyRevs?.data || []).length,
+        今週KPT: (r.kptLogs?.data || []).length,
+        今週チームサマリー: (r.teamSums?.data || []).length,
+        マイルストーン: (r.msRes?.data || []).length,
+      })
+
+      setLoading(false)
     })()
     return () => { alive = false }
   }, [today, monday, fiscalYear, levels, members])
@@ -288,11 +311,11 @@ export default function CompanyDashboardSummary({
                 }))} />
               <RankingCard T={T} title="タスク完了王" emoji="✅" accent="#007AFF" subtitle="今週の完了数"
                 entries={rankings.taskMaster.map(r => ({ name: r.name, main: `${r.count}件`, sub: '' }))} />
-              <RankingCard T={T} title="振り返り王" emoji="📝" accent="#AF52DE" subtitle="good/more/focus の総文字数"
+              <RankingCard T={T} title="振り返り王" emoji="📝" accent="#AF52DE" subtitle="KPT (Keep/Problem/Try) の総文字数"
                 entries={rankings.reflection.map(r => ({
                   name: r.name,
                   main: `${r.totalChars}字`,
-                  sub: `網羅 ${r.fullEntries}件`,
+                  sub: `${r.entries}日記入${r.fullEntries > 0 ? ` / KPT全項目 ${r.fullEntries}日` : ''}`,
                 }))} />
               <RankingCard T={T} title="目標達成王" emoji="🎖" accent="#FF9500" subtitle="担当 KR 平均"
                 entries={rankings.goalAchiever.map(r => ({ name: r.name, main: `${Math.round(r.avg)}%`, sub: `KR ${r.count}件` }))} />
