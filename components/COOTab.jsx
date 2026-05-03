@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { supabase } from '../lib/supabase'
 
 function useIsMobile(bp = 768) {
   const [m, setM] = useState(() => typeof window === 'undefined' ? false : window.innerWidth < bp)
@@ -17,6 +18,7 @@ export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings
   const owner = viewingName || myName
 
   const [history, setHistory] = useState([])
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -28,6 +30,61 @@ export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [history, busy])
 
+  // 履歴ロード (myName 確定後に1回だけ。タブ移動・リロード後も復元される)
+  useEffect(() => {
+    if (!myName || historyLoaded) return
+    let alive = true
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('coaching_chats')
+        .select('role, content, metadata, created_at')
+        .eq('owner', myName)
+        .eq('kind', 'coo')
+        .order('created_at', { ascending: true })
+        .limit(200)
+      if (!alive) return
+      // テーブル/カラム未作成 (42P01 / 42703) はサイレント無視
+      if (error && error.code !== '42P01' && error.code !== '42703') {
+        console.warn('coo chat history load error:', error)
+      }
+      if (data && data.length > 0) {
+        setHistory(data.map(r => ({
+          role: r.role,
+          content: r.content,
+          actions: r.metadata?.actions || [],
+        })))
+      }
+      setHistoryLoaded(true)
+    })()
+    return () => { alive = false }
+  }, [myName, historyLoaded])
+
+  // メッセージを履歴テーブルに保存 (失敗は console.warn 留め)
+  const saveMessage = async (role, content, metadata) => {
+    if (!myName || !content) return
+    try {
+      await supabase.from('coaching_chats').insert({
+        owner: myName, kind: 'coo', role, content,
+        metadata: metadata || null,
+      })
+    } catch (e) {
+      console.warn('coo chat save error:', e)
+    }
+  }
+
+  // 履歴クリア (DB からも削除)
+  const clearHistory = async () => {
+    if (history.length === 0) return
+    if (!window.confirm('ぺろっぺとの会話履歴をすべて削除しますか?')) return
+    try {
+      await supabase.from('coaching_chats')
+        .delete().eq('owner', myName).eq('kind', 'coo')
+    } catch (e) {
+      console.warn('coo chat clear error:', e)
+    }
+    setHistory([])
+  }
+
   const send = async (override) => {
     const msg = (override ?? input).trim()
     if (!msg || busy) return
@@ -35,7 +92,10 @@ export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings
     if (!isRetry) setInput('')
     setErr('')
     setLastUserMsg(msg)
-    if (!isRetry) setHistory(prev => [...prev, { role: 'user', content: msg }])
+    if (!isRetry) {
+      setHistory(prev => [...prev, { role: 'user', content: msg }])
+      saveMessage('user', msg)  // 発言を即保存
+    }
     setBusy(true)
     try {
       const r = await fetch('/api/integrations/coo/ai', {
@@ -48,11 +108,13 @@ export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      const aiContent = j.text || '(応答なし)'
+      const actions = j.actions || []
       setHistory(prev => [...prev, {
-        role: 'assistant',
-        content: j.text || '(応答なし)',
-        actions: j.actions || [],
+        role: 'assistant', content: aiContent, actions,
       }])
+      saveMessage('assistant', aiContent, { actions, mode })
+      // エラーメッセージは履歴に残さない (再質問を促す)
     } catch (e) {
       setErr(e.message || 'エラー')
     } finally {
@@ -106,10 +168,13 @@ export default function COOTab({ T, myName, viewingName, isAdmin, onOpenSettings
             color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
           }}>⚙️ 設定</button>
         )}
-        <button onClick={() => setHistory([])} disabled={busy} style={{
+        <button onClick={clearHistory} disabled={busy || history.length === 0} style={{
           padding: '5px 10px', borderRadius: 6,
           background: 'transparent', border: `1px solid ${T.border}`,
-          color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          color: T.textSub, fontSize: 11, fontWeight: 700,
+          cursor: (busy || history.length === 0) ? 'not-allowed' : 'pointer',
+          opacity: (busy || history.length === 0) ? 0.5 : 1,
+          fontFamily: 'inherit',
         }}>クリア</button>
       </div>
 

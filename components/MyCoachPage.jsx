@@ -204,6 +204,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   // チャット履歴のロード (myName 確定後に1回だけ)
+  // kind='mycoach' で他のチャット履歴 (COOタブ等) と分離
   useEffect(() => {
     if (!myName || chatHistoryLoaded) return
     let alive = true
@@ -212,11 +213,12 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
         .from('coaching_chats')
         .select('role, content, created_at')
         .eq('owner', myName)
+        .eq('kind', 'mycoach')
         .order('created_at', { ascending: true })
         .limit(200)
       if (!alive) return
-      // テーブル未作成 (42P01) はサイレント無視
-      if (error && error.code !== '42P01') {
+      // テーブル未作成 (42P01) や kind カラム未作成 (42703) はサイレント無視
+      if (error && error.code !== '42P01' && error.code !== '42703') {
         console.warn('chat history load error:', error)
       }
       if (data && data.length > 0) {
@@ -230,22 +232,23 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     return () => { alive = false }
   }, [myName, chatHistoryLoaded]) // eslint-disable-line
 
-  // メッセージを履歴テーブルに保存
+  // メッセージを履歴テーブルに保存 (kind='mycoach' で識別)
   const saveChatMessage = async (role, content) => {
     if (!myName || !content) return
     try {
-      await supabase.from('coaching_chats').insert({ owner: myName, role, content })
+      await supabase.from('coaching_chats').insert({ owner: myName, kind: 'mycoach', role, content })
     } catch (e) {
       // テーブル未作成や RLS 拒否はサイレントに無視 (機能は動作させる)
       console.warn('chat save error:', e)
     }
   }
 
-  // 履歴クリア
+  // 履歴クリア (kind='mycoach' のみ)
   const clearChatHistory = async () => {
     if (!window.confirm('AIチャットの履歴をすべて削除しますか？\n（過去の質問とAI回答が消えます）')) return
     try {
-      await supabase.from('coaching_chats').delete().eq('owner', myName)
+      await supabase.from('coaching_chats').delete()
+        .eq('owner', myName).eq('kind', 'mycoach')
     } catch (e) {
       console.warn('chat clear error:', e)
     }
