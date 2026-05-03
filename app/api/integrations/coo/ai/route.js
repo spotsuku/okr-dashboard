@@ -199,12 +199,21 @@ async function loadUserContext(supabase, owner) {
     return { date: r.created_at?.slice(0, 10), keep: c.keep, problem: c.problem, try: c.try }
   })
 
+  // ISO 文字列を JST の HH:MM に変換 (UTC のまま表示すると 9h ズレるため)
+  const toJstTime = (iso) => {
+    if (!iso) return ''
+    try {
+      const d = new Date(iso)
+      const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+      return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`
+    } catch { return '' }
+  }
   let workLogStatus = '未始業'
   if (workLogRes.data?.[0]) {
     let c
     try { c = typeof workLogRes.data[0].content === 'string' ? JSON.parse(workLogRes.data[0].content) : workLogRes.data[0].content } catch { c = {} }
-    if (c.end_at) workLogStatus = `本日終業済み (${c.start_at?.slice(11, 16)} 〜 ${c.end_at?.slice(11, 16)})`
-    else if (c.start_at) workLogStatus = `稼働中 (${c.start_at?.slice(11, 16)} 〜)`
+    if (c.end_at) workLogStatus = `本日終業済み (${toJstTime(c.start_at)} 〜 ${toJstTime(c.end_at)})`
+    else if (c.start_at) workLogStatus = `稼働中 (${toJstTime(c.start_at)} 〜)`
   }
 
   // テキスト化
@@ -296,8 +305,17 @@ async function execTool(supabase, owner, name, input) {
       if (wl?.[0]) {
         let c
         try { c = typeof wl[0].content === 'string' ? JSON.parse(wl[0].content) : wl[0].content } catch { c = {} }
+        // 時刻は JST 表示 (start_at は ISO 文字列で保存されている)
+        const toJst = (iso) => {
+          if (!iso) return ''
+          try {
+            const d = new Date(iso)
+            const jst = new Date(d.getTime() + 9 * 3600 * 1000)
+            return `${String(jst.getUTCHours()).padStart(2, '0')}:${String(jst.getUTCMinutes()).padStart(2, '0')}`
+          } catch { return '' }
+        }
         if (c.end_at) workStatus = `終業済み (${wl[0].created_at?.slice(0,10)})`
-        else if (c.start_at) workStatus = `稼働中 (始業 ${c.start_at?.slice(11,16)})`
+        else if (c.start_at) workStatus = `稼働中 (始業 ${toJst(c.start_at)})`
       }
       return {
         ok: true, member: target,
@@ -440,7 +458,15 @@ async function handle(request) {
 
   const isSelfChat = owner === '三木智弘'  // 三木CEO本人かどうか
 
-  const today = new Date().toISOString()
+  // 現在時刻を JST で AI に渡す (UTC のままだと 9 時間ズレた回答になる)
+  const nowJst = new Date(Date.now() + 9 * 3600 * 1000)
+  const Y = nowJst.getUTCFullYear()
+  const M = String(nowJst.getUTCMonth() + 1).padStart(2, '0')
+  const D = String(nowJst.getUTCDate()).padStart(2, '0')
+  const h = String(nowJst.getUTCHours()).padStart(2, '0')
+  const min = String(nowJst.getUTCMinutes()).padStart(2, '0')
+  const dayName = ['日', '月', '火', '水', '木', '金', '土'][nowJst.getUTCDay()]
+  const todayJst = `${Y}-${M}-${D}(${dayName}) ${h}:${min} JST`
 
   const coachInstruction = mode === 'speed'
     ? `今は ⚡ スピードモード です。問いを返さず、直接的な助言や情報を簡潔に提供してください。それでも一般論ではなく必ず NEO 文脈に接続してください。`
@@ -466,7 +492,8 @@ async function handle(request) {
 8. **本日の予定 (Google Calendar) を必ず加味する** — 「本日の残り予定」セクションがあれば、それを前提に回答を組み立てる。例: 「14:00〜15:00 に経営会議があるので、その前の30分で〜できますか?」のように、空き時間と拘束時間を意識した提案・問いをする。会議の合間に物理的に入らない量のタスクを提案しない
 
 ## 現在の状況
-- 日時: ${today}
+- 日時: ${todayJst} (タイムゾーンは Asia/Tokyo)
+  ※ ユーザーは日本にいます。回答時の時刻表現はすべて JST で行ってください
 - 対話相手: ${owner} さん
 
 ## NEO福岡について (組織知)
