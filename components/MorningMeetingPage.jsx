@@ -1390,6 +1390,9 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
         </div>
       </div>
 
+      {/* 🚨 全社の停滞タスクレビュー (期限切れ + 本日期限) */}
+      <CompanyStaleTasksReview T={T} />
+
       {/* テーブルヘッダ */}
       <div style={{
         display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
@@ -1536,6 +1539,223 @@ function MorningNextActionRow({ T, item, members, onDelete }) {
         background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer',
         fontSize: 14, padding: '0 4px', fontFamily: 'inherit',
       }}>✕</button>
+    </div>
+  )
+}
+
+// ─── 全社の停滞タスクレビュー (朝会用) ──────────────────────────────
+// 期限切れ未完了 + 本日期限 のタスクを全社で集約表示し、その場でステータス更新可能にする。
+// 狙い: 朝会の場で「もう終わってるよ」となる作業漏れを反映する。
+function CompanyStaleTasksReview({ T }) {
+  const [tasks, setTasks] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+  const [collapsed, setCollapsed] = useState(false)
+  const today = useMemo(() => toJSTDateStr(new Date()), [])
+
+  // 期限切れ + 今日期限 を取得
+  const load = useCallback(async () => {
+    // 期限切れ: due_date < today AND done=false
+    const { data: overdue, error: e1 } = await supabase.from('ka_tasks')
+      .select('id, title, assignee, due_date, done, status')
+      .eq('done', false)
+      .lt('due_date', today)
+      .order('due_date', { ascending: true })
+      .range(0, 999)
+    // 今日期限
+    const { data: todays, error: e2 } = await supabase.from('ka_tasks')
+      .select('id, title, assignee, due_date, done, status')
+      .eq('due_date', today)
+      .order('assignee', { ascending: true })
+      .range(0, 999)
+    if (e1 || e2) {
+      setLoadError((e1?.message || '') + (e2?.message || ''))
+    }
+    const merged = [...(overdue || []), ...(todays || [])]
+    // dedupe by id (just in case)
+    const map = new Map()
+    merged.forEach(t => map.set(t.id, t))
+    setTasks(Array.from(map.values()))
+  }, [today])
+
+  useEffect(() => { load() }, [load])
+
+  // Realtime: タスク更新を即反映 (朝会参加者全員でステータスが共有される)
+  useEffect(() => {
+    const ch = supabase.channel(`morning_stale_tasks_${today}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ka_tasks' },
+        payload => {
+          const row = payload.new
+          if (!row) return
+          setTasks(prev => (prev || []).map(t => t.id === row.id ? { ...t, ...row } : t))
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [today])
+
+  // タスク完了切替
+  const toggleDone = async (task) => {
+    const next = !task.done
+    setTasks(prev => (prev || []).map(t => t.id === task.id ? { ...t, done: next, status: next ? 'done' : t.status } : t))
+    const { error } = await supabase.from('ka_tasks').update({
+      done: next, status: next ? 'done' : (task.status === 'done' ? 'in_progress' : task.status),
+    }).eq('id', task.id)
+    if (error) {
+      // ロールバック
+      setTasks(prev => (prev || []).map(t => t.id === task.id ? task : t))
+      alert('更新失敗: ' + error.message)
+    }
+  }
+  // ステータス変更
+  const changeStatus = async (task, newStatus) => {
+    setTasks(prev => (prev || []).map(t => t.id === task.id ? { ...t, status: newStatus, done: newStatus === 'done' } : t))
+    const { error } = await supabase.from('ka_tasks').update({
+      status: newStatus, done: newStatus === 'done',
+    }).eq('id', task.id)
+    if (error) {
+      setTasks(prev => (prev || []).map(t => t.id === task.id ? task : t))
+      alert('更新失敗: ' + error.message)
+    }
+  }
+
+  if (tasks === null) {
+    return (
+      <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 12, marginBottom: 12 }}>
+        全社タスク 読み込み中…
+      </div>
+    )
+  }
+
+  // 担当者別にグループ化 (期限切れ→今日 の順、各グループ内は期日昇順)
+  const grouped = {}
+  for (const t of tasks) {
+    const key = t.assignee || '(未アサイン)'
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(t)
+  }
+  const sortedAssignees = Object.keys(grouped).sort()
+  const overdueCount = tasks.filter(t => t.due_date && t.due_date < today && !t.done).length
+  const todayCount = tasks.filter(t => t.due_date === today && !t.done).length
+  const totalOpen = tasks.filter(t => !t.done).length
+
+  return (
+    <div style={{
+      marginBottom: 14, background: T.bgCard,
+      border: `1px solid ${T.border}`, borderLeft: `4px solid ${overdueCount > 0 ? T.danger : T.warn}`,
+      borderRadius: 10, overflow: 'hidden',
+    }}>
+      {/* ヘッダ */}
+      <div
+        onClick={() => setCollapsed(c => !c)}
+        style={{
+          padding: '10px 14px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          background: overdueCount > 0 ? `${T.danger}08` : `${T.warn}08`,
+        }}>
+        <span style={{ fontSize: 16 }}>🚨</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>
+            全社の停滞タスク レビュー
+            <span style={{ marginLeft: 8, fontSize: 10, color: T.textMuted, fontWeight: 600 }}>
+              期限切れ {overdueCount}件 ・ 本日期限 {todayCount}件 ・ 合計未完 {totalOpen}件
+            </span>
+          </div>
+          <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>
+            朝会の場で「終わってるよ」というタスクは ✓完了 を押してその場で反映 (Realtime同期)
+          </div>
+        </div>
+        <button
+          style={{
+            padding: '4px 10px', borderRadius: 6, background: 'transparent',
+            border: `1px solid ${T.border}`, color: T.textSub, fontSize: 10, fontFamily: 'inherit',
+            cursor: 'pointer',
+          }}
+        >{collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
+      </div>
+
+      {!collapsed && (
+        <div style={{ padding: '10px 14px' }}>
+          {loadError && (
+            <div style={{ marginBottom: 8, padding: '6px 10px', background: T.dangerBg, border: `1px solid ${T.danger}40`, borderRadius: 6, color: T.danger, fontSize: 11 }}>
+              取得エラー: {loadError}
+            </div>
+          )}
+          {totalOpen === 0 ? (
+            <div style={{ padding: 12, fontSize: 12, color: T.success, textAlign: 'center', fontWeight: 700 }}>
+              ✓ 期限切れ・今日期限の未完了タスクはありません
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {sortedAssignees.map(assignee => {
+                const assigneeTasks = grouped[assignee].filter(t => !t.done)
+                if (assigneeTasks.length === 0) return null
+                return (
+                  <div key={assignee} style={{
+                    background: T.sectionBg, border: `1px solid ${T.borderLight}`,
+                    borderRadius: 8, padding: '8px 10px',
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: T.textSub, marginBottom: 6 }}>
+                      👤 {assignee} <span style={{ color: T.textMuted, fontWeight: 600 }}>({assigneeTasks.length}件)</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {assigneeTasks.map(task => {
+                        const overdue = task.due_date && task.due_date < today
+                        const days = task.due_date ? Math.round((new Date(today) - new Date(task.due_date)) / 86400000) : 0
+                        return (
+                          <div key={task.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '6px 8px',
+                            background: overdue ? `${T.danger}08` : `${T.warn}08`,
+                            border: `1px solid ${overdue ? T.danger + '30' : T.warn + '30'}`,
+                            borderRadius: 6, fontSize: 12,
+                          }}>
+                            <span style={{
+                              padding: '2px 6px', borderRadius: 4,
+                              background: overdue ? T.danger : T.warn, color: '#fff',
+                              fontSize: 9, fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0,
+                            }}>
+                              {overdue ? `${days}日超過` : '今日'}
+                            </span>
+                            <span style={{ fontSize: 10, color: T.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {task.due_date ? task.due_date.slice(5) : ''}
+                            </span>
+                            <span style={{ flex: 1, color: T.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {task.title || '(タイトル未入力)'}
+                            </span>
+                            <select
+                              value={task.status || 'not_started'}
+                              onChange={e => changeStatus(task, e.target.value)}
+                              style={{
+                                padding: '2px 4px', fontSize: 10, fontFamily: 'inherit',
+                                background: T.bgCard, color: T.textSub, border: `1px solid ${T.border}`,
+                                borderRadius: 4, cursor: 'pointer',
+                              }}>
+                              <option value="not_started">未着手</option>
+                              <option value="in_progress">進行中</option>
+                              <option value="done">完了</option>
+                            </select>
+                            <button
+                              onClick={() => toggleDone(task)}
+                              title="完了マーク"
+                              style={{
+                                padding: '4px 10px', borderRadius: 5,
+                                background: T.success, color: '#fff', border: 'none',
+                                fontSize: 10, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+                                whiteSpace: 'nowrap', flexShrink: 0,
+                              }}>
+                              ✓ 完了
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
