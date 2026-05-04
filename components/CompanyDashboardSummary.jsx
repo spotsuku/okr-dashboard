@@ -76,6 +76,8 @@ export default function CompanyDashboardSummary({
   const [teamSummaryTableMissing, setTeamSummaryTableMissing] = useState(false)
   const [progressedKRs, setProgressedKRs] = useState([])
   const [companyAnnualKRs, setCompanyAnnualKRs] = useState([])
+  // タブ切替: 'rankings' | 'team' | 'milestones'
+  const [activeTab, setActiveTab] = useState('rankings')
 
   // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
   const lastWeekRange = useMemo(() => {
@@ -450,8 +452,15 @@ export default function CompanyDashboardSummary({
           <ProgressKRCard T={T} progressed={progressedKRs} />
         </div>
 
+        {/* タブナビ: 週間ランキング / チームサマリー / マイルストーン */}
+        <DashboardTabs T={T} active={activeTab} onChange={setActiveTab} tabs={[
+          { key: 'rankings',   label: '週間ランキング', icon: '🏆', accent: '#FF9500' },
+          { key: 'team',       label: 'チームサマリー', icon: '📊', accent: '#34C759' },
+          { key: 'milestones', label: 'マイルストーン', icon: '🎯', accent: T.warn   },
+        ]} />
+
         {/* 週間ランキング (4列) — 先週月曜〜日曜の確定ランキング */}
-        {rankings && (
+        {activeTab === 'rankings' && rankings && (
           <>
             <SectionTitle T={T} icon="🏆" iconColor="#FF9500" title="週間ランキング" sub={`先週 (${lastWeekRange.label}) の Top 3`} />
             <div style={{
@@ -482,26 +491,71 @@ export default function CompanyDashboardSummary({
         )}
 
         {/* チームサマリー */}
-        <SectionTitle T={T} icon="📊" iconColor="#34C759" title="今週のチームサマリー"
-          sub={`${submittedTeamCount.submitted}/${submittedTeamCount.total} チーム提出済 ・ マネージャー定例/ディレクター確認会議に反映`} />
-        <TeamSummarySingleView T={T} levels={levels} members={members}
-          weekStart={monday} myName={myName} viewingMember={viewingMember} isAdmin={isAdmin}
-          tableMissing={teamSummaryTableMissing} />
+        {activeTab === 'team' && (
+          <>
+            <SectionTitle T={T} icon="📊" iconColor="#34C759" title="今週のチームサマリー"
+              sub={`${submittedTeamCount.submitted}/${submittedTeamCount.total} チーム提出済 ・ マネージャー定例/ディレクター確認会議に反映`} />
+            <TeamSummarySingleView T={T} levels={levels} members={members}
+              weekStart={monday} myName={myName} viewingMember={viewingMember} isAdmin={isAdmin}
+              tableMissing={teamSummaryTableMissing} />
+          </>
+        )}
 
-        {/* 下段: マイルストーン + KR ピンチ */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
-          gap: SPACING.md, marginTop: SPACING.xl,
-        }}>
-          <MilestonesCard T={T} milestones={milestones} setMilestones={setMilestones} isAdmin={isAdmin} myName={myName} />
-          <KrPinchCard T={T} pinch={krPinch} />
-        </div>
+        {/* マイルストーン (単独タブ) */}
+        {activeTab === 'milestones' && (
+          <>
+            <SectionTitle T={T} icon="🎯" iconColor={T.warn} title="マイルストーン" sub="期限近順 ・ 上位5件" />
+            <MilestonesCard T={T} milestones={milestones} setMilestones={setMilestones} isAdmin={isAdmin} myName={myName} />
+          </>
+        )}
       </div>
     </div>
   )
 }
 
 // ─── サブコンポーネント ─────────────────────────────────────
+
+// ダッシュボード下半分のタブ切替バー (週間ランキング / チームサマリー / マイルストーン)
+function DashboardTabs({ T, active, onChange, tabs }) {
+  return (
+    <div style={{
+      display: 'flex', gap: SPACING.xs + 2,
+      padding: 4,
+      background: T.sectionBg,
+      border: `1px solid ${T.borderLight}`,
+      borderRadius: RADIUS.lg,
+      marginTop: SPACING.lg,
+      marginBottom: SPACING.md,
+      overflowX: 'auto',
+    }}>
+      {tabs.map(t => {
+        const isActive = t.key === active
+        return (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            style={{
+              flex: 1, minWidth: 140,
+              padding: `${SPACING.xs + 2}px ${SPACING.md}px`,
+              borderRadius: RADIUS.md,
+              border: 'none',
+              background: isActive ? T.bgCard : 'transparent',
+              boxShadow: isActive ? SHADOWS.sm : 'none',
+              color: isActive ? T.text : T.textSub,
+              ...TYPO.subhead,
+              fontWeight: isActive ? 800 : 600,
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs + 2,
+              transition: 'all 0.15s ease',
+            }}>
+            <span style={{ fontSize: 14, color: t.accent }}>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 function SectionTitle({ T, icon, iconColor = '#007AFF', title, sub }) {
   return (
