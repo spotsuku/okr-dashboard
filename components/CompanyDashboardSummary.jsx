@@ -63,10 +63,10 @@ export default function CompanyDashboardSummary({
   const monday = useMemo(() => getMondayJSTStr(), [])
   const viewingMember = useMemo(() => (members || []).find(m => m.name === myName) || null, [members, myName])
 
-  const [overdueCount, setOverdueCount] = useState(0)
+  const [overdueMilestoneCount, setOverdueMilestoneCount] = useState(0)
   const [unfilledKRCount, setUnfilledKRCount] = useState(0)
   const [unresolvedConfirmCount, setUnresolvedConfirmCount] = useState(0)
-  const [todayTaskStats, setTodayTaskStats] = useState({ total: 0, done: 0, inProgress: 0, overdue: 0 })
+  const [todayTaskStats, setTodayTaskStats] = useState({ total: 0, done: 0, overdue: 0 })
   const [queryErrors, setQueryErrors] = useState([])
   const [workingMembers, setWorkingMembers] = useState({ active: 0, finished: 0, notStarted: 0 })
   const [milestones, setMilestones] = useState([])
@@ -74,6 +74,7 @@ export default function CompanyDashboardSummary({
   const [submittedTeamCount, setSubmittedTeamCount] = useState({ total: 0, submitted: 0 })
   const [rankings, setRankings] = useState(null)
   const [teamSummaryTableMissing, setTeamSummaryTableMissing] = useState(false)
+  const [progressedKRs, setProgressedKRs] = useState([])
   const [companyAnnualKRs, setCompanyAnnualKRs] = useState([])
 
   // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
@@ -179,12 +180,10 @@ export default function CompanyDashboardSummary({
       // タスク統計 (overdueTasks / todayTasks の2クエリから集計)
       // overdueTasks は done=false で due_date < today だけ取得済 (status='done' のみ JS で除外)
       const overdueTasks = (r.overdueTasks?.data || []).filter(t => t.status !== 'done')
-      setOverdueCount(overdueTasks.length)
       const todayTasks = r.todayTasks?.data || []
       setTodayTaskStats({
         total: todayTasks.length,
         done: todayTasks.filter(t => t.done || t.status === 'done').length,
-        inProgress: todayTasks.filter(t => !t.done && t.status === 'in_progress').length,
         overdue: overdueTasks.length,
       })
 
@@ -210,10 +209,12 @@ export default function CompanyDashboardSummary({
       const totalNonGuest = (members || []).filter(m => m.name !== '👀 ゲスト').length
       setWorkingMembers({ active, finished, notStarted: Math.max(0, totalNonGuest - active - finished) })
 
-      // マイルストーン
-      const ms = (r.msRes?.data || []).filter(m => m.status !== 'done')
-      ms.sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
-      setMilestones(ms.slice(0, 5))
+      // マイルストーン (上位5件 + 遅延件数を集計)
+      const msAll = (r.msRes?.data || []).filter(m => m.status !== 'done')
+      const overdueMs = msAll.filter(m => m.due_date && dateStr(m.due_date) < today)
+      setOverdueMilestoneCount(overdueMs.length)
+      msAll.sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
+      setMilestones(msAll.slice(0, 5))
 
       // KR ピンチ (逆指標対応)
       const moreMap = {}
@@ -226,8 +227,27 @@ export default function CompanyDashboardSummary({
       .slice(0, 5)
       setKrPinch(pinch)
 
+      // 前進KR: 先週月曜→今週月曜で current が前進した KR の一覧 (個別に表示)
+      const thisSnapAll = {}
+      ;(r.krSnapsThis?.data || []).forEach(s => { thisSnapAll[s.kr_id] = Number(s.current_value) })
+      const lastSnapAll = {}
+      ;(r.krSnapsLast?.data || []).forEach(s => { lastSnapAll[s.kr_id] = Number(s.current_value) })
+      const progressed = krList.map(kr => {
+        const tv = thisSnapAll[kr.id]
+        const lv = lastSnapAll[kr.id]
+        if (tv === undefined || lv === undefined) return null
+        const inverted = isInvertedKR(kr.title)
+        const delta = inverted ? lv - tv : tv - lv
+        if (delta <= 0) return null
+        const target = Number(kr.target) || 0
+        const deltaPct = target ? (delta / Math.abs(target)) * 100 : 0
+        return { ...kr, pct: calcKRPct(kr), delta, deltaPct, inverted }
+      }).filter(Boolean)
+      // 進捗率の上昇幅が大きい順に並べる (絶対値ではなく target 比で比較)
+      progressed.sort((a, b) => b.deltaPct - a.deltaPct)
+      setProgressedKRs(progressed)
+
       // 全社通期 KR (parent_id IS NULL の Level に紐づく rawPeriod='annual' の Objective の KR)
-      // 当年度の Level だけに絞る。Objective の objective_id で KR を join。
       const fyStr = String(fiscalYear)
       const companyLevelIds = new Set((levels || [])
         .filter(l => !l.parent_id && String(l.fiscal_year || '') === fyStr)
@@ -249,10 +269,9 @@ export default function CompanyDashboardSummary({
           ...kr,
           pct: calcKRPct(kr),
           inverted: isInvertedKR(kr.title),
+          objective_id: Number(kr.objective_id),
           objective_title: annualObjMap[kr.objective_id]?.title || '',
         }))
-        // Objective ごとにグルーピングしやすいよう objective_id 昇順、その中で達成率昇順
-        .sort((a, b) => (a.objective_id - b.objective_id) || (a.pct - b.pct))
       setCompanyAnnualKRs(companyKRs)
 
       // チームサマリー件数
@@ -351,33 +370,8 @@ export default function CompanyDashboardSummary({
           .sort((a, b) => b.totalChars - a.totalChars || b.fullEntries - a.fullEntries)
           .slice(0, 3)
 
-        // 5. KR 前進王: 先週月曜→今週月曜で current が前進した KR の件数 (絶対数)
-        //    KR 難易度差の影響を排除し、「実際に動かした KR の数」で表彰する。
-        //    逆指標 (低いほど良い) は値が下がっていれば前進扱い。
-        //    各 KR のスナップショットが両週分そろっていない場合は判定不能なので除外。
-        const thisSnap = {}
-        ;(r.krSnapsThis?.data || []).forEach(s => { thisSnap[s.kr_id] = Number(s.current_value) })
-        const lastSnap = {}
-        ;(r.krSnapsLast?.data || []).forEach(s => { lastSnap[s.kr_id] = Number(s.current_value) })
-        const advancedByOwner = {}
-        for (const kr of krList) {
-          const owner = kr.owner
-          if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
-          const tv = thisSnap[kr.id]
-          const lv = lastSnap[kr.id]
-          if (tv === undefined || lv === undefined) continue  // 履歴未蓄積
-          const advanced = isInvertedKR(kr.title) ? (lv - tv > 0) : (tv - lv > 0)
-          const st = advancedByOwner[owner] = advancedByOwner[owner] || { advanced: 0, total: 0 }
-          st.total++
-          if (advanced) st.advanced++
-        }
-        const goalAchiever = Object.entries(advancedByOwner)
-          .filter(([_, s]) => s.advanced > 0)  // 1 件でも前進した人だけ表示
-          .map(([name, s]) => ({ name, advanced: s.advanced, total: s.total }))
-          .sort((a, b) => b.advanced - a.advanced || a.total - b.total)
-          .slice(0, 3)
-
-        setRankings({ promiseKeeper, taskMaster, reflection, practiceMaster, goalAchiever })
+        // KR 前進王 はランキングから外し、1段目右の「前進KR」カードに移管 (上で集計済)。
+        setRankings({ promiseKeeper, taskMaster, reflection, practiceMaster })
       } catch (e) {
         console.warn('rankings calc error:', e)
         setRankings(null)
@@ -448,16 +442,7 @@ export default function CompanyDashboardSummary({
           </div>
         )}
 
-        {/* 上段: アラート + 今日 */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-          gap: SPACING.md, marginBottom: SPACING.lg,
-        }}>
-          <AlertCard T={T} overdueCount={overdueCount} unfilledKRCount={unfilledKRCount} unresolvedConfirmCount={unresolvedConfirmCount} />
-          <TodayCard T={T} todayTaskStats={todayTaskStats} workingMembers={workingMembers} />
-        </div>
-
-        {/* 全社 通期 KR — 目標と現状を可視化 */}
+        {/* 全社 通期 KR — タイトル直下、Objective ごとに横並び */}
         {companyAnnualKRs.length > 0 && (
           <>
             <SectionTitle T={T} icon="🎯" iconColor="#007AFF" title="全社 通期 KR"
@@ -466,13 +451,23 @@ export default function CompanyDashboardSummary({
           </>
         )}
 
+        {/* 1段目: 今すぐ注目 + 今日の全社状況 + 前進KR (3列) */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: SPACING.md, marginBottom: SPACING.lg, marginTop: SPACING.lg,
+        }}>
+          <AlertCard T={T} overdueMilestoneCount={overdueMilestoneCount} unfilledKRCount={unfilledKRCount} unresolvedConfirmCount={unresolvedConfirmCount} />
+          <TodayCard T={T} todayTaskStats={todayTaskStats} workingMembers={workingMembers} />
+          <ProgressKRCard T={T} progressed={progressedKRs} />
+        </div>
+
         {/* 週間ランキング (4列) — 先週月曜〜日曜の確定ランキング */}
         {rankings && (
           <>
             <SectionTitle T={T} icon="🏆" iconColor="#FF9500" title="週間ランキング" sub={`先週 (${lastWeekRange.label}) の Top 3`} />
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
               gap: SPACING.md, marginBottom: SPACING.xl,
             }}>
               <RankingCard T={T} title="有言実行王" emoji="🎯" accent="#34C759" subtitle="期限内完了率"
@@ -493,8 +488,6 @@ export default function CompanyDashboardSummary({
                   main: `${r.totalChars}字`,
                   sub: `網羅 ${r.fullEntries}/${r.entries}件`,
                 }))} />
-              <RankingCard T={T} title="KR 前進王" emoji="🚀" accent="#FF9500" subtitle="先週比 前進KR数"
-                entries={rankings.goalAchiever.map(r => ({ name: r.name, main: `${r.advanced}件`, sub: `担当 ${r.total}件中` }))} />
             </div>
           </>
         )}
@@ -534,8 +527,8 @@ function SectionTitle({ T, icon, iconColor = '#007AFF', title, sub }) {
 }
 
 // ─── アラート ────────────────────────────────────────────────
-function AlertCard({ T, overdueCount, unfilledKRCount, unresolvedConfirmCount }) {
-  const total = overdueCount + unfilledKRCount + unresolvedConfirmCount
+function AlertCard({ T, overdueMilestoneCount, unfilledKRCount, unresolvedConfirmCount }) {
+  const total = overdueMilestoneCount + unfilledKRCount + unresolvedConfirmCount
   const accent = total > 0 ? T.danger : T.success
   return (
     <div style={cardStyle({ T, accent, padding: SPACING.lg })}>
@@ -551,9 +544,9 @@ function AlertCard({ T, overdueCount, unfilledKRCount, unresolvedConfirmCount })
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-        <MetricRow T={T} color={T.danger} icon="⏰" label="期限切れ未完了タスク" value={overdueCount} unit="件" />
+        <MetricRow T={T} color={T.danger} icon="🚧" label="遅延マイルストーン"   value={overdueMilestoneCount} unit="件" />
         <MetricRow T={T} color={T.warn}   icon="📝" label="今週レビュー未記入 KR" value={unfilledKRCount} unit="件" />
-        <MetricRow T={T} color={T.accent} icon="🤝" label="未対応の確認依頼" value={unresolvedConfirmCount} unit="件" />
+        <MetricRow T={T} color={T.accent} icon="🤝" label="未対応の確認依頼"     value={unresolvedConfirmCount} unit="件" />
       </div>
     </div>
   )
@@ -609,8 +602,7 @@ function TodayCard({ T, todayTaskStats, workingMembers }) {
           <div style={progressFillStyle({ color: T.accent, value: pct })} />
         </div>
         <div style={{ display: 'flex', gap: SPACING.md, marginTop: SPACING.xs + 2, ...TYPO.footnote, color: T.textMuted }}>
-          <span>進行中 {todayTaskStats.inProgress}件</span>
-          <span style={{ color: T.danger, fontWeight: 700 }}>停滞 {todayTaskStats.overdue}件</span>
+          <span style={{ color: T.danger, fontWeight: 700 }}>遅延付き {todayTaskStats.overdue}件</span>
         </div>
       </div>
 
@@ -958,8 +950,59 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
 
 // ─── 全社 通期 KR ─────────────────────────────────────────
 // Objective ごとにグルーピングし、各 KR の current/target + 達成率バーを表示
+// ─── 前進KR (1段目右) ─────────────────────────────────────
+// 先週月曜→今週月曜で current が前進した KR を一覧表示。担当者付き。
+function ProgressKRCard({ T, progressed }) {
+  const accent = progressed.length > 0 ? T.success : T.textSub
+  return (
+    <div style={cardStyle({ T, accent, padding: SPACING.lg })}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
+        <div style={accentRingStyle({ color: accent, size: 32 })}>
+          <span style={{ fontSize: 16 }}>🚀</span>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ ...TYPO.headline, color: T.text }}>前進した KR</div>
+          <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>
+            {progressed.length === 0 ? '今週前進した KR はまだありません' : `先週比 ${progressed.length}件 前進`}
+          </div>
+        </div>
+      </div>
+      {progressed.length === 0 ? (
+        <div style={{ padding: SPACING.md, ...TYPO.caption, color: T.textMuted, textAlign: 'center', fontStyle: 'italic' }}>
+          KR の current 値を更新すると、ここに前進が記録されます
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2, maxHeight: 280, overflowY: 'auto' }}>
+          {progressed.map(kr => {
+            const pct = Math.round(kr.pct)
+            const dpct = Math.round(kr.deltaPct * 10) / 10
+            return (
+              <div key={kr.id} style={{
+                padding: `${SPACING.sm}px ${SPACING.md}px`,
+                borderRadius: RADIUS.md, background: T.sectionBg,
+                border: `1px solid ${T.success}26`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginBottom: 4 }}>
+                  <span style={{ ...TYPO.subhead, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {kr.title}
+                  </span>
+                  <span style={pillStyle({ color: T.success, size: 'sm' })}>+{dpct}%</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, ...TYPO.caption, color: T.textMuted }}>
+                  <span>達成 <span style={{ color: T.text, fontWeight: 700 }}>{pct}%</span></span>
+                  {kr.owner && <span style={{ marginLeft: 'auto' }}>👤 {kr.owner}</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CompanyAnnualKRsCard({ T, krs }) {
-  // Objective 単位でグルーピング (krs は事前に objective_id 順にソート済)
+  // Objective 単位でグルーピング
   const groups = {}
   krs.forEach(kr => {
     const oid = kr.objective_id || 0
@@ -973,10 +1016,18 @@ function CompanyAnnualKRsCard({ T, krs }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
         {groupList.map(g => (
           <div key={g.oid}>
-            <div style={{ ...TYPO.headline, color: T.text, marginBottom: SPACING.sm }}>
-              🎯 {g.title}
+            {/* Objective: 一行ヘッダ */}
+            <div style={{ ...TYPO.headline, color: T.text, marginBottom: SPACING.sm + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
+              <span>🎯</span>
+              <span>{g.title}</span>
+              <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 600 }}>KR {g.krs.length}件</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
+            {/* KR: 横並び (auto-fit minmax) */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(auto-fit, minmax(220px, 1fr))`,
+              gap: SPACING.sm + 2,
+            }}>
               {g.krs.map(kr => {
                 const pct = Math.round(kr.pct)
                 const pctColor = pct >= 100 ? T.success : pct >= 70 ? T.accent : pct >= 40 ? T.warn : T.danger
@@ -985,21 +1036,21 @@ function CompanyAnnualKRsCard({ T, krs }) {
                     padding: `${SPACING.sm + 2}px ${SPACING.md}px`,
                     borderRadius: RADIUS.md, background: T.sectionBg,
                     border: `1px solid ${T.borderLight}`,
+                    display: 'flex', flexDirection: 'column', gap: 6,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginBottom: 6 }}>
-                      <span style={{ ...TYPO.subhead, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.xs + 2 }}>
+                      <span style={{ ...TYPO.subhead, color: T.text, flex: 1, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                         {kr.title}
                       </span>
-                      {kr.inverted && <span style={pillStyle({ color: T.textMuted, size: 'sm' })}>逆指標</span>}
                       <span style={kpiNumber({ color: pctColor, size: 18 })}>{pct}%</span>
                     </div>
                     <div style={progressBarStyle({ T, height: 6 })}>
                       <div style={progressFillStyle({ color: pctColor, value: kr.pct })} />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, ...TYPO.caption, color: T.textMuted, marginTop: 5 }}>
-                      <span>現在 <span style={{ ...TYPO.footnote, color: T.text, fontWeight: 800 }}>{Number(kr.current ?? 0).toLocaleString()}</span> {kr.unit || ''}</span>
-                      <span>/ 目標 <span style={{ ...TYPO.footnote, color: T.textSub, fontWeight: 700 }}>{Number(kr.target ?? 0).toLocaleString()}</span> {kr.unit || ''}</span>
-                      {kr.owner && <span style={{ marginLeft: 'auto' }}>担当: {kr.owner}</span>}
+                    <div style={{ ...TYPO.caption, color: T.textMuted, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span><span style={{ ...TYPO.footnote, color: T.text, fontWeight: 800 }}>{Number(kr.current ?? 0).toLocaleString()}</span> / {Number(kr.target ?? 0).toLocaleString()} {kr.unit || ''}</span>
+                      {kr.inverted && <span style={pillStyle({ color: T.textMuted, size: 'sm' })}>逆指標</span>}
+                      {kr.owner && <span style={{ marginLeft: 'auto' }}>{kr.owner}</span>}
                     </div>
                   </div>
                 )
