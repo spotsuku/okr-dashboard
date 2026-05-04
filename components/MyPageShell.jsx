@@ -147,7 +147,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   useEffect(() => { if (myName && !viewingName) setViewingName(myName) }, [myName, viewingName])
 
   // 全社サマリーモード (個別メンバーの代わりに全社の今日タスクを集約表示)
-  const [summaryMode, setSummaryMode] = useState(false)
+  // ワークスペース起動時は全社サマリーをデフォルト表示。
+  const [summaryMode, setSummaryMode] = useState(true)
 
   const [activeTab, setActiveTab] = useState('dashboard')
   // ぺろっぺ 設定モーダル (admin のみ)
