@@ -129,6 +129,9 @@ export default function CompanyDashboardSummary({
         // 実践王: 先週の OKR 記入 (weekly_reports = KAレビュー / kr_weekly_reviews = KRレビュー)
         ['lwReports',    supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
         ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
+        // KR 前進王: 今週月曜・先週月曜の KR スナップショットを比較して「前進した KR の件数」を出す
+        ['krSnapsThis',  supabase.from('kr_progress_snapshots').select('kr_id, current_value').eq('week_start', monday).range(0, 999)],
+        ['krSnapsLast',  supabase.from('kr_progress_snapshots').select('kr_id, current_value').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
       ]
       const settled = await Promise.allSettled(queries.map(([_, p]) => p))
       if (!alive) return
@@ -312,19 +315,31 @@ export default function CompanyDashboardSummary({
           .sort((a, b) => b.totalChars - a.totalChars || b.fullEntries - a.fullEntries)
           .slice(0, 3)
 
-        // 5. 目標達成王: 担当 KR の平均達成率 (逆指標対応)
-        const krProgressByOwner = {}
+        // 5. KR 前進王: 先週月曜→今週月曜で current が前進した KR の件数 (絶対数)
+        //    KR 難易度差の影響を排除し、「実際に動かした KR の数」で表彰する。
+        //    逆指標 (低いほど良い) は値が下がっていれば前進扱い。
+        //    各 KR のスナップショットが両週分そろっていない場合は判定不能なので除外。
+        const thisSnap = {}
+        ;(r.krSnapsThis?.data || []).forEach(s => { thisSnap[s.kr_id] = Number(s.current_value) })
+        const lastSnap = {}
+        ;(r.krSnapsLast?.data || []).forEach(s => { lastSnap[s.kr_id] = Number(s.current_value) })
+        const advancedByOwner = {}
         for (const kr of krList) {
           const owner = kr.owner
           if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
-          if (!Number(kr.target)) continue
-          const arr = krProgressByOwner[owner] = krProgressByOwner[owner] || []
-          arr.push(calcKRPct(kr))
+          const tv = thisSnap[kr.id]
+          const lv = lastSnap[kr.id]
+          if (tv === undefined || lv === undefined) continue  // 履歴未蓄積
+          const advanced = isInvertedKR(kr.title) ? (lv - tv > 0) : (tv - lv > 0)
+          const st = advancedByOwner[owner] = advancedByOwner[owner] || { advanced: 0, total: 0 }
+          st.total++
+          if (advanced) st.advanced++
         }
-        const goalAchiever = Object.entries(krProgressByOwner)
-          .filter(([_, arr]) => arr.length >= 2)
-          .map(([name, arr]) => ({ name, avg: arr.reduce((a, b) => a + b, 0) / arr.length, count: arr.length }))
-          .sort((a, b) => b.avg - a.avg).slice(0, 3)
+        const goalAchiever = Object.entries(advancedByOwner)
+          .filter(([_, s]) => s.advanced > 0)  // 1 件でも前進した人だけ表示
+          .map(([name, s]) => ({ name, advanced: s.advanced, total: s.total }))
+          .sort((a, b) => b.advanced - a.advanced || a.total - b.total)
+          .slice(0, 3)
 
         setRankings({ promiseKeeper, taskMaster, reflection, practiceMaster, goalAchiever })
       } catch (e) {
@@ -433,8 +448,8 @@ export default function CompanyDashboardSummary({
                   main: `${r.totalChars}字`,
                   sub: `網羅 ${r.fullEntries}/${r.entries}件`,
                 }))} />
-              <RankingCard T={T} title="目標達成王" emoji="🎖" accent="#FF9500" subtitle="担当 KR 平均"
-                entries={rankings.goalAchiever.map(r => ({ name: r.name, main: `${Math.round(r.avg)}%`, sub: `KR ${r.count}件` }))} />
+              <RankingCard T={T} title="KR 前進王" emoji="🚀" accent="#FF9500" subtitle="先週比 前進KR数"
+                entries={rankings.goalAchiever.map(r => ({ name: r.name, main: `${r.advanced}件`, sub: `担当 ${r.total}件中` }))} />
             </div>
           </>
         )}
