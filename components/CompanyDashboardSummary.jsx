@@ -73,6 +73,7 @@ export default function CompanyDashboardSummary({
   const [krPinch, setKrPinch] = useState([])
   const [submittedTeamCount, setSubmittedTeamCount] = useState({ total: 0, submitted: 0 })
   const [rankings, setRankings] = useState(null)
+  const [teamSummaryTableMissing, setTeamSummaryTableMissing] = useState(false)
 
   // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
   const lastWeekRange = useMemo(() => {
@@ -133,8 +134,11 @@ export default function CompanyDashboardSummary({
 
       // 結果をキー名でマップ化 (失敗時は空)
       // エラーは object ではなく文字列にして console に出すと折りたたまれず読める。
+      // teamSums の PGRST205 (table missing) は既知 (SQL 未実行) なのでバナーに出さず、
+      // 該当セクション内で inline 表示するためのフラグだけ立てる。
       const r = {}
       const errs = []
+      let tsTableMissing = false
       settled.forEach((s, i) => {
         const key = queries[i][0]
         if (s.status !== 'fulfilled') {
@@ -149,12 +153,17 @@ export default function CompanyDashboardSummary({
           const msg = `${e.message || ''} | code=${e.code || ''} | details=${e.details || ''} | hint=${e.hint || ''}`
           console.warn(`[CompanyDashboardSummary] ${key} エラー: ${msg}`)
           r[key] = { data: [], count: 0, error: e }
-          errs.push({ key, message: e.message || msg, code: e.code })
+          if (key === 'teamSums' && e.code === 'PGRST205') {
+            tsTableMissing = true  // バナーには出さず inline で説明
+          } else {
+            errs.push({ key, message: e.message || msg, code: e.code })
+          }
           return
         }
         r[key] = s.value
       })
       setQueryErrors(errs)
+      setTeamSummaryTableMissing(tsTableMissing)
 
       // タスク統計 (overdueTasks / todayTasks の2クエリから集計)
       // overdueTasks は done=false で due_date < today だけ取得済 (status='done' のみ JS で除外)
@@ -433,7 +442,8 @@ export default function CompanyDashboardSummary({
         <SectionTitle T={T} icon="📊" iconColor="#34C759" title="今週のチームサマリー"
           sub={`${submittedTeamCount.submitted}/${submittedTeamCount.total} チーム提出済 ・ マネージャー定例/ディレクター確認会議に反映`} />
         <TeamSummarySingleView T={T} levels={levels} members={members}
-          weekStart={monday} myName={myName} viewingMember={viewingMember} isAdmin={isAdmin} />
+          weekStart={monday} myName={myName} viewingMember={viewingMember} isAdmin={isAdmin}
+          tableMissing={teamSummaryTableMissing} />
 
         {/* 下段: マイルストーン + KR ピンチ */}
         <div style={{
@@ -608,7 +618,25 @@ function RankingCard({ T, title, emoji, accent = '#007AFF', subtitle, entries })
 }
 
 // ─── チームサマリー (1チーム拡大表示 + プルダウン + 3カラム編集) ──
-function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingMember, isAdmin }) {
+function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingMember, isAdmin, tableMissing = false }) {
+  // テーブル未作成 (PGRST205) のときは編集 UI を出さず案内だけ表示する
+  if (tableMissing) {
+    return (
+      <div style={cardStyle({ T, accent: T.warn, padding: SPACING.lg })}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs }}>
+          <span style={{ fontSize: 18 }}>🛠</span>
+          <span style={{ ...TYPO.headline, color: T.text }}>チームサマリー機能はまだ有効化されていません</span>
+        </div>
+        <div style={{ ...TYPO.body, color: T.textSub, lineHeight: 1.6 }}>
+          <code style={{ background: T.sectionBg, padding: '1px 6px', borderRadius: 4 }}>team_weekly_summary</code> テーブルが Supabase 上に存在しません。
+        </div>
+        <div style={{ ...TYPO.footnote, color: T.textMuted, marginTop: SPACING.xs }}>
+          管理者: Supabase SQL Editor で <code>supabase_dashboard_schema_fix.sql</code> を実行してください。
+        </div>
+      </div>
+    )
+  }
+
   const monday = weekStart
 
   const rootIds = useMemo(() => new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id))), [levels])
