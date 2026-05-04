@@ -67,11 +67,13 @@ export default function CompanyDashboardSummary({
   const [unfilledKRCount, setUnfilledKRCount] = useState(0)
   const [unresolvedConfirmCount, setUnresolvedConfirmCount] = useState(0)
   const [todayTaskStats, setTodayTaskStats] = useState({ total: 0, done: 0, inProgress: 0, overdue: 0 })
+  const [queryErrors, setQueryErrors] = useState([])
   const [workingMembers, setWorkingMembers] = useState({ active: 0, finished: 0, notStarted: 0 })
   const [milestones, setMilestones] = useState([])
   const [krPinch, setKrPinch] = useState([])
   const [submittedTeamCount, setSubmittedTeamCount] = useState({ total: 0, submitted: 0 })
   const [rankings, setRankings] = useState(null)
+  const [teamSummaryTableMissing, setTeamSummaryTableMissing] = useState(false)
 
   // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
   const lastWeekRange = useMemo(() => {
@@ -91,59 +93,84 @@ export default function CompanyDashboardSummary({
     let alive = true
     setLoading(true)
     ;(async () => {
-      // ランキング用: 先週月〜日 (created_at で範囲指定)
+      // ランキング用: 先週月〜日
+      // ka_tasks には created_at が無い旧 schema もあるため、ka_tasks の週次フィルタは
+      // due_date を使う (= 「先週が期限のタスク」を集計対象)。意味的にも
+      // 「先週中の期限内完了率 (有言実行王)」「先週分のタスク完了数」として妥当。
       const lwStart = lastWeekRange.mondayIso
       const lwEnd = lastWeekRange.sundayEndIso
+      const lwStartDate = lastWeekRange.mondayStr  // YYYY-MM-DD (due_date 比較用)
+      const lwEndDate = (() => {
+        const d = new Date(lwStartDate + 'T00:00:00Z')
+        d.setUTCDate(d.getUTCDate() + 6)
+        return d.toISOString().slice(0, 10)
+      })()
+      // kr_weekly_reviews.focus_output が無い旧 schema 対策で、select には focus のみを含める。
+      // (focus_output が必要な箇所は focus で代替する)
+      // ka_tasks は全件 SELECT すると行数膨張で 400 を踏みやすいため、用途別に範囲を絞る:
+      //   - overdueTasks: 未完了 (done=false) のみ → 期限切れ判定に使用
+      //   - todayTasks:   due_date=today のみ      → 今日のタスク表示に使用
       const queries = [
-        ['allTasks',     supabase.from('ka_tasks').select('id, assignee, due_date, done, status, created_at').range(0, 1999)],
-        ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 1999)],
-        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday).range(0, 1999)],
+        ['overdueTasks', supabase.from('ka_tasks').select('id, due_date, done, status').eq('done', false).lt('due_date', today).range(0, 999)],
+        ['todayTasks',   supabase.from('ka_tasks').select('id, due_date, done, status').eq('due_date', today).range(0, 999)],
+        ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 999)],
+        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus').eq('week_start', monday).range(0, 999)],
         ['openConfirms', supabase.from('member_confirmations').select('id', { count: 'exact', head: true }).eq('status', 'open')],
         ['msRes',        supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)).range(0, 999)],
         ['workLogs',     supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).range(0, 999)],
         ['teamSums',     supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999)],
-        // 振り返り王: 先週月〜日 の KPT ログ
-        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 1999)],
-        // タスク完了王: 先週月〜日 に created_at があり done=true のタスク
-        ['lwDone',       supabase.from('ka_tasks').select('assignee, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).eq('done', true).range(0, 1999)],
-        // 有言実行王: 先週月〜日 に作成された期限付きタスク
-        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).not('due_date', 'is', null).range(0, 1999)],
+        // 振り返り王: 先週月〜日 の KPT ログ (coaching_logs.created_at は存在する)
+        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 999)],
+        // タスク完了王: 先週月〜日 に done=true になったタスク (completed_at で判定)
+        // ※ supabase_dashboard_schema_fix.sql を実行して completed_at 列が存在する前提
+        ['lwDone',       supabase.from('ka_tasks').select('assignee, completed_at').gte('completed_at', lwStart).lte('completed_at', lwEnd).eq('done', true).range(0, 999)],
+        // 有言実行王: 先週月〜日 が due_date のタスク (期限内完了率を集計)
+        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status').gte('due_date', lwStartDate).lte('due_date', lwEndDate).range(0, 999)],
         // 実践王: 先週の OKR 記入 (weekly_reports = KAレビュー / kr_weekly_reviews = KRレビュー)
-        ['lwReports',    supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 1999)],
-        ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 1999)],
+        ['lwReports',    supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
+        ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
       ]
       const settled = await Promise.allSettled(queries.map(([_, p]) => p))
       if (!alive) return
 
       // 結果をキー名でマップ化 (失敗時は空)
+      // エラーは object ではなく文字列にして console に出すと折りたたまれず読める。
+      // teamSums の PGRST205 (table missing) は既知 (SQL 未実行) なのでバナーに出さず、
+      // 該当セクション内で inline 表示するためのフラグだけ立てる。
       const r = {}
+      const errs = []
+      let tsTableMissing = false
       settled.forEach((s, i) => {
         const key = queries[i][0]
         if (s.status !== 'fulfilled') {
-          console.warn(`[CompanyDashboardSummary] ${key} クエリ失敗:`, s.reason?.message || s.reason)
+          const msg = s.reason?.message || String(s.reason)
+          console.warn(`[CompanyDashboardSummary] ${key} クエリ失敗: ${msg}`)
           r[key] = { data: [], count: 0, error: s.reason }
+          errs.push({ key, message: msg })
           return
         }
         if (s.value?.error) {
           const e = s.value.error
-          console.warn(`[CompanyDashboardSummary] ${key} エラー:`, {
-            message: e.message, code: e.code, details: e.details, hint: e.hint,
-          })
+          const msg = `${e.message || ''} | code=${e.code || ''} | details=${e.details || ''} | hint=${e.hint || ''}`
+          console.warn(`[CompanyDashboardSummary] ${key} エラー: ${msg}`)
           r[key] = { data: [], count: 0, error: e }
+          if (key === 'teamSums' && e.code === 'PGRST205') {
+            tsTableMissing = true  // バナーには出さず inline で説明
+          } else {
+            errs.push({ key, message: e.message || msg, code: e.code })
+          }
           return
         }
         r[key] = s.value
       })
+      setQueryErrors(errs)
+      setTeamSummaryTableMissing(tsTableMissing)
 
-      // タスク統計
-      const tasks = r.allTasks?.data || []
-      const overdueTasks = tasks.filter(t => {
-        if (t.done || t.status === 'done') return false
-        const d = dateStr(t.due_date)
-        return d && d < today
-      })
+      // タスク統計 (overdueTasks / todayTasks の2クエリから集計)
+      // overdueTasks は done=false で due_date < today だけ取得済 (status='done' のみ JS で除外)
+      const overdueTasks = (r.overdueTasks?.data || []).filter(t => t.status !== 'done')
       setOverdueCount(overdueTasks.length)
-      const todayTasks = tasks.filter(t => dateStr(t.due_date) === today)
+      const todayTasks = r.todayTasks?.data || []
       setTodayTaskStats({
         total: todayTasks.length,
         done: todayTasks.filter(t => t.done || t.status === 'done').length,
@@ -151,10 +178,10 @@ export default function CompanyDashboardSummary({
         overdue: overdueTasks.length,
       })
 
-      // KR レビュー
+      // KR レビュー (focus_output は select に含めていないので参照しない)
       const reviewMap = {}
       ;(r.weeklyRevs?.data || []).forEach(rv => {
-        reviewMap[rv.kr_id] = !!((rv.good||'').trim() || (rv.more||'').trim() || (rv.focus||'').trim() || (rv.focus_output||'').trim())
+        reviewMap[rv.kr_id] = !!((rv.good||'').trim() || (rv.more||'').trim() || (rv.focus||'').trim())
       })
       const krList = r.krs?.data || []
       setUnfilledKRCount(krList.filter(kr => kr.owner && !reviewMap[kr.id]).length)
@@ -266,13 +293,13 @@ export default function CompanyDashboardSummary({
           ps.totalChars += g.length + m.length + f.length
         }
         // KR レビュー (kr_weekly_reviews): kr_id → KR.owner で名前解決
+        // focus_output は select に含めていないので focus のみで集計
         const krOwnerMap = {}
         krList.forEach(kr => { krOwnerMap[kr.id] = kr.owner })
         for (const row of r.lwKrRevs?.data || []) {
           const owner = krOwnerMap[row.kr_id]
           if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
-          const g = (row.good || '').trim(), m = (row.more || '').trim()
-          const f = (row.focus_output || '').trim() || (row.focus || '').trim()
+          const g = (row.good || '').trim(), m = (row.more || '').trim(), f = (row.focus || '').trim()
           if (!g && !m && !f) continue
           const ps = ensurePr(owner)
           ps.entries++
@@ -307,7 +334,8 @@ export default function CompanyDashboardSummary({
 
       // デバッグ用: クエリ別の取得件数を console に
       console.info('[全社ダッシュボード] 取得件数:', {
-        全タスク: (r.allTasks?.data || []).length,
+        '期限切れ未完了': (r.overdueTasks?.data || []).length,
+        '今日のタスク': (r.todayTasks?.data || []).length,
         '先週完了タスク': (r.lwDone?.data || []).length,
         '先週期限付きタスク': (r.lwWithDue?.data || []).length,
         '先週KPT': (r.kptLogs?.data || []).length,
@@ -345,6 +373,29 @@ export default function CompanyDashboardSummary({
             <div style={pageSubtitle({ T })}>{fiscalYear}年度 ・ {today} 時点</div>
           </div>
         </div>
+
+        {/* 管理者用: クエリ失敗を画面に表示 (本番DBスキーマと差異がある場合の診断用) */}
+        {isAdmin && queryErrors.length > 0 && (
+          <div style={{
+            marginBottom: SPACING.lg, padding: SPACING.md,
+            borderRadius: RADIUS.md, background: `${T.danger}10`,
+            border: `1px solid ${T.danger}40`,
+          }}>
+            <div style={{ ...TYPO.headline, color: T.danger, marginBottom: SPACING.xs }}>
+              ⚠️ {queryErrors.length} 件のクエリが失敗しました (admin にのみ表示)
+            </div>
+            <div style={{ ...TYPO.caption, color: T.textSub, fontFamily: 'ui-monospace, monospace' }}>
+              {queryErrors.map((e, i) => (
+                <div key={i} style={{ marginTop: 4 }}>
+                  <strong>{e.key}</strong>: {e.message}{e.code ? ` (${e.code})` : ''}
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: SPACING.sm, ...TYPO.caption, color: T.textSub }}>
+              欠落カラム/テーブルが原因の場合: <code>supabase_dashboard_schema_fix.sql</code> を Supabase SQL Editor で実行してください。
+            </div>
+          </div>
+        )}
 
         {/* 上段: アラート + 今日 */}
         <div style={{
@@ -392,7 +443,8 @@ export default function CompanyDashboardSummary({
         <SectionTitle T={T} icon="📊" iconColor="#34C759" title="今週のチームサマリー"
           sub={`${submittedTeamCount.submitted}/${submittedTeamCount.total} チーム提出済 ・ マネージャー定例/ディレクター確認会議に反映`} />
         <TeamSummarySingleView T={T} levels={levels} members={members}
-          weekStart={monday} myName={myName} viewingMember={viewingMember} isAdmin={isAdmin} />
+          weekStart={monday} myName={myName} viewingMember={viewingMember} isAdmin={isAdmin}
+          tableMissing={teamSummaryTableMissing} />
 
         {/* 下段: マイルストーン + KR ピンチ */}
         <div style={{
@@ -567,7 +619,25 @@ function RankingCard({ T, title, emoji, accent = '#007AFF', subtitle, entries })
 }
 
 // ─── チームサマリー (1チーム拡大表示 + プルダウン + 3カラム編集) ──
-function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingMember, isAdmin }) {
+function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingMember, isAdmin, tableMissing = false }) {
+  // テーブル未作成 (PGRST205) のときは編集 UI を出さず案内だけ表示する
+  if (tableMissing) {
+    return (
+      <div style={cardStyle({ T, accent: T.warn, padding: SPACING.lg })}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs }}>
+          <span style={{ fontSize: 18 }}>🛠</span>
+          <span style={{ ...TYPO.headline, color: T.text }}>チームサマリー機能はまだ有効化されていません</span>
+        </div>
+        <div style={{ ...TYPO.body, color: T.textSub, lineHeight: 1.6 }}>
+          <code style={{ background: T.sectionBg, padding: '1px 6px', borderRadius: 4 }}>team_weekly_summary</code> テーブルが Supabase 上に存在しません。
+        </div>
+        <div style={{ ...TYPO.footnote, color: T.textMuted, marginTop: SPACING.xs }}>
+          管理者: Supabase SQL Editor で <code>supabase_dashboard_schema_fix.sql</code> を実行してください。
+        </div>
+      </div>
+    )
+  }
+
   const monday = weekStart
 
   const rootIds = useMemo(() => new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id))), [levels])
@@ -708,17 +778,9 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
     )
   }
 
-  // 緑グラデーション (チームサマリー専用、既存 TeamSummaryEditor と統一)
-  const greenGradient = T.bg === '#000000'
-    ? 'linear-gradient(135deg, rgba(48,209,88,0.18) 0%, rgba(20,80,40,0.10) 100%)'
-    : 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
-  const containerStyle = {
-    background: greenGradient,
-    border: `1px solid ${T.success}30`,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    boxShadow: SHADOWS.sm,
-  }
+  // 外側コンテナはダッシュボード他カードと同じ cardStyle に統一 (T.success accent)。
+  // 過去の独自グラデは CLAUDE.md デザインルールに反していたため撤去。
+  const containerStyle = cardStyle({ T, accent: T.success, padding: SPACING.lg })
 
   const selectSt = {
     ...inputStyle({ T }),
@@ -732,18 +794,13 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
     more:  T.warn,
     focus: T.accent,
   }
-  const cellStyleFn = (key) => {
-    const acc = cellAccent[key]
-    return {
-      background: T.bgCard,
-      border: `1px solid ${acc}26`,
-      borderTop: `3px solid ${acc}`,
-      borderRadius: RADIUS.md,
-      padding: SPACING.md,
-      display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
-      minHeight: 220, boxShadow: SHADOWS.xs,
-    }
-  }
+  // 内側 3 カラムも cardStyle に揃える。accent 色は cardStyle が背景に薄くグラデで反映する。
+  // 視認性のためタイトル文字色だけ accent で強調。
+  const cellStyleFn = (key) => ({
+    ...cardStyle({ T, accent: cellAccent[key], padding: SPACING.md }),
+    display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
+    minHeight: 220,
+  })
   const taStyle = {
     ...inputStyle({ T }),
     flex: 1, padding: SPACING.sm,
