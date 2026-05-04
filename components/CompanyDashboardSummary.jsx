@@ -76,8 +76,8 @@ export default function CompanyDashboardSummary({
   const [teamSummaryTableMissing, setTeamSummaryTableMissing] = useState(false)
   const [progressedKRs, setProgressedKRs] = useState([])
   const [companyAnnualKRs, setCompanyAnnualKRs] = useState([])
-  // タブ切替: 'rankings' | 'team' | 'milestones'
-  const [activeTab, setActiveTab] = useState('rankings')
+  // タブ切替: 'overview' | 'rankings' | 'team' | 'milestones'
+  const [activeTab, setActiveTab] = useState('overview')
 
   // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
   const lastWeekRange = useMemo(() => {
@@ -442,22 +442,25 @@ export default function CompanyDashboardSummary({
           </>
         )}
 
-        {/* 1段目: 今すぐ注目 + 今日の全社状況 + 前進KR (3列) */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: SPACING.md, marginBottom: SPACING.lg, marginTop: SPACING.lg,
-        }}>
-          <AlertCard T={T} overdueMilestoneCount={overdueMilestoneCount} unfilledKRCount={unfilledKRCount} unresolvedConfirmCount={unresolvedConfirmCount} />
-          <TodayCard T={T} todayTaskStats={todayTaskStats} workingMembers={workingMembers} />
-          <ProgressKRCard T={T} progressed={progressedKRs} />
-        </div>
-
-        {/* タブナビ: 週間ランキング / チームサマリー / マイルストーン */}
+        {/* タブナビ: 概要 / 週間ランキング / チームサマリー / マイルストーン */}
         <DashboardTabs T={T} active={activeTab} onChange={setActiveTab} tabs={[
+          { key: 'overview',   label: '概要',           icon: '📋', accent: T.accent  },
           { key: 'rankings',   label: '週間ランキング', icon: '🏆', accent: '#FF9500' },
           { key: 'team',       label: 'チームサマリー', icon: '📊', accent: '#34C759' },
           { key: 'milestones', label: 'マイルストーン', icon: '🎯', accent: T.warn   },
         ]} />
+
+        {/* 概要: 今すぐ注目 + 今日の全社状況 + 前進KR (3列) */}
+        {activeTab === 'overview' && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: SPACING.md, marginBottom: SPACING.lg,
+          }}>
+            <AlertCard T={T} overdueMilestoneCount={overdueMilestoneCount} unfilledKRCount={unfilledKRCount} unresolvedConfirmCount={unresolvedConfirmCount} />
+            <TodayCard T={T} todayTaskStats={todayTaskStats} workingMembers={workingMembers} />
+            <ProgressKRCard T={T} progressed={progressedKRs} />
+          </div>
+        )}
 
         {/* 週間ランキング (4列) — 先週月曜〜日曜の確定ランキング */}
         {activeTab === 'rankings' && rankings && (
