@@ -66,7 +66,6 @@ CREATE TRIGGER set_ka_tasks_completed_at_trg
   FOR EACH ROW EXECUTE FUNCTION set_ka_tasks_completed_at();
 
 -- 4. team_weekly_summary: チーム単位の週次サマリーテーブル
---    (supabase_team_weekly_summary.sql と同等。ここに同梱して一括実行できるように)
 CREATE TABLE IF NOT EXISTS team_weekly_summary (
   id          BIGSERIAL PRIMARY KEY,
   level_id    BIGINT NOT NULL REFERENCES levels(id) ON DELETE CASCADE,
@@ -100,4 +99,86 @@ BEGIN
 END $$;
 
 -- PostgREST のスキーマキャッシュを即時リロード
+NOTIFY pgrst, 'reload schema';
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 5. kr_progress_snapshots: KR の current 値を週次でスナップショット
+--    「KR 前進王」(先週から今週で前進した KR の件数) ランキング用。
+--    key_results.current が更新されるたびに該当週 (JST 月曜起点) の行を upsert。
+--    週内に複数回更新があった場合はその週の最終値が残る = 週末スナップショット。
+-- ════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS kr_progress_snapshots (
+  id            BIGSERIAL PRIMARY KEY,
+  kr_id         BIGINT NOT NULL REFERENCES key_results(id) ON DELETE CASCADE,
+  week_start    DATE   NOT NULL,
+  current_value NUMERIC,
+  taken_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (kr_id, week_start)
+);
+
+CREATE INDEX IF NOT EXISTS kr_progress_snapshots_week_idx
+  ON kr_progress_snapshots (week_start DESC);
+
+-- RLS は他テーブルと整合させて allow_all (Phase 2 の org-scoped 移行時に再設定可)
+ALTER TABLE kr_progress_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_kr_progress_snapshots" ON kr_progress_snapshots;
+CREATE POLICY "allow_all_kr_progress_snapshots"
+  ON kr_progress_snapshots FOR ALL TO authenticated, anon
+  USING (true) WITH CHECK (true);
+
+-- JST 月曜日を返すヘルパ関数
+CREATE OR REPLACE FUNCTION jst_monday(ts TIMESTAMPTZ) RETURNS DATE AS $$
+DECLARE
+  jst_date DATE := (ts AT TIME ZONE 'Asia/Tokyo')::date;
+BEGIN
+  -- DOW: 0=Sun, 1=Mon, ..., 6=Sat
+  -- offset to monday: (DOW + 6) % 7  → Mon=0, Tue=1, ..., Sun=6
+  RETURN jst_date - ((EXTRACT(DOW FROM jst_date)::int + 6) % 7);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- key_results.current 更新時にスナップショットを upsert
+CREATE OR REPLACE FUNCTION snapshot_kr_progress() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.current IS DISTINCT FROM OLD.current THEN
+    INSERT INTO kr_progress_snapshots (kr_id, week_start, current_value)
+    VALUES (NEW.id, jst_monday(NOW()), NEW.current)
+    ON CONFLICT (kr_id, week_start) DO UPDATE
+      SET current_value = EXCLUDED.current_value,
+          taken_at      = NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS snapshot_kr_progress_trg ON key_results;
+CREATE TRIGGER snapshot_kr_progress_trg
+  AFTER UPDATE OF current ON key_results
+  FOR EACH ROW EXECUTE FUNCTION snapshot_kr_progress();
+
+-- INSERT 時 (新規 KR 作成) も初期値を当週のスナップショットとして記録
+CREATE OR REPLACE FUNCTION snapshot_kr_progress_insert() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.current IS NOT NULL THEN
+    INSERT INTO kr_progress_snapshots (kr_id, week_start, current_value)
+    VALUES (NEW.id, jst_monday(NOW()), NEW.current)
+    ON CONFLICT (kr_id, week_start) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS snapshot_kr_progress_insert_trg ON key_results;
+CREATE TRIGGER snapshot_kr_progress_insert_trg
+  AFTER INSERT ON key_results
+  FOR EACH ROW EXECUTE FUNCTION snapshot_kr_progress_insert();
+
+-- 既存全 KR の current を「今週のスナップショット」として backfill
+-- (1 週後の比較から「KR 前進王」が機能し始める)
+INSERT INTO kr_progress_snapshots (kr_id, week_start, current_value)
+SELECT id, jst_monday(NOW()), current
+  FROM key_results
+ WHERE current IS NOT NULL
+ON CONFLICT (kr_id, week_start) DO NOTHING;
+
 NOTIFY pgrst, 'reload schema';
