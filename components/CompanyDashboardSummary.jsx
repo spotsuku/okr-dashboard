@@ -533,6 +533,7 @@ function DashboardTabs({ T, active, onChange, tabs }) {
     }}>
       {tabs.map(t => {
         const isActive = t.key === active
+        // 選択中はそのタブの accent 色で背景・枠・文字をハイライト
         return (
           <button
             key={t.key}
@@ -541,10 +542,10 @@ function DashboardTabs({ T, active, onChange, tabs }) {
               flex: 1, minWidth: 140,
               padding: `${SPACING.xs + 2}px ${SPACING.md}px`,
               borderRadius: RADIUS.md,
-              border: 'none',
-              background: isActive ? T.bgCard : 'transparent',
-              boxShadow: isActive ? SHADOWS.sm : 'none',
-              color: isActive ? T.text : T.textSub,
+              border: isActive ? `1px solid ${t.accent}55` : '1px solid transparent',
+              background: isActive ? `${t.accent}1a` : 'transparent',
+              boxShadow: isActive ? `0 1px 4px ${t.accent}33` : 'none',
+              color: isActive ? t.accent : T.textSub,
               ...TYPO.subhead,
               fontWeight: isActive ? 800 : 600,
               cursor: 'pointer',
