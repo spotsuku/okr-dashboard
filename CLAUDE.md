@@ -9,13 +9,20 @@ OKR管理ダッシュボードアプリ（Next.js 14 / Vercel）
 - 本番URL: https://okr-dashboard-taupe.vercel.app
 - GitHubリポジトリ: spotsuku/okr-dashboard
 
-## ブランチ運用ルール（必須）
+## ブランチ運用ルール（必須・絶対遵守）
 
 ### 基本方針
 - **開発は必ず `staging` ブランチで行う**
 - **`main` への直接コミットは禁止**
 - 機能完成・動作確認後に `staging` → `main` へのPRを作成する
-- PRのマージは人間が確認してから行う（Claudeは自動マージしない）
+
+### main マージは禁止 (重要・絶対遵守)
+- **Claude は `main` への merge_pull_request を絶対に実行してはならない**
+- PR の作成 (gh pr create / mcp__github__create_pull_request) までで作業は完了
+- ユーザーから「マージして」と明示的に指示があった**そのPRのみ**マージ可
+- 「ついでに」「次も同じ作業だから」等の推測でのマージは禁止
+- 1セッションで複数のPRをマージしないこと (毎回明示確認必須)
+- 過去にこのルールを繰り返し破った実績あり。**例外なし**
 
 ### 作業手順
 1. `staging` ブランチにチェックアウト: `git checkout staging`

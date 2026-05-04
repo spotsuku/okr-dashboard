@@ -272,8 +272,8 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
           />
         )}
 
-        {/* 開催中 (step 1〜3) */}
-        {meeting && meeting.step >= 1 && meeting.step < 4 && (
+        {/* 開催中 (step 1〜4) */}
+        {meeting && meeting.step >= 1 && meeting.step < 5 && (
           <>
             {/* 残り時間バナー */}
             <MorningTimerBanner T={T}
