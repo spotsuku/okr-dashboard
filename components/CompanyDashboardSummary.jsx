@@ -602,7 +602,7 @@ function TodayCard({ T, todayTaskStats, workingMembers }) {
           <div style={progressFillStyle({ color: T.accent, value: pct })} />
         </div>
         <div style={{ display: 'flex', gap: SPACING.md, marginTop: SPACING.xs + 2, ...TYPO.footnote, color: T.textMuted }}>
-          <span style={{ color: T.danger, fontWeight: 700 }}>遅延付き {todayTaskStats.overdue}件</span>
+          <span style={{ color: T.danger, fontWeight: 700 }}>遅延中 {todayTaskStats.overdue}件</span>
         </div>
       </div>
 
