@@ -749,17 +749,9 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
     )
   }
 
-  // 緑グラデーション (チームサマリー専用、既存 TeamSummaryEditor と統一)
-  const greenGradient = T.bg === '#000000'
-    ? 'linear-gradient(135deg, rgba(48,209,88,0.18) 0%, rgba(20,80,40,0.10) 100%)'
-    : 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
-  const containerStyle = {
-    background: greenGradient,
-    border: `1px solid ${T.success}30`,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    boxShadow: SHADOWS.sm,
-  }
+  // 外側コンテナはダッシュボード他カードと同じ cardStyle に統一 (T.success accent)。
+  // 過去の独自グラデは CLAUDE.md デザインルールに反していたため撤去。
+  const containerStyle = cardStyle({ T, accent: T.success, padding: SPACING.lg })
 
   const selectSt = {
     ...inputStyle({ T }),
@@ -773,18 +765,13 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
     more:  T.warn,
     focus: T.accent,
   }
-  const cellStyleFn = (key) => {
-    const acc = cellAccent[key]
-    return {
-      background: T.bgCard,
-      border: `1px solid ${acc}26`,
-      borderTop: `3px solid ${acc}`,
-      borderRadius: RADIUS.md,
-      padding: SPACING.md,
-      display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
-      minHeight: 220, boxShadow: SHADOWS.xs,
-    }
-  }
+  // 内側 3 カラムも cardStyle に揃える。accent 色は cardStyle が背景に薄くグラデで反映する。
+  // 視認性のためタイトル文字色だけ accent で強調。
+  const cellStyleFn = (key) => ({
+    ...cardStyle({ T, accent: cellAccent[key], padding: SPACING.md }),
+    display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
+    minHeight: 220,
+  })
   const taStyle = {
     ...inputStyle({ T }),
     flex: 1, padding: SPACING.sm,
