@@ -504,7 +504,7 @@ export default function CompanyDashboardSummary({
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
           gap: SPACING.md, marginTop: SPACING.xl,
         }}>
-          <MilestonesCard T={T} milestones={milestones} />
+          <MilestonesCard T={T} milestones={milestones} setMilestones={setMilestones} isAdmin={isAdmin} myName={myName} />
           <KrPinchCard T={T} pinch={krPinch} />
         </div>
       </div>
@@ -1064,7 +1064,31 @@ function CompanyAnnualKRsCard({ T, krs }) {
 }
 
 // ─── マイルストーン ──────────────────────────────────────────
-function MilestonesCard({ T, milestones }) {
+function MilestonesCard({ T, milestones, setMilestones, isAdmin, myName }) {
+  const [busyId, setBusyId] = useState(null)
+
+  // ステータスを done に切り替えて DB に保存。完了したマイルストーンは
+  // 「進行中の上位5件」フィルタから即座に消えるため、ローカル state からも除去する。
+  const markDone = async (ms) => {
+    // 編集権限: admin or 担当者本人
+    const canEdit = isAdmin || (ms.owner && myName && ms.owner === myName)
+    if (!canEdit) {
+      alert('このマイルストーンを完了にする権限がありません (担当者または管理者のみ)')
+      return
+    }
+    if (!window.confirm(`「${ms.title}」を完了にしますか？`)) return
+    setBusyId(ms.id)
+    const { error } = await supabase.from('milestones')
+      .update({ status: 'done', updated_at: new Date().toISOString() })
+      .eq('id', ms.id)
+    setBusyId(null)
+    if (error) {
+      alert('完了マークに失敗しました: ' + error.message)
+      return
+    }
+    setMilestones(prev => prev.filter(m => m.id !== ms.id))
+  }
+
   return (
     <div style={cardStyle({ T, accent: T.warn, padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
@@ -1085,6 +1109,8 @@ function MilestonesCard({ T, milestones }) {
             const overdue = days !== null && days < 0
             const urgent = days !== null && days >= 0 && days <= 7
             const acc = overdue ? T.danger : urgent ? T.warn : T.textMuted
+            const canEdit = isAdmin || (ms.owner && myName && ms.owner === myName)
+            const busy = busyId === ms.id
             return (
               <div key={ms.id} style={{
                 padding: `${SPACING.sm + 2}px ${SPACING.md}px`,
@@ -1099,6 +1125,23 @@ function MilestonesCard({ T, milestones }) {
                       {fmtMonthDay(ms.due_date)} {overdue ? `${Math.abs(days)}日超過` : days === 0 ? '今日' : `あと${days}日`}
                     </span>
                   )}
+                  <button
+                    onClick={() => markDone(ms)}
+                    disabled={!canEdit || busy}
+                    title={canEdit ? '完了にする' : '担当者または管理者のみ完了可'}
+                    style={{
+                      padding: '3px 9px',
+                      borderRadius: RADIUS.pill,
+                      border: `1px solid ${T.success}40`,
+                      background: canEdit ? `${T.success}14` : T.sectionBg,
+                      color: canEdit ? T.success : T.textMuted,
+                      ...TYPO.caption, fontWeight: 800,
+                      cursor: canEdit && !busy ? 'pointer' : 'not-allowed',
+                      opacity: busy ? 0.5 : 1,
+                      flexShrink: 0,
+                    }}>
+                    {busy ? '⟳' : '✓ 完了'}
+                  </button>
                 </div>
                 {ms.owner && <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 4 }}>担当: {ms.owner}</div>}
               </div>
