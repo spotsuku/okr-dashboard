@@ -67,6 +67,7 @@ export default function CompanyDashboardSummary({
   const [unfilledKRCount, setUnfilledKRCount] = useState(0)
   const [unresolvedConfirmCount, setUnresolvedConfirmCount] = useState(0)
   const [todayTaskStats, setTodayTaskStats] = useState({ total: 0, done: 0, inProgress: 0, overdue: 0 })
+  const [queryErrors, setQueryErrors] = useState([])
   const [workingMembers, setWorkingMembers] = useState({ active: 0, finished: 0, notStarted: 0 })
   const [milestones, setMilestones] = useState([])
   const [krPinch, setKrPinch] = useState([])
@@ -94,56 +95,62 @@ export default function CompanyDashboardSummary({
       // ランキング用: 先週月〜日 (created_at で範囲指定)
       const lwStart = lastWeekRange.mondayIso
       const lwEnd = lastWeekRange.sundayEndIso
+      // ka_tasks は全件 SELECT すると行数膨張で 400 (statement timeout / max-rows) を踏みやすいため
+      // 用途別に範囲を絞る:
+      //   - overdueTasks: 未完了 (done=false) のみ → 期限切れ判定に使用
+      //   - todayTasks:   due_date=today のみ      → 今日のタスク表示に使用
       const queries = [
-        ['allTasks',     supabase.from('ka_tasks').select('id, assignee, due_date, done, status, created_at').range(0, 1999)],
-        ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 1999)],
-        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday).range(0, 1999)],
+        ['overdueTasks', supabase.from('ka_tasks').select('id, due_date, done, status').eq('done', false).lt('due_date', today).range(0, 999)],
+        ['todayTasks',   supabase.from('ka_tasks').select('id, due_date, done, status').eq('due_date', today).range(0, 999)],
+        ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 999)],
+        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday).range(0, 999)],
         ['openConfirms', supabase.from('member_confirmations').select('id', { count: 'exact', head: true }).eq('status', 'open')],
         ['msRes',        supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)).range(0, 999)],
         ['workLogs',     supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).range(0, 999)],
         ['teamSums',     supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999)],
         // 振り返り王: 先週月〜日 の KPT ログ
-        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 1999)],
+        ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 999)],
         // タスク完了王: 先週月〜日 に created_at があり done=true のタスク
-        ['lwDone',       supabase.from('ka_tasks').select('assignee, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).eq('done', true).range(0, 1999)],
+        ['lwDone',       supabase.from('ka_tasks').select('assignee, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).eq('done', true).range(0, 999)],
         // 有言実行王: 先週月〜日 に作成された期限付きタスク
-        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).not('due_date', 'is', null).range(0, 1999)],
+        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).not('due_date', 'is', null).range(0, 999)],
         // 実践王: 先週の OKR 記入 (weekly_reports = KAレビュー / kr_weekly_reviews = KRレビュー)
-        ['lwReports',    supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 1999)],
-        ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 1999)],
+        ['lwReports',    supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
+        ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
       ]
       const settled = await Promise.allSettled(queries.map(([_, p]) => p))
       if (!alive) return
 
       // 結果をキー名でマップ化 (失敗時は空)
+      // エラーは object ではなく文字列にして console に出すと折りたたまれず読める。
       const r = {}
+      const errs = []
       settled.forEach((s, i) => {
         const key = queries[i][0]
         if (s.status !== 'fulfilled') {
-          console.warn(`[CompanyDashboardSummary] ${key} クエリ失敗:`, s.reason?.message || s.reason)
+          const msg = s.reason?.message || String(s.reason)
+          console.warn(`[CompanyDashboardSummary] ${key} クエリ失敗: ${msg}`)
           r[key] = { data: [], count: 0, error: s.reason }
+          errs.push({ key, message: msg })
           return
         }
         if (s.value?.error) {
           const e = s.value.error
-          console.warn(`[CompanyDashboardSummary] ${key} エラー:`, {
-            message: e.message, code: e.code, details: e.details, hint: e.hint,
-          })
+          const msg = `${e.message || ''} | code=${e.code || ''} | details=${e.details || ''} | hint=${e.hint || ''}`
+          console.warn(`[CompanyDashboardSummary] ${key} エラー: ${msg}`)
           r[key] = { data: [], count: 0, error: e }
+          errs.push({ key, message: e.message || msg, code: e.code })
           return
         }
         r[key] = s.value
       })
+      setQueryErrors(errs)
 
-      // タスク統計
-      const tasks = r.allTasks?.data || []
-      const overdueTasks = tasks.filter(t => {
-        if (t.done || t.status === 'done') return false
-        const d = dateStr(t.due_date)
-        return d && d < today
-      })
+      // タスク統計 (overdueTasks / todayTasks の2クエリから集計)
+      // overdueTasks は done=false で due_date < today だけ取得済 (status='done' のみ JS で除外)
+      const overdueTasks = (r.overdueTasks?.data || []).filter(t => t.status !== 'done')
       setOverdueCount(overdueTasks.length)
-      const todayTasks = tasks.filter(t => dateStr(t.due_date) === today)
+      const todayTasks = r.todayTasks?.data || []
       setTodayTaskStats({
         total: todayTasks.length,
         done: todayTasks.filter(t => t.done || t.status === 'done').length,
@@ -307,7 +314,8 @@ export default function CompanyDashboardSummary({
 
       // デバッグ用: クエリ別の取得件数を console に
       console.info('[全社ダッシュボード] 取得件数:', {
-        全タスク: (r.allTasks?.data || []).length,
+        '期限切れ未完了': (r.overdueTasks?.data || []).length,
+        '今日のタスク': (r.todayTasks?.data || []).length,
         '先週完了タスク': (r.lwDone?.data || []).length,
         '先週期限付きタスク': (r.lwWithDue?.data || []).length,
         '先週KPT': (r.kptLogs?.data || []).length,
@@ -345,6 +353,26 @@ export default function CompanyDashboardSummary({
             <div style={pageSubtitle({ T })}>{fiscalYear}年度 ・ {today} 時点</div>
           </div>
         </div>
+
+        {/* 管理者用: クエリ失敗を画面に表示 (本番DBスキーマと差異がある場合の診断用) */}
+        {isAdmin && queryErrors.length > 0 && (
+          <div style={{
+            marginBottom: SPACING.lg, padding: SPACING.md,
+            borderRadius: RADIUS.md, background: `${T.danger}10`,
+            border: `1px solid ${T.danger}40`,
+          }}>
+            <div style={{ ...TYPO.headline, color: T.danger, marginBottom: SPACING.xs }}>
+              ⚠️ {queryErrors.length} 件のクエリが失敗しました (admin にのみ表示)
+            </div>
+            <div style={{ ...TYPO.caption, color: T.textSub, fontFamily: 'ui-monospace, monospace' }}>
+              {queryErrors.map((e, i) => (
+                <div key={i} style={{ marginTop: 4 }}>
+                  <strong>{e.key}</strong>: {e.message}{e.code ? ` (${e.code})` : ''}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 上段: アラート + 今日 */}
         <div style={{
