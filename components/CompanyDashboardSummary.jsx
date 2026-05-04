@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
 import {
   cardStyle, pillStyle, btnPrimary, accentRingStyle,
-  largeTitle, pageSubtitle, progressBarStyle, progressFillStyle,
+  progressBarStyle, progressFillStyle,
   kpiNumber, inputStyle,
 } from '../lib/iosStyles'
 
@@ -405,19 +405,8 @@ export default function CompanyDashboardSummary({
   }
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: `${SPACING.xl}px ${SPACING['2xl']}px ${SPACING['3xl']}px`, background: T.bg }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: `${SPACING.md}px ${SPACING['2xl']}px ${SPACING['3xl']}px`, background: T.bg }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-
-        {/* タイトル */}
-        <div style={{ marginBottom: SPACING.xl, display: 'flex', alignItems: 'center', gap: SPACING.md, flexWrap: 'wrap' }}>
-          <div style={accentRingStyle({ color: T.accent, size: 44 })}>
-            <span style={{ fontSize: 22 }}>📊</span>
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={largeTitle({ T })}>全社ダッシュボード</h1>
-            <div style={pageSubtitle({ T })}>{fiscalYear}年度 ・ {today} 時点</div>
-          </div>
-        </div>
 
         {/* 管理者用: クエリ失敗を画面に表示 (本番DBスキーマと差異がある場合の診断用) */}
         {isAdmin && queryErrors.length > 0 && (
