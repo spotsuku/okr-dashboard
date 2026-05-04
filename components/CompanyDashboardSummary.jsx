@@ -121,8 +121,9 @@ export default function CompanyDashboardSummary({
         ['teamSums',     supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999)],
         // 振り返り王: 先週月〜日 の KPT ログ (coaching_logs.created_at は存在する)
         ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 999)],
-        // タスク完了王: 先週月〜日 が due_date で done=true のタスク
-        ['lwDone',       supabase.from('ka_tasks').select('assignee, due_date').gte('due_date', lwStartDate).lte('due_date', lwEndDate).eq('done', true).range(0, 999)],
+        // タスク完了王: 先週月〜日 に done=true になったタスク (completed_at で判定)
+        // ※ supabase_dashboard_schema_fix.sql を実行して completed_at 列が存在する前提
+        ['lwDone',       supabase.from('ka_tasks').select('assignee, completed_at').gte('completed_at', lwStart).lte('completed_at', lwEnd).eq('done', true).range(0, 999)],
         // 有言実行王: 先週月〜日 が due_date のタスク (期限内完了率を集計)
         ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status').gte('due_date', lwStartDate).lte('due_date', lwEndDate).range(0, 999)],
         // 実践王: 先週の OKR 記入 (weekly_reports = KAレビュー / kr_weekly_reviews = KRレビュー)
