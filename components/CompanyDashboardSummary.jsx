@@ -92,31 +92,41 @@ export default function CompanyDashboardSummary({
     let alive = true
     setLoading(true)
     ;(async () => {
-      // ランキング用: 先週月〜日 (created_at で範囲指定)
+      // ランキング用: 先週月〜日
+      // ka_tasks には created_at が無い旧 schema もあるため、ka_tasks の週次フィルタは
+      // due_date を使う (= 「先週が期限のタスク」を集計対象)。意味的にも
+      // 「先週中の期限内完了率 (有言実行王)」「先週分のタスク完了数」として妥当。
       const lwStart = lastWeekRange.mondayIso
       const lwEnd = lastWeekRange.sundayEndIso
-      // ka_tasks は全件 SELECT すると行数膨張で 400 (statement timeout / max-rows) を踏みやすいため
-      // 用途別に範囲を絞る:
+      const lwStartDate = lastWeekRange.mondayStr  // YYYY-MM-DD (due_date 比較用)
+      const lwEndDate = (() => {
+        const d = new Date(lwStartDate + 'T00:00:00Z')
+        d.setUTCDate(d.getUTCDate() + 6)
+        return d.toISOString().slice(0, 10)
+      })()
+      // kr_weekly_reviews.focus_output が無い旧 schema 対策で、select には focus のみを含める。
+      // (focus_output が必要な箇所は focus で代替する)
+      // ka_tasks は全件 SELECT すると行数膨張で 400 を踏みやすいため、用途別に範囲を絞る:
       //   - overdueTasks: 未完了 (done=false) のみ → 期限切れ判定に使用
       //   - todayTasks:   due_date=today のみ      → 今日のタスク表示に使用
       const queries = [
         ['overdueTasks', supabase.from('ka_tasks').select('id, due_date, done, status').eq('done', false).lt('due_date', today).range(0, 999)],
         ['todayTasks',   supabase.from('ka_tasks').select('id, due_date, done, status').eq('due_date', today).range(0, 999)],
         ['krs',          supabase.from('key_results').select('id, title, owner, current, target, unit, objective_id').range(0, 999)],
-        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', monday).range(0, 999)],
+        ['weeklyRevs',   supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus').eq('week_start', monday).range(0, 999)],
         ['openConfirms', supabase.from('member_confirmations').select('id', { count: 'exact', head: true }).eq('status', 'open')],
         ['msRes',        supabase.from('milestones').select('*').eq('fiscal_year', parseInt(fiscalYear)).range(0, 999)],
         ['workLogs',     supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).range(0, 999)],
         ['teamSums',     supabase.from('team_weekly_summary').select('level_id, good, more, focus').eq('week_start', monday).range(0, 999)],
-        // 振り返り王: 先週月〜日 の KPT ログ
+        // 振り返り王: 先週月〜日 の KPT ログ (coaching_logs.created_at は存在する)
         ['kptLogs',      supabase.from('coaching_logs').select('owner, content, created_at').eq('log_type', 'kpt').gte('created_at', lwStart).lte('created_at', lwEnd).range(0, 999)],
-        // タスク完了王: 先週月〜日 に created_at があり done=true のタスク
-        ['lwDone',       supabase.from('ka_tasks').select('assignee, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).eq('done', true).range(0, 999)],
-        // 有言実行王: 先週月〜日 に作成された期限付きタスク
-        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status, created_at').gte('created_at', lwStart).lte('created_at', lwEnd).not('due_date', 'is', null).range(0, 999)],
+        // タスク完了王: 先週月〜日 が due_date で done=true のタスク
+        ['lwDone',       supabase.from('ka_tasks').select('assignee, due_date').gte('due_date', lwStartDate).lte('due_date', lwEndDate).eq('done', true).range(0, 999)],
+        // 有言実行王: 先週月〜日 が due_date のタスク (期限内完了率を集計)
+        ['lwWithDue',    supabase.from('ka_tasks').select('assignee, due_date, done, status').gte('due_date', lwStartDate).lte('due_date', lwEndDate).range(0, 999)],
         // 実践王: 先週の OKR 記入 (weekly_reports = KAレビュー / kr_weekly_reviews = KRレビュー)
         ['lwReports',    supabase.from('weekly_reports').select('owner, good, more, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
-        ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
+        ['lwKrRevs',     supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
       ]
       const settled = await Promise.allSettled(queries.map(([_, p]) => p))
       if (!alive) return
@@ -158,10 +168,10 @@ export default function CompanyDashboardSummary({
         overdue: overdueTasks.length,
       })
 
-      // KR レビュー
+      // KR レビュー (focus_output は select に含めていないので参照しない)
       const reviewMap = {}
       ;(r.weeklyRevs?.data || []).forEach(rv => {
-        reviewMap[rv.kr_id] = !!((rv.good||'').trim() || (rv.more||'').trim() || (rv.focus||'').trim() || (rv.focus_output||'').trim())
+        reviewMap[rv.kr_id] = !!((rv.good||'').trim() || (rv.more||'').trim() || (rv.focus||'').trim())
       })
       const krList = r.krs?.data || []
       setUnfilledKRCount(krList.filter(kr => kr.owner && !reviewMap[kr.id]).length)
@@ -273,13 +283,13 @@ export default function CompanyDashboardSummary({
           ps.totalChars += g.length + m.length + f.length
         }
         // KR レビュー (kr_weekly_reviews): kr_id → KR.owner で名前解決
+        // focus_output は select に含めていないので focus のみで集計
         const krOwnerMap = {}
         krList.forEach(kr => { krOwnerMap[kr.id] = kr.owner })
         for (const row of r.lwKrRevs?.data || []) {
           const owner = krOwnerMap[row.kr_id]
           if (!owner || excludeNames.has(owner) || !validMembers.has(owner)) continue
-          const g = (row.good || '').trim(), m = (row.more || '').trim()
-          const f = (row.focus_output || '').trim() || (row.focus || '').trim()
+          const g = (row.good || '').trim(), m = (row.more || '').trim(), f = (row.focus || '').trim()
           if (!g && !m && !f) continue
           const ps = ensurePr(owner)
           ps.entries++
@@ -370,6 +380,9 @@ export default function CompanyDashboardSummary({
                   <strong>{e.key}</strong>: {e.message}{e.code ? ` (${e.code})` : ''}
                 </div>
               ))}
+            </div>
+            <div style={{ marginTop: SPACING.sm, ...TYPO.caption, color: T.textSub }}>
+              欠落カラム/テーブルが原因の場合: <code>supabase_dashboard_schema_fix.sql</code> を Supabase SQL Editor で実行してください。
             </div>
           </div>
         )}
