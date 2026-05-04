@@ -14,6 +14,7 @@ import COOKnowledgePanel from './COOKnowledgePanel'
 import ConfirmationsTab, { ComposeModal } from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
 import CompanyDashboardSummary from './CompanyDashboardSummary'
+import { isJpNonBusinessDay } from '../lib/jpHolidays'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -809,9 +810,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   const greet = jst.getUTCHours() < 11 ? 'おはようございます' : jst.getUTCHours() < 18 ? 'こんにちは' : 'こんばんは'
   const dateStr = `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
 
-  // 平日判定 (0=日 ... 6=土)
-  const jstDay = jst.getUTCDay()
-  const isWeekday = jstDay >= 1 && jstDay <= 5
+  // 営業日判定 (土日 + 日本の祝日を除外)
+  // 月曜でも祝日 (例: 振替休日・GW中の祝日) なら false になる
+  // toJSTDateStr は内部で +9h するので、元の now を渡す (jst は既に +9h されているため二重加算回避)
+  const jstDateStr = toJSTDateStr(now)
+  const isWeekday = !isJpNonBusinessDay(jstDateStr)
 
   const [busy, setBusy] = useState(false)
   const [kptOpen, setKptOpen] = useState(false)
