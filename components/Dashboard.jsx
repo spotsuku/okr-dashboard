@@ -1061,8 +1061,6 @@ export default function Dashboard({ user, onSignOut }) {
             <button onClick={() => setActivePage('portal')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'portal' ? T.navActiveBg : 'transparent', color: activePage === 'portal' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🏠 ホーム</button>
             {/* ワークスペース (旧マイページ) */}
             <button onClick={() => setActivePage('mycoach')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mycoach' ? T.navActiveBg : 'transparent', color: activePage === 'mycoach' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ワークスペース</button>
-            {/* マイルストーン */}
-            <button onClick={() => setActivePage('milestone')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'milestone' ? T.navActiveBg : 'transparent', color: activePage === 'milestone' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>マイルストーン</button>
             {/* OKR (詳細のみ) */}
             <button onClick={() => setActivePage('okr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR</button>
             {/* 週次MTG */}
