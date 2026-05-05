@@ -151,6 +151,13 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(true)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // 全社サマリーでは個人依存タブが非表示になるため、開いたままだと空白になる。
+  // 隠れるタブにいる場合は dashboard にフォールバック。
+  useEffect(() => {
+    if (summaryMode && ['calendar','drive','coo','retrospect','integrations'].includes(activeTab)) {
+      setActiveTab('dashboard')
+    }
+  }, [summaryMode, activeTab])
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
   // COOタブのチャット状態を親で保持 (タブ移動でアンマウントされても消えないように)
@@ -540,18 +547,23 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             background: 'rgba(120,120,128,0.10)',
             padding: 3, borderRadius: 11,
           }}>
-          {[
-            { key: 'dashboard',    icon: '📊', label: 'ダッシュボード' },
-            { key: 'confirm',      icon: '📢', label: '共有・確認'     },
-            { key: 'wbs',          icon: '📅', label: 'タスク'         },
-            { key: 'mail',         icon: '📧', label: 'メール'         },
-            { key: 'calendar',     icon: '📅', label: 'カレンダー'     },
-            { key: 'drive',        icon: '📁', label: 'ドライブ'       },
-            { key: 'coo',          icon: '🐸', label: 'MyCOO'         },
-            { key: 'retrospect',   icon: '💭', label: '振り返り'       },
-            { key: 'okr_edit',     icon: '🎯', label: 'OKR'           },
-            { key: 'integrations', icon: '🔌', label: '連携'           },
-          ].map(t => {
+          {(() => {
+            // 全社サマリーでは個人依存のタブ (カレンダー/ドライブ/MyCOO/振り返り/連携) を非表示。
+            // メールは全社向けに集約表示するためタブ自体は残す。
+            const allTabs = [
+              { key: 'dashboard',    icon: '📊', label: 'ダッシュボード', summary: true  },
+              { key: 'confirm',      icon: '📢', label: '共有・確認',     summary: true  },
+              { key: 'wbs',          icon: '📅', label: 'タスク',         summary: true  },
+              { key: 'mail',         icon: '📧', label: 'メール',         summary: true  },
+              { key: 'calendar',     icon: '📅', label: 'カレンダー',     summary: false },
+              { key: 'drive',        icon: '📁', label: 'ドライブ',       summary: false },
+              { key: 'coo',          icon: '🐸', label: 'MyCOO',          summary: false },
+              { key: 'retrospect',   icon: '💭', label: '振り返り',       summary: false },
+              { key: 'okr_edit',     icon: '🎯', label: 'OKR',            summary: true  },
+              { key: 'integrations', icon: '🔌', label: '連携',           summary: false },
+            ]
+            return allTabs.filter(t => !summaryMode || t.summary)
+          })().map(t => {
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
             const active = activeTab === t.key
             return (
@@ -706,14 +718,18 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             )
           )}
           {activeTab === 'mail' && (
-            <MailTab
-              T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
-              onGoToTab={(key) => setActiveTab(key)}
-              onOpenAIReply={(mail) => setAiReplyMail(mail)}
-              readMarks={mailReadMarks}
-              onMarkRead={markMailAsRead}
-              onUnmarkRead={unmarkMail}
-            />
+            summaryMode ? (
+              <CompanyMailTab T={T} members={members} />
+            ) : (
+              <MailTab
+                T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
+                onGoToTab={(key) => setActiveTab(key)}
+                onOpenAIReply={(mail) => setAiReplyMail(mail)}
+                readMarks={mailReadMarks}
+                onMarkRead={markMailAsRead}
+                onUnmarkRead={unmarkMail}
+              />
+            )
           )}
           {activeTab === 'calendar' && (
             <CalendarTab T={T} myName={myName} members={members} viewingName={viewingName} />
@@ -3705,6 +3721,167 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 }
 
 // ─── MailTab: 3カテゴリ分類のメールタブ ─────────────────────────────
+// ─── CompanyMailTab: 全社サマリー時のメール集約 ───────────────────────
+// 全メンバーの Gmail から「クレーム/重要」「称賛」「要返信件数」を集約表示
+const CLAIM_KW = /クレーム|苦情|不満|残念|至急|早急|お詫び|問題|エラー|障害|事故|遅延|キャンセル|返金|対応願|怒り|ご不便/i
+const PRAISE_KW = /ありがとう|感謝|素晴らしい|素敵|助かり|お疲れ様|応援|うれしい|嬉しい|お礼|感動|期待|良い|good\s*job|excellent|thank/i
+
+function CompanyMailTab({ T, members }) {
+  const [byMember, setByMember] = useState({})  // { name: items[] }
+  const [loading, setLoading] = useState(true)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
+
+  useEffect(() => {
+    let alive = true
+    const validMembers = (members || []).filter(m => m.email && m.name && m.name !== '👀 ゲスト')
+    if (validMembers.length === 0) { setLoading(false); return }
+
+    setLoading(true)
+    setProgress({ done: 0, total: validMembers.length })
+    const next = {}
+    let done = 0
+    // 5 件並列で順次取得 (Gmail API スロットル対策 + 段階的表示)
+    const BATCH = 5
+    let alivePromise = Promise.resolve()
+    for (let i = 0; i < validMembers.length; i += BATCH) {
+      alivePromise = alivePromise.then(async () => {
+        if (!alive) return
+        const batch = validMembers.slice(i, i + BATCH)
+        await Promise.all(batch.map(m =>
+          fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(m.name)}&limit=30&category=all`)
+            .then(r => r.json().catch(() => ({})))
+            .then(j => {
+              done++
+              if (alive) {
+                if (Array.isArray(j.allItems || j.items)) next[m.name] = j.allItems || j.items
+                setProgress({ done, total: validMembers.length })
+              }
+            })
+            .catch(() => { done++; if (alive) setProgress({ done, total: validMembers.length }) })
+        ))
+        if (alive) setByMember({ ...next })
+      })
+    }
+    alivePromise.finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [members])
+
+  // フラット化
+  const allItems = []
+  Object.entries(byMember).forEach(([name, items]) => {
+    items.forEach(it => allItems.push({ ...it, _ownerName: name }))
+  })
+
+  // 分類: クレーム > 称賛 (重複時はクレーム優先)
+  const claims = allItems.filter(it => {
+    const text = (it.subject || '') + ' ' + (it.snippet || '')
+    return CLAIM_KW.test(text)
+  })
+  const claimIds = new Set(claims.map(c => `${c._ownerName}_${c.id}`))
+  const praises = allItems.filter(it => {
+    if (claimIds.has(`${it._ownerName}_${it.id}`)) return false
+    const text = (it.subject || '') + ' ' + (it.snippet || '')
+    return PRAISE_KW.test(text)
+  })
+  // 要返信: to_me & 未返信 (全メンバー合算)
+  const needsReplyByMember = {}
+  allItems.forEach(it => {
+    if (it.category === 'to_me' && !it.replied) {
+      needsReplyByMember[it._ownerName] = (needsReplyByMember[it._ownerName] || 0) + 1
+    }
+  })
+  const needsReplyTotal = Object.values(needsReplyByMember).reduce((s, n) => s + n, 0)
+
+  if (loading && Object.keys(byMember).length === 0) {
+    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>📧 全社のメールを集約中... ({progress.done}/{progress.total})</div>
+  }
+
+  const sectionStyle = {
+    background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
+    padding: 16, marginBottom: 14,
+  }
+  const itemRow = (it, accent) => (
+    <div key={`${it._ownerName}_${it.id}`} style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '8px 10px', borderRadius: 8,
+      background: T.sectionBg, border: `1px solid ${T.borderLight}`,
+      marginBottom: 6,
+    }}>
+      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, background: `${accent}18`, color: accent, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>📧 {it._ownerName}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.subject || '(件名なし)'}</div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {it.from || ''} ・ {it.snippet || ''}
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={{ padding: '14px 18px', maxWidth: 1100, margin: '0 auto' }}>
+      {loading && (
+        <div style={{ marginBottom: 10, padding: '6px 12px', background: `${T.accent}10`, borderRadius: 8, fontSize: 12, color: T.textSub }}>
+          📧 取得中 {progress.done}/{progress.total} メンバー (順次更新)
+        </div>
+      )}
+
+      {/* 要返信件数 */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <span style={{ fontSize: 18 }}>✉️</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>要返信件数</span>
+          <span style={{ marginLeft: 'auto', fontSize: 24, fontWeight: 800, color: needsReplyTotal > 0 ? T.warn : T.textMuted }}>{needsReplyTotal} 件</span>
+        </div>
+        {Object.keys(needsReplyByMember).length === 0 ? (
+          <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>未返信メールはありません</div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {Object.entries(needsReplyByMember).sort((a, b) => b[1] - a[1]).map(([name, n]) => (
+              <span key={name} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 99, background: T.sectionBg, border: `1px solid ${T.borderLight}`, color: T.textSub }}>
+                {name} <strong style={{ color: T.warn, marginLeft: 4 }}>{n}</strong>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 重要アラート (クレーム等) */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <span style={{ fontSize: 18 }}>🚨</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>重要アラート</span>
+          <span style={{ fontSize: 11, color: T.textMuted }}>クレーム / 苦情 / 至急対応</span>
+          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: claims.length > 0 ? T.danger : T.textMuted }}>{claims.length}</span>
+        </div>
+        {claims.length === 0 ? (
+          <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>該当メールはありません ✨</div>
+        ) : (
+          <div>{claims.slice(0, 10).map(it => itemRow(it, T.danger))}</div>
+        )}
+      </div>
+
+      {/* 称賛メール */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <span style={{ fontSize: 18 }}>🎉</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>称賛メール</span>
+          <span style={{ fontSize: 11, color: T.textMuted }}>感謝 / お礼 / 高評価</span>
+          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: praises.length > 0 ? T.success : T.textMuted }}>{praises.length}</span>
+        </div>
+        {praises.length === 0 ? (
+          <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>まだ無し</div>
+        ) : (
+          <div>{praises.slice(0, 10).map(it => itemRow(it, T.success))}</div>
+        )}
+      </div>
+
+      <div style={{ fontSize: 10, color: T.textFaint, fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
+        ※ 件名・本文のキーワードから自動分類しています。Google 連携済みのメンバーのみ対象。
+      </div>
+    </div>
+  )
+}
+
 function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, readMarks, onMarkRead, onUnmarkRead }) {
   const [allItems, setAllItems] = useState([])
   const [loading, setLoading] = useState(true)
