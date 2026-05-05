@@ -320,11 +320,15 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               pointerEvents: 'none',
             }} />
 
-            {/* 通期ヘッダー */}
+            {/* 通期ヘッダー: 縦スクロール時に Objective が上に固定されるよう sticky */}
             <div onClick={() => toggleExpand(ann.id)} style={{
               padding: '20px 24px', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 14,
-              position: 'relative', zIndex: 1,
+              position: isOpen ? 'sticky' : 'relative',
+              top: isOpen ? 0 : 'auto',
+              zIndex: 5,
+              background: T().bgCard,
+              borderBottom: isOpen ? `1px solid ${T().border}` : 'none',
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -491,9 +495,10 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${T().border}` }}>
       <div style={{
         display: 'grid',
-        // 通期 KR (sticky 左) は 220-240px、Q 列は最低 220px の可変。
-        // 画面幅に合わせて 4 列が均等配分。狭い時は最低幅まで縮小+横スクロール。
-        gridTemplateColumns: 'minmax(220px, 240px) repeat(4, minmax(220px, 1fr))',
+        // 通期 KR (sticky 左) は 240px、Q 列は固定 380px で
+        // 「Q1+Q2 + Q3 が少し見える」レイアウト。Q3 以降は横スクロール。
+        gridTemplateColumns: 'minmax(240px, 240px) repeat(4, 380px)',
+        minWidth: 'max-content',
       }}>
         {/* ─── ヘッダ行: 通期 KR | Q1 OKR | Q2 OKR | Q3 OKR | Q4 OKR ───── */}
         <div style={{
