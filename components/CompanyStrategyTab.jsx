@@ -156,8 +156,8 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
           ))}
         </div>
 
-        {/* 2カラム: 左=KR一覧, 右=詳細 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: SPACING.md, alignItems: 'start' }}>
+        {/* 2カラム: 左=KR一覧 (狭め), 右=施策詳細 (広く) — 施策が主役 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) 1fr', gap: SPACING.md, alignItems: 'start' }}>
           {/* 左: KR一覧 */}
           <div style={cardStyle({ T, padding: SPACING.sm + 2 })}>
             <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 700, padding: `${SPACING.xs}px ${SPACING.xs + 2}px ${SPACING.xs + 2}px` }}>
@@ -474,9 +474,23 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
           <strong style={{ fontWeight: 800 }}>✗ 失敗の理由: </strong>{initiative.failure_reason}
         </div>
       )}
-      <div style={{ ...TYPO.caption, color: T.textMuted, display: 'flex', gap: 8, fontWeight: 600 }}>
+      <div style={{ ...TYPO.caption, color: T.textMuted, display: 'flex', gap: 8, fontWeight: 600, flexWrap: 'wrap' }}>
         {initiative.owner && <span>担当: {initiative.owner}</span>}
-        {initiative.updated_at && <span>更新: {String(initiative.updated_at).slice(0, 10)}</span>}
+        {(initiative.start_date || initiative.end_date) && (
+          <span style={{
+            padding: '1px 6px', borderRadius: 4,
+            background: T.sectionBg, color: T.textSub, fontWeight: 700,
+          }}>
+            検証 {String(initiative.start_date || '').slice(5, 10) || '?'} 〜 {String(initiative.end_date || '').slice(5, 10) || '?'}
+            {initiative.end_date && initiative.status === 'testing' && (() => {
+              const days = Math.round((new Date(initiative.end_date) - new Date()) / 86400000)
+              if (days < 0) return <span style={{ marginLeft: 4, color: T.danger }}>(期限超過 {Math.abs(days)}日)</span>
+              if (days <= 7) return <span style={{ marginLeft: 4, color: T.warn }}>(あと{days}日)</span>
+              return <span style={{ marginLeft: 4, color: T.textMuted }}>(あと{days}日)</span>
+            })()}
+          </span>
+        )}
+        {initiative.updated_at && <span style={{ marginLeft: 'auto' }}>更新: {String(initiative.updated_at).slice(0, 10)}</span>}
       </div>
     </div>
   )
@@ -513,6 +527,9 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
   const [actualValue, setActualValue] = useState(initial.actual_value ?? '')
   const [unit, setUnit] = useState(initial.unit || kr.unit || '')
   const [owner, setOwner] = useState(initial.owner || '')
+  // 検証期間 (start_date / end_date) — 施策がいつ動いていたか / いつまでに結論を出すか
+  const [startDate, setStartDate] = useState(initial.start_date ? String(initial.start_date).slice(0, 10) : '')
+  const [endDate,   setEndDate]   = useState(initial.end_date   ? String(initial.end_date).slice(0, 10)   : '')
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
@@ -524,14 +541,27 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
       target_value: targetValue === '' ? null : Number(targetValue),
       actual_value: actualValue === '' ? null : Number(actualValue),
       unit, owner,
+      start_date: startDate || null,
+      end_date: endDate || null,
       updated_at: new Date().toISOString(),
     }
+    // start_date / end_date 列が存在しない旧スキーマへのフォールバック
+    const tryWithFallback = async (op) => {
+      let res = await op(payload)
+      if (res.error && /start_date|end_date/.test(res.error.message || '')) {
+        const stripped = { ...payload }
+        delete stripped.start_date
+        delete stripped.end_date
+        res = await op(stripped)
+      }
+      return res
+    }
     if (initial.id) {
-      const { error } = await supabase.from('kr_initiatives').update(payload).eq('id', initial.id)
+      const { error } = await tryWithFallback(p => supabase.from('kr_initiatives').update(p).eq('id', initial.id))
       if (error) { alert('更新失敗: ' + error.message); setSaving(false); return }
     } else {
       payload.created_by = myName
-      const { error } = await supabase.from('kr_initiatives').insert(payload)
+      const { error } = await tryWithFallback(p => supabase.from('kr_initiatives').insert(p))
       if (error) { alert('作成失敗: ' + error.message); setSaving(false); return }
     }
     setSaving(false)
@@ -545,7 +575,7 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2 }}>
       {isModal && (
         <div style={{ ...TYPO.headline, color: T.text, marginBottom: 4 }}>
-          施策を追加 <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 600, marginLeft: 6 }}>({MODE_META[mode].icon} {MODE_META[mode].label})</span>
+          施策を追加 <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 600, marginLeft: 6 }}>({MODE_META[mode].label})</span>
         </div>
       )}
 
@@ -614,6 +644,21 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
         <Label>担当者</Label>
         <input value={owner} onChange={e => setOwner(e.target.value)} disabled={saving}
           placeholder="例: 三木智弘" style={{ ...inputBase, width: '100%' }} />
+      </div>
+
+      {/* 検証期間: 施策をいつから/いつまで動かしたか (もしくは結論期限) */}
+      <div>
+        <Label>検証期間</Label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: SPACING.xs + 2, alignItems: 'center' }}>
+          <input value={startDate} onChange={e => setStartDate(e.target.value)} type="date" disabled={saving}
+            style={{ ...inputBase, width: '100%' }} />
+          <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 700 }}>〜</span>
+          <input value={endDate} onChange={e => setEndDate(e.target.value)} type="date" disabled={saving}
+            style={{ ...inputBase, width: '100%' }} />
+        </div>
+        <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 3 }}>
+          検証中の施策は終了日 (≒結論期限) を入れておくと、進捗管理しやすくなります
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xs }}>

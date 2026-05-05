@@ -420,7 +420,7 @@ export default function CompanyDashboardSummary({
             border: `1px solid ${T.accent}40`,
             borderRadius: RADIUS.md,
           }}>
-            <span style={{ fontSize: 18 }}>👋</span>
+            <div style={{ width: 4, height: 36, background: T.accent, borderRadius: 2, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ ...TYPO.subhead, color: T.text, fontWeight: 800 }}>
                 ようこそ、{myName} さん
@@ -433,10 +433,8 @@ export default function CompanyDashboardSummary({
               style={{
                 ...btnPrimary({ T, size: 'md' }),
                 padding: '8px 18px', whiteSpace: 'nowrap',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
               }}>
-              <span style={{ fontSize: 14 }}>👤</span>
-              <span>マイページへ →</span>
+              マイページへ →
             </button>
           </div>
         )}
@@ -475,10 +473,10 @@ export default function CompanyDashboardSummary({
 
         {/* タブナビ: 概要 / 週間ランキング / チームサマリー / マイルストーン */}
         <DashboardTabs T={T} active={activeTab} onChange={setActiveTab} tabs={[
-          { key: 'overview',   label: '概要',           icon: '📋', accent: T.accent  },
-          { key: 'rankings',   label: '週間ランキング', icon: '🏆', accent: '#FF9500' },
-          { key: 'team',       label: 'チームサマリー', icon: '📊', accent: '#34C759' },
-          { key: 'milestones', label: 'マイルストーン', icon: '🎯', accent: T.warn   },
+          { key: 'overview',   label: '概要',           accent: T.accent  },
+          { key: 'rankings',   label: '週間ランキング', accent: '#FF9500' },
+          { key: 'team',       label: 'チームサマリー', accent: '#34C759' },
+          { key: 'milestones', label: 'マイルストーン', accent: T.warn   },
         ]} />
 
         {/* 概要: 今すぐ注目 + 今日の全社状況 + 前進KR (3列) */}
@@ -583,7 +581,7 @@ function DashboardTabs({ T, active, onChange, tabs }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs + 2,
               transition: 'all 0.15s ease',
             }}>
-            <span style={{ fontSize: 14, color: t.accent }}>{t.icon}</span>
+            {isActive && <div style={{ width: 3, height: 14, background: t.accent, borderRadius: 2 }} />}
             <span>{t.label}</span>
           </button>
         )
@@ -593,11 +591,10 @@ function DashboardTabs({ T, active, onChange, tabs }) {
 }
 
 function SectionTitle({ T, icon, iconColor = '#007AFF', title, sub }) {
+  // icon プロップは互換性のため残すが描画しない (絵文字アイコン廃止)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.sm + 4, marginTop: SPACING.xs, flexWrap: 'wrap' }}>
-      <div style={accentRingStyle({ color: iconColor, size: 28 })}>
-        <span style={{ fontSize: 14 }}>{icon}</span>
-      </div>
+      <div style={{ width: 4, height: 18, background: iconColor, borderRadius: 2, flexShrink: 0 }} />
       <span style={{ ...TYPO.title3, color: T.text }}>{title}</span>
       {sub && <span style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>{sub}</span>}
     </div>
@@ -610,10 +607,8 @@ function AlertCard({ T, overdueMilestoneCount, unfilledKRCount, unresolvedConfir
   const accent = total > 0 ? T.danger : T.success
   return (
     <div style={cardStyle({ T, accent, padding: SPACING.lg })}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
-        <div style={accentRingStyle({ color: accent, size: 32 })}>
-          <span style={{ fontSize: 16 }}>{total > 0 ? '🚨' : '✓'}</span>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.sm, marginBottom: SPACING.md }}>
+        <div style={{ width: 4, height: 36, background: accent, borderRadius: 2, marginTop: 2 }} />
         <div style={{ flex: 1 }}>
           <div style={{ ...TYPO.headline, color: T.text }}>今すぐ目を向けるべきこと</div>
           <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>
@@ -622,9 +617,9 @@ function AlertCard({ T, overdueMilestoneCount, unfilledKRCount, unresolvedConfir
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-        <MetricRow T={T} color={T.danger} icon="🚧" label="遅延マイルストーン"   value={overdueMilestoneCount} unit="件" />
-        <MetricRow T={T} color={T.warn}   icon="📝" label="今週レビュー未記入 KR" value={unfilledKRCount} unit="件" />
-        <MetricRow T={T} color={T.accent} icon="🤝" label="未対応の確認依頼"     value={unresolvedConfirmCount} unit="件" />
+        <MetricRow T={T} color={T.danger} label="遅延マイルストーン"   value={overdueMilestoneCount} unit="件" />
+        <MetricRow T={T} color={T.warn}   label="今週レビュー未記入 KR" value={unfilledKRCount} unit="件" />
+        <MetricRow T={T} color={T.accent} label="未対応の確認依頼"     value={unresolvedConfirmCount} unit="件" />
       </div>
     </div>
   )
@@ -640,7 +635,7 @@ function MetricRow({ T, color, icon, label, value, unit }) {
       background: isAlert ? `${color}10` : T.sectionBg,
       border: `1px solid ${isAlert ? color + '30' : T.borderLight}`,
     }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
+      <div style={{ width: 3, height: 16, background: color, borderRadius: 2, flexShrink: 0 }} />
       <span style={{ flex: 1, ...TYPO.body, color: T.text }}>{label}</span>
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
         <span style={{ ...kpiNumber({ color: isAlert ? color : T.textMuted, size: 20 }) }}>{value}</span>
@@ -656,9 +651,7 @@ function TodayCard({ T, todayTaskStats, workingMembers }) {
   return (
     <div style={cardStyle({ T, accent: T.accent, padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
-        <div style={accentRingStyle({ color: T.accent, size: 32 })}>
-          <span style={{ fontSize: 16 }}>📅</span>
-        </div>
+        <div style={{ width: 4, height: 36, background: T.accent, borderRadius: 2, marginTop: 2, flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <div style={{ ...TYPO.headline, color: T.text }}>今日の全社状況</div>
           <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>稼働率とメンバー状況</div>
@@ -713,10 +706,8 @@ function RankingCard({ T, title, emoji, accent = '#007AFF', subtitle, entries })
   const medalColor = ['#FFD60a', '#A1A1AA', '#CD7F32']
   return (
     <div style={cardStyle({ T, accent, padding: SPACING.md })}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}>
-        <div style={accentRingStyle({ color: accent, size: 26 })}>
-          <span style={{ fontSize: 13 }}>{emoji}</span>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}>
+        <div style={{ width: 3, height: 30, background: accent, borderRadius: 2, marginTop: 2, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...TYPO.callout, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
           <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 1 }}>{subtitle}</div>
@@ -998,7 +989,7 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
       {/* 3カラム */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: SPACING.sm + 2 }}>
         <div style={cellStyleFn('good')}>
-          <div style={{ ...TYPO.callout, color: T.success }}>✅ Good — チーム全体の良かったこと</div>
+          <div style={{ ...TYPO.callout, color: T.success }}>Good — チーム全体の良かったこと</div>
           <textarea value={good} disabled={!canEdit || rowLoading}
             onChange={e => { setGood(e.target.value); scheduleSave(e.target.value, more, focus) }}
             onFocus={() => focusedRef.current = 'good'} onBlur={() => focusedRef.current = null}
@@ -1006,7 +997,7 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
             style={taStyle} />
         </div>
         <div style={cellStyleFn('more')}>
-          <div style={{ ...TYPO.callout, color: T.warn }}>⚠️ More — チーム全体の課題・改善点</div>
+          <div style={{ ...TYPO.callout, color: T.warn }}>More — チーム全体の課題・改善点</div>
           <textarea value={more} disabled={!canEdit || rowLoading}
             onChange={e => { setMore(e.target.value); scheduleSave(good, e.target.value, focus) }}
             onFocus={() => focusedRef.current = 'more'} onBlur={() => focusedRef.current = null}
@@ -1014,7 +1005,7 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
             style={taStyle} />
         </div>
         <div style={cellStyleFn('focus')}>
-          <div style={{ ...TYPO.callout, color: T.accent }}>🎯 Focus — 来週のチーム注力</div>
+          <div style={{ ...TYPO.callout, color: T.accent }}>Focus — 来週のチーム注力</div>
           <textarea value={focus} disabled={!canEdit || rowLoading}
             onChange={e => { setFocus(e.target.value); scheduleSave(good, more, e.target.value) }}
             onFocus={() => focusedRef.current = 'focus'} onBlur={() => focusedRef.current = null}
@@ -1035,9 +1026,7 @@ function ProgressKRCard({ T, progressed }) {
   return (
     <div style={cardStyle({ T, accent, padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
-        <div style={accentRingStyle({ color: accent, size: 32 })}>
-          <span style={{ fontSize: 16 }}>🚀</span>
-        </div>
+        <div style={{ width: 4, height: 36, background: accent, borderRadius: 2, marginTop: 2, flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <div style={{ ...TYPO.headline, color: T.text }}>前進した KR</div>
           <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>
@@ -1068,7 +1057,7 @@ function ProgressKRCard({ T, progressed }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, ...TYPO.caption, color: T.textMuted }}>
                   <span>達成 <span style={{ color: T.text, fontWeight: 700 }}>{pct}%</span></span>
-                  {kr.owner && <span style={{ marginLeft: 'auto' }}>👤 {kr.owner}</span>}
+                  {kr.owner && <span style={{ marginLeft: 'auto' }}>担当: {kr.owner}</span>}
                 </div>
               </div>
             )
@@ -1096,7 +1085,7 @@ function CompanyAnnualKRsCard({ T, krs }) {
           <div key={g.oid}>
             {/* Objective: 一行ヘッダ */}
             <div style={{ ...TYPO.headline, color: T.text, marginBottom: SPACING.sm + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
-              <span>🎯</span>
+              <div style={{ width: 3, height: 14, background: T.accent, borderRadius: 2, flexShrink: 0 }} />
               <span>{g.title}</span>
               <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 600 }}>KR {g.krs.length}件</span>
             </div>
@@ -1170,9 +1159,7 @@ function MilestonesCard({ T, milestones, setMilestones, isAdmin, myName }) {
   return (
     <div style={cardStyle({ T, accent: T.warn, padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
-        <div style={accentRingStyle({ color: T.warn, size: 32 })}>
-          <span style={{ fontSize: 16 }}>🎯</span>
-        </div>
+        <div style={{ width: 4, height: 36, background: T.warn, borderRadius: 2, marginTop: 2, flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <div style={{ ...TYPO.headline, color: T.text }}>マイルストーン</div>
           <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>期限近順 ・ 上位5件</div>
@@ -1236,7 +1223,7 @@ function KrPinchCard({ T, pinch }) {
   return (
     <div style={cardStyle({ T, accent: T.danger, padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
-        <div style={accentRingStyle({ color: T.danger, size: 32 })}>
+        <div style={{ width: 4, height: 36, background: T.danger, borderRadius: 2, marginTop: 2, flexShrink: 0 }}>
           <span style={{ fontSize: 16 }}>📉</span>
         </div>
         <div style={{ flex: 1 }}>
