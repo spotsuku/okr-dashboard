@@ -185,10 +185,12 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const annIds = annObjs.map(o => o.id)
     // 新カラム (parent_kr_id / aggregation_type) を含めて SELECT。
     // SQL 未実行 (列なし) の環境でも壊れないよう、エラー時は従来カラムだけで再取得する。
-    const annSelectFull = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type'
-    const annSelectLegacy = 'id,objective_id,title,target,current,unit,lower_is_better,owner'
+    const annSelectFull = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order'
+    const annSelectLegacy = 'id,objective_id,title,target,current,unit,lower_is_better,owner,sort_order'
     let annKRsRes = await supabase
-      .from('key_results').select(annSelectFull).in('objective_id', annIds).range(0, 49999)
+      .from('key_results').select(annSelectFull).in('objective_id', annIds)
+      .order('sort_order', { ascending: true }).order('id', { ascending: true })
+      .range(0, 49999)
     if (annKRsRes.error && /parent_kr_id|aggregation_type|column/i.test(annKRsRes.error.message || '')) {
       console.warn('[AnnualView] parent_kr_id / aggregation_type 列が無い環境のため legacy SELECT で再取得 (SQL 未実行)')
       annKRsRes = await supabase
@@ -429,6 +431,89 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   const [addForm, setAddForm] = useState({ title: '', target: '', unit: '', owner: '' })
   const [addSaving, setAddSaving] = useState(false)
 
+  // KR セル内編集 (既存 KR を直接インライン編集)
+  const [editingKrId, setEditingKrId] = useState(null)
+  const [editForm, setEditForm] = useState({ title: '', target: '', current: '', unit: '', owner: '' })
+  const [editSaving, setEditSaving] = useState(false)
+
+  function startEditKr(qkr) {
+    setAddingCell(null)
+    setEditingKrId(qkr.id)
+    setEditForm({
+      title: qkr.title || '',
+      target: qkr.target ?? '',
+      current: qkr.current ?? '',
+      unit: qkr.unit || '',
+      owner: qkr.owner || '',
+    })
+  }
+  function cancelEditKr() {
+    setEditingKrId(null)
+    setEditForm({ title: '', target: '', current: '', unit: '', owner: '' })
+  }
+  async function commitEditKr() {
+    if (!editingKrId || editSaving) return
+    const title = (editForm.title || '').trim()
+    if (!title) { alert('KR タイトルを入力してください'); return }
+    const targetNum = Number(editForm.target)
+    if (!Number.isFinite(targetNum) || targetNum <= 0) {
+      alert('目標値 (target) を正の数値で入力してください')
+      return
+    }
+    const currentNum = editForm.current === '' ? 0 : Number(editForm.current)
+    if (!Number.isFinite(currentNum)) {
+      alert('現在値 (current) を数値で入力してください')
+      return
+    }
+    setEditSaving(true)
+    try {
+      const payload = {
+        title,
+        target: targetNum,
+        current: currentNum,
+        unit: editForm.unit || '',
+        owner: editForm.owner || null,
+      }
+      const { error } = await supabase.from('key_results').update(payload).eq('id', editingKrId)
+      if (error) throw new Error(error.message)
+      cancelEditKr()
+      if (onDataChanged) await onDataChanged()
+    } catch (err) {
+      alert('更新失敗: ' + (err.message || ''))
+    } finally {
+      setEditSaving(false)
+    }
+  }
+  async function deleteKr(qkr) {
+    if (!window.confirm(`「${qkr.title}」を削除しますか？\n紐づく KA / 週次レビューも消えます (CASCADE)`)) return
+    const { error } = await supabase.from('key_results').delete().eq('id', qkr.id)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    if (onDataChanged) await onDataChanged()
+  }
+
+  // 通期 KR の並び替え (上/下に1つ移動 = 隣接KRと sort_order を入れ替え)
+  async function moveAnnKr(annKr, direction) {
+    const list = annualKRs
+    const idx = list.findIndex(k => Number(k.id) === Number(annKr.id))
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return
+    const a = list[idx]
+    const b = list[targetIdx]
+    // sort_order が両方未設定 (=0) の場合は明示的に index を割り当て直す
+    const aSo = (a.sort_order == null) ? idx : a.sort_order
+    const bSo = (b.sort_order == null) ? targetIdx : b.sort_order
+    // 同値の場合は ±1 でずらす
+    const newA = aSo === bSo ? (direction === 'up' ? aSo - 1 : aSo + 1) : bSo
+    const newB = aSo === bSo ? aSo : aSo
+    const r1 = await supabase.from('key_results').update({ sort_order: newA }).eq('id', a.id)
+    const r2 = await supabase.from('key_results').update({ sort_order: newB }).eq('id', b.id)
+    if (r1.error || r2.error) {
+      alert('並び替え失敗: ' + ((r1.error || r2.error).message || ''))
+      return
+    }
+    if (onDataChanged) await onDataChanged()
+  }
+
   // 空セルでクリック → 追加モード起動 (該当の通期 KR からデフォルト値継承)
   function startAddInCell(annKr, qKey) {
     setAddingCell({ annKrId: annKr.id, qKey })
@@ -655,7 +740,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
         })}
 
         {/* ─── 通期 KR の各行 ───────────────────────────────── */}
-        {annualKRs.map(annKr => {
+        {annualKRs.map((annKr, krIdx) => {
           const childrenByQ = qKRsByParent[annKr.id] || { q1: [], q2: [], q3: [], q4: [] }
           // 集計タイプに応じて current を算出
           const aggregatedCurrent = aggregateAnnualKR(annKr, childrenByQ)
@@ -666,18 +751,74 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           const kr_r = getRating(kp)
           const aggLabel = { manual: '', cumulative: '累積', average: '平均', latest: '最新' }[annKr.aggregation_type || 'manual']
 
+          const isEditingAnn = Number(editingKrId) === Number(annKr.id)
           return (
             <Fragment key={annKr.id}>
-              {/* 左列: 通期 KR (sticky) */}
+              {/* 左列: 通期 KR (sticky) — クリックで編集 */}
               <div style={{
                 position: 'sticky', left: 0, zIndex: 2, background: stickyBg,
                 padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
                 display: 'flex', flexDirection: 'column', gap: 4,
-              }}>
+                cursor: isEditingAnn ? 'default' : 'pointer',
+              }}
+                onClick={() => { if (!isEditingAnn) startEditKr(annKr) }}>
+                {isEditingAnn ? (
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 4, border: `1px solid ${T().addBtnBg}`, borderRadius: 6 }}>
+                    <input autoFocus value={editForm.title}
+                      onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
+                      placeholder="通期 KR タイトル" disabled={editSaving}
+                      style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input value={editForm.current}
+                        onChange={e => setEditForm(p => ({ ...p, current: e.target.value }))}
+                        placeholder="現在" type="number" disabled={editSaving || annKr.aggregation_type !== 'manual'}
+                        title={annKr.aggregation_type !== 'manual' ? '集計タイプが手動以外なので子から自動計算されます' : ''}
+                        style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none', opacity: annKr.aggregation_type !== 'manual' ? 0.5 : 1 }} />
+                      <span style={{ alignSelf: 'center', fontSize: 11, color: T().textMuted }}>/</span>
+                      <input value={editForm.target}
+                        onChange={e => setEditForm(p => ({ ...p, target: e.target.value }))}
+                        placeholder="目標" type="number" disabled={editSaving}
+                        style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                      <input value={editForm.unit}
+                        onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
+                        placeholder="単位" disabled={editSaving}
+                        style={{ width: 44, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                    </div>
+                    <input value={editForm.owner}
+                      onChange={e => setEditForm(p => ({ ...p, owner: e.target.value }))}
+                      placeholder="担当者 (任意)" disabled={editSaving}
+                      style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={() => deleteKr(annKr)} disabled={editSaving}
+                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid #ff6b6b40`, background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        削除
+                      </button>
+                      <div style={{ flex: 1 }} />
+                      <button onClick={cancelEditKr} disabled={editSaving}
+                        style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        キャンセル
+                      </button>
+                      <button onClick={commitEditKr} disabled={editSaving}
+                        style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: editSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                        {editSaving ? '保存中…' : '✓ 保存'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
                   {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
                   <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }} title={annKr.title}>{annKr.title}</span>
+                  {/* 並び替え (上下) */}
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+                    <button onClick={() => moveAnnKr(annKr, 'up')} disabled={krIdx === 0}
+                      title="上に移動"
+                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === 0 ? T().textFaintest : T().textSub, cursor: krIdx === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
+                    <button onClick={() => moveAnnKr(annKr, 'down')} disabled={krIdx === annualKRs.length - 1}
+                      title="下に移動"
+                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === annualKRs.length - 1 ? T().textFaintest : T().textSub, cursor: krIdx === annualKRs.length - 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
@@ -689,9 +830,11 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   {annKr.owner && <Avatar name={annKr.owner} avatarUrl={members.find(m=>m.name===annKr.owner)?.avatar_url} size={14} />}
                   <span style={{ flex: 1 }}>{aggregatedCurrent.toLocaleString()} / {target.toLocaleString()} {annKr.unit || ''}</span>
                 </div>
-                <div style={{ marginTop: 2 }}>
+                <div style={{ marginTop: 2 }} onClick={e => e.stopPropagation()}>
                   <KASection krId={annKr.id} objectiveId={ann.id} levelId={ann.level_id} theme={makeKATheme(T())} />
                 </div>
+                  </>
+                )}
               </div>
               {/* Q1〜Q4 セル */}
               {Q_KEYS.map(qKey => {
@@ -788,14 +931,61 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
                         : 0
                       const qkr_r = getRating(qkp)
+                      const isEditing = Number(editingKrId) === Number(qkr.id)
+                      if (isEditing) {
+                        return (
+                          <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <input autoFocus value={editForm.title}
+                              onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
+                              placeholder="KR タイトル" disabled={editSaving}
+                              style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <input value={editForm.current}
+                                onChange={e => setEditForm(p => ({ ...p, current: e.target.value }))}
+                                placeholder="現在" type="number" disabled={editSaving}
+                                style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              <span style={{ alignSelf: 'center', fontSize: 11, color: T().textMuted }}>/</span>
+                              <input value={editForm.target}
+                                onChange={e => setEditForm(p => ({ ...p, target: e.target.value }))}
+                                placeholder="目標" type="number" disabled={editSaving}
+                                style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              <input value={editForm.unit}
+                                onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
+                                placeholder="単位" disabled={editSaving}
+                                style={{ width: 44, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            </div>
+                            <input value={editForm.owner}
+                              onChange={e => setEditForm(p => ({ ...p, owner: e.target.value }))}
+                              placeholder="担当者 (任意)" disabled={editSaving}
+                              style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => deleteKr(qkr)} disabled={editSaving}
+                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || '#ff6b6b40'}`, background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                削除
+                              </button>
+                              <div style={{ flex: 1 }} />
+                              <button onClick={cancelEditKr} disabled={editSaving}
+                                style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                キャンセル
+                              </button>
+                              <button onClick={commitEditKr} disabled={editSaving}
+                                style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: editSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                                {editSaving ? '保存中…' : '✓ 保存'}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      }
                       return (
                         <div key={qkr.id}
                           draggable
                           onDragStart={e => onKRDragStart(e, qkr.id)}
-                          title="ドラッグして他の通期 KR の行に移動"
-                          style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'grab' }}>
+                          title="クリックで編集 / ドラッグで他の通期 KR の行に移動"
+                          onClick={() => startEditKr(qkr)}
+                          style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                            <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
+                            <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
+                              onMouseDown={e => e.stopPropagation()}>⋮⋮</span>
                             <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
                             <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
                           </div>
@@ -805,7 +995,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             </div>
                             <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                           </div>
-                          <div style={{ marginTop: 3 }}>
+                          <div style={{ marginTop: 3 }} onClick={e => e.stopPropagation()}>
                             <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
                           </div>
                         </div>

@@ -3856,7 +3856,8 @@ function CompanyMailTab({ T, members }) {
   )
 
   return (
-    <div style={{ padding: '14px 18px', maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+      <div style={{ padding: '14px 18px', maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
       {loading && (
         <div style={{ marginBottom: 10, padding: '6px 12px', background: `${T.accent}10`, borderRadius: 8, fontSize: 12, color: T.textSub }}>
           📧 取得中 {progress.done}/{progress.total} メンバー (順次更新)
@@ -3915,6 +3916,7 @@ function CompanyMailTab({ T, members }) {
 
       <div style={{ fontSize: 10, color: T.textFaint, fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
         ※ 件名・本文のキーワードから自動分類しています。Google 連携済みのメンバーのみ対象。
+      </div>
       </div>
     </div>
   )
