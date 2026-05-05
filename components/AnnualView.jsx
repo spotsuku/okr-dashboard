@@ -420,6 +420,88 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   const [showAutoLink, setShowAutoLink] = useState(false)
   const [dragOverCell, setDragOverCell] = useState(null)  // 'parent_<id>_<qKey>' | 'unmapped_<qKey>'
   const [busy, setBusy] = useState(false)
+  // 空セルから直接 KR を追加するための状態
+  const [addingCell, setAddingCell] = useState(null)  // { annKrId, qKey } | null
+  const [addForm, setAddForm] = useState({ title: '', target: '', unit: '', owner: '' })
+  const [addSaving, setAddSaving] = useState(false)
+
+  // 空セルでクリック → 追加モード起動 (該当の通期 KR からデフォルト値継承)
+  function startAddInCell(annKr, qKey) {
+    setAddingCell({ annKrId: annKr.id, qKey })
+    setAddForm({
+      title: '',
+      target: '',
+      unit: annKr.unit || '',
+      owner: annKr.owner || '',
+    })
+  }
+  function cancelAddInCell() {
+    setAddingCell(null)
+    setAddForm({ title: '', target: '', unit: '', owner: '' })
+  }
+
+  // Q 期 Objective を確保 (なければ新規作成) し、KR を 1 件 insert する
+  async function commitAddInCell() {
+    if (!addingCell || addSaving) return
+    const title = (addForm.title || '').trim()
+    if (!title) { alert('KR タイトルを入力してください'); return }
+    const targetNum = Number(addForm.target)
+    if (!Number.isFinite(targetNum) || targetNum <= 0) {
+      alert('目標値 (target) を正の数値で入力してください')
+      return
+    }
+    setAddSaving(true)
+    try {
+      const qKey = addingCell.qKey
+      const periodKey = qKey  // toPeriodKey() は呼び出し元と同じ規約 (annKey 'q1'..'q4')
+      // 既存の Q 期 Objective を選ぶ (parent_objective_id = ann.id) — 1 件目を流用
+      let qObj = (qData[qKey] || []).find(o => Number(o.parent_objective_id) === Number(ann.id))
+      if (!qObj) {
+        // 既存が無ければ新規作成 (タイトルは通期 OBJ から派生)
+        const newTitle = `${qKey.toUpperCase()}: ${ann.title}`.slice(0, 200)
+        const { data: ins, error: e1 } = await supabase
+          .from('objectives')
+          .insert({
+            level_id: ann.level_id,
+            parent_objective_id: ann.id,
+            period: periodKey,
+            title: newTitle,
+            owner: addForm.owner || ann.owner || null,
+          })
+          .select()
+          .single()
+        if (e1) throw new Error('Q期Objective作成失敗: ' + e1.message)
+        qObj = ins
+      }
+      // KR insert
+      const krPayload = {
+        objective_id: qObj.id,
+        title,
+        target: targetNum,
+        current: 0,
+        unit: addForm.unit || '',
+        owner: addForm.owner || ann.owner || null,
+        parent_kr_id: addingCell.annKrId,
+      }
+      // lower_is_better 列が無い古い環境向けにフォールバック (insert 失敗 → 列を抜いて再挑戦)
+      let { error: e2 } = await supabase.from('key_results').insert(krPayload)
+      if (e2 && /lower_is_better|parent_kr_id/.test(e2.message || '')) {
+        // 列削減して再挑戦 (parent_kr_id だけは保持したいが、無いなら最小化)
+        const minimal = { ...krPayload }
+        if (/parent_kr_id/.test(e2.message || '')) delete minimal.parent_kr_id
+        if (/lower_is_better/.test(e2.message || '')) delete minimal.lower_is_better
+        const r2 = await supabase.from('key_results').insert(minimal)
+        e2 = r2.error
+      }
+      if (e2) throw new Error('KR作成失敗: ' + e2.message)
+      cancelAddInCell()
+      if (onDataChanged) await onDataChanged()
+    } catch (err) {
+      alert(err.message || '保存に失敗しました')
+    } finally {
+      setAddSaving(false)
+    }
+  }
 
   // parent_kr_id を変更 (DnD / 自動紐付けから呼ばれる)
   async function setParent(qkrId, parentId) {
@@ -611,7 +693,67 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       transition: 'background 0.1s',
                   }}>
                     {cells.length === 0 ? (
-                      <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '12px 4px', fontStyle: 'italic' }}>{isDragOver ? '↓ ここに紐付け' : '—'}</div>
+                      addingCell && Number(addingCell.annKrId) === Number(annKr.id) && addingCell.qKey === qKey ? (
+                        // 空セル → 追加フォーム (インライン)
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}` }}>
+                          <input
+                            autoFocus
+                            value={addForm.title}
+                            onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))}
+                            placeholder="KR タイトル"
+                            disabled={addSaving}
+                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <input
+                              value={addForm.target}
+                              onChange={e => setAddForm(p => ({ ...p, target: e.target.value }))}
+                              placeholder="目標値"
+                              type="number"
+                              disabled={addSaving}
+                              style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            <input
+                              value={addForm.unit}
+                              onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))}
+                              placeholder="単位"
+                              disabled={addSaving}
+                              style={{ width: 50, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          </div>
+                          <input
+                            value={addForm.owner}
+                            onChange={e => setAddForm(p => ({ ...p, owner: e.target.value }))}
+                            placeholder="担当者 (任意)"
+                            disabled={addSaving}
+                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={cancelAddInCell} disabled={addSaving}
+                              style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              ✕ キャンセル
+                            </button>
+                            <button onClick={commitAddInCell} disabled={addSaving}
+                              style={{ flex: 1, fontSize: 10, fontWeight: 700, padding: '4px 6px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: addSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                              {addSaving ? '保存中…' : '✓ 追加'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        // 通常の空セル: クリックで追加モード
+                        <button
+                          onClick={() => startAddInCell(annKr, qKey)}
+                          title={`${Q_LABELS[qKey]} の KR を追加 (この通期 KR に紐付け)`}
+                          style={{
+                            fontSize: 10, color: isDragOver ? T().addBtnBg : T().textFaintest,
+                            textAlign: 'center', padding: '12px 4px',
+                            border: `1px dashed ${isDragOver ? T().addBtnBg : T().borderDash || T().border}`,
+                            borderRadius: 6, background: 'transparent', cursor: 'pointer',
+                            fontFamily: 'inherit', width: '100%',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.color = T().addBtnBg; e.currentTarget.style.borderColor = T().addBtnBg }}
+                          onMouseLeave={e => { if (!isDragOver) { e.currentTarget.style.color = T().textFaintest; e.currentTarget.style.borderColor = T().borderDash || T().border } }}
+                        >
+                          {isDragOver ? '↓ ここに紐付け' : `＋ ${Q_LABELS[qKey]} KR を追加`}
+                        </button>
+                      )
                     ) : cells.map(qkr => {
                       const qkp = qkr.target > 0
                         ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
