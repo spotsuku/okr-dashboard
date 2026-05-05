@@ -54,7 +54,7 @@ const THEMES = { dark: COMMON_TOKENS.dark, light: COMMON_TOKENS.light }
 
 export default function CompanyDashboardSummary({
   T: parentT, themeKey = 'dark', levels = [], members = [], fiscalYear = '2026',
-  myName, isAdmin,
+  myName, isAdmin, onGoToMyPage,
 }) {
   const T = parentT || THEMES[themeKey] || THEMES.dark
 
@@ -409,6 +409,37 @@ export default function CompanyDashboardSummary({
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${SPACING.md}px ${SPACING['2xl']}px ${SPACING['3xl']}px`, background: T.bg }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+
+        {/* マイページへ戻る導線 (目立つ位置に固定) */}
+        {onGoToMyPage && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+            marginBottom: SPACING.md,
+            padding: `${SPACING.sm + 2}px ${SPACING.md}px`,
+            background: `linear-gradient(135deg, ${T.accent}1a 0%, ${T.accent}08 100%)`,
+            border: `1px solid ${T.accent}40`,
+            borderRadius: RADIUS.md,
+          }}>
+            <span style={{ fontSize: 18 }}>👋</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ ...TYPO.subhead, color: T.text, fontWeight: 800 }}>
+                ようこそ、{myName} さん
+              </div>
+              <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 1 }}>
+                ここは全社の状況サマリーです。自分のタスク・OKR・カレンダーを見たい時はマイページへ
+              </div>
+            </div>
+            <button onClick={onGoToMyPage}
+              style={{
+                ...btnPrimary({ T, size: 'md' }),
+                padding: '8px 18px', whiteSpace: 'nowrap',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+              <span style={{ fontSize: 14 }}>👤</span>
+              <span>マイページへ →</span>
+            </button>
+          </div>
+        )}
 
         {/* 管理者用: クエリ失敗を画面に表示 (本番DBスキーマと差異がある場合の診断用) */}
         {isAdmin && queryErrors.length > 0 && (
