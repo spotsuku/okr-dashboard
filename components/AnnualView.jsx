@@ -741,17 +741,26 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           onClick={() => startAddInCell(annKr, qKey)}
                           title={`${Q_LABELS[qKey]} の KR を追加 (この通期 KR に紐付け)`}
                           style={{
-                            fontSize: 10, color: isDragOver ? T().addBtnBg : T().textFaintest,
-                            textAlign: 'center', padding: '12px 4px',
-                            border: `1px dashed ${isDragOver ? T().addBtnBg : T().borderDash || T().border}`,
-                            borderRadius: 6, background: 'transparent', cursor: 'pointer',
+                            fontSize: 11, fontWeight: 700,
+                            color: T().addBtnBg,
+                            textAlign: 'center', padding: '14px 6px',
+                            border: `1px dashed ${T().addBtnBg}`,
+                            borderRadius: 6,
+                            background: isDragOver ? `${T().addBtnBg}26` : `${T().addBtnBg}0d`,
+                            cursor: 'pointer',
                             fontFamily: 'inherit', width: '100%',
-                            transition: 'all 0.15s',
+                            transition: 'background 0.15s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                           }}
-                          onMouseEnter={e => { e.currentTarget.style.color = T().addBtnBg; e.currentTarget.style.borderColor = T().addBtnBg }}
-                          onMouseLeave={e => { if (!isDragOver) { e.currentTarget.style.color = T().textFaintest; e.currentTarget.style.borderColor = T().borderDash || T().border } }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${T().addBtnBg}1a` }}
+                          onMouseLeave={e => { e.currentTarget.style.background = isDragOver ? `${T().addBtnBg}26` : `${T().addBtnBg}0d` }}
                         >
-                          {isDragOver ? '↓ ここに紐付け' : `＋ ${Q_LABELS[qKey]} KR を追加`}
+                          {isDragOver ? '↓ ここに紐付け' : (
+                            <>
+                              <span style={{ fontSize: 13 }}>＋</span>
+                              <span>{Q_LABELS[qKey]} KR を追加</span>
+                            </>
+                          )}
                         </button>
                       )
                     ) : cells.map(qkr => {
