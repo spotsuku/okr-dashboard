@@ -246,8 +246,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
-      ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current), owner: k.owner || '' }))
-      : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }]
+      ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current), owner: k.owner || '', parent_kr_id: k.parent_kr_id || null, aggregation_type: k.aggregation_type || 'manual' }))
+      : [{ _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '', parent_kr_id: null, aggregation_type: 'manual' }]
   )
   const [saving, setSaving] = useState(false)
   const [parentObj, setParentObj] = useState(null)
@@ -271,12 +271,12 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
     ;(async () => {
       const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
       if (!obj) { setParentObj(null); return }
-      const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+      const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better,parent_kr_id,aggregation_type').eq('objective_id', obj.id)
       setParentObj({ ...obj, key_results: krData || [] })
     })()
   }, [parentId])
 
-  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '' }])
+  const addKR    = () => setKRs(p => [...p, { _tmpId: Date.now(), title: '', target: '', current: '', unit: '', lower_is_better: false, owner: '', parent_kr_id: null, aggregation_type: 'manual' }])
   const removeKR = key => setKRs(p => p.filter(k => (k.id || k._tmpId) !== key))
   const updateKR = (key, field, val) => setKRs(p => p.map(k => (k.id || k._tmpId) === key ? { ...k, [field]: val } : k))
 
@@ -379,6 +379,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Results</div>
       {krs.map((kr, i) => {
         const key = kr.id || kr._tmpId
+        const isQuarterly = ['q1','q2','q3','q4'].includes(period)
+        const isAnnualPeriod = period === 'annual'
         return (
           <div key={key} style={{ background: getT().bgCard, border: `1px solid ${getT().border}`, borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -405,6 +407,32 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
                 {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
               </select>
             </div>
+            {/* Q期 KR: 親 (通期) KR を選択。マトリクス表示で同じ行に並ぶ。 */}
+            {isQuarterly && parentObj?.key_results?.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>↗ 紐付け先 通期KR</span>
+                <select value={kr.parent_kr_id || ''} onChange={e => updateKR(key, 'parent_kr_id', e.target.value ? Number(e.target.value) : null)}
+                  style={{ flex: 1, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8, padding: '5px 8px', color: kr.parent_kr_id ? getT().text : getT().textFaint, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                  <option value="">(未紐付け)</option>
+                  {parentObj.key_results.map(pk => (
+                    <option key={pk.id} value={pk.id}>{pk.title}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {/* 通期 KR: 集計方法を選択 (Q期 KR の current から自動算出) */}
+            {isAnnualPeriod && (
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>📊 集計方法</span>
+                <select value={kr.aggregation_type || 'manual'} onChange={e => updateKR(key, 'aggregation_type', e.target.value)}
+                  style={{ flex: 1, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8, padding: '5px 8px', color: getT().text, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                  <option value="manual">手動 (子から集計しない)</option>
+                  <option value="cumulative">累積 (Q1〜Q4 の合計) — 粗利 / 新規獲得 等</option>
+                  <option value="average">平均 (Q1〜Q4 の平均) — 満足度 / 達成率 等</option>
+                  <option value="latest">最新 (直近Q の値) — NPS / 在籍人数 等</option>
+                </select>
+              </div>
+            )}
           </div>
         )
       })}
@@ -856,7 +884,9 @@ export default function Dashboard({ user, onSignOut }) {
         if (kr.id && !String(kr.id).startsWith('_tmp')) {
           await supabase.from('key_results').update({
             title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
-            lower_is_better: !!kr.lower_is_better, owner: kr.owner || ''
+            lower_is_better: !!kr.lower_is_better, owner: kr.owner || '',
+            parent_kr_id: kr.parent_kr_id || null,
+            aggregation_type: kr.aggregation_type || 'manual',
           }).eq('id', kr.id)
         }
       }
@@ -866,7 +896,9 @@ export default function Dashboard({ user, onSignOut }) {
       if (newKRs.length > 0) {
         const krPayloads = newKRs.map(kr => ({
           title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
-          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || '',
+          parent_kr_id: kr.parent_kr_id || null,
+          aggregation_type: kr.aggregation_type || 'manual',
         }))
         const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
         if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
@@ -884,7 +916,9 @@ export default function Dashboard({ user, onSignOut }) {
       if (validKRs.length) {
         const krPayloads = validKRs.map(kr => ({
           title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
-          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || ''
+          lower_is_better: !!kr.lower_is_better, objective_id: objectiveId, owner: kr.owner || '',
+          parent_kr_id: kr.parent_kr_id || null,
+          aggregation_type: kr.aggregation_type || 'manual',
         }))
         const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
         if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }

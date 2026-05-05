@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { COMMON_TOKENS } from '../lib/themeTokens'
@@ -115,6 +115,32 @@ function Avatar({ name, avatarUrl, size = 20 }) {
 const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
 const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
+const Q_COLORS = { q1: '#1d4ed8', q2: '#0a8f5a', q3: '#c2410c', q4: '#7e22ce' }
+
+// 通期 KR の current を子 (parent_kr_id でリンクされた Q 期 KR) から集計
+//   manual:     親の current をそのまま使う (集計しない)
+//   cumulative: 子の current 合計
+//   average:    子の current 平均 (件数 0 なら親の current のまま)
+//   latest:     最新 Q (Q4→Q3→Q2→Q1) で値ある子の current
+function aggregateAnnualKR(annKr, childrenByQ) {
+  const type = annKr.aggregation_type || 'manual'
+  if (type === 'manual') return Number(annKr.current ?? 0)
+  const flatChildren = ['q1','q2','q3','q4'].flatMap(q => childrenByQ[q] || [])
+  if (flatChildren.length === 0) return Number(annKr.current ?? 0)
+  if (type === 'cumulative') {
+    return flatChildren.reduce((s, c) => s + (Number(c.current) || 0), 0)
+  }
+  if (type === 'average') {
+    return flatChildren.reduce((s, c) => s + (Number(c.current) || 0), 0) / flatChildren.length
+  }
+  if (type === 'latest') {
+    for (const q of ['q4','q3','q2','q1']) {
+      const arr = childrenByQ[q] || []
+      if (arr.length > 0) return Number(arr[arr.length - 1].current) || 0
+    }
+  }
+  return Number(annKr.current ?? 0)
+}
 
 function toPeriodKey(period, fiscalYear) {
   return fiscalYear === '2026' ? period : `${fiscalYear}_${period}`
@@ -159,7 +185,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const annIds = annObjs.map(o => o.id)
     const { data: annKRs } = await supabase
       .from('key_results')
-      .select('id,objective_id,title,target,current,unit,lower_is_better,owner')
+      .select('id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type')
       .in('objective_id', annIds)
       .range(0, 49999)
 
@@ -186,7 +212,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const qIds = qObjs.map(o => o.id)
     const { data: qKRs } = await supabase
       .from('key_results')
-      .select('id,objective_id,title,target,current,unit,lower_is_better,owner')
+      .select('id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type')
       .in('objective_id', qIds)
       .range(0, 49999)
 
@@ -328,138 +354,226 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               </div>
             </div>
 
-            {/* 展開：四半期 4 列ビュー (Q1〜Q4 を同時表示して編集できる表形式) */}
+            {/* 展開: マトリクス表示 (通期KR 行 × Q1〜Q4 列, 左列固定 + 右側横スクロール) */}
             {isOpen && (
               <div style={{ borderTop: `1px solid ${T().border}`, background: T().bgExpanded, padding: '14px 16px' }}>
-                {/* Q1〜Q4 を 1 行 4 列で固定表示 (会議で全四半期を同時に確認・編集) */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                  gap: 10,
-                  marginBottom: ann.key_results.length > 0 ? 16 : 0,
-                }}>
-                  {Q_KEYS.map(qKey => {
-                    const qObjs = qData[qKey]
-                    const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
-                    const qr = qProg != null ? getRating(qProg) : null
-                    const accent = qr?.color || T().textFaint
-                    return (
-                      <div key={qKey} style={{
-                        background: T().bgInner,
-                        border: `1px solid ${accent}30`,
-                        borderTop: `3px solid ${accent}`,
-                        borderRadius: 10,
-                        padding: 12,
-                        minHeight: 180,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 10,
-                      }}>
-                        {/* Q ラベル + 進捗 */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: accent, letterSpacing: '0.05em' }}>{Q_LABELS[qKey]}</span>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: accent }}>
-                            {qProg != null ? `${qProg}%` : (qObjs.length ? '計画中' : '未設定')}
-                          </span>
-                        </div>
-
-                        {qObjs.length > 0 ? qObjs.map(qObj => {
-                          const objProg = calcObjProgress(qObj.key_results)
-                          const objR = getRating(objProg)
-                          return (
-                            <div key={qObj.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {/* Q OKR タイトル + 編集/削除 */}
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                                <div style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: T().textSub, lineHeight: 1.4 }}>
-                                  {qObj.title}
-                                </div>
-                                <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                                  {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                                  {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
-                                </div>
-                              </div>
-                              {qObj.owner && (
-                                <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <Avatar name={qObj.owner} avatarUrl={members.find(m=>m.name===qObj.owner)?.avatar_url} size={14} />
-                                  <span>{qObj.owner}</span>
-                                </div>
-                              )}
-                              <div style={{ height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${Math.min(objProg, 100)}%`, background: objR.color, borderRadius: 99 }} />
-                              </div>
-                              {/* KR リスト (コンパクト) */}
-                              {qObj.key_results.length > 0 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                  {qObj.key_results.map((kr, i) => {
-                                    const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
-                                    const kr_r = getRating(kp)
-                                    return (
-                                      <div key={i} style={{ background: T().bgKr, borderRadius: 6, padding: '6px 8px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
-                                          <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={kr.title}>{kr.title}</span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                          <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                                            <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
-                                          </div>
-                                          <span style={{ fontSize: 9, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}/{kr.target?.toLocaleString()}{kr.unit}</span>
-                                        </div>
-                                        <div style={{ marginTop: 4 }}>
-                                          <KASection krId={kr.id} objectiveId={qObj.id} levelId={qObj.level_id} theme={makeKATheme(T())} />
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        }) : (
-                          // 未作成: + 作成ボタン
-                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 8px', border: `1px dashed ${T().borderDash}`, borderRadius: 8, color: T().textFaint }}>
-                            <div style={{ fontSize: 11, marginBottom: 8, color: T().textMuted }}>{Q_LABELS[qKey]} OKR 未作成</div>
-                            <button onClick={() => handleAddQ(ann.id, qKey, ann.level_id)} style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                              ＋ 作成
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* 通期KR累計貢献 (4 列の下にフルワイドで配置) */}
-                {ann.key_results.length > 0 && (
-                  <div style={{ paddingTop: 12, borderTop: `1px solid ${T().border}` }}>
-                    <div style={{ fontSize: 11, color: T().textFaint, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>通期KRへの貢献（累計）</div>
-                    {ann.key_results.map((kr, i) => {
-                      const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
-                      const kr_r = getRating(kp)
-                      return (
-                        <div key={i} style={{ marginBottom: 6 }}>
-                          <div style={{ background: T().bgKrOuter, border: `1px solid ${T().borderKr}`, borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
-                            <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>{kr.title}</span>
-                            {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
-                            <div style={{ width: 100, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                              <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
-                            </div>
-                            <span style={{ fontSize: 12, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
-                          </div>
-                          <div style={{ marginLeft: 16 }}>
-                            <KASection krId={kr.id} objectiveId={ann.id} levelId={ann.level_id} theme={makeKATheme(T())} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                <MatrixView
+                  T={T} ann={ann} qData={qData} members={members}
+                  onEdit={onEdit} onDelete={onDelete} handleAddQ={handleAddQ}
+                />
               </div>
             )}
           </div>
         )
       })}
+      </div>
+    </div>
+  )
+}
+
+// ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
+function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
+  // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
+  const qKRsByParent = {}  // { [annKrId]: { q1: [...], q2: [...], q3: [...], q4: [...] } }
+  const qKRsUnmapped = { q1: [], q2: [], q3: [], q4: [] }
+  Q_KEYS.forEach(qKey => {
+    ;(qData[qKey] || []).forEach(qObj => {
+      ;(qObj.key_results || []).forEach(qkr => {
+        const cell = { ...qkr, _qObjId: qObj.id, _qObjTitle: qObj.title, _qObjLevelId: qObj.level_id }
+        const parentId = qkr.parent_kr_id
+        if (parentId) {
+          if (!qKRsByParent[parentId]) qKRsByParent[parentId] = { q1: [], q2: [], q3: [], q4: [] }
+          qKRsByParent[parentId][qKey].push(cell)
+        } else {
+          qKRsUnmapped[qKey].push(cell)
+        }
+      })
+    })
+  })
+
+  // Q 期 Objective を列ヘッダ用に集約 (1 つの Q に複数の Objective がある場合は配列に)
+  const qObjectives = {
+    q1: qData.q1 || [], q2: qData.q2 || [], q3: qData.q3 || [], q4: qData.q4 || [],
+  }
+
+  const annualKRs = ann.key_results || []
+  const hasUnmapped = Object.values(qKRsUnmapped).some(arr => arr.length > 0)
+
+  // CSS スティッキ用の色 (左列を背景透過させない)
+  const stickyBg = T().bgInner
+  const cellBg = T().bgKr || T().bgInner
+
+  return (
+    <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${T().border}` }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(260px, 280px) repeat(4, minmax(180px, 1fr))',
+        minWidth: 'max-content',
+      }}>
+        {/* ─── ヘッダ行: 通期 KR | Q1 OKR | Q2 OKR | Q3 OKR | Q4 OKR ───── */}
+        <div style={{
+          position: 'sticky', left: 0, zIndex: 3, background: stickyBg,
+          padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
+          fontSize: 11, color: T().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700,
+        }}>
+          通期 KR
+        </div>
+        {Q_KEYS.map(qKey => {
+          const qObjs = qObjectives[qKey]
+          const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
+          const qr = qProg != null ? getRating(qProg) : null
+          const accent = qr?.color || Q_COLORS[qKey]
+          return (
+            <div key={qKey} style={{
+              padding: 10, borderBottom: `1px solid ${T().border}`,
+              borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
+              background: `${accent}0c`,
+              borderTop: `3px solid ${accent}`,
+              display: 'flex', flexDirection: 'column', gap: 4,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: accent }}>{Q_LABELS[qKey]}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: accent }}>{qProg != null ? `${qProg}%` : (qObjs.length ? '計画中' : '未設定')}</span>
+              </div>
+              {qObjs.length > 0 ? qObjs.map(qObj => (
+                <div key={qObj.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+                  <span style={{ flex: 1, fontSize: 11, color: T().textSub, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
+                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                    {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                    {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                  </div>
+                </div>
+              )) : (
+                <button onClick={() => handleAddQ(ann.id, qKey, ann.level_id)} style={{ background: 'transparent', border: `1px dashed ${T().borderDash}`, color: T().textFaint, borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  ＋ {Q_LABELS[qKey]} OKR を作成
+                </button>
+              )}
+            </div>
+          )
+        })}
+
+        {/* ─── 通期 KR の各行 ───────────────────────────────── */}
+        {annualKRs.map(annKr => {
+          const childrenByQ = qKRsByParent[annKr.id] || { q1: [], q2: [], q3: [], q4: [] }
+          // 集計タイプに応じて current を算出
+          const aggregatedCurrent = aggregateAnnualKR(annKr, childrenByQ)
+          const target = Number(annKr.target) || 0
+          const kp = target > 0
+            ? Math.round((annKr.lower_is_better ? Math.max(0, ((target * 2 - aggregatedCurrent) / target) * 100) : (aggregatedCurrent / target) * 100))
+            : 0
+          const kr_r = getRating(kp)
+          const aggLabel = { manual: '', cumulative: '累積', average: '平均', latest: '最新' }[annKr.aggregation_type || 'manual']
+
+          return (
+            <Fragment key={annKr.id}>
+              {/* 左列: 通期 KR (sticky) */}
+              <div style={{
+                position: 'sticky', left: 0, zIndex: 2, background: stickyBg,
+                padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
+                display: 'flex', flexDirection: 'column', gap: 4,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
+                  {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }} title={annKr.title}>{annKr.title}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
+                </div>
+                <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {annKr.owner && <Avatar name={annKr.owner} avatarUrl={members.find(m=>m.name===annKr.owner)?.avatar_url} size={14} />}
+                  <span style={{ flex: 1 }}>{aggregatedCurrent.toLocaleString()} / {target.toLocaleString()} {annKr.unit || ''}</span>
+                </div>
+                <div style={{ marginTop: 2 }}>
+                  <KASection krId={annKr.id} objectiveId={ann.id} levelId={ann.level_id} theme={makeKATheme(T())} />
+                </div>
+              </div>
+              {/* Q1〜Q4 セル */}
+              {Q_KEYS.map(qKey => {
+                const cells = childrenByQ[qKey] || []
+                return (
+                  <div key={qKey} style={{
+                    padding: 8, borderBottom: `1px solid ${T().border}`,
+                    borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
+                    display: 'flex', flexDirection: 'column', gap: 5,
+                  }}>
+                    {cells.length === 0 ? (
+                      <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '12px 4px', fontStyle: 'italic' }}>—</div>
+                    ) : cells.map(qkr => {
+                      const qkp = qkr.target > 0
+                        ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
+                        : 0
+                      const qkr_r = getRating(qkp)
+                      return (
+                        <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: '5px 7px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                            <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
+                            <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
+                            </div>
+                            <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                          </div>
+                          <div style={{ marginTop: 3 }}>
+                            <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </Fragment>
+          )
+        })}
+
+        {/* ─── 未紐付け Q 期 KR (parent_kr_id が NULL のもの) ─────── */}
+        {hasUnmapped && (
+          <Fragment>
+            <div style={{
+              position: 'sticky', left: 0, zIndex: 2, background: stickyBg,
+              padding: 10, borderRight: `1px solid ${T().border}`,
+              fontSize: 10, color: T().textMuted, fontWeight: 700, fontStyle: 'italic',
+            }}>
+              ⚠️ 未紐付け Q 期 KR
+              <div style={{ fontSize: 9, fontWeight: 500, marginTop: 2, color: T().textFaint }}>
+                編集して通期 KR に紐付けてください
+              </div>
+            </div>
+            {Q_KEYS.map(qKey => {
+              const cells = qKRsUnmapped[qKey] || []
+              return (
+                <div key={qKey} style={{
+                  padding: 8,
+                  borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
+                  display: 'flex', flexDirection: 'column', gap: 5,
+                }}>
+                  {cells.length === 0 ? (
+                    <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '8px 4px', fontStyle: 'italic' }}>—</div>
+                  ) : cells.map(qkr => {
+                    const qkp = qkr.target > 0
+                      ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
+                      : 0
+                    const qkr_r = getRating(qkp)
+                    return (
+                      <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', borderLeft: `2px solid ${T().textFaint}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                          <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </Fragment>
+        )}
       </div>
     </div>
   )
