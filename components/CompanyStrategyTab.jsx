@@ -47,16 +47,17 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const levelIds = (levels || []).map(l => l.id)
-      if (!levelIds.length) {
+      // 全社レベルのみ (parent_id が無い = ルート階層) に絞る
+      const rootLevelIds = (levels || []).filter(l => !l.parent_id).map(l => l.id)
+      if (!rootLevelIds.length) {
         setKrs([]); setStrategiesByKr({}); setInitiativesByKr({})
         setLoading(false); return
       }
-      // Objective を取得 (今年度の全期)
+      // Objective を取得 (今年度の全期, 全社レベル限定)
       const periods = ['annual', 'q1', 'q2', 'q3', 'q4'].map(p => toPeriodKey(p, fiscalYear))
       const { data: objs } = await supabase.from('objectives')
         .select('id,level_id,period,title,owner')
-        .in('level_id', levelIds).in('period', periods).range(0, 999)
+        .in('level_id', rootLevelIds).in('period', periods).range(0, 999)
       const objIds = (objs || []).map(o => o.id)
       const objMap = Object.fromEntries((objs || []).map(o => [o.id, o]))
       let allKrs = []
@@ -135,7 +136,7 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ ...TYPO.title2, color: T.text, margin: 0 }}>経営戦略</h1>
             <div style={{ ...TYPO.footnote, color: T.textMuted, marginTop: 1 }}>
-              重要 KR をどう達成するか — 経営の意図と試している施策を可視化
+              全社の重要 KR をどう達成するか — 経営の意図と試している施策を可視化
             </div>
           </div>
         </div>
