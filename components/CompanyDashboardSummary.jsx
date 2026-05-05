@@ -70,6 +70,7 @@ export default function CompanyDashboardSummary({
   const [queryErrors, setQueryErrors] = useState([])
   const [workingMembers, setWorkingMembers] = useState({ active: 0, finished: 0, notStarted: 0 })
   const [milestones, setMilestones] = useState([])
+  const [focusMilestones, setFocusMilestones] = useState([])
   const [krPinch, setKrPinch] = useState([])
   const [submittedTeamCount, setSubmittedTeamCount] = useState({ total: 0, submitted: 0 })
   const [rankings, setRankings] = useState(null)
@@ -217,6 +218,13 @@ export default function CompanyDashboardSummary({
       setOverdueMilestoneCount(overdueMs.length)
       msAll.sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
       setMilestones(msAll.slice(0, 5))
+
+      // 全社注力マイルストーン: org_id がルート階層 (parent_id IS NULL) AND focus_level='focus'
+      const rootLevelIds = new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id)))
+      const companyFocusMs = msAll.filter(m =>
+        m.focus_level === 'focus' && (m.org_id == null || rootLevelIds.has(Number(m.org_id)))
+      )
+      setFocusMilestones(companyFocusMs)
 
       // KR ピンチ (逆指標対応)
       const moreMap = {}
@@ -469,6 +477,15 @@ export default function CompanyDashboardSummary({
               sub={`${fiscalYear}年度 ・ ${companyAnnualKRs.length}件`} />
             <CompanyAnnualKRsCard T={T} krs={companyAnnualKRs} />
           </>
+        )}
+
+        {/* 全社 注力マイルストーン (focus_level='focus' のみ) */}
+        {focusMilestones.length > 0 && (
+          <div style={{ marginTop: SPACING.md, marginBottom: SPACING.md }}>
+            <SectionTitle T={T} iconColor={T.warn} title="全社 注力マイルストーン"
+              sub={`${focusMilestones.length}件 ・ マイルストーンページで「注力」マークを設定`} />
+            <FocusMilestonesGrid T={T} milestones={focusMilestones} today={today} />
+          </div>
         )}
 
         {/* タブナビ: 概要 / 週間ランキング / チームサマリー / マイルストーン */}
@@ -1013,6 +1030,54 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
             style={taStyle} />
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── 全社 注力マイルストーン (focus_level='focus' のみ) ────────
+function FocusMilestonesGrid({ T, milestones, today }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+      gap: SPACING.sm + 2,
+    }}>
+      {milestones.map(ms => {
+        const days = ms.due_date ? Math.round((new Date(ms.due_date) - new Date(today)) / 86400000) : null
+        const overdue = days != null && days < 0
+        const urgent = days != null && days >= 0 && days <= 14
+        const accent = overdue ? T.danger : urgent ? T.warn : T.accent
+        const statusText = overdue ? `期限超過 ${Math.abs(days)}日`
+          : days === 0 ? '今日が期限'
+          : days != null ? `あと ${days}日`
+          : '期限未設定'
+        return (
+          <div key={ms.id} style={{
+            background: T.bgCard,
+            border: `1px solid ${accent}30`,
+            borderLeft: `3px solid ${accent}`,
+            borderRadius: RADIUS.md,
+            padding: `${SPACING.sm + 2}px ${SPACING.md}px`,
+            display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
+          }}>
+            <div style={{ ...TYPO.subhead, color: T.text, fontWeight: 800, lineHeight: 1.4 }}>
+              {ms.title}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, flexWrap: 'wrap' }}>
+              <span style={pillStyle({ color: accent, size: 'sm', solid: false })}>{statusText}</span>
+              {ms.due_date && (
+                <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 700 }}>
+                  期限: {fmtMonthDay(ms.due_date)}
+                </span>
+              )}
+              {ms.owner && (
+                <span style={{ ...TYPO.caption, color: T.textMuted, marginLeft: 'auto' }}>
+                  担当: {ms.owner}
+                </span>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
