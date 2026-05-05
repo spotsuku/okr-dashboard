@@ -139,7 +139,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   const [annualObjs, setAnnualObjs] = useState([])
   const [quarterMap, setQuarterMap] = useState({})
   const [expanded,   setExpanded]   = useState({})
-  const [activeQ,    setActiveQ]    = useState({})
   const [loading,    setLoading]    = useState(true)
 
   useEffect(() => { loadAll() }, [refreshKey, fiscalYear]) // eslint-disable-line
@@ -209,7 +208,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
   const toggleExpand = (id) => {
     setExpanded(p => ({ ...p, [id]: !p[id] }))
-    if (!activeQ[id]) setActiveQ(p => ({ ...p, [id]: 'q1' }))
   }
 
   const handleAddQ = (annualObjId, qKey, levelId) => {
@@ -233,7 +231,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   )
 
   return (
-    <div style={{ padding: '0 24px 24px', maxWidth: 900, margin: '0 auto', position: 'relative' }}>
+    <div style={{ padding: '0 24px 24px', maxWidth: 1400, margin: '0 auto', position: 'relative' }}>
       <div aria-hidden style={{
         position: 'absolute', top: -150, left: '50%', transform: 'translateX(-50%)',
         width: 600, height: 400,
@@ -260,7 +258,6 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         const levelName = levels.find(l => Number(l.id) === Number(ann.level_id))?.name || ''
         const levelIcon = levels.find(l => Number(l.id) === Number(ann.level_id))?.icon || ''
         const isOpen = expanded[ann.id]
-        const curQ = activeQ[ann.id] || 'q1'
         const qData = quarterMap[ann.id] || { q1: [], q2: [], q3: [], q4: [] }
 
         return (
@@ -331,71 +328,84 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               </div>
             </div>
 
-            {/* 展開：四半期ドリルダウン */}
+            {/* 展開：四半期 4 列ビュー (Q1〜Q4 を同時表示して編集できる表形式) */}
             {isOpen && (
-              <div style={{ borderTop: `1px solid ${T().border}`, background: T().bgExpanded }}>
-                <div style={{ display: 'flex', borderBottom: `1px solid ${T().border}` }}>
+              <div style={{ borderTop: `1px solid ${T().border}`, background: T().bgExpanded, padding: '14px 16px' }}>
+                {/* 4 列グリッド (狭いと折り返し) */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                  gap: 10,
+                  marginBottom: ann.key_results.length > 0 ? 16 : 0,
+                }}>
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
                     const qr = qProg != null ? getRating(qProg) : null
-                    const isActive = curQ === qKey
+                    const accent = qr?.color || T().textFaint
                     return (
-                      <button key={qKey} onClick={() => setActiveQ(p => ({ ...p, [ann.id]: qKey }))} style={{ flex: 1, padding: '10px 8px', border: 'none', cursor: 'pointer', background: isActive ? T().tabActiveBg : 'transparent', borderBottom: isActive ? `2px solid ${qr?.color || T().addBtnBg}` : '2px solid transparent', color: isActive ? (qr?.color || T().addBtnBg) : qObjs.length ? T().textMuted : T().textFaintest, fontSize: 12, fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s' }}>
-                        {Q_LABELS[qKey]}
-                        <div style={{ fontSize: 10, marginTop: 2, fontWeight: 400 }}>{qProg != null ? `${qProg}%` : qObjs.length ? '計画中' : '未設定'}</div>
-                      </button>
-                    )
-                  })}
-                </div>
+                      <div key={qKey} style={{
+                        background: T().bgInner,
+                        border: `1px solid ${accent}30`,
+                        borderTop: `3px solid ${accent}`,
+                        borderRadius: 10,
+                        padding: 12,
+                        minHeight: 180,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                      }}>
+                        {/* Q ラベル + 進捗 */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: accent, letterSpacing: '0.05em' }}>{Q_LABELS[qKey]}</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: accent }}>
+                            {qProg != null ? `${qProg}%` : (qObjs.length ? '計画中' : '未設定')}
+                          </span>
+                        </div>
 
-                <div style={{ padding: '18px 20px' }}>
-                  {qData[curQ]?.length > 0 ? (
-                    <div>
-                      {qData[curQ].map(qObj => {
-                        const qProg = calcObjProgress(qObj.key_results)
-                        const qr = getRating(qProg)
-                        return (
-                          <div key={qObj.id} style={{ marginBottom: 14 }}>
-                            <div style={{ background: T().bgInner, border: `1px solid ${qr.color}25`, borderRadius: 12, padding: '14px 16px', borderLeft: `3px solid ${qr.color}` }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                                <div style={{ flex: 1 }}>
-                                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: `${qr.color}18`, color: qr.color, fontWeight: 700, display: 'inline-block', marginBottom: 6 }}>{qr.label}</span>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: T().textSub, lineHeight: 1.4 }}>{qObj.title}</div>
-                                  {qObj.owner && <div style={{ fontSize: 11, color: T().textMuted, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <Avatar name={qObj.owner} avatarUrl={members.find(m=>m.name===qObj.owner)?.avatar_url} size={16} />
-                                    <span>担当：{qObj.owner}</span>
-                                  </div>}
+                        {qObjs.length > 0 ? qObjs.map(qObj => {
+                          const objProg = calcObjProgress(qObj.key_results)
+                          const objR = getRating(objProg)
+                          return (
+                            <div key={qObj.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {/* Q OKR タイトル + 編集/削除 */}
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                                <div style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: T().textSub, lineHeight: 1.4 }}>
+                                  {qObj.title}
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                                  <div style={{ fontSize: 24, fontWeight: 800, color: qr.color }}>{qProg}%</div>
-                                  <div style={{ display: 'flex', gap: 4 }}>
-                                    {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: `1px solid ${T().btnEditBorder}`, color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                                    {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: `1px solid ${T().btnDelBorder}`, color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
-                                  </div>
+                                <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                                  {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                                  {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 5, padding: '2px 6px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
                                 </div>
                               </div>
-                              <div style={{ height: 5, background: T().progressBg, borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
-                                <div style={{ height: '100%', width: `${Math.min(qProg, 100)}%`, background: qr.color, borderRadius: 99 }} />
+                              {qObj.owner && (
+                                <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Avatar name={qObj.owner} avatarUrl={members.find(m=>m.name===qObj.owner)?.avatar_url} size={14} />
+                                  <span>{qObj.owner}</span>
+                                </div>
+                              )}
+                              <div style={{ height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.min(objProg, 100)}%`, background: objR.color, borderRadius: 99 }} />
                               </div>
+                              {/* KR リスト (コンパクト) */}
                               {qObj.key_results.length > 0 && (
-                                <div style={{ marginTop: 8 }}>
-                                  <div style={{ fontSize: 10, color: T().textFaint, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>この四半期のKR</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                                   {qObj.key_results.map((kr, i) => {
                                     const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
                                     const kr_r = getRating(kp)
                                     return (
-                                      <div key={i} style={{ marginBottom: 6 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T().bgKr, borderRadius: 7, padding: '7px 10px' }}>
-                                          <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
-                                          <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0 }}>{kr.title}</span>
-                                          {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
-                                          <div style={{ width: 80, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                                      <div key={i} style={{ background: T().bgKr, borderRadius: 6, padding: '6px 8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                                          <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
+                                          <span style={{ fontSize: 11, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={kr.title}>{kr.title}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                          <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
                                             <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
                                           </div>
-                                          <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
+                                          <span style={{ fontSize: 9, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}/{kr.target?.toLocaleString()}{kr.unit}</span>
                                         </div>
-                                        <div style={{ marginLeft: 16 }}>
+                                        <div style={{ marginTop: 4 }}>
                                           <KASection krId={kr.id} objectiveId={qObj.id} levelId={qObj.level_id} theme={makeKATheme(T())} />
                                         </div>
                                       </div>
@@ -404,46 +414,47 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                                 </div>
                               )}
                             </div>
+                          )
+                        }) : (
+                          // 未作成: + 作成ボタン
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 8px', border: `1px dashed ${T().borderDash}`, borderRadius: 8, color: T().textFaint }}>
+                            <div style={{ fontSize: 11, marginBottom: 8, color: T().textMuted }}>{Q_LABELS[qKey]} OKR 未作成</div>
+                            <button onClick={() => handleAddQ(ann.id, qKey, ann.level_id)} style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              ＋ 作成
+                            </button>
                           </div>
-                        )
-                      })}
-                      {ann.key_results.length > 0 && (
-                        <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T().border}` }}>
-                          <div style={{ fontSize: 11, color: T().textFaint, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>通期KRへの貢献（累計）</div>
-                          {ann.key_results.map((kr, i) => {
-                            const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
-                            const kr_r = getRating(kp)
-                            return (
-                              <div key={i} style={{ marginBottom: 6 }}>
-                                <div style={{ background: T().bgKrOuter, border: `1px solid ${T().borderKr}`, borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
-                                  <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>{kr.title}</span>
-                                  {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
-                                  <div style={{ width: 100, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
-                                  </div>
-                                  <span style={{ fontSize: 12, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
-                                </div>
-                                <div style={{ marginLeft: 16 }}>
-                                  <KASection krId={kr.id} objectiveId={ann.id} levelId={ann.level_id} theme={makeKATheme(T())} />
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '28px 20px', border: `1px dashed ${T().borderDash}`, borderRadius: 12, color: T().textFaint }}>
-                      <div style={{ fontSize: 24, marginBottom: 8 }}>＋</div>
-                      <div style={{ fontSize: 13, marginBottom: 4, color: T().textMuted }}>{Q_LABELS[curQ]}のOKRを追加</div>
-                      <div style={{ fontSize: 11, color: T().textFaintest, marginBottom: 16 }}>この通期OKRに紐づいた四半期目標を設定します</div>
-                      <button onClick={() => handleAddQ(ann.id, curQ, ann.level_id)} style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                        ＋ {Q_LABELS[curQ]} OKRを追加
-                      </button>
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
+
+                {/* 通期KR累計貢献 (4 列の下にフルワイドで配置) */}
+                {ann.key_results.length > 0 && (
+                  <div style={{ paddingTop: 12, borderTop: `1px solid ${T().border}` }}>
+                    <div style={{ fontSize: 11, color: T().textFaint, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>通期KRへの貢献（累計）</div>
+                    {ann.key_results.map((kr, i) => {
+                      const kp = kr.target > 0 ? Math.round((kr.current / kr.target) * 100) : 0
+                      const kr_r = getRating(kp)
+                      return (
+                        <div key={i} style={{ marginBottom: 6 }}>
+                          <div style={{ background: T().bgKrOuter, border: `1px solid ${T().borderKr}`, borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
+                            <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>{kr.title}</span>
+                            {kr.owner && <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={18} />}
+                            <div style={{ width: 100, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+                              <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                            </div>
+                            <span style={{ fontSize: 12, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kr.current?.toLocaleString()}{kr.unit} / {kr.target?.toLocaleString()}{kr.unit}</span>
+                          </div>
+                          <div style={{ marginLeft: 16 }}>
+                            <KASection krId={kr.id} objectiveId={ann.id} levelId={ann.level_id} theme={makeKATheme(T())} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
