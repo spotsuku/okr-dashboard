@@ -370,6 +370,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 <MatrixView
                   T={T} ann={ann} qData={qData} members={members}
                   onEdit={onEdit} onDelete={onDelete} handleAddQ={handleAddQ}
+                  onDataChanged={loadAll}
                 />
               </div>
             )}
@@ -382,7 +383,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 }
 
 // ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
-function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
+function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged }) {
   // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
   const qKRsByParent = {}  // { [annKrId]: { q1: [...], q2: [...], q3: [...], q4: [...] } }
   const qKRsUnmapped = { q1: [], q2: [], q3: [], q4: [] }
@@ -412,12 +413,81 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
   // Q期 KR をそのままメイン内容として列ごとに表示する。
   const noAnnualMode = annualKRs.length === 0 && hasUnmapped
 
+  const [showAutoLink, setShowAutoLink] = useState(false)
+  const [dragOverCell, setDragOverCell] = useState(null)  // 'parent_<id>_<qKey>' | 'unmapped_<qKey>'
+  const [busy, setBusy] = useState(false)
+
+  // parent_kr_id を変更 (DnD / 自動紐付けから呼ばれる)
+  async function setParent(qkrId, parentId) {
+    setBusy(true)
+    const { error } = await supabase.from('key_results').update({ parent_kr_id: parentId || null }).eq('id', qkrId)
+    setBusy(false)
+    if (error) {
+      alert('紐付けに失敗しました: ' + (error.message || ''))
+      return
+    }
+    if (onDataChanged) await onDataChanged()
+  }
+
+  // DnD: KR ドラッグ開始時に id を持たせる
+  function onKRDragStart(e, qkrId) {
+    e.dataTransfer.setData('application/kr-id', String(qkrId))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  // DnD: ドロップ受け側
+  function onCellDragOver(e, cellKey) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverCell !== cellKey) setDragOverCell(cellKey)
+  }
+  function onCellDragLeave(cellKey) {
+    if (dragOverCell === cellKey) setDragOverCell(null)
+  }
+  function onCellDrop(e, parentId) {
+    e.preventDefault()
+    setDragOverCell(null)
+    const qkrId = Number(e.dataTransfer.getData('application/kr-id'))
+    if (qkrId) setParent(qkrId, parentId)
+  }
+
   // CSS スティッキ用の色 (左列を背景透過させない)
   const stickyBg = T().bgInner
   const cellBg = T().bgKr || T().bgInner
 
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${T().border}` }}>
+    <div>
+      {/* 操作バー: 自動紐付け + 操作ヒント */}
+      {(hasUnmapped || annualKRs.length > 0) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          {hasUnmapped && annualKRs.length > 0 && (
+            <button onClick={() => setShowAutoLink(true)} disabled={busy}
+              style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              🔗 自動紐付け候補
+            </button>
+          )}
+          <span style={{ fontSize: 11, color: T().textFaint, fontStyle: 'italic' }}>
+            💡 Q期 KR をドラッグして通期 KR の行に移動できます
+          </span>
+        </div>
+      )}
+      {showAutoLink && (
+        <AutoLinkDialog
+          T={T}
+          annualKRs={annualKRs}
+          unmapped={qKRsUnmapped}
+          onCancel={() => setShowAutoLink(false)}
+          onApply={async (selections) => {
+            setBusy(true)
+            for (const { qkrId, parentId } of selections) {
+              await supabase.from('key_results').update({ parent_kr_id: parentId }).eq('id', qkrId)
+            }
+            setBusy(false)
+            setShowAutoLink(false)
+            if (onDataChanged) await onDataChanged()
+          }}
+        />
+      )}
+      <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${T().border}` }}>
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(260px, 280px) repeat(4, minmax(180px, 1fr))',
@@ -507,22 +577,37 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
               {/* Q1〜Q4 セル */}
               {Q_KEYS.map(qKey => {
                 const cells = childrenByQ[qKey] || []
+                const cellKey = `parent_${annKr.id}_${qKey}`
+                const isDragOver = dragOverCell === cellKey
                 return (
-                  <div key={qKey} style={{
-                    padding: 8, borderBottom: `1px solid ${T().border}`,
-                    borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
-                    display: 'flex', flexDirection: 'column', gap: 5,
+                  <div key={qKey}
+                    onDragOver={e => onCellDragOver(e, cellKey)}
+                    onDragLeave={() => onCellDragLeave(cellKey)}
+                    onDrop={e => onCellDrop(e, annKr.id)}
+                    style={{
+                      padding: 8, borderBottom: `1px solid ${T().border}`,
+                      borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
+                      display: 'flex', flexDirection: 'column', gap: 5,
+                      background: isDragOver ? `${T().addBtnBg}1a` : 'transparent',
+                      outline: isDragOver ? `2px dashed ${T().addBtnBg}` : 'none',
+                      outlineOffset: -2,
+                      transition: 'background 0.1s',
                   }}>
                     {cells.length === 0 ? (
-                      <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '12px 4px', fontStyle: 'italic' }}>—</div>
+                      <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '12px 4px', fontStyle: 'italic' }}>{isDragOver ? '↓ ここに紐付け' : '—'}</div>
                     ) : cells.map(qkr => {
                       const qkp = qkr.target > 0
                         ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
                         : 0
                       const qkr_r = getRating(qkp)
                       return (
-                        <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: '5px 7px' }}>
+                        <div key={qkr.id}
+                          draggable
+                          onDragStart={e => onKRDragStart(e, qkr.id)}
+                          title="ドラッグして他の通期 KR の行に移動"
+                          style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'grab' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                            <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
                             <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
                             <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
                           </div>
@@ -571,14 +656,24 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
             </div>
             {Q_KEYS.map(qKey => {
               const cells = qKRsUnmapped[qKey] || []
+              const cellKey = `unmapped_${qKey}`
+              const isDragOver = dragOverCell === cellKey
               return (
-                <div key={qKey} style={{
-                  padding: 8,
-                  borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
-                  display: 'flex', flexDirection: 'column', gap: 5,
+                <div key={qKey}
+                  onDragOver={e => onCellDragOver(e, cellKey)}
+                  onDragLeave={() => onCellDragLeave(cellKey)}
+                  onDrop={e => onCellDrop(e, null)}
+                  style={{
+                    padding: 8,
+                    borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
+                    display: 'flex', flexDirection: 'column', gap: 5,
+                    background: isDragOver ? `${T().textFaint}1a` : 'transparent',
+                    outline: isDragOver ? `2px dashed ${T().textFaint}` : 'none',
+                    outlineOffset: -2,
+                    transition: 'background 0.1s',
                 }}>
                   {cells.length === 0 ? (
-                    <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '8px 4px', fontStyle: 'italic' }}>—</div>
+                    <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '8px 4px', fontStyle: 'italic' }}>{isDragOver ? '↓ 紐付けを外す' : '—'}</div>
                   ) : cells.map(qkr => {
                     const qkp = qkr.target > 0
                       ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
@@ -587,8 +682,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
                     // 旧データ (通期 KR が無い) ときは KASection 含めてフル表示。
                     // 既に通期 KR がある (新運用) の場合はコンパクトに「未紐付け」表示。
                     return noAnnualMode ? (
-                      <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: '5px 7px' }}>
+                      <div key={qkr.id}
+                        draggable
+                        onDragStart={e => onKRDragStart(e, qkr.id)}
+                        title="ドラッグして通期 KR の行に紐付け"
+                        style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'grab' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                          <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
                           <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
                           <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
                         </div>
@@ -603,8 +703,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
                         </div>
                       </div>
                     ) : (
-                      <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', borderLeft: `2px solid ${T().textFaint}` }}>
+                      <div key={qkr.id}
+                        draggable
+                        onDragStart={e => onKRDragStart(e, qkr.id)}
+                        title="ドラッグして通期 KR の行に紐付け"
+                        style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', borderLeft: `2px solid ${T().textFaint}`, cursor: 'grab' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
                           <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
                           <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
@@ -616,6 +721,135 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
             })}
           </Fragment>
         )}
+      </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── 自動紐付けダイアログ ───────────────────────────────
+// 未紐付け Q 期 KR と通期 KR をタイトル類似度 (bigram Sørensen-Dice) で
+// マッチングして提案。ユーザーが選択を確認・調整 → 一括 update。
+function bigramSet(s) {
+  const out = new Set()
+  const t = (s || '').toLowerCase().replace(/\s+/g, '')
+  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2))
+  return out
+}
+function titleSimilarity(a, b) {
+  const ba = bigramSet(a), bb = bigramSet(b)
+  if (ba.size === 0 || bb.size === 0) return 0
+  let common = 0
+  for (const t of ba) if (bb.has(t)) common++
+  return (2 * common) / (ba.size + bb.size)
+}
+
+function AutoLinkDialog({ T, annualKRs, unmapped, onCancel, onApply }) {
+  // 未紐付け Q 期 KR を flat list 化
+  const flatUnmapped = []
+  Q_KEYS.forEach(qKey => {
+    ;(unmapped[qKey] || []).forEach(qkr => flatUnmapped.push({ ...qkr, _qKey: qKey }))
+  })
+
+  // 各 unmapped KR に対して候補スコアを計算 (上位 3 件)
+  const initialChoices = {}
+  flatUnmapped.forEach(qkr => {
+    const scored = annualKRs.map(annKr => ({
+      annKr, score: titleSimilarity(qkr.title, annKr.title),
+    })).sort((a, b) => b.score - a.score)
+    const top = scored[0]
+    // スコア 0.4 以上を初期選択 (それ未満は手動で選んでもらう)
+    initialChoices[qkr.id] = top && top.score >= 0.4 ? top.annKr.id : ''
+  })
+  const [choices, setChoices] = useState(initialChoices)
+  const [busy, setBusy] = useState(false)
+
+  const selectedCount = Object.values(choices).filter(v => v).length
+
+  const handleApply = async () => {
+    setBusy(true)
+    const selections = Object.entries(choices)
+      .filter(([_, parentId]) => !!parentId)
+      .map(([qkrId, parentId]) => ({ qkrId: Number(qkrId), parentId: Number(parentId) }))
+    await onApply(selections)
+    setBusy(false)
+  }
+
+  const overlayStyle = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+  }
+  const dialogStyle = {
+    background: T().bgCard, borderRadius: 14, maxWidth: 800, width: '100%',
+    maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+    boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
+  }
+
+  return (
+    <div style={overlayStyle} onClick={onCancel}>
+      <div style={dialogStyle} onClick={e => e.stopPropagation()}>
+        {/* ヘッダ */}
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T().border}` }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T().text, marginBottom: 4 }}>🔗 通期 KR への自動紐付け候補</div>
+          <div style={{ fontSize: 11, color: T().textMuted }}>
+            タイトルの類似度から候補を提案。選択を確認・修正して「適用」してください。
+          </div>
+        </div>
+        {/* リスト */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
+          {flatUnmapped.length === 0 ? (
+            <div style={{ padding: 30, textAlign: 'center', color: T().textMuted, fontSize: 13 }}>未紐付けの Q 期 KR はありません</div>
+          ) : flatUnmapped.map(qkr => {
+            const scored = annualKRs.map(annKr => ({
+              annKr, score: titleSimilarity(qkr.title, annKr.title),
+            })).sort((a, b) => b.score - a.score)
+            const choice = choices[qkr.id] || ''
+            const topScore = scored[0]?.score || 0
+            return (
+              <div key={qkr.id} style={{
+                marginBottom: 10, padding: '10px 12px',
+                background: choice ? `${T().addBtnBg}0a` : T().bgKr,
+                border: `1px solid ${choice ? T().addBtnBg + '40' : T().border}`,
+                borderRadius: 8,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: `${Q_COLORS[qkr._qKey]}18`, color: Q_COLORS[qkr._qKey], fontWeight: 700 }}>{Q_LABELS[qkr._qKey]}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1 }}>{qkr.title}</span>
+                  <span style={{ fontSize: 10, color: T().textMuted }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: T().textMuted, flexShrink: 0 }}>↗ 紐付け先 通期 KR:</span>
+                  <select value={choice} onChange={e => setChoices(p => ({ ...p, [qkr.id]: e.target.value }))}
+                    style={{ flex: 1, background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, color: T().text, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                    <option value="">(紐付けない)</option>
+                    {scored.map(({ annKr, score }) => (
+                      <option key={annKr.id} value={annKr.id}>
+                        {Math.round(score * 100)}% — {annKr.title}
+                      </option>
+                    ))}
+                  </select>
+                  {topScore < 0.3 && !choice && (
+                    <span style={{ fontSize: 10, color: T().textFaint, fontStyle: 'italic' }}>類似 KR なし</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        {/* フッタ */}
+        <div style={{ padding: '12px 20px', borderTop: `1px solid ${T().border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: T().textMuted }}>{selectedCount} / {flatUnmapped.length} 件選択中</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={onCancel} disabled={busy}
+              style={{ background: 'transparent', border: `1px solid ${T().border}`, color: T().textSub, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              キャンセル
+            </button>
+            <button onClick={handleApply} disabled={busy || selectedCount === 0}
+              style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: busy || selectedCount === 0 ? 'wait' : 'pointer', opacity: selectedCount === 0 ? 0.5 : 1, fontFamily: 'inherit' }}>
+              {busy ? '⟳ 適用中…' : `選択した ${selectedCount} 件を一括紐付け`}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
