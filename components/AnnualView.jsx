@@ -331,10 +331,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
             {/* 展開：四半期 4 列ビュー (Q1〜Q4 を同時表示して編集できる表形式) */}
             {isOpen && (
               <div style={{ borderTop: `1px solid ${T().border}`, background: T().bgExpanded, padding: '14px 16px' }}>
-                {/* 4 列グリッド (狭いと折り返し) */}
+                {/* Q1〜Q4 を 1 行 4 列で固定表示 (会議で全四半期を同時に確認・編集) */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                   gap: 10,
                   marginBottom: ann.key_results.length > 0 ? 16 : 0,
                 }}>
