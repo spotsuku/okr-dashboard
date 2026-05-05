@@ -14,6 +14,7 @@ import COOKnowledgePanel from './COOKnowledgePanel'
 import ConfirmationsTab, { ComposeModal } from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
 import CompanyDashboardSummary from './CompanyDashboardSummary'
+import CompanyStrategyTab from './CompanyStrategyTab'
 import MilestonePage from './MilestonePage'
 import { isJpNonBusinessDay } from '../lib/jpHolidays'
 
@@ -3736,29 +3737,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 }
 
 // ─── MailTab: 3カテゴリ分類のメールタブ ─────────────────────────────
-// ─── CompanyStrategyTab: 全社の経営戦略 (内容は別途検討中のプレースホルダ) ─
-function CompanyStrategyTab({ T, levels, members, fiscalYear }) {
-  return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '40px 20px' }}>
-      <div style={{
-        maxWidth: 800, margin: '0 auto',
-        padding: '32px 28px',
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-        textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🧭</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: T.text, marginBottom: 8 }}>経営戦略</div>
-        <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.7, marginBottom: 8 }}>
-          このタブは現在準備中です。
-        </div>
-        <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.7 }}>
-          中身は別途検討中。<br />
-          全社の中期戦略・SWOT・主要 KPI・3 年計画など、経営判断に必要な情報を集約予定です。
-        </div>
-      </div>
-    </div>
-  )
-}
+// ─── CompanyStrategyTab は components/CompanyStrategyTab.jsx に移動 ─
 
 // ─── CompanyMailTab: 全社サマリー時のメール集約 ───────────────────────
 // 全メンバーの Gmail から「クレーム/重要」「称賛」「要返信件数」を集約表示
