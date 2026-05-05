@@ -2064,15 +2064,16 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
   const [expandedKR, setExpandedKR] = useState(null)   // 個別KRの展開
   const [activePeriod, setActivePeriod] = useState(null) // タブ選択 (null=自動)
 
-  // 期間で分類 (通期 / 各Q)。ラベル順: 通期 → Q1 → Q2 → Q3 → Q4 → 不明
+  // 期間で分類 (Q期優先 / 通期は最後)。会議では当該四半期の進捗を主に確認するため、
+  // タブ表示順は Q1 → Q2 → Q3 → Q4 → 通期 → 不明 とする。
   const krGroups = useMemo(() => {
-    const order = ['annual', 'q1', 'q2', 'q3', 'q4', 'unknown']
+    const order = ['q1', 'q2', 'q3', 'q4', 'annual', 'unknown']
     const labels = {
-      annual: { label: '🌐 通期', color: '#5856d6' },
       q1:     { label: '🔵 Q1',  color: '#1d4ed8' },
       q2:     { label: '🟢 Q2',  color: '#0a8f5a' },
       q3:     { label: '🟠 Q3',  color: '#c2410c' },
       q4:     { label: '🟣 Q4',  color: '#7e22ce' },
+      annual: { label: '🌐 通期', color: '#5856d6' },
       unknown:{ label: '? その他', color: T.textMuted },
     }
     const buckets = Object.fromEntries(order.map(k => [k, []]))
@@ -2086,8 +2087,23 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
       .map(k => ({ key: k, ...labels[k], items: buckets[k] }))
   }, [krs, T.textMuted])
 
-  // 既定タブ: 通期があれば通期、なければ最初のもの
-  const defaultPeriodKey = krGroups[0]?.key || null
+  // 既定タブ: 会議週の月から「現在の四半期」を推定 (4-6=Q1, 7-9=Q2, 10-12=Q3, 1-3=Q4)。
+  // 該当 Q に KR があればそれを既定、無ければ Q1〜Q4 で最初に見つかったもの、それも無ければ通期。
+  const currentQuarterFromDate = (dateStr) => {
+    if (!dateStr) return null
+    const month = parseInt(String(dateStr).split('-')[1] || '0', 10)
+    if (month >= 4 && month <= 6) return 'q1'
+    if (month >= 7 && month <= 9) return 'q2'
+    if (month >= 10 && month <= 12) return 'q3'
+    if (month >= 1 && month <= 3) return 'q4'
+    return null
+  }
+  const groupKeys = krGroups.map(g => g.key)
+  const inferredQ = currentQuarterFromDate(weekStart)
+  const defaultPeriodKey =
+    (inferredQ && groupKeys.includes(inferredQ) && inferredQ) ||
+    ['q1','q2','q3','q4'].find(k => groupKeys.includes(k)) ||
+    krGroups[0]?.key || null
   const currentPeriodKey = activePeriod ?? defaultPeriodKey
   const currentGroup = krGroups.find(g => g.key === currentPeriodKey) || krGroups[0]
   const prevWeek = weekStart ? getPrevMondayStr(weekStart) : null

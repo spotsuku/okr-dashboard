@@ -133,8 +133,9 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
         .range(0, 49999)
 
       if (activePeriod === 'all') {
-        const allPeriodKeys = ['annual','q1','q2','q3','q4'].map(p => toPeriodKey(p, fiscalYear))
-        query = query.in('period', allPeriodKeys)
+        // 「通期」タブは annual 期間 OKR のみ表示 (ヘッダーOKR 年間ブレイクダウンと整合)。
+        // Q1-Q4 を見たい場合は Q1〜Q4 タブに切り替える。
+        query = query.eq('period', toPeriodKey('annual', fiscalYear))
       } else {
         query = query.eq('period', toPeriodKey(activePeriod, fiscalYear))
       }
