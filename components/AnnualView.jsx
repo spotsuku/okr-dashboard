@@ -275,14 +275,13 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
       }} />
       <div style={{ position: 'relative', zIndex: 1 }}>
-      <div style={{ marginBottom: 22, padding: '20px 0 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: T().text, margin: 0, letterSpacing: '-0.02em' }}>年間ブレイクダウン</h1>
-          <div style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg }}>
-            📅 {fiscalYear}年度
-          </div>
-        </div>
-        <div style={{ fontSize: 13, color: T().textMuted, fontWeight: 500 }}>通期OKRをクリックして四半期への展開を確認・管理できます</div>
+      {/* コンパクト見出し: 縦幅を抑えて OKR 本体に画面を譲る */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 6px', marginBottom: 8, flexWrap: 'wrap' }}>
+        <h1 style={{ fontSize: 16, fontWeight: 800, color: T().text, margin: 0, letterSpacing: '-0.01em' }}>📊 年間ブレイクダウン</h1>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg }}>
+          {fiscalYear}年度
+        </span>
+        <span style={{ fontSize: 11, color: T().textMuted, marginLeft: 'auto' }}>通期 OKR をクリックして四半期へ展開</span>
       </div>
 
       {filteredObjs.map(ann => {
@@ -543,20 +542,36 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
 
   return (
     <div>
-      {/* 操作バー: 自動紐付け + 操作ヒント */}
-      {(hasUnmapped || annualKRs.length > 0) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          {hasUnmapped && annualKRs.length > 0 && (
-            <button onClick={() => setShowAutoLink(true)} disabled={busy}
-              style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-              🔗 自動紐付け候補
-            </button>
-          )}
-          <span style={{ fontSize: 11, color: T().textFaint, fontStyle: 'italic' }}>
-            💡 Q期 KR をドラッグして通期 KR の行に移動できます
-          </span>
-        </div>
-      )}
+      {/* 操作バー: 自動紐付け + 集計バッジ + 操作ヒント (1行に圧縮) */}
+      {(hasUnmapped || annualKRs.length > 0) && (() => {
+        const unmappedTotal = Object.values(qKRsUnmapped).reduce((s, arr) => s + arr.length, 0)
+        const mappedTotal = Object.values(qKRsByParent).reduce((s, q) => s + Object.values(q).reduce((s2, arr) => s2 + arr.length, 0), 0)
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+            {hasUnmapped && annualKRs.length > 0 && (
+              <button onClick={() => setShowAutoLink(true)} disabled={busy}
+                style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                🔗 自動紐付け候補
+              </button>
+            )}
+            {/* 集計バッジ群 (空白を活用) */}
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: `${T().addBtnBg}14`, color: T().addBtnBg }}>
+              通期 KR {annualKRs.length}
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted }}>
+              紐付け済 Q期 KR {mappedTotal}
+            </span>
+            {unmappedTotal > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'rgba(255,159,67,0.15)', color: '#ff9f43' }}>
+                未紐付け {unmappedTotal}
+              </span>
+            )}
+            <span style={{ fontSize: 10, color: T().textFaint, marginLeft: 'auto' }}>
+              💡 ⋮⋮ をドラッグして紐付け / 空セルをクリックで KR 追加
+            </span>
+          </div>
+        )
+      })()}
       {showAutoLink && (
         <AutoLinkDialog
           T={T}
@@ -605,13 +620,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           return (
             <div key={qKey} style={{
               position: 'sticky', top: 0, zIndex: 4,
-              padding: 10, borderBottom: `1px solid ${T().border}`,
+              padding: '6px 10px',
+              borderBottom: `1px solid ${T().border}`,
               borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
-              // 不透明背景 + accent ボトムのアクセント (透けない)
+              // 不透明背景 + 細い下アクセント (派手な上下太線は廃止)
               background: stickyBg,
-              boxShadow: `inset 0 -3px 0 ${accent}`,
-              borderTop: `3px solid ${accent}`,
-              display: 'flex', flexDirection: 'column', gap: 4,
+              boxShadow: `inset 0 -2px 0 ${accent}`,
+              display: 'flex', flexDirection: 'column', gap: 2,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: accent }}>{Q_LABELS[qKey]}</span>
