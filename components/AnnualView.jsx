@@ -185,10 +185,12 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const annIds = annObjs.map(o => o.id)
     // 新カラム (parent_kr_id / aggregation_type) を含めて SELECT。
     // SQL 未実行 (列なし) の環境でも壊れないよう、エラー時は従来カラムだけで再取得する。
-    const annSelectFull = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type'
-    const annSelectLegacy = 'id,objective_id,title,target,current,unit,lower_is_better,owner'
+    const annSelectFull = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order'
+    const annSelectLegacy = 'id,objective_id,title,target,current,unit,lower_is_better,owner,sort_order'
     let annKRsRes = await supabase
-      .from('key_results').select(annSelectFull).in('objective_id', annIds).range(0, 49999)
+      .from('key_results').select(annSelectFull).in('objective_id', annIds)
+      .order('sort_order', { ascending: true }).order('id', { ascending: true })
+      .range(0, 49999)
     if (annKRsRes.error && /parent_kr_id|aggregation_type|column/i.test(annKRsRes.error.message || '')) {
       console.warn('[AnnualView] parent_kr_id / aggregation_type 列が無い環境のため legacy SELECT で再取得 (SQL 未実行)')
       annKRsRes = await supabase
@@ -489,6 +491,29 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     if (onDataChanged) await onDataChanged()
   }
 
+  // 通期 KR の並び替え (上/下に1つ移動 = 隣接KRと sort_order を入れ替え)
+  async function moveAnnKr(annKr, direction) {
+    const list = annualKRs
+    const idx = list.findIndex(k => Number(k.id) === Number(annKr.id))
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return
+    const a = list[idx]
+    const b = list[targetIdx]
+    // sort_order が両方未設定 (=0) の場合は明示的に index を割り当て直す
+    const aSo = (a.sort_order == null) ? idx : a.sort_order
+    const bSo = (b.sort_order == null) ? targetIdx : b.sort_order
+    // 同値の場合は ±1 でずらす
+    const newA = aSo === bSo ? (direction === 'up' ? aSo - 1 : aSo + 1) : bSo
+    const newB = aSo === bSo ? aSo : aSo
+    const r1 = await supabase.from('key_results').update({ sort_order: newA }).eq('id', a.id)
+    const r2 = await supabase.from('key_results').update({ sort_order: newB }).eq('id', b.id)
+    if (r1.error || r2.error) {
+      alert('並び替え失敗: ' + ((r1.error || r2.error).message || ''))
+      return
+    }
+    if (onDataChanged) await onDataChanged()
+  }
+
   // 空セルでクリック → 追加モード起動 (該当の通期 KR からデフォルト値継承)
   function startAddInCell(annKr, qKey) {
     setAddingCell({ annKrId: annKr.id, qKey })
@@ -715,7 +740,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
         })}
 
         {/* ─── 通期 KR の各行 ───────────────────────────────── */}
-        {annualKRs.map(annKr => {
+        {annualKRs.map((annKr, krIdx) => {
           const childrenByQ = qKRsByParent[annKr.id] || { q1: [], q2: [], q3: [], q4: [] }
           // 集計タイプに応じて current を算出
           const aggregatedCurrent = aggregateAnnualKR(annKr, childrenByQ)
@@ -785,6 +810,15 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
                   {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
                   <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }} title={annKr.title}>{annKr.title}</span>
+                  {/* 並び替え (上下) */}
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+                    <button onClick={() => moveAnnKr(annKr, 'up')} disabled={krIdx === 0}
+                      title="上に移動"
+                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === 0 ? T().textFaintest : T().textSub, cursor: krIdx === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
+                    <button onClick={() => moveAnnKr(annKr, 'down')} disabled={krIdx === annualKRs.length - 1}
+                      title="下に移動"
+                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === annualKRs.length - 1 ? T().textFaintest : T().textSub, cursor: krIdx === annualKRs.length - 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
