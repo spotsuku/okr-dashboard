@@ -450,8 +450,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     if (qkrId) setParent(qkrId, parentId)
   }
 
-  // CSS スティッキ用の色 (左列を背景透過させない)
-  const stickyBg = T().bgInner
+  // CSS スティッキ用の色: 横スクロール時に右側の Q セルが透けないよう
+  // 必ず不透明色 (bgCard = #FFFFFF / #1C1C1E) を使う。
+  const stickyBg = T().bgCard
   const cellBg = T().bgKr || T().bgInner
 
   return (
@@ -490,8 +491,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       <div style={{ overflowX: 'auto', borderRadius: 10, border: `1px solid ${T().border}` }}>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(260px, 280px) repeat(4, minmax(180px, 1fr))',
-        minWidth: 'max-content',
+        // 通期 KR (sticky 左) は 220-240px、Q 列は最低 220px の可変。
+        // 画面幅に合わせて 4 列が均等配分。狭い時は最低幅まで縮小+横スクロール。
+        gridTemplateColumns: 'minmax(220px, 240px) repeat(4, minmax(220px, 1fr))',
       }}>
         {/* ─── ヘッダ行: 通期 KR | Q1 OKR | Q2 OKR | Q3 OKR | Q4 OKR ───── */}
         <div style={{
