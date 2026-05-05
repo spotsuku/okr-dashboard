@@ -183,11 +183,18 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     if (!annObjs?.length) { setAnnualObjs([]); setQuarterMap({}); setLoading(false); return }
 
     const annIds = annObjs.map(o => o.id)
-    const { data: annKRs } = await supabase
-      .from('key_results')
-      .select('id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type')
-      .in('objective_id', annIds)
-      .range(0, 49999)
+    // 新カラム (parent_kr_id / aggregation_type) を含めて SELECT。
+    // SQL 未実行 (列なし) の環境でも壊れないよう、エラー時は従来カラムだけで再取得する。
+    const annSelectFull = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type'
+    const annSelectLegacy = 'id,objective_id,title,target,current,unit,lower_is_better,owner'
+    let annKRsRes = await supabase
+      .from('key_results').select(annSelectFull).in('objective_id', annIds).range(0, 49999)
+    if (annKRsRes.error && /parent_kr_id|aggregation_type|column/i.test(annKRsRes.error.message || '')) {
+      console.warn('[AnnualView] parent_kr_id / aggregation_type 列が無い環境のため legacy SELECT で再取得 (SQL 未実行)')
+      annKRsRes = await supabase
+        .from('key_results').select(annSelectLegacy).in('objective_id', annIds).range(0, 49999)
+    }
+    const annKRs = annKRsRes.data
 
     const annKRMap = {}
     ;(annKRs || []).forEach(kr => {
@@ -210,11 +217,14 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
 
     const qIds = qObjs.map(o => o.id)
-    const { data: qKRs } = await supabase
-      .from('key_results')
-      .select('id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type')
-      .in('objective_id', qIds)
-      .range(0, 49999)
+    // 同上: SQL 未実行環境向けのフォールバック
+    let qKRsRes = await supabase
+      .from('key_results').select(annSelectFull).in('objective_id', qIds).range(0, 49999)
+    if (qKRsRes.error && /parent_kr_id|aggregation_type|column/i.test(qKRsRes.error.message || '')) {
+      qKRsRes = await supabase
+        .from('key_results').select(annSelectLegacy).in('objective_id', qIds).range(0, 49999)
+    }
+    const qKRs = qKRsRes.data
 
     const qKRMap = {}
     ;(qKRs || []).forEach(kr => {

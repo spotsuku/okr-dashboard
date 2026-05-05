@@ -271,7 +271,12 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
     ;(async () => {
       const { data: obj } = await supabase.from('objectives').select('id,title,owner').eq('id', parentId).single()
       if (!obj) { setParentObj(null); return }
-      const { data: krData } = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better,parent_kr_id,aggregation_type').eq('objective_id', obj.id)
+      // 新カラムが無い環境向けフォールバック付き
+      let krRes = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better,parent_kr_id,aggregation_type').eq('objective_id', obj.id)
+      if (krRes.error && /parent_kr_id|aggregation_type|column/i.test(krRes.error.message || '')) {
+        krRes = await supabase.from('key_results').select('id,title,target,current,unit,lower_is_better').eq('objective_id', obj.id)
+      }
+      const krData = krRes.data
       setParentObj({ ...obj, key_results: krData || [] })
     })()
   }, [parentId])
@@ -879,15 +884,20 @@ export default function Dashboard({ user, onSignOut }) {
         await supabase.from('key_results').delete().in('id', idsToDelete)
       }
 
-      // 既存KRを更新
+      // 既存KRを更新 (新カラム不在環境ではフォールバック)
       for (const kr of validKRs) {
         if (kr.id && !String(kr.id).startsWith('_tmp')) {
-          await supabase.from('key_results').update({
+          const fullPayload = {
             title: kr.title, target: kr.target, current: kr.current, unit: kr.unit,
             lower_is_better: !!kr.lower_is_better, owner: kr.owner || '',
             parent_kr_id: kr.parent_kr_id || null,
             aggregation_type: kr.aggregation_type || 'manual',
-          }).eq('id', kr.id)
+          }
+          let res = await supabase.from('key_results').update(fullPayload).eq('id', kr.id)
+          if (res.error && /parent_kr_id|aggregation_type|column/i.test(res.error.message || '')) {
+            const { parent_kr_id, aggregation_type, ...legacy } = fullPayload
+            await supabase.from('key_results').update(legacy).eq('id', kr.id)
+          }
         }
       }
 
@@ -900,8 +910,12 @@ export default function Dashboard({ user, onSignOut }) {
           parent_kr_id: kr.parent_kr_id || null,
           aggregation_type: kr.aggregation_type || 'manual',
         }))
-        const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
-        if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+        let krRes = await supabase.from('key_results').insert(krPayloads)
+        if (krRes.error && /parent_kr_id|aggregation_type|column/i.test(krRes.error.message || '')) {
+          const stripped = krPayloads.map(({ parent_kr_id, aggregation_type, ...rest }) => rest)
+          krRes = await supabase.from('key_results').insert(stripped)
+        }
+        if (krRes.error) { console.error('KR insert error:', krRes.error); alert('KRの保存に失敗しました: ' + krRes.error.message) }
       }
     } else {
       const insertPayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
@@ -920,8 +934,12 @@ export default function Dashboard({ user, onSignOut }) {
           parent_kr_id: kr.parent_kr_id || null,
           aggregation_type: kr.aggregation_type || 'manual',
         }))
-        const { error: krErr } = await supabase.from('key_results').insert(krPayloads)
-        if (krErr) { console.error('KR insert error:', krErr); alert('KRの保存に失敗しました: ' + krErr.message) }
+        let krRes = await supabase.from('key_results').insert(krPayloads)
+        if (krRes.error && /parent_kr_id|aggregation_type|column/i.test(krRes.error.message || '')) {
+          const stripped = krPayloads.map(({ parent_kr_id, aggregation_type, ...rest }) => rest)
+          krRes = await supabase.from('key_results').insert(stripped)
+        }
+        if (krRes.error) { console.error('KR insert error:', krRes.error); alert('KRの保存に失敗しました: ' + krRes.error.message) }
       }
     }
     setActiveLevelId(objToSave.level_id)
