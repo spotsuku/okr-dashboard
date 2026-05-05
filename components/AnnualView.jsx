@@ -375,6 +375,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                   T={T} ann={ann} qData={qData} members={members}
                   onEdit={onEdit} onDelete={onDelete} handleAddQ={handleAddQ}
                   onDataChanged={loadAll}
+                  topOffset={170}
                 />
               </div>
             )}
@@ -387,7 +388,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 }
 
 // ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
-function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged }) {
+function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged, topOffset = 170 }) {
   // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
   const qKRsByParent = {}  // { [annKrId]: { q1: [...], q2: [...], q3: [...], q4: [...] } }
   const qKRsUnmapped = { q1: [], q2: [], q3: [], q4: [] }
@@ -500,9 +501,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
         gridTemplateColumns: 'minmax(240px, 240px) repeat(4, 380px)',
         minWidth: 'max-content',
       }}>
-        {/* ─── ヘッダ行: 通期 KR | Q1 OKR | Q2 OKR | Q3 OKR | Q4 OKR ───── */}
+        {/* ─── ヘッダ行: 通期 KR | Q1 OKR | Q2 OKR | Q3 OKR | Q4 OKR ─────
+            縦スクロールでも見えるよう Q 期 Objective まで sticky で固定。
+            top: topOffset (= 通期 Objective ヘッダの高さ) 直下に貼り付く */}
         <div style={{
-          position: 'sticky', left: 0, zIndex: 3, background: stickyBg,
+          position: 'sticky', left: 0, top: topOffset, zIndex: 5,
+          background: stickyBg,
           padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
           fontSize: 11, color: T().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700,
         }}>
@@ -515,9 +519,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           const accent = qr?.color || Q_COLORS[qKey]
           return (
             <div key={qKey} style={{
+              position: 'sticky', top: topOffset, zIndex: 4,
               padding: 10, borderBottom: `1px solid ${T().border}`,
               borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
-              background: `${accent}0c`,
+              // 不透明背景 + accent ボトムのアクセント (透けない)
+              background: stickyBg,
+              boxShadow: `inset 0 -3px 0 ${accent}`,  // accent ボトム
               borderTop: `3px solid ${accent}`,
               display: 'flex', flexDirection: 'column', gap: 4,
             }}>

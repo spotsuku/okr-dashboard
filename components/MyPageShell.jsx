@@ -3723,8 +3723,22 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 // ─── MailTab: 3カテゴリ分類のメールタブ ─────────────────────────────
 // ─── CompanyMailTab: 全社サマリー時のメール集約 ───────────────────────
 // 全メンバーの Gmail から「クレーム/重要」「称賛」「要返信件数」を集約表示
-const CLAIM_KW = /クレーム|苦情|不満|残念|至急|早急|お詫び|問題|エラー|障害|事故|遅延|キャンセル|返金|対応願|怒り|ご不便/i
-const PRAISE_KW = /ありがとう|感謝|素晴らしい|素敵|助かり|お疲れ様|応援|うれしい|嬉しい|お礼|感動|期待|良い|good\s*job|excellent|thank/i
+
+// 自動通知メール (人ではなくシステム発) は分類対象から除外する
+const SYSTEM_SENDER = /noreply|no-reply|do-not-reply|donotreply|notification|notice@|alerts?@|info@|@notta|notta\s*bot|automation|mailer-daemon|peatix|ticket|チケット|システム|自動配信|お知らせ/i
+
+// 重要アラート: 顧客のクレーム / 苦情 / 強い不満 / 重大な問題が示唆される
+// 弱いワード ("問題" 単独 等) は誤検出するので除外。複合フレーズで限定する。
+const CLAIM_KW = /クレーム|苦情|怒り|怒っ|抗議|至急対応|緊急対応|お詫び申し上げ|誠に申し訳|大変申し訳|不具合|障害発生|事故が|キャンセル(希望|させて|します)|返金(希望|して|を求)|遺憾|ひどい|最悪|残念ながら|ご迷惑をおかけ|お手数|遅延のお詫び|不満を|不快|騙さ|詐欺|訴え|弁護士/i
+
+// 称賛: 強めの感謝 / 高評価が示唆される。汎用「ありがとう」だけでは
+// 礼儀文に過ぎないので「誠にありがとう」「心より感謝」等の強い形に限定。
+const PRAISE_KW = /(誠に|本当に|心から|心より|大変|心の底から)?ありがとうございました?|心より感謝|深く感謝|感謝してい|感謝申し上げ|お礼申し上げ|大変助か|本当に助か|素晴らしい(対応|お話|内容|サービス|資料|プレゼン|機会|出会い)|大変参考になり|大変勉強になり|高く評価|お力添え|たいへん良かった|お話できて(嬉|うれ)し|good\s*(job|work)|excellent|outstanding|amazing|grateful/i
+
+function passesSystemFilter(it) {
+  const text = (it.from || '') + ' ' + (it.subject || '') + ' ' + (it.fromEmail || '')
+  return !SYSTEM_SENDER.test(text)
+}
 
 function CompanyMailTab({ T, members }) {
   const [byMember, setByMember] = useState({})  // { name: items[] }
@@ -3773,13 +3787,16 @@ function CompanyMailTab({ T, members }) {
   })
 
   // 分類: クレーム > 称賛 (重複時はクレーム優先)
+  // 自動通知 (Notta / Peatix / noreply 等) は両方から除外する
   const claims = allItems.filter(it => {
+    if (!passesSystemFilter(it)) return false
     const text = (it.subject || '') + ' ' + (it.snippet || '')
     return CLAIM_KW.test(text)
   })
   const claimIds = new Set(claims.map(c => `${c._ownerName}_${c.id}`))
   const praises = allItems.filter(it => {
     if (claimIds.has(`${it._ownerName}_${it.id}`)) return false
+    if (!passesSystemFilter(it)) return false
     const text = (it.subject || '') + ' ' + (it.snippet || '')
     return PRAISE_KW.test(text)
   })
@@ -3799,6 +3816,7 @@ function CompanyMailTab({ T, members }) {
   const sectionStyle = {
     background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
     padding: 16, marginBottom: 14,
+    width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden',
   }
   const itemRow = (it, accent) => (
     <div key={`${it._ownerName}_${it.id}`} style={{
@@ -3806,9 +3824,10 @@ function CompanyMailTab({ T, members }) {
       padding: '8px 10px', borderRadius: 8,
       background: T.sectionBg, border: `1px solid ${T.borderLight}`,
       marginBottom: 6,
+      width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden',
     }}>
       <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, background: `${accent}18`, color: accent, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>📧 {it._ownerName}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.subject || '(件名なし)'}</div>
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {it.from || ''} ・ {it.snippet || ''}
@@ -3818,7 +3837,7 @@ function CompanyMailTab({ T, members }) {
   )
 
   return (
-    <div style={{ padding: '14px 18px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '14px 18px', maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
       {loading && (
         <div style={{ marginBottom: 10, padding: '6px 12px', background: `${T.accent}10`, borderRadius: 8, fontSize: 12, color: T.textSub }}>
           📧 取得中 {progress.done}/{progress.total} メンバー (順次更新)
