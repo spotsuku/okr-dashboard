@@ -14,6 +14,7 @@ import COOKnowledgePanel from './COOKnowledgePanel'
 import ConfirmationsTab, { ComposeModal } from './ConfirmationsTab'
 import CompanySummaryPage from './CompanySummaryPage'
 import CompanyDashboardSummary from './CompanyDashboardSummary'
+import MilestonePage from './MilestonePage'
 import { isJpNonBusinessDay } from '../lib/jpHolidays'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
@@ -151,12 +152,13 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(true)
 
   const [activeTab, setActiveTab] = useState('dashboard')
-  // 全社サマリーでは個人依存タブが非表示になるため、開いたままだと空白になる。
-  // 隠れるタブにいる場合は dashboard にフォールバック。
+  // 全社サマリーと個人モードでタブ構成が違うため、モード切替で隠れるタブに
+  // いる場合は dashboard にフォールバック。
   useEffect(() => {
-    if (summaryMode && ['calendar','drive','coo','retrospect','integrations'].includes(activeTab)) {
-      setActiveTab('dashboard')
-    }
+    const summaryOnly = ['strategy', 'milestone']
+    const individualOnly = ['calendar', 'drive', 'coo', 'retrospect', 'integrations']
+    if (summaryMode && individualOnly.includes(activeTab)) setActiveTab('dashboard')
+    if (!summaryMode && summaryOnly.includes(activeTab)) setActiveTab('dashboard')
   }, [summaryMode, activeTab])
   // ぺろっぺ 設定モーダル (admin のみ)
   const [cooSettingsOpen, setCooSettingsOpen] = useState(false)
@@ -550,19 +552,24 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           {(() => {
             // 全社サマリーでは個人依存のタブ (カレンダー/ドライブ/MyCOO/振り返り/連携) を非表示。
             // メールは全社向けに集約表示するためタブ自体は残す。
+            // 経営戦略 / マイルストーン は全社サマリーのみ表示 (個人タブとして意味が薄い)。
+            // 順序: ダッシュボード/経営戦略/共有・確認/タスク/メール/マイルストーン/OKR
             const allTabs = [
-              { key: 'dashboard',    icon: '📊', label: 'ダッシュボード', summary: true  },
-              { key: 'confirm',      icon: '📢', label: '共有・確認',     summary: true  },
-              { key: 'wbs',          icon: '📅', label: 'タスク',         summary: true  },
-              { key: 'mail',         icon: '📧', label: 'メール',         summary: true  },
-              { key: 'calendar',     icon: '📅', label: 'カレンダー',     summary: false },
-              { key: 'drive',        icon: '📁', label: 'ドライブ',       summary: false },
-              { key: 'coo',          icon: '🐸', label: 'MyCOO',          summary: false },
-              { key: 'retrospect',   icon: '💭', label: '振り返り',       summary: false },
-              { key: 'okr_edit',     icon: '🎯', label: 'OKR',            summary: true  },
-              { key: 'integrations', icon: '🔌', label: '連携',           summary: false },
+              { key: 'dashboard',    icon: '📊', label: 'ダッシュボード', summary: true,  individual: true  },
+              { key: 'strategy',     icon: '🧭', label: '経営戦略',       summary: true,  individual: false },
+              { key: 'confirm',      icon: '📢', label: '共有・確認',     summary: true,  individual: true  },
+              { key: 'wbs',          icon: '📅', label: 'タスク',         summary: true,  individual: true  },
+              { key: 'mail',         icon: '📧', label: 'メール',         summary: true,  individual: true  },
+              { key: 'milestone',    icon: '🚩', label: 'マイルストーン', summary: true,  individual: false },
+              { key: 'okr_edit',     icon: '🎯', label: 'OKR',            summary: true,  individual: true  },
+              // 個人モード専用 (全社では非表示)
+              { key: 'calendar',     icon: '📅', label: 'カレンダー',     summary: false, individual: true },
+              { key: 'drive',        icon: '📁', label: 'ドライブ',       summary: false, individual: true },
+              { key: 'coo',          icon: '🐸', label: 'MyCOO',          summary: false, individual: true },
+              { key: 'retrospect',   icon: '💭', label: '振り返り',       summary: false, individual: true },
+              { key: 'integrations', icon: '🔌', label: '連携',           summary: false, individual: true },
             ]
-            return allTabs.filter(t => !summaryMode || t.summary)
+            return allTabs.filter(t => summaryMode ? t.summary : t.individual)
           })().map(t => {
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
             const active = activeTab === t.key
@@ -744,6 +751,14 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'retrospect' && (
             <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
+          )}
+          {activeTab === 'strategy' && (
+            <CompanyStrategyTab T={T} levels={levels} members={members} fiscalYear={fiscalYear} />
+          )}
+          {activeTab === 'milestone' && (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} members={members} onLevelsChanged={() => {}} />
+            </div>
           )}
           {activeTab === 'integrations' && (
             <IntegrationsPanel T={T} myName={myName} isViewingSelf={isViewingSelf} />
@@ -3721,6 +3736,30 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 }
 
 // ─── MailTab: 3カテゴリ分類のメールタブ ─────────────────────────────
+// ─── CompanyStrategyTab: 全社の経営戦略 (内容は別途検討中のプレースホルダ) ─
+function CompanyStrategyTab({ T, levels, members, fiscalYear }) {
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '40px 20px' }}>
+      <div style={{
+        maxWidth: 800, margin: '0 auto',
+        padding: '32px 28px',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🧭</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: T.text, marginBottom: 8 }}>経営戦略</div>
+        <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.7, marginBottom: 8 }}>
+          このタブは現在準備中です。
+        </div>
+        <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.7 }}>
+          中身は別途検討中。<br />
+          全社の中期戦略・SWOT・主要 KPI・3 年計画など、経営判断に必要な情報を集約予定です。
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── CompanyMailTab: 全社サマリー時のメール集約 ───────────────────────
 // 全メンバーの Gmail から「クレーム/重要」「称賛」「要返信件数」を集約表示
 
