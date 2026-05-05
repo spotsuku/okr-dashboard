@@ -319,10 +319,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               pointerEvents: 'none',
             }} />
 
-            {/* 通期ヘッダー: 縦スクロール時に Objective が上に固定されるよう sticky */}
+            {/* 通期ヘッダー: 縦幅圧縮版 (バッジ行に Q% を統合 / 担当を右上に移動) */}
             <div onClick={() => toggleExpand(ann.id)} style={{
-              padding: '20px 24px', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '12px 18px', cursor: 'pointer',
+              display: 'flex', alignItems: 'flex-start', gap: 14,
               position: isOpen ? 'sticky' : 'relative',
               top: isOpen ? 0 : 'auto',
               zIndex: 5,
@@ -330,39 +330,44 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               borderBottom: isOpen ? `1px solid ${T().border}` : 'none',
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* 1行目: ステータスバッジ + Q% バッジ群 (まとめて1行) */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${lColor}1f`, color: lColor, fontWeight: 700 }}>{levelIcon} {levelName}</span>
                   <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700 }}>通期</span>
                   {r && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${r.color}1f`, color: r.color, fontWeight: 800 }}>{r.label}</span>}
-                </div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: T().text, lineHeight: 1.45, marginBottom: ann.owner ? 8 : 12, letterSpacing: '-0.01em' }}>{ann.title}</div>
-                {ann.owner && <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={20} />
-                  <span style={{ fontWeight: 600 }}>担当：{ann.owner}</span>
-                </div>}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {/* 区切り */}
+                  <span style={{ width: 1, height: 14, background: T().border, margin: '0 2px' }} />
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
                     const qr = qProg != null ? getRating(qProg) : null
                     return (
-                      <div key={qKey} style={{
-                        fontSize: 11, padding: '4px 12px', borderRadius: 8, fontWeight: 700,
+                      <span key={qKey} style={{
+                        fontSize: 11, padding: '3px 10px', borderRadius: 99, fontWeight: 700,
                         background: qr ? `${qr.color}15` : 'rgba(0,0,0,0.04)',
                         color: qr ? qr.color : T().textFaintest,
                       }}>
-                        {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '未設定'}
-                      </div>
+                        {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '−'}
+                      </span>
                     )
                   })}
                 </div>
+                {/* 2行目: タイトル */}
+                <div style={{ fontSize: 16, fontWeight: 800, color: T().text, lineHeight: 1.45, letterSpacing: '-0.01em' }}>{ann.title}</div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
-                <div style={{ fontSize: 32, fontWeight: 900, color: r?.color || T().textFaint, letterSpacing: '-0.02em' }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
-                  <div style={{ fontSize: 18, color: isOpen ? lColor : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
+              {/* 右側: 達成率 + 担当 + アクション (縦に圧縮) */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: r?.color || T().textFaint, letterSpacing: '-0.02em', lineHeight: 1 }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
+                {ann.owner && (
+                  <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={16} />
+                    <span style={{ fontWeight: 600 }}>{ann.owner}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
+                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                  <div style={{ fontSize: 16, color: isOpen ? lColor : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
                 </div>
               </div>
             </div>
