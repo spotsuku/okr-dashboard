@@ -398,6 +398,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
 
   const annualKRs = ann.key_results || []
   const hasUnmapped = Object.values(qKRsUnmapped).some(arr => arr.length > 0)
+  // 通期 KR が 0 件 = 旧データ (Q期のみで運用) の場合は「未紐付け」フレームを外し、
+  // Q期 KR をそのままメイン内容として列ごとに表示する。
+  const noAnnualMode = annualKRs.length === 0 && hasUnmapped
 
   // CSS スティッキ用の色 (左列を背景透過させない)
   const stickyBg = T().bgInner
@@ -416,7 +419,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
           padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
           fontSize: 11, color: T().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700,
         }}>
-          通期 KR
+          {annualKRs.length > 0 ? '通期 KR' : '— (通期 KR 未定義)'}
         </div>
         {Q_KEYS.map(qKey => {
           const qObjs = qObjectives[qKey]
@@ -540,10 +543,21 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
               padding: 10, borderRight: `1px solid ${T().border}`,
               fontSize: 10, color: T().textMuted, fontWeight: 700, fontStyle: 'italic',
             }}>
-              ⚠️ 未紐付け Q 期 KR
-              <div style={{ fontSize: 9, fontWeight: 500, marginTop: 2, color: T().textFaint }}>
-                編集して通期 KR に紐付けてください
-              </div>
+              {noAnnualMode ? (
+                <Fragment>
+                  Q期 KR
+                  <div style={{ fontSize: 9, fontWeight: 500, marginTop: 2, color: T().textFaint }}>
+                    通期 KR を追加すると行で並びます
+                  </div>
+                </Fragment>
+              ) : (
+                <Fragment>
+                  ⚠️ 未紐付け Q 期 KR
+                  <div style={{ fontSize: 9, fontWeight: 500, marginTop: 2, color: T().textFaint }}>
+                    編集して通期 KR に紐付けてください
+                  </div>
+                </Fragment>
+              )}
             </div>
             {Q_KEYS.map(qKey => {
               const cells = qKRsUnmapped[qKey] || []
@@ -560,7 +574,25 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ }) {
                       ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
                       : 0
                     const qkr_r = getRating(qkp)
-                    return (
+                    // 旧データ (通期 KR が無い) ときは KASection 含めてフル表示。
+                    // 既に通期 KR がある (新運用) の場合はコンパクトに「未紐付け」表示。
+                    return noAnnualMode ? (
+                      <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: '5px 7px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                          <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
+                          <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
+                          </div>
+                          <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                        </div>
+                        <div style={{ marginTop: 3 }}>
+                          <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
+                        </div>
+                      </div>
+                    ) : (
                       <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', borderLeft: `2px solid ${T().textFaint}` }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
