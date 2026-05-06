@@ -63,16 +63,24 @@ let _theme = THEMES.dark
 const T = () => _theme
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-// 評価ラベル → 色 (パステル質感。原色より淡い彩度低め配色で日々使えるトーンに)
+// 配色ポリシー: ミニマル (1色 + 未達赤の2色)
+//   - 通常 (奇跡 / 変革 / 好調 / 順調 / 最低限): チャコール無彩色 (T.text)
+//   - 未達のみ: 淡い赤 (T.danger)
+// 進捗バー / バッジ / 数値テキストはこのポリシーに従う
 const RATINGS = [
-  { min: 120, label: '奇跡',   color: '#D4B894' },   // pastel gold
-  { min: 110, label: '変革',   color: '#B8A5D1' },   // pastel lavender
-  { min: 100, label: '好調',   color: '#94C4A8' },   // pastel mint
-  { min:  90, label: '順調',   color: '#A5BDD4' },   // pastel powder blue
-  { min:  80, label: '最低限', color: '#E0CC92' },   // pastel buttercup
-  { min:   0, label: '未達',   color: '#E89B9B' },   // 淡い赤 (coral / soft red)
+  { min: 120, label: '奇跡' },
+  { min: 110, label: '変革' },
+  { min: 100, label: '好調' },
+  { min:  90, label: '順調' },
+  { min:  80, label: '最低限' },
+  { min:   0, label: '未達' },
 ]
 const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >= r.min) || RATINGS[RATINGS.length - 1])
+// 未達 → 赤、それ以外 → チャコール (theme.text)
+const tColor = (r) => {
+  if (!r) return T().textFaint
+  return r.label === '未達' ? T().danger : T().text
+}
 
 function calcObjProgress(krs) {
   if (!krs?.length) return 0
@@ -113,7 +121,8 @@ function Avatar({ name, avatarUrl, size = 20 }) {
   )
 }
 
-const LAYER_COLORS = { 0: '#E89B9B', 1: '#6B96C7', 2: '#7FB89A' }
+// レイヤー識別色は廃止 → 階層は文字バッジ (経営/事業部/チーム) のみで表現
+const LAYER_COLORS = { 0: '#1a1a1a', 1: '#3a3a3c', 2: '#8e8e93' }
 const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 // Q期ごとの統一カラー (パステル質感)。進捗評価ではなく Q 期そのものの識別色
@@ -303,17 +312,11 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
   return (
     <div style={{ padding: '0 24px 24px', maxWidth: 1400, margin: '0 auto', position: 'relative' }}>
-      <div aria-hidden style={{
-        position: 'absolute', top: -150, left: '50%', transform: 'translateX(-50%)',
-        width: 600, height: 400,
-        background: `radial-gradient(ellipse, ${T().addBtnBg}18 0%, transparent 60%)`,
-        pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
-      }} />
       <div style={{ position: 'relative', zIndex: 1 }}>
       {/* コンパクト見出し: 縦幅を抑えて OKR 本体に画面を譲る */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 6px', marginBottom: 8, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 16, fontWeight: 800, color: T().text, margin: 0, letterSpacing: '-0.01em' }}>📊 年間ブレイクダウン</h1>
-        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${T().addBtnBg}15`, color: T().addBtnBg }}>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textSub }}>
           {fiscalYear}年度
         </span>
         <span style={{ fontSize: 11, color: T().textMuted, marginLeft: 'auto' }}>通期 OKR をクリックして四半期へ展開</span>
@@ -333,26 +336,15 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         return (
           <div key={ann.id} style={{
             marginBottom: 18,
-            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${lColor}05 100%)`,
-            border: `1px solid ${isOpen ? lColor + '40' : lColor + '15'}`,
+            background: T().bgCard,
+            border: `1px solid ${T().border}`,
             borderRadius: 18, overflow: 'hidden',
             position: 'relative',
             boxShadow: isOpen
-              ? `0 1px 2px rgba(0,0,0,0.05), 0 8px 24px ${lColor}26, 0 16px 40px rgba(0,0,0,0.04)`
-              : '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+              ? '0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)'
+              : '0 1px 2px rgba(0,0,0,0.03)',
             transition: 'all 0.25s ease',
           }}>
-            {/* 上端に薄い色グラデ帯 (左の太線の代わり) */}
-            <div aria-hidden style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-              background: `linear-gradient(90deg, ${lColor} 0%, ${lColor}80 100%)`,
-            }} />
-            {/* 右上に放射状グロウ */}
-            <div aria-hidden style={{
-              position: 'absolute', top: -40, right: -40, width: 200, height: 200,
-              background: `radial-gradient(circle, ${lColor}10 0%, transparent 65%)`,
-              pointerEvents: 'none',
-            }} />
 
             {/* 通期ヘッダー: 縦幅圧縮版 (バッジ行に Q% を統合 / 担当を右上に移動) */}
             <div onClick={() => toggleExpand(ann.id)} style={{
@@ -367,20 +359,21 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               <div style={{ flex: 1, minWidth: 0 }}>
                 {/* 1行目: ステータスバッジ + Q% バッジ群 (まとめて1行) */}
                 <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${lColor}1f`, color: lColor, fontWeight: 700 }}>{levelIcon} {levelName}</span>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textSub, fontWeight: 700 }}>{levelIcon} {levelName}</span>
                   <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700 }}>通期</span>
-                  {r && <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${r.color}1f`, color: r.color, fontWeight: 800 }}>{r.label}</span>}
+                  {r && (() => { const rc = tColor(r); return <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${rc}1a`, color: rc, fontWeight: 800 }}>{r.label}</span> })()}
                   {/* 区切り */}
                   <span style={{ width: 1, height: 14, background: T().border, margin: '0 2px' }} />
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
                     const qr = qProg != null ? getRating(qProg) : null
+                    const qc = qr ? tColor(qr) : T().textFaintest
                     return (
                       <span key={qKey} style={{
                         fontSize: 11, padding: '3px 10px', borderRadius: 99, fontWeight: 700,
-                        background: qr ? `${qr.color}15` : 'rgba(0,0,0,0.04)',
-                        color: qr ? qr.color : T().textFaintest,
+                        background: qr ? `${qc}12` : 'rgba(0,0,0,0.04)',
+                        color: qc,
                       }}>
                         {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '−'}
                       </span>
@@ -392,7 +385,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               </div>
               {/* 右側: 達成率 + 担当 + アクション (縦に圧縮) */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: r?.color || T().textFaint, letterSpacing: '-0.02em', lineHeight: 1 }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
+                <div style={{ fontSize: 28, fontWeight: 900, color: tColor(r), letterSpacing: '-0.02em', lineHeight: 1 }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
                 {ann.owner && (
                   <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={16} />
@@ -402,7 +395,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
                   {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
                   {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
-                  <div style={{ fontSize: 16, color: isOpen ? lColor : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
+                  <div style={{ fontSize: 16, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
                 </div>
               </div>
             </div>
@@ -725,14 +718,14 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
               </button>
             )}
             {/* 集計バッジ群 (空白を活用) */}
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: `${T().addBtnBg}14`, color: T().addBtnBg }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textSub }}>
               通期 KR {annualKRs.length}
             </span>
             <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted }}>
               紐付け済 Q期 KR {mappedTotal}
             </span>
             {unmappedTotal > 0 && (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'rgba(255,159,67,0.15)', color: '#ff9f43' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: `${T().danger}14`, color: T().danger }}>
                 未紐付け {unmappedTotal}
               </span>
             )}
@@ -800,8 +793,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
               display: 'flex', flexDirection: 'column', gap: 2,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: accent }}>{Q_LABELS[qKey]}</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: accent }}>{qProg != null ? `${qProg}%` : (qObjs.length ? '計画中' : '未設定')}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: T().text }}>{Q_LABELS[qKey]}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: qr ? tColor(qr) : T().textFaint }}>{qProg != null ? `${qProg}%` : (qObjs.length ? '計画中' : '未設定')}</span>
               </div>
               {qObjs.length > 0 ? qObjs.map(qObj => (
                 <div key={qObj.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -907,15 +900,15 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     onClick={e => e.stopPropagation()}
                     title="ドラッグで並び替え"
                     style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab', userSelect: 'none', padding: '0 2px' }}>⋮⋮</span>
-                  <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
+                  {(() => { const krc = tColor(kr_r); return <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${krc}14`, color: krc, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span> })()}
                   {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
                   <span style={{ fontSize: 13, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: kr_r.color, borderRadius: 99 }} />
+                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: tColor(kr_r), borderRadius: 99 }} />
                   </div>
-                  <span style={{ fontSize: 11, color: kr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
+                  <span style={{ fontSize: 11, color: tColor(kr_r), fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
                 </div>
                 <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
                   {annKr.owner && <Avatar name={annKr.owner} avatarUrl={members.find(m=>m.name===annKr.owner)?.avatar_url} size={14} />}
@@ -1022,6 +1015,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
                         : 0
                       const qkr_r = getRating(qkp)
+                      const qkrc = tColor(qkr_r)
                       const isEditing = Number(editingKrId) === Number(qkr.id)
                       if (isEditing) {
                         return (
@@ -1078,20 +1072,20 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             borderRadius: 10,
                             padding: '8px 10px',
                             cursor: 'pointer',
-                            border: `1px solid ${qkr_r.color}20`,
-                            boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkr_r.color}14`,
+                            border: `1px solid ${qkrc}20`,
+                            boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkrc}14`,
                           }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
                             <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
                               onMouseDown={e => e.stopPropagation()}>⋮⋮</span>
-                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkr_r.color}22`, color: qkr_r.color, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkrc}22`, color: qkrc, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
                             <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
+                              <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: 99 }} />
                             </div>
-                            <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                            <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                           </div>
                           <div style={{ marginTop: 3 }} onClick={e => e.stopPropagation()}>
                             <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
@@ -1214,6 +1208,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
                       : 0
                     const qkr_r = getRating(qkp)
+                    const qkrc = tColor(qkr_r)
                     // 旧データ (通期 KR が無い) ときは KASection 含めてフル表示。
                     // 既に通期 KR がある (新運用) の場合はコンパクトに「未紐付け」表示。
                     return noAnnualMode ? (
@@ -1226,19 +1221,19 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           borderRadius: 10,
                           padding: '8px 10px',
                           cursor: 'grab',
-                          border: `1px solid ${qkr_r.color}20`,
-                          boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkr_r.color}14`,
+                          border: `1px solid ${qkrc}20`,
+                          boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkrc}14`,
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
                           <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
-                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkr_r.color}22`, color: qkr_r.color, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkrc}22`, color: qkrc, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
                           <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
+                            <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: 99 }} />
                           </div>
-                          <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                          <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
                         <div style={{ marginTop: 4 }}>
                           <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
@@ -1259,7 +1254,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
                           <span style={{ fontSize: 11, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
-                          <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                          <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
                       </div>
                     )
