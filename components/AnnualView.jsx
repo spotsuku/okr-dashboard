@@ -185,8 +185,11 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
   useEffect(() => { loadAll() }, [refreshKey, fiscalYear]) // eslint-disable-line
 
-  const loadAll = async () => {
-    setLoading(true)
+  // silent=true で呼ばれた場合は loading 状態を切り替えない (KR 保存後の裏再取得用)。
+  // 全画面「読み込み中…」に切り替わると DOM が一旦空になり、スクロール位置が
+  // 先頭に戻ってしまうため、保存系のフローからは silent で呼ぶ。
+  const loadAll = async (silent = false) => {
+    if (!silent) setLoading(true)
 
     const annualKey = toPeriodKey('annual', fiscalYear)
     const { data: annObjs } = await supabase
@@ -406,7 +409,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 <MatrixView
                   T={T} ann={ann} qData={qData} members={members}
                   onEdit={onEdit} onDelete={onDelete} handleAddQ={handleAddQ}
-                  onDataChanged={loadAll}
+                  onDataChanged={() => loadAll(true)}
                 />
               </div>
             )}
