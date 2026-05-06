@@ -1093,7 +1093,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
 
   useEffect(() => {
-    supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id').order('level_id').range(0, 49999).then(({data})=>setObjectives(data||[]))
+    supabase.from('objectives').select('id,title,level_id,period,owner,parent_objective_id,archived_at').order('level_id').range(0, 49999).then(({data})=>setObjectives((data||[]).filter(o => !o.archived_at)))
     supabase.from('key_results').select('*').order('objective_id').range(0, 49999).then(({data})=>setKeyResults((data||[]).map(kr => kr.current === undefined && kr.current_value !== undefined ? { ...kr, current: kr.current_value } : kr)))
     supabase.from('members').select('*').order('name').then(({data, error})=>{ if(error) console.error('members load error:', error); setMembers(data||[]) })
   }, [])

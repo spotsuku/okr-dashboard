@@ -219,8 +219,9 @@ export default function WeeklyMTGFacilitation({
     if (levelIds.length === 0) { setScopePreview({ perLevel: [], total: 0 }); return }
     const scopeLevels = levelIds.map(id => levels.find(l => Number(l.id) === Number(id))).filter(Boolean)
 
-    const { data: objs } = await supabase.from('objectives')
-      .select('id, level_id').in('level_id', levelIds)
+    const { data: objsRaw } = await supabase.from('objectives')
+      .select('id, level_id, archived_at').in('level_id', levelIds)
+    const objs = (objsRaw || []).filter(o => !o.archived_at)
     const objsByLevel = {}
     ;(objs || []).forEach(o => {
       if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
@@ -1049,12 +1050,12 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
         const periodKeys = [q, `${fy}_${q}`]
 
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, period, title, owner, parent_objective_id')
+          .select('id, level_id, period, title, owner, parent_objective_id, archived_at')
           .in('level_id', scopeLevelIds)
           .in('period', periodKeys)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = objsRes.data || []
+        const objs = (objsRes.data || []).filter(o => !o.archived_at)
 
         const objIds = objs.map(o => o.id)
         let krs = []
@@ -1428,11 +1429,11 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
 
         // Objective を取得
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, period, title, owner')
+          .select('id, level_id, period, title, owner, archived_at')
           .in('level_id', scopeLevelIds)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = objsRes.data || []
+        const objs = (objsRes.data || []).filter(o => !o.archived_at)
         const allObjIds = objs.map(o => o.id)
         if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
@@ -1762,8 +1763,8 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
 
         // 補助: 今週のKA件数 + 担当アバター
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, period').in('level_id', scopeLevelIds).range(0, 49999)
-        const objs = objsRes.data || []
+          .select('id, level_id, period, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = (objsRes.data || []).filter(o => !o.archived_at)
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
         const objToPeriod = new Map(objs.map(o => [Number(o.id), (o.period || '').toString().split('_').pop()]))
@@ -1935,8 +1936,8 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
 
         // 参考: 先週のKA件数 (補助情報として表示)
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
-        const objs = objsRes.data || []
+          .select('id, level_id, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = (objsRes.data || []).filter(o => !o.archived_at)
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
         let kas = []
@@ -2602,9 +2603,9 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
         if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
 
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id').in('level_id', scopeLevelIds).range(0, 49999)
+          .select('id, level_id, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = objsRes.data || []
+        const objs = (objsRes.data || []).filter(o => !o.archived_at)
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
 
@@ -3585,8 +3586,8 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setScopeKAs([]); return }
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, title').in('level_id', scopeLevelIds).range(0, 49999)
-        const objs = objsRes.data || []
+          .select('id, level_id, title, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = (objsRes.data || []).filter(o => !o.archived_at)
         const objIds = objs.map(o => o.id)
         if (objIds.length === 0) { if (alive) setScopeKAs([]); return }
         const kasRes = await supabase.from('weekly_reports')
