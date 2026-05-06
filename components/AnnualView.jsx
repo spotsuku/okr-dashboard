@@ -554,6 +554,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   const [draggedAnnKrId, setDraggedAnnKrId] = useState(null)
   const [dragOverAnnKrId, setDragOverAnnKrId] = useState(null)
   const [dragOverPos, setDragOverPos] = useState(null)  // 'before' | 'after'
+  // Q 期 KR を同一セル内で並び替えるためのオーバーレイ状態
+  const [dragOverQKrId, setDragOverQKrId] = useState(null)
+  const [dragOverQKrPos, setDragOverQKrPos] = useState(null)  // 'before' | 'after'
 
   function onAnnRowDragStart(e, annKrId) {
     e.dataTransfer.setData('application/ann-row-id', String(annKrId))
@@ -726,6 +729,70 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     setDragOverCell(null)
     const qkrId = Number(e.dataTransfer.getData('application/kr-id'))
     if (qkrId) setParent(qkrId, parentId)
+  }
+
+  // Q 期 KR カード上にドラッグした時の並び替え検知 (同一セル内の siblings 限定)
+  function onQKrDragOver(e, targetId) {
+    const types = e.dataTransfer?.types
+    if (!types || !Array.from(types).includes('application/kr-id')) return
+    e.preventDefault()
+    e.stopPropagation()  // 親 cell の dragOver を抑止 (セル全体の枠線が出ないように)
+    e.dataTransfer.dropEffect = 'move'
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pos = (e.clientY - rect.top) < rect.height / 2 ? 'before' : 'after'
+    if (targetId !== dragOverQKrId || pos !== dragOverQKrPos) {
+      setDragOverQKrId(targetId); setDragOverQKrPos(pos)
+    }
+  }
+  function onQKrDragLeave(targetId) {
+    if (dragOverQKrId === targetId) {
+      setDragOverQKrId(null); setDragOverQKrPos(null)
+    }
+  }
+  // siblings 配列 (同じ parent + 同じ Q) を渡し、その中で sort_order を再採番
+  async function onQKrDrop(e, targetQkr, siblings) {
+    const draggedIdStr = e.dataTransfer?.getData('application/kr-id')
+    if (!draggedIdStr) return
+    e.preventDefault()
+    e.stopPropagation()
+    const draggedId = Number(draggedIdStr)
+    const pos = dragOverQKrPos
+    setDragOverQKrId(null); setDragOverQKrPos(null)
+    if (draggedId === Number(targetQkr.id)) return
+
+    // dragged が同一セルの sibling かどうかで分岐
+    const fromIdx = (siblings || []).findIndex(k => Number(k.id) === draggedId)
+    if (fromIdx < 0) {
+      // 別セルから来た → 親と Q 期を targetQkr に揃える (= parent_kr_id 変更 + objective_id 変更)
+      const targetParent = targetQkr.parent_kr_id ?? null
+      await supabase.from('key_results').update({
+        parent_kr_id: targetParent,
+        objective_id: targetQkr.objective_id,
+      }).eq('id', draggedId)
+      if (onDataChanged) await onDataChanged()
+      return
+    }
+    // 同一セル内の並び替え
+    const list = [...siblings]
+    const [moved] = list.splice(fromIdx, 1)
+    let insertIdx = list.findIndex(k => Number(k.id) === Number(targetQkr.id))
+    if (pos === 'after') insertIdx++
+    list.splice(insertIdx, 0, moved)
+    const updates = list.map((k, i) => {
+      if (k.sort_order === i) return null
+      return supabase.from('key_results').update({ sort_order: i }).eq('id', k.id)
+    }).filter(Boolean)
+    const results = await Promise.all(updates)
+    const errored = results.find(r => r?.error)
+    if (errored) {
+      if (/sort_order/i.test(errored.error.message || '')) {
+        alert('並び替えには key_results.sort_order 列が必要です。\n以下を Supabase で実行してください:\n\nALTER TABLE key_results ADD COLUMN sort_order INT DEFAULT 0;')
+      } else {
+        alert('並び替え失敗: ' + (errored.error.message || ''))
+      }
+      return
+    }
+    if (onDataChanged) await onDataChanged()
   }
 
   // CSS スティッキ用の色: 横スクロール時に右側の Q セルが透けないよう
@@ -1085,11 +1152,15 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           </div>
                         )
                       }
+                      const isDragOverThisQKr = Number(dragOverQKrId) === Number(qkr.id)
                       return (
                         <div key={qkr.id}
                           draggable
                           onDragStart={e => onKRDragStart(e, qkr.id)}
-                          title="クリックで編集 / ドラッグで他の通期 KR の行に移動"
+                          onDragOver={e => onQKrDragOver(e, qkr.id)}
+                          onDragLeave={() => onQKrDragLeave(qkr.id)}
+                          onDrop={e => onQKrDrop(e, qkr, cells)}
+                          title="クリックで編集 / ドラッグで上下に並び替え (他の行へドロップで紐付け変更)"
                           onClick={() => startEditKr(qkr)}
                           style={{
                             background: cellBg,
@@ -1097,7 +1168,11 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             padding: '8px 10px',
                             cursor: 'pointer',
                             border: `1px solid ${qkrc}20`,
-                            boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkrc}14`,
+                            boxShadow: isDragOverThisQKr
+                              ? (dragOverQKrPos === 'before'
+                                  ? `inset 0 3px 0 0 ${T().addBtnBg}, 0 1px 2px rgba(0,0,0,0.04)`
+                                  : `inset 0 -3px 0 0 ${T().addBtnBg}, 0 1px 2px rgba(0,0,0,0.04)`)
+                              : `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkrc}14`,
                           }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
                             <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
