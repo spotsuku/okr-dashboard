@@ -183,7 +183,14 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   const [expanded,   setExpanded]   = useState({})
   const [loading,    setLoading]    = useState(true)
 
-  useEffect(() => { loadAll() }, [refreshKey, fiscalYear]) // eslint-disable-line
+  // 初回マウント + 年度切替: 全画面ローディング表示で fresh load
+  // それ以降の refreshKey 変更 (Supabase Realtime 起因 / 保存後の裏再取得):
+  //   silent モードで現在の DOM を維持したまま差分だけ反映 → ページがチカチカしない
+  useEffect(() => { loadAll(false) }, [fiscalYear]) // eslint-disable-line
+  useEffect(() => {
+    if (refreshKey === 0) return  // 初回マウントは fiscalYear 側に任せる
+    loadAll(true)
+  }, [refreshKey]) // eslint-disable-line
 
   // silent=true で呼ばれた場合は loading 状態を切り替えない (KR 保存後の裏再取得用)。
   // 全画面「読み込み中…」に切り替わると DOM が一旦空になり、スクロール位置が
