@@ -19,9 +19,9 @@ import { useAutoSave } from '../lib/useAutoSave'
 
 // iOS システムカラーに統一
 const STATUS_CFG = {
-  focus:  { label: '🎯 注力', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',  border: 'rgba(0,122,255,0.30)' },
-  good:   { label: '✅ Good', color: '#34C759', bg: 'rgba(52,199,89,0.10)',  border: 'rgba(52,199,89,0.30)' },
-  more:   { label: '🔺 More', color: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  border: 'rgba(255,59,48,0.30)' },
+  focus:  { label: '🎯 注力', color: '#6B96C7', bg: 'rgba(107,150,199,0.12)', border: 'rgba(107,150,199,0.30)' },
+  good:   { label: '✅ Good', color: '#7FB89A', bg: 'rgba(127,184,154,0.12)', border: 'rgba(127,184,154,0.30)' },
+  more:   { label: '🔺 More', color: '#E89B9B', bg: 'rgba(232,155,155,0.12)', border: 'rgba(232,155,155,0.30)' },
   normal: { label: '未分類',  color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.20)' },
   done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
 }
@@ -358,8 +358,8 @@ function KARow({ ka, members, T, onDelete }) {
 const thS = (T) => ({ padding: '5px 8px', fontSize: 9, color: T.textMuted, fontWeight: 700, borderBottom: `1px solid ${T.border}`, textAlign: 'left', whiteSpace: 'nowrap' })
 
 const DEFAULT_THEME = {
-  accent:       '#4d9fff',
-  accentSolid:  '#4d9fff',
+  accent:       '#6B96C7',
+  accentSolid:  '#6B96C7',
   text:         '#1a1f36',
   textSub:      '#4a5270',
   textMuted:    '#7a8599',
@@ -369,6 +369,6 @@ const DEFAULT_THEME = {
   bgCard2:      '#f5f7fb',
   border:       'rgba(0,0,0,0.08)',
   borderMid:    'rgba(0,0,0,0.12)',
-  badgeBg:      '#4d9fff',
-  badgeBorder:  'rgba(77,159,255,0.4)',
+  badgeBg:      '#6B96C7',
+  badgeBorder:  'rgba(107,150,199,0.4)',
 }

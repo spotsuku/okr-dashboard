@@ -8,8 +8,8 @@ import KASection from './KASection'
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
 function makeKATheme(t) {
   return {
-    accent:       t.btnEditColor || '#4d9fff',
-    accentSolid:  t.addBtnBg     || '#4d9fff',
+    accent:       t.btnEditColor || '#6B96C7',
+    accentSolid:  t.addBtnBg     || '#6B96C7',
     text:         t.text,
     textSub:      t.textSub,
     textMuted:    t.textMuted,
@@ -19,8 +19,8 @@ function makeKATheme(t) {
     bgCard2:      t.bgKr,
     border:       t.border,
     borderMid:    t.borderDash,
-    badgeBg:      t.btnEditColor || '#4d9fff',
-    badgeBorder:  t.btnEditBorder || 'rgba(77,159,255,0.25)',
+    badgeBg:      t.btnEditColor || '#6B96C7',
+    badgeBorder:  t.btnEditBorder || 'rgba(107,150,199,0.25)',
   }
 }
 
@@ -35,11 +35,11 @@ const THEMES = {
     borderDash: 'rgba(255,255,255,0.08)',
     borderKr: 'rgba(255,255,255,0.06)',
     progressBg: 'rgba(255,255,255,0.06)',
-    btnEditBg: 'rgba(10,132,255,0.16)', btnEditBorder: 'rgba(10,132,255,0.30)', btnEditColor: '#0A84FF',
-    btnDelBg: 'rgba(255,69,58,0.16)', btnDelBorder: 'rgba(255,69,58,0.30)', btnDelColor: '#FF453A',
+    btnEditBg: 'rgba(124,163,209,0.18)', btnEditBorder: 'rgba(124,163,209,0.32)', btnEditColor: '#7CA3D1',
+    btnDelBg: 'rgba(237,156,160,0.16)', btnDelBorder: 'rgba(237,156,160,0.30)', btnDelColor: '#ED9CA0',
     tabActiveBg: 'rgba(255,255,255,0.05)',
     badgePeriodBg: 'rgba(255,255,255,0.06)',
-    addBtnBg: '#0A84FF',
+    addBtnBg: '#7CA3D1',
     refBg: 'rgba(48,209,88,0.16)', refBorder: 'rgba(48,209,88,0.30)',
   },
   light: {
@@ -50,11 +50,11 @@ const THEMES = {
     borderDash: 'rgba(0,0,0,0.10)',
     borderKr: 'rgba(0,0,0,0.06)',
     progressBg: 'rgba(0,0,0,0.06)',
-    btnEditBg: 'rgba(0,122,255,0.10)', btnEditBorder: 'rgba(0,122,255,0.30)', btnEditColor: '#007AFF',
-    btnDelBg: 'rgba(255,59,48,0.10)', btnDelBorder: 'rgba(255,59,48,0.30)', btnDelColor: '#FF3B30',
+    btnEditBg: 'rgba(107,150,199,0.12)', btnEditBorder: 'rgba(107,150,199,0.30)', btnEditColor: '#6B96C7',
+    btnDelBg: 'rgba(232,155,155,0.12)', btnDelBorder: 'rgba(232,155,155,0.30)', btnDelColor: '#E89B9B',
     tabActiveBg: '#F2F2F7',
     badgePeriodBg: '#F2F2F7',
-    addBtnBg: '#007AFF',
+    addBtnBg: '#6B96C7',
     refBg: 'rgba(52,199,89,0.08)', refBorder: 'rgba(52,199,89,0.30)',
   },
 }
@@ -70,7 +70,7 @@ const RATINGS = [
   { min: 100, label: '好調',   color: '#94C4A8' },   // pastel mint
   { min:  90, label: '順調',   color: '#A5BDD4' },   // pastel powder blue
   { min:  80, label: '最低限', color: '#E0CC92' },   // pastel buttercup
-  { min:   0, label: '未達',   color: '#D4A89B' },   // pastel peach (赤の代わり、優しい色)
+  { min:   0, label: '未達',   color: '#E89B9B' },   // 淡い赤 (coral / soft red)
 ]
 const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >= r.min) || RATINGS[RATINGS.length - 1])
 
@@ -94,7 +94,7 @@ function getAbsoluteDepth(levelId, levels) {
 }
 
 // ─── Avatar helpers ─────────────────────────────────────────────────────────
-const AVATAR_COLORS = ['#4d9fff','#00d68f','#D4A89B','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
+const AVATAR_COLORS = ['#4d9fff','#00d68f','#E89B9B','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
   if (!name) return '#606880'
   let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
@@ -113,7 +113,7 @@ function Avatar({ name, avatarUrl, size = 20 }) {
   )
 }
 
-const LAYER_COLORS = { 0: '#D4A89B', 1: '#4d9fff', 2: '#00d68f' }
+const LAYER_COLORS = { 0: '#E89B9B', 1: '#6B96C7', 2: '#7FB89A' }
 const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 // Q期ごとの統一カラー (パステル質感)。進捗評価ではなく Q 期そのものの識別色
@@ -706,7 +706,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   // CSS スティッキ用の色: 横スクロール時に右側の Q セルが透けないよう
   // 必ず不透明色 (bgCard = #FFFFFF / #1C1C1E) を使う。
   const stickyBg = T().bgCard
-  const cellBg = T().bgKr || T().bgInner
+  // KR セル: 視認性を最優先 (KRはこのページで一番重要な情報)
+  // 透けた灰背景ではなく、白カード + 影 + Q カラーの左アクセントで「カード感」を出す
+  const cellBg = T().bgCard
 
   return (
     <div>
@@ -803,7 +805,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
               </div>
               {qObjs.length > 0 ? qObjs.map(qObj => (
                 <div key={qObj.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-                  <span style={{ flex: 1, fontSize: 11, color: T().textSub, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: T().text, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
                   <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
                     {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
                     {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
@@ -880,7 +882,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={() => deleteKr(annKr)} disabled={editSaving}
-                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid #D4A89B40`, background: 'transparent', color: '#D4A89B', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid rgba(232,155,155,0.30)`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
                         削除
                       </button>
                       <div style={{ flex: 1 }} />
@@ -907,7 +909,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab', userSelect: 'none', padding: '0 2px' }}>⋮⋮</span>
                   <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
                   {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }} title={annKr.title}>{annKr.title}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
@@ -1049,7 +1051,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button onClick={() => deleteKr(qkr)} disabled={editSaving}
-                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || '#D4A89B40'}`, background: 'transparent', color: '#D4A89B', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || 'rgba(232,155,155,0.30)'}`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
                                 削除
                               </button>
                               <div style={{ flex: 1 }} />
@@ -1071,18 +1073,26 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           onDragStart={e => onKRDragStart(e, qkr.id)}
                           title="クリックで編集 / ドラッグで他の通期 KR の行に移動"
                           onClick={() => startEditKr(qkr)}
-                          style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'pointer' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                            <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
+                          style={{
+                            background: cellBg,
+                            borderRadius: 8,
+                            padding: '8px 10px',
+                            cursor: 'pointer',
+                            border: `1px solid ${T().border}`,
+                            borderLeft: `3px solid ${qkr_r.color}`,
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.04)',
+                          }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                            <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
                               onMouseDown={e => e.stopPropagation()}>⋮⋮</span>
-                            <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
-                            <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkr_r.color}22`, color: qkr_r.color, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
                               <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
                             </div>
-                            <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                            <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                           </div>
                           <div style={{ marginTop: 3 }} onClick={e => e.stopPropagation()}>
                             <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
@@ -1212,19 +1222,27 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         draggable
                         onDragStart={e => onKRDragStart(e, qkr.id)}
                         title="ドラッグして通期 KR の行に紐付け"
-                        style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'grab' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                          <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
-                          <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
-                          <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                        style={{
+                          background: cellBg,
+                          borderRadius: 8,
+                          padding: '8px 10px',
+                          cursor: 'grab',
+                          border: `1px solid ${T().border}`,
+                          borderLeft: `3px solid ${qkr_r.color}`,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.04)',
+                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                          <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkr_r.color}22`, color: qkr_r.color, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
                           </div>
-                          <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                          <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
-                        <div style={{ marginTop: 3 }}>
+                        <div style={{ marginTop: 4 }}>
                           <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
                         </div>
                       </div>
@@ -1233,11 +1251,20 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         draggable
                         onDragStart={e => onKRDragStart(e, qkr.id)}
                         title="ドラッグして通期 KR の行に紐付け"
-                        style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', borderLeft: `2px solid ${T().textFaint}`, cursor: 'grab' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
-                          <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
-                          <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                        style={{
+                          background: cellBg,
+                          borderRadius: 8,
+                          padding: '7px 9px',
+                          borderLeft: `3px solid ${T().textFaint}`,
+                          border: `1px solid ${T().border}`,
+                          borderLeftWidth: 3,
+                          borderLeftColor: T().textFaint,
+                          cursor: 'grab',
+                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                          <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
                       </div>
                     )
