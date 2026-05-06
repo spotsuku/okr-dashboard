@@ -8,8 +8,8 @@ import KASection from './KASection'
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
 function makeKATheme(t) {
   return {
-    accent:       t.btnEditColor || '#4d9fff',
-    accentSolid:  t.addBtnBg     || '#4d9fff',
+    accent:       t.btnEditColor || '#6B96C7',
+    accentSolid:  t.addBtnBg     || '#6B96C7',
     text:         t.text,
     textSub:      t.textSub,
     textMuted:    t.textMuted,
@@ -19,8 +19,8 @@ function makeKATheme(t) {
     bgCard2:      t.bgKr,
     border:       t.border,
     borderMid:    t.borderDash,
-    badgeBg:      t.btnEditColor || '#4d9fff',
-    badgeBorder:  t.btnEditBorder || 'rgba(77,159,255,0.25)',
+    badgeBg:      t.btnEditColor || '#6B96C7',
+    badgeBorder:  t.btnEditBorder || 'rgba(107,150,199,0.25)',
   }
 }
 
@@ -35,11 +35,11 @@ const THEMES = {
     borderDash: 'rgba(255,255,255,0.08)',
     borderKr: 'rgba(255,255,255,0.06)',
     progressBg: 'rgba(255,255,255,0.06)',
-    btnEditBg: 'rgba(10,132,255,0.16)', btnEditBorder: 'rgba(10,132,255,0.30)', btnEditColor: '#0A84FF',
-    btnDelBg: 'rgba(255,69,58,0.16)', btnDelBorder: 'rgba(255,69,58,0.30)', btnDelColor: '#FF453A',
+    btnEditBg: 'rgba(124,163,209,0.18)', btnEditBorder: 'rgba(124,163,209,0.32)', btnEditColor: '#7CA3D1',
+    btnDelBg: 'rgba(237,156,160,0.16)', btnDelBorder: 'rgba(237,156,160,0.30)', btnDelColor: '#ED9CA0',
     tabActiveBg: 'rgba(255,255,255,0.05)',
     badgePeriodBg: 'rgba(255,255,255,0.06)',
-    addBtnBg: '#0A84FF',
+    addBtnBg: '#7CA3D1',
     refBg: 'rgba(48,209,88,0.16)', refBorder: 'rgba(48,209,88,0.30)',
   },
   light: {
@@ -50,11 +50,11 @@ const THEMES = {
     borderDash: 'rgba(0,0,0,0.10)',
     borderKr: 'rgba(0,0,0,0.06)',
     progressBg: 'rgba(0,0,0,0.06)',
-    btnEditBg: 'rgba(0,122,255,0.10)', btnEditBorder: 'rgba(0,122,255,0.30)', btnEditColor: '#007AFF',
-    btnDelBg: 'rgba(255,59,48,0.10)', btnDelBorder: 'rgba(255,59,48,0.30)', btnDelColor: '#FF3B30',
+    btnEditBg: 'rgba(107,150,199,0.12)', btnEditBorder: 'rgba(107,150,199,0.30)', btnEditColor: '#6B96C7',
+    btnDelBg: 'rgba(232,155,155,0.12)', btnDelBorder: 'rgba(232,155,155,0.30)', btnDelColor: '#E89B9B',
     tabActiveBg: '#F2F2F7',
     badgePeriodBg: '#F2F2F7',
-    addBtnBg: '#007AFF',
+    addBtnBg: '#6B96C7',
     refBg: 'rgba(52,199,89,0.08)', refBorder: 'rgba(52,199,89,0.30)',
   },
 }
@@ -63,13 +63,14 @@ let _theme = THEMES.dark
 const T = () => _theme
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+// 評価ラベル → 色 (パステル質感。原色より淡い彩度低め配色で日々使えるトーンに)
 const RATINGS = [
-  { min: 120, label: '奇跡',   color: '#ff9f43' },
-  { min: 110, label: '変革',   color: '#a855f7' },
-  { min: 100, label: '好調',   color: '#00d68f' },
-  { min:  90, label: '順調',   color: '#4d9fff' },
-  { min:  80, label: '最低限', color: '#ffd166' },
-  { min:   0, label: '未達',   color: '#ff6b6b' },
+  { min: 120, label: '奇跡',   color: '#D4B894' },   // pastel gold
+  { min: 110, label: '変革',   color: '#B8A5D1' },   // pastel lavender
+  { min: 100, label: '好調',   color: '#94C4A8' },   // pastel mint
+  { min:  90, label: '順調',   color: '#A5BDD4' },   // pastel powder blue
+  { min:  80, label: '最低限', color: '#E0CC92' },   // pastel buttercup
+  { min:   0, label: '未達',   color: '#E89B9B' },   // 淡い赤 (coral / soft red)
 ]
 const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >= r.min) || RATINGS[RATINGS.length - 1])
 
@@ -93,7 +94,7 @@ function getAbsoluteDepth(levelId, levels) {
 }
 
 // ─── Avatar helpers ─────────────────────────────────────────────────────────
-const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
+const AVATAR_COLORS = ['#4d9fff','#00d68f','#E89B9B','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
   if (!name) return '#606880'
   let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
@@ -112,10 +113,16 @@ function Avatar({ name, avatarUrl, size = 20 }) {
   )
 }
 
-const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
+const LAYER_COLORS = { 0: '#E89B9B', 1: '#6B96C7', 2: '#7FB89A' }
 const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
-const Q_COLORS = { q1: '#1d4ed8', q2: '#0a8f5a', q3: '#c2410c', q4: '#7e22ce' }
+// Q期ごとの統一カラー (パステル質感)。進捗評価ではなく Q 期そのものの識別色
+const Q_COLORS = {
+  q1: '#94C4A8',  // pastel mint (春)
+  q2: '#A5BDD4',  // pastel sky (夏)
+  q3: '#D6B894',  // pastel sand (秋)
+  q4: '#B8A5D1',  // pastel lavender (冬)
+}
 
 // 通期 KR の current を子 (parent_kr_id でリンクされた Q 期 KR) から集計
 //   manual:     親の current をそのまま使う (集計しない)
@@ -517,26 +524,68 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     if (onDataChanged) await onDataChanged()
   }
 
-  // 通期 KR の並び替え (上/下に1つ移動 = 隣接KRと sort_order を入れ替え)
-  async function moveAnnKr(annKr, direction) {
-    const list = annualKRs
-    const idx = list.findIndex(k => Number(k.id) === Number(annKr.id))
-    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return
-    const a = list[idx]
-    const b = list[targetIdx]
-    const aSo = (a.sort_order == null) ? idx : a.sort_order
-    const bSo = (b.sort_order == null) ? targetIdx : b.sort_order
-    const newA = aSo === bSo ? (direction === 'up' ? aSo - 1 : aSo + 1) : bSo
-    const newB = aSo === bSo ? aSo : aSo
-    const r1 = await supabase.from('key_results').update({ sort_order: newA }).eq('id', a.id)
-    const r2 = await supabase.from('key_results').update({ sort_order: newB }).eq('id', b.id)
-    if (r1.error || r2.error) {
-      const e = (r1.error || r2.error)
-      if (/sort_order/i.test(e.message || '')) {
+  // 通期 KR のドラッグ&ドロップ並び替え
+  // 状態: 何を掴んで / どこにドロップしようとしているか / 上下どちらに挿入か
+  const [draggedAnnKrId, setDraggedAnnKrId] = useState(null)
+  const [dragOverAnnKrId, setDragOverAnnKrId] = useState(null)
+  const [dragOverPos, setDragOverPos] = useState(null)  // 'before' | 'after'
+
+  function onAnnRowDragStart(e, annKrId) {
+    e.dataTransfer.setData('application/ann-row-id', String(annKrId))
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggedAnnKrId(annKrId)
+  }
+  function onAnnRowDragEnd() {
+    setDraggedAnnKrId(null)
+    setDragOverAnnKrId(null)
+    setDragOverPos(null)
+  }
+  function onAnnRowDragOver(e, annKrId) {
+    if (draggedAnnKrId == null || draggedAnnKrId === annKrId) return
+    const types = e.dataTransfer?.types
+    if (!types || !Array.from(types).includes('application/ann-row-id')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pos = (e.clientY - rect.top) < rect.height / 2 ? 'before' : 'after'
+    if (annKrId !== dragOverAnnKrId || pos !== dragOverPos) {
+      setDragOverAnnKrId(annKrId); setDragOverPos(pos)
+    }
+  }
+  function onAnnRowDragLeave(annKrId) {
+    if (dragOverAnnKrId === annKrId) {
+      setDragOverAnnKrId(null); setDragOverPos(null)
+    }
+  }
+  async function onAnnRowDrop(e, targetId) {
+    const draggedIdStr = e.dataTransfer?.getData('application/ann-row-id')
+    if (!draggedIdStr) return
+    e.preventDefault()
+    const draggedId = Number(draggedIdStr)
+    const pos = dragOverPos
+    onAnnRowDragEnd()
+    if (draggedId === Number(targetId)) return
+    // 新しい並び順を計算
+    const list = [...annualKRs]
+    const fromIdx = list.findIndex(k => Number(k.id) === draggedId)
+    if (fromIdx < 0) return
+    const [moved] = list.splice(fromIdx, 1)
+    let insertIdx = list.findIndex(k => Number(k.id) === Number(targetId))
+    if (insertIdx < 0) return
+    if (pos === 'after') insertIdx++
+    list.splice(insertIdx, 0, moved)
+    // 0..N で sort_order を再割り当て (差分のみ更新)
+    const updates = list.map((k, i) => {
+      if (k.sort_order === i) return null
+      return supabase.from('key_results').update({ sort_order: i }).eq('id', k.id)
+    }).filter(Boolean)
+    const results = await Promise.all(updates)
+    const errored = results.find(r => r?.error)
+    if (errored) {
+      if (/sort_order/i.test(errored.error.message || '')) {
         alert('並び替えには key_results.sort_order 列が必要です。\n以下を Supabase で実行してください:\n\nALTER TABLE key_results ADD COLUMN sort_order INT DEFAULT 0;')
       } else {
-        alert('並び替え失敗: ' + (e.message || ''))
+        alert('並び替え失敗: ' + (errored.error.message || ''))
       }
       return
     }
@@ -657,7 +706,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   // CSS スティッキ用の色: 横スクロール時に右側の Q セルが透けないよう
   // 必ず不透明色 (bgCard = #FFFFFF / #1C1C1E) を使う。
   const stickyBg = T().bgCard
-  const cellBg = T().bgKr || T().bgInner
+  // KR セル: 視認性を最優先 (KRはこのページで一番重要な情報)
+  // 透けた灰背景ではなく、白カード + 影 + Q カラーの左アクセントで「カード感」を出す
+  const cellBg = T().bgCard
 
   return (
     <div>
@@ -735,7 +786,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           const qObjs = qObjectives[qKey]
           const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
           const qr = qProg != null ? getRating(qProg) : null
-          const accent = qr?.color || Q_COLORS[qKey]
+          // accent は Q 期そのものの識別色を常に使う (進捗による変色は廃止 — 統一感を優先)
+          const accent = Q_COLORS[qKey]
           return (
             <div key={qKey} style={{
               position: 'sticky', top: 0, zIndex: 4,
@@ -753,7 +805,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
               </div>
               {qObjs.length > 0 ? qObjs.map(qObj => (
                 <div key={qObj.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-                  <span style={{ flex: 1, fontSize: 11, color: T().textSub, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: T().text, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
                   <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
                     {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
                     {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
@@ -783,14 +835,25 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           const isEditingAnn = Number(editingKrId) === Number(annKr.id)
           return (
             <Fragment key={annKr.id}>
-              {/* 左列: 通期 KR (sticky) — クリックで編集 */}
+              {/* 左列: 通期 KR (sticky) — クリックで編集 / ドラッグで並び替え */}
               <div style={{
                 position: 'sticky', left: 0, zIndex: 2, background: stickyBg,
                 padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
                 display: 'flex', flexDirection: 'column', gap: 4,
                 cursor: isEditingAnn ? 'default' : 'pointer',
+                opacity: draggedAnnKrId === annKr.id ? 0.4 : 1,
+                // ドロップ位置のラインインジケータ (上 or 下に色付きバー)
+                boxShadow: dragOverAnnKrId === annKr.id
+                  ? (dragOverPos === 'before'
+                      ? `inset 0 3px 0 0 ${T().addBtnBg}`
+                      : `inset 0 -3px 0 0 ${T().addBtnBg}`)
+                  : 'none',
+                transition: 'opacity 0.1s',
               }}
-                onClick={() => { if (!isEditingAnn) startEditKr(annKr) }}>
+                onClick={() => { if (!isEditingAnn) startEditKr(annKr) }}
+                onDragOver={e => onAnnRowDragOver(e, annKr.id)}
+                onDragLeave={() => onAnnRowDragLeave(annKr.id)}
+                onDrop={e => onAnnRowDrop(e, annKr.id)}>
                 {isEditingAnn ? (
                   <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 4, border: `1px solid ${T().addBtnBg}`, borderRadius: 6 }}>
                     <input autoFocus value={editForm.title}
@@ -819,7 +882,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={() => deleteKr(annKr)} disabled={editSaving}
-                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid #ff6b6b40`, background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid rgba(232,155,155,0.30)`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
                         削除
                       </button>
                       <div style={{ flex: 1 }} />
@@ -836,18 +899,17 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                 ) : (
                   <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {/* ドラッグハンドル: ここをつかんで上下にドロップで並び替え */}
+                  <span
+                    draggable
+                    onDragStart={e => { e.stopPropagation(); onAnnRowDragStart(e, annKr.id) }}
+                    onDragEnd={onAnnRowDragEnd}
+                    onClick={e => e.stopPropagation()}
+                    title="ドラッグで並び替え"
+                    style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab', userSelect: 'none', padding: '0 2px' }}>⋮⋮</span>
                   <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
                   {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }} title={annKr.title}>{annKr.title}</span>
-                  {/* 並び替え (上下) */}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-                    <button onClick={() => moveAnnKr(annKr, 'up')} disabled={krIdx === 0}
-                      title="上に移動"
-                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === 0 ? T().textFaintest : T().textSub, cursor: krIdx === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
-                    <button onClick={() => moveAnnKr(annKr, 'down')} disabled={krIdx === annualKRs.length - 1}
-                      title="下に移動"
-                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === annualKRs.length - 1 ? T().textFaintest : T().textSub, cursor: krIdx === annualKRs.length - 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
-                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
@@ -989,7 +1051,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button onClick={() => deleteKr(qkr)} disabled={editSaving}
-                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || '#ff6b6b40'}`, background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || 'rgba(232,155,155,0.30)'}`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
                                 削除
                               </button>
                               <div style={{ flex: 1 }} />
@@ -1011,18 +1073,25 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           onDragStart={e => onKRDragStart(e, qkr.id)}
                           title="クリックで編集 / ドラッグで他の通期 KR の行に移動"
                           onClick={() => startEditKr(qkr)}
-                          style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'pointer' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                            <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
+                          style={{
+                            background: cellBg,
+                            borderRadius: 10,
+                            padding: '8px 10px',
+                            cursor: 'pointer',
+                            border: `1px solid ${qkr_r.color}20`,
+                            boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkr_r.color}14`,
+                          }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                            <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
                               onMouseDown={e => e.stopPropagation()}>⋮⋮</span>
-                            <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
-                            <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkr_r.color}22`, color: qkr_r.color, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
                               <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
                             </div>
-                            <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                            <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                           </div>
                           <div style={{ marginTop: 3 }} onClick={e => e.stopPropagation()}>
                             <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
@@ -1030,6 +1099,65 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         </div>
                       )
                     })}
+                    {/* 既存 KR の有無に関わらず「追加ボタン / インラインフォーム」を表示 */}
+                    {cells.length > 0 && (
+                      addingCell && Number(addingCell.annKrId) === Number(annKr.id) && addingCell.qKey === qKey ? (
+                        // 追加フォーム (既存 KR の下にインライン展開)
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}`, marginTop: 4 }}>
+                          <input autoFocus value={addForm.title}
+                            onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))}
+                            placeholder="KR タイトル" disabled={addSaving}
+                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <input value={addForm.target}
+                              onChange={e => setAddForm(p => ({ ...p, target: e.target.value }))}
+                              placeholder="目標値" type="number" disabled={addSaving}
+                              style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            <input value={addForm.unit}
+                              onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))}
+                              placeholder="単位" disabled={addSaving}
+                              style={{ width: 50, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          </div>
+                          <input value={addForm.owner}
+                            onChange={e => setAddForm(p => ({ ...p, owner: e.target.value }))}
+                            placeholder="担当者 (任意)" disabled={addSaving}
+                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={cancelAddInCell} disabled={addSaving}
+                              style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              ✕ キャンセル
+                            </button>
+                            <button onClick={commitAddInCell} disabled={addSaving}
+                              style={{ flex: 1, fontSize: 10, fontWeight: 700, padding: '4px 6px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: addSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                              {addSaving ? '保存中…' : '✓ 追加'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        // 既存 KR の下に小さい追加ボタン
+                        <button
+                          onClick={() => startAddInCell(annKr, qKey)}
+                          title={`${Q_LABELS[qKey]} にもう1つ KR を追加`}
+                          style={{
+                            fontSize: 10, fontWeight: 700,
+                            color: T().addBtnBg,
+                            textAlign: 'center', padding: '6px',
+                            border: `1px dashed ${T().addBtnBg}80`,
+                            borderRadius: 6,
+                            background: 'transparent', cursor: 'pointer',
+                            fontFamily: 'inherit', width: '100%',
+                            marginTop: 4,
+                            transition: 'background 0.15s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${T().addBtnBg}10` }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <span style={{ fontSize: 12 }}>＋</span>
+                          <span>もう1つ追加</span>
+                        </button>
+                      )
+                    )}
                   </div>
                 )
               })}
@@ -1093,19 +1221,26 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         draggable
                         onDragStart={e => onKRDragStart(e, qkr.id)}
                         title="ドラッグして通期 KR の行に紐付け"
-                        style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', cursor: 'grab' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                          <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
-                          <span style={{ fontSize: 8, padding: '1px 4px', borderRadius: 99, background: `${qkr_r.color}18`, color: qkr_r.color, fontWeight: 700, flexShrink: 0 }}>{qkr_r.label}</span>
-                          <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                        style={{
+                          background: cellBg,
+                          borderRadius: 10,
+                          padding: '8px 10px',
+                          cursor: 'grab',
+                          border: `1px solid ${qkr_r.color}20`,
+                          boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkr_r.color}14`,
+                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                          <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkr_r.color}22`, color: qkr_r.color, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div style={{ flex: 1, height: 3, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkr_r.color, borderRadius: 99 }} />
                           </div>
-                          <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                          <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
-                        <div style={{ marginTop: 3 }}>
+                        <div style={{ marginTop: 4 }}>
                           <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
                         </div>
                       </div>
@@ -1114,11 +1249,17 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         draggable
                         onDragStart={e => onKRDragStart(e, qkr.id)}
                         title="ドラッグして通期 KR の行に紐付け"
-                        style={{ background: cellBg, borderRadius: 6, padding: '5px 7px', borderLeft: `2px solid ${T().textFaint}`, cursor: 'grab' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ fontSize: 10, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
-                          <span style={{ fontSize: 10, color: T().textSub, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
-                          <span style={{ fontSize: 9, color: qkr_r.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                        style={{
+                          background: cellBg,
+                          borderRadius: 10,
+                          padding: '7px 9px',
+                          border: `1px dashed ${T().textFaint}40`,
+                          cursor: 'grab',
+                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                          <span style={{ fontSize: 10, color: qkr_r.color, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
                       </div>
                     )
