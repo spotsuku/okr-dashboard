@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
-import { OrgProvider } from '../lib/orgContext'
+import { useCurrentOrg } from '../lib/orgContext'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
@@ -635,6 +635,11 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ user, onSignOut }) {
+  // 現在アクティブな組織。マルチテナント環境で複数 org に所属しているユーザー
+  // (例: 同 email が NEO 福岡とデモ org の両方にいる guest@demo.local) でも、
+  // levels / members など全データクエリをこの id で絞ることで他 org のデータが
+  // 混ざらないようにする (RLS は両 org を許容するためフロント側で明示フィルタ必須)。
+  const { currentOrg } = useCurrentOrg()
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(() => {
@@ -704,11 +709,15 @@ export default function Dashboard({ user, onSignOut }) {
   }, [activePage, fiscalYear])
 
   useEffect(() => {
+    // currentOrg が確定するまでは何もしない (空配列で初期化されたまま)。
+    // currentOrg が切り替わったら organization_id で絞り直して再ロードする。
+    if (!currentOrg?.id) return
+    const orgId = currentOrg.id
     const load = async () => {
       setLoading(true)
       const [{ data: lvls, error }, { data: mems }] = await Promise.all([
-        supabase.from('levels').select('*').order('id'),
-        supabase.from('members').select('*').order('id'),
+        supabase.from('levels').select('*').eq('organization_id', orgId).order('id'),
+        supabase.from('members').select('*').eq('organization_id', orgId).order('id'),
       ])
       if (error) console.error('levels error:', error)
       const validLvls = (lvls || []).filter(l => l.fiscal_year === fiscalYear)
@@ -762,12 +771,19 @@ export default function Dashboard({ user, onSignOut }) {
       })
       // members 変更
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, payload => {
+        // 他 org のリアルタイム更新が混ざらないよう organization_id で除外
+        const orgId = currentOrg?.id
+        const row = payload.new || payload.old
+        if (orgId && row?.organization_id != null && Number(row.organization_id) !== Number(orgId)) return
         if (payload.eventType === 'INSERT') setMembers(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
         else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))
         else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.id !== payload.old.id))
       })
       // levels 変更（組織名変更等）
       .on('postgres_changes', { event: '*', schema: 'public', table: 'levels' }, payload => {
+        const orgId = currentOrg?.id
+        const row = payload.new || payload.old
+        if (orgId && row?.organization_id != null && Number(row.organization_id) !== Number(orgId)) return
         if (payload.eventType === 'INSERT') setLevels(prev => prev.some(l => l.id === payload.new.id) ? prev : [...prev, payload.new])
         else if (payload.eventType === 'UPDATE') setLevels(prev => prev.map(l => l.id === payload.new.id ? payload.new : l))
         else if (payload.eventType === 'DELETE') setLevels(prev => prev.filter(l => l.id !== payload.old.id))
@@ -777,7 +793,7 @@ export default function Dashboard({ user, onSignOut }) {
       })
 
     return () => { supabase.removeChannel(channel) }
-  }, [fiscalYear]) // eslint-disable-line
+  }, [fiscalYear, currentOrg?.id]) // eslint-disable-line
 
   // ─── 不正なperiodキーを自動修正 ─────────────────────────────────────────
   useEffect(() => {
@@ -1084,7 +1100,6 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   return (
-    <OrgProvider user={user}>
     <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
       {/* Demo モードバナー */}
       <DemoBanner />
@@ -1186,7 +1201,9 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'milestone' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} members={members} onLevelsChanged={async () => {
-            const { data: lvls } = await supabase.from('levels').select('*').order('id')
+            const orgId = currentOrg?.id
+            const q = supabase.from('levels').select('*').order('id')
+            const { data: lvls } = orgId ? await q.eq('organization_id', orgId) : await q
             const validLvls = (lvls || []).filter(l => l.fiscal_year === fiscalYear)
             setLevels(validLvls.length ? validLvls : [])
           }} />
@@ -1291,12 +1308,10 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
     </div>
-    </OrgProvider>
   )
 }
 
 // ─── Demo モードバナー ──────────────────────────────────────
-import { useCurrentOrg } from '../lib/orgContext'
 import OrgSettingsPanel from './OrgSettingsPanel'
 function DemoBanner() {
   const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
