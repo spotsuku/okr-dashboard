@@ -272,6 +272,14 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       console.error('[AnnualView] Q期 key_results 取得失敗:', qKRsRes.error)
     }
     const qKRs = qKRsRes.data || []
+    // 通期 KR と同様にクライアント側で sort_order → id でソート (sort_order 列が
+    // 無い環境でも動作)。これがないと並び替え後の順序が UI に反映されない。
+    qKRs.sort((a, b) => {
+      const sa = a.sort_order ?? Number.MAX_SAFE_INTEGER
+      const sb = b.sort_order ?? Number.MAX_SAFE_INTEGER
+      if (sa !== sb) return sa - sb
+      return (a.id || 0) - (b.id || 0)
+    })
 
     const qKRMap = {}
     ;(qKRs || []).forEach(kr => {
