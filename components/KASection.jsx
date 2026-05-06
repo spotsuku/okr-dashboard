@@ -20,10 +20,10 @@ import { useAutoSave } from '../lib/useAutoSave'
 // iOS システムカラーに統一
 const STATUS_CFG = {
   focus:  { label: '🎯 注力', color: '#6B96C7', bg: 'rgba(107,150,199,0.12)', border: 'rgba(107,150,199,0.30)' },
-  good:   { label: '✅ Good', color: '#7FB89A', bg: 'rgba(127,184,154,0.12)', border: 'rgba(127,184,154,0.30)' },
+  good:   { label: '✅ Good', color: '#3a3a3c', bg: 'rgba(0,0,0,0.05)',         border: 'rgba(0,0,0,0.10)' },
   more:   { label: '🔺 More', color: '#E89B9B', bg: 'rgba(232,155,155,0.12)', border: 'rgba(232,155,155,0.30)' },
-  normal: { label: '未分類',  color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.20)' },
-  done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
+  normal: { label: '未分類',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
+  done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.06)', border: 'rgba(142,142,147,0.14)' },
 }
 const STATUS_ORDER = ['normal','focus','good','more','done']
 
