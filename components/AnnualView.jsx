@@ -183,20 +183,39 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     if (!annObjs?.length) { setAnnualObjs([]); setQuarterMap({}); setLoading(false); return }
 
     const annIds = annObjs.map(o => o.id)
-    // 新カラム (parent_kr_id / aggregation_type) を含めて SELECT。
-    // SQL 未実行 (列なし) の環境でも壊れないよう、エラー時は従来カラムだけで再取得する。
-    const annSelectFull = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order'
-    const annSelectLegacy = 'id,objective_id,title,target,current,unit,lower_is_better,owner,sort_order'
+    // 新カラム (parent_kr_id / aggregation_type / sort_order) を含めて SELECT。
+    // SQL 未実行 (列なし) の環境でも壊れないよう、エラー時は段階的にフォールバックする。
+    const annSelectFull   = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order'
+    const annSelectMid    = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type'
+    const annSelectMin    = 'id,objective_id,title,target,current,unit,lower_is_better,owner'
+    // Step 1: 全カラム + sort_order で order
     let annKRsRes = await supabase
       .from('key_results').select(annSelectFull).in('objective_id', annIds)
-      .order('sort_order', { ascending: true }).order('id', { ascending: true })
+      .order('sort_order', { ascending: true, nullsFirst: false }).order('id', { ascending: true })
       .range(0, 49999)
-    if (annKRsRes.error && /parent_kr_id|aggregation_type|column/i.test(annKRsRes.error.message || '')) {
-      console.warn('[AnnualView] parent_kr_id / aggregation_type 列が無い環境のため legacy SELECT で再取得 (SQL 未実行)')
+    // Step 2: sort_order が無ければ全カラムから sort_order を抜いて order なしで取得
+    if (annKRsRes.error && /sort_order/i.test(annKRsRes.error.message || '')) {
+      console.warn('[AnnualView] sort_order 列が無い環境のため抜いて再取得 (key_results に ALTER TABLE 推奨)')
       annKRsRes = await supabase
-        .from('key_results').select(annSelectLegacy).in('objective_id', annIds).range(0, 49999)
+        .from('key_results').select(annSelectMid).in('objective_id', annIds).range(0, 49999)
     }
-    const annKRs = annKRsRes.data
+    // Step 3: parent_kr_id / aggregation_type も無ければ最小 SELECT
+    if (annKRsRes.error && /parent_kr_id|aggregation_type|column/i.test(annKRsRes.error.message || '')) {
+      console.warn('[AnnualView] parent_kr_id / aggregation_type 列が無い環境のため最小 SELECT で再取得 (SQL 未実行)')
+      annKRsRes = await supabase
+        .from('key_results').select(annSelectMin).in('objective_id', annIds).range(0, 49999)
+    }
+    if (annKRsRes.error) {
+      console.error('[AnnualView] key_results 取得失敗:', annKRsRes.error)
+    }
+    const annKRs = annKRsRes.data || []
+    // クライアント側で sort_order → id でソート (列が無い環境でも動作)
+    annKRs.sort((a, b) => {
+      const sa = a.sort_order ?? Number.MAX_SAFE_INTEGER
+      const sb = b.sort_order ?? Number.MAX_SAFE_INTEGER
+      if (sa !== sb) return sa - sb
+      return (a.id || 0) - (b.id || 0)
+    })
 
     const annKRMap = {}
     ;(annKRs || []).forEach(kr => {
@@ -219,14 +238,21 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
 
     const qIds = qObjs.map(o => o.id)
-    // 同上: SQL 未実行環境向けのフォールバック
+    // 同上: SQL 未実行環境向けの段階的フォールバック
     let qKRsRes = await supabase
       .from('key_results').select(annSelectFull).in('objective_id', qIds).range(0, 49999)
+    if (qKRsRes.error && /sort_order/i.test(qKRsRes.error.message || '')) {
+      qKRsRes = await supabase
+        .from('key_results').select(annSelectMid).in('objective_id', qIds).range(0, 49999)
+    }
     if (qKRsRes.error && /parent_kr_id|aggregation_type|column/i.test(qKRsRes.error.message || '')) {
       qKRsRes = await supabase
-        .from('key_results').select(annSelectLegacy).in('objective_id', qIds).range(0, 49999)
+        .from('key_results').select(annSelectMin).in('objective_id', qIds).range(0, 49999)
     }
-    const qKRs = qKRsRes.data
+    if (qKRsRes.error) {
+      console.error('[AnnualView] Q期 key_results 取得失敗:', qKRsRes.error)
+    }
+    const qKRs = qKRsRes.data || []
 
     const qKRMap = {}
     ;(qKRs || []).forEach(kr => {
@@ -499,16 +525,19 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return
     const a = list[idx]
     const b = list[targetIdx]
-    // sort_order が両方未設定 (=0) の場合は明示的に index を割り当て直す
     const aSo = (a.sort_order == null) ? idx : a.sort_order
     const bSo = (b.sort_order == null) ? targetIdx : b.sort_order
-    // 同値の場合は ±1 でずらす
     const newA = aSo === bSo ? (direction === 'up' ? aSo - 1 : aSo + 1) : bSo
     const newB = aSo === bSo ? aSo : aSo
     const r1 = await supabase.from('key_results').update({ sort_order: newA }).eq('id', a.id)
     const r2 = await supabase.from('key_results').update({ sort_order: newB }).eq('id', b.id)
     if (r1.error || r2.error) {
-      alert('並び替え失敗: ' + ((r1.error || r2.error).message || ''))
+      const e = (r1.error || r2.error)
+      if (/sort_order/i.test(e.message || '')) {
+        alert('並び替えには key_results.sort_order 列が必要です。\n以下を Supabase で実行してください:\n\nALTER TABLE key_results ADD COLUMN sort_order INT DEFAULT 0;')
+      } else {
+        alert('並び替え失敗: ' + (e.message || ''))
+      }
       return
     }
     if (onDataChanged) await onDataChanged()
