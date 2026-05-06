@@ -1082,6 +1082,65 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         </div>
                       )
                     })}
+                    {/* 既存 KR の有無に関わらず「追加ボタン / インラインフォーム」を表示 */}
+                    {cells.length > 0 && (
+                      addingCell && Number(addingCell.annKrId) === Number(annKr.id) && addingCell.qKey === qKey ? (
+                        // 追加フォーム (既存 KR の下にインライン展開)
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}`, marginTop: 4 }}>
+                          <input autoFocus value={addForm.title}
+                            onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))}
+                            placeholder="KR タイトル" disabled={addSaving}
+                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <input value={addForm.target}
+                              onChange={e => setAddForm(p => ({ ...p, target: e.target.value }))}
+                              placeholder="目標値" type="number" disabled={addSaving}
+                              style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            <input value={addForm.unit}
+                              onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))}
+                              placeholder="単位" disabled={addSaving}
+                              style={{ width: 50, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          </div>
+                          <input value={addForm.owner}
+                            onChange={e => setAddForm(p => ({ ...p, owner: e.target.value }))}
+                            placeholder="担当者 (任意)" disabled={addSaving}
+                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={cancelAddInCell} disabled={addSaving}
+                              style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              ✕ キャンセル
+                            </button>
+                            <button onClick={commitAddInCell} disabled={addSaving}
+                              style={{ flex: 1, fontSize: 10, fontWeight: 700, padding: '4px 6px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: addSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                              {addSaving ? '保存中…' : '✓ 追加'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        // 既存 KR の下に小さい追加ボタン
+                        <button
+                          onClick={() => startAddInCell(annKr, qKey)}
+                          title={`${Q_LABELS[qKey]} にもう1つ KR を追加`}
+                          style={{
+                            fontSize: 10, fontWeight: 700,
+                            color: T().addBtnBg,
+                            textAlign: 'center', padding: '6px',
+                            border: `1px dashed ${T().addBtnBg}80`,
+                            borderRadius: 6,
+                            background: 'transparent', cursor: 'pointer',
+                            fontFamily: 'inherit', width: '100%',
+                            marginTop: 4,
+                            transition: 'background 0.15s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${T().addBtnBg}10` }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <span style={{ fontSize: 12 }}>＋</span>
+                          <span>もう1つ追加</span>
+                        </button>
+                      )
+                    )}
                   </div>
                 )
               })}
