@@ -677,9 +677,11 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     setDragOverPos(null)
   }
   function onAnnRowDragOver(e, annKrId) {
-    if (draggedAnnKrId == null || draggedAnnKrId === annKrId) return
     const types = e.dataTransfer?.types
     if (!types || !Array.from(types).includes('application/ann-row-id')) return
+    // 同一マトリクス内の自分自身ホバーは無視 (別 OKR からのドラッグは
+    // draggedAnnKrId がローカル null なのでこのチェックを通過する)
+    if (draggedAnnKrId === annKrId) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     const rect = e.currentTarget.getBoundingClientRect()
@@ -701,10 +703,16 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     const pos = dragOverPos
     onAnnRowDragEnd()
     if (draggedId === Number(targetId)) return
-    // 新しい並び順を計算
+
+    const fromIdx = annualKRs.findIndex(k => Number(k.id) === draggedId)
+    if (fromIdx < 0) {
+      // 別 OKR からドラッグされた通期 KR → この OKR (ann) に移動
+      await moveAnnualKRToThisOKR(draggedId, targetId, pos)
+      return
+    }
+
+    // 同一 OKR 内のリオーダー
     const list = [...annualKRs]
-    const fromIdx = list.findIndex(k => Number(k.id) === draggedId)
-    if (fromIdx < 0) return
     const [moved] = list.splice(fromIdx, 1)
     let insertIdx = list.findIndex(k => Number(k.id) === Number(targetId))
     if (insertIdx < 0) return
@@ -726,6 +734,96 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       return
     }
     if (onDataChanged) await onDataChanged()
+  }
+
+  // 通期 KR を別 OKR (この MatrixView の ann) に移動する。
+  // 子 Q 期 KR の objective_id も移動先 OKR の Q 期 obj に揃えないと、
+  // 子が「未紐付け」状態になって表示から消える (前例の bug と同じ)。
+  async function moveAnnualKRToThisOKR(annKrId, targetAnnKrId, pos) {
+    setBusy(true)
+    try {
+      // 1. 子 Q 期 KRs を取得
+      const { data: children } = await supabase
+        .from('key_results')
+        .select('id, objective_id')
+        .eq('parent_kr_id', annKrId)
+        .range(0, 999)
+
+      // 2. 子の現在の Q 期 obj から period を取得
+      let childObjs = []
+      if (children?.length) {
+        const childObjIds = [...new Set(children.map(c => c.objective_id).filter(Boolean))]
+        if (childObjIds.length) {
+          const r = await supabase
+            .from('objectives')
+            .select('id, period')
+            .in('id', childObjIds)
+          childObjs = r.data || []
+        }
+      }
+
+      // 3. 移動先 OKR (ann) の Q1〜Q4 obj を find or create
+      const targetQObjByPeriod = {}
+      for (const qKey of Q_KEYS) {
+        let qObj = (qData[qKey] || []).find(o => Number(o.parent_objective_id) === Number(ann.id))
+        if (!qObj) qObj = (qData[qKey] || [])[0]
+        if (!qObj) {
+          const newTitle = `${qKey.toUpperCase()}: ${ann.title}`.slice(0, 200)
+          const { data: ins, error: ie } = await supabase
+            .from('objectives')
+            .insert({ level_id: ann.level_id, parent_objective_id: ann.id, period: qKey, title: newTitle })
+            .select().single()
+          if (ie) { console.warn('Q期Objective作成失敗:', ie.message); continue }
+          qObj = ins
+        }
+        targetQObjByPeriod[qKey] = qObj
+      }
+
+      // 4. 子の objective_id を移動先 Q 期 obj に更新
+      const childUpdates = []
+      for (const child of (children || [])) {
+        const childObj = childObjs.find(o => Number(o.id) === Number(child.objective_id))
+        let period = childObj?.period || ''
+        if (period.includes('_')) period = period.split('_').pop()
+        const tQObj = targetQObjByPeriod[period]
+        if (tQObj && Number(child.objective_id) !== Number(tQObj.id)) {
+          childUpdates.push(
+            supabase.from('key_results').update({ objective_id: tQObj.id }).eq('id', child.id)
+          )
+        }
+      }
+      if (childUpdates.length) await Promise.all(childUpdates)
+
+      // 5. 通期 KR 自体の objective_id を ann.id に更新 + sort_order を target 位置に挿入
+      // sort_order は targetAnnKrId の前後に。簡略化のため list 末尾に追加してから再採番
+      const newList = [...annualKRs]
+      const insertAt = pos === 'after'
+        ? newList.findIndex(k => Number(k.id) === Number(targetAnnKrId)) + 1
+        : Math.max(0, newList.findIndex(k => Number(k.id) === Number(targetAnnKrId)))
+      // 仮レコードで挿入位置を確保
+      newList.splice(insertAt, 0, { id: annKrId })
+
+      if (markSelfAction) markSelfAction()
+      const annUpdate = await supabase
+        .from('key_results')
+        .update({ objective_id: ann.id, sort_order: insertAt })
+        .eq('id', annKrId)
+      if (annUpdate.error) {
+        alert('通期 KR 移動失敗: ' + (annUpdate.error.message || ''))
+        return
+      }
+      // sort_order の周辺を再採番 (差分のみ)
+      const reorderUpdates = newList.map((k, i) => {
+        if (Number(k.id) === Number(annKrId)) return null  // すでに上で update 済み
+        if (k.sort_order === i) return null
+        return supabase.from('key_results').update({ sort_order: i }).eq('id', k.id)
+      }).filter(Boolean)
+      if (reorderUpdates.length) await Promise.all(reorderUpdates)
+
+      if (onDataChanged) await onDataChanged()
+    } finally {
+      setBusy(false)
+    }
   }
 
   // 空セルでクリック → 追加モード起動 (該当の通期 KR からデフォルト値継承)
