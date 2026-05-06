@@ -421,6 +421,35 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   )
 }
 
+// ─── 担当者セレクタ (アイコン + 氏名表示 + メンバー一覧から選択) ─
+function OwnerSelect({ value, onChange, members, T, disabled }) {
+  const m = (members || []).find(x => x.name === value)
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '3px 6px',
+      border: `1px solid ${T.border}`,
+      borderRadius: 6,
+      background: T.bgCard,
+      opacity: disabled ? 0.5 : 1,
+    }}>
+      {m ? <Avatar name={m.name} avatarUrl={m.avatar_url} size={16} />
+         : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)', flexShrink: 0 }} />}
+      <select value={value || ''} onChange={e => onChange(e.target.value)} disabled={disabled}
+        style={{
+          flex: 1, minWidth: 0, fontSize: 11, padding: '2px 0',
+          border: 'none', background: 'transparent', color: T.text,
+          fontFamily: 'inherit', outline: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+          appearance: 'none', WebkitAppearance: 'none',
+        }}>
+        <option value="">担当者なし</option>
+        {(members || []).map(x => <option key={x.id} value={x.name}>{x.name}</option>)}
+      </select>
+      <span style={{ fontSize: 9, color: T.textFaint, flexShrink: 0 }}>▾</span>
+    </div>
+  )
+}
+
 // ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
 function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged }) {
   // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
@@ -872,10 +901,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         placeholder="単位" disabled={editSaving}
                         style={{ width: 44, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                     </div>
-                    <input value={editForm.owner}
-                      onChange={e => setEditForm(p => ({ ...p, owner: e.target.value }))}
-                      placeholder="担当者 (任意)" disabled={editSaving}
-                      style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                    <OwnerSelect value={editForm.owner} onChange={v => setEditForm(p => ({ ...p, owner: v }))}
+                      members={members} T={T()} disabled={editSaving} />
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={() => deleteKr(annKr)} disabled={editSaving}
                         style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid rgba(232,155,155,0.30)`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -968,12 +995,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               disabled={addSaving}
                               style={{ width: 50, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                           </div>
-                          <input
-                            value={addForm.owner}
-                            onChange={e => setAddForm(p => ({ ...p, owner: e.target.value }))}
-                            placeholder="担当者 (任意)"
-                            disabled={addSaving}
-                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <OwnerSelect value={addForm.owner} onChange={v => setAddForm(p => ({ ...p, owner: v }))}
+                            members={members} T={T()} disabled={addSaving} />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button onClick={cancelAddInCell} disabled={addSaving}
                               style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1042,10 +1065,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                                 placeholder="単位" disabled={editSaving}
                                 style={{ width: 44, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             </div>
-                            <input value={editForm.owner}
-                              onChange={e => setEditForm(p => ({ ...p, owner: e.target.value }))}
-                              placeholder="担当者 (任意)" disabled={editSaving}
-                              style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            <OwnerSelect value={editForm.owner} onChange={v => setEditForm(p => ({ ...p, owner: v }))}
+                              members={members} T={T()} disabled={editSaving} />
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button onClick={() => deleteKr(qkr)} disabled={editSaving}
                                 style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || 'rgba(232,155,155,0.30)'}`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1090,6 +1111,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             </div>
                             <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                           </div>
+                          {qkr.owner && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 10, color: T().textMuted }}>
+                              <Avatar name={qkr.owner} avatarUrl={members.find(m => m.name === qkr.owner)?.avatar_url} size={14} />
+                              <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{qkr.owner}</span>
+                            </div>
+                          )}
                           <div style={{ marginTop: 3 }} onClick={e => e.stopPropagation()}>
                             <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
                           </div>
@@ -1115,10 +1142,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               placeholder="単位" disabled={addSaving}
                               style={{ width: 50, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                           </div>
-                          <input value={addForm.owner}
-                            onChange={e => setAddForm(p => ({ ...p, owner: e.target.value }))}
-                            placeholder="担当者 (任意)" disabled={addSaving}
-                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                          <OwnerSelect value={addForm.owner} onChange={v => setAddForm(p => ({ ...p, owner: v }))}
+                            members={members} T={T()} disabled={addSaving} />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button onClick={cancelAddInCell} disabled={addSaving}
                               style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1238,6 +1263,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           </div>
                           <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
+                        {qkr.owner && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 10, color: T().textMuted }}>
+                            <Avatar name={qkr.owner} avatarUrl={members.find(m => m.name === qkr.owner)?.avatar_url} size={14} />
+                            <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{qkr.owner}</span>
+                          </div>
+                        )}
                         <div style={{ marginTop: 4 }}>
                           <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
                         </div>
