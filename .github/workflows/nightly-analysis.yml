@@ -1,0 +1,45 @@
+name: Nightly Analysis (Claude AI)
+
+# 毎日 22:00 JST (= 13:00 UTC) に実行
+# - Claude API でコード解析 → バグ候補 + 改善提案
+# - 結果を GitHub Issue として自動作成 (label: bot/finding)
+# - 既存の open Issue とタイトル一致するものはスキップ (重複防止)
+#
+# 手動実行も可能 (Actions タブから "Run workflow")
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 毎日 22:00 JST
+  workflow_dispatch:        # 手動トリガ
+
+permissions:
+  contents: read
+  issues: write              # Issue 作成権限
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (full history for git log)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 100   # 過去 100 コミット取得
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Run nightly analysis
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          AI_MODEL: ${{ vars.AI_MODEL || 'claude-sonnet-4-5' }}
+          MIN_CONFIDENCE: ${{ vars.MIN_CONFIDENCE || '0.7' }}
+        run: node scripts/nightly-analysis.mjs
