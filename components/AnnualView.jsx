@@ -268,12 +268,23 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     if (!silent) setLoading(true)
 
     const annualKey = toPeriodKey('annual', fiscalYear)
-    const { data: annObjs } = await supabase
+    let annObjsRes = await supabase
       .from('objectives')
-      .select('id,level_id,period,title,owner,parent_objective_id')
+      .select('id,level_id,period,title,owner,parent_objective_id,archived_at')
       .eq('period', annualKey)
+      .is('archived_at', null)  // アーカイブ済みは除外
       .order('level_id,id')
       .range(0, 49999)
+    if (annObjsRes.error && /archived_at|column/i.test(annObjsRes.error.message || '')) {
+      // archived_at 列が無い古い環境のフォールバック
+      annObjsRes = await supabase
+        .from('objectives')
+        .select('id,level_id,period,title,owner,parent_objective_id')
+        .eq('period', annualKey)
+        .order('level_id,id')
+        .range(0, 49999)
+    }
+    const annObjs = annObjsRes.data
 
     if (!annObjs?.length) { setAnnualObjs([]); setQuarterMap({}); setLoading(false); return }
 
@@ -323,12 +334,22 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const qKeys = Q_KEYS.map(q => toPeriodKey(q, fiscalYear))
     // 年度プレフィックスの有無両方で検索（データ不整合対応）
     const allQKeys = [...new Set([...qKeys, ...Q_KEYS, ...Q_KEYS.map(q => `${fiscalYear}_${q}`)])]
-    const { data: qObjs } = await supabase
+    let qObjsRes = await supabase
       .from('objectives')
-      .select('id,level_id,period,title,owner,parent_objective_id')
+      .select('id,level_id,period,title,owner,parent_objective_id,archived_at')
       .in('period', allQKeys)
+      .is('archived_at', null)
       .order('id')
       .range(0, 49999)
+    if (qObjsRes.error && /archived_at|column/i.test(qObjsRes.error.message || '')) {
+      qObjsRes = await supabase
+        .from('objectives')
+        .select('id,level_id,period,title,owner,parent_objective_id')
+        .in('period', allQKeys)
+        .order('id')
+        .range(0, 49999)
+    }
+    const qObjs = qObjsRes.data
 
     if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
 

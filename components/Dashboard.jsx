@@ -633,6 +633,119 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 }
 
 
+// ─── アーカイブ済み OKR 一覧パネル ────────────────────────────────────────
+// archived_at IS NOT NULL の objectives を新しい順に表示し、復元ボタンを提供。
+// 親 OKR (annual) を復元する際は子の Q 期 obj は archived_at を変更しないので、
+// もし子も archive されていたら個別に復元が必要 (現状は親のみアーカイブ前提)。
+function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, refreshKey }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('objectives')
+      .select('id, level_id, period, title, owner, archived_at, parent_objective_id')
+      .not('archived_at', 'is', null)
+      .order('archived_at', { ascending: false })
+      .range(0, 999)
+    if (error) {
+      // archived_at 列が無い古い環境
+      console.warn('[ArchivedOKRPanel] archived_at 列が見つかりません。supabase_objectives_archive.sql を実行してください。', error.message)
+      setItems([])
+    } else {
+      setItems(data || [])
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load, refreshKey])
+
+  const periodLabel = (p) => {
+    const m = (p || '').match(/(annual|q[1-4])$/)
+    if (!m) return p
+    return { annual: '通期', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }[m[1]] || p
+  }
+  const levelOf = (id) => levels.find(l => Number(l.id) === Number(id))?.name || `level=${id}`
+  const memberOf = (name) => members.find(m => m.name === name)
+  const fmtDate = (s) => {
+    if (!s) return ''
+    const d = new Date(s)
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+
+  const handleRestore = async (id) => {
+    setBusyId(id)
+    await onRestore(id)
+    setBusyId(null)
+    load()
+  }
+
+  return (
+    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, letterSpacing: '-0.01em' }}>📦 アーカイブ OKR</h1>
+        <span style={{ fontSize: 12, color: T.textMuted }}>{loading ? '読み込み中…' : `${items.length} 件`}</span>
+        <span style={{ flex: 1 }} />
+        <button onClick={load} title="再読み込み"
+          style={{ background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          ⟳ 更新
+        </button>
+      </div>
+      {!loading && items.length === 0 && (
+        <div style={{ padding: '40px 20px', textAlign: 'center', color: T.textFaint, border: `1px dashed ${T.border}`, borderRadius: 12, background: T.bgCard }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+          <div style={{ fontSize: 13, color: T.textSub }}>アーカイブされた OKR はありません</div>
+        </div>
+      )}
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map(o => {
+            const m = memberOf(o.owner)
+            return (
+              <div key={o.id} style={{
+                background: T.bgCard,
+                border: `1px solid ${T.border}`,
+                borderRadius: 12,
+                padding: '12px 16px',
+                display: 'flex', alignItems: 'center', gap: 12,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub }}>{levelOf(o.level_id)}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub }}>{periodLabel(o.period)}</span>
+                    <span style={{ fontSize: 10, color: T.textMuted }}>アーカイブ日時: {fmtDate(o.archived_at)}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={o.title}>{o.title}</div>
+                  {o.owner && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, fontSize: 11, color: T.textMuted }}>
+                      {m?.avatar_url
+                        ? <img src={m.avatar_url} alt={o.owner} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
+                        : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)' }} />}
+                      <span>{o.owner}</span>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => handleRestore(o.id)} disabled={busyId === o.id}
+                  style={{
+                    background: T.accentSolid, border: 'none', color: '#fff',
+                    borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
+                    cursor: busyId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
+                    whiteSpace: 'nowrap', flexShrink: 0,
+                  }}>
+                  {busyId === o.id ? '復元中…' : '↩ 復元'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ user, onSignOut }) {
   // 現在アクティブな組織。マルチテナント環境で複数 org に所属しているユーザー
@@ -683,7 +796,8 @@ export default function Dashboard({ user, onSignOut }) {
   _T = T
   if (typeof window !== 'undefined') window.__OKR_THEME__ = T
   const [members, setMembers]               = useState([])
-  const [undoDelete, setUndoDelete]         = useState(null) // { objId, obj, krs, timer }
+  const [undoDelete, setUndoDelete]         = useState(null) // { objId, obj, timer, hardDelete? }
+  const [showArchive, setShowArchive]       = useState(false) // OKR 画面をアーカイブ一覧に切替
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -829,9 +943,17 @@ export default function Dashboard({ user, onSignOut }) {
 
   // window経由でRealtimeハンドラからアクセスできるよう公開
   const fetchForLevel = async (levelId, period, year = '2026') => {
-    let query = supabase.from('objectives').select('id,level_id,period,title,owner').eq('level_id', levelId).order('id')
+    let query = supabase.from('objectives').select('id,level_id,period,title,owner,archived_at').eq('level_id', levelId).order('id')
     query = query.eq('period', toPeriodKey(period, year))
-    const { data: objs } = await query
+    let { data: objs, error } = await query
+    if (error && /archived_at|column/i.test(error.message || '')) {
+      // archived_at 列が無い古い環境向けフォールバック
+      const r = await supabase.from('objectives').select('id,level_id,period,title,owner').eq('level_id', levelId).eq('period', toPeriodKey(period, year)).order('id')
+      objs = r.data
+    } else if (objs) {
+      // archived_at IS NOT NULL の行を除外 (アーカイブ済みは表示しない)
+      objs = objs.filter(o => !o.archived_at)
+    }
     if (!objs || objs.length === 0) return []
     const ids = objs.map(o => o.id)
     const { data: rawKrs } = await supabase
@@ -964,39 +1086,71 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   const handleDelete = async (objId) => {
-    // 1. 削除対象のデータをバックアップ
+    // 1. 対象データのバックアップ (Undo トースト用)
     const { data: obj } = await supabase.from('objectives').select('*').eq('id', objId).single()
-    const { data: krs } = await supabase.from('key_results').select('*').eq('objective_id', objId)
     if (!obj) return
 
-    // 2. DBから即削除
-    await supabase.from('key_results').delete().eq('objective_id', objId)
-    await supabase.from('objectives').delete().eq('id', objId)
+    // 2. ソフトデリート: archived_at = NOW() を UPDATE。key_results は触らない
+    //    (親 obj が archived だと表示クエリの in 句に乗らないため自動的に隠れる)
+    const { error: archErr } = await supabase
+      .from('objectives')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', objId)
+    if (archErr) {
+      // archived_at 列が無い古い環境向けフォールバック: 従来どおり DELETE
+      if (/archived_at|column/i.test(archErr.message || '')) {
+        const { data: krs } = await supabase.from('key_results').select('*').eq('objective_id', objId)
+        await supabase.from('key_results').delete().eq('objective_id', objId)
+        await supabase.from('objectives').delete().eq('id', objId)
+        await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+        setAnnualRefreshKey(k => k + 1)
+        if (undoDelete?.timer) clearTimeout(undoDelete.timer)
+        const timer = setTimeout(() => setUndoDelete(null), 10000)
+        setUndoDelete({ objId, obj, krs: krs || [], timer, hardDelete: true })
+        return
+      }
+      alert('アーカイブに失敗しました: ' + archErr.message)
+      return
+    }
 
-    // 3. UI即時更新
+    // 3. UI 即時更新 (archived 行はクエリで自動的に除外される)
     await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
     setAnnualRefreshKey(k => k + 1)
 
-    // 4. 前のundo timerをクリア（あれば即確定）
+    // 4. 前の Undo タイマをクリア
     if (undoDelete?.timer) clearTimeout(undoDelete.timer)
 
-    // 5. undoトースト表示（10秒間）
+    // 5. Undo トースト (10 秒)。10 秒経過しても archived_at は残るため
+    //    「📦 アーカイブ OKR」画面からいつでも復元可能
     const timer = setTimeout(() => setUndoDelete(null), 10000)
-    setUndoDelete({ objId, obj, krs: krs || [], timer })
+    setUndoDelete({ objId, obj, timer })
   }
 
   const handleUndoDelete = async () => {
     if (!undoDelete) return
     clearTimeout(undoDelete.timer)
-    const { obj, krs } = undoDelete
-    // objectives を復元
-    const { id, ...objData } = obj
-    const { data: restored } = await supabase.from('objectives').insert(objData).select().single()
-    if (restored && krs.length) {
-      const krPayloads = krs.map(({ id, objective_id, ...kr }) => ({ ...kr, objective_id: restored.id }))
-      await supabase.from('key_results').insert(krPayloads)
+    if (undoDelete.hardDelete) {
+      // 旧フォールバック (DELETE) 経路: 従来どおり obj + krs を再 INSERT
+      const { obj, krs } = undoDelete
+      const { id, ...objData } = obj
+      const { data: restored } = await supabase.from('objectives').insert(objData).select().single()
+      if (restored && krs?.length) {
+        const krPayloads = krs.map(({ id, objective_id, ...kr }) => ({ ...kr, objective_id: restored.id }))
+        await supabase.from('key_results').insert(krPayloads)
+      }
+    } else {
+      // 通常: archived_at = null に戻すだけ (KR は触ってないので自動復活)
+      await supabase.from('objectives').update({ archived_at: null }).eq('id', undoDelete.objId)
     }
     setUndoDelete(null)
+    await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+    setAnnualRefreshKey(k => k + 1)
+  }
+
+  // アーカイブ済み OKR の復元 (アーカイブ画面の「↩ 復元」ボタンから)
+  const handleRestoreArchived = async (objId) => {
+    const { error } = await supabase.from('objectives').update({ archived_at: null }).eq('id', objId)
+    if (error) { alert('復元に失敗しました: ' + error.message); return }
     await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
     setAnnualRefreshKey(k => k + 1)
   }
@@ -1181,6 +1335,17 @@ export default function Dashboard({ user, onSignOut }) {
               ))}
             </div>
             <div style={{ flex: 1 }} />
+            <button onClick={() => setShowArchive(p => !p)}
+              title={showArchive ? '通常のOKR画面に戻る' : 'アーカイブされたOKRを一覧表示'}
+              style={{
+                background: showArchive ? T.accentSolid : 'transparent',
+                border: `1px solid ${showArchive ? T.accentSolid : T.border}`,
+                color: showArchive ? '#fff' : T.textSub,
+                borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}>
+              {showArchive ? '← 戻る' : '📦 アーカイブ OKR'}
+            </button>
             <button onClick={() => setModal({ type: 'add', obj: { period: 'annual' } })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
               ＋ OKR を追加
             </button>
@@ -1215,8 +1380,13 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
 
+      {/* Archive View (📦 アーカイブ OKR ボタンで切替) */}
+      <div style={{ display: activePage === 'okr' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
+        <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
+          onRestore={handleRestoreArchived} refreshKey={annualRefreshKey} />
+      </div>
       {/* Annual View */}
-      <div style={{ display: activePage === 'okr' && viewMode === 'annual' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1240,7 +1410,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
       {/* Owner View */}
-      <div style={{ display: activePage === 'okr' && viewMode === 'owner' ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1302,7 +1472,7 @@ export default function Dashboard({ user, onSignOut }) {
       )}
       {undoDelete && (
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: T.text, minWidth: 300 }}>
-          <span style={{ flex: 1 }}>「{undoDelete.obj.title?.slice(0, 20)}{undoDelete.obj.title?.length > 20 ? '…' : ''}」を削除しました</span>
+          <span style={{ flex: 1 }}>「{undoDelete.obj.title?.slice(0, 20)}{undoDelete.obj.title?.length > 20 ? '…' : ''}」を{undoDelete.hardDelete ? '削除' : 'アーカイブ'}しました</span>
           <button onClick={handleUndoDelete} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>元に戻す</button>
           <button onClick={() => { clearTimeout(undoDelete.timer); setUndoDelete(null) }} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: '0 4px' }}>✕</button>
         </div>
