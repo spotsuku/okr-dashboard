@@ -1074,13 +1074,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           title="クリックで編集 / ドラッグで他の通期 KR の行に移動"
                           onClick={() => startEditKr(qkr)}
                           style={{
-                            background: cellBg,
-                            borderRadius: 8,
+                            background: `linear-gradient(135deg, ${qkr_r.color}1f 0%, ${qkr_r.color}08 35%, ${cellBg} 70%)`,
+                            borderRadius: 10,
                             padding: '8px 10px',
                             cursor: 'pointer',
-                            border: `1px solid ${T().border}`,
-                            borderLeft: `3px solid ${qkr_r.color}`,
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.04)',
+                            border: `1px solid ${qkr_r.color}26`,
+                            boxShadow: `0 1px 2px rgba(0,0,0,0.03), 0 4px 14px ${qkr_r.color}1f`,
                           }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
                             <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
@@ -1223,13 +1222,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         onDragStart={e => onKRDragStart(e, qkr.id)}
                         title="ドラッグして通期 KR の行に紐付け"
                         style={{
-                          background: cellBg,
-                          borderRadius: 8,
+                          background: `linear-gradient(135deg, ${qkr_r.color}1f 0%, ${qkr_r.color}08 35%, ${cellBg} 70%)`,
+                          borderRadius: 10,
                           padding: '8px 10px',
                           cursor: 'grab',
-                          border: `1px solid ${T().border}`,
-                          borderLeft: `3px solid ${qkr_r.color}`,
-                          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.04)',
+                          border: `1px solid ${qkr_r.color}26`,
+                          boxShadow: `0 1px 2px rgba(0,0,0,0.03), 0 4px 14px ${qkr_r.color}1f`,
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
                           <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
@@ -1252,13 +1250,10 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         onDragStart={e => onKRDragStart(e, qkr.id)}
                         title="ドラッグして通期 KR の行に紐付け"
                         style={{
-                          background: cellBg,
-                          borderRadius: 8,
+                          background: `linear-gradient(135deg, ${T().textFaint}14 0%, ${cellBg} 70%)`,
+                          borderRadius: 10,
                           padding: '7px 9px',
-                          borderLeft: `3px solid ${T().textFaint}`,
-                          border: `1px solid ${T().border}`,
-                          borderLeftWidth: 3,
-                          borderLeftColor: T().textFaint,
+                          border: `1px dashed ${T().textFaint}40`,
                           cursor: 'grab',
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
