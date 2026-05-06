@@ -528,7 +528,9 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 )}
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
                   {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }}
+                    title="この OKR をアーカイブします (アーカイブ画面から復元・完全削除可能)"
+                    style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textSub, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📦 アーカイブ</button>}
                   <div style={{ fontSize: 16, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
                 </div>
               </div>
@@ -1202,7 +1204,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: T().text, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
                   <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
                     {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                    {onDelete && <button onClick={() => onDelete(qObj.id)} style={{ background: T().btnDelBg, border: 'none', color: T().btnDelColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                    {onDelete && <button onClick={() => onDelete(qObj.id)}
+                      title="この Q 期 OKR をアーカイブ"
+                      style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textMuted, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📦</button>}
                   </div>
                 </div>
               )) : (

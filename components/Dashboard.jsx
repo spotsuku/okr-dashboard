@@ -486,11 +486,13 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
               width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>✎</button>
-            <button onClick={e => { e.stopPropagation(); onDelete(obj.id) }} style={{
-              background: getT().warnBg, border: `1px solid ${getT().warnBg}`, color: getT().warn,
-              width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>✕</button>
+            <button onClick={e => { e.stopPropagation(); onDelete(obj.id) }}
+              title="アーカイブ (アーカイブ画面から復元・完全削除可能)"
+              style={{
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: getT().textMuted,
+                width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>📦</button>
             <span style={{ color: getT().textFaint, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
           </div>
         </div>
@@ -637,10 +639,11 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 // archived_at IS NOT NULL の objectives を新しい順に表示し、復元ボタンを提供。
 // 親 OKR (annual) を復元する際は子の Q 期 obj は archived_at を変更しないので、
 // もし子も archive されていたら個別に復元が必要 (現状は親のみアーカイブ前提)。
-function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, refreshKey }) {
+function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, refreshKey }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
+  const [purgingId, setPurgingId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -679,6 +682,13 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, refreshKe
     setBusyId(id)
     await onRestore(id)
     setBusyId(null)
+    load()
+  }
+
+  const handlePurge = async (obj) => {
+    setPurgingId(obj.id)
+    await onPurge(obj)
+    setPurgingId(null)
     load()
   }
 
@@ -728,15 +738,27 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, refreshKe
                     </div>
                   )}
                 </div>
-                <button onClick={() => handleRestore(o.id)} disabled={busyId === o.id}
-                  style={{
-                    background: T.accentSolid, border: 'none', color: '#fff',
-                    borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                    cursor: busyId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
-                    whiteSpace: 'nowrap', flexShrink: 0,
-                  }}>
-                  {busyId === o.id ? '復元中…' : '↩ 復元'}
-                </button>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => handleRestore(o.id)} disabled={busyId === o.id || purgingId === o.id}
+                    style={{
+                      background: T.accentSolid, border: 'none', color: '#fff',
+                      borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
+                      cursor: busyId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {busyId === o.id ? '復元中…' : '↩ 復元'}
+                  </button>
+                  <button onClick={() => handlePurge(o)} disabled={busyId === o.id || purgingId === o.id}
+                    title="完全削除 (DB から物理削除・復元不可)"
+                    style={{
+                      background: 'transparent', border: `1px solid ${T.danger}`, color: T.danger,
+                      borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
+                      cursor: purgingId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {purgingId === o.id ? '削除中…' : '🗑 完全削除'}
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -1155,6 +1177,23 @@ export default function Dashboard({ user, onSignOut }) {
     setAnnualRefreshKey(k => k + 1)
   }
 
+  // アーカイブ済み OKR の完全削除 (DB から物理 DELETE)。アーカイブ画面のみで実行可能。
+  // 紐付く key_results と子 Q 期 objective も明示的に削除する。
+  const handlePurgeArchived = async (obj) => {
+    if (!obj?.id) return
+    const ok = window.confirm(`「${obj.title}」を完全に削除します。\nこの OKR と紐付く KR / 子 Q 期 OKR がすべて DB から消え、復元できなくなります。\n本当に削除しますか？`)
+    if (!ok) return
+    // 1. 子 Q 期 objective も対象 (同じ annual の親) — 子の KR 含めて削除
+    const { data: childObjs } = await supabase.from('objectives').select('id').eq('parent_objective_id', obj.id)
+    const allObjIds = [obj.id, ...((childObjs || []).map(o => o.id))]
+    // 2. 関連 key_results を全削除
+    await supabase.from('key_results').delete().in('objective_id', allObjIds)
+    // 3. objectives を削除
+    const { error } = await supabase.from('objectives').delete().in('id', allObjIds)
+    if (error) { alert('完全削除に失敗しました: ' + error.message); return }
+    setAnnualRefreshKey(k => k + 1)
+  }
+
   const handleLinkGoogle = async () => {
     const { error } = await supabase.auth.linkIdentity({
       provider: 'google',
@@ -1383,7 +1422,7 @@ export default function Dashboard({ user, onSignOut }) {
       {/* Archive View (📦 アーカイブ OKR ボタンで切替) */}
       <div style={{ display: activePage === 'okr' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
         <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
-          onRestore={handleRestoreArchived} refreshKey={annualRefreshKey} />
+          onRestore={handleRestoreArchived} onPurge={handlePurgeArchived} refreshKey={annualRefreshKey} />
       </div>
       {/* Annual View */}
       <div style={{ display: activePage === 'okr' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
