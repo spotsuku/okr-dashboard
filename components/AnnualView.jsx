@@ -63,13 +63,14 @@ let _theme = THEMES.dark
 const T = () => _theme
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+// 評価ラベル → 色 (パステル質感。原色より淡い彩度低め配色で日々使えるトーンに)
 const RATINGS = [
-  { min: 120, label: '奇跡',   color: '#ff9f43' },
-  { min: 110, label: '変革',   color: '#a855f7' },
-  { min: 100, label: '好調',   color: '#00d68f' },
-  { min:  90, label: '順調',   color: '#4d9fff' },
-  { min:  80, label: '最低限', color: '#ffd166' },
-  { min:   0, label: '未達',   color: '#ff6b6b' },
+  { min: 120, label: '奇跡',   color: '#D4B894' },   // pastel gold
+  { min: 110, label: '変革',   color: '#B8A5D1' },   // pastel lavender
+  { min: 100, label: '好調',   color: '#94C4A8' },   // pastel mint
+  { min:  90, label: '順調',   color: '#A5BDD4' },   // pastel powder blue
+  { min:  80, label: '最低限', color: '#E0CC92' },   // pastel buttercup
+  { min:   0, label: '未達',   color: '#D4A89B' },   // pastel peach (赤の代わり、優しい色)
 ]
 const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >= r.min) || RATINGS[RATINGS.length - 1])
 
@@ -93,7 +94,7 @@ function getAbsoluteDepth(levelId, levels) {
 }
 
 // ─── Avatar helpers ─────────────────────────────────────────────────────────
-const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
+const AVATAR_COLORS = ['#4d9fff','#00d68f','#D4A89B','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function avatarColor(name) {
   if (!name) return '#606880'
   let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
@@ -112,10 +113,16 @@ function Avatar({ name, avatarUrl, size = 20 }) {
   )
 }
 
-const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f' }
+const LAYER_COLORS = { 0: '#D4A89B', 1: '#4d9fff', 2: '#00d68f' }
 const Q_KEYS = ['q1', 'q2', 'q3', 'q4']
 const Q_LABELS = { q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
-const Q_COLORS = { q1: '#1d4ed8', q2: '#0a8f5a', q3: '#c2410c', q4: '#7e22ce' }
+// Q期ごとの統一カラー (パステル質感)。進捗評価ではなく Q 期そのものの識別色
+const Q_COLORS = {
+  q1: '#94C4A8',  // pastel mint (春)
+  q2: '#A5BDD4',  // pastel sky (夏)
+  q3: '#D6B894',  // pastel sand (秋)
+  q4: '#B8A5D1',  // pastel lavender (冬)
+}
 
 // 通期 KR の current を子 (parent_kr_id でリンクされた Q 期 KR) から集計
 //   manual:     親の current をそのまま使う (集計しない)
@@ -777,7 +784,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           const qObjs = qObjectives[qKey]
           const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
           const qr = qProg != null ? getRating(qProg) : null
-          const accent = qr?.color || Q_COLORS[qKey]
+          // accent は Q 期そのものの識別色を常に使う (進捗による変色は廃止 — 統一感を優先)
+          const accent = Q_COLORS[qKey]
           return (
             <div key={qKey} style={{
               position: 'sticky', top: 0, zIndex: 4,
@@ -872,7 +880,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={() => deleteKr(annKr)} disabled={editSaving}
-                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid #ff6b6b40`, background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid #D4A89B40`, background: 'transparent', color: '#D4A89B', cursor: 'pointer', fontFamily: 'inherit' }}>
                         削除
                       </button>
                       <div style={{ flex: 1 }} />
@@ -1041,7 +1049,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button onClick={() => deleteKr(qkr)} disabled={editSaving}
-                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || '#ff6b6b40'}`, background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || '#D4A89B40'}`, background: 'transparent', color: '#D4A89B', cursor: 'pointer', fontFamily: 'inherit' }}>
                                 削除
                               </button>
                               <div style={{ flex: 1 }} />
