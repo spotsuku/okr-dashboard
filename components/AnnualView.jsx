@@ -517,26 +517,68 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     if (onDataChanged) await onDataChanged()
   }
 
-  // 通期 KR の並び替え (上/下に1つ移動 = 隣接KRと sort_order を入れ替え)
-  async function moveAnnKr(annKr, direction) {
-    const list = annualKRs
-    const idx = list.findIndex(k => Number(k.id) === Number(annKr.id))
-    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return
-    const a = list[idx]
-    const b = list[targetIdx]
-    const aSo = (a.sort_order == null) ? idx : a.sort_order
-    const bSo = (b.sort_order == null) ? targetIdx : b.sort_order
-    const newA = aSo === bSo ? (direction === 'up' ? aSo - 1 : aSo + 1) : bSo
-    const newB = aSo === bSo ? aSo : aSo
-    const r1 = await supabase.from('key_results').update({ sort_order: newA }).eq('id', a.id)
-    const r2 = await supabase.from('key_results').update({ sort_order: newB }).eq('id', b.id)
-    if (r1.error || r2.error) {
-      const e = (r1.error || r2.error)
-      if (/sort_order/i.test(e.message || '')) {
+  // 通期 KR のドラッグ&ドロップ並び替え
+  // 状態: 何を掴んで / どこにドロップしようとしているか / 上下どちらに挿入か
+  const [draggedAnnKrId, setDraggedAnnKrId] = useState(null)
+  const [dragOverAnnKrId, setDragOverAnnKrId] = useState(null)
+  const [dragOverPos, setDragOverPos] = useState(null)  // 'before' | 'after'
+
+  function onAnnRowDragStart(e, annKrId) {
+    e.dataTransfer.setData('application/ann-row-id', String(annKrId))
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggedAnnKrId(annKrId)
+  }
+  function onAnnRowDragEnd() {
+    setDraggedAnnKrId(null)
+    setDragOverAnnKrId(null)
+    setDragOverPos(null)
+  }
+  function onAnnRowDragOver(e, annKrId) {
+    if (draggedAnnKrId == null || draggedAnnKrId === annKrId) return
+    const types = e.dataTransfer?.types
+    if (!types || !Array.from(types).includes('application/ann-row-id')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pos = (e.clientY - rect.top) < rect.height / 2 ? 'before' : 'after'
+    if (annKrId !== dragOverAnnKrId || pos !== dragOverPos) {
+      setDragOverAnnKrId(annKrId); setDragOverPos(pos)
+    }
+  }
+  function onAnnRowDragLeave(annKrId) {
+    if (dragOverAnnKrId === annKrId) {
+      setDragOverAnnKrId(null); setDragOverPos(null)
+    }
+  }
+  async function onAnnRowDrop(e, targetId) {
+    const draggedIdStr = e.dataTransfer?.getData('application/ann-row-id')
+    if (!draggedIdStr) return
+    e.preventDefault()
+    const draggedId = Number(draggedIdStr)
+    const pos = dragOverPos
+    onAnnRowDragEnd()
+    if (draggedId === Number(targetId)) return
+    // 新しい並び順を計算
+    const list = [...annualKRs]
+    const fromIdx = list.findIndex(k => Number(k.id) === draggedId)
+    if (fromIdx < 0) return
+    const [moved] = list.splice(fromIdx, 1)
+    let insertIdx = list.findIndex(k => Number(k.id) === Number(targetId))
+    if (insertIdx < 0) return
+    if (pos === 'after') insertIdx++
+    list.splice(insertIdx, 0, moved)
+    // 0..N で sort_order を再割り当て (差分のみ更新)
+    const updates = list.map((k, i) => {
+      if (k.sort_order === i) return null
+      return supabase.from('key_results').update({ sort_order: i }).eq('id', k.id)
+    }).filter(Boolean)
+    const results = await Promise.all(updates)
+    const errored = results.find(r => r?.error)
+    if (errored) {
+      if (/sort_order/i.test(errored.error.message || '')) {
         alert('並び替えには key_results.sort_order 列が必要です。\n以下を Supabase で実行してください:\n\nALTER TABLE key_results ADD COLUMN sort_order INT DEFAULT 0;')
       } else {
-        alert('並び替え失敗: ' + (e.message || ''))
+        alert('並び替え失敗: ' + (errored.error.message || ''))
       }
       return
     }
@@ -783,14 +825,25 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           const isEditingAnn = Number(editingKrId) === Number(annKr.id)
           return (
             <Fragment key={annKr.id}>
-              {/* 左列: 通期 KR (sticky) — クリックで編集 */}
+              {/* 左列: 通期 KR (sticky) — クリックで編集 / ドラッグで並び替え */}
               <div style={{
                 position: 'sticky', left: 0, zIndex: 2, background: stickyBg,
                 padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
                 display: 'flex', flexDirection: 'column', gap: 4,
                 cursor: isEditingAnn ? 'default' : 'pointer',
+                opacity: draggedAnnKrId === annKr.id ? 0.4 : 1,
+                // ドロップ位置のラインインジケータ (上 or 下に色付きバー)
+                boxShadow: dragOverAnnKrId === annKr.id
+                  ? (dragOverPos === 'before'
+                      ? `inset 0 3px 0 0 ${T().addBtnBg}`
+                      : `inset 0 -3px 0 0 ${T().addBtnBg}`)
+                  : 'none',
+                transition: 'opacity 0.1s',
               }}
-                onClick={() => { if (!isEditingAnn) startEditKr(annKr) }}>
+                onClick={() => { if (!isEditingAnn) startEditKr(annKr) }}
+                onDragOver={e => onAnnRowDragOver(e, annKr.id)}
+                onDragLeave={() => onAnnRowDragLeave(annKr.id)}
+                onDrop={e => onAnnRowDrop(e, annKr.id)}>
                 {isEditingAnn ? (
                   <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 4, border: `1px solid ${T().addBtnBg}`, borderRadius: 6 }}>
                     <input autoFocus value={editForm.title}
@@ -836,18 +889,17 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                 ) : (
                   <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {/* ドラッグハンドル: ここをつかんで上下にドロップで並び替え */}
+                  <span
+                    draggable
+                    onDragStart={e => { e.stopPropagation(); onAnnRowDragStart(e, annKr.id) }}
+                    onDragEnd={onAnnRowDragEnd}
+                    onClick={e => e.stopPropagation()}
+                    title="ドラッグで並び替え"
+                    style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab', userSelect: 'none', padding: '0 2px' }}>⋮⋮</span>
                   <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${kr_r.color}18`, color: kr_r.color, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span>
                   {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
                   <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }} title={annKr.title}>{annKr.title}</span>
-                  {/* 並び替え (上下) */}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-                    <button onClick={() => moveAnnKr(annKr, 'up')} disabled={krIdx === 0}
-                      title="上に移動"
-                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === 0 ? T().textFaintest : T().textSub, cursor: krIdx === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
-                    <button onClick={() => moveAnnKr(annKr, 'down')} disabled={krIdx === annualKRs.length - 1}
-                      title="下に移動"
-                      style={{ width: 18, height: 12, padding: 0, border: `1px solid ${T().border}`, borderRadius: 3, background: 'transparent', color: krIdx === annualKRs.length - 1 ? T().textFaintest : T().textSub, cursor: krIdx === annualKRs.length - 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
-                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
