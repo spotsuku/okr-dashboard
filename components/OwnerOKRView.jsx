@@ -396,7 +396,9 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                     )}
                     <div style={{ display: 'flex', gap: 4 }}>
                       {onEdit && <button onClick={() => onEdit(obj)} style={{ background: T().btnEditBg, border: `1px solid ${T().btnEditBorder}`, color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                      {onDelete && <button onClick={() => onDelete(obj.id)} style={{ background: T().btnDelBg, border: `1px solid ${T().btnDelBorder}`, color: T().btnDelColor, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>}
+                      {onDelete && <button onClick={() => onDelete(obj.id)}
+                        title="アーカイブ (アーカイブ画面から復元・完全削除可能)"
+                        style={{ background: 'rgba(0,0,0,0.05)', border: `1px solid ${T().border}`, color: T().textSub, borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>📦 アーカイブ</button>}
                     </div>
                   </div>
                 </div>
