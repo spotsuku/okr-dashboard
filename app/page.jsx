@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { OrgProvider } from '../lib/orgContext'
 import LoginPage from '../components/LoginPage'
 import Dashboard from '../components/Dashboard'
 
@@ -87,5 +88,9 @@ export default function Page() {
     return <LoginPage />
   }
 
-  return <Dashboard user={user} onSignOut={handleSignOut} />
+  return (
+    <OrgProvider user={user}>
+      <Dashboard user={user} onSignOut={handleSignOut} />
+    </OrgProvider>
+  )
 }
