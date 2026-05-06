@@ -739,11 +739,49 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   function onCellDragLeave(cellKey) {
     if (dragOverCell === cellKey) setDragOverCell(null)
   }
-  function onCellDrop(e, parentId) {
+  function onCellDrop(e, parentId, qKey) {
     e.preventDefault()
     setDragOverCell(null)
     const qkrId = Number(e.dataTransfer.getData('application/kr-id'))
-    if (qkrId) setParent(qkrId, parentId)
+    if (!qkrId) return
+    if (parentId == null || !qKey) {
+      // 未紐付け化 or qKey 不明 → parent_kr_id だけ更新 (従来挙動)
+      setParent(qkrId, parentId)
+      return
+    }
+    // 通常 cell 上ドロップ: parent_kr_id + objective_id を一緒に揃える。
+    // objective_id を移動先 OKR の Q 期 obj に揃えないと、別 OKR を跨いだ
+    // ときに移動先の matrix の qData に乗らず KR が消えたように見える。
+    moveKrIntoCell(qkrId, parentId, qKey)
+  }
+
+  // KR を「移動先 OKR (ann) の qKey セル」に確実に移動する
+  async function moveKrIntoCell(qkrId, parentId, qKey) {
+    // 移動先 OKR (ann) の Q 期 Objective を確保 (なければ新規作成)
+    let qObj = (qData[qKey] || []).find(o => Number(o.parent_objective_id) === Number(ann.id))
+    if (!qObj) qObj = (qData[qKey] || [])[0]
+    if (!qObj) {
+      const newTitle = `${qKey.toUpperCase()}: ${ann.title}`.slice(0, 200)
+      const { data: ins, error: e1 } = await supabase
+        .from('objectives')
+        .insert({
+          level_id: ann.level_id,
+          parent_objective_id: ann.id,
+          period: qKey,
+          title: newTitle,
+        })
+        .select().single()
+      if (e1) { alert('Q期Objective作成失敗: ' + e1.message); return }
+      qObj = ins
+    }
+    setBusy(true)
+    const { error } = await supabase.from('key_results').update({
+      parent_kr_id: parentId,
+      objective_id: qObj.id,
+    }).eq('id', qkrId)
+    setBusy(false)
+    if (error) { alert('移動失敗: ' + (error.message || '')); return }
+    if (onDataChanged) await onDataChanged()
   }
 
   // Q 期 KR カード上にドラッグした時の並び替え検知 (同一セル内の siblings 限定)
@@ -1041,7 +1079,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   <div key={qKey}
                     onDragOver={e => onCellDragOver(e, cellKey)}
                     onDragLeave={() => onCellDragLeave(cellKey)}
-                    onDrop={e => onCellDrop(e, annKr.id)}
+                    onDrop={e => onCellDrop(e, annKr.id, qKey)}
                     style={{
                       padding: 8, borderBottom: `1px solid ${T().border}`,
                       borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
