@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { COMMON_TOKENS } from '../lib/themeTokens'
@@ -182,8 +182,84 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   const [quarterMap, setQuarterMap] = useState({})
   const [expanded,   setExpanded]   = useState({})
   const [loading,    setLoading]    = useState(true)
+  // 自己アクション直後 (500ms 以内) の Realtime 由来 reload はスキップする。
+  // ローカル state を楽観更新で先に書き換えているため、二重 reload しなくても
+  // UI は最新の状態になっている。これで KR 移動後の「一瞬消える」フラッシュが消える。
+  const lastSelfActionRef = useRef(0)
 
-  useEffect(() => { loadAll() }, [refreshKey, fiscalYear]) // eslint-disable-line
+  // 初回マウント + 年度切替: 全画面ローディング表示で fresh load
+  // それ以降の refreshKey 変更 (Supabase Realtime 起因 / 保存後の裏再取得):
+  //   silent モードで現在の DOM を維持したまま差分だけ反映 → ページがチカチカしない
+  useEffect(() => { loadAll(false) }, [fiscalYear]) // eslint-disable-line
+  useEffect(() => {
+    if (refreshKey === 0) return  // 初回マウントは fiscalYear 側に任せる
+    // 自己アクション直後の Realtime echo は無視 (楽観更新済みなので不要)
+    if (Date.now() - lastSelfActionRef.current < 800) return
+    loadAll(true)
+  }, [refreshKey]) // eslint-disable-line
+
+  // ─── 楽観更新: KR の cell 間移動 (DB 反映を待たずに UI を先に書き換え) ─
+  // newObjId / newParentKrId は DB 反映後の最終値と一致させる必要がある。
+  const optimisticMoveKR = useCallback((qkrId, newObjId, newParentKrId) => {
+    setQuarterMap(prev => {
+      // 元の場所から KR を取り除き、新しい qObj.key_results に追加する
+      let movedKr = null
+      const next = {}
+      for (const annId of Object.keys(prev)) {
+        next[annId] = {}
+        for (const qk of Q_KEYS) {
+          next[annId][qk] = (prev[annId][qk] || []).map(qObj => {
+            const krs = qObj.key_results || []
+            const idx = krs.findIndex(k => Number(k.id) === Number(qkrId))
+            if (idx < 0) return qObj
+            movedKr = krs[idx]
+            return { ...qObj, key_results: krs.filter((_, i) => i !== idx) }
+          })
+        }
+      }
+      if (!movedKr) return prev
+      // 更新後の値を反映
+      const updatedKr = { ...movedKr, parent_kr_id: newParentKrId, objective_id: newObjId }
+      // 新しい qObj を探して push
+      let placed = false
+      for (const annId of Object.keys(next)) {
+        for (const qk of Q_KEYS) {
+          next[annId][qk] = next[annId][qk].map(qObj => {
+            if (placed || Number(qObj.id) !== Number(newObjId)) return qObj
+            placed = true
+            return { ...qObj, key_results: [...(qObj.key_results || []), updatedKr] }
+          })
+        }
+      }
+      // 移動先 qObj が見つからない場合は ↑ で削除した KR を戻す (古い場所維持)
+      if (!placed) return prev
+      return next
+    })
+  }, [])
+
+  // ─── 楽観更新: 同一 cell 内 sort_order 並び替え ─
+  const optimisticReorderKRs = useCallback((qObjId, orderedIds) => {
+    setQuarterMap(prev => {
+      const next = {}
+      for (const annId of Object.keys(prev)) {
+        next[annId] = {}
+        for (const qk of Q_KEYS) {
+          next[annId][qk] = (prev[annId][qk] || []).map(qObj => {
+            if (Number(qObj.id) !== Number(qObjId)) return qObj
+            const byId = new Map((qObj.key_results || []).map(k => [Number(k.id), k]))
+            const reordered = orderedIds.map((id, i) => {
+              const k = byId.get(Number(id))
+              return k ? { ...k, sort_order: i } : null
+            }).filter(Boolean)
+            return { ...qObj, key_results: reordered }
+          })
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const markSelfAction = useCallback(() => { lastSelfActionRef.current = Date.now() }, [])
 
   // silent=true で呼ばれた場合は loading 状態を切り替えない (KR 保存後の裏再取得用)。
   // 全画面「読み込み中…」に切り替わると DOM が一旦空になり、スクロール位置が
@@ -272,6 +348,14 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       console.error('[AnnualView] Q期 key_results 取得失敗:', qKRsRes.error)
     }
     const qKRs = qKRsRes.data || []
+    // 通期 KR と同様にクライアント側で sort_order → id でソート (sort_order 列が
+    // 無い環境でも動作)。これがないと並び替え後の順序が UI に反映されない。
+    qKRs.sort((a, b) => {
+      const sa = a.sort_order ?? Number.MAX_SAFE_INTEGER
+      const sb = b.sort_order ?? Number.MAX_SAFE_INTEGER
+      if (sa !== sb) return sa - sb
+      return (a.id || 0) - (b.id || 0)
+    })
 
     const qKRMap = {}
     ;(qKRs || []).forEach(kr => {
@@ -409,7 +493,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 <MatrixView
                   T={T} ann={ann} qData={qData} members={members}
                   onEdit={onEdit} onDelete={onDelete} handleAddQ={handleAddQ}
-                  onDataChanged={() => loadAll(true)}
+                  onDataChanged={async () => { markSelfAction(); await loadAll(true) }}
+                  optimisticMoveKR={optimisticMoveKR}
+                  optimisticReorderKRs={optimisticReorderKRs}
+                  markSelfAction={markSelfAction}
                 />
               </div>
             )}
@@ -451,7 +538,7 @@ function OwnerSelect({ value, onChange, members, T, disabled }) {
 }
 
 // ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
-function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged }) {
+function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged, optimisticMoveKR, optimisticReorderKRs, markSelfAction }) {
   // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
   const qKRsByParent = {}  // { [annKrId]: { q1: [...], q2: [...], q3: [...], q4: [...] } }
   const qKRsUnmapped = { q1: [], q2: [], q3: [], q4: [] }
@@ -700,6 +787,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
 
   // parent_kr_id を変更 (DnD / 自動紐付けから呼ばれる)
   async function setParent(qkrId, parentId) {
+    if (markSelfAction) markSelfAction()
     setBusy(true)
     const { error } = await supabase.from('key_results').update({ parent_kr_id: parentId || null }).eq('id', qkrId)
     setBusy(false)
@@ -724,11 +812,58 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   function onCellDragLeave(cellKey) {
     if (dragOverCell === cellKey) setDragOverCell(null)
   }
-  function onCellDrop(e, parentId) {
+  function onCellDrop(e, parentId, qKey) {
     e.preventDefault()
     setDragOverCell(null)
     const qkrId = Number(e.dataTransfer.getData('application/kr-id'))
-    if (qkrId) setParent(qkrId, parentId)
+    if (!qkrId) return
+    if (parentId == null || !qKey) {
+      // 未紐付け化 or qKey 不明 → parent_kr_id だけ更新 (従来挙動)
+      setParent(qkrId, parentId)
+      return
+    }
+    // 通常 cell 上ドロップ: parent_kr_id + objective_id を一緒に揃える。
+    // objective_id を移動先 OKR の Q 期 obj に揃えないと、別 OKR を跨いだ
+    // ときに移動先の matrix の qData に乗らず KR が消えたように見える。
+    moveKrIntoCell(qkrId, parentId, qKey)
+  }
+
+  // KR を「移動先 OKR (ann) の qKey セル」に確実に移動する
+  async function moveKrIntoCell(qkrId, parentId, qKey) {
+    // 移動先 OKR (ann) の Q 期 Objective を確保 (なければ新規作成)
+    let qObj = (qData[qKey] || []).find(o => Number(o.parent_objective_id) === Number(ann.id))
+    if (!qObj) qObj = (qData[qKey] || [])[0]
+    if (!qObj) {
+      const newTitle = `${qKey.toUpperCase()}: ${ann.title}`.slice(0, 200)
+      const { data: ins, error: e1 } = await supabase
+        .from('objectives')
+        .insert({
+          level_id: ann.level_id,
+          parent_objective_id: ann.id,
+          period: qKey,
+          title: newTitle,
+        })
+        .select().single()
+      if (e1) { alert('Q期Objective作成失敗: ' + e1.message); return }
+      qObj = ins
+    }
+    // 楽観更新: DB を待たず UI 上で即座に移動先に表示する
+    if (markSelfAction) markSelfAction()
+    if (optimisticMoveKR) optimisticMoveKR(qkrId, qObj.id, parentId)
+    setBusy(true)
+    const { error } = await supabase.from('key_results').update({
+      parent_kr_id: parentId,
+      objective_id: qObj.id,
+    }).eq('id', qkrId)
+    setBusy(false)
+    if (error) {
+      alert('移動失敗: ' + (error.message || ''))
+      // 失敗時は full reload で正しい state に戻す
+      if (onDataChanged) await onDataChanged()
+      return
+    }
+    // 成功時は楽観更新済みなので明示的な reload は不要
+    // (Realtime echo は markSelfAction によりスキップされる)
   }
 
   // Q 期 KR カード上にドラッグした時の並び替え検知 (同一セル内の siblings 限定)
@@ -763,13 +898,19 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     // dragged が同一セルの sibling かどうかで分岐
     const fromIdx = (siblings || []).findIndex(k => Number(k.id) === draggedId)
     if (fromIdx < 0) {
-      // 別セルから来た → 親と Q 期を targetQkr に揃える (= parent_kr_id 変更 + objective_id 変更)
+      // 別セルから来た → 親と Q 期を targetQkr に揃える (= parent_kr_id + objective_id 変更)
       const targetParent = targetQkr.parent_kr_id ?? null
-      await supabase.from('key_results').update({
+      // 楽観更新で UI を先に書き換え
+      if (markSelfAction) markSelfAction()
+      if (optimisticMoveKR) optimisticMoveKR(draggedId, targetQkr.objective_id, targetParent)
+      const { error } = await supabase.from('key_results').update({
         parent_kr_id: targetParent,
         objective_id: targetQkr.objective_id,
       }).eq('id', draggedId)
-      if (onDataChanged) await onDataChanged()
+      if (error) {
+        alert('移動失敗: ' + (error.message || ''))
+        if (onDataChanged) await onDataChanged()  // ロールバック用フル reload
+      }
       return
     }
     // 同一セル内の並び替え
@@ -778,6 +919,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     let insertIdx = list.findIndex(k => Number(k.id) === Number(targetQkr.id))
     if (pos === 'after') insertIdx++
     list.splice(insertIdx, 0, moved)
+    // 楽観更新: ローカル state の sort_order を即時反映
+    if (markSelfAction) markSelfAction()
+    if (optimisticReorderKRs) optimisticReorderKRs(targetQkr.objective_id, list.map(k => k.id))
     const updates = list.map((k, i) => {
       if (k.sort_order === i) return null
       return supabase.from('key_results').update({ sort_order: i }).eq('id', k.id)
@@ -790,9 +934,10 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       } else {
         alert('並び替え失敗: ' + (errored.error.message || ''))
       }
+      if (onDataChanged) await onDataChanged()  // ロールバック
       return
     }
-    if (onDataChanged) await onDataChanged()
+    // 成功時は楽観更新済みなので reload 不要
   }
 
   // CSS スティッキ用の色: 横スクロール時に右側の Q セルが透けないよう
@@ -1026,7 +1171,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   <div key={qKey}
                     onDragOver={e => onCellDragOver(e, cellKey)}
                     onDragLeave={() => onCellDragLeave(cellKey)}
-                    onDrop={e => onCellDrop(e, annKr.id)}
+                    onDrop={e => onCellDrop(e, annKr.id, qKey)}
                     style={{
                       padding: 8, borderBottom: `1px solid ${T().border}`,
                       borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
