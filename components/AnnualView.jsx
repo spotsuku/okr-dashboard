@@ -175,7 +175,7 @@ function getDescendantIds(levelId, levels) {
 }
 
 // ─── AnnualView ─────────────────────────────────────────────────────────────
-export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey, fiscalYear = '2026', themeKey = 'dark', activeLevelId, members = [] }) {
+export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey, fiscalYear = '2026', themeKey = 'dark', activeLevelId, members = [], canEditOKR = true }) {
   _theme = THEMES[themeKey] || THEMES.dark
 
   const [annualObjs, setAnnualObjs] = useState([])
@@ -542,6 +542,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 <MatrixView
                   T={T} ann={ann} qData={qData} members={members}
                   onEdit={onEdit} onDelete={onDelete} handleAddQ={handleAddQ}
+                  canEditOKR={canEditOKR}
                   onDataChanged={async () => { markSelfAction(); await loadAll(true) }}
                   optimisticMoveKR={optimisticMoveKR}
                   optimisticReorderKRs={optimisticReorderKRs}
@@ -588,7 +589,7 @@ function OwnerSelect({ value, onChange, members, T, disabled }) {
 }
 
 // ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
-function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged, optimisticMoveKR, optimisticReorderKRs, optimisticMoveAnnualKR, markSelfAction }) {
+function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged, optimisticMoveKR, optimisticReorderKRs, optimisticMoveAnnualKR, markSelfAction, canEditOKR = true }) {
   // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
   const qKRsByParent = {}  // { [annKrId]: { q1: [...], q2: [...], q3: [...], q4: [...] } }
   const qKRsUnmapped = { q1: [], q2: [], q3: [], q4: [] }
@@ -632,6 +633,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   const [editSaving, setEditSaving] = useState(false)
 
   function startEditKr(qkr) {
+    if (!canEditOKR) return  // member ロールは KR 編集不可 (閲覧のみ)
     setAddingCell(null)
     setEditingKrId(qkr.id)
     setEditForm({
@@ -696,6 +698,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   const [dragOverQKrPos, setDragOverQKrPos] = useState(null)  // 'before' | 'after'
 
   function onAnnRowDragStart(e, annKrId) {
+    if (!canEditOKR) { e.preventDefault(); return }
     e.dataTransfer.setData('application/ann-row-id', String(annKrId))
     e.dataTransfer.effectAllowed = 'move'
     setDraggedAnnKrId(annKrId)
@@ -868,6 +871,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
 
   // 空セルでクリック → 追加モード起動 (該当の通期 KR からデフォルト値継承)
   function startAddInCell(annKr, qKey) {
+    if (!canEditOKR) return  // member ロールは KR 追加不可
     setAddingCell({ annKrId: annKr.id, qKey })
     setAddForm({
       title: '',
@@ -959,6 +963,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
 
   // DnD: KR ドラッグ開始時に id を持たせる
   function onKRDragStart(e, qkrId) {
+    if (!canEditOKR) { e.preventDefault(); return }
     e.dataTransfer.setData('application/kr-id', String(qkrId))
     e.dataTransfer.effectAllowed = 'move'
   }
@@ -1114,7 +1119,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
         const mappedTotal = Object.values(qKRsByParent).reduce((s, q) => s + Object.values(q).reduce((s2, arr) => s2 + arr.length, 0), 0)
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-            {hasUnmapped && annualKRs.length > 0 && (
+            {canEditOKR && hasUnmapped && annualKRs.length > 0 && (
               <button onClick={() => setShowAutoLink(true)} disabled={busy}
                 style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                 🔗 自動紐付け候補
@@ -1210,9 +1215,11 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   </div>
                 </div>
               )) : (
-                <button onClick={() => handleAddQ(ann.id, qKey, ann.level_id)} style={{ background: 'transparent', border: `1px dashed ${T().borderDash}`, color: T().textFaint, borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  ＋ {Q_LABELS[qKey]} OKR を作成
-                </button>
+                canEditOKR && (
+                  <button onClick={() => handleAddQ(ann.id, qKey, ann.level_id)} style={{ background: 'transparent', border: `1px dashed ${T().borderDash}`, color: T().textFaint, borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    ＋ {Q_LABELS[qKey]} OKR を作成
+                  </button>
+                )
               )}
             </div>
           )
@@ -1382,7 +1389,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           </div>
                         </div>
                       ) : (
-                        // 通常の空セル: クリックで追加モード
+                        // 通常の空セル: クリックで追加モード (member ロールは非表示)
+                        canEditOKR && (
                         <button
                           onClick={() => startAddInCell(annKr, qKey)}
                           title={`${Q_LABELS[qKey]} の KR を追加 (この通期 KR に紐付け)`}
@@ -1408,6 +1416,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             </>
                           )}
                         </button>
+                        )
                       )
                     ) : cells.map(qkr => {
                       const qkp = qkr.target > 0
@@ -1504,8 +1513,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         </div>
                       )
                     })}
-                    {/* 既存 KR の有無に関わらず「追加ボタン / インラインフォーム」を表示 */}
-                    {cells.length > 0 && (
+                    {/* 既存 KR の有無に関わらず「追加ボタン / インラインフォーム」を表示 (member は非表示) */}
+                    {canEditOKR && cells.length > 0 && (
                       addingCell && Number(addingCell.annKrId) === Number(annKr.id) && addingCell.qKey === qKey ? (
                         // 追加フォーム (既存 KR の下にインライン展開)
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}`, marginTop: 4 }}>

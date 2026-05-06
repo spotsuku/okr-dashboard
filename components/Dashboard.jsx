@@ -775,6 +775,10 @@ export default function Dashboard({ user, onSignOut }) {
   // levels / members など全データクエリをこの id で絞ることで他 org のデータが
   // 混ざらないようにする (RLS は両 org を許容するためフロント側で明示フィルタ必須)。
   const { currentOrg } = useCurrentOrg()
+  // OKR / KR の追加・編集・アーカイブ・並び替え等のミューテーションは
+  // owner / admin ロールのみに許可。member は閲覧のみ。
+  // KA (KASection / weekly_reports) は対象外で従来どおり全員編集可。
+  const canEditOKR = ['owner', 'admin'].includes(currentOrg?.role)
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(() => {
@@ -1374,20 +1378,29 @@ export default function Dashboard({ user, onSignOut }) {
               ))}
             </div>
             <div style={{ flex: 1 }} />
-            <button onClick={() => setShowArchive(p => !p)}
-              title={showArchive ? '通常のOKR画面に戻る' : 'アーカイブされたOKRを一覧表示'}
-              style={{
-                background: showArchive ? T.accentSolid : 'transparent',
-                border: `1px solid ${showArchive ? T.accentSolid : T.border}`,
-                color: showArchive ? '#fff' : T.textSub,
-                borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-              }}>
-              {showArchive ? '← 戻る' : '📦 アーカイブ OKR'}
-            </button>
-            <button onClick={() => setModal({ type: 'add', obj: { period: 'annual' } })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-              ＋ OKR を追加
-            </button>
+            {canEditOKR && (
+              <>
+                <button onClick={() => setShowArchive(p => !p)}
+                  title={showArchive ? '通常のOKR画面に戻る' : 'アーカイブされたOKRを一覧表示'}
+                  style={{
+                    background: showArchive ? T.accentSolid : 'transparent',
+                    border: `1px solid ${showArchive ? T.accentSolid : T.border}`,
+                    color: showArchive ? '#fff' : T.textSub,
+                    borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  }}>
+                  {showArchive ? '← 戻る' : '📦 アーカイブ OKR'}
+                </button>
+                <button onClick={() => setModal({ type: 'add', obj: { period: 'annual' } })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  ＋ OKR を追加
+                </button>
+              </>
+            )}
+            {!canEditOKR && (
+              <span style={{ fontSize: 11, color: T.textMuted }} title="OKR / KR の編集には組織の admin / owner ロールが必要です">
+                👁 閲覧のみ
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -1440,11 +1453,12 @@ export default function Dashboard({ user, onSignOut }) {
             fiscalYear={fiscalYear}
             themeKey={themeKey}
             activeLevelId={activeLevelId}
-            onAddObjective={({ parentObjectiveId, period, level_id }) => {
+            canEditOKR={canEditOKR}
+            onAddObjective={canEditOKR ? ({ parentObjectiveId, period, level_id }) => {
               setModal({ type: 'add', obj: { parent_objective_id: parentObjectiveId, period, level_id } })
-            }}
-            onEdit={obj => setModal({ type: 'edit', obj })}
-            onDelete={handleDelete}
+            } : null}
+            onEdit={canEditOKR ? (obj => setModal({ type: 'edit', obj })) : null}
+            onDelete={canEditOKR ? handleDelete : null}
           />
         </div>
       </div>
@@ -1481,8 +1495,8 @@ export default function Dashboard({ user, onSignOut }) {
             levels={levels}
             fiscalYear={fiscalYear}
             themeKey={themeKey}
-            onEdit={obj => setModal({ type: 'edit', obj })}
-            onDelete={handleDelete}
+            onEdit={canEditOKR ? (obj => setModal({ type: 'edit', obj })) : null}
+            onDelete={canEditOKR ? handleDelete : null}
             refreshKey={annualRefreshKey}
           />
         </div>
