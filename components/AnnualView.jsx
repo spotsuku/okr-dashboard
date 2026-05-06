@@ -261,6 +261,32 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
   const markSelfAction = useCallback(() => { lastSelfActionRef.current = Date.now() }, [])
 
+  // ─── 楽観更新: 通期 KR を別 OKR に移動 (annualObjs を直接更新) ─
+  // children の Q 期 KR は別途 optimisticMoveKR で移動する
+  const optimisticMoveAnnualKR = useCallback((annKrId, toAnnObjId, insertIdx) => {
+    setAnnualObjs(prev => {
+      let movedKr = null
+      const next = prev.map(annObj => {
+        const krs = annObj.key_results || []
+        const idx = krs.findIndex(k => Number(k.id) === Number(annKrId))
+        if (idx < 0) return annObj
+        movedKr = krs[idx]
+        return { ...annObj, key_results: krs.filter((_, i) => i !== idx) }
+      })
+      if (!movedKr) return prev
+      const updatedKr = { ...movedKr, objective_id: toAnnObjId }
+      return next.map(annObj => {
+        if (Number(annObj.id) !== Number(toAnnObjId)) return annObj
+        const krs = [...(annObj.key_results || [])]
+        const safeIdx = Math.max(0, Math.min(insertIdx, krs.length))
+        krs.splice(safeIdx, 0, updatedKr)
+        // sort_order を 0..N で再採番
+        const reordered = krs.map((k, i) => ({ ...k, sort_order: i }))
+        return { ...annObj, key_results: reordered }
+      })
+    })
+  }, [])
+
   // silent=true で呼ばれた場合は loading 状態を切り替えない (KR 保存後の裏再取得用)。
   // 全画面「読み込み中…」に切り替わると DOM が一旦空になり、スクロール位置が
   // 先頭に戻ってしまうため、保存系のフローからは silent で呼ぶ。
@@ -268,12 +294,23 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     if (!silent) setLoading(true)
 
     const annualKey = toPeriodKey('annual', fiscalYear)
-    const { data: annObjs } = await supabase
+    let annObjsRes = await supabase
       .from('objectives')
-      .select('id,level_id,period,title,owner,parent_objective_id')
+      .select('id,level_id,period,title,owner,parent_objective_id,archived_at')
       .eq('period', annualKey)
+      .is('archived_at', null)  // アーカイブ済みは除外
       .order('level_id,id')
       .range(0, 49999)
+    if (annObjsRes.error && /archived_at|column/i.test(annObjsRes.error.message || '')) {
+      // archived_at 列が無い古い環境のフォールバック
+      annObjsRes = await supabase
+        .from('objectives')
+        .select('id,level_id,period,title,owner,parent_objective_id')
+        .eq('period', annualKey)
+        .order('level_id,id')
+        .range(0, 49999)
+    }
+    const annObjs = annObjsRes.data
 
     if (!annObjs?.length) { setAnnualObjs([]); setQuarterMap({}); setLoading(false); return }
 
@@ -323,12 +360,22 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const qKeys = Q_KEYS.map(q => toPeriodKey(q, fiscalYear))
     // 年度プレフィックスの有無両方で検索（データ不整合対応）
     const allQKeys = [...new Set([...qKeys, ...Q_KEYS, ...Q_KEYS.map(q => `${fiscalYear}_${q}`)])]
-    const { data: qObjs } = await supabase
+    let qObjsRes = await supabase
       .from('objectives')
-      .select('id,level_id,period,title,owner,parent_objective_id')
+      .select('id,level_id,period,title,owner,parent_objective_id,archived_at')
       .in('period', allQKeys)
+      .is('archived_at', null)
       .order('id')
       .range(0, 49999)
+    if (qObjsRes.error && /archived_at|column/i.test(qObjsRes.error.message || '')) {
+      qObjsRes = await supabase
+        .from('objectives')
+        .select('id,level_id,period,title,owner,parent_objective_id')
+        .in('period', allQKeys)
+        .order('id')
+        .range(0, 49999)
+    }
+    const qObjs = qObjsRes.data
 
     if (!qObjs?.length) { setQuarterMap({}); setLoading(false); return }
 
@@ -496,6 +543,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                   onDataChanged={async () => { markSelfAction(); await loadAll(true) }}
                   optimisticMoveKR={optimisticMoveKR}
                   optimisticReorderKRs={optimisticReorderKRs}
+                  optimisticMoveAnnualKR={optimisticMoveAnnualKR}
                   markSelfAction={markSelfAction}
                 />
               </div>
@@ -538,7 +586,7 @@ function OwnerSelect({ value, onChange, members, T, disabled }) {
 }
 
 // ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
-function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged, optimisticMoveKR, optimisticReorderKRs, markSelfAction }) {
+function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged, optimisticMoveKR, optimisticReorderKRs, optimisticMoveAnnualKR, markSelfAction }) {
   // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
   const qKRsByParent = {}  // { [annKrId]: { q1: [...], q2: [...], q3: [...], q4: [...] } }
   const qKRsUnmapped = { q1: [], q2: [], q3: [], q4: [] }
@@ -656,9 +704,11 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     setDragOverPos(null)
   }
   function onAnnRowDragOver(e, annKrId) {
-    if (draggedAnnKrId == null || draggedAnnKrId === annKrId) return
     const types = e.dataTransfer?.types
     if (!types || !Array.from(types).includes('application/ann-row-id')) return
+    // 同一マトリクス内の自分自身ホバーは無視 (別 OKR からのドラッグは
+    // draggedAnnKrId がローカル null なのでこのチェックを通過する)
+    if (draggedAnnKrId === annKrId) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     const rect = e.currentTarget.getBoundingClientRect()
@@ -680,10 +730,16 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     const pos = dragOverPos
     onAnnRowDragEnd()
     if (draggedId === Number(targetId)) return
-    // 新しい並び順を計算
+
+    const fromIdx = annualKRs.findIndex(k => Number(k.id) === draggedId)
+    if (fromIdx < 0) {
+      // 別 OKR からドラッグされた通期 KR → この OKR (ann) に移動
+      await moveAnnualKRToThisOKR(draggedId, targetId, pos)
+      return
+    }
+
+    // 同一 OKR 内のリオーダー
     const list = [...annualKRs]
-    const fromIdx = list.findIndex(k => Number(k.id) === draggedId)
-    if (fromIdx < 0) return
     const [moved] = list.splice(fromIdx, 1)
     let insertIdx = list.findIndex(k => Number(k.id) === Number(targetId))
     if (insertIdx < 0) return
@@ -705,6 +761,107 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       return
     }
     if (onDataChanged) await onDataChanged()
+  }
+
+  // 通期 KR を別 OKR (この MatrixView の ann) に移動する。
+  // 子 Q 期 KR の objective_id も移動先 OKR の Q 期 obj に揃えないと、
+  // 子が「未紐付け」状態になって表示から消える (前例の bug と同じ)。
+  async function moveAnnualKRToThisOKR(annKrId, targetAnnKrId, pos) {
+    setBusy(true)
+    try {
+      // 1. 子 Q 期 KRs を取得 (DB から)
+      const { data: children } = await supabase
+        .from('key_results')
+        .select('id, objective_id')
+        .eq('parent_kr_id', annKrId)
+        .range(0, 999)
+
+      // 2. 子の現在の Q 期 obj から period を取得
+      let childObjs = []
+      if (children?.length) {
+        const childObjIds = [...new Set(children.map(c => c.objective_id).filter(Boolean))]
+        if (childObjIds.length) {
+          const r = await supabase
+            .from('objectives')
+            .select('id, period')
+            .in('id', childObjIds)
+          childObjs = r.data || []
+        }
+      }
+
+      // 3. 移動先 OKR (ann) の Q1〜Q4 obj を find or create
+      const targetQObjByPeriod = {}
+      for (const qKey of Q_KEYS) {
+        let qObj = (qData[qKey] || []).find(o => Number(o.parent_objective_id) === Number(ann.id))
+        if (!qObj) qObj = (qData[qKey] || [])[0]
+        if (!qObj) {
+          const newTitle = `${qKey.toUpperCase()}: ${ann.title}`.slice(0, 200)
+          const { data: ins, error: ie } = await supabase
+            .from('objectives')
+            .insert({ level_id: ann.level_id, parent_objective_id: ann.id, period: qKey, title: newTitle })
+            .select().single()
+          if (ie) { console.warn('Q期Objective作成失敗:', ie.message); continue }
+          qObj = ins
+        }
+        targetQObjByPeriod[qKey] = qObj
+      }
+
+      // 挿入位置を計算 (この MatrixView の annualKRs の中で targetAnnKrId の前後)
+      const insertAt = pos === 'after'
+        ? annualKRs.findIndex(k => Number(k.id) === Number(targetAnnKrId)) + 1
+        : Math.max(0, annualKRs.findIndex(k => Number(k.id) === Number(targetAnnKrId)))
+
+      // ─ 楽観更新: DB 反映を待たずに UI を先に切り替え ─
+      if (markSelfAction) markSelfAction()
+      // 4a. 子 Q 期 KR をローカル state で移動先 Q 期 obj に動かす
+      if (optimisticMoveKR && children?.length) {
+        for (const child of children) {
+          const childObj = childObjs.find(o => Number(o.id) === Number(child.objective_id))
+          let period = childObj?.period || ''
+          if (period.includes('_')) period = period.split('_').pop()
+          const tQObj = targetQObjByPeriod[period]
+          if (tQObj && Number(child.objective_id) !== Number(tQObj.id)) {
+            optimisticMoveKR(child.id, tQObj.id, annKrId)
+          }
+        }
+      }
+      // 4b. 通期 KR 自体をローカル state で移動先 ann に動かす
+      if (optimisticMoveAnnualKR) optimisticMoveAnnualKR(annKrId, ann.id, insertAt)
+
+      // ─ DB update を並行発行 (await はするが UI は楽観で先行) ─
+      const childUpdates = []
+      for (const child of (children || [])) {
+        const childObj = childObjs.find(o => Number(o.id) === Number(child.objective_id))
+        let period = childObj?.period || ''
+        if (period.includes('_')) period = period.split('_').pop()
+        const tQObj = targetQObjByPeriod[period]
+        if (tQObj && Number(child.objective_id) !== Number(tQObj.id)) {
+          childUpdates.push(
+            supabase.from('key_results').update({ objective_id: tQObj.id }).eq('id', child.id)
+          )
+        }
+      }
+      const annUpdatePromise = supabase
+        .from('key_results')
+        .update({ objective_id: ann.id, sort_order: insertAt })
+        .eq('id', annKrId)
+
+      const [annUpdate, ...childResults] = await Promise.all([annUpdatePromise, ...childUpdates])
+      if (annUpdate?.error) {
+        alert('通期 KR 移動失敗: ' + (annUpdate.error.message || ''))
+        if (onDataChanged) await onDataChanged()  // ロールバック用フル reload
+        return
+      }
+      const childErr = childResults.find(r => r?.error)
+      if (childErr) {
+        console.warn('子 KR の移動で一部エラー:', childErr.error.message)
+        if (onDataChanged) await onDataChanged()
+        return
+      }
+      // 成功時は楽観更新済みなので明示 reload は不要 (Realtime echo は markSelfAction でスキップ)
+    } finally {
+      setBusy(false)
+    }
   }
 
   // 空セルでクリック → 追加モード起動 (該当の通期 KR からデフォルト値継承)

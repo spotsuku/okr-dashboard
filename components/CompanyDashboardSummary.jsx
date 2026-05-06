@@ -139,7 +139,7 @@ export default function CompanyDashboardSummary({
         ['krSnapsLast',  supabase.from('kr_progress_snapshots').select('kr_id, current_value').eq('week_start', lastWeekRange.mondayStr).range(0, 999)],
         // 全社通期 KR: levels.parent_id IS NULL かつ fiscal_year=今年度 の Level に紐づく objectives で
         // period の rawPeriod が 'annual' のもの。クライアント側で krs と join する。
-        ['objectives',   supabase.from('objectives').select('id, level_id, period, title').range(0, 999)],
+        ['objectives',   supabase.from('objectives').select('id, level_id, period, title, archived_at').range(0, 999).then(r => ({ ...r, data: (r.data || []).filter(o => !o.archived_at) }))],
       ]
       const settled = await Promise.allSettled(queries.map(([_, p]) => p))
       if (!alive) return

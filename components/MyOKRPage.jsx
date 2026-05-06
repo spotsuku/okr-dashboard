@@ -725,7 +725,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
       // ① 自分がOwner/KR担当/KA担当のデータを並行取得
       const [{ data: myObjs }, { data: myKRs }, { data: myKAs }, { data: myAssignedTasks }] = await Promise.all([
-        supabase.from('objectives').select('id,title,level_id,period,owner').eq('owner', myName).order('period').range(0, 49999),
+        supabase.from('objectives').select('id,title,level_id,period,owner,archived_at').eq('owner', myName).order('period').range(0, 49999).then(r => ({ ...r, data: (r.data || []).filter(o => !o.archived_at) })),
         supabase.from('key_results').select('*').eq('owner', myName).range(0, 49999),
         supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done').in('week_start', weeksToLoad).range(0, 49999),
         supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).range(0, 49999),
