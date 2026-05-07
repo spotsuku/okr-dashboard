@@ -317,7 +317,8 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     const annIds = annObjs.map(o => o.id)
     // 新カラム (parent_kr_id / aggregation_type / sort_order) を含めて SELECT。
     // SQL 未実行 (列なし) の環境でも壊れないよう、エラー時は段階的にフォールバックする。
-    const annSelectFull   = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order'
+    // 末尾の program_tags は新規追加列。列が無い古い環境では Mid / Min にフォールバック
+    const annSelectFull   = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order,program_tags'
     const annSelectMid    = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type'
     const annSelectMin    = 'id,objective_id,title,target,current,unit,lower_is_better,owner'
     // Step 1: 全カラム + sort_order で order
@@ -325,9 +326,9 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       .from('key_results').select(annSelectFull).in('objective_id', annIds)
       .order('sort_order', { ascending: true, nullsFirst: false }).order('id', { ascending: true })
       .range(0, 49999)
-    // Step 2: sort_order が無ければ全カラムから sort_order を抜いて order なしで取得
-    if (annKRsRes.error && /sort_order/i.test(annKRsRes.error.message || '')) {
-      console.warn('[AnnualView] sort_order 列が無い環境のため抜いて再取得 (key_results に ALTER TABLE 推奨)')
+    // Step 2: sort_order / program_tags が無ければ全カラムから抜いて order なしで取得
+    if (annKRsRes.error && /sort_order|program_tags/i.test(annKRsRes.error.message || '')) {
+      console.warn('[AnnualView] sort_order / program_tags 列が無い環境のため抜いて再取得 (key_results に ALTER TABLE 推奨)')
       annKRsRes = await supabase
         .from('key_results').select(annSelectMid).in('objective_id', annIds).range(0, 49999)
     }
@@ -383,7 +384,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     // 同上: SQL 未実行環境向けの段階的フォールバック
     let qKRsRes = await supabase
       .from('key_results').select(annSelectFull).in('objective_id', qIds).range(0, 49999)
-    if (qKRsRes.error && /sort_order/i.test(qKRsRes.error.message || '')) {
+    if (qKRsRes.error && /sort_order|program_tags/i.test(qKRsRes.error.message || '')) {
       qKRsRes = await supabase
         .from('key_results').select(annSelectMid).in('objective_id', qIds).range(0, 49999)
     }
@@ -588,6 +589,54 @@ function OwnerSelect({ value, onChange, members, T, disabled }) {
   )
 }
 
+// ─── プログラムタグ入力 (チップ + Enter で追加 + ✕ で削除 + datalist 補完) ──
+function ProgramTagsInput({ value, onChange, T, disabled, allTags = [], suggestId = 'kr-program-tags' }) {
+  const [input, setInput] = useState('')
+  const tags = Array.isArray(value) ? value : []
+  function addTag(t) {
+    const v = (t || '').trim()
+    if (!v || tags.includes(v)) { setInput(''); return }
+    onChange([...tags, v])
+    setInput('')
+  }
+  function removeTag(t) { onChange(tags.filter(x => x !== t)) }
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4,
+      padding: '3px 6px',
+      border: `1px solid ${T.border}`,
+      borderRadius: 6,
+      background: T.bgCard,
+      opacity: disabled ? 0.5 : 1,
+    }}>
+      <span style={{ fontSize: 11, color: T.textFaint, flexShrink: 0 }}>🏷</span>
+      {tags.map(t => (
+        <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', background: 'rgba(107,150,199,0.15)', color: '#6B96C7', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>
+          {t}
+          <button type="button" onClick={() => removeTag(t)} disabled={disabled}
+            style={{ background: 'transparent', border: 'none', color: '#6B96C7', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}>✕</button>
+        </span>
+      ))}
+      <input
+        list={suggestId}
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(input) }
+          else if (e.key === 'Backspace' && !input && tags.length > 0) { removeTag(tags[tags.length - 1]) }
+        }}
+        onBlur={() => { if (input.trim()) addTag(input) }}
+        placeholder={tags.length === 0 ? 'プログラムタグ' : ''}
+        disabled={disabled}
+        style={{ flex: 1, minWidth: 80, fontSize: 11, padding: '2px 4px', border: 'none', background: 'transparent', color: T.text, outline: 'none', fontFamily: 'inherit' }}
+      />
+      <datalist id={suggestId}>
+        {allTags.filter(t => !tags.includes(t)).map(t => <option key={t} value={t} />)}
+      </datalist>
+    </div>
+  )
+}
+
 // ─── マトリクスビュー (通期 KR 行 × Q1〜Q4 列, 左列固定 + 横スクロール) ──
 function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDataChanged, optimisticMoveKR, optimisticReorderKRs, optimisticMoveAnnualKR, markSelfAction, canEditOKR = true }) {
   // 各 Q 列の Q-period KRs を「parent_kr_id ごと」「未紐付け」に分類
@@ -624,13 +673,30 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   const [busy, setBusy] = useState(false)
   // 空セルから直接 KR を追加するための状態
   const [addingCell, setAddingCell] = useState(null)  // { annKrId, qKey } | null
-  const [addForm, setAddForm] = useState({ title: '', target: '', unit: '', owner: '' })
+  const [addForm, setAddForm] = useState({ title: '', target: '', unit: '', owner: '', program_tags: [] })
   const [addSaving, setAddSaving] = useState(false)
 
   // KR セル内編集 (既存 KR を直接インライン編集)
   const [editingKrId, setEditingKrId] = useState(null)
-  const [editForm, setEditForm] = useState({ title: '', target: '', current: '', unit: '', owner: '' })
+  const [editForm, setEditForm] = useState({ title: '', target: '', current: '', unit: '', owner: '', program_tags: [] })
   const [editSaving, setEditSaving] = useState(false)
+
+  // プログラムタグ サジェスト用 (objectives + key_results 両方から集約)
+  const [allProgramTags, setAllProgramTags] = useState([])
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const [objR, krR] = await Promise.all([
+        supabase.from('objectives').select('program_tags').not('program_tags', 'is', null).range(0, 999),
+        supabase.from('key_results').select('program_tags').not('program_tags', 'is', null).range(0, 999),
+      ])
+      if (!alive) return
+      const set = new Set()
+      ;[...(objR.data || []), ...(krR.data || [])].forEach(o => (o.program_tags || []).forEach(t => { if (t) set.add(t) }))
+      setAllProgramTags([...set].sort())
+    })()
+    return () => { alive = false }
+  }, [editingKrId, addingCell?.annKrId])  // 編集モード起動時に最新化
 
   function startEditKr(qkr) {
     if (!canEditOKR) return  // member ロールは KR 編集不可 (閲覧のみ)
@@ -642,11 +708,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       current: qkr.current ?? '',
       unit: qkr.unit || '',
       owner: qkr.owner || '',
+      program_tags: Array.isArray(qkr.program_tags) ? qkr.program_tags : [],
     })
   }
   function cancelEditKr() {
     setEditingKrId(null)
-    setEditForm({ title: '', target: '', current: '', unit: '', owner: '' })
+    setEditForm({ title: '', target: '', current: '', unit: '', owner: '', program_tags: [] })
   }
   async function commitEditKr() {
     if (!editingKrId || editSaving) return
@@ -670,8 +737,14 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
         current: currentNum,
         unit: editForm.unit || '',
         owner: editForm.owner || null,
+        program_tags: Array.isArray(editForm.program_tags) ? editForm.program_tags : [],
       }
-      const { error } = await supabase.from('key_results').update(payload).eq('id', editingKrId)
+      let { error } = await supabase.from('key_results').update(payload).eq('id', editingKrId)
+      if (error && /program_tags|column/i.test(error.message || '')) {
+        delete payload.program_tags
+        const r = await supabase.from('key_results').update(payload).eq('id', editingKrId)
+        error = r.error
+      }
       if (error) throw new Error(error.message)
       cancelEditKr()
       if (onDataChanged) await onDataChanged()
@@ -878,11 +951,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       target: '',
       unit: annKr.unit || '',
       owner: annKr.owner || '',
+      // 親の通期 KR のタグをデフォルトで継承
+      program_tags: Array.isArray(annKr.program_tags) ? [...annKr.program_tags] : [],
     })
   }
   function cancelAddInCell() {
     setAddingCell(null)
-    setAddForm({ title: '', target: '', unit: '', owner: '' })
+    setAddForm({ title: '', target: '', unit: '', owner: '', program_tags: [] })
   }
 
   // Q 期 Objective を確保 (なければ新規作成) し、KR を 1 件 insert する
@@ -927,14 +1002,16 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
         unit: addForm.unit || '',
         owner: addForm.owner || ann.owner || null,
         parent_kr_id: addingCell.annKrId,
+        program_tags: Array.isArray(addForm.program_tags) ? addForm.program_tags : [],
       }
-      // lower_is_better 列が無い古い環境向けにフォールバック (insert 失敗 → 列を抜いて再挑戦)
+      // lower_is_better / parent_kr_id / program_tags 列が無い古い環境向けフォールバック
       let { error: e2 } = await supabase.from('key_results').insert(krPayload)
-      if (e2 && /lower_is_better|parent_kr_id/.test(e2.message || '')) {
-        // 列削減して再挑戦 (parent_kr_id だけは保持したいが、無いなら最小化)
+      if (e2 && /lower_is_better|parent_kr_id|program_tags|column/i.test(e2.message || '')) {
+        // 列削減して再挑戦
         const minimal = { ...krPayload }
-        if (/parent_kr_id/.test(e2.message || '')) delete minimal.parent_kr_id
-        if (/lower_is_better/.test(e2.message || '')) delete minimal.lower_is_better
+        if (/parent_kr_id/i.test(e2.message || '')) delete minimal.parent_kr_id
+        if (/lower_is_better/i.test(e2.message || '')) delete minimal.lower_is_better
+        if (/program_tags|column/i.test(e2.message || '')) delete minimal.program_tags
         const r2 = await supabase.from('key_results').insert(minimal)
         e2 = r2.error
       }
@@ -1283,6 +1360,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     </div>
                     <OwnerSelect value={editForm.owner} onChange={v => setEditForm(p => ({ ...p, owner: v }))}
                       members={members} T={T()} disabled={editSaving} />
+                    <ProgramTagsInput value={editForm.program_tags} onChange={v => setEditForm(p => ({ ...p, program_tags: v }))}
+                      T={T()} disabled={editSaving} allTags={allProgramTags} suggestId={`kr-tag-ann-${editingKrId}`} />
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={() => deleteKr(annKr)} disabled={editSaving}
                         style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid rgba(232,155,155,0.30)`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1377,6 +1456,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           </div>
                           <OwnerSelect value={addForm.owner} onChange={v => setAddForm(p => ({ ...p, owner: v }))}
                             members={members} T={T()} disabled={addSaving} />
+                          <ProgramTagsInput value={addForm.program_tags} onChange={v => setAddForm(p => ({ ...p, program_tags: v }))}
+                            T={T()} disabled={addSaving} allTags={allProgramTags} suggestId="kr-tag-add-empty" />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button onClick={cancelAddInCell} disabled={addSaving}
                               style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1449,6 +1530,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             </div>
                             <OwnerSelect value={editForm.owner} onChange={v => setEditForm(p => ({ ...p, owner: v }))}
                               members={members} T={T()} disabled={editSaving} />
+                            <ProgramTagsInput value={editForm.program_tags} onChange={v => setEditForm(p => ({ ...p, program_tags: v }))}
+                              T={T()} disabled={editSaving} allTags={allProgramTags} suggestId={`kr-tag-q-${editingKrId}`} />
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button onClick={() => deleteKr(qkr)} disabled={editSaving}
                                 style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || 'rgba(232,155,155,0.30)'}`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1507,6 +1590,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{qkr.owner}</span>
                             </div>
                           )}
+                          {Array.isArray(qkr.program_tags) && qkr.program_tags.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+                              {qkr.program_tags.map(t => (
+                                <span key={t} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: 'rgba(107,150,199,0.15)', color: '#6B96C7', fontWeight: 700 }}>🏷 {t}</span>
+                              ))}
+                            </div>
+                          )}
                           <div style={{ marginTop: 3 }} onClick={e => e.stopPropagation()}>
                             <KASection krId={qkr.id} objectiveId={qkr._qObjId} levelId={qkr._qObjLevelId} theme={makeKATheme(T())} />
                           </div>
@@ -1534,6 +1624,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           </div>
                           <OwnerSelect value={addForm.owner} onChange={v => setAddForm(p => ({ ...p, owner: v }))}
                             members={members} T={T()} disabled={addSaving} />
+                          <ProgramTagsInput value={addForm.program_tags} onChange={v => setAddForm(p => ({ ...p, program_tags: v }))}
+                            T={T()} disabled={addSaving} allTags={allProgramTags} suggestId="kr-tag-add-more" />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button onClick={cancelAddInCell} disabled={addSaving}
                               style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>

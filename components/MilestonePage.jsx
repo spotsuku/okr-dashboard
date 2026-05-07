@@ -584,12 +584,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
               cursor: 'pointer', background: showAllOrgs ? T.accentBg : 'transparent',
               fontSize: 12, fontWeight: 600, color: showAllOrgs ? T.accent : T.textSub, fontFamily: 'inherit',
             }}>{showAllOrgs ? '全組織表示中' : '全組織を表示'}</button>
-            <button onClick={() => setShowAddOrg(true)} style={{
-              padding: '7px 14px', border: 'none', borderRadius: 9,
-              cursor: 'pointer', background: T.accent, color: '#fff',
-              fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-              boxShadow: `0 2px 6px ${T.accent}40`,
-            }}>＋ 事業部を追加</button>
+            {/* 「+ 事業部を追加」ボタンは削除しました。組織の追加・削除は「組織」ページから行ってください。 */}
           </div>
         ) : null}
       />

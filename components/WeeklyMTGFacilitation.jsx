@@ -9,14 +9,33 @@ import ConfirmationsTab from './ConfirmationsTab'
 import MeetingImport from './MeetingImport'
 
 // ─── プログラムタグ フィルタ用 Context ──────────────────────────────────────
-// 機能別組織図ではなくプログラム横断で会議をする場合に、選択中の
-// objectives.program_tags でフィルタするためのコンテキスト。null = フィルタなし。
+// 機能別組織図ではなくプログラム横断で会議をする場合のためのフィルタ。
+// タグは KR にも obj にも付けられる。フィルタは「KR のタグ」or「親 obj のタグ」
+// のいずれかが選択タグを含めばその KR を表示。
 const ProgramTagContext = createContext(null)
 function useProgramTag() { return useContext(ProgramTagContext) }
-// 受け取った objectives 配列を programTag でフィルタする (null や 列無し環境では no-op)
+
+// objectives 配列のみを obj 自身のタグでフィルタ (旧来の挙動・KR を伴わない集計用)
 function applyProgramTagFilter(objs, programTag) {
   if (!programTag) return objs || []
   return (objs || []).filter(o => Array.isArray(o.program_tags) && o.program_tags.includes(programTag))
+}
+
+// KR を「自身のタグ or 親 obj のタグ」で判定してフィルタし、関連する obj
+// (= フィルタ後の KR を 1 つ以上持つ obj) だけを返す。
+function applyProgramTagFilterKRs(objs, krs, programTag) {
+  if (!programTag) return { objs: objs || [], krs: krs || [] }
+  const objMap = new Map((objs || []).map(o => [Number(o.id), o]))
+  const filteredKRs = (krs || []).filter(kr => {
+    const krTags = Array.isArray(kr.program_tags) ? kr.program_tags : []
+    if (krTags.includes(programTag)) return true
+    const obj = objMap.get(Number(kr.objective_id))
+    const objTags = Array.isArray(obj?.program_tags) ? obj.program_tags : []
+    return objTags.includes(programTag)
+  })
+  const matchObjIds = new Set(filteredKRs.map(kr => Number(kr.objective_id)))
+  const filteredObjs = (objs || []).filter(o => matchObjIds.has(Number(o.id)))
+  return { objs: filteredObjs, krs: filteredKRs }
 }
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
@@ -1119,18 +1138,30 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           .in('period', periodKeys)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = applyProgramTagFilter((objsRes.data || []).filter(o => !o.archived_at), programTag)
+        // タグフィルタは KR レベルで行うため、ここでは obj をすべて保持 (アーカイブのみ除外)
+        let objsAll = (objsRes.data || []).filter(o => !o.archived_at)
 
-        const objIds = objs.map(o => o.id)
-        let krs = []
+        const objIds = objsAll.map(o => o.id)
+        let krsAll = []
         if (objIds.length > 0) {
-          const krsRes = await supabase.from('key_results')
-            .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
+          let krsRes = await supabase.from('key_results')
+            .select('id, title, target, current, unit, owner, objective_id, lower_is_better, program_tags')
             .in('objective_id', objIds)
             .range(0, 49999)
+          // program_tags 列が無い古い環境のフォールバック
+          if (krsRes.error && /program_tags|column/i.test(krsRes.error.message || '')) {
+            krsRes = await supabase.from('key_results')
+              .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
+              .in('objective_id', objIds)
+              .range(0, 49999)
+          }
           if (krsRes.error) throw krsRes.error
-          krs = krsRes.data || []
+          krsAll = krsRes.data || []
         }
+        // KR レベルのプログラムタグフィルタ (KR own tag OR 親 obj inherited tag)
+        const filtered = applyProgramTagFilterKRs(objsAll, krsAll, programTag)
+        const objs = filtered.objs
+        const krs = filtered.krs
 
         // 3) 順序組み立て: level 順 → objective 順 → kr 順
         const byLevel = new Map(scopeLevelIds.map(id => [id, []]))
@@ -1492,17 +1523,36 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
 
-        // Objective を取得
+        // Objective を取得 (タグフィルタは KR レベルで後段で行うため、obj は archived のみ除外)
         const objsRes = await supabase.from('objectives')
           .select('id, level_id, period, title, owner, archived_at, program_tags')
           .in('level_id', scopeLevelIds)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = applyProgramTagFilter((objsRes.data || []).filter(o => !o.archived_at), programTagCtx)
+        const objsAll = (objsRes.data || []).filter(o => !o.archived_at)
+        const allObjIdsAll = objsAll.map(o => o.id)
+        if (allObjIdsAll.length === 0) { if (alive) setItems([]); return }
+
+        // KR (program_tags 含む) → KR レベルでタグフィルタ → 関連 obj だけ残す
+        let krsRes = await supabase.from('key_results')
+          .select('id, title, objective_id, program_tags')
+          .in('objective_id', allObjIdsAll)
+          .range(0, 49999)
+        if (krsRes.error && /program_tags|column/i.test(krsRes.error.message || '')) {
+          krsRes = await supabase.from('key_results')
+            .select('id, title, objective_id')
+            .in('objective_id', allObjIdsAll)
+            .range(0, 49999)
+        }
+        if (krsRes.error) throw krsRes.error
+        const krsAll = krsRes.data || []
+        const filtered = applyProgramTagFilterKRs(objsAll, krsAll, programTagCtx)
+        const objs = filtered.objs
         const allObjIds = objs.map(o => o.id)
+        const krs = filtered.krs
         if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
-        // 当週のKA (weekly_reports)
+        // 当週のKA (weekly_reports) — フィルタ後の objIds に絞る
         const kasRes = await supabase.from('weekly_reports')
           .select('*')
           .in('objective_id', allObjIds)
@@ -1510,15 +1560,12 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
           .neq('status', 'done')
           .range(0, 49999)
         if (kasRes.error) throw kasRes.error
-        const kas = kasRes.data || []
-
-        // KR を取得（コンテキスト表示用）
-        const krsRes = await supabase.from('key_results')
-          .select('id, title, objective_id')
-          .in('objective_id', allObjIds)
-          .range(0, 49999)
-        if (krsRes.error) throw krsRes.error
-        const krs = krsRes.data || []
+        let kas = kasRes.data || []
+        // タグフィルタ中: 紐付く KR がフィルタを通った KA だけ残す
+        if (programTagCtx) {
+          const krIdSet = new Set(krs.map(k => Number(k.id)))
+          kas = kas.filter(ka => !ka.kr_id || krIdSet.has(Number(ka.kr_id)))
+        }
 
         // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
         const built = []

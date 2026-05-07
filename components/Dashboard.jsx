@@ -1495,7 +1495,7 @@ export default function Dashboard({ user, onSignOut }) {
       )}
       {activePage === 'orgjd' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-          <OrgPage themeKey={themeKey} user={user} />
+          <OrgPage themeKey={themeKey} user={user} fiscalYear={fiscalYear} />
         </div>
       )}
 
