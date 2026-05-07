@@ -183,6 +183,19 @@ export default function WeeklyMTGFacilitation({
   useEffect(() => {
     let alive = true
     ;(async () => {
+      // 1) program_definitions マスタから取得 (推奨)
+      const defRes = await supabase
+        .from('program_definitions')
+        .select('name')
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+        .range(0, 999)
+      if (!alive) return
+      if (!defRes.error && defRes.data) {
+        setAllProgramTags(defRes.data.map(d => d.name))
+        return
+      }
+      // 2) フォールバック: マスタ未作成環境では既存タグから集約
       const { data, error } = await supabase
         .from('objectives')
         .select('program_tags')
@@ -390,30 +403,36 @@ export default function WeeklyMTGFacilitation({
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      {/* プログラムタグ フィルタ (機能横断会議用) */}
-      {allProgramTags.length > 0 && (
-        <div style={{
-          padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8,
-          borderBottom: `1px solid ${T.border}`, background: T.bgCard, fontSize: 12,
-          flexShrink: 0,
-        }}>
-          <span style={{ color: T.textMuted, fontWeight: 700 }}>🏷 プログラムで絞る:</span>
-          <select value={programTag || ''} onChange={e => setProgramTag(e.target.value || null)}
-            style={{
-              padding: '4px 10px', borderRadius: 6, border: `1px solid ${T.border}`,
-              background: T.bgCard, color: T.text, fontSize: 12, fontFamily: 'inherit',
-              cursor: 'pointer', outline: 'none',
-            }}>
-            <option value="">— すべて —</option>
-            {allProgramTags.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          {programTag && (
-            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(107,150,199,0.15)', color: '#6B96C7', fontWeight: 700 }}>
-              {programTag} の OKR / KR / KA のみ表示中
-            </span>
-          )}
-        </div>
-      )}
+      {/* プログラムタグ フィルタ (機能横断会議用) — 常時表示 */}
+      <div style={{
+        padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8,
+        borderBottom: `1px solid ${T.border}`, background: T.bgCard, fontSize: 12,
+        flexShrink: 0,
+      }}>
+        <span style={{ color: T.textMuted, fontWeight: 700 }}>🏷 プログラムで絞る:</span>
+        {allProgramTags.length > 0 ? (
+          <>
+            <select value={programTag || ''} onChange={e => setProgramTag(e.target.value || null)}
+              style={{
+                padding: '4px 10px', borderRadius: 6, border: `1px solid ${T.border}`,
+                background: T.bgCard, color: T.text, fontSize: 12, fontFamily: 'inherit',
+                cursor: 'pointer', outline: 'none',
+              }}>
+              <option value="">— すべて —</option>
+              {allProgramTags.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            {programTag && (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(107,150,199,0.15)', color: '#6B96C7', fontWeight: 700 }}>
+                {programTag} の OKR / KR / KA のみ表示中
+              </span>
+            )}
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic' }}>
+            タグ未登録 — 「組織ページ → 🏷 プログラム管理」で定義してください
+          </span>
+        )}
+      </div>
       {/* タイマー (進行中ステップでのみ — done 以外) */}
       {!viewingPrep && step >= 1 && stepKind !== 'done' && session?.started_at && (
         <MeetingTimerBanner
