@@ -276,16 +276,30 @@ export default function WeeklyMTGFacilitation({
         if (!alive) return
         if (error) console.warn('[WeeklyMTG] session load error:', error.message)
         setSession(data || null)
+        // セッションが無い or step=0 のときは sessionStorage の facil フラグが
+        // 残っていても prep 画面を強制表示 (古いフラグで「会議開始ビューが
+        // 表示されない」現象を防ぐ)
+        if (!data || (data.step ?? 0) === 0) {
+          if (typeof window !== 'undefined' && facilStorageKey) {
+            window.sessionStorage.removeItem(facilStorageKey)
+          }
+          setViewingPrepState(true)
+        }
         setLoading(false)
       })
       .catch(err => {
         if (!alive) return
         console.warn('[WeeklyMTG] session load exception:', err)
         setSession(null)
+        // 例外時も prep に戻す (画面が空になるのを防ぐ)
+        if (typeof window !== 'undefined' && facilStorageKey) {
+          window.sessionStorage.removeItem(facilStorageKey)
+        }
+        setViewingPrepState(true)
         setLoading(false)
       })
     return () => { alive = false }
-  }, [meeting?.key, weekStart])
+  }, [meeting?.key, weekStart, facilStorageKey])
 
   // ── Realtime 購読 ───────────────────────────────────────
   useEffect(() => {
@@ -469,12 +483,23 @@ export default function WeeklyMTGFacilitation({
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      {/* プログラムタグ フィルタ (機能横断会議用) — 常時表示 */}
+      {/* プログラムタグ フィルタ + prep 戻り (機能横断会議用) — 常時表示 */}
       <div style={{
         padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8,
         borderBottom: `1px solid ${T.border}`, background: T.bgCard, fontSize: 12,
         flexShrink: 0,
       }}>
+        {!viewingPrep && (
+          <button onClick={() => setViewingPrep(true)}
+            title="会議準備画面に戻る (プログラム選択・ファシリ変更等)"
+            style={{
+              padding: '4px 10px', borderRadius: 6, border: `1px solid ${T.border}`,
+              background: 'transparent', color: T.textSub, fontSize: 12, fontFamily: 'inherit',
+              cursor: 'pointer', outline: 'none', whiteSpace: 'nowrap', fontWeight: 700,
+            }}>
+            ← 会議準備に戻る
+          </button>
+        )}
         <span style={{ color: T.textMuted, fontWeight: 700 }}>🏷 プログラムで絞る:</span>
         {allProgramTags.length > 0 ? (
           <>
