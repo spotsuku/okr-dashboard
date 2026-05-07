@@ -93,6 +93,14 @@ function resolveScopeLevelIds(wkly, levels) {
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
       .map(l => l.id)
   }
+  // 全階層 (全社 / 部署 / チーム すべて) — プログラム別定例など、組織を
+  // 横断するタグベースの会議で使う。タグの付き場所が任意のレベルでも拾える。
+  if (wkly?.scope === 'all-levels') {
+    return levels
+      .slice()
+      .sort((a, b) => (getDepth(a.id, levels) - getDepth(b.id, levels)) || (a.sort_order || 0) - (b.sort_order || 0))
+      .map(l => l.id)
+  }
   return []
 }
 
@@ -264,13 +272,34 @@ export default function WeeklyMTGFacilitation({
       .eq('meeting_key', meeting.key)
       .eq('week_start', weekStart)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!alive) return
+        if (error) console.warn('[WeeklyMTG] session load error:', error.message)
         setSession(data || null)
+        // セッションが無い or step=0 のときは sessionStorage の facil フラグが
+        // 残っていても prep 画面を強制表示 (古いフラグで「会議開始ビューが
+        // 表示されない」現象を防ぐ)
+        if (!data || (data.step ?? 0) === 0) {
+          if (typeof window !== 'undefined' && facilStorageKey) {
+            window.sessionStorage.removeItem(facilStorageKey)
+          }
+          setViewingPrepState(true)
+        }
+        setLoading(false)
+      })
+      .catch(err => {
+        if (!alive) return
+        console.warn('[WeeklyMTG] session load exception:', err)
+        setSession(null)
+        // 例外時も prep に戻す (画面が空になるのを防ぐ)
+        if (typeof window !== 'undefined' && facilStorageKey) {
+          window.sessionStorage.removeItem(facilStorageKey)
+        }
+        setViewingPrepState(true)
         setLoading(false)
       })
     return () => { alive = false }
-  }, [meeting?.key, weekStart])
+  }, [meeting?.key, weekStart, facilStorageKey])
 
   // ── Realtime 購読 ───────────────────────────────────────
   useEffect(() => {
@@ -298,38 +327,79 @@ export default function WeeklyMTGFacilitation({
     if (levelIds.length === 0) { setScopePreview({ perLevel: [], total: 0 }); return }
     const scopeLevels = levelIds.map(id => levels.find(l => Number(l.id) === Number(id))).filter(Boolean)
 
+    // タグフィルタは KR レベルで行うため、obj は archive のみ除外して全件取得
     const { data: objsRaw } = await supabase.from('objectives')
       .select('id, level_id, archived_at, program_tags').in('level_id', levelIds)
-    const objs = applyProgramTagFilter((objsRaw || []).filter(o => !o.archived_at), programTag)
-    const objsByLevel = {}
-    ;(objs || []).forEach(o => {
-      if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
-      objsByLevel[o.level_id].push(o.id)
-    })
-    const allObjIds = (objs || []).map(o => o.id)
+    const objsAll = (objsRaw || []).filter(o => !o.archived_at)
+    const allObjIdsAll = objsAll.map(o => o.id)
 
     let perLevel = []
     if (wkly.flow === 'kr') {
-      let krs = []
-      if (allObjIds.length > 0) {
-        const { data } = await supabase.from('key_results')
-          .select('id, objective_id, title, owner').in('objective_id', allObjIds)
-        krs = data || []
+      // KR を全件取って (program_tags 含む) → KR レベルフィルタ → obj を矯正
+      let krsRaw = []
+      if (allObjIdsAll.length > 0) {
+        let res = await supabase.from('key_results')
+          .select('id, objective_id, title, owner, program_tags').in('objective_id', allObjIdsAll)
+        if (res.error && /program_tags|column/i.test(res.error.message || '')) {
+          res = await supabase.from('key_results')
+            .select('id, objective_id, title, owner').in('objective_id', allObjIdsAll)
+        }
+        krsRaw = res.data || []
       }
+      const filtered = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
+      const krs = filtered.krs
+      const objsByLevel = {}
+      ;(filtered.objs || []).forEach(o => {
+        if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
+        objsByLevel[o.level_id].push(o.id)
+      })
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
         const items = krs.filter(k => ids.has(k.objective_id))
         return { level: l, count: items.length, items: items.map(k => ({ id: k.id, title: k.title, owner: k.owner })) }
       })
     } else if (wkly.flow === 'ka' || wkly.flow === 'sales') {
+      // KR を全件取って KR レベルフィルタ → 対象 KR set を作る → KA を kr_id で絞る
+      let krsRaw = []
+      if (allObjIdsAll.length > 0) {
+        let res = await supabase.from('key_results')
+          .select('id, objective_id, program_tags').in('objective_id', allObjIdsAll)
+        if (res.error && /program_tags|column/i.test(res.error.message || '')) {
+          res = await supabase.from('key_results')
+            .select('id, objective_id').in('objective_id', allObjIdsAll)
+        }
+        krsRaw = res.data || []
+      }
+      const filteredKRs = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
+      const krs = filteredKRs.krs
+      const krIdSet = new Set(krs.map(k => Number(k.id)))
+      const objTagsMap = new Map(objsAll.map(o => [Number(o.id), Array.isArray(o.program_tags) ? o.program_tags : []]))
+
       let kas = []
-      if (allObjIds.length > 0) {
+      if (allObjIdsAll.length > 0) {
         const { data } = await supabase.from('weekly_reports')
           .select('id, objective_id, status, ka_title, kr_id, owner, week_start')
-          .in('objective_id', allObjIds).eq('week_start', weekStart)
-        // status='done' を除外
+          .in('objective_id', allObjIdsAll).eq('week_start', weekStart)
         kas = (data || []).filter(k => k.status !== 'done')
       }
+      // KA フィルタ:
+      //   - filter なし → 全 KA を残す
+      //   - filter あり → kr_id 付きは KR set チェック / kr_id 無しは親 obj の own tags チェック
+      if (programTag) {
+        kas = kas.filter(ka => {
+          if (ka.kr_id) return krIdSet.has(Number(ka.kr_id))
+          const objTags = objTagsMap.get(Number(ka.objective_id)) || []
+          return objTags.includes(programTag)
+        })
+      }
+      // フィルタ後の KA から、対象 obj を level 別にグルーピング
+      const matchObjIds = new Set(kas.map(k => Number(k.objective_id)))
+      const objsByLevel = {}
+      ;(objsAll || []).forEach(o => {
+        if (!matchObjIds.has(Number(o.id))) return
+        if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
+        objsByLevel[o.level_id].push(o.id)
+      })
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
         const items = kas.filter(k => ids.has(k.objective_id))
@@ -413,12 +483,23 @@ export default function WeeklyMTGFacilitation({
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      {/* プログラムタグ フィルタ (機能横断会議用) — 常時表示 */}
+      {/* プログラムタグ フィルタ + prep 戻り (機能横断会議用) — 常時表示 */}
       <div style={{
         padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8,
         borderBottom: `1px solid ${T.border}`, background: T.bgCard, fontSize: 12,
         flexShrink: 0,
       }}>
+        {!viewingPrep && (
+          <button onClick={() => setViewingPrep(true)}
+            title="会議準備画面に戻る (プログラム選択・ファシリ変更等)"
+            style={{
+              padding: '4px 10px', borderRadius: 6, border: `1px solid ${T.border}`,
+              background: 'transparent', color: T.textSub, fontSize: 12, fontFamily: 'inherit',
+              cursor: 'pointer', outline: 'none', whiteSpace: 'nowrap', fontWeight: 700,
+            }}>
+            ← 会議準備に戻る
+          </button>
+        )}
         <span style={{ color: T.textMuted, fontWeight: 700 }}>🏷 プログラムで絞る:</span>
         {allProgramTags.length > 0 ? (
           <>
@@ -784,7 +865,8 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
   const scopeLabel = wkly?.scope === 'specific-team' ? `${wkly.teamName} チーム`
     : wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
     : wkly?.scope === 'all-teams' ? '全チーム合同'
-    : wkly?.scope === 'all-departments' ? '全事業部合同' : '未定義'
+    : wkly?.scope === 'all-departments' ? '全事業部合同'
+    : wkly?.scope === 'all-levels' ? '全階層 (全社/部署/チーム横断)' : '未定義'
 
   const meetColor = meeting.color || T.accent
   return (
@@ -1591,34 +1673,50 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         if (krsRes.error) throw krsRes.error
         const krsAll = krsRes.data || []
         const filtered = applyProgramTagFilterKRs(objsAll, krsAll, programTagCtx)
-        const objs = filtered.objs
-        const allObjIds = objs.map(o => o.id)
         const krs = filtered.krs
-        if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
-        // 当週のKA (weekly_reports) — フィルタ後の objIds に絞る
+        // 当週の KA (weekly_reports) を「scope 内全 obj」から取得 (フィルタ後 obj に
+        // 絞らない理由: KA.objective_id が KR の現在の objective_id と異なる
+        // ケース (KR を別 obj に移動した時等) を取りこぼさないため)。
         const kasRes = await supabase.from('weekly_reports')
           .select('*')
-          .in('objective_id', allObjIds)
+          .in('objective_id', allObjIdsAll)
           .eq('week_start', weekStart)
           .neq('status', 'done')
           .range(0, 49999)
         if (kasRes.error) throw kasRes.error
         let kas = kasRes.data || []
+
         // タグフィルタ中の KA フィルタ:
-        //   - kr_id 付き → 親 KR がフィルタ通過した (= krIdSet にいる) ものだけ残す
+        //   - kr_id 付き → 親 KR がフィルタ通過した (= filtered.krs にいる) ものだけ残す
         //   - kr_id 無し (obj 直下の浮き KA) → 親 obj の own tags がフィルタを含む場合のみ残す
         // これで「KR にタグを付けたら、その KR に紐付く KA はそのプログラムとして
         // 認識される」が override セマンティクスで実現される。
+        const objTagsMap = new Map(objsAll.map(o => [Number(o.id), Array.isArray(o.program_tags) ? o.program_tags : []]))
         if (programTagCtx) {
           const krIdSet = new Set(krs.map(k => Number(k.id)))
-          const objTagsMap = new Map(objsAll.map(o => [Number(o.id), Array.isArray(o.program_tags) ? o.program_tags : []]))
           kas = kas.filter(ka => {
             if (ka.kr_id) return krIdSet.has(Number(ka.kr_id))
             const objTags = objTagsMap.get(Number(ka.objective_id)) || []
             return objTags.includes(programTagCtx)
           })
         }
+        // フィルタ後の KA から、表示用の対象 obj を再構築 (KA に紐付くものだけ)
+        const objsById = new Map(objsAll.map(o => [Number(o.id), o]))
+        const krsById = new Map(krs.map(k => [Number(k.id), k]))
+        const matchObjIds = new Set()
+        for (const ka of kas) {
+          // KA.objective_id を採用。もし KR.objective_id と異なる場合、KR の現在の
+          // objective_id を優先 (KA に紐付く obj として認識される)
+          const kr = ka.kr_id ? krsById.get(Number(ka.kr_id)) : null
+          const targetObjId = kr?.objective_id ?? ka.objective_id
+          if (targetObjId != null && objsById.has(Number(targetObjId))) {
+            matchObjIds.add(Number(targetObjId))
+          }
+        }
+        const objs = (objsAll || []).filter(o => matchObjIds.has(Number(o.id)))
+        const allObjIds = objs.map(o => o.id)
+        if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
         // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
         const built = []
