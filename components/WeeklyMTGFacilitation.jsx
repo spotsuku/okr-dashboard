@@ -272,9 +272,16 @@ export default function WeeklyMTGFacilitation({
       .eq('meeting_key', meeting.key)
       .eq('week_start', weekStart)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!alive) return
+        if (error) console.warn('[WeeklyMTG] session load error:', error.message)
         setSession(data || null)
+        setLoading(false)
+      })
+      .catch(err => {
+        if (!alive) return
+        console.warn('[WeeklyMTG] session load exception:', err)
+        setSession(null)
         setLoading(false)
       })
     return () => { alive = false }
@@ -792,7 +799,8 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
   const scopeLabel = wkly?.scope === 'specific-team' ? `${wkly.teamName} チーム`
     : wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
     : wkly?.scope === 'all-teams' ? '全チーム合同'
-    : wkly?.scope === 'all-departments' ? '全事業部合同' : '未定義'
+    : wkly?.scope === 'all-departments' ? '全事業部合同'
+    : wkly?.scope === 'all-levels' ? '全階層 (全社/部署/チーム横断)' : '未定義'
 
   const meetColor = meeting.color || T.accent
   return (
