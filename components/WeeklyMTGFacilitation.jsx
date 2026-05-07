@@ -21,14 +21,24 @@ function applyProgramTagFilter(objs, programTag) {
   return (objs || []).filter(o => Array.isArray(o.program_tags) && o.program_tags.includes(programTag))
 }
 
-// KR を「自身のタグ or 親 obj のタグ」で判定してフィルタし、関連する obj
-// (= フィルタ後の KR を 1 つ以上持つ obj) だけを返す。
+// KR を「プログラム」で判定してフィルタ。
+// セマンティクス (override 優先):
+//   - KR が独自に program_tags を持つ場合: その KR own tags のみで判定 (obj 継承は無視)
+//   - KR にタグが無い場合: 親 obj の program_tags を継承して判定
+//   → KR にタグを付けると「その KR と紐付く KA はそのプログラムとして認識」される。
+//     例: 親 obj=「アカデミア」だが KR を「PJT共創」とタグ付けすると、その KR は
+//         PJT共創 のみに属する (アカデミアではフィルタされない)
+// 関連する obj (= フィルタ後の KR を 1 つ以上持つ obj) だけを返す。
 function applyProgramTagFilterKRs(objs, krs, programTag) {
   if (!programTag) return { objs: objs || [], krs: krs || [] }
   const objMap = new Map((objs || []).map(o => [Number(o.id), o]))
   const filteredKRs = (krs || []).filter(kr => {
     const krTags = Array.isArray(kr.program_tags) ? kr.program_tags : []
-    if (krTags.includes(programTag)) return true
+    if (krTags.length > 0) {
+      // KR 自身がタグを持つ: 親の継承は無視。own tags だけで判定
+      return krTags.includes(programTag)
+    }
+    // KR にタグ無し: 親 obj のタグを継承
     const obj = objMap.get(Number(kr.objective_id))
     const objTags = Array.isArray(obj?.program_tags) ? obj.program_tags : []
     return objTags.includes(programTag)
@@ -1595,10 +1605,19 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
           .range(0, 49999)
         if (kasRes.error) throw kasRes.error
         let kas = kasRes.data || []
-        // タグフィルタ中: 紐付く KR がフィルタを通った KA だけ残す
+        // タグフィルタ中の KA フィルタ:
+        //   - kr_id 付き → 親 KR がフィルタ通過した (= krIdSet にいる) ものだけ残す
+        //   - kr_id 無し (obj 直下の浮き KA) → 親 obj の own tags がフィルタを含む場合のみ残す
+        // これで「KR にタグを付けたら、その KR に紐付く KA はそのプログラムとして
+        // 認識される」が override セマンティクスで実現される。
         if (programTagCtx) {
           const krIdSet = new Set(krs.map(k => Number(k.id)))
-          kas = kas.filter(ka => !ka.kr_id || krIdSet.has(Number(ka.kr_id)))
+          const objTagsMap = new Map(objsAll.map(o => [Number(o.id), Array.isArray(o.program_tags) ? o.program_tags : []]))
+          kas = kas.filter(ka => {
+            if (ka.kr_id) return krIdSet.has(Number(ka.kr_id))
+            const objTags = objTagsMap.get(Number(ka.objective_id)) || []
+            return objTags.includes(programTagCtx)
+          })
         }
 
         // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
