@@ -313,38 +313,79 @@ export default function WeeklyMTGFacilitation({
     if (levelIds.length === 0) { setScopePreview({ perLevel: [], total: 0 }); return }
     const scopeLevels = levelIds.map(id => levels.find(l => Number(l.id) === Number(id))).filter(Boolean)
 
+    // タグフィルタは KR レベルで行うため、obj は archive のみ除外して全件取得
     const { data: objsRaw } = await supabase.from('objectives')
       .select('id, level_id, archived_at, program_tags').in('level_id', levelIds)
-    const objs = applyProgramTagFilter((objsRaw || []).filter(o => !o.archived_at), programTag)
-    const objsByLevel = {}
-    ;(objs || []).forEach(o => {
-      if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
-      objsByLevel[o.level_id].push(o.id)
-    })
-    const allObjIds = (objs || []).map(o => o.id)
+    const objsAll = (objsRaw || []).filter(o => !o.archived_at)
+    const allObjIdsAll = objsAll.map(o => o.id)
 
     let perLevel = []
     if (wkly.flow === 'kr') {
-      let krs = []
-      if (allObjIds.length > 0) {
-        const { data } = await supabase.from('key_results')
-          .select('id, objective_id, title, owner').in('objective_id', allObjIds)
-        krs = data || []
+      // KR を全件取って (program_tags 含む) → KR レベルフィルタ → obj を矯正
+      let krsRaw = []
+      if (allObjIdsAll.length > 0) {
+        let res = await supabase.from('key_results')
+          .select('id, objective_id, title, owner, program_tags').in('objective_id', allObjIdsAll)
+        if (res.error && /program_tags|column/i.test(res.error.message || '')) {
+          res = await supabase.from('key_results')
+            .select('id, objective_id, title, owner').in('objective_id', allObjIdsAll)
+        }
+        krsRaw = res.data || []
       }
+      const filtered = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
+      const krs = filtered.krs
+      const objsByLevel = {}
+      ;(filtered.objs || []).forEach(o => {
+        if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
+        objsByLevel[o.level_id].push(o.id)
+      })
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
         const items = krs.filter(k => ids.has(k.objective_id))
         return { level: l, count: items.length, items: items.map(k => ({ id: k.id, title: k.title, owner: k.owner })) }
       })
     } else if (wkly.flow === 'ka' || wkly.flow === 'sales') {
+      // KR を全件取って KR レベルフィルタ → 対象 KR set を作る → KA を kr_id で絞る
+      let krsRaw = []
+      if (allObjIdsAll.length > 0) {
+        let res = await supabase.from('key_results')
+          .select('id, objective_id, program_tags').in('objective_id', allObjIdsAll)
+        if (res.error && /program_tags|column/i.test(res.error.message || '')) {
+          res = await supabase.from('key_results')
+            .select('id, objective_id').in('objective_id', allObjIdsAll)
+        }
+        krsRaw = res.data || []
+      }
+      const filteredKRs = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
+      const krs = filteredKRs.krs
+      const krIdSet = new Set(krs.map(k => Number(k.id)))
+      const objTagsMap = new Map(objsAll.map(o => [Number(o.id), Array.isArray(o.program_tags) ? o.program_tags : []]))
+
       let kas = []
-      if (allObjIds.length > 0) {
+      if (allObjIdsAll.length > 0) {
         const { data } = await supabase.from('weekly_reports')
           .select('id, objective_id, status, ka_title, kr_id, owner, week_start')
-          .in('objective_id', allObjIds).eq('week_start', weekStart)
-        // status='done' を除外
+          .in('objective_id', allObjIdsAll).eq('week_start', weekStart)
         kas = (data || []).filter(k => k.status !== 'done')
       }
+      // KA フィルタ:
+      //   - filter なし → 全 KA を残す
+      //   - filter あり → kr_id 付きは KR set チェック / kr_id 無しは親 obj の own tags チェック
+      if (programTag) {
+        kas = kas.filter(ka => {
+          if (ka.kr_id) return krIdSet.has(Number(ka.kr_id))
+          const objTags = objTagsMap.get(Number(ka.objective_id)) || []
+          return objTags.includes(programTag)
+        })
+      }
+      // フィルタ後の KA から、対象 obj を level 別にグルーピング
+      const matchObjIds = new Set(kas.map(k => Number(k.objective_id)))
+      const objsByLevel = {}
+      ;(objsAll || []).forEach(o => {
+        if (!matchObjIds.has(Number(o.id))) return
+        if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
+        objsByLevel[o.level_id].push(o.id)
+      })
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
         const items = kas.filter(k => ids.has(k.objective_id))
