@@ -268,11 +268,18 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
     })()
   }, [period, levelId, fiscalYear])
 
-  // プログラムタグサジェスト用に既存タグを集約
+  // プログラムタグ マスタ (program_definitions) から候補を取得。
+  // マスタが無い旧環境では objectives.program_tags の distinct で補完。
   useEffect(() => {
     ;(async () => {
+      const defRes = await supabase.from('program_definitions').select('name').order('sort_order', { ascending: true }).order('name', { ascending: true }).range(0, 999)
+      if (!defRes.error && defRes.data) {
+        setAllTags(defRes.data.map(d => d.name))
+        return
+      }
+      // フォールバック
       const { data, error } = await supabase.from('objectives').select('program_tags').not('program_tags', 'is', null).range(0, 999)
-      if (error) return  // 列が無い古い環境では黙ってスキップ
+      if (error) return
       const set = new Set()
       ;(data || []).forEach(o => (o.program_tags || []).forEach(t => { if (t) set.add(t) }))
       setAllTags([...set].sort())
@@ -383,33 +390,34 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>)}
         </select>
       </div>
-      {/* プログラムタグ: 横断会議でフィルタするためのフリーフォームタグ */}
+      {/* プログラムタグ: マスタ (program_definitions) から選択。新規追加は組織ページで管理。 */}
       <div style={{ marginBottom: 13 }}>
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>
-          🏷 プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用)</span>
+          🏷 プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
-          {programTags.map(t => (
-            <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: 'rgba(107,150,199,0.15)', color: '#6B96C7', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
-              {t}
-              <button type="button" onClick={() => removeTag(t)} style={{ background: 'transparent', border: 'none', color: '#6B96C7', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
-            </span>
-          ))}
-          <input
-            list="program-tags-suggest"
-            value={tagInput}
-            onChange={e => setTagInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput) }
-              else if (e.key === 'Backspace' && !tagInput && programTags.length > 0) { removeTag(programTags[programTags.length - 1]) }
-            }}
-            onBlur={() => { if (tagInput.trim()) addTag(tagInput) }}
-            placeholder={programTags.length === 0 ? '例: プログラムA, 新規事業X (Enter で追加)' : ''}
-            style={{ flex: 1, minWidth: 120, background: 'transparent', border: 'none', color: '#e8eaf0', fontSize: 13, outline: 'none', padding: '3px 4px' }}
-          />
-          <datalist id="program-tags-suggest">
-            {allTags.filter(t => !programTags.includes(t)).map(t => <option key={t} value={t} />)}
-          </datalist>
+          {programTags.map(t => {
+            const isOrphan = !allTags.includes(t)
+            return (
+              <span key={t} title={isOrphan ? 'マスタから削除されたタグです。組織ページで再定義してください。' : ''}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isOrphan ? 'rgba(232,155,155,0.15)' : 'rgba(107,150,199,0.15)', color: isOrphan ? '#E89B9B' : '#6B96C7', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
+                {isOrphan ? '⚠ ' : ''}{t}
+                <button type="button" onClick={() => removeTag(t)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+              </span>
+            )
+          })}
+          {(() => {
+            const candidates = allTags.filter(t => !programTags.includes(t))
+            return candidates.length > 0 ? (
+              <select value="" onChange={e => { if (e.target.value) addTag(e.target.value) }}
+                style={{ flex: 1, minWidth: 140, background: 'transparent', border: 'none', color: '#9aa3b8', fontSize: 13, outline: 'none', padding: '3px 4px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <option value="">＋ プログラムを追加</option>
+                {candidates.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            ) : programTags.length === 0 ? (
+              <span style={{ fontSize: 11, color: '#9aa3b8' }}>マスタにタグがありません — 組織ページで定義してください</span>
+            ) : null
+          })()}
         </div>
       </div>
 

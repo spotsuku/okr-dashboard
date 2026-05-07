@@ -589,15 +589,18 @@ function OwnerSelect({ value, onChange, members, T, disabled }) {
   )
 }
 
-// ─── プログラムタグ入力 (チップ + Enter で追加 + ✕ で削除 + datalist 補完) ──
-function ProgramTagsInput({ value, onChange, T, disabled, allTags = [], suggestId = 'kr-program-tags' }) {
-  const [input, setInput] = useState('')
+// ─── プログラムタグ入力 (マスタから選択するマルチセレクト方式) ──
+// allTags は program_definitions から取得した name の配列。
+// マスタにないタグ (旧データ) は ⚠ アイコン付きで表示し、削除のみ可能。
+// 新しいタグを追加するには「組織ページ → 🏷 プログラム管理」を案内する。
+function ProgramTagsInput({ value, onChange, T, disabled, allTags = [] }) {
   const tags = Array.isArray(value) ? value : []
+  const orphanTags = tags.filter(t => !allTags.includes(t))  // マスタに無い (削除済み等)
+  const candidates = allTags.filter(t => !tags.includes(t))
   function addTag(t) {
     const v = (t || '').trim()
-    if (!v || tags.includes(v)) { setInput(''); return }
+    if (!v || tags.includes(v)) return
     onChange([...tags, v])
-    setInput('')
   }
   function removeTag(t) { onChange(tags.filter(x => x !== t)) }
   return (
@@ -610,29 +613,33 @@ function ProgramTagsInput({ value, onChange, T, disabled, allTags = [], suggestI
       opacity: disabled ? 0.5 : 1,
     }}>
       <span style={{ fontSize: 11, color: T.textFaint, flexShrink: 0 }}>🏷</span>
-      {tags.map(t => (
-        <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', background: 'rgba(107,150,199,0.15)', color: '#6B96C7', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>
-          {t}
-          <button type="button" onClick={() => removeTag(t)} disabled={disabled}
-            style={{ background: 'transparent', border: 'none', color: '#6B96C7', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}>✕</button>
-        </span>
-      ))}
-      <input
-        list={suggestId}
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(input) }
-          else if (e.key === 'Backspace' && !input && tags.length > 0) { removeTag(tags[tags.length - 1]) }
-        }}
-        onBlur={() => { if (input.trim()) addTag(input) }}
-        placeholder={tags.length === 0 ? 'プログラムタグ' : ''}
-        disabled={disabled}
-        style={{ flex: 1, minWidth: 80, fontSize: 11, padding: '2px 4px', border: 'none', background: 'transparent', color: T.text, outline: 'none', fontFamily: 'inherit' }}
-      />
-      <datalist id={suggestId}>
-        {allTags.filter(t => !tags.includes(t)).map(t => <option key={t} value={t} />)}
-      </datalist>
+      {tags.map(t => {
+        const isOrphan = orphanTags.includes(t)
+        return (
+          <span key={t} title={isOrphan ? 'このタグはマスタから削除されています。組織ページで再定義してください。' : ''}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', background: isOrphan ? 'rgba(232,155,155,0.15)' : 'rgba(107,150,199,0.15)', color: isOrphan ? '#E89B9B' : '#6B96C7', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>
+            {isOrphan ? '⚠ ' : ''}{t}
+            <button type="button" onClick={() => removeTag(t)} disabled={disabled}
+              style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}>✕</button>
+          </span>
+        )
+      })}
+      {candidates.length > 0 ? (
+        <select
+          value=""
+          onChange={e => { if (e.target.value) addTag(e.target.value) }}
+          disabled={disabled}
+          style={{ fontSize: 11, padding: '2px 4px', border: 'none', background: 'transparent', color: T.textSub, fontFamily: 'inherit', outline: 'none', cursor: disabled ? 'not-allowed' : 'pointer', appearance: 'auto' }}>
+          <option value="">＋ プログラムを追加</option>
+          {candidates.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      ) : (
+        tags.length === 0 && (
+          <span style={{ fontSize: 10, color: T.textFaint }} title="組織ページの「🏷 プログラム管理」でタグを定義してください">
+            タグなし (組織ページで定義)
+          </span>
+        )
+      )}
     </div>
   )
 }
@@ -681,11 +688,20 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
   const [editForm, setEditForm] = useState({ title: '', target: '', current: '', unit: '', owner: '', program_tags: [] })
   const [editSaving, setEditSaving] = useState(false)
 
-  // プログラムタグ サジェスト用 (objectives + key_results 両方から集約)
+  // プログラムタグ マスタ (program_definitions) から候補を取得。
+  // マスタが無い旧環境では objectives + key_results からの distinct で補完。
   const [allProgramTags, setAllProgramTags] = useState([])
   useEffect(() => {
     let alive = true
     ;(async () => {
+      // 1) program_definitions マスタから取得 (推奨)
+      const defRes = await supabase.from('program_definitions').select('name').order('sort_order', { ascending: true }).order('name', { ascending: true }).range(0, 999)
+      if (!alive) return
+      if (!defRes.error && defRes.data) {
+        setAllProgramTags(defRes.data.map(d => d.name))
+        return
+      }
+      // 2) フォールバック: マスタ未作成環境では既存タグから集約
       const [objR, krR] = await Promise.all([
         supabase.from('objectives').select('program_tags').not('program_tags', 'is', null).range(0, 999),
         supabase.from('key_results').select('program_tags').not('program_tags', 'is', null).range(0, 999),
