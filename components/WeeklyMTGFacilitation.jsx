@@ -93,6 +93,14 @@ function resolveScopeLevelIds(wkly, levels) {
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
       .map(l => l.id)
   }
+  // 全階層 (全社 / 部署 / チーム すべて) — プログラム別定例など、組織を
+  // 横断するタグベースの会議で使う。タグの付き場所が任意のレベルでも拾える。
+  if (wkly?.scope === 'all-levels') {
+    return levels
+      .slice()
+      .sort((a, b) => (getDepth(a.id, levels) - getDepth(b.id, levels)) || (a.sort_order || 0) - (b.sort_order || 0))
+      .map(l => l.id)
+  }
   return []
 }
 
