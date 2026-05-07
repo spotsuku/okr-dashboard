@@ -48,6 +48,21 @@ function applyProgramTagFilterKRs(objs, krs, programTag) {
   return { objs: filteredObjs, krs: filteredKRs }
 }
 
+// Q 期 obj の level_id が親 annual obj と異なる場合があるため、
+// チーム単位の集計では「親 annual obj の level_id」を辿って使う。
+// (OKR マトリクスは parent_objective_id でグルーピングするため整合する)
+function resolveAnnualLevelId(objId, objsById) {
+  let cur = objsById.get(Number(objId))
+  let depth = 0
+  while (cur?.parent_objective_id && depth < 10) {
+    const parent = objsById.get(Number(cur.parent_objective_id))
+    if (!parent) break
+    cur = parent
+    depth++
+  }
+  return cur?.level_id ?? null
+}
+
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。bgSection は sectionBg のエイリアス。
 const DARK_T  = { ...COMMON_TOKENS.dark,  bgSection: COMMON_TOKENS.dark.sectionBg  }
@@ -328,10 +343,12 @@ export default function WeeklyMTGFacilitation({
     const scopeLevels = levelIds.map(id => levels.find(l => Number(l.id) === Number(id))).filter(Boolean)
 
     // タグフィルタは KR レベルで行うため、obj は archive のみ除外して全件取得
+    // parent_objective_id を含めて取得 (チーム集計時に親 annual の level_id を辿るため)
     const { data: objsRaw } = await supabase.from('objectives')
-      .select('id, level_id, archived_at, program_tags').in('level_id', levelIds)
+      .select('id, level_id, archived_at, program_tags, parent_objective_id').in('level_id', levelIds)
     const objsAll = (objsRaw || []).filter(o => !o.archived_at)
     const allObjIdsAll = objsAll.map(o => o.id)
+    const objsById = new Map(objsAll.map(o => [Number(o.id), o]))
 
     let perLevel = []
     if (wkly.flow === 'kr') {
@@ -348,10 +365,13 @@ export default function WeeklyMTGFacilitation({
       }
       const filtered = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
       const krs = filtered.krs
+      // 親 annual obj の level_id でチーム集計 (Q 期 obj の level_id 不整合に対応)
       const objsByLevel = {}
       ;(filtered.objs || []).forEach(o => {
-        if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
-        objsByLevel[o.level_id].push(o.id)
+        const teamLvl = resolveAnnualLevelId(o.id, objsById)
+        if (teamLvl == null) return
+        if (!objsByLevel[teamLvl]) objsByLevel[teamLvl] = []
+        objsByLevel[teamLvl].push(o.id)
       })
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
@@ -393,12 +413,15 @@ export default function WeeklyMTGFacilitation({
         })
       }
       // フィルタ後の KA から、対象 obj を level 別にグルーピング
+      // 親 annual obj の level_id でチーム集計 (Q 期 obj の level_id 不整合に対応)
       const matchObjIds = new Set(kas.map(k => Number(k.objective_id)))
       const objsByLevel = {}
       ;(objsAll || []).forEach(o => {
         if (!matchObjIds.has(Number(o.id))) return
-        if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
-        objsByLevel[o.level_id].push(o.id)
+        const teamLvl = resolveAnnualLevelId(o.id, objsById)
+        if (teamLvl == null) return
+        if (!objsByLevel[teamLvl]) objsByLevel[teamLvl] = []
+        objsByLevel[teamLvl].push(o.id)
       })
       perLevel = scopeLevels.map(l => {
         const ids = new Set(objsByLevel[l.id] || [])
@@ -1650,14 +1673,19 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
 
         // Objective を取得 (タグフィルタは KR レベルで後段で行うため、obj は archived のみ除外)
+        // parent_objective_id を含めて取得 (チーム集計時に親 annual の level_id を辿るため)
+        // また、子 Q obj の level_id が親と違うケースに対応するため scope に親 annual の
+        // level も含む必要がある → 一旦 archived 除外で全 obj を取得 (scope=all-levels なら
+        // どのみち全件、teams-of 等は scope 内のみ取得)
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, period, title, owner, archived_at, program_tags')
+          .select('id, level_id, period, title, owner, archived_at, program_tags, parent_objective_id')
           .in('level_id', scopeLevelIds)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
         const objsAll = (objsRes.data || []).filter(o => !o.archived_at)
         const allObjIdsAll = objsAll.map(o => o.id)
         if (allObjIdsAll.length === 0) { if (alive) setItems([]); return }
+        const objsById = new Map(objsAll.map(o => [Number(o.id), o]))
 
         // KR (program_tags 含む) → KR レベルでタグフィルタ → 関連 obj だけ残す
         let krsRes = await supabase.from('key_results')
@@ -1702,7 +1730,6 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
           })
         }
         // フィルタ後の KA から、表示用の対象 obj を再構築 (KA に紐付くものだけ)
-        const objsById = new Map(objsAll.map(o => [Number(o.id), o]))
         const krsById = new Map(krs.map(k => [Number(k.id), k]))
         const matchObjIds = new Set()
         for (const ka of kas) {
@@ -1719,10 +1746,12 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
         // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
+        // チーム所属判定は親 annual obj の level_id を辿って使う (Q 期 obj の
+        // level_id が親 annual と異なる不整合データに対応)
         const built = []
         for (const lvlId of scopeLevelIds) {
           const team = levels.find(l => Number(l?.id) === Number(lvlId)) || { id: lvlId, name: '?', icon: '🏢' }
-          const teamObjs = objs.filter(o => Number(o.level_id) === Number(lvlId)).sort((a, b) => a.id - b.id)
+          const teamObjs = objs.filter(o => Number(resolveAnnualLevelId(o.id, objsById)) === Number(lvlId)).sort((a, b) => a.id - b.id)
           for (const o of teamObjs) {
             const objKas = kas
               .filter(k => Number(k.objective_id) === Number(o.id))
