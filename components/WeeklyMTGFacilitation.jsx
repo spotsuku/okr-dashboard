@@ -492,6 +492,7 @@ export default function WeeklyMTGFacilitation({
             T={T} meeting={meeting} weekStart={weekStart} myName={myName} members={members}
             levels={levels}
             scope={scopePreview} session={session}
+            programTag={programTag}
             onUpdateSession={async (patch) => {
               // 楽観的更新: 先に画面を反映
               setSession(prev => prev ? { ...prev, ...patch } : { meeting_key: meeting.key, week_start: weekStart, step: 0, ...patch })
@@ -716,7 +717,10 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
 }
 
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, onUpdateSession, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, onUpdateSession, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList, programTag }) {
+  const wkly = meeting?.weeklyMTG
+  const requiresProgram = !!wkly?.requiresProgram
+  const programReady = !requiresProgram || !!programTag
   // 除外する組織レベル(チーム/部署) ID のセット
   // 優先順位: localStorage (即時) > session DB
   // (DB列 excluded_level_ids が無い環境でも動くよう localStorage を併用)
@@ -764,7 +768,6 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       onUpdateSession({ excluded_level_ids: arr })
     }
   }, [excludedLevelIds, onUpdateSession, lsKey])
-  const wkly = meeting?.weeklyMTG
   const flowLabel = wkly?.flow === 'ka' ? 'KA重点'
     : wkly?.flow === 'sales' ? '営業フォーカス'
     : 'KR重点'
@@ -1060,22 +1063,34 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
         return (
           <>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {requiresProgram && !programReady && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 10,
+                  background: `${T.warn}1a`, border: `1px solid ${T.warn}55`,
+                  color: T.warn, fontSize: 13, fontWeight: 700, lineHeight: 1.5,
+                }}>
+                  🏷 この会議はプログラム別定例です。<br/>
+                  画面上部の「プログラムで絞る」プルダウンから対象プログラムを選択してから開始してください。
+                </div>
+              )}
               {inProgress ? (
                 <>
-                  <button onClick={onResume} disabled={!scope} style={bigPrimary}>
+                  <button onClick={onResume} disabled={!scope || !programReady} style={bigPrimary}>
                     <span style={{ fontSize: 18 }}>▶️</span> 続きから再開
                     <span style={{ fontSize: 11, opacity: 0.85 }}>(Step {sessStep})</span>
                   </button>
                   <button onClick={onReset} style={bigSecondary}>↻ リセットして最初から</button>
                 </>
               ) : isFinished ? (
-                <button onClick={onStart} disabled={!scope} style={bigPrimary}>
+                <button onClick={onStart} disabled={!scope || !programReady} style={bigPrimary}>
                   <span style={{ fontSize: 18 }}>▶️</span> もう一度開始
+                  {programTag && <span style={{ fontSize: 11, opacity: 0.85 }}>（{programTag}）</span>}
                   {myName && <span style={{ fontSize: 11, opacity: 0.85 }}>（ファシリ: {myName}）</span>}
                 </button>
               ) : (
-                <button onClick={onStart} disabled={!scope} style={bigPrimary}>
+                <button onClick={onStart} disabled={!scope || !programReady} style={bigPrimary}>
                   <span style={{ fontSize: 18 }}>▶️</span> 会議を開始
+                  {programTag && <span style={{ fontSize: 11, opacity: 0.85 }}>（{programTag}）</span>}
                   {myName && <span style={{ fontSize: 11, opacity: 0.85 }}>（ファシリ: {myName}）</span>}
                 </button>
               )}
