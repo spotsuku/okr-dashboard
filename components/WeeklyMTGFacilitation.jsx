@@ -1648,34 +1648,50 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         if (krsRes.error) throw krsRes.error
         const krsAll = krsRes.data || []
         const filtered = applyProgramTagFilterKRs(objsAll, krsAll, programTagCtx)
-        const objs = filtered.objs
-        const allObjIds = objs.map(o => o.id)
         const krs = filtered.krs
-        if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
-        // 当週のKA (weekly_reports) — フィルタ後の objIds に絞る
+        // 当週の KA (weekly_reports) を「scope 内全 obj」から取得 (フィルタ後 obj に
+        // 絞らない理由: KA.objective_id が KR の現在の objective_id と異なる
+        // ケース (KR を別 obj に移動した時等) を取りこぼさないため)。
         const kasRes = await supabase.from('weekly_reports')
           .select('*')
-          .in('objective_id', allObjIds)
+          .in('objective_id', allObjIdsAll)
           .eq('week_start', weekStart)
           .neq('status', 'done')
           .range(0, 49999)
         if (kasRes.error) throw kasRes.error
         let kas = kasRes.data || []
+
         // タグフィルタ中の KA フィルタ:
-        //   - kr_id 付き → 親 KR がフィルタ通過した (= krIdSet にいる) ものだけ残す
+        //   - kr_id 付き → 親 KR がフィルタ通過した (= filtered.krs にいる) ものだけ残す
         //   - kr_id 無し (obj 直下の浮き KA) → 親 obj の own tags がフィルタを含む場合のみ残す
         // これで「KR にタグを付けたら、その KR に紐付く KA はそのプログラムとして
         // 認識される」が override セマンティクスで実現される。
+        const objTagsMap = new Map(objsAll.map(o => [Number(o.id), Array.isArray(o.program_tags) ? o.program_tags : []]))
         if (programTagCtx) {
           const krIdSet = new Set(krs.map(k => Number(k.id)))
-          const objTagsMap = new Map(objsAll.map(o => [Number(o.id), Array.isArray(o.program_tags) ? o.program_tags : []]))
           kas = kas.filter(ka => {
             if (ka.kr_id) return krIdSet.has(Number(ka.kr_id))
             const objTags = objTagsMap.get(Number(ka.objective_id)) || []
             return objTags.includes(programTagCtx)
           })
         }
+        // フィルタ後の KA から、表示用の対象 obj を再構築 (KA に紐付くものだけ)
+        const objsById = new Map(objsAll.map(o => [Number(o.id), o]))
+        const krsById = new Map(krs.map(k => [Number(k.id), k]))
+        const matchObjIds = new Set()
+        for (const ka of kas) {
+          // KA.objective_id を採用。もし KR.objective_id と異なる場合、KR の現在の
+          // objective_id を優先 (KA に紐付く obj として認識される)
+          const kr = ka.kr_id ? krsById.get(Number(ka.kr_id)) : null
+          const targetObjId = kr?.objective_id ?? ka.objective_id
+          if (targetObjId != null && objsById.has(Number(targetObjId))) {
+            matchObjIds.add(Number(targetObjId))
+          }
+        }
+        const objs = (objsAll || []).filter(o => matchObjIds.has(Number(o.id)))
+        const allObjIds = objs.map(o => o.id)
+        if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
         // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
         const built = []
