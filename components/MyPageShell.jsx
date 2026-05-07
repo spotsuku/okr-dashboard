@@ -876,11 +876,12 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         .order('created_at', { ascending: false })
         .limit(10)
       if (!alive) return
-      // 平日 (月〜金 JST) の最新ログを採用 (土日のログは始業ゲートでは無視)
+      // 平日 (月〜金 JST) かつ祝日でない最新ログを採用 (土日 + 日本の祝日は始業ゲートで無視)
       const weekdayRow = (data || []).find(row => {
         const j = new Date(new Date(row.created_at).getTime() + 9 * 3600 * 1000)
-        const dow = j.getUTCDay()  // 0=日 ... 6=土
-        return dow >= 1 && dow <= 5
+        const dStr = `${j.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2,'0')}-${String(j.getUTCDate()).padStart(2,'0')}`
+        // isJpNonBusinessDay は土日 + 祝日両方を true で返す
+        return !isJpNonBusinessDay(dStr)
       })
       if (!weekdayRow) { setPendingYesterdayLog(false); return }
       const c = parseLogContent(weekdayRow.content)

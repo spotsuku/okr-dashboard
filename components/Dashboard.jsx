@@ -244,6 +244,9 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   const [owner, setOwner]     = useState(initial?.owner || '')
   const [levelId, setLevelId] = useState(String(initial?.level_id || activeLevelId || levels[0]?.id))
   const [period, setPeriod]   = useState(activePeriod === 'all' ? 'q1' : activePeriod)
+  const [programTags, setProgramTags] = useState(Array.isArray(initial?.program_tags) ? initial.program_tags : [])
+  const [tagInput, setTagInput] = useState('')
+  const [allTags, setAllTags] = useState([])  // サジェスト用 (既存の全タグ)
   const [krs, setKRs] = useState(
     initial?.key_results?.length
       ? initial.key_results.map(k => ({ ...k, target: String(k.target), current: String(k.current), owner: k.owner || '', parent_kr_id: k.parent_kr_id || null, aggregation_type: k.aggregation_type || 'manual' }))
@@ -264,6 +267,35 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       setAnnualObjList(objs || [])
     })()
   }, [period, levelId, fiscalYear])
+
+  // プログラムタグ マスタ (program_definitions) から候補を取得。
+  // マスタが無い旧環境では objectives.program_tags の distinct で補完。
+  useEffect(() => {
+    ;(async () => {
+      const defRes = await supabase.from('program_definitions').select('name').order('sort_order', { ascending: true }).order('name', { ascending: true }).range(0, 999)
+      if (!defRes.error && defRes.data) {
+        setAllTags(defRes.data.map(d => d.name))
+        return
+      }
+      // フォールバック
+      const { data, error } = await supabase.from('objectives').select('program_tags').not('program_tags', 'is', null).range(0, 999)
+      if (error) return
+      const set = new Set()
+      ;(data || []).forEach(o => (o.program_tags || []).forEach(t => { if (t) set.add(t) }))
+      setAllTags([...set].sort())
+    })()
+  }, [])
+
+  function addTag(t) {
+    const v = (t || '').trim()
+    if (!v) return
+    if (programTags.includes(v)) return
+    setProgramTags(prev => [...prev, v])
+    setTagInput('')
+  }
+  function removeTag(t) {
+    setProgramTags(prev => prev.filter(x => x !== t))
+  }
 
   // 選択中の通期OKRの詳細（KR含む）を取得
   useEffect(() => {
@@ -295,7 +327,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
     }
     setSaving(true)
     await onSave({
-      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: parentId || null },
+      obj: { id: initial?.id, title, owner, level_id: parseInt(levelId), period, parent_objective_id: parentId || null, program_tags: programTags },
       krs: krs.map(k => ({ ...k, target: parseFloat(k.target) || 0, current: parseFloat(k.current) || 0 })),
     })
     setSaving(false)
@@ -357,6 +389,36 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           <option value="">-- 未設定 --</option>
           {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>)}
         </select>
+      </div>
+      {/* プログラムタグ: マスタ (program_definitions) から選択。新規追加は組織ページで管理。 */}
+      <div style={{ marginBottom: 13 }}>
+        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>
+          🏷 プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
+          {programTags.map(t => {
+            const isOrphan = !allTags.includes(t)
+            return (
+              <span key={t} title={isOrphan ? 'マスタから削除されたタグです。組織ページで再定義してください。' : ''}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isOrphan ? 'rgba(232,155,155,0.15)' : 'rgba(107,150,199,0.15)', color: isOrphan ? '#E89B9B' : '#6B96C7', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
+                {isOrphan ? '⚠ ' : ''}{t}
+                <button type="button" onClick={() => removeTag(t)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+              </span>
+            )
+          })}
+          {(() => {
+            const candidates = allTags.filter(t => !programTags.includes(t))
+            return candidates.length > 0 ? (
+              <select value="" onChange={e => { if (e.target.value) addTag(e.target.value) }}
+                style={{ flex: 1, minWidth: 140, background: 'transparent', border: 'none', color: '#9aa3b8', fontSize: 13, outline: 'none', padding: '3px 4px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <option value="">＋ プログラムを追加</option>
+                {candidates.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            ) : programTags.length === 0 ? (
+              <span style={{ fontSize: 11, color: '#9aa3b8' }}>マスタにタグがありません — 組織ページで定義してください</span>
+            ) : null
+          })()}
+        </div>
       </div>
 
       {parentObj && (
@@ -1030,7 +1092,14 @@ export default function Dashboard({ user, onSignOut }) {
     if (objToSave.id) {
       const updatePayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
       if (objToSave.parent_objective_id !== undefined) updatePayload.parent_objective_id = objToSave.parent_objective_id
-      const { error: updErr } = await supabase.from('objectives').update(updatePayload).eq('id', objToSave.id)
+      if (objToSave.program_tags !== undefined) updatePayload.program_tags = objToSave.program_tags
+      let { error: updErr } = await supabase.from('objectives').update(updatePayload).eq('id', objToSave.id)
+      if (updErr && /program_tags|column/i.test(updErr.message || '')) {
+        // 列が無い古い環境: tags を抜いて再試行
+        delete updatePayload.program_tags
+        const r = await supabase.from('objectives').update(updatePayload).eq('id', objToSave.id)
+        updErr = r.error
+      }
       if (updErr) { console.error('objective update error:', updErr); alert('目標の更新に失敗しました: ' + updErr.message); return }
 
       // 所属組織変更時、紐づくKA(weekly_reports)のlevel_idも更新
@@ -1084,10 +1153,16 @@ export default function Dashboard({ user, onSignOut }) {
     } else {
       const insertPayload = { title: objToSave.title, owner: objToSave.owner, level_id: objToSave.level_id, period: objToSave.period }
       if (objToSave.parent_objective_id) insertPayload.parent_objective_id = objToSave.parent_objective_id
-      const { data, error } = await supabase
+      if (objToSave.program_tags?.length) insertPayload.program_tags = objToSave.program_tags
+      let { data, error } = await supabase
         .from('objectives')
         .insert(insertPayload)
         .select().single()
+      if (error && /program_tags|column/i.test(error.message || '')) {
+        delete insertPayload.program_tags
+        const r = await supabase.from('objectives').insert(insertPayload).select().single()
+        data = r.data; error = r.error
+      }
       if (error) { console.error('objective insert error:', error); alert('目標の保存に失敗しました: ' + error.message); return }
       objectiveId = data.id
       const validKRs = krs.filter(k => k.title?.trim())
@@ -1428,7 +1503,7 @@ export default function Dashboard({ user, onSignOut }) {
       )}
       {activePage === 'orgjd' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-          <OrgPage themeKey={themeKey} user={user} />
+          <OrgPage themeKey={themeKey} user={user} fiscalYear={fiscalYear} />
         </div>
       )}
 

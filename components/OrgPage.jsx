@@ -3173,6 +3173,146 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
 }
 
 // ══════════════════════════════════════════════════
+// プログラム管理モーダル — タグマスタ (program_definitions) を CRUD
+// ══════════════════════════════════════════════════
+function ProgramManageModal({ onClose, T }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newName, setNewName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [usageCounts, setUsageCounts] = useState({})  // { name: count }
+
+  const load = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('program_definitions')
+      .select('id, name, color, description, sort_order, created_at')
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true })
+      .range(0, 999)
+    if (error) {
+      alert('プログラム管理テーブルが見つかりません。\n\nsupabase_program_definitions.sql を Supabase で実行してください。')
+      setItems([])
+    } else {
+      setItems(data || [])
+    }
+    // 使用数を集計 (objectives + key_results の program_tags から count)
+    const [oR, kR] = await Promise.all([
+      supabase.from('objectives').select('program_tags').not('program_tags', 'is', null).range(0, 9999),
+      supabase.from('key_results').select('program_tags').not('program_tags', 'is', null).range(0, 9999),
+    ])
+    const counts = {}
+    ;[...(oR.data || []), ...(kR.data || [])].forEach(r => {
+      ;(r.program_tags || []).forEach(t => { counts[t] = (counts[t] || 0) + 1 })
+    })
+    setUsageCounts(counts)
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function handleAdd() {
+    const v = newName.trim()
+    if (!v) return
+    if (items.some(it => it.name === v)) { alert('同名のタグが既に存在します'); return }
+    setBusy(true)
+    const { error } = await supabase.from('program_definitions').insert({ name: v })
+    setBusy(false)
+    if (error) { alert('追加に失敗: ' + error.message); return }
+    setNewName('')
+    load()
+  }
+  async function handleRename(id) {
+    const v = editName.trim()
+    if (!v) return
+    setBusy(true)
+    const { error } = await supabase.from('program_definitions').update({ name: v }).eq('id', id)
+    setBusy(false)
+    if (error) { alert('変更に失敗: ' + error.message); return }
+    setEditingId(null)
+    setEditName('')
+    load()
+  }
+  async function handleDelete(item) {
+    const cnt = usageCounts[item.name] || 0
+    const msg = cnt > 0
+      ? `「${item.name}」は ${cnt} 件の OKR / KR で使用されています。\nマスタから削除しても OKR / KR 側のタグは残ります (⚠ アイコンで表示)。\n本当に削除しますか?`
+      : `「${item.name}」を削除しますか?`
+    if (!window.confirm(msg)) return
+    setBusy(true)
+    const { error } = await supabase.from('program_definitions').delete().eq('id', item.id)
+    setBusy(false)
+    if (error) { alert('削除に失敗: ' + error.message); return }
+    load()
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 60,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.bgCard, borderRadius: 14, padding: 20, width: '100%', maxWidth: 560,
+        maxHeight: '85vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.2)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: T.text }}>🏷 プログラム管理</h3>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 18, cursor: 'pointer', padding: 4 }}>✕</button>
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+          OKR / KR の編集画面から選択できるプログラムタグを定義します。<br/>
+          会議画面 (週次MTG) でタグを選ぶと、関連する OKR / KR のみ表示されます。
+        </div>
+        {/* 追加 */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+            placeholder="新しいプログラム名 (例: プログラムA)"
+            style={{ flex: 1, padding: '8px 10px', border: `1px solid ${T.border}`, borderRadius: 6, background: T.bgCard2 || T.bgCard, color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+          <button onClick={handleAdd} disabled={busy || !newName.trim()}
+            style={{ padding: '8px 14px', borderRadius: 6, border: 'none', background: T.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+            ＋ 追加
+          </button>
+        </div>
+        {/* 一覧 */}
+        {loading ? (
+          <div style={{ fontSize: 12, color: T.textMuted, padding: 20, textAlign: 'center' }}>読み込み中...</div>
+        ) : items.length === 0 ? (
+          <div style={{ fontSize: 12, color: T.textFaint, padding: 20, textAlign: 'center', fontStyle: 'italic' }}>
+            プログラムタグがまだありません。上の入力欄から追加してください。
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {items.map(it => (
+              <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: `1px solid ${T.border}`, borderRadius: 8, background: T.bgCard }}>
+                {editingId === it.id ? (
+                  <>
+                    <input value={editName} onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRename(it.id); if (e.key === 'Escape') setEditingId(null) }}
+                      autoFocus
+                      style={{ flex: 1, padding: '4px 8px', border: `1px solid ${T.accent}`, borderRadius: 5, background: T.bgCard, color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
+                    <button onClick={() => handleRename(it.id)} disabled={busy} style={{ padding: '4px 10px', borderRadius: 5, border: 'none', background: T.accent, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>保存</button>
+                    <button onClick={() => { setEditingId(null); setEditName('') }} style={{ padding: '4px 8px', borderRadius: 5, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: T.text }}>{it.name}</span>
+                    <span style={{ fontSize: 10, color: T.textMuted }}>使用 {usageCounts[it.name] || 0} 件</span>
+                    <button onClick={() => { setEditingId(it.id); setEditName(it.name) }} style={{ padding: '3px 8px', borderRadius: 5, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>名称変更</button>
+                    <button onClick={() => handleDelete(it)} disabled={busy} style={{ padding: '3px 8px', borderRadius: 5, border: `1px solid ${T.danger}40`, background: 'transparent', color: T.danger, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>削除</button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════
 // 組織管理モーダル
 // ══════════════════════════════════════════════════
 function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear, onCopyFromYear }) {
@@ -3352,6 +3492,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
 
   const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
   const [showOrgManage, setShowOrgManage] = useState(false)
+  const [showProgramManage, setShowProgramManage] = useState(false)
 
   // 組織管理ハンドラー
   const getSubtree = (id, lvls) => {
@@ -3439,6 +3580,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: T().accentBg, color: T().accent }}>{fiscalYear}年度</span>
               {isAdmin && <span style={{ fontSize: 11, padding: '4px 12px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700 }}>👑 管理者</span>}
+              <button onClick={() => setShowProgramManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🏷 プログラム管理</button>
               <button onClick={() => setShowOrgManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: 'none', background: T().accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 2px 6px ${T().accent}40` }}>🏗️ 組織を管理</button>
             </div>
           }
@@ -3504,6 +3646,9 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
           fiscalYear={fiscalYear}
           onCopyFromYear={handleCopyFromYear}
         />
+      )}
+      {showProgramManage && (
+        <ProgramManageModal onClose={() => setShowProgramManage(false)} T={T()} />
       )}
     </div>
   )

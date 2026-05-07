@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
 import { COMMON_TOKENS } from '../lib/themeTokens'
@@ -7,6 +7,36 @@ import { getMeeting, MEETING_URLS, SALES_DASHBOARD_URL } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import ConfirmationsTab from './ConfirmationsTab'
 import MeetingImport from './MeetingImport'
+
+// ─── プログラムタグ フィルタ用 Context ──────────────────────────────────────
+// 機能別組織図ではなくプログラム横断で会議をする場合のためのフィルタ。
+// タグは KR にも obj にも付けられる。フィルタは「KR のタグ」or「親 obj のタグ」
+// のいずれかが選択タグを含めばその KR を表示。
+const ProgramTagContext = createContext(null)
+function useProgramTag() { return useContext(ProgramTagContext) }
+
+// objectives 配列のみを obj 自身のタグでフィルタ (旧来の挙動・KR を伴わない集計用)
+function applyProgramTagFilter(objs, programTag) {
+  if (!programTag) return objs || []
+  return (objs || []).filter(o => Array.isArray(o.program_tags) && o.program_tags.includes(programTag))
+}
+
+// KR を「自身のタグ or 親 obj のタグ」で判定してフィルタし、関連する obj
+// (= フィルタ後の KR を 1 つ以上持つ obj) だけを返す。
+function applyProgramTagFilterKRs(objs, krs, programTag) {
+  if (!programTag) return { objs: objs || [], krs: krs || [] }
+  const objMap = new Map((objs || []).map(o => [Number(o.id), o]))
+  const filteredKRs = (krs || []).filter(kr => {
+    const krTags = Array.isArray(kr.program_tags) ? kr.program_tags : []
+    if (krTags.includes(programTag)) return true
+    const obj = objMap.get(Number(kr.objective_id))
+    const objTags = Array.isArray(obj?.program_tags) ? obj.program_tags : []
+    return objTags.includes(programTag)
+  })
+  const matchObjIds = new Set(filteredKRs.map(kr => Number(kr.objective_id)))
+  const filteredObjs = (objs || []).filter(o => matchObjIds.has(Number(o.id)))
+  return { objs: filteredObjs, krs: filteredKRs }
+}
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。bgSection は sectionBg のエイリアス。
@@ -139,6 +169,45 @@ export default function WeeklyMTGFacilitation({
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [scopePreview, setScopePreview] = useState(null) // { perLevel: [{level, count}], total }
+  // プログラムタグでの絞り込み (null = 全件) + サジェスト用の既存タグ一覧
+  const [programTag, setProgramTag] = useState(() => {
+    if (typeof window === 'undefined') return null
+    return sessionStorage.getItem('wm_program_tag') || null
+  })
+  const [allProgramTags, setAllProgramTags] = useState([])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (programTag) sessionStorage.setItem('wm_program_tag', programTag)
+    else sessionStorage.removeItem('wm_program_tag')
+  }, [programTag])
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      // 1) program_definitions マスタから取得 (推奨)
+      const defRes = await supabase
+        .from('program_definitions')
+        .select('name')
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+        .range(0, 999)
+      if (!alive) return
+      if (!defRes.error && defRes.data) {
+        setAllProgramTags(defRes.data.map(d => d.name))
+        return
+      }
+      // 2) フォールバック: マスタ未作成環境では既存タグから集約
+      const { data, error } = await supabase
+        .from('objectives')
+        .select('program_tags')
+        .not('program_tags', 'is', null)
+        .range(0, 999)
+      if (!alive || error) return
+      const set = new Set()
+      ;(data || []).forEach(o => (o.program_tags || []).forEach(t => { if (t) set.add(t) }))
+      setAllProgramTags([...set].sort())
+    })()
+    return () => { alive = false }
+  }, [])
   // 準備画面 / ファシリ画面 の切替。
   // sessionStorage に「このタブで facilitation に入った」フラグを置き、リロード後も復元する。
   // これにより会議実行中にリロードしても準備画面に戻されない。
@@ -220,8 +289,8 @@ export default function WeeklyMTGFacilitation({
     const scopeLevels = levelIds.map(id => levels.find(l => Number(l.id) === Number(id))).filter(Boolean)
 
     const { data: objsRaw } = await supabase.from('objectives')
-      .select('id, level_id, archived_at').in('level_id', levelIds)
-    const objs = (objsRaw || []).filter(o => !o.archived_at)
+      .select('id, level_id, archived_at, program_tags').in('level_id', levelIds)
+    const objs = applyProgramTagFilter((objsRaw || []).filter(o => !o.archived_at), programTag)
     const objsByLevel = {}
     ;(objs || []).forEach(o => {
       if (!objsByLevel[o.level_id]) objsByLevel[o.level_id] = []
@@ -260,7 +329,7 @@ export default function WeeklyMTGFacilitation({
 
     const total = perLevel.reduce((s, x) => s + x.count, 0)
     setScopePreview({ perLevel, total, flow: wkly.flow })
-  }, [wkly, levels, weekStart])
+  }, [wkly, levels, weekStart, programTag])
 
   useEffect(() => { loadScopePreview() }, [loadScopePreview])
 
@@ -329,10 +398,41 @@ export default function WeeklyMTGFacilitation({
   const nextStepN = stepIdx >= 0 && stepIdx < stepNumbers.length - 1 ? stepNumbers[stepIdx + 1] : null
 
   return (
+    <ProgramTagContext.Provider value={programTag}>
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto',
       background: T.bg, color: T.text, fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
+      {/* プログラムタグ フィルタ (機能横断会議用) — 常時表示 */}
+      <div style={{
+        padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8,
+        borderBottom: `1px solid ${T.border}`, background: T.bgCard, fontSize: 12,
+        flexShrink: 0,
+      }}>
+        <span style={{ color: T.textMuted, fontWeight: 700 }}>🏷 プログラムで絞る:</span>
+        {allProgramTags.length > 0 ? (
+          <>
+            <select value={programTag || ''} onChange={e => setProgramTag(e.target.value || null)}
+              style={{
+                padding: '4px 10px', borderRadius: 6, border: `1px solid ${T.border}`,
+                background: T.bgCard, color: T.text, fontSize: 12, fontFamily: 'inherit',
+                cursor: 'pointer', outline: 'none',
+              }}>
+              <option value="">— すべて —</option>
+              {allProgramTags.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            {programTag && (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(107,150,199,0.15)', color: '#6B96C7', fontWeight: 700 }}>
+                {programTag} の OKR / KR / KA のみ表示中
+              </span>
+            )}
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic' }}>
+            タグ未登録 — 「組織ページ → 🏷 プログラム管理」で定義してください
+          </span>
+        )}
+      </div>
       {/* タイマー (進行中ステップでのみ — done 以外) */}
       {!viewingPrep && step >= 1 && stepKind !== 'done' && session?.started_at && (
         <MeetingTimerBanner
@@ -536,6 +636,7 @@ export default function WeeklyMTGFacilitation({
         )}
       </div>
     </div>
+    </ProgramTagContext.Provider>
   )
 }
 
@@ -1006,6 +1107,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
 // ─── Step 1: KR順送り（Phase 3-1: ナビ枠 + 現在KR表示） ─────────────────────
 function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
+  const programTag = useProgramTag()
   const [allItems, setAllItems] = useState(null) // 全候補
   const [loadError, setLoadError] = useState(null)
   // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
@@ -1050,23 +1152,35 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
         const periodKeys = [q, `${fy}_${q}`]
 
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, period, title, owner, parent_objective_id, archived_at')
+          .select('id, level_id, period, title, owner, parent_objective_id, archived_at, program_tags')
           .in('level_id', scopeLevelIds)
           .in('period', periodKeys)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = (objsRes.data || []).filter(o => !o.archived_at)
+        // タグフィルタは KR レベルで行うため、ここでは obj をすべて保持 (アーカイブのみ除外)
+        let objsAll = (objsRes.data || []).filter(o => !o.archived_at)
 
-        const objIds = objs.map(o => o.id)
-        let krs = []
+        const objIds = objsAll.map(o => o.id)
+        let krsAll = []
         if (objIds.length > 0) {
-          const krsRes = await supabase.from('key_results')
-            .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
+          let krsRes = await supabase.from('key_results')
+            .select('id, title, target, current, unit, owner, objective_id, lower_is_better, program_tags')
             .in('objective_id', objIds)
             .range(0, 49999)
+          // program_tags 列が無い古い環境のフォールバック
+          if (krsRes.error && /program_tags|column/i.test(krsRes.error.message || '')) {
+            krsRes = await supabase.from('key_results')
+              .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
+              .in('objective_id', objIds)
+              .range(0, 49999)
+          }
           if (krsRes.error) throw krsRes.error
-          krs = krsRes.data || []
+          krsAll = krsRes.data || []
         }
+        // KR レベルのプログラムタグフィルタ (KR own tag OR 親 obj inherited tag)
+        const filtered = applyProgramTagFilterKRs(objsAll, krsAll, programTag)
+        const objs = filtered.objs
+        const krs = filtered.krs
 
         // 3) 順序組み立て: level 順 → objective 順 → kr 順
         const byLevel = new Map(scopeLevelIds.map(id => [id, []]))
@@ -1092,7 +1206,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     }
     load()
     return () => { alive = false }
-  }, [wkly?.scope, weekStart, levels])
+  }, [wkly?.scope, weekStart, levels, programTag])
 
   // key_results の変更を items に反映 (KR編集後の再mountで値が消える問題対策)
   useEffect(() => {
@@ -1387,6 +1501,7 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
 
 // ─── Step 1: KA順送り（Phase 4） ───────────────────────────────────────────
 function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
+  const programTagCtx = useProgramTag()
   const wkly = meeting?.weeklyMTG
   const [allItems, setAllItems] = useState(null) // 全候補
   // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
@@ -1427,17 +1542,36 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
 
-        // Objective を取得
+        // Objective を取得 (タグフィルタは KR レベルで後段で行うため、obj は archived のみ除外)
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, period, title, owner, archived_at')
+          .select('id, level_id, period, title, owner, archived_at, program_tags')
           .in('level_id', scopeLevelIds)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = (objsRes.data || []).filter(o => !o.archived_at)
+        const objsAll = (objsRes.data || []).filter(o => !o.archived_at)
+        const allObjIdsAll = objsAll.map(o => o.id)
+        if (allObjIdsAll.length === 0) { if (alive) setItems([]); return }
+
+        // KR (program_tags 含む) → KR レベルでタグフィルタ → 関連 obj だけ残す
+        let krsRes = await supabase.from('key_results')
+          .select('id, title, objective_id, program_tags')
+          .in('objective_id', allObjIdsAll)
+          .range(0, 49999)
+        if (krsRes.error && /program_tags|column/i.test(krsRes.error.message || '')) {
+          krsRes = await supabase.from('key_results')
+            .select('id, title, objective_id')
+            .in('objective_id', allObjIdsAll)
+            .range(0, 49999)
+        }
+        if (krsRes.error) throw krsRes.error
+        const krsAll = krsRes.data || []
+        const filtered = applyProgramTagFilterKRs(objsAll, krsAll, programTagCtx)
+        const objs = filtered.objs
         const allObjIds = objs.map(o => o.id)
+        const krs = filtered.krs
         if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
-        // 当週のKA (weekly_reports)
+        // 当週のKA (weekly_reports) — フィルタ後の objIds に絞る
         const kasRes = await supabase.from('weekly_reports')
           .select('*')
           .in('objective_id', allObjIds)
@@ -1445,15 +1579,12 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
           .neq('status', 'done')
           .range(0, 49999)
         if (kasRes.error) throw kasRes.error
-        const kas = kasRes.data || []
-
-        // KR を取得（コンテキスト表示用）
-        const krsRes = await supabase.from('key_results')
-          .select('id, title, objective_id')
-          .in('objective_id', allObjIds)
-          .range(0, 49999)
-        if (krsRes.error) throw krsRes.error
-        const krs = krsRes.data || []
+        let kas = kasRes.data || []
+        // タグフィルタ中: 紐付く KR がフィルタを通った KA だけ残す
+        if (programTagCtx) {
+          const krIdSet = new Set(krs.map(k => Number(k.id)))
+          kas = kas.filter(ka => !ka.kr_id || krIdSet.has(Number(ka.kr_id)))
+        }
 
         // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
         const built = []
@@ -1478,7 +1609,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
     }
     load()
     return () => { alive = false }
-  }, [wkly?.scope, wkly?.parentLevelName, weekStart, levels])
+  }, [wkly?.scope, wkly?.parentLevelName, weekStart, levels, programTagCtx])
 
   // weekly_reports の変更を items に反映 (autoSave 後に items が古くなる問題を解決)
   // KAEditCard が key={ka.id} で unmount されるため、items に新しい値を入れておかないと
@@ -1724,6 +1855,7 @@ function Step1DirectorReview({ T, meeting, weekStart, levels, members, onPrev, o
 
 // 今週分の team_weekly_summary を全チーム読み込み、read-only で並べる
 function DirectorSummaryList({ T, weekStart, levels, members }) {
+  const programTagCtx = useProgramTag()
   const [teams, setTeams] = useState(null)
   const [activeTeamId, setActiveTeamId] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -1763,8 +1895,8 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
 
         // 補助: 今週のKA件数 + 担当アバター
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, period, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
-        const objs = (objsRes.data || []).filter(o => !o.archived_at)
+          .select('id, level_id, period, archived_at, program_tags').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = applyProgramTagFilter((objsRes.data || []).filter(o => !o.archived_at), programTagCtx)
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
         const objToPeriod = new Map(objs.map(o => [Number(o.id), (o.period || '').toString().split('_').pop()]))
@@ -1853,7 +1985,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
     }
     load()
     return () => { alive = false }
-  }, [weekStart, levels, reloadKey])
+  }, [weekStart, levels, reloadKey, programTagCtx])
 
   if (teams === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>読み込み中…</div>
@@ -1901,6 +2033,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
 }
 
 function PreviousManagerSummary({ T, weekStart, levels, members }) {
+  const programTagCtx = useProgramTag()
   const [teams, setTeams] = useState(null)
   const [expanded, setExpanded] = useState(true)
   const [activeTeamId, setActiveTeamId] = useState(null) // null = 全チーム表示
@@ -1936,8 +2069,8 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
 
         // 参考: 先週のKA件数 (補助情報として表示)
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
-        const objs = (objsRes.data || []).filter(o => !o.archived_at)
+          .select('id, level_id, archived_at, program_tags').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = applyProgramTagFilter((objsRes.data || []).filter(o => !o.archived_at), programTagCtx)
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
         let kas = []
@@ -1980,7 +2113,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
     }
     load()
     return () => { alive = false }
-  }, [lastMonday, levels])
+  }, [lastMonday, levels, programTagCtx])
 
   if (!lastMonday) return null
   if (teams === null) {
@@ -2574,6 +2707,7 @@ function FieldRowInline({ T, icon, label, accent, value, placeholder, onChange, 
 // 横断連携の確認は次の Step 2 (確認事項) で扱う。
 function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
   const wkly = meeting?.weeklyMTG
+  const programTagCtx = useProgramTag()
   const [teams, setTeams] = useState(null) // [{ team, kaCount, owners, statusCounts, good, more, focus }]
   const [loadError, setLoadError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -2603,9 +2737,9 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
         if (scopeLevelIds.length === 0) { if (alive) setTeams([]); return }
 
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
+          .select('id, level_id, archived_at, program_tags').in('level_id', scopeLevelIds).range(0, 49999)
         if (objsRes.error) throw objsRes.error
-        const objs = (objsRes.data || []).filter(o => !o.archived_at)
+        const objs = applyProgramTagFilter((objsRes.data || []).filter(o => !o.archived_at), programTagCtx)
         const objIds = objs.map(o => o.id)
         const objToLevel = new Map(objs.map(o => [Number(o.id), Number(o.level_id)]))
 
@@ -2658,7 +2792,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
     }
     load()
     return () => { alive = false }
-  }, [wkly?.scope, weekStart, levels, reloadKey])
+  }, [wkly?.scope, weekStart, levels, reloadKey, programTagCtx])
 
   if (teams === null) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>チーム別サマリーを集計中...</div>
@@ -3553,6 +3687,7 @@ function secondaryBtn(T) {
 // 「誰がいつまでに何をやるか」を必ず確認するステップ。
 // meeting_action_items テーブル に保存。会議終了時に0件なら警告。
 function Step3NextActions({ T, meeting, weekStart, session, myName, members, levels = [], onPrev, onFinish }) {
+  const programTagCtx = useProgramTag()
   const [items, setItems] = useState(null)
   const [scopeKAs, setScopeKAs] = useState([]) // 任意紐付け用のKA選択肢
   const [loadError, setLoadError] = useState(null)
@@ -3586,8 +3721,8 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setScopeKAs([]); return }
         const objsRes = await supabase.from('objectives')
-          .select('id, level_id, title, archived_at').in('level_id', scopeLevelIds).range(0, 49999)
-        const objs = (objsRes.data || []).filter(o => !o.archived_at)
+          .select('id, level_id, title, archived_at, program_tags').in('level_id', scopeLevelIds).range(0, 49999)
+        const objs = applyProgramTagFilter((objsRes.data || []).filter(o => !o.archived_at), programTagCtx)
         const objIds = objs.map(o => o.id)
         if (objIds.length === 0) { if (alive) setScopeKAs([]); return }
         const kasRes = await supabase.from('weekly_reports')
@@ -3612,7 +3747,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
     }
     load()
     return () => { alive = false }
-  }, [meeting?.key, weekStart, levels])
+  }, [meeting?.key, weekStart, levels, programTagCtx])
 
   // Realtime購読 (ka_tasks 変更を監視; この会議の行のみ反映)
   useEffect(() => {

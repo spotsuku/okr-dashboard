@@ -219,12 +219,13 @@ export default function CompanyDashboardSummary({
       msAll.sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
       setMilestones(msAll.slice(0, 5))
 
-      // 全社注力マイルストーン: org_id がルート階層 (parent_id IS NULL) AND focus_level='focus'
-      const rootLevelIds = new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id)))
-      const companyFocusMs = msAll.filter(m =>
-        m.focus_level === 'focus' && (m.org_id == null || rootLevelIds.has(Number(m.org_id)))
-      )
-      setFocusMilestones(companyFocusMs)
+      // 注力マイルストーン: 組織階層を問わず focus_level='focus' な未完了マイルストーン
+      // (元は全社レベル限定だったが、全部署の注力マイルストーンも横断表示する)
+      // due_date 昇順 (期限切れ → 直近) で表示
+      const focusMs = msAll
+        .filter(m => m.focus_level === 'focus')
+        .sort((a, b) => (a.due_date || '9999-12-31').localeCompare(b.due_date || '9999-12-31'))
+      setFocusMilestones(focusMs)
 
       // KR ピンチ (逆指標対応)
       const moreMap = {}
@@ -479,12 +480,12 @@ export default function CompanyDashboardSummary({
           </>
         )}
 
-        {/* 全社 注力マイルストーン (focus_level='focus' のみ) */}
+        {/* 注力マイルストーン (全部署横断・focus_level='focus' のみ) */}
         {focusMilestones.length > 0 && (
           <div style={{ marginTop: SPACING.md, marginBottom: SPACING.md }}>
-            <SectionTitle T={T} iconColor={T.warn} title="全社 注力マイルストーン"
-              sub={`${focusMilestones.length}件 ・ マイルストーンページで「注力」マークを設定`} />
-            <FocusMilestonesGrid T={T} milestones={focusMilestones} today={today} />
+            <SectionTitle T={T} iconColor={T.warn} title="⭐ 注力マイルストーン"
+              sub={`全部署横断 ${focusMilestones.length}件 ・ マイルストーンページで「注力」マークを設定`} />
+            <FocusMilestonesGrid T={T} milestones={focusMilestones} today={today} levels={levels} />
           </div>
         )}
 
@@ -1035,7 +1036,8 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
 }
 
 // ─── 全社 注力マイルストーン (focus_level='focus' のみ) ────────
-function FocusMilestonesGrid({ T, milestones, today }) {
+function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
+  const levelById = new Map((levels || []).map(l => [Number(l.id), l]))
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -1050,6 +1052,9 @@ function FocusMilestonesGrid({ T, milestones, today }) {
           : days === 0 ? '今日が期限'
           : days != null ? `あと ${days}日`
           : '期限未設定'
+        // 所属組織のラベル (ms.org_id → level.name)
+        const lvl = ms.org_id != null ? levelById.get(Number(ms.org_id)) : null
+        const orgLabel = lvl ? `${lvl.icon || ''} ${lvl.name}` : '全社'
         return (
           <div key={ms.id} style={{
             background: T.bgCard,
@@ -1059,6 +1064,11 @@ function FocusMilestonesGrid({ T, milestones, today }) {
             padding: `${SPACING.sm + 2}px ${SPACING.md}px`,
             display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
           }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub, whiteSpace: 'nowrap' }}>
+                {orgLabel}
+              </span>
+            </div>
             <div style={{ ...TYPO.subhead, color: T.text, fontWeight: 800, lineHeight: 1.4 }}>
               {ms.title}
             </div>
