@@ -1179,6 +1179,28 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kr_weekly_reviews' }, () => {
         setReviewVersion(v => v + 1)
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'objectives' }, payload => {
+        // archive (archived_at セット) や復元 (NULL) も含めて反映
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const o = payload.new
+          if (o.archived_at) {
+            // archived → state から除外
+            setObjectives(prev => prev.filter(x => x.id !== o.id))
+          } else {
+            // 復元 or 通常更新
+            setObjectives(prev => prev.some(x => x.id === o.id)
+              ? prev.map(x => x.id === o.id ? { ...x, ...o } : x)
+              : [...prev, o])
+          }
+        } else if (payload.eventType === 'INSERT' && payload.new) {
+          const o = payload.new
+          if (!o.archived_at) {
+            setObjectives(prev => prev.some(x => x.id === o.id) ? prev : [...prev, o])
+          }
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          setObjectives(prev => prev.filter(x => x.id !== payload.old.id))
+        }
+      })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
@@ -1365,15 +1387,22 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     }
     return null
   }, [selectedObj, rightPeriod, quarterMap, objectives, annualObjsForMap])
+  // アーカイブ済み objective に紐付く KR を非表示にするため、有効な objective.id で
+  // フィルタした visible 版を作る (objectives 自体は load 時に archived_at で除外済み)
+  const visibleKeyResults = useMemo(() => {
+    const validObjIds = new Set(objectives.map(o => Number(o.id)))
+    return keyResults.filter(kr => validObjIds.has(Number(kr.objective_id)))
+  }, [keyResults, objectives])
+
   const selectedObjKRs = useMemo(() => {
     if (!rightObj && rightPeriod !== 'annual' && selectedObj) {
       // Q期OBJが存在しない場合、通期OBJのKRをperiodでフィルタ
-      const annKRs = keyResults.filter(kr => Number(kr.objective_id) === Number(selectedObj.id))
+      const annKRs = visibleKeyResults.filter(kr => Number(kr.objective_id) === Number(selectedObj.id))
       const filtered = annKRs.filter(kr => kr.period === rightPeriod)
       return filtered.length > 0 ? filtered : []
     }
-    return rightObj ? keyResults.filter(kr => Number(kr.objective_id)===Number(rightObj.id)) : []
-  }, [rightObj, rightPeriod, selectedObj, keyResults])
+    return rightObj ? visibleKeyResults.filter(kr => Number(kr.objective_id)===Number(rightObj.id)) : []
+  }, [rightObj, rightPeriod, selectedObj, visibleKeyResults])
   const depth          = selectedObj ? getDepth(selectedObj.level_id, levels) : 0
   const objColor       = LAYER_COLORS[depth] || '#a0a8be'
 
