@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { MEETINGS } from '../lib/meetings'
+import { renderTextWithLinks } from '../lib/renderTextWithLinks'
 
 // 📢 共有・確認タブ
 //   kind = 'confirmation' (確認) / 'share' (共有)
@@ -346,7 +347,7 @@ function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, 
       <div style={{
         fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6,
         padding: '6px 2px',
-      }}>{item.content}</div>
+      }}>{renderTextWithLinks(item.content, { color: T.accent })}</div>
 
       {/* 参考URL */}
       {refUrls.length > 0 && (
@@ -374,7 +375,7 @@ function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, 
               <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>
                 <b style={{ color: T.textSub }}>{r.from_name}</b> ・ {formatRelTime(r.created_at)}
               </div>
-              <div style={{ color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{r.content}</div>
+              <div style={{ color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{renderTextWithLinks(r.content, { color: T.accent })}</div>
             </div>
           ))}
         </div>

@@ -8,6 +8,7 @@ import { ComposeModal } from './ConfirmationsTab'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { HeroCard } from './iosUI'
 import { isJpNonBusinessDay } from '../lib/jpHolidays'
+import { renderTextWithLinks } from '../lib/renderTextWithLinks'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -1189,14 +1190,14 @@ function MeetingConfirmCard({ T, item, replies, myName, onResolve, onReplied }) 
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.to_name}</span>
       </div>
       <div style={{ fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6, padding: '4px 2px' }}>
-        {item.content}
+        {renderTextWithLinks(item.content, { color: T.accent })}
       </div>
       {replies.length > 0 && (
         <div style={{ marginTop: 8, paddingLeft: 10, borderLeft: `2px solid ${T.border}` }}>
           {replies.map(r => (
             <div key={r.id} style={{ marginBottom: 6, fontSize: 11 }}>
               <b style={{ color: T.textSub }}>{r.from_name}</b>
-              <span style={{ color: T.text, marginLeft: 6, whiteSpace: 'pre-wrap' }}>{r.content}</span>
+              <span style={{ color: T.text, marginLeft: 6, whiteSpace: 'pre-wrap' }}>{renderTextWithLinks(r.content, { color: T.accent })}</span>
             </div>
           ))}
         </div>
