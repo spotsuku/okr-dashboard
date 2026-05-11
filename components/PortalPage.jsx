@@ -11,7 +11,6 @@ import { isDemoMode } from '../lib/demoMocks'
 const DASHBOARDS = [
   { id: 'okr',         title: 'OKR ダッシュボード',         description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true, group: 'main',     keywords: 'okr ka タスク 目標' },
 
-  { id: 'cs',          title: 'CS ダッシュボード',          description: '顧客対応・満足度管理',           icon: 'users',      color: '#34C759', url: 'https://neo-cs.vercel.app/',                            external: true, group: 'business', keywords: 'cs 顧客 満足度' },
   { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: 'trendingUp', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', external: true, group: 'business', keywords: 'sales 営業 商談' },
   { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: 'building',   color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',      external: true, group: 'business', keywords: 'community コミュニティ' },
   { id: 'youth',       title: 'ユース ダッシュボード',      description: 'ユース活動管理',                 icon: 'sprout',     color: '#FFCC00', url: 'https://neo-youth.vercel.app/dashboard',                external: true, group: 'business', keywords: 'youth ユース' },
