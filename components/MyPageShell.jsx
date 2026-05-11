@@ -4298,18 +4298,31 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
     }).catch(() => setToast('コピー失敗'))
   }
 
-  function openMailtoFallback() {
+  function buildFallbackUrl() {
     const url = new URL('https://mail.google.com/mail/')
     url.searchParams.set('view', 'cm')
     url.searchParams.set('fs', '1')
     if (toEmail) url.searchParams.set('to', toEmail)
     url.searchParams.set('su', `Re: ${mail.subject || ''}`)
     url.searchParams.set('body', draft)
-    window.open(url.toString(), '_blank')
+    return url.toString()
+  }
+
+  // スマホ Safari/Chrome では fetch の await を挟むと window.open が
+  // ユーザー操作起点とみなされず blocked される。クリック直後 (同期) に
+  // 空タブを開き、結果が返ってきたらそのタブに URL を流し込むことで回避する。
+  function navigateTab(targetWindow, url) {
+    if (targetWindow && !targetWindow.closed) {
+      try { targetWindow.location.href = url; return } catch {}
+    }
+    const popup = window.open(url, '_blank')
+    if (!popup) window.location.href = url   // ポップアップ全面ブロック時は同タブ遷移
   }
 
   async function createDraft() {
     setSubmitting(true); setToast('')
+    // クリック直後の同期処理として空タブを先に開く (スマホのポップアップブロック回避)
+    const preWin = window.open('about:blank', '_blank')
     try {
       const r = await fetch('/api/integrations/gmail/create-draft', {
         method: 'POST',
@@ -4325,20 +4338,26 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) {
-        // 403 など → mailto フォールバック
+        // 403 など → mailto フォールバック (事前に開いたタブをそのまま流用)
         if (r.status === 403 || j.needsScope || j.needsReauth) {
           setToast(`${j.error || 'Gmail API で下書き作成できませんでした'} → 代わりに Gmail の新規作成画面を開きます`)
-          setTimeout(() => openMailtoFallback(), 500)
+          navigateTab(preWin, buildFallbackUrl())
           return
         }
+        if (preWin && !preWin.closed) { try { preWin.close() } catch {} }
         setError(j.error || `HTTP ${r.status}`)
         return
       }
       // 成功 → 下書きを Gmail で開く
-      if (j.openUrl) window.open(j.openUrl, '_blank')
+      if (j.openUrl) {
+        navigateTab(preWin, j.openUrl)
+      } else if (preWin && !preWin.closed) {
+        try { preWin.close() } catch {}
+      }
       setToast('下書きを作成しました')
       setTimeout(() => { setToast(''); onClose?.() }, 1000)
     } catch (e) {
+      if (preWin && !preWin.closed) { try { preWin.close() } catch {} }
       setError(`送信エラー: ${e.message || e}`)
     }
     setSubmitting(false)
