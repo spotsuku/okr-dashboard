@@ -2,9 +2,11 @@
 // POST /api/integrations/confirmations/notify  Body: { confirmation_id }
 //
 // 通知順:
-//  1. 宛先メンバー (members.email) 経由で user_integrations の slack token を取得できれば DM
-//  2. 宛先メンバーの所属 level (members.level_id) の slack_webhook_url があれば channel 通知
-//  3. どちらも無ければ何もせず 200 (UI 側で realtime 反映されるため致命的ではない)
+//  0. SLACK_WEBHOOK_URL_CONFIRMATIONS が設定されていれば、共有・確認事項専用
+//     チャンネルに通知 (部署/グローバル webhook はスキップ)
+//  1. 宛先メンバーの所属 level (members.level_id) の slack_webhook_url があれば channel 通知
+//  2. グローバル webhook (SLACK_WEBHOOK_URL)
+//  3. いずれも無ければ何もせず 200 (UI 側で realtime 反映されるため致命的ではない)
 
 export const dynamic = 'force-dynamic'
 
@@ -59,9 +61,24 @@ export async function POST(request) {
       `→ マイページ → 📬確認 タブで返信できます`,
     ].join('\n')
 
-    // 3a. 部署 webhook に通知 (設定あれば優先)
     let notified = false
-    if (toMember?.level_id) {
+
+    // 3a. 共有・確認事項専用 webhook (設定があれば最優先・他をスキップ)
+    if (process.env.SLACK_WEBHOOK_URL_CONFIRMATIONS) {
+      try {
+        await fetch(process.env.SLACK_WEBHOOK_URL_CONFIRMATIONS, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        })
+        notified = true
+      } catch (e) {
+        console.warn('Confirmations Slack webhook failed:', e?.message)
+      }
+    }
+
+    // 3b. 部署 webhook に通知 (専用 webhook が無い場合のフォールバック)
+    if (!notified && toMember?.level_id) {
       const { data: lvl } = await supabase.from('levels')
         .select('slack_webhook_url').eq('id', toMember.level_id).maybeSingle()
       if (lvl?.slack_webhook_url) {
@@ -78,7 +95,7 @@ export async function POST(request) {
       }
     }
 
-    // 3b. グローバル webhook (通常はこちらで社内連携チャンネルに投稿)
+    // 3c. グローバル webhook (最終フォールバック)
     if (!notified && process.env.SLACK_WEBHOOK_URL) {
       try {
         await fetch(process.env.SLACK_WEBHOOK_URL, {
