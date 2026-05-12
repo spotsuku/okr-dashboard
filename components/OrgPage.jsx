@@ -663,14 +663,27 @@ function ConfirmationsWebhookPanel({ currentUser }) {
         }),
       })
       const j = await r.json().catch(() => ({}))
-      setSaving(false)
       if (!r.ok) {
+        setSaving(false)
         setMessage('❌ 保存失敗: ' + (j.error || `HTTP ${r.status}`))
         return
       }
-      const v = j.url || ''
-      setUrl(v); setInitialUrl(v)
-      setMessage(v ? '✅ 保存しました' : '✅ 設定を解除しました')
+      // 二重確認: 即座に GET で再取得し、DB に確実に書き込まれたかを検証
+      // (古いキャッシュバンドル / RLS の silent failure を検知するため)
+      const vr = await fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}&_t=${Date.now()}`, { cache: 'no-store' })
+      const vj = await vr.json().catch(() => ({}))
+      setSaving(false)
+      if (!vr.ok) {
+        setMessage('❌ 検証失敗: ' + (vj.error || `HTTP ${vr.status}`))
+        return
+      }
+      const stored = vj.url || ''
+      setUrl(stored); setInitialUrl(stored)
+      if (stored === (url || '')) {
+        setMessage(stored ? '✅ 保存しました (DB反映確認済)' : '✅ 設定を解除しました')
+      } else {
+        setMessage(`⚠️ 保存処理は完了したが DB の値 (「${stored || '(空)'}」) が入力値と一致しません。ブラウザキャッシュをハードリロード (Cmd+Shift+R / Ctrl+Shift+R) してください`)
+      }
     } catch (e) {
       setSaving(false)
       setMessage('❌ 保存失敗: ' + (e.message || String(e)))
