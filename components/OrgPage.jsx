@@ -660,15 +660,17 @@ function ConfirmationsWebhookPanel() {
     if (!url || !isUrlValid || testing) return
     setTesting(true); setMessage('')
     try {
-      const r = await fetch(url, {
+      const r = await fetch('/api/integrations/slack/test-webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          url,
           text: `✅ テスト通知: 共有・確認事項チャンネルへのSlack通知が正常に動作しています (${currentOrg?.name || ''})`,
         }),
       })
+      const j = await r.json().catch(() => ({}))
       setMessage(r.ok ? '✅ テスト通知を送信しました (Slackで確認してください)'
-                     : `❌ テスト送信失敗: HTTP ${r.status}`)
+                     : `❌ テスト送信失敗: ${j.error || `HTTP ${r.status}`}`)
     } catch (e) {
       setMessage('❌ テスト送信失敗: ' + (e.message || String(e)))
     } finally {
