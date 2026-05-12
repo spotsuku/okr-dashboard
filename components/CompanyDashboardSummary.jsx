@@ -1038,12 +1038,18 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
 // ─── 全社 注力マイルストーン (focus_level='focus' のみ) ────────
 function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
   const levelById = new Map((levels || []).map(l => [Number(l.id), l]))
+  // 直近の 上2行分 (4列 × 2 = 8件) を既定表示。それより多ければ「もっと見る」で全件展開
+  const COLLAPSED_COUNT = 8
+  const [expanded, setExpanded] = useState(false)
+  const visible = expanded ? milestones : milestones.slice(0, COLLAPSED_COUNT)
+  const hidden = Math.max(0, milestones.length - COLLAPSED_COUNT)
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-      gap: SPACING.sm + 2,
-    }}>
-      {milestones.map(ms => {
+    <div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+        gap: SPACING.sm + 2,
+      }}>
+        {visible.map(ms => {
         const days = ms.due_date ? Math.round((new Date(ms.due_date) - new Date(today)) / 86400000) : null
         const overdue = days != null && days < 0
         const urgent = days != null && days >= 0 && days <= 14
@@ -1088,6 +1094,19 @@ function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
           </div>
         )
       })}
+      </div>
+      {hidden > 0 && (
+        <div style={{ marginTop: SPACING.sm + 2, textAlign: 'center' }}>
+          <button onClick={() => setExpanded(v => !v)} style={{
+            padding: '6px 16px', borderRadius: 999, fontFamily: 'inherit',
+            background: 'transparent', color: T.textSub,
+            border: `1px solid ${T.border}`,
+            fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          }}>
+            {expanded ? `▲ 閉じる` : `▼ 残り ${hidden}件 を表示`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
