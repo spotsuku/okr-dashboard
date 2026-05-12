@@ -303,7 +303,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
     <div style={{ maxWidth: 900 }}>
       {/* Slack 連携 (admin のみ) */}
       {isAdmin && <SlackSyncPanel />}
-      {isAdmin && <ConfirmationsWebhookPanel />}
+      {isAdmin && <ConfirmationsWebhookPanel currentUser={currentUser} />}
 
       {/* サマリー */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -617,7 +617,7 @@ function SlackSyncPanel() {
 // 共有・確認事項 専用 Slack Webhook 設定 (admin 用・組織ごと)
 // organizations.slack_webhook_confirmations に保存
 // ══════════════════════════════════════════════════
-function ConfirmationsWebhookPanel() {
+function ConfirmationsWebhookPanel({ currentUser }) {
   const { currentOrg } = useCurrentOrg()
   const [url, setUrl] = useState('')
   const [initialUrl, setInitialUrl] = useState('')
@@ -629,14 +629,19 @@ function ConfirmationsWebhookPanel() {
   useEffect(() => {
     if (!currentOrg?.id) return
     let aborted = false
-    setLoading(true)
-    supabase.from('organizations').select('slack_webhook_confirmations')
-      .eq('id', currentOrg.id).maybeSingle()
-      .then(({ data }) => {
+    setLoading(true); setMessage('')
+    fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}`)
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
         if (aborted) return
-        const v = data?.slack_webhook_confirmations || ''
+        if (!r.ok) {
+          setMessage('❌ 取得失敗: ' + (j.error || `HTTP ${r.status}`))
+          return
+        }
+        const v = j.url || ''
         setUrl(v); setInitialUrl(v)
       })
+      .catch(e => { if (!aborted) setMessage('❌ 取得失敗: ' + (e.message || String(e))) })
       .finally(() => { if (!aborted) setLoading(false) })
     return () => { aborted = true }
   }, [currentOrg?.id])
@@ -647,13 +652,29 @@ function ConfirmationsWebhookPanel() {
   const save = async () => {
     if (!currentOrg?.id || !isUrlValid || saving) return
     setSaving(true); setMessage('')
-    const { error } = await supabase.from('organizations')
-      .update({ slack_webhook_confirmations: url || null })
-      .eq('id', currentOrg.id)
-    setSaving(false)
-    if (error) { setMessage('❌ 保存失敗: ' + error.message); return }
-    setInitialUrl(url)
-    setMessage(url ? '✅ 保存しました' : '✅ 設定を解除しました')
+    try {
+      const r = await fetch('/api/integrations/slack/org-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organization_id: currentOrg.id,
+          url,
+          email: currentUser?.email || '',
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      setSaving(false)
+      if (!r.ok) {
+        setMessage('❌ 保存失敗: ' + (j.error || `HTTP ${r.status}`))
+        return
+      }
+      const v = j.url || ''
+      setUrl(v); setInitialUrl(v)
+      setMessage(v ? '✅ 保存しました' : '✅ 設定を解除しました')
+    } catch (e) {
+      setSaving(false)
+      setMessage('❌ 保存失敗: ' + (e.message || String(e)))
+    }
   }
 
   const sendTest = async () => {
