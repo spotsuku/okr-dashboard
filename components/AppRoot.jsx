@@ -95,6 +95,18 @@ function PostAuthRouter({ user, onSignOut, urlSlug }) {
     if (!found) router.replace('/')
   }, [loading, urlSlug, orgs, router])
 
+  // currentOrg が URL slug と乖離したら URL を自動同期 (Dashboard の switchOrg や
+  // 外部からの setCurrentOrg をトリガに /{slug} へ navigate する)。
+  // OrgSwitcher 側で URL 操作する必要がなくなり、責務が orgContext+AppRoot に集約される。
+  useEffect(() => {
+    if (loading) return
+    if (!urlSlug) return  // "/" 側は別 useEffect が担当
+    if (!currentOrg?.slug) return
+    if (currentOrg.slug === urlSlug) return
+    const search = typeof window !== 'undefined' ? window.location.search : ''
+    router.replace(`/${currentOrg.slug}${search}`)
+  }, [loading, urlSlug, currentOrg?.slug, router])
+
   if (loading) return <FullPageLoader text="組織情報を取得中..." />
   if (error)   return <FullPageError text={error} />
   if (!currentOrg) return <NoOrgScreen email={user.email} />
