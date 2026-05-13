@@ -1,4 +1,15 @@
 import { Client } from '@notionhq/client'
+import { createClient } from '@supabase/supabase-js'
+import { resolveNotionApiKey } from '../../../lib/notionForOrg'
+
+function getAdmin() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } }
+  )
+}
 
 function extractPageId(url) {
   // Notion URLs:
@@ -101,15 +112,17 @@ async function getAllBlocks(notion, blockId, depth = 0) {
 
 export async function POST(request) {
   try {
-    const { notionUrl } = await request.json()
+    const body = await request.json()
+    const { notionUrl, organization_id: orgId } = body || {}
 
     if (!notionUrl) {
       return Response.json({ error: 'notionUrl is required' }, { status: 400 })
     }
 
-    const apiKey = process.env.NOTION_API_KEY
+    // 組織別の Notion API キーを解決 (org の notion_api_key 優先、無ければ env var fallback)
+    const apiKey = await resolveNotionApiKey(orgId, getAdmin())
     if (!apiKey) {
-      return Response.json({ error: 'NOTION_API_KEY is not configured' }, { status: 500 })
+      return Response.json({ error: 'Notion API キーが設定されていません (組織設定 or 環境変数を確認してください)' }, { status: 500 })
     }
 
     const pageId = extractPageId(notionUrl)
