@@ -63,6 +63,9 @@ export default function AppRoot({ urlSlug = null }) {
 
   if (!user) {
     if (DEMO_MODE) return <DemoErrorScreen demoError={demoError} />
+    // SaaS化 Plan B: URL に slug が入っている = 招待リンク経由などで特定組織への
+    // サインインを意図している。組織名を fetch してログイン画面に表示する。
+    if (urlSlug) return <OrgBrandedLogin slug={urlSlug} />
     return <LoginPage />
   }
 
@@ -194,6 +197,23 @@ function NoOrgScreen({ email }) {
       />
     </div>
   )
+}
+
+// URL に slug がある状態で未ログイン → 組織名入りログイン画面 (Plan B)
+function OrgBrandedLogin({ slug }) {
+  const [orgName, setOrgName] = useState(null)
+  const [resolved, setResolved] = useState(false)
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/org/public?slug=${encodeURIComponent(slug)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (alive) { setOrgName(j?.organization?.name || null); setResolved(true) } })
+      .catch(() => { if (alive) setResolved(true) })
+    return () => { alive = false }
+  }, [slug])
+  // 解決前は通常ログインを出す (UI の点滅を最小化)
+  if (!resolved) return <LoginPage />
+  return <LoginPage orgName={orgName} />
 }
 
 function DemoErrorScreen({ demoError }) {
