@@ -38,7 +38,7 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
 
   const [loading, setLoading] = useState(true)
   const [krs, setKrs] = useState([])      // 全社の KR (objectives 経由で fetch)
-  const [strategiesByKr, setStrategiesByKr] = useState({})  // {kr_id: row}
+  const [strategiesByKr, setStrategiesByKr] = useState({})  // {kr_id: [messages...]}
   const [initiativesByKr, setInitiativesByKr] = useState({}) // {kr_id: [...]}
   const [selectedKrId, setSelectedKrId] = useState(null)
   const [filter, setFilter] = useState('annual')  // 'annual' | 'q1'..'q4' | 'all'
@@ -77,10 +77,37 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
       })
       setKrs(krWithObj)
 
-      // 戦略テキスト
-      const { data: strategies } = await supabase.from('kr_strategies')
-        .select('*').in('kr_id', allKrs.map(k => k.id)).range(0, 999)
-      const sm = {}; (strategies || []).forEach(s => { sm[s.kr_id] = s })
+      // 戦略メッセージ (kr_strategy_messages: 日付付き履歴) を読み込み
+      const krIds = allKrs.map(k => k.id)
+      const { data: messages } = await supabase.from('kr_strategy_messages')
+        .select('*').in('kr_id', krIds).order('message_date', { ascending: false }).range(0, 9999)
+      const sm = {}
+      ;(messages || []).forEach(m => {
+        if (!sm[m.kr_id]) sm[m.kr_id] = []
+        sm[m.kr_id].push(m)
+      })
+      // 互換: kr_strategies に行があってまだ移行されていない KR は今日の日付として取り込む
+      const { data: legacyStrategies } = await supabase.from('kr_strategies')
+        .select('*').in('kr_id', krIds).range(0, 999)
+      ;(legacyStrategies || []).forEach(s => {
+        if (!s.message) return
+        const list = sm[s.kr_id] || []
+        // 既に kr_strategy_messages に何か入っていればスキップ
+        if (list.length > 0) return
+        const todayJst = (() => {
+          const d = new Date(Date.now() + 9 * 3600 * 1000)
+          return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+        })()
+        sm[s.kr_id] = [{
+          id: `legacy-${s.kr_id}`,
+          kr_id: s.kr_id,
+          message_date: todayJst,
+          message: s.message,
+          updated_by: s.updated_by,
+          updated_at: s.updated_at,
+          _legacy: true,
+        }]
+      })
       setStrategiesByKr(sm)
 
       // 施策
@@ -266,8 +293,9 @@ function KrStrategyDetail({ T, kr, strategy, initiatives, myName, isAdmin, onCha
         </div>
       </div>
 
-      {/* 経営からのメッセージ */}
-      <StrategyMessageEditor T={T} kr={kr} strategy={strategy} myName={myName} onChanged={onChanged} />
+      {/* 経営からのメッセージ (日付タブで履歴切替) */}
+      <StrategyMessageEditor T={T} kr={kr} messages={Array.isArray(strategy) ? strategy : (strategy ? [strategy] : [])}
+        myName={myName} onChanged={onChanged} />
 
       {/* 施策一覧 */}
       <InitiativesSection T={T} kr={kr} initiatives={initiatives}
@@ -277,20 +305,76 @@ function KrStrategyDetail({ T, kr, strategy, initiatives, myName, isAdmin, onCha
   )
 }
 
-// ─── 経営メッセージ (テキストエリア + autosave) ──────────────────
-function StrategyMessageEditor({ T, kr, strategy, myName, onChanged }) {
-  const [text, setText] = useState(strategy?.message || '')
+// ─── 経営メッセージ (日付タブで履歴切替 + 編集) ──────────────
+// messages: [{ kr_id, message_date 'YYYY-MM-DD', message, updated_by, updated_at }, ...]
+//   - 日付降順で並んでいる前提 (load 時に order by message_date desc)
+// 編集は「今日 (JST)」の行に対して upsert (onConflict: kr_id,message_date)
+function todayJstYMD() {
+  const d = new Date(Date.now() + 9 * 3600 * 1000)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+function formatMessageDate(ymd) {
+  // 'YYYY-MM-DD' → 'M/D(曜)'
+  if (!ymd) return ''
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  const dow = ['日', '月', '火', '水', '木', '金', '土'][dt.getUTCDay()]
+  return `${m}/${d}(${dow})`
+}
+
+function StrategyMessageEditor({ T, kr, messages, myName, onChanged }) {
+  const today = todayJstYMD()
+
+  // タブ一覧 = 今日 + 履歴 (今日は履歴に含まれていなければ先頭に挿入)
+  const tabs = useMemo(() => {
+    const list = [...(messages || [])]
+    const hasToday = list.some(m => m.message_date === today)
+    if (!hasToday) {
+      list.unshift({ kr_id: kr.id, message_date: today, message: '', updated_by: null, updated_at: null, _new: true })
+    }
+    // 日付降順
+    return list.sort((a, b) => (a.message_date < b.message_date ? 1 : a.message_date > b.message_date ? -1 : 0))
+  }, [messages, today, kr.id])
+
+  const [activeDate, setActiveDate] = useState(today)
+  // 選択中タブが消えたら今日 (= 先頭) に戻す
+  useEffect(() => {
+    if (!tabs.find(t => t.message_date === activeDate)) setActiveDate(tabs[0]?.message_date || today)
+  }, [tabs, activeDate, today])
+
+  const active = tabs.find(t => t.message_date === activeDate) || tabs[0] || { message: '' }
+  const isToday = active.message_date === today
+
+  const [text, setText] = useState(active.message || '')
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  useEffect(() => { setText(strategy?.message || '') }, [strategy?.id, strategy?.message])
+  // タブ切替時に入力欄をリセット
+  useEffect(() => {
+    setText(active.message || '')
+    setEditing(false)
+  }, [active.message_date, active.message])
 
   const save = async () => {
     setSaving(true)
-    const payload = { kr_id: kr.id, message: text, updated_by: myName, updated_at: new Date().toISOString() }
-    const { error } = await supabase.from('kr_strategies').upsert(payload, { onConflict: 'kr_id' })
+    const payload = {
+      kr_id: kr.id,
+      message_date: today,
+      message: text,
+      updated_by: myName,
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = await supabase.from('kr_strategy_messages')
+      .upsert(payload, { onConflict: 'kr_id,message_date' })
     setSaving(false)
     if (error) { alert('保存失敗: ' + error.message); return }
+    // 互換: 旧 kr_strategies も同じメッセージで upsert (既存読み手のため)
+    try {
+      await supabase.from('kr_strategies').upsert({
+        kr_id: kr.id, message: text, updated_by: myName, updated_at: new Date().toISOString(),
+      }, { onConflict: 'kr_id' })
+    } catch {}
     setEditing(false)
+    setActiveDate(today)
     if (onChanged) await onChanged()
   }
 
@@ -299,23 +383,59 @@ function StrategyMessageEditor({ T, kr, strategy, myName, onChanged }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
         <div style={accentRingStyle({ color: '#AF52DE', size: 28 })}><span style={{ fontSize: 14 }}>📝</span></div>
         <div style={{ ...TYPO.callout, color: T.text, flex: 1 }}>経営からのメッセージ</div>
-        {!editing ? (
+        {!editing && isToday && (
           <button onClick={() => setEditing(true)} style={{ ...btnPrimary({ T, size: 'sm', color: '#AF52DE' }), padding: '4px 10px', fontSize: 11 }}>
             ✎ 編集
           </button>
-        ) : (
+        )}
+        {!editing && !isToday && (
+          <button onClick={() => { setActiveDate(today); setEditing(true) }} style={{ padding: '4px 10px', borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            ✎ 今日の版で編集
+          </button>
+        )}
+        {editing && (
           <>
-            <button onClick={() => { setEditing(false); setText(strategy?.message || '') }} disabled={saving}
+            <button onClick={() => { setEditing(false); setText(active.message || '') }} disabled={saving}
               style={{ padding: '4px 10px', borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
               キャンセル
             </button>
             <button onClick={save} disabled={saving}
               style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), padding: '4px 10px', fontSize: 11 }}>
-              {saving ? '保存中…' : '✓ 保存'}
+              {saving ? '保存中…' : `✓ ${formatMessageDate(today)} で保存`}
             </button>
           </>
         )}
       </div>
+
+      {/* 日付タブ (今日が先頭、横スクロール可) */}
+      {tabs.length > 0 && (
+        <div style={{
+          display: 'flex', gap: 4, marginBottom: SPACING.sm,
+          overflowX: 'auto', paddingBottom: 4,
+        }}>
+          {tabs.map(t => {
+            const tabIsToday = t.message_date === today
+            const isActive = t.message_date === activeDate
+            return (
+              <button key={t.message_date} onClick={() => setActiveDate(t.message_date)}
+                style={{
+                  padding: '4px 10px', borderRadius: RADIUS.pill,
+                  border: `1px solid ${isActive ? '#AF52DE' : T.border}`,
+                  background: isActive ? 'rgba(175,82,222,0.12)' : 'transparent',
+                  color: isActive ? '#AF52DE' : T.textSub,
+                  fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+                title={t.updated_by ? `更新: ${t.updated_by}` : ''}
+              >
+                {tabIsToday ? `今日 (${formatMessageDate(t.message_date)})` : formatMessageDate(t.message_date)}
+                {t._new && <span style={{ marginLeft: 4, opacity: 0.5 }}>(新規)</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {editing ? (
         <textarea
           value={text}
@@ -328,11 +448,20 @@ function StrategyMessageEditor({ T, kr, strategy, myName, onChanged }) {
           }}
         />
       ) : (
-        text.trim() ? (
-          <div style={{ ...TYPO.body, color: T.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{text}</div>
+        active.message && active.message.trim() ? (
+          <>
+            <div style={{ ...TYPO.body, color: T.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{active.message}</div>
+            {active.updated_by && (
+              <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 8, textAlign: 'right' }}>
+                — {active.updated_by} ({formatMessageDate(active.message_date)})
+              </div>
+            )}
+          </>
         ) : (
           <div style={{ padding: SPACING.md, ...TYPO.body, color: T.textMuted, textAlign: 'center', fontStyle: 'italic' }}>
-            まだメッセージが登録されていません。「✎ 編集」から経営の意図を記入してください。
+            {isToday
+              ? 'まだメッセージが登録されていません。「✎ 編集」から経営の意図を記入してください。'
+              : 'この日のメッセージはありません。'}
           </div>
         )
       )}
@@ -340,7 +469,7 @@ function StrategyMessageEditor({ T, kr, strategy, myName, onChanged }) {
   )
 }
 
-// ─── 施策一覧 (深化 + 探索) ─────────────────────────────────────
+// ─── 施策一覧 (深化 + 探索) ─────────────────────────────────
 function InitiativesSection({ T, kr, initiatives, exploitInits, exploreInits, myName, isAdmin, onChanged }) {
   const [adding, setAdding] = useState(null) // { mode } | null
 
@@ -409,7 +538,7 @@ function ModeBlock({ T, mode, inits, kr, onAdd, myName, isAdmin, onChanged }) {
   )
 }
 
-// ─── 施策カード ──────────────────────────────────────────────────
+// ─── 施策カード ────────────────────────────────────────────
 function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
   const meta = STATUS_META[initiative.status] || STATUS_META.testing
   const [editing, setEditing] = useState(false)
@@ -496,7 +625,7 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
   )
 }
 
-// ─── 施策追加/編集モーダル ───────────────────────────────────────
+// ─── 施策追加/編集モーダル ─────────────────────────────────
 function InitiativeFormModal({ T, kr, mode, myName, onCancel, onSaved }) {
   return (
     <div onClick={onCancel} style={{
@@ -657,7 +786,7 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
             style={{ ...inputBase, width: '100%' }} />
         </div>
         <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 3 }}>
-          検証中の施策は終了日 (≒結論期限) を入れておくと、進捗管理しやすくなります
+          検証中の施策は終了日 (≈結論期限) を入れておくと、進捗管理しやすくなります
         </div>
       </div>
 
