@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
 import { openNotionUrl } from '../lib/notionLink'
+import { useCurrentOrg } from '../lib/orgContext'
 
 // 汎用: どの会議でも使える議事録タスク取り込みモーダル
 //   props:
@@ -11,8 +12,10 @@ import { openNotionUrl } from '../lib/notionLink'
 //     meetingKey: string (例: 'morning', 'weekly-kickoff' など - lib/meetings.js 参照)
 //     meetingTitle: string (表示用)
 //     members: Array<{name: string}>
-//     T: themeオブジェクト
+//     T: テーマオブジェクト
 export default function MeetingImport({ open, onClose, meetingKey = 'morning', meetingTitle = '朝会', members = [], T, weekStart = null, sessionId = null, onImported }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgQs = currentOrg?.id ? `&organization_id=${encodeURIComponent(currentOrg.id)}` : ''
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [pages, setPages] = useState([])
@@ -34,7 +37,7 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
       // cache: 'no-store' でブラウザキャッシュを回避 (キャンセル→再取込で同じURLでも最新を取得)
       const ts = Date.now()  // 念のためクエリにタイムスタンプも追加
       const [ntRes, kasRes, objsRes] = await Promise.all([
-        fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&_t=${ts}`, { cache: 'no-store' }),
+        fetch(`/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}${orgQs}&_t=${ts}`, { cache: 'no-store' }),
         supabase.from('weekly_reports').select('id,ka_title,kr_id,objective_id,owner,status,week_start')
           .neq('status','done').order('week_start', { ascending: false }).order('ka_title').range(0, 49999),
         supabase.from('objectives').select('id,title').range(0, 49999),
@@ -54,7 +57,7 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
     } catch (e) {
       setLoading(false); setError(e.message || '取得エラー')
     }
-  }, [meetingKey])
+  }, [meetingKey, orgQs])
 
   useEffect(() => {
     if (!open) return
@@ -67,7 +70,7 @@ export default function MeetingImport({ open, onClose, meetingKey = 'morning', m
     try {
       const ts = Date.now()
       const res = await fetch(
-        `/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&pageId=${page.id}&_t=${ts}`,
+        `/api/notion-meeting?meetingKey=${encodeURIComponent(meetingKey)}&pageId=${page.id}${orgQs}&_t=${ts}`,
         { cache: 'no-store' }
       )
       const nt = await res.json()

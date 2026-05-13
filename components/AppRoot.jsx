@@ -1,5 +1,5 @@
 'use client'
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // AppRoot
 // SaaS化 Phase 1: ルート "/" と "/[orgSlug]" の両方で使う共通エントリ。
 // 認証 → 組織解決 → リダイレクト or ダッシュボード描画 を一手に処理する。
@@ -11,13 +11,15 @@
 // urlSlug 無しモード = ログイン+組織解決後に router.replace(`/${slug}`) する。
 // urlSlug 指定モード = 指定 slug を OrgProvider に initialSlug として渡し、
 //                      その組織のダッシュボードを描画。所属していなければ "/" へ戻す。
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { OrgProvider, useCurrentOrg } from '../lib/orgContext'
 import LoginPage from './LoginPage'
 import Dashboard from './Dashboard'
+import CreateOrgModal from './CreateOrgModal'
+import OrgIconBar from './OrgIconBar'
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 const DEMO_GUEST_EMAIL    = process.env.NEXT_PUBLIC_DEMO_GUEST_EMAIL    || 'guest@demo.local'
@@ -71,7 +73,7 @@ export default function AppRoot({ urlSlug = null }) {
   )
 }
 
-// ─── 認証後の動線制御 ───────────────────────────────────────
+// ─── 認証後の動線制御 ──────────────────────────────────────
 // urlSlug 無し ("/") → currentOrg 確定後に /{slug}?... へ replace
 // urlSlug あり ("/{orgSlug}") → 所属チェック失敗時のみ "/" へ replace
 function PostAuthRouter({ user, onSignOut, urlSlug }) {
@@ -115,7 +117,15 @@ function PostAuthRouter({ user, onSignOut, urlSlug }) {
   // "/" 配下で currentOrg 確定済み → 直後に上の useEffect が router.replace するので一瞬ローダー
   if (!urlSlug) return <FullPageLoader text={`${currentOrg.name} を開いています...`} />
 
-  return <Dashboard user={user} onSignOut={onSignOut} />
+  // Slack 風: 左端に組織アイコン列 + 右に既存 Dashboard
+  return (
+    <div style={{ display: 'flex', height: '100vh', minHeight: 0 }}>
+      <OrgIconBar userEmail={user.email} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Dashboard user={user} onSignOut={onSignOut} />
+      </div>
+    </div>
+  )
 }
 
 // ─── プレースホルダ画面群 ────────────────────────────────────────
@@ -146,6 +156,8 @@ function FullPageError({ text }) {
 }
 
 function NoOrgScreen({ email }) {
+  const [createOpen, setCreateOpen] = useState(false)
+  const router = useRouter()
   return (
     <div style={{
       minHeight: '100vh', background: '#090d18', color: '#fff',
@@ -154,16 +166,32 @@ function NoOrgScreen({ email }) {
       <div style={{ maxWidth: 480, textAlign: 'center', fontFamily: 'sans-serif' }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>🏢</div>
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>所属組織がありません</div>
-        <div style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, marginBottom: 20 }}>
           {email} は現在どの組織にも所属していません。<br />
-          管理者から招待を受けてください。<br />
-          <span style={{ color: '#666' }}>(近日: 自分で組織を作成する機能を追加予定)</span>
+          自分で新しい組織を作るか、管理者から招待を受けてください。
         </div>
-        <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }} style={{
-          padding: '8px 18px', borderRadius: 8, background: '#374151', color: '#fff',
-          border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-        }}>ログアウト</button>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => setCreateOpen(true)} style={{
+            padding: '10px 20px', borderRadius: 8, background: '#4d9fff', color: '#fff',
+            border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+          }}>＋ 新しい組織を作成</button>
+          <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }} style={{
+            padding: '10px 18px', borderRadius: 8, background: '#374151', color: '#fff',
+            border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+          }}>ログアウト</button>
+        </div>
       </div>
+      <CreateOrgModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(org) => {
+          // 作成成功 → 新組織の URL へ
+          setCreateOpen(false)
+          if (org?.slug) router.replace(`/${org.slug}`)
+          else window.location.reload()
+        }}
+        userEmail={email}
+      />
     </div>
   )
 }
