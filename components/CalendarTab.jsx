@@ -386,7 +386,8 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
           borderRight: `1px solid ${T.border}`, background: T.bgCard,
           position: 'sticky', left: 0, zIndex: 2,
         }}>
-          <div style={{ height: 38, borderBottom: `1px solid ${T.border}` }} />
+          {/* 日付ヘッダと同じ rendered height (38 + padding 12 + border 1 = 51px) にしてラベルと時間境界線を揃える */}
+          <div style={{ height: 38, padding: '6px 0', borderBottom: `1px solid ${T.border}` }} />
           <div style={{ position: 'relative', height: TOTAL_HEIGHT }}>
             {Array.from({ length: HOURS_PER_DAY + 1 }, (_, i) => {
               const h = HOUR_FROM + i
@@ -471,8 +472,18 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
               <div style={{
                 position: 'relative', height: TOTAL_HEIGHT,
                 background: T.bg,
-                backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${SLOT_PX * 2 - 1}px, ${T.border} ${SLOT_PX * 2 - 1}px, ${T.border} ${SLOT_PX * 2}px)`,
               }}>
+                {/* 時間境界線 (イベントの top と同じ y 座標で完全一致させる) */}
+                {Array.from({ length: HOURS_PER_DAY }, (_, i) => {
+                  const h = HOUR_FROM + 1 + i
+                  return (
+                    <div key={`hr-${h}`} style={{
+                      position: 'absolute', left: 0, right: 0,
+                      top: minToPx(h * 60),
+                      height: 1, background: T.border, pointerEvents: 'none',
+                    }} />
+                  )
+                })}
                 {/* 業務時間外を薄くシェード */}
                 <div style={{
                   position: 'absolute', left: 0, right: 0,
@@ -528,7 +539,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
                   }
                   return sorted.map(ev => {
                     const top = minToPx(ev.startMin)
-                    const h = Math.max(SLOT_PX - 2, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 1)
+                    const h = Math.max(SLOT_PX - 3, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 2)
                     const widthPct = 100 / ev._cols
                     const leftPct = ev._col * widthPct
                     const isNarrow = ev._cols > 1
@@ -567,6 +578,7 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }
     <div
       style={{
         position: 'absolute',
+        boxSizing: 'border-box',
         left: `calc(${leftPct}% + 2px)`,
         width: `calc(${widthPct}% - 4px)`,
         top, height: h,
