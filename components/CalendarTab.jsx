@@ -386,7 +386,8 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
           borderRight: `1px solid ${T.border}`, background: T.bgCard,
           position: 'sticky', left: 0, zIndex: 2,
         }}>
-          <div style={{ height: 38, borderBottom: `1px solid ${T.border}` }} />
+          {/* 日付ヘッダと同じ rendered height (38 + padding 12 + border 1 = 51px) にしてラベルと時間境界線を揃える */}
+          <div style={{ height: 38, padding: '6px 0', borderBottom: `1px solid ${T.border}` }} />
           <div style={{ position: 'relative', height: TOTAL_HEIGHT }}>
             {Array.from({ length: HOURS_PER_DAY + 1 }, (_, i) => {
               const h = HOUR_FROM + i
