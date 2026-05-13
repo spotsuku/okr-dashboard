@@ -539,7 +539,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
                   }
                   return sorted.map(ev => {
                     const top = minToPx(ev.startMin)
-                    const h = Math.max(SLOT_PX - 2, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 1)
+                    const h = Math.max(SLOT_PX - 3, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 2)
                     const widthPct = 100 / ev._cols
                     const leftPct = ev._col * widthPct
                     const isNarrow = ev._cols > 1
@@ -578,6 +578,7 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }
     <div
       style={{
         position: 'absolute',
+        boxSizing: 'border-box',
         left: `calc(${leftPct}% + 2px)`,
         width: `calc(${widthPct}% - 4px)`,
         top, height: h,
