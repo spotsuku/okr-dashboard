@@ -1,9 +1,20 @@
 import { Client } from '@notionhq/client'
-import { getMeetingDbId, getMeeting } from '../../../lib/meetings'
+import { createClient } from '@supabase/supabase-js'
+import { getMeeting } from '../../../lib/meetings'
+import { resolveNotionConfig } from '../../../lib/notionForOrg'
 
 // Notionは eventual consistency があるため毎回最新を取得 (Next.jsのキャッシュ無効化)
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+function getAdmin() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } }
+  )
+}
 
 function extractRichText(richTextArray) {
   if (!richTextArray || !Array.isArray(richTextArray)) return ''
@@ -81,18 +92,18 @@ async function getAllBlocks(notion, blockId, depth = 0) {
 
 export async function GET(req) {
   try {
-    const apiKey = process.env.NOTION_API_KEY
-    if (!apiKey) return Response.json({ error: 'NOTION_API_KEY is not configured' }, { status: 500 })
-
     const { searchParams } = new URL(req.url)
     const meetingKey = searchParams.get('meetingKey') || 'morning'
     const pageId = searchParams.get('pageId')
+    const orgId = searchParams.get('organization_id') || null
 
     const meeting = getMeeting(meetingKey)
     if (!meeting) return Response.json({ error: `Unknown meetingKey: ${meetingKey}` }, { status: 400 })
 
-    const dbId = getMeetingDbId(meetingKey)
-    if (!dbId) return Response.json({ error: `${meeting.title} の DB_ID が設定されていません (環境変数を確認してください)` }, { status: 500 })
+    // 組織別の Notion 設定を解決 (org の notion_api_key/notion_db_ids 優先、無ければ env var fallback)
+    const { apiKey, dbId } = await resolveNotionConfig(orgId, meetingKey, getAdmin())
+    if (!apiKey) return Response.json({ error: 'Notion API キーが設定されていません (組織設定 or 環境変数を確認してください)' }, { status: 500 })
+    if (!dbId) return Response.json({ error: `${meeting.title} の Notion DB が設定されていません (組織設定で連携 DB を指定してください)` }, { status: 500 })
 
     const notion = new Client({ auth: apiKey })
 

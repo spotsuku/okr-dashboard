@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useCurrentOrg } from '../lib/orgContext'
 
 // スマホ判定
 function useIsMobile(bp = 768) {
@@ -64,6 +65,8 @@ const PALETTE = [
 
 export default function CalendarTab({ T, myName, members, viewingName }) {
   const isMobile = useIsMobile()
+  const { currentOrg } = useCurrentOrg()
+  const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   // 週開始日 (JST月曜の UTC 00:00)
   const [weekStart, setWeekStart] = useState(() => jstMonday(new Date()))
   // モバイル: 日ビュー用のカレント日付 (UTC ベース、デフォ今日)
@@ -262,7 +265,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
                 if (window.confirm(
                   'Google の書き込み権限が不足しています。\n\n予定作成には「Calendar 予定の作成・編集」スコープが必要です。連携タブで再認証してください。\n\n今すぐ連携タブに移動しますか？'
                 )) {
-                  window.location.href = '/?tab=integrations'
+                  window.location.href = `${orgPath}?page=integrations`
                 }
               } else {
                 alert(`実行エラー: ${msg}`)
@@ -699,6 +702,8 @@ function computeFreeSlots(data, days, selected) {
 
 // ─── 未連携メンバーのフッター (連携依頼 mailto) ────────────────────────
 function UnconnectedFooter({ T, dataMembers, selected }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   const unconnected = (dataMembers || []).filter(r => selected.includes(r.name) && !r.connected)
   if (unconnected.length === 0) return null
   return (
@@ -712,7 +717,9 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {unconnected.map(r => {
           const subject = encodeURIComponent('OKR Dashboard カレンダー連携のお願い')
-          const link = typeof window !== 'undefined' ? `${window.location.origin}/?tab=integrations` : '/?tab=integrations'
+          const link = typeof window !== 'undefined'
+            ? `${window.location.origin}${orgPath}?page=integrations`
+            : `${orgPath}?page=integrations`
           const body = encodeURIComponent(
             `${r.name} さん\n\nOKR Dashboard でカレンダーを共有したいので、以下のURLから Google 連携をお願いします。\n\n${link}\n\nよろしくお願いします。`
           )
@@ -734,8 +741,32 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
 }
 
 // ─── AI チャットパネル (右側常駐) ──────────────────────────────────────
+const AI_HISTORY_STORAGE_KEY = 'okr-calendar-ai-history-v1'
+
 function AIPanel({ T, myName, viewingName, members, selected, weekStart, onProposal, isMobile = false }) {
-  const [history, setHistory] = useState([])  // [{role, content (string)}]
+  // [{role, content (string), actions?: [{tool}]}]
+  // localStorage に永続化 (クリアボタン押下まで保持。リロード/ページ移動で消えないように)
+  const [history, setHistory] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = localStorage.getItem(AI_HISTORY_STORAGE_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch { return [] }
+  })
+  // history 変更を localStorage へ反映 (action result 本体は重いので tool 名のみ保存)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const compact = history.map(h => ({
+        role: h.role,
+        content: h.content,
+        actions: (h.actions || []).map(a => ({ tool: a.tool })),
+      }))
+      localStorage.setItem(AI_HISTORY_STORAGE_KEY, JSON.stringify(compact))
+    } catch {}
+  }, [history])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -747,6 +778,13 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
 
   const owner = viewingName || myName
   const [lastUserMsg, setLastUserMsg] = useState('')
+
+  const clearHistory = () => {
+    setHistory([])
+    if (typeof window !== 'undefined') {
+      try { localStorage.removeItem(AI_HISTORY_STORAGE_KEY) } catch {}
+    }
+  }
 
   const send = async (overrideMsg) => {
     const msg = (overrideMsg ?? input).trim()
@@ -846,7 +884,7 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
         <div style={{ fontSize: 12, fontWeight: 700, color: T.text, flex: 1 }}>
           カレンダー AI
         </div>
-        <button onClick={() => setHistory([])} disabled={busy} style={btnSm(T)}>クリア</button>
+        <button onClick={clearHistory} disabled={busy} style={btnSm(T)}>クリア</button>
         <button onClick={() => setCollapsed(true)} style={btnSm(T)}>»</button>
       </div>
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 10 }}>

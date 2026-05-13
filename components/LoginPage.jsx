@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase'
 // ★ 本番URLを固定（これ以外のURLに飛ばない）
 const PRODUCTION_URL = 'https://okr-dashboard-taupe.vercel.app'
 
-export default function LoginPage() {
+// orgName を渡すと「{orgName} にサインイン」と組織名入りの見出しになる (SaaS化 Plan B)
+export default function LoginPage({ orgName = null }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
@@ -62,6 +63,11 @@ export default function LoginPage() {
           <h1 style={{ color: '#e8eaf0', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
             {isSignUp ? 'アカウント作成' : 'ログイン'}
           </h1>
+          {orgName && (
+            <div style={{ marginTop: 10, fontSize: 13, color: '#9ca3af', lineHeight: 1.6 }}>
+              <span style={{ fontWeight: 700, color: '#e8eaf0' }}>{orgName}</span> にサインイン
+            </div>
+          )}
         </div>
 
         {/* Google ログインボタン */}
