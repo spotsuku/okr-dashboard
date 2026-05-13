@@ -3,22 +3,25 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { COMMON_TOKENS, IOS_SHADOW } from '../lib/themeTokens'
 import { LargeTitle, SearchBar, DashboardTile } from './iosUI'
 import { isDemoMode } from '../lib/demoMocks'
+import { useCurrentOrg } from '../lib/orgContext'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
 // 内蔵 OKR + NEO の外部サービスダッシュボード (本番のみ)。
 // demo 環境では external=true のものを非表示にする (本番URL露出防止)。
+// orgSlugs が指定されているエントリは、その組織でのみ表示される
+//   (NEO福岡 固有のリンクは ['neo-fukuoka'] で限定)
 // ユーザー追加分は「カスタムリンク」(localStorage) に登録される。
 const DASHBOARDS = [
   { id: 'okr',         title: 'OKR ダッシュボード',         description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true, group: 'main',     keywords: 'okr ka タスク 目標' },
 
-  { id: 'cs',          title: 'CS ダッシュボード',          description: '顧客対応・満足度管理',           icon: 'users',      color: '#34C759', url: 'https://neo-cs.vercel.app/',                            external: true, group: 'business', keywords: 'cs 顧客 満足度' },
-  { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: 'trendingUp', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', external: true, group: 'business', keywords: 'sales 営業 商談' },
-  { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: 'building',   color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',      external: true, group: 'business', keywords: 'community コミュニティ' },
-  { id: 'youth',       title: 'ユース ダッシュボード',      description: 'ユース活動管理',                 icon: 'sprout',     color: '#FFCC00', url: 'https://neo-youth.vercel.app/dashboard',                external: true, group: 'business', keywords: 'youth ユース' },
+  { id: 'cs',          title: 'CS ダッシュボード',          description: '顧客対応・満足度管理',           icon: 'users',      color: '#34C759', url: 'https://neo-cs.vercel.app/',                            external: true, group: 'business', keywords: 'cs 顧客 満足度', orgSlugs: ['neo-fukuoka'] },
+  { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: 'trendingUp', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', external: true, group: 'business', keywords: 'sales 営業 商談',  orgSlugs: ['neo-fukuoka'] },
+  { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: 'building',   color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',      external: true, group: 'business', keywords: 'community コミュニティ', orgSlugs: ['neo-fukuoka'] },
+  { id: 'youth',       title: 'ユース ダッシュボード',      description: 'ユース活動管理',                 icon: 'sprout',     color: '#FFCC00', url: 'https://neo-youth.vercel.app/dashboard',                external: true, group: 'business', keywords: 'youth ユース',          orgSlugs: ['neo-fukuoka'] },
 
-  { id: 'seisaku',     title: '制作物管理',                 description: '制作物の進行・管理',             icon: 'palette',    color: '#5AC8FA', url: 'https://seisaku-kanri-blond.vercel.app/',               external: true, group: 'tools',    keywords: '制作 デザイン' },
-  { id: 'budget',      title: '予算管理 ダッシュボード',     description: '予算策定・実績管理',             icon: 'chartPie',   color: '#AF52DE', url: 'https://neobudget-liard.vercel.app/#',                  external: true, group: 'tools',    keywords: '予算 管理 実績' },
-  { id: 'invitation',  title: 'イベント招待 ダッシュボード', description: 'イベント招待・参加管理',         icon: 'envelope',   color: '#FF2D55', url: 'https://invitation-ruby-psi.vercel.app/',               external: true, group: 'tools',    keywords: 'invitation イベント招待' },
+  { id: 'seisaku',     title: '制作物管理',                 description: '制作物の進行・管理',             icon: 'palette',    color: '#5AC8FA', url: 'https://seisaku-kanri-blond.vercel.app/',               external: true, group: 'tools',    keywords: '制作 デザイン',         orgSlugs: ['neo-fukuoka'] },
+  { id: 'budget',      title: '予算管理 ダッシュボード',     description: '予算策定・実績管理',             icon: 'chartPie',   color: '#AF52DE', url: 'https://neobudget-liard.vercel.app/#',                  external: true, group: 'tools',    keywords: '予算 管理 実績',        orgSlugs: ['neo-fukuoka'] },
+  { id: 'invitation',  title: 'イベント招待 ダッシュボード', description: 'イベント招待・参加管理',         icon: 'envelope',   color: '#FF2D55', url: 'https://invitation-ruby-psi.vercel.app/',               external: true, group: 'tools',    keywords: 'invitation イベント招待', orgSlugs: ['neo-fukuoka'] },
 ]
 
 // テーマは lib/themeTokens.js で一元管理
@@ -59,6 +62,8 @@ function normalizeUrl(input) {
 
 export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
   const T = THEMES[themeKey] || THEMES.dark
+  const { currentOrg } = useCurrentOrg()
+  const orgSlug = currentOrg?.slug || null
   const [search, setSearch] = useState('')
   const [customLinks, setCustomLinks] = useState([])
   const [showAdd, setShowAdd] = useState(false)
@@ -110,14 +115,17 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
 
   // 検索フィルタ (内蔵 + カスタム)
   // demo 環境では external=true を非表示 (本番URL露出防止)
+  // orgSlugs が指定された項目は、現在の組織がリストに含まれる場合のみ表示 (SaaS化)
   const demo = isDemoMode()
   const allItems = useMemo(() => [
-    ...DASHBOARDS.filter(d => !demo || !d.external),
+    ...DASHBOARDS
+      .filter(d => !demo || !d.external)
+      .filter(d => !d.orgSlugs || (orgSlug && d.orgSlugs.includes(orgSlug))),
     ...customLinks.map(l => ({
       id: l.id, title: l.title, description: l.url, icon: 'link', color: l.color || '#007AFF',
       url: l.url, group: 'custom', keywords: `${l.title} ${l.url}`, custom: true,
     })),
-  ], [customLinks, demo])
+  ], [customLinks, demo, orgSlug])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return allItems
