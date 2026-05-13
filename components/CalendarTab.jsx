@@ -734,8 +734,32 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
 }
 
 // ─── AI チャットパネル (右側常駐) ──────────────────────────────────────
+const AI_HISTORY_STORAGE_KEY = 'okr-calendar-ai-history-v1'
+
 function AIPanel({ T, myName, viewingName, members, selected, weekStart, onProposal, isMobile = false }) {
-  const [history, setHistory] = useState([])  // [{role, content (string)}]
+  // [{role, content (string), actions?: [{tool}]}]
+  // localStorage に永続化 (クリアボタン押下まで保持。リロード/ページ移動で消えないように)
+  const [history, setHistory] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = localStorage.getItem(AI_HISTORY_STORAGE_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch { return [] }
+  })
+  // history 変更を localStorage へ反映 (action result 本体は重いので tool 名のみ保存)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const compact = history.map(h => ({
+        role: h.role,
+        content: h.content,
+        actions: (h.actions || []).map(a => ({ tool: a.tool })),
+      }))
+      localStorage.setItem(AI_HISTORY_STORAGE_KEY, JSON.stringify(compact))
+    } catch {}
+  }, [history])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -747,6 +771,13 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
 
   const owner = viewingName || myName
   const [lastUserMsg, setLastUserMsg] = useState('')
+
+  const clearHistory = () => {
+    setHistory([])
+    if (typeof window !== 'undefined') {
+      try { localStorage.removeItem(AI_HISTORY_STORAGE_KEY) } catch {}
+    }
+  }
 
   const send = async (overrideMsg) => {
     const msg = (overrideMsg ?? input).trim()
@@ -846,7 +877,7 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
         <div style={{ fontSize: 12, fontWeight: 700, color: T.text, flex: 1 }}>
           カレンダー AI
         </div>
-        <button onClick={() => setHistory([])} disabled={busy} style={btnSm(T)}>クリア</button>
+        <button onClick={clearHistory} disabled={busy} style={btnSm(T)}>クリア</button>
         <button onClick={() => setCollapsed(true)} style={btnSm(T)}>»</button>
       </div>
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
