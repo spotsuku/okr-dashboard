@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useCurrentOrg } from '../lib/orgContext'
 
 // スマホ判定
 function useIsMobile(bp = 768) {
@@ -64,6 +65,8 @@ const PALETTE = [
 
 export default function CalendarTab({ T, myName, members, viewingName }) {
   const isMobile = useIsMobile()
+  const { currentOrg } = useCurrentOrg()
+  const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   // 週開始日 (JST月曜の UTC 00:00)
   const [weekStart, setWeekStart] = useState(() => jstMonday(new Date()))
   // モバイル: 日ビュー用のカレント日付 (UTC ベース、デフォ今日)
@@ -262,7 +265,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
                 if (window.confirm(
                   'Google の書き込み権限が不足しています。\n\n予定作成には「Calendar 予定の作成・編集」スコープが必要です。連携タブで再認証してください。\n\n今すぐ連携タブに移動しますか？'
                 )) {
-                  window.location.href = '/?tab=integrations'
+                  window.location.href = `${orgPath}?page=integrations`
                 }
               } else {
                 alert(`実行エラー: ${msg}`)
@@ -699,6 +702,8 @@ function computeFreeSlots(data, days, selected) {
 
 // ─── 未連携メンバーのフッター (連携依頼 mailto) ────────────────────────
 function UnconnectedFooter({ T, dataMembers, selected }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   const unconnected = (dataMembers || []).filter(r => selected.includes(r.name) && !r.connected)
   if (unconnected.length === 0) return null
   return (
@@ -712,7 +717,9 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {unconnected.map(r => {
           const subject = encodeURIComponent('OKR Dashboard カレンダー連携のお願い')
-          const link = typeof window !== 'undefined' ? `${window.location.origin}/?tab=integrations` : '/?tab=integrations'
+          const link = typeof window !== 'undefined'
+            ? `${window.location.origin}${orgPath}?page=integrations`
+            : `${orgPath}?page=integrations`
           const body = encodeURIComponent(
             `${r.name} さん\n\nOKR Dashboard でカレンダーを共有したいので、以下のURLから Google 連携をお願いします。\n\n${link}\n\nよろしくお願いします。`
           )
