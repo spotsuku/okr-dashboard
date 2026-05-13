@@ -293,6 +293,25 @@ export async function POST(request) {
     .map(m => `- ${m.name}${m.email ? ` <${m.email}>` : ''}`)
     .join('\n')
 
+  // 曜日参照表を JST で算出 (LLM の曜日推論誤りを防ぐため、明示的に注入する)
+  const DOW_JA = ['日', '月', '火', '水', '木', '金', '土']
+  const todayJst = new Date(new Date(today).getTime() + 9 * 3600 * 1000)
+  const todayJstY = todayJst.getUTCFullYear()
+  const todayJstM = todayJst.getUTCMonth()
+  const todayJstD = todayJst.getUTCDate()
+  const dateRefLines = []
+  for (let i = 0; i < 21; i++) {
+    const dms = Date.UTC(todayJstY, todayJstM, todayJstD + i)
+    const dt = new Date(dms)
+    const y = dt.getUTCFullYear()
+    const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(dt.getUTCDate()).padStart(2, '0')
+    const dow = DOW_JA[dt.getUTCDay()]
+    const label = i === 0 ? ' ← 今日' : i === 1 ? ' ← 明日' : ''
+    dateRefLines.push(`- ${y}-${m}-${d}(${dow})${label}`)
+  }
+  const dateRefStr = dateRefLines.join('\n')
+
   const systemPrompt = `あなたは OKR Dashboard のカレンダー管理アシスタントです。ユーザーの指示に基づき、ツールを使ってカレンダー予定の確認・作成・更新・削除を行います。
 
 ## 現在の状況
@@ -301,6 +320,10 @@ export async function POST(request) {
 - 操作実行者: ${owner}
 - 招待候補メンバー:
 ${membersStr || '(なし)'}
+
+## 日付・曜日参照表 (JST、確定値・必ずこの表から曜日を引くこと)
+日付から曜日を自分で計算してはいけない。下表に存在する日付はこの曜日表記をそのまま使う。
+${dateRefStr}
 
 ## 行動ルール
 1. 仮押さえは件名の先頭に「[仮]」を付ける (create_event ツール側で自動付与されるが、AI も意識すること)
