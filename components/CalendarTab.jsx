@@ -471,8 +471,18 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
               <div style={{
                 position: 'relative', height: TOTAL_HEIGHT,
                 background: T.bg,
-                backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${SLOT_PX * 2 - 1}px, ${T.border} ${SLOT_PX * 2 - 1}px, ${T.border} ${SLOT_PX * 2}px)`,
               }}>
+                {/* 時間境界線 (イベントの top と同じ y 座標で完全一致させる) */}
+                {Array.from({ length: HOURS_PER_DAY }, (_, i) => {
+                  const h = HOUR_FROM + 1 + i
+                  return (
+                    <div key={`hr-${h}`} style={{
+                      position: 'absolute', left: 0, right: 0,
+                      top: minToPx(h * 60),
+                      height: 1, background: T.border, pointerEvents: 'none',
+                    }} />
+                  )
+                })}
                 {/* 業務時間外を薄くシェード */}
                 <div style={{
                   position: 'absolute', left: 0, right: 0,
