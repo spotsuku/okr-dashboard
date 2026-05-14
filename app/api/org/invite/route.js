@@ -10,6 +10,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@supabase/supabase-js'
+import { sendInviteEmail } from '../../../../lib/sendInviteEmail'
 
 function admin() {
   return createClient(
@@ -62,7 +63,21 @@ export async function POST(request) {
       return json({ error: '組織メンバー追加失敗: ' + omErr.message }, { status: 500 })
     }
 
-    return json({ ok: true, member_id: memberId })
+    // 3) 招待メールを Resend で送信 (env 未設定なら skip)
+    //    組織の name / slug を取得して、サインインURL付きメールを送る
+    const { data: org } = await sb.from('organizations')
+      .select('name, slug').eq('id', organization_id).maybeSingle()
+
+    const mail = await sendInviteEmail({
+      toEmail: email,
+      toName: name || null,
+      organizationName: org?.name || null,
+      organizationSlug: org?.slug || null,
+      inviterEmail: inviter_email,
+      role,
+    })
+
+    return json({ ok: true, member_id: memberId, email: mail })
   } catch (e) {
     return json({ error: e.message || String(e) }, { status: 500 })
   }

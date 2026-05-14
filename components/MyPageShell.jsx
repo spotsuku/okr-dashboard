@@ -3445,7 +3445,7 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
     if (!viewingName) return
     // プレビュー用の上位 3件
     const { data } = await supabase.from('member_confirmations')
-      .select('id, from_name, content, created_at')
+      .select('id, from_name, content, reference_urls, created_at')
       .eq('to_name', viewingName).eq('status', 'open')
       .order('created_at', { ascending: false }).limit(3)
     setItems(data || [])
@@ -3508,25 +3508,48 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
           display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap',
           position: 'relative', zIndex: 1,
         }}>
-          {items.map(it => (
-            <div key={it.id} style={{
-              flex: '1 1 240px', minWidth: 0,
-              padding: '8px 12px', borderRadius: 9,
-              background: 'rgba(255,255,255,0.22)',
-              backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.28)',
-              fontSize: 11, color: '#fff',
-            }}>
-              <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 2 }}>
-                from <b>{it.from_name}</b>
+          {items.map(it => {
+            const refUrls = Array.isArray(it.reference_urls) ? it.reference_urls : []
+            return (
+              <div key={it.id} style={{
+                flex: '1 1 240px', minWidth: 0,
+                padding: '8px 12px', borderRadius: 9,
+                background: 'rgba(255,255,255,0.22)',
+                backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.28)',
+                fontSize: 11, color: '#fff',
+              }}>
+                <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 2 }}>
+                  from <b>{it.from_name}</b>
+                </div>
+                <div style={{
+                  color: '#fff', lineHeight: 1.5, fontWeight: 600,
+                  overflow: 'hidden', display: '-webkit-box',
+                  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                }}>{it.content}</div>
+                {refUrls.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                    {refUrls.map((u, i) => {
+                      const href = u.url?.match(/^https?:\/\//) ? u.url : (u.url ? `https://${u.url}` : '#')
+                      return (
+                        <a key={i} href={href} target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            padding: '2px 7px', borderRadius: 5,
+                            background: 'rgba(255,255,255,0.28)',
+                            color: '#fff',
+                            fontSize: 10, fontWeight: 700, textDecoration: 'none',
+                            border: '1px solid rgba(255,255,255,0.35)',
+                            maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>🔗 {u.label || u.url}</a>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <div style={{
-                color: '#fff', lineHeight: 1.5, fontWeight: 600,
-                overflow: 'hidden', display: '-webkit-box',
-                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-              }}>{it.content}</div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
