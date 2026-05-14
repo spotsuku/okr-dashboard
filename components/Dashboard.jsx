@@ -1375,6 +1375,10 @@ export default function Dashboard({ user, onSignOut }) {
     <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
       {/* Demo モードバナー */}
       <DemoBanner />
+      {/* myAI ライセンス: 初回ログインのフルスクリーンゲート (SaaS化 Phase 5) */}
+      <LicenseGate T={T} myEmail={user?.email} />
+      {/* myAI ライセンス無効時のソフトロックバナー (SaaS化 Phase 5) */}
+      <LicenseBanner T={T} />
       <OrgSwitcherTopBar />
       {/* Header (スマホでは非表示 - MyPageShell の下メニューでナビゲート) */}
       <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
@@ -1611,6 +1615,8 @@ export default function Dashboard({ user, onSignOut }) {
 
 // ─── Demo モードバナー ──────────────────────────────────────
 import OrgSettingsPanel from './OrgSettingsPanel'
+import LicenseBanner from './LicenseBanner'
+import LicenseGate from './LicenseGate'
 function DemoBanner() {
   const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
   if (!DEMO_MODE) return null

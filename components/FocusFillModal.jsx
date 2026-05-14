@@ -77,6 +77,15 @@ const WEATHER_OPTIONS = [
   { v: 5, icon: '🌟', label: '快晴' },
 ]
 
+// KA ステータス選択肢 (MyCoachPage と同じ値・色味で揃える)
+const KA_STATUS_OPTIONS = [
+  { key: 'focus',  label: '🎯 Focus', color: '#4d9fff' },
+  { key: 'good',   label: '✅ Good',  color: '#00d68f' },
+  { key: 'more',   label: '🔺 More',  color: '#ff6b6b' },
+  { key: 'normal', label: '未着手',   color: '#8E8E93' },
+  { key: 'done',   label: '✓ 完了',   color: '#7a8599' },
+]
+
 // ─── メインコンポーネント ───────────────────────────
 export default function FocusFillModal({ open, onClose, T, viewingName, myName, isAdmin = false, initialMode = 'kr', levels = [] }) {
   const isViewingSelf = viewingName === myName
@@ -363,6 +372,39 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     }
   }
 
+  // KA ステータス変更
+  //   newStatus='done' の場合はキューから即時除外して次のカードへ進む
+  async function handleKaStatusChange(newStatus) {
+    if (!currentCard || currentCard.kind !== 'ka' || !canEdit) return
+    const ka = currentCard.ka
+    const prevStatus = ka.status || 'normal'
+    if (prevStatus === newStatus) return
+    // 楽観更新: DOM のステータスバッジを先に切り替える
+    ka.status = newStatus
+    const { error } = await supabase.from('weekly_reports')
+      .update({ status: newStatus }).eq('id', ka.id)
+    if (error) {
+      ka.status = prevStatus
+      alert('ステータス変更エラー: ' + error.message)
+      return
+    }
+    if (newStatus === 'done') {
+      // 完了したKAはキューから外して次に進む
+      const curIdx = index.ka
+      const newQ = queue.ka.filter((_, i) => i !== curIdx)
+      setQueue(prev => ({ ...prev, ka: newQ }))
+      if (newQ.length === 0) {
+        setCompleted(c => ({ ...c, ka: true }))
+      } else if (curIdx >= newQ.length) {
+        setIndex(i => ({ ...i, ka: newQ.length - 1 }))
+      }
+      // curIdx < newQ.length の場合は index 据え置きで次のカードが自然に出る
+    } else {
+      // 再描画用にキューを浅コピー
+      setQueue(prev => ({ ...prev, ka: [...prev.ka] }))
+    }
+  }
+
   function moveBack() {
     setIndex(i => ({ ...i, [mode]: Math.max(0, i[mode] - 1) }))
     setCompleted(c => ({ ...c, [mode]: false }))
@@ -581,7 +623,8 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
             <CardView T={T} card={current} draft={draft} setDraft={setDraft} cfg={cfg}
               readOnly={!canEdit} deptLabelOf={deptLabelOf}
               weekStart={weekStartOf(current.kind)}
-              meetingText={meetingLabel(current.kind)} />
+              meetingText={meetingLabel(current.kind)}
+              onKaStatusChange={handleKaStatusChange} />
           ) : null}
         </div>
 
@@ -633,7 +676,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 }
 
 // ─── カード表示 ────────────────────────────────────────
-function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart, meetingText }) {
+function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart, meetingText, onKaStatusChange }) {
   const isKR = card.kind === 'kr'
   const kr = card.kr
   const ka = card.ka
@@ -717,6 +760,30 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
         {!isKR && ka.kr_title && (
           <div style={{ fontSize: 11, color: T.textMuted }}>
             所属KR: {ka.kr_title}
+          </div>
+        )}
+        {/* KA ステータス切替 (完了にすると一覧から非表示) */}
+        {!isKR && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, marginRight: 2 }}>状態</span>
+            {KA_STATUS_OPTIONS.map(opt => {
+              const active = (ka.status || 'normal') === opt.key
+              return (
+                <button key={opt.key}
+                  onClick={() => !readOnly && onKaStatusChange?.(opt.key)}
+                  disabled={readOnly}
+                  title={opt.key === 'done' ? '完了にすると次回からこのKAは表示されません' : undefined}
+                  style={{
+                    fontSize: 10, padding: '3px 9px', borderRadius: 99,
+                    background: active ? `${opt.color}22` : 'transparent',
+                    color: active ? opt.color : T.textFaint,
+                    border: `1px solid ${active ? opt.color : T.border}`,
+                    fontWeight: 700, fontFamily: 'inherit',
+                    cursor: readOnly ? 'not-allowed' : 'pointer',
+                    opacity: readOnly ? 0.6 : 1,
+                  }}>{opt.label}</button>
+              )
+            })}
           </div>
         )}
       </div>

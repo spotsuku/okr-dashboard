@@ -8,6 +8,7 @@ import { ComposeModal } from './ConfirmationsTab'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { HeroCard } from './iosUI'
 import { isJpNonBusinessDay } from '../lib/jpHolidays'
+import { renderTextWithLinks } from '../lib/renderTextWithLinks'
 
 // 🌅 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
@@ -1189,14 +1190,30 @@ function MeetingConfirmCard({ T, item, replies, myName, onResolve, onReplied }) 
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.to_name}</span>
       </div>
       <div style={{ fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6, padding: '4px 2px' }}>
-        {item.content}
+        {renderTextWithLinks(item.content, { color: T.accent })}
       </div>
+      {Array.isArray(item.reference_urls) && item.reference_urls.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          {item.reference_urls.map((u, i) => {
+            const href = u.url?.match(/^https?:\/\//) ? u.url : (u.url ? `https://${u.url}` : '#')
+            return (
+              <a key={i} href={href} target="_blank" rel="noopener noreferrer" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', borderRadius: 6,
+                background: T.accentBg, color: T.accent,
+                fontSize: 11, fontWeight: 700, textDecoration: 'none',
+                border: `1px solid ${T.accent}30`,
+              }}>🔗 {u.label || u.url}</a>
+            )
+          })}
+        </div>
+      )}
       {replies.length > 0 && (
         <div style={{ marginTop: 8, paddingLeft: 10, borderLeft: `2px solid ${T.border}` }}>
           {replies.map(r => (
             <div key={r.id} style={{ marginBottom: 6, fontSize: 11 }}>
               <b style={{ color: T.textSub }}>{r.from_name}</b>
-              <span style={{ color: T.text, marginLeft: 6, whiteSpace: 'pre-wrap' }}>{r.content}</span>
+              <span style={{ color: T.text, marginLeft: 6, whiteSpace: 'pre-wrap' }}>{renderTextWithLinks(r.content, { color: T.accent })}</span>
             </div>
           ))}
         </div>

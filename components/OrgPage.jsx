@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { LargeTitle, BgGlow } from './iosUI'
 import TaskManualPage from './TaskManualPage'
@@ -302,6 +303,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
     <div style={{ maxWidth: 900 }}>
       {/* Slack 連携 (admin のみ) */}
       {isAdmin && <SlackSyncPanel />}
+      {isAdmin && <ConfirmationsWebhookPanel currentUser={currentUser} />}
 
       {/* サマリー */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -606,6 +608,171 @@ function SlackSyncPanel() {
           background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
           fontSize: 12, color: T().danger,
         }}>⚠️ エラー: {error}</div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════
+// 共有・確認事項 専用 Slack Webhook 設定 (admin 用・組織ごと)
+// organizations.slack_webhook_confirmations に保存
+// ══════════════════════════════════════════════════
+function ConfirmationsWebhookPanel({ currentUser }) {
+  const { currentOrg } = useCurrentOrg()
+  const [url, setUrl] = useState('')
+  const [initialUrl, setInitialUrl] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!currentOrg?.id) return
+    let aborted = false
+    setLoading(true); setMessage('')
+    fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}`)
+      .then(async r => {
+        const j = await r.json().catch(() => ({}))
+        if (aborted) return
+        if (!r.ok) {
+          setMessage('❌ 取得失敗: ' + (j.error || `HTTP ${r.status}`))
+          return
+        }
+        const v = j.url || ''
+        setUrl(v); setInitialUrl(v)
+      })
+      .catch(e => { if (!aborted) setMessage('❌ 取得失敗: ' + (e.message || String(e))) })
+      .finally(() => { if (!aborted) setLoading(false) })
+    return () => { aborted = true }
+  }, [currentOrg?.id])
+
+  const isUrlValid = url === '' || /^https:\/\/hooks\.slack\.com\/services\//.test(url)
+  const dirty = url !== initialUrl
+
+  const save = async () => {
+    if (!currentOrg?.id || !isUrlValid || saving) return
+    setSaving(true); setMessage('')
+    try {
+      const r = await fetch('/api/integrations/slack/org-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organization_id: currentOrg.id,
+          url,
+          email: currentUser?.email || '',
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setSaving(false)
+        setMessage('❌ 保存失敗: ' + (j.error || `HTTP ${r.status}`))
+        return
+      }
+      // 二重確認: 即座に GET で再取得し、DB に確実に書き込まれたかを検証
+      // (古いキャッシュバンドル / RLS の silent failure を検知するため)
+      const vr = await fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}&_t=${Date.now()}`, { cache: 'no-store' })
+      const vj = await vr.json().catch(() => ({}))
+      setSaving(false)
+      if (!vr.ok) {
+        setMessage('❌ 検証失敗: ' + (vj.error || `HTTP ${vr.status}`))
+        return
+      }
+      const stored = vj.url || ''
+      setUrl(stored); setInitialUrl(stored)
+      if (stored === (url || '')) {
+        setMessage(stored ? '✅ 保存しました (DB反映確認済)' : '✅ 設定を解除しました')
+      } else {
+        setMessage(`⚠️ 保存処理は完了したが DB の値 (「${stored || '(空)'}」) が入力値と一致しません。ブラウザキャッシュをハードリロード (Cmd+Shift+R / Ctrl+Shift+R) してください`)
+      }
+    } catch (e) {
+      setSaving(false)
+      setMessage('❌ 保存失敗: ' + (e.message || String(e)))
+    }
+  }
+
+  const sendTest = async () => {
+    if (!url || !isUrlValid || testing) return
+    setTesting(true); setMessage('')
+    try {
+      const r = await fetch('/api/integrations/slack/test-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          text: `✅ テスト通知: 共有・確認事項チャンネルへのSlack通知が正常に動作しています (${currentOrg?.name || ''})`,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      setMessage(r.ok ? '✅ テスト通知を送信しました (Slackで確認してください)'
+                     : `❌ テスト送信失敗: ${j.error || `HTTP ${r.status}`}`)
+    } catch (e) {
+      setMessage('❌ テスト送信失敗: ' + (e.message || String(e)))
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div style={{
+      marginBottom: 20, padding: '14px 18px', borderRadius: 12,
+      background: T().bgCard, border: `1px solid ${T().border}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 18 }}>📨</span>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T().text }}>
+            共有・確認事項の通知チャンネル
+          </div>
+          <div style={{ fontSize: 11, color: T().textMuted, lineHeight: 1.5 }}>
+            ダッシュボードから投稿された 📢共有 / 📬確認 事項を、ここに登録した Slack Incoming Webhook で投稿します。
+            <br />未設定の場合は部署 webhook → グローバル設定の順にフォールバックします。
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          type="url"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://hooks.slack.com/services/T.../B.../..."
+          disabled={loading || !currentOrg?.id}
+          style={{
+            flex: 1, minWidth: 280, padding: '8px 12px', fontSize: 12,
+            fontFamily: 'inherit',
+            background: T().bg, color: T().text,
+            border: `1px solid ${url && !isUrlValid ? T().danger : T().border}`,
+            borderRadius: 8, outline: 'none',
+          }}
+        />
+        <button onClick={save} disabled={!dirty || !isUrlValid || saving || loading || !currentOrg?.id}
+          style={{
+            padding: '8px 16px', borderRadius: 8, border: 'none',
+            background: (dirty && isUrlValid && !saving) ? T().accent : T().border,
+            color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            cursor: (dirty && isUrlValid && !saving) ? 'pointer' : 'not-allowed',
+          }}>{saving ? '保存中…' : '💾 保存'}</button>
+        <button onClick={sendTest} disabled={!url || !isUrlValid || testing}
+          style={{
+            padding: '8px 14px', borderRadius: 8,
+            background: 'transparent', color: T().textSub,
+            border: `1px solid ${T().border}`,
+            fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            cursor: (!url || !isUrlValid || testing) ? 'not-allowed' : 'pointer',
+            opacity: (!url || !isUrlValid) ? 0.5 : 1,
+          }}>{testing ? '送信中…' : '🧪 テスト送信'}</button>
+      </div>
+      {url && !isUrlValid && (
+        <div style={{ marginTop: 8, fontSize: 11, color: T().danger }}>
+          ⚠️ Slack Incoming Webhook URL の形式が違います (https://hooks.slack.com/services/... で始まる必要があります)
+        </div>
+      )}
+      {message && (
+        <div style={{
+          marginTop: 10, padding: 8, borderRadius: 6,
+          background: message.startsWith('✅') ? 'rgba(0,214,143,0.10)' : 'rgba(255,107,107,0.10)',
+          border: `1px solid ${message.startsWith('✅') ? 'rgba(0,214,143,0.30)' : 'rgba(255,107,107,0.30)'}`,
+          fontSize: 11, color: message.startsWith('✅') ? T().text : T().danger,
+        }}>{message}</div>
       )}
     </div>
   )

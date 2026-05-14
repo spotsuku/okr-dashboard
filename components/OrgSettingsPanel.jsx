@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
+import LicenseSection from './LicenseSection'
 
 // ─────────────────────────────────────────────────────────────
 // 組織設定パネル (モーダル)
@@ -101,6 +102,14 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {currentOrg?.id && (
+            <LicenseSection
+              T={T}
+              orgId={currentOrg.id}
+              myEmail={myEmail}
+              canManage={canManage}
+            />
+          )}
           {!canManage && (
             <div style={{ padding: 10, marginBottom: 10, background: T.bgSection, borderRadius: 8, fontSize: 11, color: T.textMuted }}>
               閲覧権限のみ。owner / admin に依頼してください。

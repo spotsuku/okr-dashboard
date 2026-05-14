@@ -1846,7 +1846,37 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   completedBy={myName}
                   weeksList={weeksList}
                   onMoveKA={async (reportId, targetKrId) => {
-                    await supabase.from('weekly_reports').update({ kr_id: targetKrId }).eq('id', reportId)
+                    // 移動元のKA情報を取得 (old ka_key の算出と sibling 週特定のため)
+                    const { data: src } = await supabase.from('weekly_reports')
+                      .select('id, kr_id, ka_title, owner, objective_id')
+                      .eq('id', reportId).maybeSingle()
+                    if (!src) { await reload(); return }
+                    if (Number(src.kr_id) === Number(targetKrId)) { await reload(); return }
+                    const oldKaKey = computeKAKey(src)
+                    const newKaKey = computeKAKey({ ...src, kr_id: targetKrId })
+                    // 移動先KRの title を取得 (weekly_reports.kr_title は denormalized)
+                    const { data: targetKr } = await supabase.from('key_results')
+                      .select('id, title').eq('id', targetKrId).maybeSingle()
+                    // sibling 週 (同じ ka_key) の行 id をまとめて取得
+                    const { data: siblings } = await supabase.from('weekly_reports')
+                      .select('id, owner')
+                      .eq('kr_id', src.kr_id)
+                      .eq('ka_title', src.ka_title || '')
+                      .eq('objective_id', src.objective_id)
+                    const srcOwner = (src.owner || '').trim()
+                    const ids = (siblings || [])
+                      .filter(r => (r.owner || '').trim() === srcOwner)
+                      .map(r => r.id)
+                    const updateIds = ids.length > 0 ? ids : [reportId]
+                    // weekly_reports の kr_id / kr_title をまとめて更新
+                    await supabase.from('weekly_reports')
+                      .update({ kr_id: targetKrId, kr_title: targetKr?.title || '' })
+                      .in('id', updateIds)
+                    // ka_tasks.ka_key を新しい値に追従更新 (タスクが切れないように)
+                    if (oldKaKey && newKaKey && oldKaKey !== newKaKey) {
+                      await supabase.from('ka_tasks')
+                        .update({ ka_key: newKaKey }).eq('ka_key', oldKaKey)
+                    }
                     reload()
                   }}
                   viewMode={meetingViewMode}
