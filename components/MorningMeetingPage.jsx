@@ -1192,6 +1192,22 @@ function MeetingConfirmCard({ T, item, replies, myName, onResolve, onReplied }) 
       <div style={{ fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6, padding: '4px 2px' }}>
         {renderTextWithLinks(item.content, { color: T.accent })}
       </div>
+      {Array.isArray(item.reference_urls) && item.reference_urls.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          {item.reference_urls.map((u, i) => {
+            const href = u.url?.match(/^https?:\/\//) ? u.url : (u.url ? `https://${u.url}` : '#')
+            return (
+              <a key={i} href={href} target="_blank" rel="noopener noreferrer" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', borderRadius: 6,
+                background: T.accentBg, color: T.accent,
+                fontSize: 11, fontWeight: 700, textDecoration: 'none',
+                border: `1px solid ${T.accent}30`,
+              }}>🔗 {u.label || u.url}</a>
+            )
+          })}
+        </div>
+      )}
       {replies.length > 0 && (
         <div style={{ marginTop: 8, paddingLeft: 10, borderLeft: `2px solid ${T.border}` }}>
           {replies.map(r => (
