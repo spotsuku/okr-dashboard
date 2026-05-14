@@ -5,10 +5,23 @@
 //   - 最下部に "+" で組織新規作成
 //
 // Dashboard.jsx を無改変にするため、AppRoot 側でこれを Dashboard の左にラップする。
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCurrentOrg } from '../lib/orgContext'
 import CreateOrgModal from './CreateOrgModal'
+
+// スマホ判定 (CalendarTab と同パターン)。SSR を壊さないよう初期値は false。
+function useIsMobile(bp = 768) {
+  const [m, setM] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const h = () => setM(window.innerWidth < bp)
+    h()
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [bp])
+  return m
+}
 
 // slug を安定したカラーへ (簡易ハッシュ)
 const PALETTE = [
@@ -30,9 +43,14 @@ function initialOf(name, slug) {
 }
 
 export default function OrgIconBar({ userEmail }) {
+  const isMobile = useIsMobile()
   const { currentOrg, orgs } = useCurrentOrg()
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
+
+  // スマホでは横バーを出さない (左に黒帯が残る問題回避)。
+  // モバイルでの組織切替はダッシュボード上部の組織バナー / 設定から行う。
+  if (isMobile) return null
 
   // 組織が 1 つだけならバーは表示しない (画面幅節約)。0 でも非表示。
   if (!orgs || orgs.length < 2) {
