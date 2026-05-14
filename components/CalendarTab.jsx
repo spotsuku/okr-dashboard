@@ -134,7 +134,9 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
   }, [data])
 
   // ─── 予定作成/更新/削除の確認モーダル ───
-  const [pendingProposal, setPendingProposal] = useState(null)  // { type, plan } or null
+  // AI が複数の mutate ツール (create_event 等) を一度に呼ぶケースがあるため、
+  // 1 件のみではなく配列で保持し、ダイアログ内で順次実行する。
+  const [pendingProposals, setPendingProposals] = useState(null)  // null | Array<{type, plan}>
 
   // AI からの提案を承認 → 実行
   const executeProposal = useCallback(async (type, plan) => {
@@ -235,32 +237,26 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
         members={members}
         selected={selected}
         weekStart={weekStart}
-        onProposal={(type, plan) => setPendingProposal({ type, plan })}
+        onProposals={(proposals) => setPendingProposals(proposals)}
         isMobile={isMobile}
       />
 
-      {/* 確認ダイアログ */}
-      {pendingProposal && (
+      {/* 確認ダイアログ (1件 or 複数件をまとめて承認) */}
+      {pendingProposals && pendingProposals.length > 0 && (
         <ProposalDialog
           T={T}
-          proposal={pendingProposal}
-          onClose={() => setPendingProposal(null)}
-          onConfirm={async () => {
-            try {
-              await executeProposal(pendingProposal.type, pendingProposal.plan)
-              setPendingProposal(null)
-              await fetchEvents()
-            } catch (e) {
-              const msg = e.message || 'エラー'
-              if (/403|Insufficient|insufficient auth/i.test(msg)) {
-                if (window.confirm(
-                  'Google の書き込み権限が不足しています。\n\n予定作成には「Calendar 予定の作成・編集」スコープが必要です。連携タブで再認証してください。\n\n今すぐ連携タブに移動しますか？'
-                )) {
-                  window.location.href = '/?tab=integrations'
-                }
-              } else {
-                alert(`実行エラー: ${msg}`)
-              }
+          proposals={pendingProposals}
+          onClose={() => setPendingProposals(null)}
+          executeOne={executeProposal}
+          onAllDone={async () => {
+            setPendingProposals(null)
+            await fetchEvents()
+          }}
+          onAuthError={() => {
+            if (window.confirm(
+              'Google の書き込み権限が不足しています。\n\n予定作成には「Calendar 予定の作成・編集」スコープが必要です。連携タブで再認証してください。\n\n今すぐ連携タブに移動しますか？'
+            )) {
+              window.location.href = '/?tab=integrations'
             }
           }}
         />
@@ -728,7 +724,7 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
 }
 
 // ─── AI チャットパネル (右側常駐) ──────────────────────────────────────
-function AIPanel({ T, myName, viewingName, members, selected, weekStart, onProposal, isMobile = false }) {
+function AIPanel({ T, myName, viewingName, members, selected, weekStart, onProposals, isMobile = false }) {
   const [history, setHistory] = useState([])  // [{role, content (string)}]
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -773,17 +769,17 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
 
-      // 提案 (mutate) があれば確認ダイアログを開く (最後の1件)
-      const proposalAction = (j.actions || []).reverse().find(a =>
-        a.result?.proposal && ['create', 'update', 'delete'].includes(a.result.proposal)
-      )
+      // 提案 (mutate) があれば確認ダイアログを開く (複数件はまとめて一括承認)
+      const proposals = (j.actions || [])
+        .filter(a => a.result?.proposal && ['create', 'update', 'delete'].includes(a.result.proposal))
+        .map(a => ({ type: a.result.proposal, plan: a.result.plan }))
       setHistory(prev => [...prev, {
         role: 'assistant',
         content: j.text || '(返答なし)',
         actions: j.actions || [],
       }])
-      if (proposalAction) {
-        onProposal(proposalAction.result.proposal, proposalAction.result.plan)
+      if (proposals.length > 0) {
+        onProposals(proposals)
       }
     } catch (e) {
       setErr(e.message || 'AI エラー')
@@ -923,25 +919,72 @@ function AIPanel({ T, myName, viewingName, members, selected, weekStart, onPropo
   )
 }
 
-// ─── 確認ダイアログ (作成/更新/削除) ──────────────────────────────────
-function ProposalDialog({ T, proposal, onClose, onConfirm }) {
-  const { type, plan } = proposal
+// ─── 確認ダイアログ (作成/更新/削除・複数件まとめて承認) ──────────────────
+function ProposalDialog({ T, proposals, onClose, executeOne, onAllDone, onAuthError }) {
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)   // 完了件数
+  const [failures, setFailures] = useState([])  // [{idx, error}]
+  const [skipped, setSkipped] = useState({})    // { idx: true } で除外
+
+  const total = proposals.length
+  const multi = total > 1
+
+  const allCreate = proposals.every(p => p.type === 'create')
+  const allUpdate = proposals.every(p => p.type === 'update')
+  const allDelete = proposals.every(p => p.type === 'delete')
+
+  const title = multi
+    ? (allCreate ? `${total} 件の予定の作成を承認しますか？`
+       : allUpdate ? `${total} 件の予定の更新を承認しますか？`
+       : allDelete ? `${total} 件の予定の削除を承認しますか？`
+       : `${total} 件の操作を承認しますか？`)
+    : (proposals[0].type === 'create' ? '予定の作成を承認しますか？'
+       : proposals[0].type === 'update' ? '予定の更新を承認しますか？'
+       : '予定の削除を承認しますか？')
+
+  const activeIndices = proposals.map((_, i) => i).filter(i => !skipped[i])
+  const dangerStyle = allDelete
+
   const handle = async () => {
     setBusy(true)
-    try { await onConfirm() } finally { setBusy(false) }
+    setProgress(0)
+    setFailures([])
+    const fails = []
+    let done = 0
+    for (const i of activeIndices) {
+      try {
+        await executeOne(proposals[i].type, proposals[i].plan)
+      } catch (e) {
+        const msg = e.message || String(e)
+        // 認証エラーは即中断して連携タブへの誘導をかける
+        if (/403|Insufficient|insufficient auth/i.test(msg)) {
+          setBusy(false)
+          setFailures([{ idx: i, error: msg }])
+          onAuthError()
+          return
+        }
+        fails.push({ idx: i, error: msg })
+      } finally {
+        done += 1
+        setProgress(done)
+      }
+    }
+    setBusy(false)
+    if (fails.length === 0) {
+      await onAllDone()
+    } else {
+      setFailures(fails)
+      // 失敗があった場合はダイアログを閉じずサマリを表示
+    }
   }
-  const title = type === 'create' ? '予定の作成を承認しますか？'
-              : type === 'update' ? '予定の更新を承認しますか？'
-              : '予定の削除を承認しますか？'
-  const recurrenceText = formatRecurrence(plan.recurrence, plan.start_iso)
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
       zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: T.bgCard, borderRadius: 12, width: 'min(520px, 92vw)',
+        background: T.bgCard, borderRadius: 12, width: 'min(560px, 94vw)',
         border: `1px solid ${T.border}`, boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
         display: 'flex', flexDirection: 'column', maxHeight: '90vh',
       }}>
@@ -949,79 +992,185 @@ function ProposalDialog({ T, proposal, onClose, onConfirm }) {
           padding: '14px 18px', borderBottom: `1px solid ${T.border}`,
           fontSize: 14, fontWeight: 700, color: T.text,
         }}>{title}</div>
+
         <div style={{ padding: 18, overflowY: 'auto', fontSize: 12, color: T.text, lineHeight: 1.7 }}>
-          {type === 'create' && (
-            <>
-              <Row T={T} k="件名" v={plan.summary} />
-              <Row T={T} k="日時" v={`${jstHHMM(plan.start_iso)} – ${jstHHMM(plan.end_iso)} (${shortDate(plan.start_iso)})`} />
-              {recurrenceText && <Row T={T} k="繰り返し" v={recurrenceText} />}
-              <Row T={T} k="招待"
-                   v={(plan.attendee_names || []).length === 0 ? '(なし)' :
-                      (plan.attendee_names || []).map(n =>
-                        plan.unresolved_names?.includes(n) ? `${n} (⚠ メール未解決)` : n
-                      ).join(', ')} />
-              {plan.attendee_emails && plan.attendee_emails.length > 0 && (
-                <div style={{ fontSize: 10, color: T.textMuted, marginLeft: 80 }}>
-                  → {plan.attendee_emails.join(', ')}
-                </div>
-              )}
-              <Row T={T} k="Meet" v={plan.add_meet ? '✅ Google Meet リンクを発行' : '—'} />
-              {plan.description && <Row T={T} k="説明" v={plan.description} />}
-              <div style={{
-                marginTop: 10, padding: 8, background: T.warnBg, color: T.warn,
-                fontSize: 11, borderRadius: 6,
-              }}>
-                ⚠️ 承認すると招待メールが招待者に自動送信されます。件名は仮押さえとして「[仮]」が先頭に付きます。
-              </div>
-            </>
+          {proposals.map((p, idx) => {
+            const failed = failures.find(f => f.idx === idx)
+            const isSkipped = !!skipped[idx]
+            return (
+              <ProposalItem
+                key={idx}
+                T={T}
+                proposal={p}
+                index={idx}
+                total={total}
+                showHeader={multi}
+                skipped={isSkipped}
+                onToggleSkip={() => setSkipped(s => ({ ...s, [idx]: !s[idx] }))}
+                failedError={failed?.error}
+                disableSkip={busy}
+              />
+            )
+          })}
+
+          {allCreate && (
+            <div style={{
+              marginTop: 10, padding: 8, background: T.warnBg, color: T.warn,
+              fontSize: 11, borderRadius: 6,
+            }}>
+              ⚠️ 承認すると招待メールが招待者に自動送信されます。件名は仮押さえとして「[仮]」が先頭に付きます。
+            </div>
           )}
-          {type === 'update' && (
-            <>
-              <Row T={T} k="event_id" v={plan.event_id} />
-              {plan.summary && <Row T={T} k="件名" v={plan.summary} />}
-              {(plan.start_iso || plan.end_iso) && (
-                <Row T={T} k="日時" v={`${plan.start_iso ? jstHHMM(plan.start_iso) : '?'} – ${plan.end_iso ? jstHHMM(plan.end_iso) : '?'}`} />
-              )}
-              {recurrenceText && <Row T={T} k="繰り返し" v={recurrenceText} />}
-              {plan.attendee_names && <Row T={T} k="招待" v={plan.attendee_names.join(', ')} />}
-              {plan.description && <Row T={T} k="説明" v={plan.description} />}
-              <div style={{
-                marginTop: 10, padding: 8, background: T.warnBg, color: T.warn,
-                fontSize: 11, borderRadius: 6,
-              }}>
-                ⚠️ 承認すると変更が招待者に通知されます。
-              </div>
-            </>
+          {allUpdate && (
+            <div style={{
+              marginTop: 10, padding: 8, background: T.warnBg, color: T.warn,
+              fontSize: 11, borderRadius: 6,
+            }}>
+              ⚠️ 承認すると変更が招待者に通知されます。
+            </div>
           )}
-          {type === 'delete' && (
-            <>
-              <Row T={T} k="event_id" v={plan.event_id} />
-              <div style={{
-                marginTop: 10, padding: 8, background: T.dangerBg, color: T.danger,
-                fontSize: 11, borderRadius: 6,
-              }}>
-                ⚠️ 承認すると予定が削除され、招待者にキャンセル通知が送信されます。
-              </div>
-            </>
+          {allDelete && (
+            <div style={{
+              marginTop: 10, padding: 8, background: T.dangerBg, color: T.danger,
+              fontSize: 11, borderRadius: 6,
+            }}>
+              ⚠️ 承認すると予定が削除され、招待者にキャンセル通知が送信されます。
+            </div>
+          )}
+
+          {busy && multi && (
+            <div style={{
+              marginTop: 12, padding: 8, background: T.sectionBg, color: T.textSub,
+              fontSize: 11, borderRadius: 6,
+            }}>
+              実行中… {progress} / {activeIndices.length}
+            </div>
+          )}
+          {!busy && failures.length > 0 && (
+            <div style={{
+              marginTop: 12, padding: 10, background: T.dangerBg, color: T.danger,
+              fontSize: 11, borderRadius: 6,
+            }}>
+              ⚠️ {failures.length} 件失敗しました。成功した予定はカレンダーに反映済みです。
+            </div>
           )}
         </div>
+
         <div style={{
           padding: 12, borderTop: `1px solid ${T.border}`,
-          display: 'flex', gap: 8, justifyContent: 'flex-end',
+          display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center',
         }}>
+          {multi && !busy && failures.length === 0 && (
+            <div style={{ flex: 1, fontSize: 11, color: T.textMuted }}>
+              {activeIndices.length} / {total} 件を実行
+            </div>
+          )}
           <button onClick={onClose} disabled={busy} style={{
             padding: '8px 16px', borderRadius: 7,
             background: 'transparent', color: T.textSub, border: `1px solid ${T.border}`,
             fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-          }}>キャンセル</button>
-          <button onClick={handle} disabled={busy} style={{
-            padding: '8px 18px', borderRadius: 7,
-            background: type === 'delete' ? T.danger : T.accent,
-            color: '#fff', border: 'none',
-            fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: busy ? 'wait' : 'pointer',
-          }}>{busy ? '実行中…' : '承認して実行'}</button>
+          }}>{failures.length > 0 ? '閉じる' : 'キャンセル'}</button>
+          {failures.length === 0 && (
+            <button
+              onClick={handle}
+              disabled={busy || activeIndices.length === 0}
+              style={{
+                padding: '8px 18px', borderRadius: 7,
+                background: dangerStyle ? T.danger : T.accent,
+                color: '#fff', border: 'none',
+                fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                cursor: busy ? 'wait' : (activeIndices.length === 0 ? 'not-allowed' : 'pointer'),
+                opacity: activeIndices.length === 0 ? 0.5 : 1,
+              }}>
+              {busy ? `実行中… ${progress}/${activeIndices.length}` :
+               multi ? `承認して ${activeIndices.length} 件実行` : '承認して実行'}
+            </button>
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ProposalDialog 内の 1 件分の表示。複数件モード時は ✕ ボタンで個別除外可能。
+function ProposalItem({ T, proposal, index, total, showHeader, skipped, onToggleSkip, failedError, disableSkip }) {
+  const { type, plan } = proposal
+  const recurrenceText = formatRecurrence(plan.recurrence, plan.start_iso)
+  return (
+    <div style={{
+      marginBottom: showHeader ? 12 : 0,
+      padding: showHeader ? 10 : 0,
+      borderRadius: showHeader ? 8 : 0,
+      border: showHeader ? `1px solid ${failedError ? T.danger + '60' : (skipped ? T.border : T.border)}` : 'none',
+      background: showHeader ? (failedError ? T.dangerBg : (skipped ? 'transparent' : T.sectionBg)) : 'transparent',
+      opacity: skipped ? 0.45 : 1,
+      position: 'relative',
+    }}>
+      {showHeader && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
+          fontSize: 11, fontWeight: 700, color: T.textSub,
+        }}>
+          <span>{index + 1} / {total}</span>
+          <span style={{ flex: 1 }} />
+          {!failedError && (
+            <button
+              onClick={onToggleSkip}
+              disabled={disableSkip}
+              style={{
+                background: 'transparent', border: 'none',
+                color: skipped ? T.accent : T.textMuted,
+                fontSize: 10, fontWeight: 700, cursor: disableSkip ? 'not-allowed' : 'pointer',
+                padding: '2px 6px', borderRadius: 4, fontFamily: 'inherit',
+              }}
+              title={skipped ? '実行対象に戻す' : 'この件を実行対象から外す'}
+            >
+              {skipped ? '↺ 戻す' : '✕ 除外'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {type === 'create' && (
+        <>
+          <Row T={T} k="件名" v={plan.summary} />
+          <Row T={T} k="日時" v={`${jstHHMM(plan.start_iso)} – ${jstHHMM(plan.end_iso)} (${shortDate(plan.start_iso)})`} />
+          {recurrenceText && <Row T={T} k="繰り返し" v={recurrenceText} />}
+          <Row T={T} k="招待"
+               v={(plan.attendee_names || []).length === 0 ? '(なし)' :
+                  (plan.attendee_names || []).map(n =>
+                    plan.unresolved_names?.includes(n) ? `${n} (⚠ メール未解決)` : n
+                  ).join(', ')} />
+          {plan.attendee_emails && plan.attendee_emails.length > 0 && (
+            <div style={{ fontSize: 10, color: T.textMuted, marginLeft: 80 }}>
+              → {plan.attendee_emails.join(', ')}
+            </div>
+          )}
+          <Row T={T} k="Meet" v={plan.add_meet ? '✅ Google Meet リンクを発行' : '—'} />
+          {plan.description && <Row T={T} k="説明" v={plan.description} />}
+        </>
+      )}
+      {type === 'update' && (
+        <>
+          <Row T={T} k="event_id" v={plan.event_id} />
+          {plan.summary && <Row T={T} k="件名" v={plan.summary} />}
+          {(plan.start_iso || plan.end_iso) && (
+            <Row T={T} k="日時" v={`${plan.start_iso ? jstHHMM(plan.start_iso) : '?'} – ${plan.end_iso ? jstHHMM(plan.end_iso) : '?'}`} />
+          )}
+          {recurrenceText && <Row T={T} k="繰り返し" v={recurrenceText} />}
+          {plan.attendee_names && <Row T={T} k="招待" v={plan.attendee_names.join(', ')} />}
+          {plan.description && <Row T={T} k="説明" v={plan.description} />}
+        </>
+      )}
+      {type === 'delete' && (
+        <Row T={T} k="event_id" v={plan.event_id} />
+      )}
+
+      {failedError && (
+        <div style={{ marginTop: 6, fontSize: 10, color: T.danger }}>
+          失敗: {failedError}
+        </div>
+      )}
     </div>
   )
 }
