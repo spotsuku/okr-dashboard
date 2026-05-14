@@ -80,7 +80,7 @@ where slug <> 'neo-fukuoka'
 -- 4. 取得用ヘルパー関数 (アプリから参照しやすく)
 -- ─────────────────────────────────────────────────────
 
-create or replace function is_module_enabled(p_org_id uuid, p_module text)
+create or replace function is_module_enabled(p_org_id bigint, p_module text)
 returns boolean
 language sql
 stable
@@ -101,4 +101,4 @@ notify pgrst, 'reload schema';
 -- 検証クエリ (適用後に実行)
 -- ─────────────────────────────────────────────────────
 -- select slug, plan, enabled_modules from organizations;
--- select is_module_enabled('<org_uuid>', 'google_integration');
+-- select is_module_enabled(<org_id_bigint>, 'google_integration');
