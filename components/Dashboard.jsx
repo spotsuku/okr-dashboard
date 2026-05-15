@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { useCurrentOrg } from '../lib/orgContext'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
+import { useLayerLabels } from '../lib/levelLabels'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
@@ -115,9 +116,10 @@ function getAbsoluteDepth(levelId, levels) {
 }
 
 const LAYER_COLORS = { 0: '#E8875A', 1: '#5DCAA5', 2: '#5DCAA5' }
-const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
 const getLayerColor = absDepth => LAYER_COLORS[absDepth] || '#B0BAC8'
-const getLayerLabel = absDepth => LAYER_LABELS[absDepth] || ''
+// 層ラベルは組織別 (lib/levelLabels.js の useLayerLabels() で取得)。
+// helper 関数として残す場合は labels を引数で受け取る。
+const getLayerLabel = (absDepth, labels) => (labels && labels[absDepth]) || ''
 
 function Avatar({ name, color, size = 28 }) {
   if (!name) return null
@@ -606,11 +608,12 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
 
 // ─── Level Column ─────────────────────────────────────────────────────────────
 function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast }) {
+  const layerLabels = useLayerLabels()
   const level = levels.find(l => Number(l.id) === Number(levelId))
   const objs = nodeObjectives[levelId] || []
   const absDepth = getAbsoluteDepth(levelId, levels)
   const layerColor = getLayerColor(absDepth)
-  const layerLabel = getLayerLabel(absDepth)
+  const layerLabel = getLayerLabel(absDepth, layerLabels)
   const allProgs = objs.map(o => calcObjProgress(o.key_results))
   const avg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : null
   const avgR = avg !== null ? getRating(avg) : null
