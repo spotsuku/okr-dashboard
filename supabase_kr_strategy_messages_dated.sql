@@ -35,3 +35,16 @@ SELECT
 FROM kr_strategies
 WHERE message IS NOT NULL AND length(trim(message)) > 0
 ON CONFLICT (kr_id, message_date) DO NOTHING;
+
+-- ─────────────────────────────────────────────────────────────────
+-- RLS (Phase 1 multitenant の allow_all パターン)
+-- これを忘れると INSERT/UPDATE が
+-- 「new row violates row-level security policy」で全部拒否される
+-- ─────────────────────────────────────────────────────────────────
+ALTER TABLE kr_strategy_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS allow_all_kr_strategy_messages ON kr_strategy_messages;
+CREATE POLICY allow_all_kr_strategy_messages ON kr_strategy_messages
+  FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+NOTIFY pgrst, 'reload schema';
