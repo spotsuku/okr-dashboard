@@ -55,6 +55,10 @@ const THEMES = { dark: COMMON_TOKENS.dark, light: COMMON_TOKENS.light }
 export default function CompanyDashboardSummary({
   T: parentT, themeKey = 'dark', levels = [], members = [], fiscalYear = '2026',
   myName, isAdmin, onGoToMyPage, initialSection = 'overview',
+  // teamSummaryOnly: true のときはウェルカム / 全社 KR / 注力マイルストーン /
+  // サブタブナビを隠して TeamSummarySingleView だけを表示する
+  // (メインタブ「チームサマリー」専用画面)
+  teamSummaryOnly = false,
 }) {
   const T = parentT || THEMES[themeKey] || THEMES.dark
 
@@ -419,8 +423,8 @@ export default function CompanyDashboardSummary({
     <div style={{ flex: 1, overflowY: 'auto', padding: `${SPACING.md}px ${SPACING['2xl']}px ${SPACING['3xl']}px`, background: T.bg }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
 
-        {/* マイページへ戻る導線 (目立つ位置に固定) */}
-        {onGoToMyPage && (
+        {/* マイページへ戻る導線 (目立つ位置に固定) — チームサマリー専用画面では非表示 */}
+        {!teamSummaryOnly && onGoToMyPage && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
             marginBottom: SPACING.md,
@@ -471,8 +475,8 @@ export default function CompanyDashboardSummary({
           </div>
         )}
 
-        {/* 全社 通期 KR — タイトル直下、Objective ごとに横並び */}
-        {companyAnnualKRs.length > 0 && (
+        {/* 全社 通期 KR — チームサマリー専用画面では非表示 */}
+        {!teamSummaryOnly && companyAnnualKRs.length > 0 && (
           <>
             <SectionTitle T={T} icon="🎯" iconColor="#007AFF" title="全社 通期 KR"
               sub={`${fiscalYear}年度 ・ ${companyAnnualKRs.length}件`} />
@@ -480,8 +484,8 @@ export default function CompanyDashboardSummary({
           </>
         )}
 
-        {/* 注力マイルストーン (全部署横断・focus_level='focus' のみ) */}
-        {focusMilestones.length > 0 && (
+        {/* 注力マイルストーン — チームサマリー専用画面では非表示 */}
+        {!teamSummaryOnly && focusMilestones.length > 0 && (
           <div style={{ marginTop: SPACING.md, marginBottom: SPACING.md }}>
             <SectionTitle T={T} iconColor={T.warn} title="⭐ 注力マイルストーン"
               sub={`全部署横断 ${focusMilestones.length}件 ・ マイルストーンページで「注力」マークを設定`} />
@@ -489,16 +493,19 @@ export default function CompanyDashboardSummary({
           </div>
         )}
 
-        {/* タブナビ: 概要 / 週間ランキング / チームサマリー / マイルストーン */}
-        <DashboardTabs T={T} active={activeTab} onChange={setActiveTab} tabs={[
-          { key: 'overview',   label: '概要',           accent: T.accent  },
-          { key: 'rankings',   label: '週間ランキング', accent: '#FF9500' },
-          { key: 'team',       label: 'チームサマリー', accent: '#34C759' },
-          { key: 'milestones', label: 'マイルストーン', accent: T.warn   },
-        ]} />
+        {/* タブナビ: 概要 / 週間ランキング / マイルストーン
+            チームサマリーは上位の「チームサマリー」メインタブに昇格したのでここから除外。
+            teamSummaryOnly=true のときはサブタブ自体を出さない。 */}
+        {!teamSummaryOnly && (
+          <DashboardTabs T={T} active={activeTab} onChange={setActiveTab} tabs={[
+            { key: 'overview',   label: '概要',           accent: T.accent  },
+            { key: 'rankings',   label: '週間ランキング', accent: '#FF9500' },
+            { key: 'milestones', label: 'マイルストーン', accent: T.warn   },
+          ]} />
+        )}
 
         {/* 概要: 今すぐ注目 + 今日の全社状況 + 前進KR (3列) */}
-        {activeTab === 'overview' && (
+        {!teamSummaryOnly && activeTab === 'overview' && (
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
             gap: SPACING.md, marginBottom: SPACING.lg,
@@ -510,7 +517,7 @@ export default function CompanyDashboardSummary({
         )}
 
         {/* 週間ランキング (4列) — 先週月曜〜日曜の確定ランキング */}
-        {activeTab === 'rankings' && rankings && (
+        {!teamSummaryOnly && activeTab === 'rankings' && rankings && (
           <>
             <SectionTitle T={T} icon="🏆" iconColor="#FF9500" title="週間ランキング" sub={`先週 (${lastWeekRange.label}) の Top 3`} />
             <div style={{
@@ -540,8 +547,8 @@ export default function CompanyDashboardSummary({
           </>
         )}
 
-        {/* チームサマリー */}
-        {activeTab === 'team' && (
+        {/* チームサマリー (メインタブ「チームサマリー」専用画面のみで表示) */}
+        {teamSummaryOnly && (
           <>
             <SectionTitle T={T} icon="📊" iconColor="#34C759" title="今週のチームサマリー"
               sub={`${submittedTeamCount.submitted}/${submittedTeamCount.total} チーム提出済 ・ マネージャー定例/ディレクター確認会議に反映`} />
@@ -552,7 +559,7 @@ export default function CompanyDashboardSummary({
         )}
 
         {/* マイルストーン (単独タブ) */}
-        {activeTab === 'milestones' && (
+        {!teamSummaryOnly && activeTab === 'milestones' && (
           <>
             <SectionTitle T={T} icon="🎯" iconColor={T.warn} title="マイルストーン" sub="期限近順 ・ 上位5件" />
             <MilestonesCard T={T} milestones={milestones} setMilestones={setMilestones} isAdmin={isAdmin} myName={myName} />
@@ -949,19 +956,38 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
 
   return (
     <div style={containerStyle}>
-      {/* セレクタ行 */}
+      {/* 部署タブ (横並びボタン) */}
+      <div style={{
+        display: 'flex', gap: 6, flexWrap: 'wrap',
+        marginBottom: SPACING.sm,
+        paddingBottom: SPACING.sm,
+        borderBottom: `1px solid ${T.border}`,
+      }}>
+        {departments.map(d => {
+          const active = Number(selectedDeptId) === Number(d.id)
+          return (
+            <button key={d.id} onClick={() => {
+              const did = Number(d.id)
+              setSelectedDeptId(did)
+              const teams = teamsByDept[did] || []
+              if (teams.length > 0) setSelectedTeamId(Number(teams[0].id))
+            }} style={{
+              padding: '6px 14px', borderRadius: RADIUS.md,
+              border: `1px solid ${active ? T.accent : T.border}`,
+              background: active ? `${T.accent}18` : T.bgCard,
+              color: active ? T.accent : T.textSub,
+              fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              fontFamily: 'inherit',
+            }}>
+              {d.icon || ''} {d.name}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* セレクタ行 (チームプルダウン + マネージャ表示) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, flexWrap: 'wrap', marginBottom: SPACING.md }}>
-        <span style={{ ...TYPO.footnote, color: T.textSub, fontWeight: 700 }}>部署</span>
-        <select value={selectedDeptId || ''} onChange={(e) => {
-          const did = Number(e.target.value)
-          setSelectedDeptId(did)
-          const teams = teamsByDept[did] || []
-          if (teams.length > 0) setSelectedTeamId(Number(teams[0].id))
-        }} style={selectSt}>
-          {departments.map(d => (
-            <option key={d.id} value={d.id}>{d.icon || ''} {d.name}</option>
-          ))}
-        </select>
         <span style={{ ...TYPO.footnote, color: T.textSub, fontWeight: 700 }}>チーム</span>
         <select value={selectedTeamId || ''} onChange={(e) => setSelectedTeamId(Number(e.target.value))} style={selectSt}>
           {teamsInSelectedDept.length === 0 && <option value="">(チームなし)</option>}

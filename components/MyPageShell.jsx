@@ -774,8 +774,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               levels={levels} members={members}
               fiscalYear={fiscalYear}
               myName={myName} isAdmin={isAdmin}
-              onGoToMyPage={() => { setViewingName(myName); setSummaryMode(false) }}
-              initialSection="team"
+              teamSummaryOnly
             />
           )}
           {activeTab === 'milestone' && (
