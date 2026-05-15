@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import LicenseSection from './LicenseSection'
+import OrgMeetingsSection from './OrgMeetingsSection'
 
 // ─────────────────────────────────────────────────────────────
 // 組織設定パネル (モーダル)
@@ -132,6 +133,11 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
           {/* Notion 連携設定 (owner/admin) */}
           {canManage && currentOrg?.id && (
             <NotionConfigSection T={T} orgId={currentOrg.id} requesterEmail={myEmail} />
+          )}
+
+          {/* 会議設定 (= organization_meetings の一覧 + プレビュー) */}
+          {currentOrg?.id && (
+            <OrgMeetingsSection T={T} orgId={currentOrg.id} canManage={canManage} />
           )}
 
           {loading ? (
