@@ -1,14 +1,21 @@
 'use client'
-import ModuleSkeleton from './_skeleton'
+import ConfirmationsTab from '../../ConfirmationsTab'
 
 // 共有事項モジュール
-// Phase 5c で実装予定: ConfirmationsTab の kind='share' 部分を抽出。
-// 一方向の共有 (返信不要)。会議中に追加、Slack 通知も可能。
-export default function SharedItemsModule(props) {
-  return <ModuleSkeleton
-    icon="📢"
-    label="共有事項"
-    desc="一方向の共有 (返信不要)。会議中に追加すると Slack へ通知"
-    {...props}
-  />
+// 既存 ConfirmationsTab を lockedKind="share" で embed。
+// 一方向の共有 (返信不要)。会議中に追加可、defaultMeetingKey で会議に紐付け。
+export default function SharedItemsModule({ meeting, config, weekStart, T, members, viewingName, myName }) {
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <ConfirmationsTab
+        T={T}
+        myName={myName || viewingName}
+        members={members}
+        viewingName={viewingName || myName}
+        lockedKind="share"
+        allowCompose
+        defaultMeetingKey={meeting?.key}
+      />
+    </div>
+  )
 }

@@ -1,14 +1,21 @@
 'use client'
-import ModuleSkeleton from './_skeleton'
+import ConfirmationsTab from '../../ConfirmationsTab'
 
 // 確認事項モジュール
-// Phase 5c で実装予定: ConfirmationsTab の kind='confirmation' 部分を抽出。
-// 双方向の確認/返信スレッド。属人化解消の独自機能。
-export default function ConfirmationsModule(props) {
-  return <ModuleSkeleton
-    icon="❓"
-    label="確認事項"
-    desc="双方向の確認/返信スレッド。属人化解消・ブロッカー可視化"
-    {...props}
-  />
+// 既存 ConfirmationsTab を lockedKind="confirmation" で embed。
+// 双方向の確認/返信スレッド。会議中に新規作成可、defaultMeetingKey で会議に紐付け。
+export default function ConfirmationsModule({ meeting, config, weekStart, T, members, viewingName, myName }) {
+  return (
+    <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <ConfirmationsTab
+        T={T}
+        myName={myName || viewingName}
+        members={members}
+        viewingName={viewingName || myName}
+        lockedKind="confirmation"
+        allowCompose
+        defaultMeetingKey={meeting?.key}
+      />
+    </div>
+  )
 }
