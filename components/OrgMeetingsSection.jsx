@@ -1,8 +1,9 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { MODULE_META } from '../lib/meetings/moduleRegistry'
 import MeetingShell from './meetings/MeetingShell'
+import MeetingEditModal from './MeetingEditModal'
 
 // ─────────────────────────────────────────────────────────────
 // 組織設定 → 会議設定セクション (Phase 5e)
@@ -19,10 +20,23 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
   const [loading, setLoading]     = useState(true)
   const [err, setErr]             = useState(null)
   const [previewMeeting, setPreviewMeeting] = useState(null)
+  const [editMeeting, setEditMeeting]       = useState(null)  // { meeting } or { meeting: null } for new
   const [members, setMembers]     = useState([])
   const [levels, setLevels]       = useState([])
 
-  // 会議一覧 + プレビューに必要な members/levels を取得
+  // 会議一覧を取得 (= 再読込可)
+  const reloadMeetings = useCallback(async () => {
+    if (!orgId) return
+    const { data, error } = await supabase.from('organization_meetings')
+      .select('id, key, title, icon, color, modules, target_filter, day_of_week, sort_order')
+      .eq('organization_id', orgId)
+      .is('archived_at', null)
+      .order('sort_order')
+    if (error) setErr(error.message)
+    setMeetings(data || [])
+  }, [orgId])
+
+  // 初回ロード: 会議一覧 + members + levels
   useEffect(() => {
     if (!orgId) return
     let alive = true
@@ -52,6 +66,16 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
     return () => { alive = false }
   }, [orgId])
 
+  // 会議削除 (archived_at をセット = ソフトデリート)
+  const handleDelete = async (meeting) => {
+    if (!window.confirm(`「${meeting.title}」をアーカイブしますか?\n(進行中の会議セッションには影響しません)`)) return
+    const { error } = await supabase.from('organization_meetings')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', meeting.id)
+    if (error) { alert('削除失敗: ' + error.message); return }
+    reloadMeetings()
+  }
+
   if (!orgId) return null
 
   const sectionStyle = {
@@ -76,6 +100,18 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
           組織の会議体一覧。各会議は「個人報告 / KA確認 / KR確認 / 共有事項 / 確認事項 / ネクストアクション」のモジュールを組み合わせて構成されます。
           {!canManage && '（編集には owner/admin 権限が必要）'}
         </div>
+
+        {/* 新規追加ボタン */}
+        {canManage && (
+          <div style={{ marginBottom: 10 }}>
+            <button onClick={() => setEditMeeting({ meeting: null })} style={{
+              padding: '6px 14px', borderRadius: 7,
+              border: `1px dashed ${T.accent}`,
+              background: `${T.accent}10`, color: T.accent,
+              fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>+ 新規会議を追加</button>
+          </div>
+        )}
 
         {loading && <div style={{ fontSize: 11, color: T.textMuted }}>読み込み中…</div>}
         {err && <div style={{ fontSize: 11, color: T.danger }}>エラー: {err}</div>}
@@ -111,19 +147,43 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
                   })}
                 </div>
               </div>
-              <button onClick={() => setPreviewMeeting(m)} style={{
-                padding: '4px 10px',
-                borderRadius: 6,
+              <button onClick={() => setPreviewMeeting(m)} title="プレビュー" style={{
+                padding: '4px 10px', borderRadius: 6,
                 border: `1px solid ${T.border}`,
-                background: T.bgCard,
-                color: T.text,
-                fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
-                cursor: 'pointer',
-              }}>👁 プレビュー</button>
+                background: T.bgCard, color: T.text,
+                fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+              }}>👁</button>
+              {canManage && (
+                <>
+                  <button onClick={() => setEditMeeting({ meeting: m })} title="編集" style={{
+                    padding: '4px 10px', borderRadius: 6,
+                    border: `1px solid ${T.border}`,
+                    background: T.bgCard, color: T.text,
+                    fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                  }}>✏️</button>
+                  <button onClick={() => handleDelete(m)} title="アーカイブ" style={{
+                    padding: '4px 10px', borderRadius: 6,
+                    border: `1px solid ${T.border}`,
+                    background: T.bgCard, color: T.danger,
+                    fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                  }}>🗑️</button>
+                </>
+              )}
             </div>
           ))}
         </div>
       </div>
+
+      {/* 編集 / 新規追加モーダル */}
+      {editMeeting && (
+        <MeetingEditModal
+          T={T}
+          orgId={orgId}
+          meeting={editMeeting.meeting}
+          onClose={() => setEditMeeting(null)}
+          onSaved={() => { reloadMeetings(); setEditMeeting(null) }}
+        />
+      )}
 
       {/* MeetingShell プレビューモーダル */}
       {previewMeeting && (
