@@ -54,7 +54,7 @@ const THEMES = { dark: COMMON_TOKENS.dark, light: COMMON_TOKENS.light }
 
 export default function CompanyDashboardSummary({
   T: parentT, themeKey = 'dark', levels = [], members = [], fiscalYear = '2026',
-  myName, isAdmin, onGoToMyPage,
+  myName, isAdmin, onGoToMyPage, initialSection = 'overview',
 }) {
   const T = parentT || THEMES[themeKey] || THEMES.dark
 
@@ -78,7 +78,7 @@ export default function CompanyDashboardSummary({
   const [progressedKRs, setProgressedKRs] = useState([])
   const [companyAnnualKRs, setCompanyAnnualKRs] = useState([])
   // タブ切替: 'overview' | 'rankings' | 'team' | 'milestones'
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(initialSection)
 
   // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
   const lastWeekRange = useMemo(() => {
