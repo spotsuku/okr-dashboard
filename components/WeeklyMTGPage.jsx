@@ -989,7 +989,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
 function getCurrentQ() { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
-export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod }) {
+export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod, forceMode = null }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
   const [mobilePanel, setMobilePanel] = useState('list') // 'list' | 'detail'
@@ -1029,14 +1029,21 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   // ファシリ / 一覧 モード切替 (会議選択後)
   // localStorage で保存して同じ会議に戻った時の好みを記憶
+  // forceMode が渡されている場合はそれを強制 (OKR タブ「週次」/「会議」ナビ用)
   const [mtgMode, setMtgMode] = useState(() => {
+    if (forceMode) return forceMode
     if (typeof window === 'undefined') return 'facilitation'
     return localStorage.getItem('weeklyMTG_mode') || 'facilitation'
   })
   useEffect(() => {
+    if (forceMode) return  // forceMode 中は localStorage を汚さない
     if (typeof window === 'undefined') return
     localStorage.setItem('weeklyMTG_mode', mtgMode)
-  }, [mtgMode])
+  }, [mtgMode, forceMode])
+  // forceMode が後から変わったら state も追従
+  useEffect(() => {
+    if (forceMode && forceMode !== mtgMode) setMtgMode(forceMode)
+  }, [forceMode, mtgMode])
 
   // 会議名で levels から該当レベルを検索
   const findLevelByName = (name) => {
@@ -1590,25 +1597,27 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         }}>{currentMeeting?.icon || '📋'}</div>
         <div style={{ fontSize:14, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
 
-        {/* ファシリ / 一覧 モード切替トグル */}
-        <div style={{ display:'flex', gap:0, padding:2, background:wT().bgCard, borderRadius:7, border:`1px solid ${wT().border}` }}>
-          <button onClick={() => setMtgMode('facilitation')}
-            title="進行ガイド付きステップ式 (ファシリが変わっても会議が進めやすい)"
-            style={{
-              padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
-              background: mtgMode === 'facilitation' ? meetingColor : 'transparent',
-              color: mtgMode === 'facilitation' ? '#fff' : wT().textSub,
-              fontSize:11, fontWeight:700,
-            }}>🧭 ファシリ</button>
-          <button onClick={() => setMtgMode('list')}
-            title="従来の3ペイン表形式（KR/KAを一覧編集）"
-            style={{
-              padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
-              background: mtgMode === 'list' ? meetingColor : 'transparent',
-              color: mtgMode === 'list' ? '#fff' : wT().textSub,
-              fontSize:11, fontWeight:700,
-            }}>📋 一覧</button>
-        </div>
+        {/* ファシリ / 一覧 モード切替トグル — forceMode 指定時 (OKR タブ「週次」/「会議」ナビ) は非表示 */}
+        {!forceMode && (
+          <div style={{ display:'flex', gap:0, padding:2, background:wT().bgCard, borderRadius:7, border:`1px solid ${wT().border}` }}>
+            <button onClick={() => setMtgMode('facilitation')}
+              title="進行ガイド付きステップ式 (ファシリが変わっても会議が進めやすい)"
+              style={{
+                padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: mtgMode === 'facilitation' ? meetingColor : 'transparent',
+                color: mtgMode === 'facilitation' ? '#fff' : wT().textSub,
+                fontSize:11, fontWeight:700,
+              }}>🧭 ファシリ</button>
+            <button onClick={() => setMtgMode('list')}
+              title="従来の3ペイン表形式（KR/KAを一覧編集）"
+              style={{
+                padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: mtgMode === 'list' ? meetingColor : 'transparent',
+                color: mtgMode === 'list' ? '#fff' : wT().textSub,
+                fontSize:11, fontWeight:700,
+              }}>📋 一覧</button>
+          </div>
+        )}
 
         <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}
           title={currentMeeting?.weeklyMTG?.withDiscussion ? 'チーム別の Good/More/Focus サマリー + 横断連携の確認'

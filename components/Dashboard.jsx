@@ -1524,7 +1524,7 @@ export default function Dashboard({ user, onSignOut }) {
       {/* ─── ページ切替 ─── */}
       {activePage === 'portal' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><PortalPage user={user} onNavigate={setActivePage} themeKey={themeKey} members={members} T={T} /></div>}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
-      {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
+      {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} forceMode="facilitation" /></div>}
       {activePage === 'morning' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><MorningMeetingPage user={user} members={members} themeKey={themeKey} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
@@ -1629,10 +1629,14 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
 
-      {/* OKR サブタブ: 週次 (= 全 KR/KA 一覧。次々回 commit で週次MTG 一覧モードを移植) */}
+      {/* OKR サブタブ: 週次 (= 全 KR/KA 一覧。WeeklyMTGPage を一覧モード固定で表示) */}
       {activePage === 'okr' && okrSubTab === 'weekly' && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, color: T.textMuted, fontSize: 13 }}>
-          📅 週次 OKR ビュー (実装中・次々回リリースで反映)
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <WeeklyMTGPage
+            levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
+            user={user} initialPeriod={activePeriod}
+            forceMode="list"
+          />
         </div>
       )}
 
