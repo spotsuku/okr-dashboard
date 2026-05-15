@@ -1618,10 +1618,14 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {/* OKR サブタブ: 個人 (= 自分の OKR。次の commit で MyOKRPage を埋め込む) */}
+      {/* OKR サブタブ: 個人 (= MyOKRPage を埋め込み。自分の OKR を見る) */}
       {activePage === 'okr' && okrSubTab === 'personal' && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, color: T.textMuted, fontSize: 13 }}>
-          👤 個人 OKR ビュー (実装中・次のリリースで反映)
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <MyOKRPageNew
+            user={user} levels={levels} members={members}
+            themeKey={themeKey} fiscalYear={fiscalYear}
+            onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }}
+          />
         </div>
       )}
 
