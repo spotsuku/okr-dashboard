@@ -54,7 +54,7 @@ const THEMES = { dark: COMMON_TOKENS.dark, light: COMMON_TOKENS.light }
 
 export default function CompanyDashboardSummary({
   T: parentT, themeKey = 'dark', levels = [], members = [], fiscalYear = '2026',
-  myName, isAdmin, onGoToMyPage,
+  myName, isAdmin, onGoToMyPage, initialSection = 'overview',
 }) {
   const T = parentT || THEMES[themeKey] || THEMES.dark
 
@@ -78,7 +78,7 @@ export default function CompanyDashboardSummary({
   const [progressedKRs, setProgressedKRs] = useState([])
   const [companyAnnualKRs, setCompanyAnnualKRs] = useState([])
   // タブ切替: 'overview' | 'rankings' | 'team' | 'milestones'
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(initialSection)
 
   // 先週月曜〜日曜 の範囲を計算 (ランキング集計用)
   const lastWeekRange = useMemo(() => {
@@ -1038,8 +1038,8 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
 // ─── 全社 注力マイルストーン (focus_level='focus' のみ) ────────
 function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
   const levelById = new Map((levels || []).map(l => [Number(l.id), l]))
-  // 直近の 上2行分 (4列 × 2 = 8件) を既定表示。それより多ければ「もっと見る」で全件展開
-  const COLLAPSED_COUNT = 8
+  // 直近の 上1行分 (4列 × 1 = 4件) を既定表示。それより多ければ「もっと見る」で全件展開
+  const COLLAPSED_COUNT = 4
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? milestones : milestones.slice(0, COLLAPSED_COUNT)
   const hidden = Math.max(0, milestones.length - COLLAPSED_COUNT)

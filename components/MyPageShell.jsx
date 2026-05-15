@@ -558,6 +558,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             const allTabs = [
               { key: 'dashboard',    icon: '📊', label: 'ダッシュボード', summary: true,  individual: true  },
               { key: 'strategy',     icon: '🧭', label: '経営戦略',       summary: true,  individual: false },
+              { key: 'team_summary', icon: '📋', label: 'チームサマリー', summary: true,  individual: false },
               { key: 'confirm',      icon: '📢', label: '共有・確認',     summary: true,  individual: true  },
               { key: 'wbs',          icon: '📅', label: 'タスク',         summary: true,  individual: true  },
               { key: 'mail',         icon: '📧', label: 'メール',         summary: true,  individual: true  },
@@ -756,6 +757,16 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'strategy' && (
             <CompanyStrategyTab T={T} levels={levels} members={members} fiscalYear={fiscalYear} />
+          )}
+          {activeTab === 'team_summary' && (
+            <CompanyDashboardSummary
+              T={T} themeKey={themeKey}
+              levels={levels} members={members}
+              fiscalYear={fiscalYear}
+              myName={myName} isAdmin={isAdmin}
+              onGoToMyPage={() => { setViewingName(myName); setSummaryMode(false) }}
+              initialSection="team"
+            />
           )}
           {activeTab === 'milestone' && (
             <div style={{ flex: 1, overflowY: 'auto' }}>
