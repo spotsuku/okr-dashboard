@@ -1038,8 +1038,8 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
 // ─── 全社 注力マイルストーン (focus_level='focus' のみ) ────────
 function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
   const levelById = new Map((levels || []).map(l => [Number(l.id), l]))
-  // 直近の 上2行分 (4列 × 2 = 8件) を既定表示。それより多ければ「もっと見る」で全件展開
-  const COLLAPSED_COUNT = 8
+  // 直近の 上1行分 (4列 × 1 = 4件) を既定表示。それより多ければ「もっと見る」で全件展開
+  const COLLAPSED_COUNT = 4
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? milestones : milestones.slice(0, COLLAPSED_COUNT)
   const hidden = Math.max(0, milestones.length - COLLAPSED_COUNT)
