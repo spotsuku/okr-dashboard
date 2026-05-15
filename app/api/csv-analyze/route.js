@@ -1,3 +1,5 @@
+import { callClaude, AICallError } from '../../../lib/aiCall'
+
 export async function POST(request) {
   const { csvText, departments, mode } = await request.json()
 
@@ -86,14 +88,9 @@ export async function POST(request) {
 
   const systemPrompt = mode === 'ka' ? kaSystemPrompt : okrSystemPrompt
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
+  let data
+  try {
+    data = await callClaude({
       model: 'claude-sonnet-4-5',
       max_tokens: 8000,
       system: systemPrompt,
@@ -101,12 +98,12 @@ export async function POST(request) {
         role: 'user',
         content: `以下のCSVを解析して、全てのKAを抽出してください:\n\n${csvText}`
       }],
-    }),
-  })
-
-  const data = await response.json()
-  if (!response.ok) {
-    return Response.json({ error: data.error?.message || 'AI解析エラーが発生しました' }, { status: 500 })
+    })
+  } catch (e) {
+    if (e instanceof AICallError) {
+      return Response.json({ error: e.userMessage }, { status: e.retryable ? 503 : 500 })
+    }
+    return Response.json({ error: 'AI解析エラーが発生しました: ' + e.message }, { status: 500 })
   }
 
   try {

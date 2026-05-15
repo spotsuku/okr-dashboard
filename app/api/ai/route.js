@@ -1,3 +1,5 @@
+import { callClaude, AICallError } from '../../../lib/aiCall'
+
 export async function POST(request) {
   try {
     const { messages, context } = await request.json()
@@ -121,30 +123,19 @@ ${contextStr}`
       : (process.env.AI_MODEL || 'claude-sonnet-4-5')
     const maxTokens = isDemoMode ? 1024 : 2048
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        system: systemPrompt,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-      }),
+    const data = await callClaude({
+      model,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
     })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      return Response.json({ error: data.error?.message || 'AI APIエラーが発生しました' }, { status: 500 })
-    }
 
     const content = data.content?.[0]?.text || 'レスポンスを取得できませんでした'
     return Response.json({ content })
   } catch (e) {
+    if (e instanceof AICallError) {
+      return Response.json({ error: e.userMessage }, { status: e.retryable ? 503 : 500 })
+    }
     console.error('AI chat error:', e)
     return Response.json({ error: 'エラーが発生しました: ' + e.message }, { status: 500 })
   }
