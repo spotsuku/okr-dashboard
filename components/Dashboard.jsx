@@ -868,6 +868,10 @@ export default function Dashboard({ user, onSignOut }) {
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
+  // OKR タブのサブタブ (年間 / 個人 / 週次)
+  // okr_full=true 組織: サブタブで切り替え
+  // okr_full=false 組織: 個人のみ表示 (= サブタブナビ非表示)
+  const [okrSubTab, setOkrSubTab]           = useState('annual')
   // SaaS 化 Phase C: モジュール別 feature flag (ナビ / 画面表示制御に使用)
   const aiChatEnabled       = useFeatureFlag(MODULE_KEYS.AI_CHAT)
   const okrFullEnabled      = useFeatureFlag(MODULE_KEYS.OKR_FULL)
@@ -1460,8 +1464,29 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
         </div>
 
-        {/* 2行目：OKRページのみ（ビュー切替・期間フィルタ + OKR追加） */}
-        {activePage === 'okr' && okrFullEnabled && (
+        {/* 2行目: OKR サブタブナビ (年間 / 個人 / 週次) */}
+        {activePage === 'okr' && (
+          <div style={{ padding: '5px 20px', display: 'flex', gap: 4, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
+            {[
+              { key: 'annual',   label: '📊 年間' },
+              { key: 'personal', label: '👤 個人' },
+              { key: 'weekly',   label: '📅 週次' },
+            ].map(t => {
+              const active = okrSubTab === t.key
+              return (
+                <button key={t.key} onClick={() => setOkrSubTab(t.key)} style={{
+                  padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: active ? T.navActiveBg : 'transparent',
+                  color: active ? T.navActiveText : T.textSub,
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                }}>{t.label}</button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* 3行目: OKRページ・年間サブタブのみ (ビュー切替・期間フィルタ + OKR追加) */}
+        {activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {[{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
@@ -1524,12 +1549,12 @@ export default function Dashboard({ user, onSignOut }) {
       )}
 
       {/* Archive View (📦 アーカイブ OKR ボタンで切替) */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
         <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
           onRestore={handleRestoreArchived} onPurge={handlePurgeArchived} refreshKey={annualRefreshKey} />
       </div>
       {/* Annual View */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1554,7 +1579,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
       {/* Owner View */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1592,6 +1617,20 @@ export default function Dashboard({ user, onSignOut }) {
           />
         </div>
       </div>
+
+      {/* OKR サブタブ: 個人 (= 自分の OKR。次の commit で MyOKRPage を埋め込む) */}
+      {activePage === 'okr' && okrSubTab === 'personal' && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, color: T.textMuted, fontSize: 13 }}>
+          👤 個人 OKR ビュー (実装中・次のリリースで反映)
+        </div>
+      )}
+
+      {/* OKR サブタブ: 週次 (= 全 KR/KA 一覧。次々回 commit で週次MTG 一覧モードを移植) */}
+      {activePage === 'okr' && okrSubTab === 'weekly' && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, color: T.textMuted, fontSize: 13 }}>
+          📅 週次 OKR ビュー (実装中・次々回リリースで反映)
+        </div>
+      )}
 
       {showAI && aiChatEnabled && (
         <AIPanel
