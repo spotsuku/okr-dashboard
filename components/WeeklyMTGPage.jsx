@@ -1077,6 +1077,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   useEffect(() => {
     // 既に何か開いていれば何もしない
     if (activeMeetingKey) return
+    // forceMode='list' (= OKR タブ「週次」) のときは会議選択画面を飛ばして
+    // 自動で最初の会議を選択 → ユーザーは会議切り替え UI で他の会議も見られる
+    if (forceMode === 'list' && WEEKLY_MTG_MEETINGS.length > 0) {
+      selectMeeting(WEEKLY_MTG_MEETINGS[0].key)
+      return
+    }
     let alive = true
     const weekMon = toDateStr(getMonday(new Date()))
     supabase.from('weekly_mtg_sessions')
