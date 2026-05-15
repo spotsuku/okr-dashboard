@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { OrgProvider, useCurrentOrg } from '../lib/orgContext'
+import { LicenseProvider } from '../lib/license/licenseContext'
 import LoginPage from './LoginPage'
 import Dashboard from './Dashboard'
 import CreateOrgModal from './CreateOrgModal'
@@ -71,7 +72,9 @@ export default function AppRoot({ urlSlug = null }) {
 
   return (
     <OrgProvider user={user} initialSlug={urlSlug || undefined}>
-      <PostAuthRouter user={user} onSignOut={handleSignOut} urlSlug={urlSlug} />
+      <LicenseProvider userEmail={user.email}>
+        <PostAuthRouter user={user} onSignOut={handleSignOut} urlSlug={urlSlug} />
+      </LicenseProvider>
     </OrgProvider>
   )
 }

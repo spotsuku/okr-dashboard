@@ -6,6 +6,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@supabase/supabase-js'
+import { callClaude, aiErrorResponse, AICallError } from '../../../../lib/aiCall'
 
 function getAdminClient() {
   return createClient(
@@ -118,25 +119,13 @@ ${kaLines.length > 0 ? kaLines.join('\n\n') : '(なし)'}
 
 上記を集約して、チーム全体の Good / More / Focus を JSON で返してください。`
 
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1500,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
+    // Claude 呼び出し (529 等は lib/aiCall.js で自動リトライ + ユーザー向けメッセージ整形)
+    const data = await callClaude({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1500,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
     })
-    if (!r.ok) {
-      const text = await r.text()
-      return Response.json({ error: `AI 呼び出しエラー ${r.status}: ${text.slice(0, 200)}` }, { status: 500 })
-    }
-    const data = await r.json()
     const text = (data?.content?.[0]?.text || '').trim()
 
     // JSON 抽出 (```json ブロック対応)
@@ -157,6 +146,7 @@ ${kaLines.length > 0 ? kaLines.join('\n\n') : '(なし)'}
       sources: { krCount, kaCount },
     })
   } catch (e) {
+    if (e instanceof AICallError) return aiErrorResponse(e)
     console.error('team-summary AI error:', e)
     return Response.json({ error: e.message || String(e) }, { status: 500 })
   }

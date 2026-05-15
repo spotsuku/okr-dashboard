@@ -4,6 +4,7 @@ import { COMMON_TOKENS, IOS_SHADOW } from '../lib/themeTokens'
 import { LargeTitle, SearchBar, DashboardTile } from './iosUI'
 import { isDemoMode } from '../lib/demoMocks'
 import { useCurrentOrg } from '../lib/orgContext'
+import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 
 // ─── ダッシュボード定義 ─────────────────────────────────
 // 内蔵 OKR + NEO の外部サービスダッシュボード (本番のみ)。
@@ -63,6 +64,9 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { currentOrg } = useCurrentOrg()
   const orgSlug = currentOrg?.slug || null
+  // SaaS化 Phase C: orgSlugs フィルタを portal_neo モジュール flag に置き換え
+  // (neo-fukuoka 専用の外部リンク集を flag で制御)
+  const portalNeoEnabled = useFeatureFlag(MODULE_KEYS.PORTAL_NEO)
   const [search, setSearch] = useState('')
   const [customLinks, setCustomLinks] = useState([])
   const [showAdd, setShowAdd] = useState(false)
@@ -114,17 +118,17 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
 
   // 検索フィルタ (内蔵 + カスタム)
   // demo 環境では external=true を非表示 (本番URL露出防止)
-  // orgSlugs が指定された項目は、現在の組織がリストに含まれる場合のみ表示 (SaaS化)
+  // orgSlugs が指定された項目は portal_neo フラグが ON のテナントだけ表示 (SaaS化 Phase C)
   const demo = isDemoMode()
   const allItems = useMemo(() => [
     ...DASHBOARDS
       .filter(d => !demo || !d.external)
-      .filter(d => !d.orgSlugs || (orgSlug && d.orgSlugs.includes(orgSlug))),
+      .filter(d => !d.orgSlugs || portalNeoEnabled),
     ...customLinks.map(l => ({
       id: l.id, title: l.title, description: l.url, icon: 'link', color: l.color || '#007AFF',
       url: l.url, group: 'custom', keywords: `${l.title} ${l.url}`, custom: true,
     })),
-  ], [customLinks, demo, orgSlug])
+  ], [customLinks, demo, portalNeoEnabled])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return allItems
