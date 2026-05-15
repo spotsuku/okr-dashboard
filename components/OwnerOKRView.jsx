@@ -132,7 +132,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
 
     // 1. ownerNameが担当のObjectives + KAを並行取得
     const [{ data: objs }, { data: myKAs }, { data: myKRs }] = await Promise.all([
-      supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').eq('owner', ownerName).order('period,id').range(0, 49999),
+      supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id,archived_at').eq('owner', ownerName).is('archived_at', null).order('period,id').range(0, 49999),
       supabase.from('weekly_reports').select('*').eq('owner', ownerName).neq('status', 'done').range(0, 49999),
       supabase.from('key_results').select('*').eq('owner', ownerName).range(0, 49999),
     ])
@@ -159,7 +159,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     const missingObjIds = [...new Set([...krObjIds, ...kaObjIds])]
     let extraObjs = []
     if (missingObjIds.length > 0) {
-      const { data } = await supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id').in('id', missingObjIds).range(0, 49999)
+      const { data } = await supabase.from('objectives').select('id,level_id,period,title,owner,parent_objective_id,archived_at').in('id', missingObjIds).is('archived_at', null).range(0, 49999)
       extraObjs = filterByFY(data)
     }
 
