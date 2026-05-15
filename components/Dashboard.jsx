@@ -869,13 +869,19 @@ export default function Dashboard({ user, onSignOut }) {
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
   // OKR タブのサブタブ (年間 / 個人 / 週次)
-  // okr_full=true 組織: サブタブで切り替え
-  // okr_full=false 組織: 個人のみ表示 (= サブタブナビ非表示)
+  // okr_full=true 組織: 年間 / 個人 / 週次 全部
+  // okr_full=false 組織: 個人のみ
   const [okrSubTab, setOkrSubTab]           = useState('annual')
   // SaaS 化 Phase C: モジュール別 feature flag (ナビ / 画面表示制御に使用)
   const aiChatEnabled       = useFeatureFlag(MODULE_KEYS.AI_CHAT)
   const okrFullEnabled      = useFeatureFlag(MODULE_KEYS.OKR_FULL)
   const milestonesEnabled   = useFeatureFlag(MODULE_KEYS.MILESTONES)
+  // okr_full=false テナントで「年間」「週次」サブタブが選ばれていたら「個人」にフォールバック
+  useEffect(() => {
+    if (!okrFullEnabled && (okrSubTab === 'annual' || okrSubTab === 'weekly')) {
+      setOkrSubTab('personal')
+    }
+  }, [okrFullEnabled, okrSubTab])
   const [initialAIMessage, setInitialAIMessage] = useState(null)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
@@ -1416,10 +1422,8 @@ export default function Dashboard({ user, onSignOut }) {
             <button onClick={() => setActivePage('portal')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'portal' ? T.navActiveBg : 'transparent', color: activePage === 'portal' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🏠 ホーム</button>
             {/* ワークスペース (旧マイページ) */}
             <button onClick={() => setActivePage('mycoach')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mycoach' ? T.navActiveBg : 'transparent', color: activePage === 'mycoach' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ワークスペース</button>
-            {/* OKR (階層ビュー = OKR フル機能、okr_full モジュール限定) */}
-            {okrFullEnabled && (
-              <button onClick={() => setActivePage('okr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR</button>
-            )}
+            {/* OKR — 個人サブタブはコア機能なので全プラン表示。年間/週次サブタブは okr_full で出し分け */}
+            <button onClick={() => setActivePage('okr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR</button>
             {/* 週次MTG */}
             <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
             {/* 朝会 */}
@@ -1464,13 +1468,14 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
         </div>
 
-        {/* 2行目: OKR サブタブナビ (年間 / 個人 / 週次) */}
+        {/* 2行目: OKR サブタブナビ (年間 / 個人 / 週次)
+            「個人」はコア機能なので全プラン表示、「年間」「週次」は okr_full のみ */}
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', gap: 4, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             {[
-              { key: 'annual',   label: '📊 年間' },
+              ...(okrFullEnabled ? [{ key: 'annual', label: '📊 年間' }] : []),
               { key: 'personal', label: '👤 個人' },
-              { key: 'weekly',   label: '📅 週次' },
+              ...(okrFullEnabled ? [{ key: 'weekly', label: '📅 週次' }] : []),
             ].map(t => {
               const active = okrSubTab === t.key
               return (
