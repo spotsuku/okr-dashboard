@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { useCurrentOrg } from '../lib/orgContext'
+import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
@@ -864,6 +865,10 @@ export default function Dashboard({ user, onSignOut }) {
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
+  // SaaS 化 Phase C: モジュール別 feature flag (ナビ / 画面表示制御に使用)
+  const aiChatEnabled       = useFeatureFlag(MODULE_KEYS.AI_CHAT)
+  const okrFullEnabled      = useFeatureFlag(MODULE_KEYS.OKR_FULL)
+  const milestonesEnabled   = useFeatureFlag(MODULE_KEYS.MILESTONES)
   const [initialAIMessage, setInitialAIMessage] = useState(null)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
@@ -1444,7 +1449,9 @@ export default function Dashboard({ user, onSignOut }) {
                 <button onClick={onSignOut} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.warn, fontSize: 12, fontFamily: 'inherit' }}>ログアウト</button>
               </div>
             </div>
-            <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
+            {aiChatEnabled && (
+              <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
+            )}
           </div>
         </div>
 
@@ -1493,8 +1500,8 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}
       {activePage === 'mycoach' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyPageShell user={user} members={members} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
-      {activePage === 'summary' && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
-      {activePage === 'milestone' && (
+      {activePage === 'summary' && okrFullEnabled && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'milestone' && milestonesEnabled && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} members={members} onLevelsChanged={async () => {
             const orgId = currentOrg?.id
@@ -1581,7 +1588,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {showAI && (
+      {showAI && aiChatEnabled && (
         <AIPanel
           onClose={() => { setShowAI(false); setInitialAIMessage(null) }}
           okrContext={{ levels, objectives: subtreeObjs, activePeriod }}
