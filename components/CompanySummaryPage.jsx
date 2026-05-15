@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
+import { useLayerLabels } from '../lib/levelLabels'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけ上書き
@@ -46,7 +47,7 @@ function getSubtreeIds(rootId, levels) {
 }
 
 const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f', 3: '#ffd166' }
-const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
+// 層ラベルは組織別 (lib/levelLabels.js の useLayerLabels() で取得)
 
 const toPeriodKey = (period, year) => year === '2026' ? period : `${year}_${period}`
 
@@ -104,6 +105,7 @@ function Bar({ value, color, max = 150 }) {
 // ─── メインコンポーネント ────────────────────────────────────────────────────
 export default function CompanySummaryPage({ levels, members, themeKey = 'dark', fiscalYear = '2026' }) {
   const wT = () => W_THEMES[themeKey]
+  const layerLabels = useLayerLabels()
 
   const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
   const [activePeriod, setActivePeriod] = useState(getCurrentQ())
@@ -421,7 +423,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
           }}>
             {departmentStats.map(dept => {
               const layerColor = LAYER_COLORS[dept.depth] || '#a0a8be'
-              const layerLabel = LAYER_LABELS[dept.depth] || ''
+              const layerLabel = layerLabels[dept.depth] || ''
               return (
                 <div key={dept.level.id} style={{
                   background: wT().bgCard, border: `1px solid ${wT().border}`,

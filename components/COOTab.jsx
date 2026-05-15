@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 
 function useIsMobile(bp = 768) {
   const [m, setM] = useState(() => typeof window === 'undefined' ? false : window.innerWidth < bp)
@@ -17,6 +18,8 @@ export default function COOTab({
   T, myName, viewingName, isAdmin, onOpenSettings,
   chatState, setChatState,
 }) {
+  // SaaS化: coo_knowledge モジュール OFF テナントは何も描画しない (二重防御)
+  const cooEnabled = useFeatureFlag(MODULE_KEYS.COO_KNOWLEDGE)
   const isMobile = useIsMobile()
   const owner = viewingName || myName
 
@@ -140,6 +143,9 @@ export default function COOTab({
       setBusy(false)
     }
   }
+
+  // SaaS化: coo_knowledge OFF テナントは早期 return (ナビでも非表示済み、二重防御)
+  if (!cooEnabled) return null
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>

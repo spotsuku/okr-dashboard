@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { mgmtSupabase, isMgmtConfigured } from '../lib/mgmtSupabase'
+import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 
 // ─── 工数管理タブ (経営ダッシュボード neo-mg と双方向リアルタイム同期) ───
 //
@@ -55,6 +56,8 @@ function investedFTE(members, biz, role) {
 }
 
 export default function WorkforceTab({ T }) {
+  // SaaS化: workforce モジュール OFF のテナントは何も描画しない (二重防御)
+  const workforceEnabled = useFeatureFlag(MODULE_KEYS.WORKFORCE)
   const [view, setView] = useState('visual')  // 'numeric' | 'visual'
   const [snapshot, setSnapshot] = useState(null)
   const [savedAt, setSavedAt] = useState(null)
@@ -200,6 +203,8 @@ export default function WorkforceTab({ T }) {
   }, [scheduleSave])
 
   // ─── レンダリング ───
+  // SaaS化: workforce モジュール OFF テナントは早期 return (二重防御。ナビでも非表示)
+  if (!workforceEnabled) return null
   if (loading) {
     return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>経営ダッシュボードから読み込み中...</div>
   }

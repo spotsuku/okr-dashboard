@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { useCurrentOrg } from '../lib/orgContext'
+import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
+import { useLayerLabels } from '../lib/levelLabels'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
@@ -114,9 +116,10 @@ function getAbsoluteDepth(levelId, levels) {
 }
 
 const LAYER_COLORS = { 0: '#E8875A', 1: '#5DCAA5', 2: '#5DCAA5' }
-const LAYER_LABELS = { 0: '経営', 1: '事業部', 2: 'チーム' }
 const getLayerColor = absDepth => LAYER_COLORS[absDepth] || '#B0BAC8'
-const getLayerLabel = absDepth => LAYER_LABELS[absDepth] || ''
+// 層ラベルは組織別 (lib/levelLabels.js の useLayerLabels() で取得)。
+// helper 関数として残す場合は labels を引数で受け取る。
+const getLayerLabel = (absDepth, labels) => (labels && labels[absDepth]) || ''
 
 function Avatar({ name, color, size = 28 }) {
   if (!name) return null
@@ -605,11 +608,12 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
 
 // ─── Level Column ─────────────────────────────────────────────────────────────
 function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast }) {
+  const layerLabels = useLayerLabels()
   const level = levels.find(l => Number(l.id) === Number(levelId))
   const objs = nodeObjectives[levelId] || []
   const absDepth = getAbsoluteDepth(levelId, levels)
   const layerColor = getLayerColor(absDepth)
-  const layerLabel = getLayerLabel(absDepth)
+  const layerLabel = getLayerLabel(absDepth, layerLabels)
   const allProgs = objs.map(o => calcObjProgress(o.key_results))
   const avg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : null
   const avgR = avg !== null ? getRating(avg) : null
@@ -864,6 +868,10 @@ export default function Dashboard({ user, onSignOut }) {
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
+  // SaaS 化 Phase C: モジュール別 feature flag (ナビ / 画面表示制御に使用)
+  const aiChatEnabled       = useFeatureFlag(MODULE_KEYS.AI_CHAT)
+  const okrFullEnabled      = useFeatureFlag(MODULE_KEYS.OKR_FULL)
+  const milestonesEnabled   = useFeatureFlag(MODULE_KEYS.MILESTONES)
   const [initialAIMessage, setInitialAIMessage] = useState(null)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
@@ -1404,8 +1412,10 @@ export default function Dashboard({ user, onSignOut }) {
             <button onClick={() => setActivePage('portal')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'portal' ? T.navActiveBg : 'transparent', color: activePage === 'portal' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🏠 ホーム</button>
             {/* ワークスペース (旧マイページ) */}
             <button onClick={() => setActivePage('mycoach')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mycoach' ? T.navActiveBg : 'transparent', color: activePage === 'mycoach' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ワークスペース</button>
-            {/* OKR (詳細のみ) */}
-            <button onClick={() => setActivePage('okr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR</button>
+            {/* OKR (階層ビュー = OKR フル機能、okr_full モジュール限定) */}
+            {okrFullEnabled && (
+              <button onClick={() => setActivePage('okr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR</button>
+            )}
             {/* 週次MTG */}
             <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
             {/* 朝会 */}
@@ -1444,12 +1454,14 @@ export default function Dashboard({ user, onSignOut }) {
                 <button onClick={onSignOut} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.warn, fontSize: 12, fontFamily: 'inherit' }}>ログアウト</button>
               </div>
             </div>
-            <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
+            {aiChatEnabled && (
+              <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
+            )}
           </div>
         </div>
 
         {/* 2行目：OKRページのみ（ビュー切替・期間フィルタ + OKR追加） */}
-        {activePage === 'okr' && (
+        {activePage === 'okr' && okrFullEnabled && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {[{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
@@ -1493,8 +1505,8 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}
       {activePage === 'mycoach' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyPageShell user={user} members={members} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
-      {activePage === 'summary' && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
-      {activePage === 'milestone' && (
+      {activePage === 'summary' && okrFullEnabled && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'milestone' && milestonesEnabled && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} members={members} onLevelsChanged={async () => {
             const orgId = currentOrg?.id
@@ -1512,12 +1524,12 @@ export default function Dashboard({ user, onSignOut }) {
       )}
 
       {/* Archive View (📦 アーカイブ OKR ボタンで切替) */}
-      <div style={{ display: activePage === 'okr' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
         <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
           onRestore={handleRestoreArchived} onPurge={handlePurgeArchived} refreshKey={annualRefreshKey} />
       </div>
       {/* Annual View */}
-      <div style={{ display: activePage === 'okr' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1542,7 +1554,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
       {/* Owner View */}
-      <div style={{ display: activePage === 'okr' && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1581,7 +1593,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {showAI && (
+      {showAI && aiChatEnabled && (
         <AIPanel
           onClose={() => { setShowAI(false); setInitialAIMessage(null) }}
           okrContext={{ levels, objectives: subtreeObjs, activePeriod }}

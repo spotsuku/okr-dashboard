@@ -17,6 +17,7 @@ import CompanyDashboardSummary from './CompanyDashboardSummary'
 import CompanyStrategyTab from './CompanyStrategyTab'
 import MilestonePage from './MilestonePage'
 import { isJpNonBusinessDay } from '../lib/jpHolidays'
+import { useFeatureFlags } from '../lib/featureFlags'
 
 // ─── Themes ────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -153,6 +154,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(true)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // SaaS 化 Phase C: 組織別 feature flag を取得 (現在の組織で有効なモジュール集合)
+  const enabledModules = useFeatureFlags()
   // 全社サマリーと個人モードでタブ構成が違うため、モード切替で隠れるタブに
   // いる場合は dashboard にフォールバック。
   useEffect(() => {
@@ -555,23 +558,30 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             // メールは全社向けに集約表示するためタブ自体は残す。
             // 経営戦略 / マイルストーン は全社サマリーのみ表示 (個人タブとして意味が薄い)。
             // 順序: ダッシュボード/経営戦略/共有・確認/タスク/メール/マイルストーン/OKR
+            // SaaS 化 Phase C: requiresFlag が指定されたタブは
+            //   currentOrg.enabled_modules[flag] が true のときだけ表示。
+            //   neo-fukuoka は grandfathered で全モジュール ON なので変化なし。
             const allTabs = [
               { key: 'dashboard',    icon: '📊', label: 'ダッシュボード', summary: true,  individual: true  },
-              { key: 'strategy',     icon: '🧭', label: '経営戦略',       summary: true,  individual: false },
+              { key: 'strategy',     icon: '🧭', label: '経営戦略',       summary: true,  individual: false, requiresFlag: 'okr_full' },
               { key: 'team_summary', icon: '📋', label: 'チームサマリー', summary: true,  individual: false },
               { key: 'confirm',      icon: '📢', label: '共有・確認',     summary: true,  individual: true  },
               { key: 'wbs',          icon: '📅', label: 'タスク',         summary: true,  individual: true  },
-              { key: 'mail',         icon: '📧', label: 'メール',         summary: true,  individual: true  },
-              { key: 'milestone',    icon: '🚩', label: 'マイルストーン', summary: true,  individual: false },
+              { key: 'mail',         icon: '📧', label: 'メール',         summary: true,  individual: true,  requiresFlag: 'google_integration' },
+              { key: 'milestone',    icon: '🚩', label: 'マイルストーン', summary: true,  individual: false, requiresFlag: 'milestones' },
               { key: 'okr_edit',     icon: '🎯', label: 'OKR',            summary: true,  individual: true  },
               // 個人モード専用 (全社では非表示)
-              { key: 'calendar',     icon: '📅', label: 'カレンダー',     summary: false, individual: true },
-              { key: 'drive',        icon: '📁', label: 'ドライブ',       summary: false, individual: true },
-              { key: 'coo',          icon: '🐸', label: 'MyCOO',          summary: false, individual: true },
+              { key: 'calendar',     icon: '📅', label: 'カレンダー',     summary: false, individual: true,  requiresFlag: 'google_integration' },
+              { key: 'drive',        icon: '📁', label: 'ドライブ',       summary: false, individual: true,  requiresFlag: 'google_integration' },
+              { key: 'coo',          icon: '🐸', label: 'MyCOO',          summary: false, individual: true,  requiresFlag: 'coo_knowledge' },
               { key: 'retrospect',   icon: '💭', label: '振り返り',       summary: false, individual: true },
               { key: 'integrations', icon: '🔌', label: '連携',           summary: false, individual: true },
             ]
-            return allTabs.filter(t => summaryMode ? t.summary : t.individual)
+            return allTabs.filter(t => {
+              if (!(summaryMode ? t.summary : t.individual)) return false
+              if (t.requiresFlag && !enabledModules?.[t.requiresFlag]) return false
+              return true
+            })
           })().map(t => {
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
             const active = activeTab === t.key
@@ -764,8 +774,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               levels={levels} members={members}
               fiscalYear={fiscalYear}
               myName={myName} isAdmin={isAdmin}
-              onGoToMyPage={() => { setViewingName(myName); setSummaryMode(false) }}
-              initialSection="team"
+              teamSummaryOnly
             />
           )}
           {activeTab === 'milestone' && (

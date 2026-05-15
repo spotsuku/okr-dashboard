@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import KASection from './KASection'
+import { useLayerLabels } from '../lib/levelLabels'
 
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
 function makeKATheme(t) {
@@ -177,6 +178,7 @@ function getDescendantIds(levelId, levels) {
 // ─── AnnualView ─────────────────────────────────────────────────────────────
 export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, refreshKey, fiscalYear = '2026', themeKey = 'dark', activeLevelId, members = [], canEditOKR = true }) {
   _theme = THEMES[themeKey] || THEMES.dark
+  const layerLabels = useLayerLabels()
 
   const [annualObjs, setAnnualObjs] = useState([])
   const [quarterMap, setQuarterMap] = useState({})
@@ -462,7 +464,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         const r = getRating(prog)
         const depth = getAbsoluteDepth(ann.level_id, levels)
         const lColor = LAYER_COLORS[depth] || '#a0a8be'
-        const lLabel = { 0: '経営', 1: '事業部', 2: 'チーム' }[depth] || ''
+        const lLabel = layerLabels[depth] || ''
         const levelName = levels.find(l => Number(l.id) === Number(ann.level_id))?.name || ''
         const levelIcon = levels.find(l => Number(l.id) === Number(ann.level_id))?.icon || ''
         const isOpen = expanded[ann.id]

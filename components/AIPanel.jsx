@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { useCurrentOrg } from '../lib/orgContext'
 
 const IS_DEMO = (typeof process !== 'undefined') && process.env?.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -20,6 +21,7 @@ const WELCOME_MSG = IS_DEMO
   : 'こんにちは！OKRコーチのClaudeです。\n\nOKRの案の作成、フィードバック、目標達成のアドバイスなど、何でもご相談ください。現在のOKRデータも参照しながらサポートします。'
 
 export default function AIPanel({ onClose, okrContext, initialMessage }) {
+  const { currentOrg } = useCurrentOrg()
   const [messages, setMessages] = useState([
     { role: 'assistant', content: WELCOME_MSG },
   ])
@@ -53,7 +55,8 @@ export default function AIPanel({ onClose, okrContext, initialMessage }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          context: okrContext,
+          // SaaS化: context に組織名を含めて API 側で自社固有 prompt を出し分け
+          context: { ...okrContext, organizationName: currentOrg?.name },
         }),
       })
       const data = await res.json()
