@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import TaskBulkAddModal from './TaskBulkAddModal'
 import { SheetModal } from './iosUI'
 import { computeKAKey } from '../lib/kaKey'
 
@@ -965,6 +966,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
   useEffect(() => { if (isMobile && displayMode !== 'list') setDisplayMode('list') }, [isMobile, displayMode])
   const [selectedMember, setSelectedMember] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showBulkModal, setShowBulkModal]     = useState(false)
 
   const [allTasks, setAllTasks] = useState([])
   const [kaMap, setKaMap] = useState({})
@@ -1135,7 +1137,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                   </div>
                 )}
               </div>
-              {/* タスク追加 */}
+              {/* タスク追加 (フォーム型) */}
               <button onClick={() => setShowCreateModal(true)} style={{
                 padding: isMobile ? '10px 16px' : '8px 16px', borderRadius: 9, border: 'none',
                 background: T.accent, color: '#fff',
@@ -1145,6 +1147,16 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                 display: 'flex', alignItems: 'center', gap: 4,
                 minHeight: isMobile ? 44 : 'auto',
               }}>＋ タスク追加</button>
+              {/* メモ帳モード (一括追加) */}
+              <button onClick={() => setShowBulkModal(true)} style={{
+                padding: isMobile ? '10px 14px' : '8px 14px', borderRadius: 9,
+                border: `1px solid ${T.border}`,
+                background: T.bgCard, color: T.text,
+                fontSize: isMobile ? 14 : 12, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: 4,
+                minHeight: isMobile ? 44 : 'auto',
+              }} title="メモ帳のように改行区切りで一括追加">📝 メモ帳</button>
               {/* マイ/全社 切替 (モバイルはマイタスクに固定、切替不可) */}
               {!isMobile && (
                 <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
@@ -1198,6 +1210,13 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
           )}
         </div>
       </div>
+      {showBulkModal && (
+        <TaskBulkAddModal
+          T={T} members={members} myName={myName}
+          onClose={() => setShowBulkModal(false)}
+          onCreated={() => { setShowBulkModal(false); load() }}
+        />
+      )}
       {showCreateModal && (
         <TaskCreateModal onClose={() => setShowCreateModal(false)} onCreated={load} members={members} myName={myName} T={T} fiscalYear={fiscalYear} />
       )}
