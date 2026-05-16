@@ -1443,21 +1443,26 @@ export default function Dashboard({ user, onSignOut }) {
 
           {/* 右側 */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
-            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
-              {syncStatus === 'synced' ? '🟢' : syncStatus === 'error' ? '🔴' : '🟡'}
-            </span>
             {/* AI ボタン (ユーザーアイコンの左に配置) */}
             {aiChatEnabled && (
               <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
             )}
-            {/* ユーザーメニュー */}
+            {/* ユーザーメニュー (テーマ切替・同期状態もここに集約) */}
             <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
               <button style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
                 👤 <span style={{ fontSize: 11 }}>▾</span>
               </button>
-              <div className="user-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+              <div className="user-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 220, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
                 <div style={{ padding: '8px 12px', fontSize: 12, color: T.textMuted, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>{user.email}</div>
+                {/* テーマ切替 + 同期状態 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>
+                  <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} title={themeKey === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替'} style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bg, color: T.textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                    {themeKey === 'dark' ? '☀️ ライト' : '🌙 ダーク'}
+                  </button>
+                  <span title={syncStatus === 'synced' ? '同期済み' : syncStatus === 'error' ? '同期エラー' : '同期中'} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
+                    {syncStatus === 'synced' ? '🟢 同期済' : syncStatus === 'error' ? '🔴 エラー' : '🟡 同期中'}
+                  </span>
+                </div>
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
                 {hasGoogle
