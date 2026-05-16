@@ -872,6 +872,14 @@ export default function Dashboard({ user, onSignOut }) {
   // okr_full=true 組織: 年間 / 個人 / 週次 全部
   // okr_full=false 組織: 個人のみ
   const [okrSubTab, setOkrSubTab]           = useState('annual')
+  // 組織設定モーダル: OrgIconBar の「⚙ 設定」ボタンから window event 経由で開かれる
+  const [orgSettingsOpen, setOrgSettingsOpen] = useState(false)
+  useEffect(() => {
+    const h = () => setOrgSettingsOpen(true)
+    if (typeof window === 'undefined') return
+    window.addEventListener('open-org-settings', h)
+    return () => window.removeEventListener('open-org-settings', h)
+  }, [])
   // SaaS 化 Phase C: モジュール別 feature flag (ナビ / 画面表示制御に使用)
   const aiChatEnabled       = useFeatureFlag(MODULE_KEYS.AI_CHAT)
   const okrFullEnabled      = useFeatureFlag(MODULE_KEYS.OKR_FULL)
@@ -1397,17 +1405,11 @@ export default function Dashboard({ user, onSignOut }) {
       <LicenseGate T={T} myEmail={user?.email} />
       {/* myAI ライセンス無効時のソフトロックバナー (SaaS化 Phase 5) */}
       <LicenseBanner T={T} />
-      <OrgSwitcherTopBar />
       {/* Header (スマホでは非表示 - MyPageShell の下メニューでナビゲート) */}
       <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
         <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, overflow: 'visible' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <button onClick={() => setShowSidebar(p => !p)} style={{
-              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-              color: getT().textSub, width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
-              fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>☰</button>
             {!isMobile && (
               <div>
                 <div style={{ fontSize: 10, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase' }}>NEO Management</div>
@@ -1445,6 +1447,10 @@ export default function Dashboard({ user, onSignOut }) {
             <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
               {syncStatus === 'synced' ? '🟢' : syncStatus === 'error' ? '🔴' : '🟡'}
             </span>
+            {/* AI ボタン (ユーザーアイコンの左に配置) */}
+            {aiChatEnabled && (
+              <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
+            )}
             {/* ユーザーメニュー */}
             <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
               <button style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1462,9 +1468,6 @@ export default function Dashboard({ user, onSignOut }) {
                 <button onClick={onSignOut} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.warn, fontSize: 12, fontFamily: 'inherit' }}>ログアウト</button>
               </div>
             </div>
-            {aiChatEnabled && (
-              <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
-            )}
           </div>
         </div>
 
@@ -1652,6 +1655,9 @@ export default function Dashboard({ user, onSignOut }) {
           initialMessage={initialAIMessage}
         />
       )}
+
+      {/* 組織設定モーダル (OrgIconBar の「⚙」ボタンから window event で開かれる) */}
+      {orgSettingsOpen && <OrgSettingsPanelWrapper onClose={() => setOrgSettingsOpen(false)} />}
       {modal && (
         <Modal title={modal.type === 'add' ? '目標を追加' : '目標を編集'} onClose={() => setModal(null)}>
           <ObjForm
@@ -1699,41 +1705,10 @@ function DemoBanner() {
   )
 }
 
-// ─── 組織切替バー (組織設定ボタン付き) ─
-function OrgSwitcherTopBar() {
-  const { currentOrg, orgs, switchOrg, loading } = useCurrentOrg()
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  if (loading) return null
-  if (!currentOrg) return null
-  // 1組織のみ所属でも、組織設定ボタンを表示する
-  return (
-    <>
-      <div style={{
-        padding: '4px 16px', background: 'rgba(0,0,0,0.04)',
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-        display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif',
-      }}>
-        <span style={{ color: '#666' }}>🏢 組織:</span>
-        {orgs.length > 1 ? (
-          <select value={currentOrg?.slug || ''} onChange={e => switchOrg(e.target.value)} style={{
-            padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.12)',
-            background: '#fff', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
-          }}>
-            {orgs.map(o => <option key={o.slug} value={o.slug}>{o.name} ({o.role})</option>)}
-          </select>
-        ) : (
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#333' }}>{currentOrg.name} ({currentOrg.role})</span>
-        )}
-        <button onClick={() => setSettingsOpen(true)} title="組織設定" style={{
-          padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.12)',
-          background: 'transparent', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-        }}>⚙️ 設定</button>
-      </div>
-      {settingsOpen && <OrgSettingsPanelWrapper onClose={() => setSettingsOpen(false)} />}
-    </>
-  )
-}
+// 旧 OrgSwitcherTopBar (グレーの組織バー) は削除済。
+// 組織アイコン / 設定ボタンは OrgIconBar (左のサイドバー、Slack 風) に移動。
+// 「⚙ 設定」ボタンは window event 'open-org-settings' を発火し、Dashboard 内の
+// useEffect リスナーが orgSettingsOpen state を立てて OrgSettingsPanelWrapper を開く。
 
 function OrgSettingsPanelWrapper({ onClose }) {
   const T = COMMON_TOKENS.dark

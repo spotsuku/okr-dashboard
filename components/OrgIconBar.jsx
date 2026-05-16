@@ -48,33 +48,23 @@ export default function OrgIconBar({ userEmail }) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
 
-  // スマホでは横バーを出さない (左に黒帯が残る問題回避)。
-  // モバイルでの組織切替はダッシュボード上部の組織バナー / 設定から行う。
+  // スマホでは横バーを出さない (左に黒帯が残る問題回避)
   if (isMobile) return null
 
-  // 組織が 1 つだけならバーは表示しない (画面幅節約)。0 でも非表示。
-  if (!orgs || orgs.length < 2) {
-    return (
-      <>
-        {/* 単一組織でも "+" だけは出しておくと多テナント拡張への入り口になる */}
-        {orgs && orgs.length >= 1 && (
-          <div style={barWrap}>
-            <div style={{ flex: 1 }} />
-            <AddButton onClick={() => setCreateOpen(true)} />
-          </div>
-        )}
-        <CreateOrgModal
-          open={createOpen} onClose={() => setCreateOpen(false)}
-          onCreated={(org) => { setCreateOpen(false); if (org?.slug) router.push(`/${org.slug}`) }}
-          userEmail={userEmail}
-        />
-      </>
-    )
+  // 0 組織なら何も出さない
+  if (!orgs || orgs.length === 0) return null
+
+  // 設定ボタン: window event で Dashboard 側に通知 (props 伝達回避)
+  const openSettings = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open-org-settings'))
+    }
   }
 
   return (
     <>
       <div style={barWrap}>
+        {/* 組織アイコン (1 組織以上で表示。Slack 風) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8 }}>
           {orgs.map(o => {
             const active = currentOrg?.slug === o.slug
@@ -109,6 +99,16 @@ export default function OrgIconBar({ userEmail }) {
           })}
         </div>
         <div style={{ flex: 1 }} />
+        {/* 組織設定ボタン (= 旧 OrgSwitcherTopBar の「⚙ 設定」を移植) */}
+        <button onClick={openSettings} title="組織設定" style={{
+          width: 40, height: 40, borderRadius: 10, marginBottom: 6,
+          background: 'rgba(255,255,255,0.06)',
+          color: '#9ca3af',
+          border: '1px solid rgba(255,255,255,0.10)', cursor: 'pointer',
+          fontSize: 17, fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>⚙</button>
+        {/* 組織追加ボタン */}
         <AddButton onClick={() => setCreateOpen(true)} />
       </div>
       <CreateOrgModal
