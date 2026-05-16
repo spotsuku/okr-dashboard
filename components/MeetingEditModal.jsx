@@ -38,6 +38,9 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   })
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState(null)
+  // drag & drop 用 state
+  const [dragIndex, setDragIndex]     = useState(null)
+  const [dropHoverIdx, setDropHoverIdx] = useState(null)
 
   const handleAddModule = (type) => {
     if (modules.some(m => m.type === type)) {
@@ -66,6 +69,33 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
       return next.map((m, i) => ({ ...m, sort_order: i + 1 }))
     })
   }
+
+  // drag & drop でモジュールを並び替え
+  const handleDragStart = (idx) => (e) => {
+    setDragIndex(idx)
+    e.dataTransfer.effectAllowed = 'move'
+    // Firefox 互換: dataTransfer に何か入れないと drag が起動しない場合あり
+    try { e.dataTransfer.setData('text/plain', String(idx)) } catch {}
+  }
+  const handleDragOver = (idx) => (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dropHoverIdx !== idx) setDropHoverIdx(idx)
+  }
+  const handleDragLeave = () => setDropHoverIdx(null)
+  const handleDrop = (idx) => (e) => {
+    e.preventDefault()
+    setDropHoverIdx(null)
+    if (dragIndex === null || dragIndex === idx) { setDragIndex(null); return }
+    setModules(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(dragIndex, 1)
+      next.splice(idx, 0, moved)
+      return next.map((m, i) => ({ ...m, sort_order: i + 1 }))
+    })
+    setDragIndex(null)
+  }
+  const handleDragEnd = () => { setDragIndex(null); setDropHoverIdx(null) }
 
   const handleSave = async () => {
     if (!title.trim()) { setErr('タイトルは必須です'); return }
@@ -211,15 +241,36 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
           {/* モジュール構成 */}
           <div style={sectionSt}>
             <label style={labelSt}>モジュール構成 (= 会議のステップ順序) <span style={{ color: T.danger }}>*</span></label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}
+              onDragLeave={handleDragLeave}
+            >
               {modules.map((m, idx) => {
                 const meta = MODULE_META[m.type] || { icon: '?', label: m.type, desc: '' }
+                const isDragging  = dragIndex === idx
+                const isDropHover = dropHoverIdx === idx && dragIndex !== idx
                 return (
-                  <div key={`${m.type}-${idx}`} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '8px 10px',
-                    background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
-                  }}>
+                  <div
+                    key={`${m.type}-${idx}`}
+                    draggable
+                    onDragStart={handleDragStart(idx)}
+                    onDragOver={handleDragOver(idx)}
+                    onDrop={handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 10px',
+                      background: T.bgCard,
+                      border: `1px solid ${isDropHover ? T.accent : T.border}`,
+                      borderTop: isDropHover ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
+                      borderRadius: 8,
+                      cursor: 'grab',
+                      opacity: isDragging ? 0.4 : 1,
+                      transition: 'border 0.1s, opacity 0.15s',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: T.textMuted, width: 14, cursor: 'grab' }} title="ドラッグして並び替え">⋮⋮</span>
                     <span style={{ fontSize: 11, color: T.textMuted, width: 18, textAlign: 'center' }}>{idx + 1}</span>
                     <span style={{ fontSize: 18 }}>{meta.icon}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
