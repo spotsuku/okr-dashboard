@@ -13,7 +13,7 @@ import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 //   (NEO福岡 固有のリンクは ['neo-fukuoka'] で限定)
 // ユーザー追加分は「カスタムリンク」(localStorage) に登録される。
 const DASHBOARDS = [
-  { id: 'okr',         title: 'OKR ダッシュボード',         description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true, group: 'main',     keywords: 'okr ka タスク 目標' },
+  { id: 'okr',         title: 'ワークスペース',             description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true, group: 'main',     keywords: 'workspace ワークスペース okr ka タスク 目標' },
 
   { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: 'trendingUp', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', external: true, group: 'business', keywords: 'sales 営業 商談',  orgSlugs: ['neo-fukuoka'] },
   { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: 'building',   color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',      external: true, group: 'business', keywords: 'community コミュニティ', orgSlugs: ['neo-fukuoka'] },
