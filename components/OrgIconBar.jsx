@@ -2,13 +2,14 @@
 // Slack 風の左サイドバー (Phase 4 SaaS化)
 //   - 縦に並んだ組織アイコン (頭文字 + カラー)
 //   - 各アイコンクリック → router.push('/{slug}')
-//   - 最下部に "+" で組織新規作成
+//   - 最下部に "+" で組織新規作成、組織設定への入口も
 //
 // Dashboard.jsx を無改変にするため、AppRoot 側でこれを Dashboard の左にラップする。
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCurrentOrg } from '../lib/orgContext'
 import CreateOrgModal from './CreateOrgModal'
+import Icon from './Icon'
 
 // スマホ判定 (CalendarTab と同パターン)。SSR を壊さないよう初期値は false。
 function useIsMobile(bp = 768) {
@@ -103,11 +104,11 @@ export default function OrgIconBar({ userEmail }) {
         <button onClick={openSettings} title="組織設定" style={{
           width: 40, height: 40, borderRadius: 10, marginBottom: 6,
           background: 'rgba(255,255,255,0.06)',
-          color: '#9ca3af',
+          color: 'rgba(255,255,255,0.65)',
           border: '1px solid rgba(255,255,255,0.10)', cursor: 'pointer',
-          fontSize: 17, fontFamily: 'inherit',
+          fontFamily: 'inherit',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>⚙</button>
+        }}><Icon name="settings" size={17} /></button>
         {/* 組織追加ボタン */}
         <AddButton onClick={() => setCreateOpen(true)} />
       </div>
@@ -123,21 +124,21 @@ export default function OrgIconBar({ userEmail }) {
 function AddButton({ onClick }) {
   return (
     <button onClick={onClick} title="新しい組織を作成" style={{
-      width: 40, height: 40, borderRadius: 20, marginBottom: 10,
-      background: 'rgba(255,255,255,0.06)', color: '#9ca3af',
+      width: 40, height: 40, borderRadius: 10, marginBottom: 10,
+      background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.65)',
       border: '1.5px dashed rgba(255,255,255,0.18)', cursor: 'pointer',
-      fontSize: 22, fontWeight: 400, fontFamily: 'inherit',
+      fontFamily: 'inherit',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       transition: 'all 0.15s ease',
     }} onMouseEnter={(e) => {
-      e.currentTarget.style.background = 'rgba(77,159,255,0.18)'
-      e.currentTarget.style.color = '#4d9fff'
-      e.currentTarget.style.borderColor = '#4d9fff'
+      e.currentTarget.style.background = 'rgba(14,165,233,0.18)'
+      e.currentTarget.style.color = '#7dd3fc'
+      e.currentTarget.style.borderColor = '#0ea5e9'
     }} onMouseLeave={(e) => {
       e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-      e.currentTarget.style.color = '#9ca3af'
+      e.currentTarget.style.color = 'rgba(255,255,255,0.65)'
       e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'
-    }}>＋</button>
+    }}><Icon name="plus" size={18} /></button>
   )
 }
 

@@ -1406,15 +1406,22 @@ export default function Dashboard({ user, onSignOut }) {
       <LicenseGate T={T} myEmail={user?.email} />
       {/* myAI ライセンス無効時のソフトロックバナー (SaaS化 Phase 5) */}
       <LicenseBanner T={T} />
-      {/* Header (スマホでは非表示 - MyPageShell の下メニューでナビゲート) */}
-      <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
+      {/* Header (Glass: backdrop blur + 56px / スマホでは非表示) */}
+      <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)', position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
-        <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, overflow: 'visible' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0, overflow: 'visible' }}>
+          {/* ブランド (24px 黒角丸 N + キャプション + 運営DB) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${T.border}` }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: 7,
+              background: T.text, color: T.bgCard,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 800, letterSpacing: '-0.02em',
+            }}>N</div>
             {!isMobile && (
-              <div>
-                <div style={{ fontSize: 10, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase' }}>NEO Management</div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>NEO 運営DB</div>
+              <div style={{ lineHeight: 1.1 }}>
+                <div style={{ fontSize: 9, color: T.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>NEO Management</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginTop: 1 }}>NEO 運営DB</div>
               </div>
             )}
           </div>
@@ -1453,10 +1460,24 @@ export default function Dashboard({ user, onSignOut }) {
             })()}
           </div>
 
+          {/* 検索バー (⌘K)。機能本体は将来実装 */}
+          <div title="検索 (準備中)" style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            height: 30, padding: '0 10px', minWidth: 160,
+            background: T.bgSoft, border: `1px solid ${T.border}`,
+            borderRadius: 8, color: T.textMuted, fontSize: 12,
+            cursor: 'not-allowed', flexShrink: 0,
+          }}>
+            <Icon name="search" size={13} />
+            <span>検索 …</span>
+            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 9, padding: '1px 5px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 4, color: T.textMuted, fontFamily: 'ui-monospace, monospace' }}>⌘K</span>
+          </div>
+
           {/* 年度切り替え */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
             {['2025', '2026'].map(yr => (
-              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accentSolid : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
+              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accent : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
             ))}
           </div>
 
@@ -1470,8 +1491,9 @@ export default function Dashboard({ user, onSignOut }) {
             )}
             {/* ユーザーメニュー (テーマ切替・同期状態もここに集約) */}
             <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
-              <button style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
-                👤 <span style={{ fontSize: 11 }}>▾</span>
+              <button style={{ background: T.bgCard, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, height: 32, padding: '0 8px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="user" size={14} />
+                <Icon name="chevronD" size={10} />
               </button>
               <div className="user-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 220, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
                 <div style={{ padding: '8px 12px', fontSize: 12, color: T.textMuted, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>{user.email}</div>
