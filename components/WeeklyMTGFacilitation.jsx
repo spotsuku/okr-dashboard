@@ -1762,13 +1762,16 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
             }
           }
         }
-        // 重複除去: 同じ ka.id が複数のチーム/objective に紐付いてしまうケースを排除
-        // (scope が overlap / resolveAnnualLevelId が同じ obj を複数 level に解決等の不整合データ対策)
-        const seenKaIds = new Set()
+        // 重複除去: 同じチーム内で同じ ka.id が複数回 push されるケース (= scope overlap や
+        // resolveAnnualLevelId の不整合データ対策) のみを排除。
+        // 「セールスと CS の両方に同じ KA が紐付く」ような複数チーム表示は維持する。
+        const seenKey = new Set()
         const dedupedBuilt = built.filter(it => {
-          const kid = Number(it.ka?.id)
-          if (!kid || seenKaIds.has(kid)) return false
-          seenKaIds.add(kid)
+          const teamId = Number(it.team?.id)
+          const kaId   = Number(it.ka?.id)
+          const key    = `${teamId}|${kaId}`
+          if (!kaId || seenKey.has(key)) return false
+          seenKey.add(key)
           return true
         })
         if (alive) { setItems(dedupedBuilt); setLoadError(null) }
