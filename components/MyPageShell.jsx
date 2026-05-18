@@ -662,7 +662,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 workLog={workLogs[viewingName]}
                 onWorkLogChange={reloadWorkLogs}
                 onGoToTab={(key) => setActiveTab(key)}
-                onGoToSummary={() => setSummaryMode(true)}
+                onGoToSummary={() => setActiveTab('team_summary')}
                 onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
                 onOpenAIReply={(mail) => setAiReplyMail(mail)}
                 mailReadMarks={mailReadMarks}
@@ -2002,7 +2002,7 @@ function TeamSummaryNotification({ T, viewingMember, myName, isAdmin, levels = [
             : myUnsubmitted > 0
               ? `あなたの担当 ${myUnsubmitted} チーム未提出`
               : allUnsubmitted > 0
-                ? `${allUnsubmitted} チーム未提出 (全社サマリーで確認)`
+                ? `${allUnsubmitted} チーム未提出 (チームサマリーで確認)`
                 : '✓ 全チーム提出済み'}
         </div>
       </div>
@@ -2010,7 +2010,7 @@ function TeamSummaryNotification({ T, viewingMember, myName, isAdmin, levels = [
         padding: '4px 10px', borderRadius: 6,
         background: T.accent, color: '#fff',
         fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
-      }}>全社サマリー →</div>
+      }}>チームサマリー →</div>
     </div>
   )
 }
