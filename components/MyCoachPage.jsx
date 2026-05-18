@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { computeKAKey } from '../lib/kaKey'
+import Icon from './Icon'
 
 // JST基準のYYYY-MM-DDを返す
 function toDateStr(d) {
@@ -494,7 +495,9 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
   const sectionStyle = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
   const sH = (icon, text, extra) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexShrink: 0 }}>
-      <span style={{ fontSize: 14 }}>{icon}</span>
+      {typeof icon === 'string'
+        ? <span style={{ fontSize: 14 }}>{icon}</span>
+        : <span style={{ display: 'inline-flex', alignItems: 'center', color: T.textSub }}>{icon}</span>}
       <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{text}</span>
       {extra}
     </div>
@@ -547,7 +550,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
 
             {/* 左上: 今週のアクションプラン */}
             <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)', maxHeight: isMobile ? 'none' : 260 }}>
-              {sH('🎯', '今週のアクションプラン',
+              {sH(<Icon name="target" size={14} />, '今週のアクションプラン',
                 <button onClick={() => { coachingGenerated.current = false; generateWeeklyCoaching() }} disabled={coachingLoading}
                   style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,0.3)', background: 'transparent', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
                   {coachingLoading ? '生成中...' : '更新'}
@@ -566,7 +569,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
 
             {/* 右上: KA一覧（タブ切替 + ステータス選択） */}
             <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
-              {sH('📌', `KA一覧（${allKAs.length}件）`)}
+              {sH(<Icon name="flag" size={14} />, `KA一覧（${allKAs.length}件）`)}
               {/* タブ */}
               <div style={{ display: 'flex', gap: 2, marginBottom: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                 {[
@@ -615,7 +618,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
 
             {/* 左中: マイOKR */}
             <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
-              {sH('📊', 'マイOKR')}
+              {sH(<Icon name="target" size={14} />, 'マイOKR')}
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {objectives.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>担当Objectiveなし</div>}
                 {objectives.map(obj => {
@@ -651,10 +654,10 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
 
             {/* 右中: タスク + AIタスク提案 */}
             <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
-              {sH('📋', `タスク（${tasks.length}件）`,
+              {sH(<Icon name="workspace" size={14} />, `タスク（${tasks.length}件）`,
                 <button onClick={proposeTasksFromAI} disabled={proposingTasks}
-                  style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(77,159,255,0.3)', background: 'rgba(77,159,255,0.06)', color: '#4d9fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                  {proposingTasks ? '検討中...' : '🤖 AIでタスク検討'}
+                  style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: `1px solid ${T.info}4d`, background: `${T.info}10`, color: T.info, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {proposingTasks ? '検討中...' : (<><Icon name="ai" size={11} /> AIでタスク検討</>)}
                 </button>
               )}
               <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -725,7 +728,7 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             {/* 下段: 過去の努力（横幅いっぱい） */}
             <div style={{ ...sectionStyle, gridColumn: '1 / -1' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                {sH('🏆', '過去の努力')}
+                {sH(<Icon name="star" size={14} />, '過去の努力')}
                 <div style={{ display: 'flex', gap: 16, marginLeft: 'auto', marginBottom: 8 }}>
                   <div style={{ textAlign: 'center' }}>
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</span>
