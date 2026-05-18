@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 
 // ─── 日付ユーティリティ (JST) ─────────────────────────
 function toJSTDateStr(d) {
@@ -88,6 +89,7 @@ const KA_STATUS_OPTIONS = [
 
 // ─── メインコンポーネント ───────────────────────────
 export default function FocusFillModal({ open, onClose, T, viewingName, myName, isAdmin = false, initialMode = 'kr', levels = [] }) {
+  const { isMobile } = useResponsive()
   const isViewingSelf = viewingName === myName
   const canEdit = isViewingSelf || isAdmin   // 管理者は他メンバーも編集可
   const [mode, setMode] = useState(initialMode)
@@ -469,17 +471,20 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
       background: 'rgba(0,0,0,0.35)',
       backdropFilter: 'blur(20px) saturate(180%)',
       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-      zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
+      zIndex: 9999, display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center',
+      padding: isMobile ? 6 : 20,
       animation: 'focusFillFade 0.2s ease',
+      overflowY: 'auto',
     }}>
       <style>{`
         @keyframes focusFillFade { from {opacity:0} to {opacity:1} }
         @keyframes focusFillSlide { from {transform:translateY(20px); opacity:0} to {transform:translateY(0); opacity:1} }
       `}</style>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, borderRadius: 18,
-        width: '100%', maxWidth: 720, maxHeight: '92vh',
+        background: T.bgCard, borderRadius: isMobile ? 12 : 18,
+        width: '100%', maxWidth: 720,
+        maxHeight: isMobile ? 'none' : '92vh',
+        minHeight: isMobile ? '100vh' : 'auto',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '0 24px 60px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.08)',
         animation: 'focusFillSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
@@ -572,12 +577,12 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         </div>
 
         {/* ─── CTA + 進捗 + 締切 ─── */}
-        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}`, background: cfg.accentBg }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: cfg.accent, marginBottom: 6 }}>
+        <div style={{ padding: isMobile ? '10px 12px' : '14px 20px', borderBottom: `1px solid ${T.border}`, background: cfg.accentBg }}>
+          <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: cfg.accent, marginBottom: 6, lineHeight: 1.3 }}>
             {cfg.cta}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: T.textSub }}>
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: T.textSub, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 height: 6, background: 'rgba(255,255,255,0.3)', borderRadius: 99, overflow: 'hidden',
               }}>
@@ -608,7 +613,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
           style={{
-            flex: 1, overflowY: 'auto', padding: 24, minHeight: 0,
+            flex: 1, overflowY: 'auto', padding: isMobile ? 14 : 24, minHeight: 0,
             transform: `translateX(${swipeDelta}px)`,
             transition: swipeDelta === 0 ? 'transform 0.2s ease' : 'none',
             opacity: Math.abs(swipeDelta) > 120 ? 0.5 : 1,
@@ -631,9 +636,9 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         {/* ─── フッター操作 ─── */}
         {!loading && !completed[mode] && q.length > 0 && (
           <div style={{
-            display: 'flex', gap: 8, padding: '12px 20px',
+            display: 'flex', gap: 6, padding: isMobile ? '8px 10px' : '12px 20px',
             borderTop: `1px solid ${T.border}`, background: T.sectionBg,
-            alignItems: 'center',
+            alignItems: 'center', flexWrap: 'wrap',
           }}>
             <button onClick={skipCard} disabled={saving || q.length <= 1} style={{
               background: 'transparent', border: `1px solid ${T.borderMid}`,
