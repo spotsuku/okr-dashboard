@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, RADIUS } from '../lib/themeTokens'
+import { cardStyle, sectionHeaderStyle } from '../lib/iosStyles'
+import Icon from './Icon'
 import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
@@ -710,19 +712,22 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                   <div style={{ fontSize: 11, color: T.textMuted, marginRight: 4 }}>入力スタイル:</div>
                   <button onClick={() => setFocusFillOpen('kr')} style={{
                     padding: '5px 12px', borderRadius: 7, border: 'none',
-                    background: '#4d9fff', color: '#fff',
+                    background: T.info, color: '#fff',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                  }}>📝 KR記入モード</button>
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                  }}><Icon name="pencil" size={12} /> KR記入モード</button>
                   <button onClick={() => setFocusFillOpen('ka')} style={{
                     padding: '5px 12px', borderRadius: 7, border: 'none',
-                    background: '#00d68f', color: '#fff',
+                    background: T.success, color: '#fff',
                     fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                  }}>📝 KA記入モード</button>
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                  }}><Icon name="pencil" size={12} /> KA記入モード</button>
                   <div style={{
                     padding: '5px 12px', borderRadius: 7,
                     background: T.navActiveBg, color: T.navActiveText,
                     fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-                  }}>📋 一覧モード（表示中）</div>
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                  }}><Icon name="workspace" size={12} /> 一覧モード（表示中）</div>
                 </div>
                 <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
                   <MyOKRPageNew
@@ -1343,9 +1348,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           <button onClick={() => setSettingsOpen(v => !v)} title="ウィジェットの表示設定" style={{
             background: settingsOpen ? T.accentBg : 'rgba(120,120,128,0.12)',
             border: 'none', color: settingsOpen ? T.accent : T.textSub,
-            borderRadius: 10, padding: '8px 12px', fontSize: 14, cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}>⚙️</button>
+            borderRadius: 10, padding: '8px 10px',
+            display: 'inline-flex', alignItems: 'center',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}><Icon name="settings" size={16} /></button>
         </div>
 
         {settingsOpen && (
@@ -1373,7 +1379,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           minWidth: 0,
         }}>
           {showW('today') && (
-            <Section T={T} icon="⚡" accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
+            <Section T={T} icon={<Icon name="bolt" size={14} />} accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
               <button onClick={loadTasks} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1386,7 +1392,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             </Section>
           )}
           {showW('week') && (
-            <Section T={T} icon="📅" accent={T.success} title="今週やること" flex={1}>
+            <Section T={T} icon={<Icon name="calendar" size={14} />} accent={T.success} title="今週やること" flex={1}>
               {taskBoard.loading ? <Loading T={T} /> : (
                 <WeekTasks T={T} byWeekday={taskBoard.byWeekday} canEdit={isViewingSelf} onToggle={toggleTaskDone} />
               )}
@@ -1402,7 +1408,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
           {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
-          <Section T={T} icon="📊" accent={T.warn} title="OKR・KA記入漏れ" flex={0} headerRight={
+          <Section T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
               borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1428,19 +1434,21 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
                         <button onClick={() => onOpenFocusFill && onOpenFocusFill('kr')}
                           style={{
                             flex: 1, padding: '6px 10px', border: 'none',
-                            background: '#4d9fff', color: '#fff',
+                            background: T.info, color: '#fff',
                             borderRadius: 6, fontSize: 11, fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
-                          }}>🎯 KR記入 ({krCount}) →</button>
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                          }}><Icon name="target" size={12} /> KR記入 ({krCount}) →</button>
                       )}
                       {kaCount > 0 && (
                         <button onClick={() => onOpenFocusFill && onOpenFocusFill('ka')}
                           style={{
                             flex: 1, padding: '6px 10px', border: 'none',
-                            background: '#00d68f', color: '#fff',
+                            background: T.success, color: '#fff',
                             borderRadius: 6, fontSize: 11, fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
-                          }}>📋 KA記入 ({kaCount}) →</button>
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                          }}><Icon name="check" size={12} /> KA記入 ({kaCount}) →</button>
                       )}
                     </div>
                   )}
@@ -1510,7 +1518,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               onGoToSummary={onGoToSummary} />
           )}
           {showW('achievements') && (
-            <Section T={T} icon="🏆" accent={T.warn} title="今週の成果" flex={0} headerRight={
+            <Section T={T} icon={<Icon name="star" size={14} />} accent={T.warn} title="今週の成果" flex={0} headerRight={
               <button onClick={loadAchievements} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -2891,38 +2899,26 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
   // flex>=1 の場合は grow して親の残りスペースを埋める
   // モバイルでは常に自動サイズ (外側スクロール + 中身フルハイト)
   const isAutoSize = isMobile || flex === 0 || flex === 'none'
-  // iOS 風: 立体感 (3層シャドウ) + サブカラー (accent 渡されたら微妙にチント)
-  const baseStyle = {
-    background: accent ? `linear-gradient(180deg, ${T.bgCard} 0%, ${accent}06 100%)` : T.bgCard,
-    border: `1px solid ${accent ? accent + '1f' : T.border}`,
-    borderRadius: 14,
-    overflow: 'hidden',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.03)',
-    display: 'flex', flexDirection: 'column',
-  }
+  // Glass: cardStyle で半透明白 + backdrop-blur + 罫線アクセント
+  const base = cardStyle({ T, padding: 0 })
   const outerStyle = isAutoSize
-    ? { ...baseStyle, flex: '0 0 auto' }
-    : { ...baseStyle, flex, minHeight: 0 }
+    ? { ...base, flex: '0 0 auto', display: 'flex', flexDirection: 'column' }
+    : { ...base, flex, minHeight: 0, display: 'flex', flexDirection: 'column' }
   const innerStyle = isAutoSize
     ? { padding: isMobile ? '12px 14px' : '10px 14px' }
     : { flex: 1, overflowY: 'auto', padding: '10px 14px', minHeight: 0 }
+  // icon は文字列 (絵文字) も ReactNode (<Icon />) も受け取れる
+  const isEmoji = typeof icon === 'string'
   return (
     <div style={outerStyle}>
-      <div style={{
-        padding: '10px 14px',
-        borderBottom: `1px solid ${T.border}`,
-        fontSize: 12, fontWeight: 800, color: T.text,
-        display: 'flex', alignItems: 'center', gap: 8,
-        flexShrink: 0,
-        background: accent ? `${accent}0d` : T.sectionBg,
-        letterSpacing: '-0.01em',
-      }}>
+      <div style={sectionHeaderStyle({ T, accent })}>
         {icon && (
           <span style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 24, height: 24, borderRadius: 7,
+            width: 24, height: 24, borderRadius: RADIUS.sm,
             background: accent ? `${accent}1f` : 'rgba(0,0,0,0.05)',
-            fontSize: 14, lineHeight: 1,
+            color: accent || T.textSub,
+            fontSize: isEmoji ? 14 : undefined, lineHeight: 1,
           }}>{icon}</span>
         )}
         <span style={{ flex: 1 }}>{title}</span>
@@ -3609,7 +3605,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
   const extra = Math.max(0, items.length - visible.length)
 
   return (
-    <Section T={T} icon="📅" accent={T.info} title="Google カレンダー (直近8時間)" flex={0}>
+    <Section T={T} icon={<Icon name="calendar" size={14} />} accent={T.info} title="Google カレンダー (直近8時間)" flex={0}>
       {loading ? (
         <div style={{ padding: 12, color: T.textMuted, fontSize: 11 }}>読み込み中...</div>
       ) : isUnconnected ? (
@@ -3706,7 +3702,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 
   return (
     <Section
-      T={T} icon="📧" accent="#FF3B30" title="Gmail (要対応 5件)" flex={0}
+      T={T} icon={<Icon name="mail" size={14} />} accent={T.danger} title="Gmail (要対応 5件)" flex={0}
       headerRight={
         !isUnconnected && !error ? (
           <button onClick={() => onGoToTab?.('mail')} style={{
