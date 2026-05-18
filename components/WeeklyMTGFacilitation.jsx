@@ -1762,7 +1762,16 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
             }
           }
         }
-        if (alive) { setItems(built); setLoadError(null) }
+        // 重複除去: 同じ ka.id が複数のチーム/objective に紐付いてしまうケースを排除
+        // (scope が overlap / resolveAnnualLevelId が同じ obj を複数 level に解決等の不整合データ対策)
+        const seenKaIds = new Set()
+        const dedupedBuilt = built.filter(it => {
+          const kid = Number(it.ka?.id)
+          if (!kid || seenKaIds.has(kid)) return false
+          seenKaIds.add(kid)
+          return true
+        })
+        if (alive) { setItems(dedupedBuilt); setLoadError(null) }
       } catch (e) {
         console.error('Step1KALoop load error:', e)
         if (alive) { setItems([]); setLoadError(e?.message || String(e)) }
