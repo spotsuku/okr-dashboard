@@ -1746,12 +1746,20 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         if (allObjIds.length === 0) { if (alive) setItems([]); return }
 
         // 順序組み立て: チーム順 → Objective順 → KA(sort_order)順
-        // チーム所属判定は親 annual obj の level_id を辿って使う (Q 期 obj の
-        // level_id が親 annual と異なる不整合データに対応)
+        // チーム所属判定: obj.level_id を優先 (= 準備画面の集計と同じロジック)。
+        // それで scope 外なら親 annual obj の level_id にフォールバック
+        // (Q 期 obj が誤って全社 level に紐付いている不整合データ対策)。
+        const scopeSet = new Set(scopeLevelIds.map(Number))
         const built = []
         for (const lvlId of scopeLevelIds) {
           const team = levels.find(l => Number(l?.id) === Number(lvlId)) || { id: lvlId, name: '?', icon: '🏢' }
-          const teamObjs = objs.filter(o => Number(resolveAnnualLevelId(o.id, objsById)) === Number(lvlId)).sort((a, b) => a.id - b.id)
+          const teamObjs = objs.filter(o => {
+            const direct = Number(o.level_id)
+            // obj.level_id が scope 内なら、それで判定 (準備画面と一致)
+            if (scopeSet.has(direct)) return direct === Number(lvlId)
+            // scope 外なら fallback で親 annual を辿る
+            return Number(resolveAnnualLevelId(o.id, objsById)) === Number(lvlId)
+          }).sort((a, b) => a.id - b.id)
           for (const o of teamObjs) {
             const objKas = kas
               .filter(k => Number(k.objective_id) === Number(o.id))
@@ -1762,9 +1770,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
             }
           }
         }
-        // 重複除去: 同じチーム内で同じ ka.id が複数回 push されるケース (= scope overlap や
-        // resolveAnnualLevelId の不整合データ対策) のみを排除。
-        // 「セールスと CS の両方に同じ KA が紐付く」ような複数チーム表示は維持する。
+        // 重複除去: 同じチーム内で同じ ka.id が複数回 push されるケースのみを排除
         const seenKey = new Set()
         const dedupedBuilt = built.filter(it => {
           const teamId = Number(it.team?.id)
