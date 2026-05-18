@@ -1053,15 +1053,37 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
                      : cur === 'in_progress' ? 'done'
                      : 'not_started'
     const newDone = nextStatus === 'done'
+    const taskId = Number(task.id)
+
+    // オプティミスティック更新: state を即座に書き換え (リロードで白くならない)
+    const applyTo = (newStatus, newDoneVal) => (t) =>
+      Number(t.id) === taskId ? { ...t, status: newStatus, done: newDoneVal } : t
+    setTaskBoard(b => ({
+      ...b,
+      today: b.today.map(applyTo(nextStatus, newDone)),
+      byWeekday: Object.fromEntries(
+        Object.entries(b.byWeekday).map(([k, v]) => [k, v.map(applyTo(nextStatus, newDone))])
+      ),
+    }))
 
     // done カラムは確実に更新 (旧スキーマでも成功)
     const { error } = await supabase.from('ka_tasks').update({ done: newDone }).eq('id', task.id)
-    if (error) { alert('更新に失敗しました: ' + error.message); return }
+    if (error) {
+      // 失敗時は元の状態にロールバック
+      setTaskBoard(b => ({
+        ...b,
+        today: b.today.map(applyTo(cur, !!task.done)),
+        byWeekday: Object.fromEntries(
+          Object.entries(b.byWeekday).map(([k, v]) => [k, v.map(applyTo(cur, !!task.done))])
+        ),
+      }))
+      alert('更新に失敗しました: ' + error.message)
+      return
+    }
     // status カラムがあれば更新 (無い環境でもエラーは握りつぶす、MyTasksPage と同じ方針)
     await supabase.from('ka_tasks').update({ status: nextStatus }).eq('id', task.id).then(() => {}).catch(() => {})
 
-    loadTasks()
-    loadReminders()
+    // 「今週の成果」だけ同期 (loadAchievements 自体は loading フラグを立てないので白くならない)
     loadAchievements()
   }
 
