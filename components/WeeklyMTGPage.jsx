@@ -8,6 +8,7 @@ import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
+import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 
 // 会議ごとのアイコン (SVG・currentColor を継承)
@@ -992,6 +993,9 @@ function getCurrentQ() { const m = new Date().getMonth(); return m >= 3 && m <= 
 export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod, forceMode = null }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
+  // 組織別の会議リスト (新規組織は空、NEO福岡は旧固定リスト)
+  const { meetings: orgMeetings } = useWeeklyMTGMeetings()
+  const displayMeetings = orgMeetings.length > 0 ? orgMeetings : []
   const [mobilePanel, setMobilePanel] = useState('list') // 'list' | 'detail'
   const [reports,       setReports]       = useState([])
   const [objectives,    setObjectives]    = useState([])
@@ -1498,13 +1502,34 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 <div style={{ fontSize: 22, fontWeight: 800, color: wT().text, letterSpacing:'-0.01em' }}>今週の会議を選択</div>
                 <div style={{ fontSize: 12, color: wT().textMuted }}>会議ごとに対象の部署・チーム・観点が自動で絞り込まれます</div>
               </div>
+              {displayMeetings.length === 0 && (
+                <div style={{
+                  padding: '40px 24px', textAlign: 'center',
+                  background: wT().bgCard, border: `1px dashed ${wT().border}`, borderRadius: 16,
+                  marginBottom: 14,
+                }}>
+                  <div style={{ fontSize: 14, color: wT().textSub, marginBottom: 14, lineHeight: 1.7 }}>
+                    まだ会議が登録されていません。<br />
+                    組織設定から会議を新規作成してください。
+                  </div>
+                  <button
+                    onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('open-org-settings', { detail: { section: 'meetings' } })) }}
+                    style={{
+                      padding: '10px 22px', borderRadius: 10, border: 'none',
+                      background: wT().accent, color: '#fff',
+                      fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                      boxShadow: `0 2px 6px ${wT().accent}55`,
+                    }}>+ 会議を新規作成</button>
+                </div>
+              )}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:14 }}>
-                {WEEKLY_MTG_MEETINGS.map(m => {
-                  const viewBadge = m.weeklyMTG.withDiscussion ? 'チームサマリー'
-                    : m.weeklyMTG.viewMode === 'kr' ? 'KR重点'
-                    : m.weeklyMTG.viewMode === 'ka' ? 'KA重点'
+                {displayMeetings.map(m => {
+                  const wm = m.weeklyMTG || {}
+                  const viewBadge = wm.withDiscussion ? 'チームサマリー'
+                    : wm.viewMode === 'kr' ? 'KR重点'
+                    : wm.viewMode === 'ka' ? 'KA重点'
                     : '両方'
-                  const scope = m.weeklyMTG.levelName || (m.weeklyMTG.levelSelect === 'department' ? '事業部選択' : '全社')
+                  const scope = wm.levelName || (wm.levelSelect === 'department' ? '事業部選択' : '全社')
                   const Icon = MEETING_ICONS[m.key] || MEETING_ICONS._default
                   return (
                     <button key={m.key} onClick={() => selectMeeting(m.key)}
