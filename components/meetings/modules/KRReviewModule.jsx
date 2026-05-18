@@ -21,26 +21,28 @@ export default function KRReviewModule({ meeting, config, weekStart, T, members 
 
     Promise.all([
       supabase.from('key_results')
-        .select('id, title, target, current, unit, owner, objective_id, lower_is_better, archived_at')
-        .is('archived_at', null)
+        .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
         .order('id'),
       supabase.from('kr_weekly_reviews')
         .select('kr_id, good, more, focus, weather')
         .eq('week_start', weekStart),
       supabase.from('objectives')
-        .select('id, title, level_id, period, archived_at')
+        .select('id, title, level_id, period')
         .is('archived_at', null),
     ]).then(([krsRes, reviewsRes, objsRes]) => {
       if (!alive) return
       if (krsRes.error) setErr(krsRes.error.message)
       const krsData = krsRes.data || []
       const reviewsData = reviewsRes.data || []
-      const objsMap = new Map((objsRes.data || []).map(o => [o.id, o]))
+      const objsMap = new Map((objsRes.data || []).map(o => [Number(o.id), o]))
 
-      const merged = krsData.map(kr => ({
-        ...kr,
-        _obj: objsMap.get(kr.objective_id),
-      }))
+      // archived Objective 配下の KR は除外 (objectives.archived_at で間接的にフィルタ)
+      const merged = krsData
+        .filter(kr => objsMap.has(Number(kr.objective_id)))
+        .map(kr => ({
+          ...kr,
+          _obj: objsMap.get(Number(kr.objective_id)),
+        }))
       setKrs(merged)
       const reviewsMap = {}
       reviewsData.forEach(r => { reviewsMap[r.kr_id] = r })

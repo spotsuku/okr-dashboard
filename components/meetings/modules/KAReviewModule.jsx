@@ -14,22 +14,30 @@ export default function KAReviewModule({ meeting, config, weekStart, T, members 
   const [loading, setLoading] = useState(true)
   const [err, setErr]       = useState(null)
 
-  // 対象 KA を取得
+  // 対象 KA を取得 (archived Objective 配下の KA は除外)
   useEffect(() => {
     if (!weekStart) return
     let alive = true
     setLoading(true)
-    supabase.from('weekly_reports')
-      .select('id, ka_title, kr_title, owner, status, good, more, focus_output, objective_id, kr_id, level_id, ka_key')
-      .eq('week_start', weekStart)
-      .order('level_id', { ascending: true })
-      .order('id', { ascending: true })
-      .then(({ data, error }) => {
-        if (!alive) return
-        if (error) setErr(error.message)
-        setKas(data || [])
-        setLoading(false)
-      })
+    Promise.all([
+      supabase.from('weekly_reports')
+        .select('id, ka_title, kr_title, owner, status, good, more, focus_output, objective_id, kr_id, level_id, ka_key')
+        .eq('week_start', weekStart)
+        .order('level_id', { ascending: true })
+        .order('id', { ascending: true }),
+      supabase.from('objectives')
+        .select('id')
+        .is('archived_at', null),
+    ]).then(([kasRes, objsRes]) => {
+      if (!alive) return
+      if (kasRes.error) setErr(kasRes.error.message)
+      const activeObjIds = new Set((objsRes.data || []).map(o => Number(o.id)))
+      const kas = (kasRes.data || []).filter(ka =>
+        ka.objective_id == null || activeObjIds.has(Number(ka.objective_id))
+      )
+      setKas(kas)
+      setLoading(false)
+    })
     return () => { alive = false }
   }, [weekStart])
 
