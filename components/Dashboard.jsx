@@ -22,6 +22,7 @@ import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
 import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
+import Icon from './Icon'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -1418,20 +1419,38 @@ export default function Dashboard({ user, onSignOut }) {
             )}
           </div>
 
-          {/* ページナビ */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
-            {/* ホーム */}
-            <button onClick={() => setActivePage('portal')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'portal' ? T.navActiveBg : 'transparent', color: activePage === 'portal' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🏠 ホーム</button>
-            {/* ワークスペース (旧マイページ) */}
-            <button onClick={() => setActivePage('mycoach')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mycoach' ? T.navActiveBg : 'transparent', color: activePage === 'mycoach' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ワークスペース</button>
-            {/* OKR — 個人サブタブはコア機能なので全プラン表示。年間/週次サブタブは okr_full で出し分け */}
-            <button onClick={() => setActivePage('okr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR</button>
-            {/* 週次MTG */}
-            <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
-            {/* 朝会 */}
-            <button onClick={() => setActivePage('morning')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'morning' ? T.navActiveBg : 'transparent', color: activePage === 'morning' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🌅 朝会</button>
-            {/* 組織 */}
-            <button onClick={() => setActivePage('orgjd')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'orgjd' ? T.navActiveBg : 'transparent', color: activePage === 'orgjd' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>組織</button>
+          {/* ページナビ (Glass: 絵文字 → SVG Icon) */}
+          <div style={{ display: 'flex', gap: 2, background: T.bgSoft || 'rgba(255,255,255,0.55)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+            {(() => {
+              const navItems = [
+                { id: 'portal',  label: 'ホーム',         icon: 'home' },
+                { id: 'mycoach', label: 'ワークスペース', icon: 'workspace' },
+                { id: 'okr',     label: 'OKR',            icon: 'target' },
+                { id: 'weekly',  label: '週次MTG',        icon: 'calendar' },
+                { id: 'morning', label: '朝会',           icon: 'morning' },
+                { id: 'orgjd',   label: '組織',           icon: 'org' },
+              ]
+              return navItems.map(it => {
+                const active = activePage === it.id
+                return (
+                  <button
+                    key={it.id}
+                    onClick={() => setActivePage(it.id)}
+                    style={{
+                      padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                      background: active ? T.navActiveBg : 'transparent',
+                      color: active ? T.navActiveText : T.textSub,
+                      fontSize: isMobile ? 11 : 12, fontWeight: active ? 700 : 600,
+                      fontFamily: 'inherit', whiteSpace: 'nowrap',
+                      display: 'flex', alignItems: 'center', gap: 5,
+                    }}
+                  >
+                    <Icon name={it.icon} size={13} />
+                    <span>{it.label}</span>
+                  </button>
+                )
+              })
+            })()}
           </div>
 
           {/* 年度切り替え */}
@@ -1443,9 +1462,11 @@ export default function Dashboard({ user, onSignOut }) {
 
           {/* 右側 */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            {/* AI ボタン (ユーザーアイコンの左に配置) */}
+            {/* AI ボタン (Glass: 絵文字 → Icon name="ai") */}
             {aiChatEnabled && (
-              <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
+              <button onClick={() => setShowAI(p => !p)} title="AI アシスタント" style={{ background: T.bgCard, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="ai" size={15} />
+              </button>
             )}
             {/* ユーザーメニュー (テーマ切替・同期状態もここに集約) */}
             <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
