@@ -99,6 +99,11 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
   const [showAll, setShowAll] = useState(false)               // 記入済みも含めて表示
   const [completed, setCompleted] = useState({ kr: false, ka: false })
   const [objMap, setObjMap] = useState({})
+  // 先週の Good/More/Focus を参照表示するためのマップ
+  // KR: kr_id → kr_weekly_reviews row (先週分)
+  // KA: ka_key (or `${kr_id}|${ka_title}`) → weekly_reports row (先週分)
+  const [prevKrMap, setPrevKrMap] = useState({})
+  const [prevKaMap, setPrevKaMap] = useState({})
   const [swipeDelta, setSwipeDelta] = useState(0)  // D: スワイプ時のX移動量
   // フィルタ:
   //   periodFilter: 'auto' (現Q+通期, 既定) | 'q1' | 'q2' | 'q3' | 'q4' | 'annual' | 'all'
@@ -163,14 +168,31 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const currentMon = getMondayJSTStr()
     const [cy, cm, cd] = currentMon.split('-').map(Number)
     const nextMon = new Date(Date.UTC(cy, cm - 1, cd + 7)).toISOString().split('T')[0]
+    // 先週分 (参考表示用): KR は krWeekStart -7日 / KA は currentMon -7日
+    const [py, pm, pd] = krWeekStart.split('-').map(Number)
+    const prevKrWeekStart = new Date(Date.UTC(py, pm - 1, pd - 7)).toISOString().split('T')[0]
+    const prevMon = new Date(Date.UTC(cy, cm - 1, cd - 7)).toISOString().split('T')[0]
 
-    const [krsRes, krReviewsRes, kasRes, objsRes] = await Promise.all([
+    const [krsRes, krReviewsRes, kasRes, objsRes, prevKrReviewsRes, prevKasRes] = await Promise.all([
       supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName).range(0, 49999),
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart).range(0, 49999),
-      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start, reference_urls')
+      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start, reference_urls, ka_key')
         .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done').range(0, 49999),
       supabase.from('objectives').select('id, title, period, level_id').is('archived_at', null).range(0, 49999),
+      // 先週分の参照 (読み取り専用、入力エリア上部に表示)
+      supabase.from('kr_weekly_reviews').select('*').eq('week_start', prevKrWeekStart).range(0, 49999),
+      supabase.from('weekly_reports').select('kr_id, ka_title, good, more, focus_output, ka_key')
+        .eq('owner', viewingName).eq('week_start', prevMon).range(0, 49999),
     ])
+
+    // 先週マップ: KR は kr_id をキーに、KA は ka_key 優先 (なければ kr_id|ka_title)
+    setPrevKrMap(Object.fromEntries((prevKrReviewsRes.data || []).map(r => [String(r.kr_id), r])))
+    const prevKaMapBuilt = {}
+    ;(prevKasRes.data || []).forEach(r => {
+      const key = r.ka_key || `${r.kr_id}|${(r.ka_title || '').trim()}`
+      if (!prevKaMapBuilt[key]) prevKaMapBuilt[key] = r
+    })
+    setPrevKaMap(prevKaMapBuilt)
 
     // KA の対象週を決定
     // ・今日が月曜 & 今週分が存在 → 今週 (その日のキックオフ向け)
@@ -626,6 +648,11 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
               readOnly={!canEdit} deptLabelOf={deptLabelOf}
               weekStart={weekStartOf(current.kind)}
               meetingText={meetingLabel(current.kind)}
+              prevRecord={
+                current.kind === 'kr'
+                  ? prevKrMap[String(current.kr?.id)]
+                  : prevKaMap[current.ka?.ka_key || `${current.ka?.kr_id}|${(current.ka?.ka_title || '').trim()}`]
+              }
               onKaStatusChange={handleKaStatusChange} />
           ) : null}
         </div>
@@ -678,7 +705,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 }
 
 // ─── カード表示 ────────────────────────────────────────
-function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart, meetingText, onKaStatusChange }) {
+function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart, meetingText, onKaStatusChange, prevRecord = null }) {
   const isKR = card.kind === 'kr'
   const kr = card.kr
   const ka = card.ka
@@ -842,6 +869,9 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
         </div>
       )}
 
+      {/* 先週の記入を参考表示 (社員からの要望: 漏れ確認のため) */}
+      <PrevReferenceBlock T={T} prev={prevRecord} isKR={isKR} weekStart={weekStart} />
+
       {/* 3 フィールド (絶対日のみ) */}
       <FieldRow T={T} label={`✅ ${goodMoreWk} good — 良かったこと・続けたいこと`}
         color="#00d68f" readOnly={readOnly}
@@ -924,6 +954,73 @@ function RefUrlsEditor({ T, value, onChange, readOnly }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// 先週の good/more/focus を読み取り専用で表示
+// 社員からの要望: 「先週の記入が見えていると今週の漏れ確認に使える」
+function PrevReferenceBlock({ T, prev, isKR, weekStart }) {
+  const [open, setOpen] = useState(true)
+  if (!prev) return null
+  const good = (prev.good || '').trim()
+  const more = (prev.more || '').trim()
+  const focus = (prev.focus || prev.focus_output || '').trim()
+  const allEmpty = !good && !more && !focus
+  // 先週ラベル (= weekStart - 7日)
+  const [y, m, d] = (weekStart || '').split('-').map(Number)
+  const prevD = new Date(Date.UTC(y || 2026, (m || 1) - 1, (d || 1) - 7))
+  const sundayD = new Date(prevD); sundayD.setUTCDate(prevD.getUTCDate() + 6)
+  const label = `${prevD.getUTCMonth() + 1}/${prevD.getUTCDate()}〜${sundayD.getUTCMonth() + 1}/${sundayD.getUTCDate()}`
+
+  if (allEmpty) {
+    return (
+      <div style={{
+        fontSize: 11, color: T.textMuted, padding: '6px 12px',
+        background: T.sectionBg, borderRadius: 8,
+        fontStyle: 'italic',
+      }}>
+        📅 先週 ({label}) は未記入でした
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      background: T.sectionBg, borderRadius: 8, padding: '8px 12px 10px',
+      border: `1px solid ${T.border}`,
+      display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          fontSize: 11, fontWeight: 700, color: T.textSub,
+          display: 'flex', alignItems: 'center', gap: 6, padding: 0,
+          fontFamily: 'inherit', textAlign: 'left',
+        }}>
+        <span style={{ fontSize: 9, color: T.textMuted }}>{open ? '▼' : '▶'}</span>
+        <span>📅 先週 ({label}) の記入 — 参考</span>
+      </button>
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2 }}>
+          {good && <PrevLine T={T} label="✅ good" text={good} color="#00d68f" />}
+          {more && <PrevLine T={T} label="🔺 more" text={more} color="#ff6b6b" />}
+          {focus && <PrevLine T={T} label="🎯 focus" text={focus} color="#4d9fff" />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PrevLine({ T, label, text, color }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, color, flexShrink: 0,
+        padding: '2px 7px', borderRadius: 4, background: `${color}15`,
+        whiteSpace: 'nowrap',
+      }}>{label}</span>
+      <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5, whiteSpace: 'pre-wrap', flex: 1, minWidth: 0 }}>{text}</span>
     </div>
   )
 }
