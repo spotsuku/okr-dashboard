@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { SegmentedControl } from './iosUI'
+import Icon from './Icon'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
 
@@ -267,7 +268,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
           {/* KR編集セクション */}
           <div style={{ marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${krEditing?'rgba(255,159,67,0.4)':wT().border}`, transition:'border-color 0.15s' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#ff9f43', textTransform:'uppercase', letterSpacing:'0.08em' }}>📝 KR設定</div>
+              <div style={{ fontSize:10, fontWeight:700, color:wT().warn, textTransform:'uppercase', letterSpacing:'0.08em', display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="pencil" size={11} /> KR設定</div>
               {!krEditing && (
                 <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:'1px solid rgba(255,159,67,0.3)', background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
               )}
@@ -311,7 +312,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
             <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>✅ Good — うまくいったこと</div>
+              <div style={{ fontSize:10, fontWeight:700, color:wT().success, background:`${wT().success}1a`, padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="check" size={11} /> Good — うまくいったこと</div>
               <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="進んでいること・良かったこと" style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
             </div>
             <div style={{ minWidth:0 }}>
@@ -325,7 +326,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
             <div style={{ flex:1, height:1, background:wT().border }} />
           </div>
           <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🎯 来週の注力アクション</div>
+            <div style={{ fontSize:10, fontWeight:700, color:wT().info, background:`${wT().info}1a`, padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> 来週の注力アクション</div>
             <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか・何に力を入れるか" style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
@@ -401,7 +402,7 @@ function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle,
   return (
     <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:420, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {doneCount}/{tasks.length}</span>
+        <span style={{ fontSize:10, fontWeight:700, color:wT().accent, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> タスク {doneCount}/{tasks.length}</span>
         <button onClick={addTask} style={{ marginLeft:4, background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', borderRadius:4, color:'#a855f7', fontSize:10, padding:'2px 6px', cursor:'pointer', fontFamily:'inherit' }}>＋</button>
         <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
       </div>
@@ -973,13 +974,13 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           </div>
           <div style={{
             fontSize:12, fontWeight:800, padding:'5px 12px', borderRadius:99,
-            background: weekMode==='next' ? 'rgba(255,159,67,0.18)' : 'rgba(0,214,143,0.15)',
-            color: weekMode==='next' ? '#ff9f43' : '#00d68f',
-            border: `1px solid ${weekMode==='next' ? 'rgba(255,159,67,0.5)' : 'rgba(0,214,143,0.35)'}`,
-            display:'flex', alignItems:'center', gap:4,
-            boxShadow: weekMode==='next' ? '0 0 0 3px rgba(255,159,67,0.15)' : 'none',
+            background: weekMode==='next' ? `${wT().warn}1f` : `${wT().success}1f`,
+            color: weekMode==='next' ? wT().warn : wT().success,
+            border: `1px solid ${weekMode==='next' ? `${wT().warn}80` : `${wT().success}59`}`,
+            display:'flex', alignItems:'center', gap:5,
           }}>
-            📝 {weekMode==='next' ? '翌週を記入中' : '今週を記入中'} {formatWeekLabel(selectedWeek)}
+            <Icon name="pencil" size={12} />
+            {weekMode==='next' ? '翌週を記入中' : '今週を記入中'} {formatWeekLabel(selectedWeek)}
           </div>
         </div>
       </div>
@@ -996,8 +997,8 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         {!isMobile && (
           <div style={{ width: isTablet ? 120 : 155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
             <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
-            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?'rgba(77,159,255,0.3)':'transparent'}`, background:!activeLevelId?'rgba(77,159,255,0.12)':'transparent' }}>
-              <span>🏢</span><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?'#4d9fff':wT().textSub }}>全部署</span>
+            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?`${wT().info}4d`:'transparent'}`, background:!activeLevelId?`${wT().info}1f`:'transparent', color:!activeLevelId?wT().info:wT().textSub }}>
+              <Icon name="building" size={12} /><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500 }}>全部署</span>
             </div>
             {roots.map(r=>renderSb(r,0))}
           </div>
@@ -1005,7 +1006,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
         {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
-          <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 マイObjective（{visibleObjs.length}件）</div>
+          <div style={{ fontSize:10, color:wT().info, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
             <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
           )}
@@ -1064,7 +1065,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           )}
           {!selectedObj ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
-              <div style={{ fontSize:36 }}>🎯</div>
+              <Icon name="target" size={36} stroke={1.4} />
               <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
@@ -1130,7 +1131,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
               {objKRs.length > 0 && (
                 <div style={{ marginBottom:16 }}>
-                  <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📊 Key Results（{objKRs.length}件）</div>
+                  <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> Key Results（{objKRs.length}件）</div>
                   {objKRs.map(kr => {
                     const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
                     return (
@@ -1147,7 +1148,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                         <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
                           {krKAs.length > 0 && (
                             <>
-                              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4 }}>📋 KA（{krKAs.length}件）</div>
+                              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> KA（{krKAs.length}件）</div>
                               <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
                                 <KATableHeader wT={wT} />
                                 <tbody>
@@ -1181,7 +1182,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 if (unlinkedKAs.length === 0) return null
                 return (
                   <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>📋 その他のKA（{unlinkedKAs.length}件）</div>
+                    <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
                     <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
                       <KATableHeader wT={wT} />
                       <tbody>
