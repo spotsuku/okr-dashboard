@@ -564,7 +564,7 @@ export default function WeeklyMTGFacilitation({
           padding: '12px 20px', borderBottom: `1px solid ${T.border}`,
           background: T.bgCard, flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', maxWidth: 900, margin: '0 auto' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', maxWidth: 1280, margin: '0 auto' }}>
             {stepDefs.map((s, i) => {
               const isActive = step === s.n
               const isDone = step > s.n
@@ -591,7 +591,7 @@ export default function WeeklyMTGFacilitation({
           </div>
           {/* ファシリ表示 */}
           {session?.facilitator && (
-            <div style={{ maxWidth: 900, margin: '8px auto 0', fontSize: 11, color: T.textMuted, textAlign: 'right' }}>
+            <div style={{ maxWidth: 1280, margin: '8px auto 0', fontSize: 11, color: T.textMuted, textAlign: 'right' }}>
               ファシリ: <strong style={{ color: T.text }}>{session.facilitator}</strong>
               {session.started_at && <span> ・ 開始 {formatTime(session.started_at)}</span>}
             </div>
@@ -801,7 +801,7 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
     <div style={{
       padding: '8px 16px', background: bg, borderBottom: `2px solid ${border}`, flexShrink: 0,
     }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 14 }}>{isOver ? '🚨' : isTen ? '⚠️' : '⏱'}</span>
         <span style={{ fontSize: 12, color: T.textMuted }}>
           {isOver ? (
@@ -893,7 +893,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
 
   const meetColor = meeting.color || T.accent
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 24px 40px', position: 'relative' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 40px', position: 'relative' }}>
       <div aria-hidden style={{
         position: 'absolute', top: -150, left: '50%', transform: 'translateX(-50%)',
         width: 600, height: 400,
@@ -1435,7 +1435,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
   const periodLabel = (currentObj?.period || '').toString().split('_').pop().toUpperCase()
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 20px' }}>
       {/* トップアクション (準備に戻る) */}
       {onBackToPrep && (
         <div style={{ marginBottom: 12 }}>
@@ -1540,7 +1540,7 @@ const KA_STATUS_ORDER = ['normal','focus','good','more','done']
 function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
   const meetColor = meeting?.color || '#FF9500'
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 20px' }}>
       {onBackToPrep && (
         <div style={{ marginBottom: 12 }}>
           <button onClick={onBackToPrep} style={{
@@ -1882,7 +1882,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 20px' }}>
       {onBackToPrep && (
         <div style={{ marginBottom: 12 }}>
           <button onClick={onBackToPrep} style={{
@@ -1995,7 +1995,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
 // マネージャー会議で書かれた今週分のチームサマリーを閲覧。編集はしない。
 function Step1DirectorReview({ T, meeting, weekStart, levels, members, onPrev, onNext, onBackToPrep }) {
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 20px' }}>
       {onBackToPrep && (
         <div style={{ marginBottom: 12 }}>
           <button onClick={onBackToPrep} style={{
@@ -3029,7 +3029,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 20px' }}>
       {onBackToPrep && (
         <div style={{ marginBottom: 12 }}>
           <button onClick={onBackToPrep} style={{
@@ -3778,7 +3778,7 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
       {/* 上部ヘッダー */}
       {isShare ? (
         <div style={{
-          maxWidth: 900, width: '100%', margin: '14px auto 0', padding: '14px 18px',
+          maxWidth: 1280, width: '100%', margin: '14px auto 0', padding: '14px 18px',
           background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
           border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
           borderRadius: 14, fontSize: 12, color: T.textSub,
@@ -3799,7 +3799,7 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
         </div>
       ) : withDiscussion ? (
         <div style={{
-          maxWidth: 900, width: '100%', margin: '14px auto 0', padding: '16px 20px',
+          maxWidth: 1280, width: '100%', margin: '14px auto 0', padding: '16px 20px',
           background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
           border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
           borderRadius: 14, fontSize: 12, color: T.textSub,
@@ -3981,7 +3981,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 20px' }}>
       <div style={{
         marginBottom: 18, padding: '18px 22px',
         background: `linear-gradient(135deg, ${T.warn}f0 0%, ${T.warn}c0 100%)`,
@@ -4263,7 +4263,7 @@ function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
 // ─── プレースホルダ Step 1 / 2 (Phase 3-5 で本実装) ──────────────────────────
 function PlaceholderStep({ T, title, note, onPrev, onNext, nextLabel = '次へ →' }) {
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>🚧</div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 6 }}>{title}</h2>
       <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 28 }}>{note}</div>
