@@ -13,7 +13,7 @@ import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 //   (NEO福岡 固有のリンクは ['neo-fukuoka'] で限定)
 // ユーザー追加分は「カスタムリンク」(localStorage) に登録される。
 const DASHBOARDS = [
-  { id: 'okr',         title: 'OKR ダッシュボード',         description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true, group: 'main',     keywords: 'okr ka タスク 目標' },
+  { id: 'okr',         title: 'ワークスペース',             description: 'OKR・KA・タスク管理',          icon: 'target',     color: '#007AFF', internal: true, group: 'main',     keywords: 'workspace ワークスペース okr ka タスク 目標' },
 
   { id: 'sales',       title: '営業ダッシュボード',         description: '営業活動・商談管理',             icon: 'trendingUp', color: '#FF9500', url: 'https://sales-dashboard-jade-chi.vercel.app/dashboard', external: true, group: 'business', keywords: 'sales 営業 商談',  orgSlugs: ['neo-fukuoka'] },
   { id: 'community',   title: 'コミュニティ ダッシュボード', description: 'NEOポータル',                    icon: 'building',   color: '#FF3B30', url: 'https://community-dashboard-5abc3.web.app/events',      external: true, group: 'business', keywords: 'community コミュニティ', orgSlugs: ['neo-fukuoka'] },
@@ -161,47 +161,31 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 20px 32px', position: 'relative' }}>
 
-        {/* ─── ヒーロー: 大きいガラスカード ─── */}
-        <div style={{
-          marginTop: 20, marginBottom: 24,
-          padding: '28px 28px 24px',
-          background: `linear-gradient(135deg, ${T.accent}f5 0%, ${T.accent}c0 60%, ${T.accent}80 100%)`,
-          borderRadius: 24,
-          color: '#FFFFFF',
-          position: 'relative', overflow: 'hidden',
-          boxShadow: `
-            0 1px 2px rgba(0,0,0,0.06),
-            0 8px 24px rgba(0,122,255,0.20),
-            0 24px 56px rgba(0,122,255,0.18)
-          `,
-        }}>
-          {/* 装飾グラデーションオーブ */}
-          <div aria-hidden style={{
-            position: 'absolute', top: -80, right: -60, width: 280, height: 280,
-            background: 'radial-gradient(circle, rgba(255,255,255,0.30) 0%, transparent 60%)',
-            borderRadius: '50%', pointerEvents: 'none',
-          }} />
-          <div aria-hidden style={{
-            position: 'absolute', bottom: -100, left: -40, width: 240, height: 240,
-            background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 65%)',
-            borderRadius: '50%', pointerEvents: 'none',
-          }} />
-
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <div style={{
-              fontSize: 11, fontWeight: 800, letterSpacing: '0.18em',
-              opacity: 0.85, textTransform: 'uppercase', marginBottom: 8,
-            }}>NEO Management</div>
-            <div style={{
-              fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em',
-              lineHeight: 1.15, marginBottom: 6,
-            }}>{greet}</div>
-            {user?.email && (
-              <div style={{ fontSize: 14, opacity: 0.92 }}>
-                {user.email} としてログイン中
-              </div>
-            )}
-          </div>
+        {/* Glass: 静かな挨拶ライン (= 大バナー廃止、罫線・余白で階層を作る) */}
+        <div style={{ marginTop: 28, marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <h1 style={{
+            fontSize: 28, fontWeight: 600, letterSpacing: '-0.01em',
+            color: T.text, lineHeight: 1.2, margin: 0,
+          }}>{greet}{user?.email ? '' : ''}</h1>
+          {user?.email && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '2px 8px', borderRadius: 99,
+              background: T.successSoft, color: T.success,
+              fontSize: 11, fontWeight: 500,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: 99, background: 'currentColor' }} />
+              {user.email.split('@')[0]} さん
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: T.textSub, marginBottom: 24, fontWeight: 400 }}>
+          {(() => {
+            const today = new Date()
+            const wd = ['日', '月', '火', '水', '木', '金', '土'][today.getDay()]
+            return `${today.getMonth() + 1}月${today.getDate()}日（${wd}）`
+          })()}
+          {user?.email && ` · ${user.email} としてログイン中`}
         </div>
 
         {/* ─── 検索バー ─── */}

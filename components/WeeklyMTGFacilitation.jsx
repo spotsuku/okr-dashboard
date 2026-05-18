@@ -1762,7 +1762,19 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
             }
           }
         }
-        if (alive) { setItems(built); setLoadError(null) }
+        // 重複除去: 同じチーム内で同じ ka.id が複数回 push されるケース (= scope overlap や
+        // resolveAnnualLevelId の不整合データ対策) のみを排除。
+        // 「セールスと CS の両方に同じ KA が紐付く」ような複数チーム表示は維持する。
+        const seenKey = new Set()
+        const dedupedBuilt = built.filter(it => {
+          const teamId = Number(it.team?.id)
+          const kaId   = Number(it.ka?.id)
+          const key    = `${teamId}|${kaId}`
+          if (!kaId || seenKey.has(key)) return false
+          seenKey.add(key)
+          return true
+        })
+        if (alive) { setItems(dedupedBuilt); setLoadError(null) }
       } catch (e) {
         console.error('Step1KALoop load error:', e)
         if (alive) { setItems([]); setLoadError(e?.message || String(e)) }

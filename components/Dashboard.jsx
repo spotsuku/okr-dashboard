@@ -22,6 +22,7 @@ import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
 import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
+import Icon from './Icon'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -868,10 +869,28 @@ export default function Dashboard({ user, onSignOut }) {
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
+  // OKR タブのサブタブ (年間 / 個人 / 週次)
+  // okr_full=true 組織: 年間 / 個人 / 週次 全部
+  // okr_full=false 組織: 個人のみ
+  const [okrSubTab, setOkrSubTab]           = useState('annual')
+  // 組織設定モーダル: OrgIconBar の「⚙ 設定」ボタンから window event 経由で開かれる
+  const [orgSettingsOpen, setOrgSettingsOpen] = useState(false)
+  useEffect(() => {
+    const h = () => setOrgSettingsOpen(true)
+    if (typeof window === 'undefined') return
+    window.addEventListener('open-org-settings', h)
+    return () => window.removeEventListener('open-org-settings', h)
+  }, [])
   // SaaS 化 Phase C: モジュール別 feature flag (ナビ / 画面表示制御に使用)
   const aiChatEnabled       = useFeatureFlag(MODULE_KEYS.AI_CHAT)
   const okrFullEnabled      = useFeatureFlag(MODULE_KEYS.OKR_FULL)
   const milestonesEnabled   = useFeatureFlag(MODULE_KEYS.MILESTONES)
+  // okr_full=false テナントで「年間」「週次」サブタブが選ばれていたら「個人」にフォールバック
+  useEffect(() => {
+    if (!okrFullEnabled && (okrSubTab === 'annual' || okrSubTab === 'weekly')) {
+      setOkrSubTab('personal')
+    }
+  }, [okrFullEnabled, okrSubTab])
   const [initialAIMessage, setInitialAIMessage] = useState(null)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
@@ -1387,63 +1406,106 @@ export default function Dashboard({ user, onSignOut }) {
       <LicenseGate T={T} myEmail={user?.email} />
       {/* myAI ライセンス無効時のソフトロックバナー (SaaS化 Phase 5) */}
       <LicenseBanner T={T} />
-      <OrgSwitcherTopBar />
-      {/* Header (スマホでは非表示 - MyPageShell の下メニューでナビゲート) */}
-      <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
+      {/* Header (Glass: backdrop blur + 56px / スマホでは非表示) */}
+      <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)', position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
-        <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, overflow: 'visible' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <button onClick={() => setShowSidebar(p => !p)} style={{
-              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-              color: getT().textSub, width: 32, height: 32, borderRadius: 8, cursor: 'pointer',
-              fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>☰</button>
+        <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0, overflow: 'visible' }}>
+          {/* ブランド (24px 黒角丸 N + キャプション + 運営DB) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${T.border}` }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: 7,
+              background: T.text, color: T.bgCard,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 800, letterSpacing: '-0.02em',
+            }}>N</div>
             {!isMobile && (
-              <div>
-                <div style={{ fontSize: 10, color: T.accent, letterSpacing: '0.18em', textTransform: 'uppercase' }}>NEO Management</div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>NEO 運営DB</div>
+              <div style={{ lineHeight: 1.1 }}>
+                <div style={{ fontSize: 9, color: T.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>NEO Management</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginTop: 1 }}>NEO 運営DB</div>
               </div>
             )}
           </div>
 
-          {/* ページナビ */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
-            {/* ホーム */}
-            <button onClick={() => setActivePage('portal')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'portal' ? T.navActiveBg : 'transparent', color: activePage === 'portal' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🏠 ホーム</button>
-            {/* ワークスペース (旧マイページ) */}
-            <button onClick={() => setActivePage('mycoach')} style={{ padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'mycoach' ? T.navActiveBg : 'transparent', color: activePage === 'mycoach' ? T.navActiveText : T.textSub, fontSize: isMobile ? 11 : 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ワークスペース</button>
-            {/* OKR (階層ビュー = OKR フル機能、okr_full モジュール限定) */}
-            {okrFullEnabled && (
-              <button onClick={() => setActivePage('okr')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'okr' ? T.navActiveBg : 'transparent', color: activePage === 'okr' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>OKR</button>
-            )}
-            {/* 週次MTG */}
-            <button onClick={() => setActivePage('weekly')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'weekly' ? T.navActiveBg : 'transparent', color: activePage === 'weekly' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>週次MTG</button>
-            {/* 朝会 */}
-            <button onClick={() => setActivePage('morning')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'morning' ? T.navActiveBg : 'transparent', color: activePage === 'morning' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>🌅 朝会</button>
-            {/* 組織 */}
-            <button onClick={() => setActivePage('orgjd')} style={{ padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: activePage === 'orgjd' ? T.navActiveBg : 'transparent', color: activePage === 'orgjd' ? T.navActiveText : T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>組織</button>
+          {/* ページナビ (Glass: 絵文字 → SVG Icon) */}
+          <div style={{ display: 'flex', gap: 2, background: T.bgSoft || 'rgba(255,255,255,0.55)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+            {(() => {
+              const navItems = [
+                { id: 'portal',  label: 'ホーム',         icon: 'home' },
+                { id: 'mycoach', label: 'ワークスペース', icon: 'workspace' },
+                { id: 'okr',     label: 'OKR',            icon: 'target' },
+                { id: 'weekly',  label: '週次MTG',        icon: 'calendar' },
+                { id: 'morning', label: '朝会',           icon: 'morning' },
+                { id: 'orgjd',   label: '組織',           icon: 'org' },
+              ]
+              return navItems.map(it => {
+                const active = activePage === it.id
+                return (
+                  <button
+                    key={it.id}
+                    onClick={() => setActivePage(it.id)}
+                    style={{
+                      padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                      background: active ? T.navActiveBg : 'transparent',
+                      color: active ? T.navActiveText : T.textSub,
+                      fontSize: isMobile ? 11 : 12, fontWeight: active ? 700 : 600,
+                      fontFamily: 'inherit', whiteSpace: 'nowrap',
+                      display: 'flex', alignItems: 'center', gap: 5,
+                    }}
+                  >
+                    <Icon name={it.icon} size={13} />
+                    <span>{it.label}</span>
+                  </button>
+                )
+              })
+            })()}
+          </div>
+
+          {/* 検索バー (⌘K)。機能本体は将来実装 */}
+          <div title="検索 (準備中)" style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            height: 30, padding: '0 10px', minWidth: 160,
+            background: T.bgSoft, border: `1px solid ${T.border}`,
+            borderRadius: 8, color: T.textMuted, fontSize: 12,
+            cursor: 'not-allowed', flexShrink: 0,
+          }}>
+            <Icon name="search" size={13} />
+            <span>検索 …</span>
+            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 9, padding: '1px 5px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 4, color: T.textMuted, fontFamily: 'ui-monospace, monospace' }}>⌘K</span>
           </div>
 
           {/* 年度切り替え */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
             {['2025', '2026'].map(yr => (
-              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accentSolid : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
+              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accent : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
             ))}
           </div>
 
           {/* 右側 */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-            <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>{themeKey === 'dark' ? '☀️' : '🌙'}</button>
-            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
-              {syncStatus === 'synced' ? '🟢' : syncStatus === 'error' ? '🔴' : '🟡'}
-            </span>
-            {/* ユーザーメニュー */}
-            <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
-              <button style={{ background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textSub, borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
-                👤 <span style={{ fontSize: 11 }}>▾</span>
+            {/* AI ボタン (Glass: 絵文字 → Icon name="ai") */}
+            {aiChatEnabled && (
+              <button onClick={() => setShowAI(p => !p)} title="AI アシスタント" style={{ background: T.bgCard, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="ai" size={15} />
               </button>
-              <div className="user-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 200, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+            )}
+            {/* ユーザーメニュー (テーマ切替・同期状態もここに集約) */}
+            <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
+              <button style={{ background: T.bgCard, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, height: 32, padding: '0 8px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="user" size={14} />
+                <Icon name="chevronD" size={10} />
+              </button>
+              <div className="user-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 220, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
                 <div style={{ padding: '8px 12px', fontSize: 12, color: T.textMuted, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>{user.email}</div>
+                {/* テーマ切替 + 同期状態 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>
+                  <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} title={themeKey === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替'} style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bg, color: T.textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                    {themeKey === 'dark' ? '☀️ ライト' : '🌙 ダーク'}
+                  </button>
+                  <span title={syncStatus === 'synced' ? '同期済み' : syncStatus === 'error' ? '同期エラー' : '同期中'} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
+                    {syncStatus === 'synced' ? '🟢 同期済' : syncStatus === 'error' ? '🔴 エラー' : '🟡 同期中'}
+                  </span>
+                </div>
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
                 {hasGoogle
@@ -1454,14 +1516,33 @@ export default function Dashboard({ user, onSignOut }) {
                 <button onClick={onSignOut} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.warn, fontSize: 12, fontFamily: 'inherit' }}>ログアウト</button>
               </div>
             </div>
-            {aiChatEnabled && (
-              <button onClick={() => setShowAI(p => !p)} style={{ background: T.textMuted, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>🤖</button>
-            )}
           </div>
         </div>
 
-        {/* 2行目：OKRページのみ（ビュー切替・期間フィルタ + OKR追加） */}
-        {activePage === 'okr' && okrFullEnabled && (
+        {/* 2行目: OKR サブタブナビ (年間 / 個人 / 週次)
+            「個人」はコア機能なので全プラン表示、「年間」「週次」は okr_full のみ */}
+        {activePage === 'okr' && (
+          <div style={{ padding: '5px 20px', display: 'flex', gap: 4, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
+            {[
+              ...(okrFullEnabled ? [{ key: 'annual', label: '📊 年間' }] : []),
+              { key: 'personal', label: '👤 個人' },
+              ...(okrFullEnabled ? [{ key: 'weekly', label: '📅 週次' }] : []),
+            ].map(t => {
+              const active = okrSubTab === t.key
+              return (
+                <button key={t.key} onClick={() => setOkrSubTab(t.key)} style={{
+                  padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: active ? T.navActiveBg : 'transparent',
+                  color: active ? T.navActiveText : T.textSub,
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                }}>{t.label}</button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* 3行目: OKRページ・年間サブタブのみ (ビュー切替・期間フィルタ + OKR追加) */}
+        {activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {[{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
@@ -1499,7 +1580,7 @@ export default function Dashboard({ user, onSignOut }) {
       {/* ─── ページ切替 ─── */}
       {activePage === 'portal' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><PortalPage user={user} onNavigate={setActivePage} themeKey={themeKey} members={members} T={T} /></div>}
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
-      {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} /></div>}
+      {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} forceMode="facilitation" /></div>}
       {activePage === 'morning' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><MorningMeetingPage user={user} members={members} themeKey={themeKey} /></div>}
       {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
@@ -1524,12 +1605,12 @@ export default function Dashboard({ user, onSignOut }) {
       )}
 
       {/* Archive View (📦 アーカイブ OKR ボタンで切替) */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
         <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
           onRestore={handleRestoreArchived} onPurge={handlePurgeArchived} refreshKey={annualRefreshKey} />
       </div>
       {/* Annual View */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1554,7 +1635,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
       {/* Owner View */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1593,6 +1674,28 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
+      {/* OKR サブタブ: 個人 (= MyOKRPage を埋め込み。自分の OKR を見る) */}
+      {activePage === 'okr' && okrSubTab === 'personal' && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <MyOKRPageNew
+            user={user} levels={levels} members={members}
+            themeKey={themeKey} fiscalYear={fiscalYear}
+            onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }}
+          />
+        </div>
+      )}
+
+      {/* OKR サブタブ: 週次 (= 全 KR/KA 一覧。WeeklyMTGPage を一覧モード固定で表示) */}
+      {activePage === 'okr' && okrSubTab === 'weekly' && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <WeeklyMTGPage
+            levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
+            user={user} initialPeriod={activePeriod}
+            forceMode="list"
+          />
+        </div>
+      )}
+
       {showAI && aiChatEnabled && (
         <AIPanel
           onClose={() => { setShowAI(false); setInitialAIMessage(null) }}
@@ -1600,6 +1703,9 @@ export default function Dashboard({ user, onSignOut }) {
           initialMessage={initialAIMessage}
         />
       )}
+
+      {/* 組織設定モーダル (OrgIconBar の「⚙」ボタンから window event で開かれる) */}
+      {orgSettingsOpen && <OrgSettingsPanelWrapper onClose={() => setOrgSettingsOpen(false)} />}
       {modal && (
         <Modal title={modal.type === 'add' ? '目標を追加' : '目標を編集'} onClose={() => setModal(null)}>
           <ObjForm
@@ -1647,41 +1753,10 @@ function DemoBanner() {
   )
 }
 
-// ─── 組織切替バー (組織設定ボタン付き) ─
-function OrgSwitcherTopBar() {
-  const { currentOrg, orgs, switchOrg, loading } = useCurrentOrg()
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  if (loading) return null
-  if (!currentOrg) return null
-  // 1組織のみ所属でも、組織設定ボタンを表示する
-  return (
-    <>
-      <div style={{
-        padding: '4px 16px', background: 'rgba(0,0,0,0.04)',
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-        display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif',
-      }}>
-        <span style={{ color: '#666' }}>🏢 組織:</span>
-        {orgs.length > 1 ? (
-          <select value={currentOrg?.slug || ''} onChange={e => switchOrg(e.target.value)} style={{
-            padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.12)',
-            background: '#fff', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
-          }}>
-            {orgs.map(o => <option key={o.slug} value={o.slug}>{o.name} ({o.role})</option>)}
-          </select>
-        ) : (
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#333' }}>{currentOrg.name} ({currentOrg.role})</span>
-        )}
-        <button onClick={() => setSettingsOpen(true)} title="組織設定" style={{
-          padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.12)',
-          background: 'transparent', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-        }}>⚙️ 設定</button>
-      </div>
-      {settingsOpen && <OrgSettingsPanelWrapper onClose={() => setSettingsOpen(false)} />}
-    </>
-  )
-}
+// 旧 OrgSwitcherTopBar (グレーの組織バー) は削除済。
+// 組織アイコン / 設定ボタンは OrgIconBar (左のサイドバー、Slack 風) に移動。
+// 「⚙ 設定」ボタンは window event 'open-org-settings' を発火し、Dashboard 内の
+// useEffect リスナーが orgSettingsOpen state を立てて OrgSettingsPanelWrapper を開く。
 
 function OrgSettingsPanelWrapper({ onClose }) {
   const T = COMMON_TOKENS.dark

@@ -2,13 +2,14 @@
 // Slack 風の左サイドバー (Phase 4 SaaS化)
 //   - 縦に並んだ組織アイコン (頭文字 + カラー)
 //   - 各アイコンクリック → router.push('/{slug}')
-//   - 最下部に "+" で組織新規作成
+//   - 最下部に "+" で組織新規作成、組織設定への入口も
 //
 // Dashboard.jsx を無改変にするため、AppRoot 側でこれを Dashboard の左にラップする。
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCurrentOrg } from '../lib/orgContext'
 import CreateOrgModal from './CreateOrgModal'
+import Icon from './Icon'
 
 // スマホ判定 (CalendarTab と同パターン)。SSR を壊さないよう初期値は false。
 function useIsMobile(bp = 768) {
@@ -48,33 +49,23 @@ export default function OrgIconBar({ userEmail }) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
 
-  // スマホでは横バーを出さない (左に黒帯が残る問題回避)。
-  // モバイルでの組織切替はダッシュボード上部の組織バナー / 設定から行う。
+  // スマホでは横バーを出さない (左に黒帯が残る問題回避)
   if (isMobile) return null
 
-  // 組織が 1 つだけならバーは表示しない (画面幅節約)。0 でも非表示。
-  if (!orgs || orgs.length < 2) {
-    return (
-      <>
-        {/* 単一組織でも "+" だけは出しておくと多テナント拡張への入り口になる */}
-        {orgs && orgs.length >= 1 && (
-          <div style={barWrap}>
-            <div style={{ flex: 1 }} />
-            <AddButton onClick={() => setCreateOpen(true)} />
-          </div>
-        )}
-        <CreateOrgModal
-          open={createOpen} onClose={() => setCreateOpen(false)}
-          onCreated={(org) => { setCreateOpen(false); if (org?.slug) router.push(`/${org.slug}`) }}
-          userEmail={userEmail}
-        />
-      </>
-    )
+  // 0 組織なら何も出さない
+  if (!orgs || orgs.length === 0) return null
+
+  // 設定ボタン: window event で Dashboard 側に通知 (props 伝達回避)
+  const openSettings = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open-org-settings'))
+    }
   }
 
   return (
     <>
       <div style={barWrap}>
+        {/* 組織アイコン (1 組織以上で表示。Slack 風) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8 }}>
           {orgs.map(o => {
             const active = currentOrg?.slug === o.slug
@@ -109,6 +100,16 @@ export default function OrgIconBar({ userEmail }) {
           })}
         </div>
         <div style={{ flex: 1 }} />
+        {/* 組織設定ボタン (= 旧 OrgSwitcherTopBar の「⚙ 設定」を移植) */}
+        <button onClick={openSettings} title="組織設定" style={{
+          width: 40, height: 40, borderRadius: 10, marginBottom: 6,
+          background: 'rgba(255,255,255,0.06)',
+          color: 'rgba(255,255,255,0.65)',
+          border: '1px solid rgba(255,255,255,0.10)', cursor: 'pointer',
+          fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}><Icon name="settings" size={17} /></button>
+        {/* 組織追加ボタン */}
         <AddButton onClick={() => setCreateOpen(true)} />
       </div>
       <CreateOrgModal
@@ -123,21 +124,21 @@ export default function OrgIconBar({ userEmail }) {
 function AddButton({ onClick }) {
   return (
     <button onClick={onClick} title="新しい組織を作成" style={{
-      width: 40, height: 40, borderRadius: 20, marginBottom: 10,
-      background: 'rgba(255,255,255,0.06)', color: '#9ca3af',
+      width: 40, height: 40, borderRadius: 10, marginBottom: 10,
+      background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.65)',
       border: '1.5px dashed rgba(255,255,255,0.18)', cursor: 'pointer',
-      fontSize: 22, fontWeight: 400, fontFamily: 'inherit',
+      fontFamily: 'inherit',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       transition: 'all 0.15s ease',
     }} onMouseEnter={(e) => {
-      e.currentTarget.style.background = 'rgba(77,159,255,0.18)'
-      e.currentTarget.style.color = '#4d9fff'
-      e.currentTarget.style.borderColor = '#4d9fff'
+      e.currentTarget.style.background = 'rgba(14,165,233,0.18)'
+      e.currentTarget.style.color = '#7dd3fc'
+      e.currentTarget.style.borderColor = '#0ea5e9'
     }} onMouseLeave={(e) => {
       e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-      e.currentTarget.style.color = '#9ca3af'
+      e.currentTarget.style.color = 'rgba(255,255,255,0.65)'
       e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'
-    }}>＋</button>
+    }}><Icon name="plus" size={18} /></button>
   )
 }
 

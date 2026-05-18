@@ -578,12 +578,11 @@ export function Icon({ name, size = 22, color = 'currentColor', strokeWidth = 1.
   )
 }
 
-// ─── 立体的なダッシュボードカード (グラスモーフィズム + マルチシャドウ) ─────
+// ─── ダッシュボードカード (Glass テーマ: 罫線ベース、影軽量) ──────────────
 // icon は ICON_PATHS のキー名 (例: 'target') または絵文字文字列。色アクセント color。
-export function DashboardTile({ T, icon, title, sub, color = '#007AFF', onClick, badge, status }) {
+// Glass テーマ移行: 立体感ある強い影/カラーチントグラデ → 罫線 + 薄い accent ring
+export function DashboardTile({ T, icon, title, sub, color = '#0ea5e9', onClick, badge, status }) {
   const isLineIcon = typeof icon === 'string' && ICON_PATHS[icon]
-  const shadowDefault = `0 1px 2px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04), 0 16px 40px rgba(0,0,0,0.04)`
-  const shadowHover   = `0 1px 2px rgba(0,0,0,0.06), 0 6px 16px ${color}1a, 0 24px 56px ${color}33`
 
   return (
     <button
@@ -591,81 +590,49 @@ export function DashboardTile({ T, icon, title, sub, color = '#007AFF', onClick,
       disabled={!onClick}
       style={{
         position: 'relative', overflow: 'hidden', textAlign: 'left',
-        // 微妙にカラーチントが入ったグラデーション (純白の単調さを回避)
-        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${color}05 100%)`,
-        border: `1px solid ${color}1a`,
-        borderRadius: 20, padding: '22px 20px',
+        background: T.bgCard,
+        border: `1px solid ${T.border}`,
+        borderRadius: 14, padding: '18px 16px',
         cursor: onClick ? 'pointer' : 'default',
         fontFamily: 'inherit',
-        boxShadow: shadowDefault,
-        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-        display: 'flex', flexDirection: 'column', gap: 14,
-        minHeight: 158,
+        boxShadow: '0 1px 2px rgba(15,23,42,.04)',
+        backdropFilter: 'blur(16px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+        transition: 'border-color .12s, box-shadow .12s, transform .12s',
+        display: 'flex', flexDirection: 'column', gap: 12,
+        minHeight: 130,
       }}
       onMouseEnter={e => {
         if (!onClick) return
-        e.currentTarget.style.transform = 'translateY(-4px)'
-        e.currentTarget.style.boxShadow = shadowHover
-        e.currentTarget.style.borderColor = `${color}45`
+        e.currentTarget.style.borderColor = T.borderStrong || 'rgba(15,23,42,.16)'
+        e.currentTarget.style.boxShadow = '0 2px 6px rgba(15,23,42,.08)'
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.boxShadow = shadowDefault
-        e.currentTarget.style.borderColor = `${color}1a`
+        e.currentTarget.style.borderColor = T.border
+        e.currentTarget.style.boxShadow = '0 1px 2px rgba(15,23,42,.04)'
       }}
-      onMouseDown={e => onClick && (e.currentTarget.style.transform = 'translateY(-1px) scale(0.985)')}
-      onMouseUp={e => onClick && (e.currentTarget.style.transform = 'translateY(-4px)')}
     >
-      {/* 上端ハイライト (1px の白い線) — ガラス感 */}
-      <div aria-hidden style={{
-        position: 'absolute', top: 0, left: 12, right: 12, height: 1,
-        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent)',
-        pointerEvents: 'none',
-      }} />
-      {/* 右上に放射 グロウ */}
-      <div aria-hidden style={{
-        position: 'absolute', top: -50, right: -50, width: 180, height: 180,
-        background: `radial-gradient(circle, ${color}1a 0%, transparent 65%)`,
-        pointerEvents: 'none',
-      }} />
-
-      {/* アイコンタイル: 立体感のあるグラデ + ハイライト + 影 */}
+      {/* アイコンタイル (Glass: 半透明 accent ringed) */}
       <div style={{
-        width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-        position: 'relative', overflow: 'hidden',
-        background: `linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`,
-        boxShadow: `
-          inset 0 1px 0 rgba(255,255,255,0.4),
-          inset 0 -1px 0 rgba(0,0,0,0.05),
-          0 6px 14px ${color}55,
-          0 2px 4px ${color}33
-        `,
+        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+        background: `${color}1f`,
+        color: color,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {/* 内側 ハイライト */}
-        <div aria-hidden style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.25), transparent)',
-          pointerEvents: 'none',
-        }} />
         {isLineIcon ? (
-          <Icon name={icon} size={28} color="#FFFFFF" strokeWidth={2.2}
-            style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))', position: 'relative' }} />
+          <Icon name={icon} size={18} color={color} strokeWidth={1.8} />
         ) : (
-          <span style={{
-            fontSize: 26, lineHeight: 1, position: 'relative',
-            filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))',
-          }}>{icon}</span>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
         )}
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 15, fontWeight: 800, color: T.text,
-          letterSpacing: '-0.01em', lineHeight: 1.3, marginBottom: 4,
+          fontSize: 14, fontWeight: 600, color: T.text,
+          letterSpacing: '-0.005em', lineHeight: 1.3, marginBottom: 3,
         }}>{title}</div>
         {sub && (
-          <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.5 }}>{sub}</div>
+          <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.5, fontWeight: 400 }}>{sub}</div>
         )}
       </div>
 

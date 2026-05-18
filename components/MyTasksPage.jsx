@@ -210,9 +210,30 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
   })
 
   const canSave = title.trim() && (noKaLink || reportId)
+  const titleInputRef = useRef(null)
 
-  const save = async () => {
-    if (!canSave) return
+  // 期日プリセット (JST 基準で計算)
+  const datePresets = (() => {
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const today = new Date()
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
+    // 今週金曜
+    const fri = new Date(today)
+    const diffFri = (5 - today.getDay() + 7) % 7
+    fri.setDate(today.getDate() + diffFri)
+    // 来週同曜日
+    const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7)
+    return [
+      { label: '今日',   v: fmt(today) },
+      { label: '明日',   v: fmt(tomorrow) },
+      { label: '今週末', v: fmt(fri) },
+      { label: '来週',   v: fmt(nextWeek) },
+    ]
+  })()
+
+  // keep=true で「作成して続ける」モード (= モーダル閉じずにタイトルだけクリア)
+  const save = async (keep = false) => {
+    if (!canSave || saving) return
     setSaving(true)
     const selectedKA = noKaLink ? null : allKAs.find(k => String(k.id) === String(reportId))
     const payload = {
@@ -225,16 +246,56 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
     setSaving(false)
     if (error) { alert('タスクの作成に失敗しました: ' + error.message); return }
     onCreated()
-    onClose()
+    if (keep) {
+      // 連続追加モード: タイトルクリア + フォーカス戻す。担当/期日/KA は維持
+      setTitle('')
+      setTimeout(() => titleInputRef.current?.focus(), 0)
+    } else {
+      onClose()
+    }
+  }
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if ((e.metaKey || e.ctrlKey) && canSave) {
+        // Cmd+Enter = 作成して続ける
+        e.preventDefault()
+        save(true)
+      } else if (canSave) {
+        // Enter = 作成 (= モーダル閉じる)
+        e.preventDefault()
+        save(false)
+      }
+    }
   }
 
   const inputSt = { width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
+  const presetBtnSt = (active) => ({
+    padding: '5px 10px', borderRadius: 7,
+    border: `1px solid ${active ? T.accent : T.border}`,
+    background: active ? `${T.accent}18` : T.bg,
+    color: active ? T.accent : T.textSub,
+    fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+    cursor: 'pointer', whiteSpace: 'nowrap',
+  })
 
   return (
     <SheetModal T={T} open onClose={onClose} title="タスクを追加" maxWidth={560}
       footer={<>
-        <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 9, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-        <button onClick={save} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: canSave && !saving ? T.accent : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 700, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+        <span style={{ flex: 1, fontSize: 10, color: T.textFaint }}>
+          Enter = 作成 / ⌘ + Enter = 作成して続ける
+        </span>
+        <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 9, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+        <button onClick={() => save(true)} disabled={!canSave || saving} title="保存してフォームをクリア、次のタスクを連続入力"
+          style={{ padding: '8px 16px', borderRadius: 9,
+            border: `1px solid ${T.border}`,
+            background: canSave && !saving ? T.bgCard : 'transparent',
+            color: canSave && !saving ? T.text : T.textFaint,
+            fontSize: 13, fontWeight: 700,
+            cursor: canSave && !saving ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+          + 作成して続ける
+        </button>
+        <button onClick={() => save(false)} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: canSave && !saving ? T.accent : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 700, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
           {saving ? '保存中...' : '作成する'}
         </button>
       </>}
@@ -243,7 +304,7 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
         {/* タイトル */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>タイトル <span style={{ color: '#ff6b6b' }}>*</span></div>
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タスク内容を入力" style={inputSt} autoFocus />
+          <input ref={titleInputRef} value={title} onChange={e => setTitle(e.target.value)} onKeyDown={handleTitleKeyDown} placeholder="タスク内容を入力 (Enter で作成)" style={inputSt} autoFocus />
         </div>
 
         {/* 担当者 */}
@@ -258,6 +319,17 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
         {/* 期日 */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>期日</div>
+          {/* プリセット (ワンクリックで設定) */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
+            {datePresets.map(p => (
+              <button key={p.label} onClick={() => setDueDate(dueDate === p.v ? '' : p.v)} style={presetBtnSt(dueDate === p.v)}>
+                {p.label}
+              </button>
+            ))}
+            {dueDate && (
+              <button onClick={() => setDueDate('')} title="期日をクリア" style={presetBtnSt(false)}>× クリア</button>
+            )}
+          </div>
           <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inputSt} />
         </div>
 
@@ -965,6 +1037,22 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
   useEffect(() => { if (isMobile && displayMode !== 'list') setDisplayMode('list') }, [isMobile, displayMode])
   const [selectedMember, setSelectedMember] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  // グローバルショートカット: ⌘ + N (Ctrl + N) でタスク追加モーダルを開く
+  useEffect(() => {
+    const handleKey = (e) => {
+      // input / textarea / contenteditable にフォーカス中は通常の N 入力を妨げない
+      const tag = e.target?.tagName?.toLowerCase()
+      const editable = e.target?.isContentEditable
+      if (tag === 'input' || tag === 'textarea' || editable) return
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault()
+        setShowCreateModal(true)
+      }
+    }
+    if (typeof window === 'undefined') return
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [])
 
   const [allTasks, setAllTasks] = useState([])
   const [kaMap, setKaMap] = useState({})
@@ -1144,7 +1232,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                 cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
                 display: 'flex', alignItems: 'center', gap: 4,
                 minHeight: isMobile ? 44 : 'auto',
-              }}>＋ タスク追加</button>
+              }} title="⌘ + N でも追加できます">＋ タスク追加</button>
               {/* マイ/全社 切替 (モバイルはマイタスクに固定、切替不可) */}
               {!isMobile && (
                 <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
@@ -1199,7 +1287,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
         </div>
       </div>
       {showCreateModal && (
-        <TaskCreateModal onClose={() => setShowCreateModal(false)} onCreated={load} members={members} myName={myName} T={T} fiscalYear={fiscalYear} />
+        <TaskCreateModal onClose={() => setShowCreateModal(false)} onCreated={load} members={members} myName={myName} T={T} fiscalYear={fiscalYear} defaultNoKaLink={true} />
       )}
     </div>
   )
