@@ -126,10 +126,12 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     if (!lv) return null
     return lv.parent_id ? String(lv.parent_id) : String(lv.id)
   }, [levelMap])
-  // 事業部の選択肢 (parent_id が無いレベル = 事業部)
+  // 事業部の選択肢 (= parent_id が root (= depth 0 = 全社) の levels)
+  // 旧: filter(l => !l.parent_id) では root 自身 (= 全社) しか取れず、本来の事業部が漏れる
   const deptOptions = useMemo(() => {
+    const rootIds = new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id)))
     return (levels || [])
-      .filter(l => !l.parent_id)
+      .filter(l => l.parent_id && rootIds.has(Number(l.parent_id)))
       .map(l => ({ id: String(l.id), name: l.name }))
   }, [levels])
 
