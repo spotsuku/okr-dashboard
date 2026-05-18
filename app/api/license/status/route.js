@@ -35,10 +35,10 @@ export async function GET(request) {
     return jsonResponse({ error: '権限がありません' }, { status: 403 })
   }
 
-  // 組織の grandfathered フラグを取得
+  // 組織の grandfathered フラグ + 試用基準日 を取得
   const { data: org, error: orgErr } = await sb
     .from('organizations')
-    .select('id, license_grandfathered')
+    .select('id, license_grandfathered, admin_first_login_at')
     .eq('id', organization_id)
     .maybeSingle()
   if (orgErr) return jsonResponse({ error: orgErr.message }, { status: 500 })
@@ -54,8 +54,21 @@ export async function GET(request) {
       billing_type: null,
       expires_at: null,
       last_verified_at: null,
+      trial_active: false,
+      trial_days_left: null,
+      trial_expired: false,
     })
   }
+
+  // 30日無料トライアル判定 (admin_first_login_at が基準)
+  const TRIAL_DAYS = 30
+  const trialStart = org.admin_first_login_at ? new Date(org.admin_first_login_at).getTime() : null
+  const trialEndMs = trialStart ? trialStart + TRIAL_DAYS * 86400000 : null
+  const trialDaysLeft = trialEndMs
+    ? Math.max(0, Math.ceil((trialEndMs - Date.now()) / 86400000))
+    : TRIAL_DAYS  // 未設定 (= 管理者がまだ一度もログインしていない) → 満額扱い
+  const trialActive = trialDaysLeft > 0
+  const trialExpired = !trialActive
 
   // ライセンス行を取得
   const { data: lic, error: licErr } = await sb
@@ -66,15 +79,19 @@ export async function GET(request) {
   if (licErr) return jsonResponse({ error: licErr.message }, { status: 500 })
 
   if (!lic) {
+    // キー未登録: トライアル期間中なら active=true で利用可、切れていればロック
     return jsonResponse({
-      active: false,
+      active: trialActive,
       grandfathered: false,
       has_key: false,
-      reason: 'not_set',
+      reason: trialActive ? null : 'trial_expired',
       product_id: null,
       billing_type: null,
       expires_at: null,
       last_verified_at: null,
+      trial_active: trialActive,
+      trial_days_left: trialDaysLeft,
+      trial_expired: trialExpired,
     })
   }
 
@@ -93,6 +110,9 @@ export async function GET(request) {
       billing_type: lic.billing_type || null,
       expires_at: lic.expires_at || null,
       last_verified_at: lic.last_verified_at,
+      trial_active: trialActive,
+      trial_days_left: trialDaysLeft,
+      trial_expired: trialExpired,
     })
   }
 
@@ -128,5 +148,8 @@ export async function GET(request) {
     billing_type: (v.billing_type ?? lic.billing_type) || null,
     expires_at: (v.expires_at ?? lic.expires_at) || null,
     last_verified_at: now,
+    trial_active: trialActive,
+    trial_days_left: trialDaysLeft,
+    trial_expired: trialExpired,
   })
 }

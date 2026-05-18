@@ -54,8 +54,11 @@ export default function LicenseGate({ T, myEmail }) {
     }
   }, [orgId])
 
+  // トライアル中 (admin_first_login_at から30日以内) はゲートを出さない。
+  // 30日経過後 (status.trial_expired === true) ではじめてフルスクリーンでキー入力を要求。
   const shouldShow =
     !loading && status && !status.grandfathered && status.has_key === false && !dismissed
+    && status.trial_expired === true
 
   const handleSave = useCallback(async () => {
     if (!keyInput.trim() || !orgId) return
