@@ -38,6 +38,22 @@ export default function LicenseGate({ T, myEmail }) {
   const [keyInput, setKeyInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  // デバッグ用: ?myai_force_gate=1 でトライアル中でもゲートを強制表示
+  // 例: /neo-fukuoka?myai_force_gate=1#myai_test_key=4f8c-...
+  const [forceShow, setForceShow] = useState(false)
+
+  // マウント時に URL パラメータをチェック
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('myai_force_gate') === '1') {
+        setForceShow(true)
+        const m = window.location.hash.match(/myai_test_key=([^&]+)/)
+        if (m) setKeyInput(decodeURIComponent(m[1]))
+      }
+    } catch { /* noop */ }
+  }, [])
 
   const orgId = currentOrg?.id
   const role = currentOrg?.role
@@ -56,9 +72,11 @@ export default function LicenseGate({ T, myEmail }) {
 
   // トライアル中 (admin_first_login_at から30日以内) はゲートを出さない。
   // 30日経過後 (status.trial_expired === true) ではじめてフルスクリーンでキー入力を要求。
-  const shouldShow =
+  // デバッグ用 forceShow=true なら trial 状態に関係なくゲートを表示。
+  const shouldShow = forceShow || (
     !loading && status && !status.grandfathered && status.has_key === false && !dismissed
     && status.trial_expired === true
+  )
 
   const handleSave = useCallback(async () => {
     if (!keyInput.trim() || !orgId) return
