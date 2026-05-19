@@ -1845,6 +1845,184 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
 //   タスク完了率 / KR記入率 / KA記入率 / 月22日以上ログイン / 振り返り記入 /
 //   MyCOO 5回以上相談 / Google連携完了 の 7 種を当月で集計。
 //   80% 以上 or 22 日以上で 1 バッジ獲得。詳細は振り返りページで参照可能。
+// ─── バッジ集計ロジック (BadgeCollection / BadgeCollectionDetail で共有) ──
+async function fetchBadgeStats(viewingName) {
+  if (!viewingName) return []
+  const now = new Date()
+  const jst = new Date(now.getTime() + 9 * 3600 * 1000)
+  const y = jst.getUTCFullYear(), m = jst.getUTCMonth()
+  const monthStart = new Date(Date.UTC(y, m, 1)).toISOString().split('T')[0]
+  const monthEnd = new Date(Date.UTC(y, m + 1, 0)).toISOString().split('T')[0]
+
+  const [tasksRes, krRes, krReviewsRes, kasRes, logsRes, chatsRes, googleRes] = await Promise.all([
+    supabase.from('ka_tasks').select('id, done, due_date')
+      .eq('assignee', viewingName)
+      .gte('due_date', monthStart).lte('due_date', monthEnd),
+    supabase.from('key_results').select('id').eq('owner', viewingName).is('archived_at', null).limit(200),
+    supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output, week_start')
+      .gte('week_start', monthStart).lte('week_start', monthEnd),
+    supabase.from('weekly_reports').select('id, owner, good, more, focus_output, week_start')
+      .eq('owner', viewingName).gte('week_start', monthStart).lte('week_start', monthEnd),
+    supabase.from('coaching_logs').select('id, log_type, created_at')
+      .eq('owner', viewingName).gte('created_at', `${monthStart}T00:00:00`).lte('created_at', `${monthEnd}T23:59:59`),
+    supabase.from('coaching_chats').select('id, role, created_at')
+      .eq('owner', viewingName).eq('role', 'user').eq('kind', 'mycoach')
+      .gte('created_at', `${monthStart}T00:00:00`).lte('created_at', `${monthEnd}T23:59:59`),
+    supabase.from('members').select('google_refresh_token').ilike('name', viewingName).limit(1),
+  ])
+
+  const tasks = tasksRes.data || []
+  const taskRate = tasks.length > 0 ? Math.round((tasks.filter(t => t.done).length / tasks.length) * 100) : 0
+  const krIds = new Set((krRes.data || []).map(k => k.id))
+  const monthlyKrReviews = (krReviewsRes.data || []).filter(r => krIds.has(r.kr_id) &&
+    ((r.good || '').trim() || (r.more || '').trim() || (r.focus || '').trim() || (r.focus_output || '').trim()))
+  const weeksInMonth = Math.ceil((new Date(monthEnd).getTime() - new Date(monthStart).getTime()) / (7 * 86400000)) + 1
+  const krExpected = Math.max(krIds.size * weeksInMonth, 1)
+  const krRate = Math.round((monthlyKrReviews.length / krExpected) * 100)
+  const kas = kasRes.data || []
+  const kaWritten = kas.filter(k => (k.good || '').trim() || (k.more || '').trim() || (k.focus_output || '').trim())
+  const kaRate = kas.length > 0 ? Math.round((kaWritten.length / kas.length) * 100) : 0
+  const logs = logsRes.data || []
+  const workDays = new Set(logs.filter(l => l.log_type === 'work_log')
+    .map(l => l.created_at?.split('T')[0])).size
+  const kptDays = new Set(logs.filter(l => l.log_type === 'kpt')
+    .map(l => l.created_at?.split('T')[0])).size
+  const mycooCount = (chatsRes.data || []).length
+  const googleConnected = !!(googleRes.data?.[0]?.google_refresh_token)
+
+  return [
+    { key: 'tasks', label: 'タスク完了率', value: `${taskRate}%`, achieved: taskRate >= 80, progress: Math.min(100, taskRate), iconName: 'check', desc: '完了率 80% 以上', target: '80%' },
+    { key: 'kr',    label: 'KR記入率',     value: `${krRate}%`, achieved: krRate >= 80, progress: Math.min(100, krRate), iconName: 'target', desc: 'KR の週次レビューが 80% 以上', target: '80%' },
+    { key: 'ka',    label: 'KA記入率',     value: `${kaRate}%`, achieved: kaRate >= 80, progress: Math.min(100, kaRate), iconName: 'workspace', desc: 'KA の週次記入が 80% 以上', target: '80%' },
+    { key: 'login', label: 'ログイン皆勤', value: `${workDays}日`, achieved: workDays >= 22, progress: Math.min(100, Math.round(workDays / 22 * 100)), iconName: 'morning', desc: '月 22 日以上ログイン', target: '22日' },
+    { key: 'kpt',   label: '振り返り皆勤', value: `${kptDays}日`, achieved: kptDays >= 22, progress: Math.min(100, Math.round(kptDays / 22 * 100)), iconName: 'refresh', desc: '月 22 日以上の振り返り記入', target: '22日' },
+    { key: 'mycoo', label: 'MyCOO 達人',   value: `${mycooCount}回`, achieved: mycooCount >= 5, progress: Math.min(100, Math.round(mycooCount / 5 * 100)), iconName: 'ai', desc: 'MyCOO に月 5 回以上相談', target: '5回' },
+    { key: 'google',label: 'Google 連携',  value: googleConnected ? '完了' : '未連携', achieved: googleConnected, progress: googleConnected ? 100 : 0, iconName: 'link', desc: 'Google アカウントを連携済', target: '連携' },
+  ]
+}
+
+// ─── BadgeCollectionDetail: 振り返りページ用のグリッド表示 ─────────────────
+//   各バッジを大きく表示。獲得済はゴールドの円形アイコン + 「✓ 獲得」ピル、
+//   未獲得はグレー + 進捗 % を表示。
+function BadgeCollectionDetail({ T, viewingName }) {
+  const [stats, setStats] = useState({ loading: true, items: [] })
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const items = await fetchBadgeStats(viewingName)
+      if (alive) setStats({ loading: false, items })
+    })()
+    return () => { alive = false }
+  }, [viewingName])
+
+  const achievedCount = stats.items.filter(i => i.achieved).length
+  const totalCount = stats.items.length
+  const monthLabel = (() => {
+    const jst = new Date(Date.now() + 9 * 3600 * 1000)
+    return `${jst.getUTCFullYear()}年${jst.getUTCMonth() + 1}月`
+  })()
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`,
+      borderRadius: 14, padding: 18,
+    }}>
+      {/* ヘッダ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <span style={{ fontSize: 20 }}>🏅</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>
+            バッジコレクション ({achievedCount} / {totalCount})
+          </div>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+            {monthLabel} の達成状況 · 月次でリセットされます
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
+          達成率 {totalCount > 0 ? Math.round(achievedCount / totalCount * 100) : 0}%
+        </div>
+      </div>
+
+      {/* バッジグリッド */}
+      {stats.loading ? <Loading T={T} /> : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: 12,
+        }}>
+          {stats.items.map(b => (
+            <BadgeCard key={b.key} T={T} badge={b} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BadgeCard({ T, badge }) {
+  const achieved = badge.achieved
+  return (
+    <div style={{
+      position: 'relative',
+      padding: '18px 14px 14px',
+      background: achieved ? `linear-gradient(180deg, ${T.warn}1a 0%, ${T.warn}05 100%)` : T.sectionBg,
+      border: `1px solid ${achieved ? `${T.warn}66` : T.border}`,
+      borderRadius: 14,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+      gap: 10,
+    }}>
+      {achieved && (
+        <span style={{
+          position: 'absolute', top: 8, right: 8,
+          fontSize: 10, fontWeight: 700, color: T.warn,
+          padding: '2px 8px', borderRadius: 99,
+          background: `${T.warn}1a`, border: `1px solid ${T.warn}80`,
+          letterSpacing: '0.02em',
+        }}>✓ 獲得</span>
+      )}
+      {/* 大きな円形アイコン */}
+      <div style={{
+        width: 64, height: 64, borderRadius: 99,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: achieved
+          ? `linear-gradient(135deg, #facc15 0%, #d97706 100%)`
+          : T.bg,
+        border: achieved ? `2px solid ${T.warn}` : `2px solid ${T.border}`,
+        boxShadow: achieved ? `0 4px 14px ${T.warn}40` : 'none',
+        color: achieved ? '#fff' : T.textMuted,
+      }}>
+        <Icon name={badge.iconName} size={28} stroke={achieved ? 2.4 : 1.8} />
+      </div>
+      {/* タイトル */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
+        {badge.label}
+      </div>
+      {/* 説明文 */}
+      <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5, minHeight: 32 }}>
+        {badge.desc}
+      </div>
+      {/* 進捗 */}
+      <div style={{ width: '100%' }}>
+        <div style={{
+          height: 4, borderRadius: 99, background: T.border,
+          overflow: 'hidden', marginBottom: 4,
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${badge.progress}%`,
+            background: achieved ? T.warn : T.accent,
+            transition: 'width 0.3s ease',
+          }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: T.textMuted }}>
+          <span>{badge.value}</span>
+          <span>目標 {badge.target}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function BadgeCollection({ T, viewingName, isViewingSelf, onGoToRetrospect }) {
   const [stats, setStats] = useState({ loading: true, items: [] })
 
@@ -3156,7 +3334,10 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
       {/* 本体 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
         {data.loading ? <Loading T={T} /> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 880, margin: '0 auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
+            {/* バッジコレクション詳細 (グリッド表示) */}
+            <BadgeCollectionDetail T={T} viewingName={viewingName} />
+
             {/* サマリー: タスク統計 + KPT 集約 */}
             <RetrospectSummary T={T} stats={data.taskStats} kpt={data.kptSummary} range={range} />
 
