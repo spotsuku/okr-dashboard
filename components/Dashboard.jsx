@@ -885,12 +885,7 @@ export default function Dashboard({ user, onSignOut }) {
   const aiChatEnabled       = useFeatureFlag(MODULE_KEYS.AI_CHAT)
   const okrFullEnabled      = useFeatureFlag(MODULE_KEYS.OKR_FULL)
   const milestonesEnabled   = useFeatureFlag(MODULE_KEYS.MILESTONES)
-  // okr_full=false テナントで「年間」「週次」サブタブが選ばれていたら「個人」にフォールバック
-  useEffect(() => {
-    if (!okrFullEnabled && (okrSubTab === 'annual' || okrSubTab === 'weekly')) {
-      setOkrSubTab('personal')
-    }
-  }, [okrFullEnabled, okrSubTab])
+  // OKR サブタブ「年間/個人/週次」は全プラン標準。フォールバック処理は不要
   const [initialAIMessage, setInitialAIMessage] = useState(null)
   const [showSidebar, setShowSidebar]       = useState(false)
   const [isMobile, setIsMobile]             = useState(false)
@@ -1520,13 +1515,13 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
 
         {/* 2行目: OKR サブタブナビ (年間 / 個人 / 週次)
-            「個人」はコア機能なので全プラン表示、「年間」「週次」は okr_full のみ */}
+            標準設計として全プランで 3 タブ表示 */}
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', gap: 4, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             {[
-              ...(okrFullEnabled ? [{ key: 'annual', label: '📊 年間' }] : []),
+              { key: 'annual', label: '📊 年間' },
               { key: 'personal', label: '👤 個人' },
-              ...(okrFullEnabled ? [{ key: 'weekly', label: '📅 週次' }] : []),
+              { key: 'weekly', label: '📅 週次' },
             ].map(t => {
               const active = okrSubTab === t.key
               return (
@@ -1542,7 +1537,7 @@ export default function Dashboard({ user, onSignOut }) {
         )}
 
         {/* 3行目: OKRページ・年間サブタブのみ (ビュー切替・期間フィルタ + OKR追加) */}
-        {activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && (
+        {activePage === 'okr' && okrSubTab === 'annual' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
               {[{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
@@ -1605,12 +1600,12 @@ export default function Dashboard({ user, onSignOut }) {
       )}
 
       {/* Archive View (📦 アーカイブ OKR ボタンで切替) */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
+      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
         <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
           onRestore={handleRestoreArchived} onPurge={handlePurgeArchived} refreshKey={annualRefreshKey} />
       </div>
       {/* Annual View */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1635,7 +1630,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
       {/* Owner View */}
-      <div style={{ display: activePage === 'okr' && okrFullEnabled && okrSubTab === 'annual' && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
