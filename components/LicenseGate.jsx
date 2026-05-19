@@ -78,6 +78,20 @@ export default function LicenseGate({ T, myEmail }) {
     && status.trial_expired === true
   )
 
+  // URL のデバッグフラグ (?myai_force_gate=1) と hash (#myai_test_key=) を消すヘルパー
+  const clearDebugFlags = useCallback(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('myai_force_gate')
+      // hash の myai_test_key 部分だけ消す (他の hash は維持)
+      if (url.hash) {
+        url.hash = url.hash.replace(/(^|&)myai_test_key=[^&]*/g, '').replace(/^#&/, '#').replace(/^#$/, '')
+      }
+      window.history.replaceState(null, '', url.toString())
+    } catch { /* noop */ }
+  }, [])
+
   const handleSave = useCallback(async () => {
     if (!keyInput.trim() || !orgId) return
     setBusy(true); setErrorMsg('')
@@ -101,20 +115,27 @@ export default function LicenseGate({ T, myEmail }) {
       // has_key=true 反映でゲート自動クローズ。キー無効なら入力残し
       if (j?.status && j.status.active === false && j.status.reason && j.status.reason !== 'not_set') {
         setErrorMsg(`キーは保存されましたが myAI 側で無効でした (${j.status.reason})`)
+      } else {
+        // 保存成功: 強制表示フラグとデバッグ URL パラメータを解除して閉じる
+        setForceShow(false)
+        clearDebugFlags()
       }
     } catch (e) {
       setErrorMsg(e.message || String(e))
     } finally {
       setBusy(false)
     }
-  }, [keyInput, orgId, myEmail, refresh])
+  }, [keyInput, orgId, myEmail, refresh, clearDebugFlags])
 
   const handleDismiss = useCallback(() => {
     if (orgId && typeof window !== 'undefined') {
       try { localStorage.setItem(dismissedKeyFor(orgId), '1') } catch {}
     }
     setDismissed(true)
-  }, [orgId])
+    // forceShow=true で開いていた場合、URL のデバッグフラグも消してゲートを閉じる
+    setForceShow(false)
+    clearDebugFlags()
+  }, [orgId, clearDebugFlags])
 
   if (!shouldShow) return null
 
