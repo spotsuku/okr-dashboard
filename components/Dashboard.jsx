@@ -1631,10 +1631,8 @@ export default function Dashboard({ user, onSignOut }) {
           />
         </div>
       </div>
-      {/* 個人ビュー (年間 / 週次 両方共通) → OwnerOKRView
-          左にメンバー一覧 + 右にそのメンバーの担当 OKR を表示。
-          年間/週次のサブタブ切替で表示は変わらない (内部の Q1-Q4/通期 タブで絞り込む) */}
-      <div style={{ display: activePage === 'okr' && okrViewScope === 'personal' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {/* 年間 + 個人 → OwnerOKRView (メンバーサイドバー + 担当OKR一覧) */}
+      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && okrViewScope === 'personal' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1673,8 +1671,16 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {/* 「年間 + 個人」「週次 + 個人」共に OwnerOKRView (上記) で対応するため、
-          MyOKRPage の埋め込みはここでは行わない (= マイページ等から別途利用) */}
+      {/* 週次 + 個人 → MyOKRPage (= 自分の OKR を週次フォーカスで記入する場) */}
+      {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'personal' && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <MyOKRPageNew
+            user={user} levels={levels} members={members}
+            themeKey={themeKey} fiscalYear={fiscalYear}
+            onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }}
+          />
+        </div>
+      )}
 
       {/* 週次 + 全社 → WeeklyMTGPage 一覧モード */}
       {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'company' && (

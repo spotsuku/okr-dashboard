@@ -1613,7 +1613,8 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
-      {/* 会議コンテキストバー */}
+      {/* 会議コンテキストバー (forceMode='list' = OKRタブから埋め込み時は非表示) */}
+      {!forceMode && (
       <div style={{
         padding:'8px 16px', borderBottom:`2px solid ${meetingColor}`,
         background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap',
@@ -1684,6 +1685,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:STATUS_CFG.done.bg, color:STATUS_CFG.done.color, border:`1px solid ${STATUS_CFG.done.border}` }}>{STATUS_CFG.done.label}</span>
         </div>
       </div>
+      )}
 
       {/* ── ファシリモードならステップ式UI、一覧モードなら従来3ペイン ── */}
       {mtgMode === 'facilitation' ? (
