@@ -1964,22 +1964,22 @@ function Monthly1on1Card({ T, viewingName, isViewingSelf }) {
               <span style={{ fontSize: 12, color: T.text }}>{draft.supervisor || '(未設定)'}</span>
             )}
             <span style={{ fontSize: 10, color: T.textMuted }}>
-              指定すると、その人が「上司の月次 KPT」欄を編集できます
+              指定すると、その人が「上司から見た KPT」欄を編集できます
             </span>
           </div>
 
-          {/* 自分の月次 KPT (= 部下/閲覧中の本人が自分について書く) */}
+          {/* 自分から見た KPT (= 部下のセルフ評価) */}
           <KPTRow
-            T={T} title="自分の月次 KPT" subtitle="部下が自分について記入"
+            T={T} title="自分から見た KPT" subtitle="部下によるセルフ評価"
             keep={draft.self_keep} problem={draft.self_problem} tryNote={draft.self_try}
             readOnly={!isViewingSelf}
             onSave={(k, p, t) => save({ self_keep: k, self_problem: p, self_try: t })}
             saving={saving}
           />
 
-          {/* 上司の月次 KPT (= 上司が自分について書く。部下から閲覧できて 1on1 で議論する) */}
+          {/* 上司から見た KPT (= 上司による部下の評価) */}
           <KPTRow
-            T={T} title="上司の月次 KPT" subtitle="上司が自分について記入"
+            T={T} title="上司から見た KPT" subtitle="上司が部下について記入"
             keep={draft.boss_keep} problem={draft.boss_problem} tryNote={draft.boss_try}
             readOnly={isViewingSelf}
             onSave={(k, p, t) => save({ boss_keep: k, boss_problem: p, boss_try: t })}
