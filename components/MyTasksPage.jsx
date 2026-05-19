@@ -256,6 +256,8 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
   }
 
   const handleTitleKeyDown = (e) => {
+    // IME (日本語変換) 中の Enter は変換確定なので無視する
+    if (e.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter' && !e.shiftKey) {
       if ((e.metaKey || e.ctrlKey) && canSave) {
         // Cmd+Enter = 作成して続ける
@@ -439,7 +441,12 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
         {isEditing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <input ref={editRef} value={editTitle} onChange={e => setEditTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+              onKeyDown={e => {
+                // IME 変換中の Enter は変換確定なので無視
+                if (e.isComposing || e.keyCode === 229) return
+                if (e.key === 'Enter') saveEdit()
+                if (e.key === 'Escape') cancelEdit()
+              }}
               style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.accent}`, background: T.bg, color: T.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
