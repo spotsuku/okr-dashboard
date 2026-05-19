@@ -768,7 +768,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               chatState={cooChatState} setChatState={setCooChatState} />
           )}
           {activeTab === 'retrospect' && (
-            <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} />
+            <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} myName={myName} />
           )}
           {activeTab === 'strategy' && (
             <CompanyStrategyTab T={T} levels={levels} members={members} fiscalYear={fiscalYear} />
@@ -1848,7 +1848,12 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
 // ─── Monthly1on1Card: 月次 1on1 (KPT 共同記入 + 成長テーマ) ─────────────
 //   自分の KPT を編集 + 上司の KPT を閲覧 (上司側からも編集可) + 共同で成長テーマ
 //   KR進捗・KR/KA 記入率は BadgeCollectionDetail を参照することを案内
-function Monthly1on1Card({ T, viewingName, isViewingSelf }) {
+function Monthly1on1Card({ T, viewingName, myName }) {
+  // 編集権限:
+  //   - 部下本人 (myName === viewingName) → self_* を編集
+  //   - 上司 (myName === supervisor) → boss_* を編集
+  //   - その他の閲覧者 → 全て read-only
+  const isMySelf = myName && myName === viewingName
   // 月を YYYY-MM 形式で。default は当月
   const currentMonth = (() => {
     const jst = new Date(Date.now() + 9 * 3600 * 1000)
@@ -1948,7 +1953,7 @@ function Monthly1on1Card({ T, viewingName, isViewingSelf }) {
           {/* 上司 (supervisor) 設定 */}
           <div style={{ marginBottom: 14, padding: '10px 12px', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>上司</span>
-            {isViewingSelf ? (
+            {isMySelf ? (
               <input
                 value={draft.supervisor}
                 onChange={e => setDraft(d => ({ ...d, supervisor: e.target.value }))}
@@ -1964,27 +1969,30 @@ function Monthly1on1Card({ T, viewingName, isViewingSelf }) {
               <span style={{ fontSize: 12, color: T.text }}>{draft.supervisor || '(未設定)'}</span>
             )}
             <span style={{ fontSize: 10, color: T.textMuted }}>
-              指定すると、その人が「上司から見た KPT」欄を編集できます
+              ここで指定された上司本人が、そのメンバーの「振り返り」ページを開くと「上司から見た KPT」を編集できます
             </span>
           </div>
 
+          {/* 編集権限の判定: supervisor として指定された人だけが boss_* を編集可能 */}
           {/* 自分から見た KPT (= 部下のセルフ評価) */}
           <KPTRow
             T={T} title="自分から見た KPT" subtitle="部下によるセルフ評価"
             keep={draft.self_keep} problem={draft.self_problem} tryNote={draft.self_try}
-            readOnly={!isViewingSelf}
+            readOnly={!isMySelf}
             onSave={(k, p, t) => save({ self_keep: k, self_problem: p, self_try: t })}
             saving={saving}
           />
 
-          {/* 上司から見た KPT (= 上司による部下の評価) */}
+          {/* 上司から見た KPT (= supervisor として指定された上司のみ編集可) */}
           <KPTRow
-            T={T} title="上司から見た KPT" subtitle="上司が部下について記入"
+            T={T} title="上司から見た KPT" subtitle="supervisor として指定された上司が部下について記入"
             keep={draft.boss_keep} problem={draft.boss_problem} tryNote={draft.boss_try}
-            readOnly={isViewingSelf}
+            readOnly={!myName || !draft.supervisor || myName !== draft.supervisor}
             onSave={(k, p, t) => save({ boss_keep: k, boss_problem: p, boss_try: t })}
             saving={saving}
-            emptyMessage="上司がまだ記入していません"
+            emptyMessage={isMySelf
+              ? `上司 (${draft.supervisor || '未指定'}) がまだ記入していません`
+              : '上司がまだ記入していません'}
           />
 
           {/* 成長テーマ */}
@@ -3445,7 +3453,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
 }
 
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
-function RetrospectTab({ T, viewingName, viewingMember }) {
+function RetrospectTab({ T, viewingName, viewingMember, myName }) {
   const isMobile = useIsMobile()
   const [subTab, setSubTab] = useState('retrospect') // 'retrospect' | 'badges'
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
@@ -3601,7 +3609,7 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
         ) : data.loading ? <Loading T={T} /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
             {/* 月次 1on1 (= Phase 1: 自分の KPT + 上司の KPT (read-only) + 成長テーマ) */}
-            <Monthly1on1Card T={T} viewingName={viewingName} isViewingSelf={!viewingMember || viewingName === viewingMember?.name} />
+            <Monthly1on1Card T={T} viewingName={viewingName} myName={myName} />
 
             {/* サマリー: タスク統計 + KPT 集約 */}
             <RetrospectSummary T={T} stats={data.taskStats} kpt={data.kptSummary} range={range} />
