@@ -322,7 +322,10 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
   const updateKR = (key, field, val) => setKRs(p => p.map(k => (k.id || k._tmpId) === key ? { ...k, [field]: val } : k))
 
   const save = async () => {
-    if (!title.trim()) return
+    if (!title.trim()) {
+      alert('目標タイトルを入力してください')
+      return
+    }
     // Q期OBJはparent_objective_idが必須
     const isQ = ['q1','q2','q3','q4'].includes(period)
     if (isQ && !parentId) {
@@ -511,7 +514,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22, borderTop: `1px solid ${getT().border}`, paddingTop: 18 }}>
         <Btn variant="ghost" onClick={onClose}>キャンセル</Btn>
-        <Btn onClick={save} disabled={saving}>{saving ? '保存中...' : '保存する'}</Btn>
+        <Btn onClick={save} disabled={saving || !title.trim()}>{saving ? '保存中...' : '保存する'}</Btn>
       </div>
     </>
   )
