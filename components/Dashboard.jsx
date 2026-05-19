@@ -1538,11 +1538,11 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
         )}
 
-        {/* 3行目: OKRページ・全タブ共通 (全社/個人 切替 + 年間サブタブの OKR追加) */}
+        {/* 3行目: OKRページ・全タブ共通 (組織/個人 切替 + 年間サブタブの OKR追加) */}
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {[{key:'company',label:'🏢 全社'},{key:'personal',label:'👤 個人'}].map(v => (
+              {[{key:'company',label:'🏢 組織'},{key:'personal',label:'👤 個人'}].map(v => (
                 <button key={v.key} onClick={() => setOkrViewScope(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: okrViewScope === v.key ? T.navActiveBg : 'transparent', color: okrViewScope === v.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
               ))}
             </div>
@@ -1631,8 +1631,10 @@ export default function Dashboard({ user, onSignOut }) {
           />
         </div>
       </div>
-      {/* 年間 + 個人 → OwnerOKRView (メンバー選択 + その人の担当 OKR ビュー) */}
-      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && okrViewScope === 'personal' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {/* 個人ビュー (年間 / 週次 両方共通) → OwnerOKRView
+          左にメンバー一覧 + 右にそのメンバーの担当 OKR を表示。
+          年間/週次のサブタブ切替で表示は変わらない (内部の Q1-Q4/通期 タブで絞り込む) */}
+      <div style={{ display: activePage === 'okr' && okrViewScope === 'personal' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1671,16 +1673,8 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {/* 年間 + 個人 / 週次 + 個人 → 自分の OKR (MyOKRPage) は週次のみ */}
-      {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'personal' && (
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-          <MyOKRPageNew
-            user={user} levels={levels} members={members}
-            themeKey={themeKey} fiscalYear={fiscalYear}
-            onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }}
-          />
-        </div>
-      )}
+      {/* 「年間 + 個人」「週次 + 個人」共に OwnerOKRView (上記) で対応するため、
+          MyOKRPage の埋め込みはここでは行わない (= マイページ等から別途利用) */}
 
       {/* 週次 + 全社 → WeeklyMTGPage 一覧モード */}
       {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'company' && (
