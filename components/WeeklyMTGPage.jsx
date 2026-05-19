@@ -1619,8 +1619,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
-      {/* 会議コンテキストバー (forceMode='list' = OKRタブから埋め込み時は非表示) */}
-      {!forceMode && (
+      {/* 会議コンテキストバー (forceMode='list' = OKRタブ「週次」埋め込み時のみ非表示)
+          forceMode='facilitation' (週次MTG ナビ) では従来通り表示 */}
+      {forceMode !== 'list' && (
       <div style={{
         padding:'8px 16px', borderBottom:`2px solid ${meetingColor}`,
         background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap',
