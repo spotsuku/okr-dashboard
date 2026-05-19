@@ -10,6 +10,7 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
+import Icon from './Icon'
 
 // 会議ごとのアイコン (SVG・currentColor を継承)
 const Ico = ({ size=22, children }) => (
@@ -50,7 +51,7 @@ const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f', 3: '#ffd166' }
 
 // ★ doneを追加した5種ステータス
 const STATUS_CFG = {
-  focus:  { label: '🎯 注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
+  focus:  { label: '注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
   good:   { label: '✅ Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
   more:   { label: '🔺 More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
   normal: { label: '未分類',  color: '#606880', bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)' },
@@ -1663,10 +1664,10 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             : meetingViewMode === 'kr' ? 'KR詳細(天気/Good/More/Focus)が展開、KAテーブルは折り畳み表示'
             : meetingViewMode === 'ka' ? 'KAテーブルを常時表示、KR詳細は折り畳み'
             : 'KRとKA両方表示'}>
-          {currentMeeting?.weeklyMTG?.withDiscussion ? '🤝 チームサマリー'
-            : meetingViewMode === 'kr' ? '🎯 KR重点'
-            : meetingViewMode === 'ka' ? '📋 KA重点'
-            : '📊 両方'}
+          {currentMeeting?.weeklyMTG?.withDiscussion ? 'チームサマリー'
+            : meetingViewMode === 'kr' ? 'KR重点'
+            : meetingViewMode === 'ka' ? 'KA重点'
+            : '両方'}
         </span>
         <span style={{ fontSize:10, color:wT().textMuted, fontStyle:'italic', display:'inline-block', minWidth:0 }}>
           {currentMeeting?.weeklyMTG?.withDiscussion ? 'チーム別 Good/More/Focus サマリー + 横断連携'
@@ -1675,7 +1676,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             : 'KR・KA両方表示'}
         </span>
         <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color:fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
-          📅 {fiscalYear}年度
+          {fiscalYear}年度
         </div>
         {myMember && (
           <div style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:99, background:`${avatarColor(myName)}12`, border:`1px solid ${avatarColor(myName)}30` }}>
@@ -1750,7 +1751,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
         {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && mobilePanel !== 'list' ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
-          <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🎯 Objective（{activeObjs.length}件）</div>
+          <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Objective ({activeObjs.length}件)</div>
           {visibleObjs.length===0 && <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>}
 
           {/* アクティブなObjective */}
@@ -1810,7 +1811,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           )}
           {!selectedObj ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
-              <div style={{ fontSize:36 }}>🎯</div>
+              <Icon name="target" size={36} stroke={1.4} />
               <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
