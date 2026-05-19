@@ -1505,9 +1505,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         }}>
           {showW('goal_month_main') && (
             <PopGoalCard
-              T={T} icon="🌟" title="今月のメインテーマ"
-              gradient="linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%)"
-              accent="#92400e"
+              T={T} iconName="star" title="今月のメインテーマ"
               value={monthTheme.main} loading={monthTheme.loading} canEdit={isViewingSelf}
               placeholder="例: 評議会24社のクロージング完了"
               onSave={(v) => saveMonthTheme({ main: v, growth: monthTheme.growth })}
@@ -1515,9 +1513,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           )}
           {showW('goal_month_growth') && (
             <PopGoalCard
-              T={T} icon="💪" title="今月の成長テーマ"
-              gradient="linear-gradient(135deg, #fce7f3 0%, #c084fc 100%)"
-              accent="#7c2d8e"
+              T={T} iconName="user" title="今月の成長テーマ"
               value={monthTheme.growth} loading={monthTheme.loading} canEdit={isViewingSelf}
               placeholder="例: 1on1で相手の話を引き出す力"
               onSave={(v) => saveMonthTheme({ main: monthTheme.main, growth: v })}
@@ -1525,9 +1521,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           )}
           {showW('goal_week') && (
             <PopGoalCard
-              T={T} icon="🚀" title="今週のゴール"
-              gradient="linear-gradient(135deg, #cffafe 0%, #38bdf8 100%)"
-              accent="#075985"
+              T={T} iconName="flag" title="今週のゴール"
               value={weekGoal.goal} loading={weekGoal.loading} canEdit={isViewingSelf}
               placeholder="例: 提案書v2をクライアントに提出して承認をもらう"
               onSave={(v) => saveWeekGoal(v)}
@@ -1979,38 +1973,35 @@ function TeamSummaryNotification({ T, viewingMember, myName, isAdmin, levels = [
       onClick={onGoToSummary}
       style={{
         background: T.bgCard, border: `1px solid ${T.border}`,
-        borderLeft: `3px solid ${T.accent}`,
-        borderRadius: 10, padding: '10px 14px',
-        display: 'flex', alignItems: 'center', gap: 10,
-        cursor: 'pointer', transition: 'background 0.15s',
+        borderRadius: 12, padding: 14,
+        cursor: 'pointer', transition: 'background 0.12s',
+        flexShrink: 0,
       }}
       onMouseEnter={(e) => e.currentTarget.style.background = T.sectionBg}
       onMouseLeave={(e) => e.currentTarget.style.background = T.bgCard}
     >
-      <span style={{ fontSize: 18 }}>📊</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-          今週のチームサマリー
-          {!loading && stats.total > 0 && (
-            <span style={{ marginLeft: 8, fontSize: 10, color: T.textMuted, fontWeight: 600 }}>
-              {stats.submitted}/{stats.total} チーム提出済み
-            </span>
-          )}
-        </div>
-        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
-          {loading ? '読み込み中...'
-            : myUnsubmitted > 0
-              ? `あなたの担当 ${myUnsubmitted} チーム未提出`
-              : allUnsubmitted > 0
-                ? `${allUnsubmitted} チーム未提出 (チームサマリーで確認)`
-                : '✓ 全チーム提出済み'}
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ color: T.textMuted, display: 'inline-flex' }}>
+          <Icon name="org" size={12} stroke={1.8} />
+        </span>
+        <div style={{
+          fontSize: 10.5, fontWeight: 600, color: T.textMuted, flex: 1,
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>今週のチームサマリー</div>
+        {!loading && stats.total > 0 && (
+          <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
+            {stats.submitted}/{stats.total}
+          </span>
+        )}
       </div>
-      <div style={{
-        padding: '4px 10px', borderRadius: 6,
-        background: T.accent, color: '#fff',
-        fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
-      }}>チームサマリー →</div>
+      <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
+        {loading ? '読み込み中...'
+          : myUnsubmitted > 0
+            ? `あなたの担当 ${myUnsubmitted} チーム未提出`
+            : allUnsubmitted > 0
+              ? `${allUnsubmitted} チーム未提出`
+              : '✓ 全チーム提出済み'}
+      </div>
     </div>
   )
 }
@@ -2423,7 +2414,7 @@ function FieldBlock({ T, label, value, onChange, onFocus, onBlur, placeholder, d
 }
 
 // ─── ポップなゴールカード ─────────────────────────────────
-function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit, placeholder, onSave }) {
+function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit, placeholder, onSave, iconName }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
@@ -2431,30 +2422,39 @@ function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit
   async function commit() {
     setSaving(true); await onSave(draft); setSaving(false); setEditing(false)
   }
+  // Dashboard cleanup ハンドオフ:
+  //   多色パステル背景は廃止し、白カード + caption + ライン Icon に統一。
+  //   iconName が指定されていれば Icon コンポーネント描画、なければ従来絵文字 (互換)
   return (
     <div style={{
-      background: gradient,
-      border: `1px solid rgba(255,255,255,0.5)`,
-      borderRadius: 14,
+      background: T.bgCard,
+      border: `1px solid ${T.border}`,
+      borderRadius: 12,
       padding: 14,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
       flexShrink: 0,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
-        <div style={{ fontSize: 12, fontWeight: 800, color: accent, flex: 1, letterSpacing: 0.3 }}>
-          {title}
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        {iconName ? (
+          <span style={{ color: T.textMuted, display: 'inline-flex' }}>
+            <Icon name={iconName} size={12} stroke={1.8} />
+          </span>
+        ) : (
+          <span style={{ fontSize: 13, lineHeight: 1, color: T.textMuted }}>{icon}</span>
+        )}
+        <div style={{
+          fontSize: 10.5, fontWeight: 600, color: T.textMuted, flex: 1,
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>{title}</div>
         {canEdit && !editing && (
           <button onClick={startEdit} title="編集" style={{
-            background: 'rgba(255,255,255,0.6)', border: 'none', color: accent,
-            borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer',
-            fontFamily: 'inherit', fontWeight: 700,
-          }}>✏️ 編集</button>
+            background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub,
+            borderRadius: 6, padding: '2px 7px', fontSize: 10, cursor: 'pointer',
+            fontFamily: 'inherit', fontWeight: 500,
+          }}>編集</button>
         )}
       </div>
       {loading ? (
-        <div style={{ fontSize: 11, color: accent, opacity: 0.7 }}>読み込み中...</div>
+        <div style={{ fontSize: 12, color: T.textMuted }}>読み込み中...</div>
       ) : editing ? (
         <div>
           <textarea
@@ -2463,34 +2463,33 @@ function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit
             rows={3}
             placeholder={placeholder}
             style={{
-              width: '100%', padding: 8, background: 'rgba(255,255,255,0.85)',
-              border: `1px solid ${accent}33`, borderRadius: 6, color: '#222',
+              width: '100%', padding: 8, background: T.bg,
+              border: `1px solid ${T.border}`, borderRadius: 6, color: T.text,
               fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none',
               boxSizing: 'border-box',
             }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
             <button onClick={() => setEditing(false)} disabled={saving} style={{
-              background: 'rgba(255,255,255,0.6)', border: 'none', color: accent,
+              background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub,
               borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
-              fontFamily: 'inherit', fontWeight: 700,
+              fontFamily: 'inherit',
             }}>キャンセル</button>
             <button onClick={commit} disabled={saving} style={{
-              background: accent, border: 'none', color: '#fff',
-              borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 800,
+              background: T.accent, border: 'none', color: '#fff',
+              borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 600,
               cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit',
               opacity: saving ? 0.6 : 1,
-            }}>💾 保存</button>
+            }}>保存</button>
           </div>
         </div>
       ) : value ? (
         <div style={{
-          fontSize: 13, color: '#1a1a1a', lineHeight: 1.55, whiteSpace: 'pre-wrap',
-          fontWeight: 600,
+          fontSize: 13, color: T.text, lineHeight: 1.5, whiteSpace: 'pre-wrap',
         }}>{value}</div>
       ) : (
-        <div style={{ fontSize: 11, color: accent, opacity: 0.65, fontStyle: 'italic' }}>
-          {canEdit ? `${placeholder} (✏️ 編集 で記入)` : '未設定'}
+        <div style={{ fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>
+          {canEdit ? `${placeholder} (編集 で記入)` : '未設定'}
         </div>
       )}
     </div>
@@ -3329,53 +3328,68 @@ const TASK_STATUS_CONFIG = {
 function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
   const today = toJSTDateStr(new Date())
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {tasks.map(t => {
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {tasks.map((t, i) => {
         const status = t.status || (t.done ? 'done' : 'not_started')
-        const cfg = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG.not_started
         const done = status === 'done'
+        const inProgress = status === 'in_progress'
         const overdue = t.due_date && t.due_date < today && !done
         const label = t.title || t.weekly_reports?.ka_title || '(無題)'
         const nextLabel = status === 'not_started' ? '進行中'
                         : status === 'in_progress' ? '完了'
                         : '未着手'
+        // 状態の丸 (= 16px / border 1.5px / 背景: 完了は塗り、進行中は半円、それ以外は透明)
+        const dotBorder = done ? T.success : overdue ? T.danger : inProgress ? T.accent : (T.borderStrong || T.border)
+        const dotBg = done
+          ? T.success
+          : inProgress
+            ? `conic-gradient(${T.accent} 50%, transparent 50%)`
+            : 'transparent'
         return (
           <div key={t.id} style={{
-            display: 'flex', alignItems: 'flex-start', gap: 7,
-            padding: '6px 8px', borderRadius: 6,
-            background: overdue ? T.dangerBg : T.sectionBg,
-            border: `1px solid ${overdue ? `${T.danger}33` : T.border}`,
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px',
+            borderBottom: i < tasks.length - 1 ? `1px solid ${T.border}` : 'none',
+            background: T.bgCard,
             opacity: done ? 0.55 : 1,
+            cursor: canEdit ? 'pointer' : 'default',
           }}>
             <button
               onClick={() => canEdit && onToggle(t)}
               disabled={!canEdit}
               title={canEdit ? `クリックで「${nextLabel}」に変更` : '閲覧のみ'}
               style={{
-                width: 18, height: 18, flexShrink: 0, marginTop: 1,
-                borderRadius: 4, border: 'none', background: 'transparent',
-                color: cfg.color, fontSize: 16, lineHeight: 1,
-                cursor: canEdit ? 'pointer' : 'not-allowed',
+                width: 16, height: 16, flexShrink: 0,
+                borderRadius: 99,
+                border: `1.5px solid ${dotBorder}`,
+                background: dotBg,
+                color: '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: 0, fontFamily: 'inherit', fontWeight: 700,
+                padding: 0, cursor: canEdit ? 'pointer' : 'not-allowed',
               }}
-            >{cfg.icon}</button>
+            >{done && <Icon name="check" size={11} stroke={3} />}</button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: 12, color: T.text, fontWeight: 500,
+                fontSize: 13, color: done ? T.textMuted : T.text,
                 textDecoration: done ? 'line-through' : 'none',
-                lineHeight: 1.4, wordBreak: 'break-word',
+                fontWeight: 400, lineHeight: 1.4,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{label}</div>
-              <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {showDue && t.due_date && (
-                  <span style={{ color: overdue ? T.danger : T.textMuted, fontWeight: overdue ? 700 : 500 }}>
-                    {overdue ? '🚨 ' : '📅 '}{t.due_date}
-                  </span>
-                )}
-                {status === 'in_progress' && <span style={{ color: cfg.color, fontWeight: 700 }}>{cfg.icon} {cfg.label}</span>}
-                {t.weekly_reports?.kr_title && <span>KR: {truncate(t.weekly_reports.kr_title, 20)}</span>}
-              </div>
             </div>
+            {t.weekly_reports?.kr_title && (
+              <span style={{ fontSize: 11, color: T.textMuted, fontFamily: 'ui-monospace, SF Mono, monospace', flexShrink: 0 }}>
+                KR: {truncate(t.weekly_reports.kr_title, 14)}
+              </span>
+            )}
+            {showDue && t.due_date && (
+              <span style={{
+                fontSize: 11,
+                color: overdue ? T.danger : T.textMuted,
+                fontWeight: overdue ? 500 : 400,
+                fontFamily: overdue ? 'ui-monospace, SF Mono, monospace' : 'inherit',
+                minWidth: 56, textAlign: 'right', flexShrink: 0,
+              }}>{t.due_date}</span>
+            )}
           </div>
         )
       })}
@@ -3507,89 +3521,68 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
   // 0件なら非表示 (UI 汚さない)
   if (count === 0) return null
 
+  // Dashboard cleanup ハンドオフ準拠:
+  //   warn-soft 背景 + warn 左ボーダー + 円形 msg アイコン (ハロー) + テキスト + 返信ボタン
+  const previewItem = items[0]
+  const previewFrom = previewItem?.from_name || ''
+  const previewContent = (previewItem?.content || '').replace(/\s+/g, ' ').trim()
   return (
-    <div
-      onClick={() => onGoToTab && onGoToTab('confirm')}
-      style={{
-        background: `linear-gradient(135deg, ${T.accent}f0 0%, ${T.accent}b0 100%)`,
-        padding: '12px 18px',
-        cursor: 'pointer',
-        flexShrink: 0,
-        color: '#fff',
-        boxShadow: `0 2px 8px ${T.accent}33`,
-        position: 'relative', overflow: 'hidden',
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: '12px 14px 12px 16px',
+      margin: '12px 16px 0',
+      background: T.warnBg || `${T.warn}1f`,
+      border: `1px solid ${T.warn}`,
+      borderLeft: `4px solid ${T.warn}`,
+      borderRadius: 8,
+      flexShrink: 0,
+    }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: 99, flexShrink: 0,
+        background: T.warn, color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: `0 0 0 4px ${T.warn}26`,
       }}>
-      <div aria-hidden style={{
-        position: 'absolute', top: -50, right: -30, width: 200, height: 200,
-        background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 60%)',
-        pointerEvents: 'none', borderRadius: '50%',
-      }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
-        <span style={{ fontSize: 18 }}>📬</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>
-          {isViewingSelf
-            ? `未解決の確認事項が ${count}件 あります`
-            : `${viewingName}さん宛の未解決 確認事項が ${count}件 あります`}
-        </span>
-        <div style={{ flex: 1 }} />
-        <span style={{
-          padding: '5px 12px', borderRadius: 99,
-          background: 'rgba(255,255,255,0.25)',
-          backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-          color: '#fff',
-          fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
-          border: '1px solid rgba(255,255,255,0.30)',
-        }}>📢 共有・確認タブで返信 →</span>
+        <Icon name="msg" size={14} stroke={2.2} />
       </div>
-      {items.length > 0 && (
-        <div style={{
-          display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap',
-          position: 'relative', zIndex: 1,
-        }}>
-          {items.map(it => {
-            const refUrls = Array.isArray(it.reference_urls) ? it.reference_urls : []
-            return (
-              <div key={it.id} style={{
-                flex: '1 1 240px', minWidth: 0,
-                padding: '8px 12px', borderRadius: 9,
-                background: 'rgba(255,255,255,0.22)',
-                backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.28)',
-                fontSize: 11, color: '#fff',
-              }}>
-                <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 2 }}>
-                  from <b>{it.from_name}</b>
-                </div>
-                <div style={{
-                  color: '#fff', lineHeight: 1.5, fontWeight: 600,
-                  overflow: 'hidden', display: '-webkit-box',
-                  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                }}>{it.content}</div>
-                {refUrls.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-                    {refUrls.map((u, i) => {
-                      const href = u.url?.match(/^https?:\/\//) ? u.url : (u.url ? `https://${u.url}` : '#')
-                      return (
-                        <a key={i} href={href} target="_blank" rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            padding: '2px 7px', borderRadius: 5,
-                            background: 'rgba(255,255,255,0.28)',
-                            color: '#fff',
-                            fontSize: 10, fontWeight: 700, textDecoration: 'none',
-                            border: '1px solid rgba(255,255,255,0.35)',
-                            maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>🔗 {u.label || u.url}</a>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>
+            {isViewingSelf ? '未解決の確認事項' : `${viewingName}さん宛の未解決 確認事項`}
+          </span>
+          <span style={{
+            fontSize: 11, fontWeight: 600, color: T.warn,
+            padding: '1px 7px', background: '#fff',
+            border: `1px solid ${T.warn}`, borderRadius: 99,
+            whiteSpace: 'nowrap',
+          }}>{count}件</span>
         </div>
-      )}
+        {previewContent && (
+          <div style={{
+            fontSize: 12, color: T.textSub,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {previewFrom && (
+              <>
+                <span style={{ color: T.textMuted }}>from</span>{' '}
+                <span style={{ fontWeight: 500, color: T.text }}>{previewFrom}</span>{' · '}
+              </>
+            )}
+            {previewContent}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={() => onGoToTab && onGoToTab('confirm')}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '6px 12px', fontSize: 12, fontWeight: 500,
+          background: T.warn, color: '#fff',
+          border: `1px solid ${T.warn}`, borderRadius: 7,
+          cursor: 'pointer', flexShrink: 0, fontFamily: 'inherit',
+        }}>
+        返信する <Icon name="arrowRight" size={11} stroke={2} />
+      </button>
     </div>
   )
 }

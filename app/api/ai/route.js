@@ -1,8 +1,17 @@
 import { callClaude, AICallError } from '../../../lib/aiCall'
+import { createClient } from '@supabase/supabase-js'
+
+function admin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } }
+  )
+}
 
 export async function POST(request) {
   try {
-    const { messages, context } = await request.json()
+    const { messages, context, owner } = await request.json()
 
     if (!messages || !Array.isArray(messages)) {
       return Response.json({ error: 'messages is required' }, { status: 400 })
@@ -16,6 +25,22 @@ export async function POST(request) {
     }
 
     const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || process.env.DEMO_MODE === 'true'
+
+    // Phase 2: ユーザーごとのコーチング・プロファイル取得
+    // owner が渡されたら coaching_profiles から要約を読み込んでシステムプロンプトに注入
+    let profileBlock = ''
+    if (owner) {
+      try {
+        const sb = admin()
+        const { data: prof } = await sb.from('coaching_profiles')
+          .select('profile_summary').eq('owner', owner).maybeSingle()
+        if (prof?.profile_summary) {
+          profileBlock = `\n【このユーザーの傾向 (これまでの対話から蓄積したプロファイル)】\n${prof.profile_summary}\n上記の傾向を踏まえて、このユーザーに最適な伝え方・優先順位の置き方で回答してください。\n`
+        }
+      } catch (e) {
+        console.warn('[ai] coaching_profiles fetch failed:', e.message)
+      }
+    }
 
     // OKRコーチとしてのシステムプロンプト
     const contextStr = context ? JSON.stringify(context, null, 0) : '(データなし)'
@@ -125,7 +150,7 @@ ${premisesText}
 - ユーザーのJD（職務記述書）の内容を踏まえ、その役割・責務に即したアドバイスをする
 - マイルストーンの期日が近い場合は優先度を上げて提案する
 - ${orgName}の事業内容や理念を踏まえたアドバイスをする
-
+${profileBlock}
 【ユーザーのOKRデータ】
 ${contextStr}`
 
