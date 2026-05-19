@@ -1422,14 +1422,19 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           )}
         </div>
 
-        {/* ─── 中カラム：リマインダーBox 種類別に独立表示 ─── */}
+        {/* ─── 中カラム：Gmail をファーストビューに / その下にリマインダー / カレンダー ─── */}
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
           minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
-          {/* 常に表示: OKR記入漏れ - 集中記入モーダル呼び出し */}
+          {/* Gmail Box - 返信必要 / 確認必要 5件 (= ファーストビュー最優先) */}
+          {showW('gmail') && (
+            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} onMarkRead={onMarkMailRead} />
+          )}
+
+          {/* OKR記入漏れ - 集中記入モーダル呼び出し */}
           <Section T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="OKR・KA記入漏れ" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
@@ -1485,14 +1490,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             })()}
           </Section>
 
-          {/* カレンダー Box - 直近8時間の予定 */}
+          {/* カレンダー Box - 直近8時間の予定 (= 最下) */}
           {showW('calendar') && (
             <CalendarBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} />
-          )}
-
-          {/* Gmail Box - 返信必要 / 確認必要 5件 */}
-          {showW('gmail') && (
-            <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} onMarkRead={onMarkMailRead} />
           )}
         </div>
 
@@ -1972,27 +1972,30 @@ function TeamSummaryNotification({ T, viewingMember, myName, isAdmin, levels = [
     <div
       onClick={onGoToSummary}
       style={{
-        background: T.bgCard, border: `1px solid ${T.border}`,
+        background: T.bgCard,
+        border: `1px solid ${T.accent}40`,
+        borderLeft: `3px solid ${T.accent}`,
         borderRadius: 12, padding: 14,
-        cursor: 'pointer', transition: 'background 0.12s',
+        cursor: 'pointer', transition: 'background 0.12s, border-color 0.12s',
         flexShrink: 0,
       }}
-      onMouseEnter={(e) => e.currentTarget.style.background = T.sectionBg}
-      onMouseLeave={(e) => e.currentTarget.style.background = T.bgCard}
+      onMouseEnter={(e) => { e.currentTarget.style.background = `${T.accent}0a` }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = T.bgCard }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ color: T.textMuted, display: 'inline-flex' }}>
-          <Icon name="org" size={12} stroke={1.8} />
+        <span style={{ color: T.accent, display: 'inline-flex' }}>
+          <Icon name="org" size={13} stroke={1.8} />
         </span>
         <div style={{
-          fontSize: 10.5, fontWeight: 600, color: T.textMuted, flex: 1,
+          fontSize: 10.5, fontWeight: 700, color: T.accent, flex: 1,
           letterSpacing: '0.04em', textTransform: 'uppercase',
         }}>今週のチームサマリー</div>
         {!loading && stats.total > 0 && (
-          <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
+          <span style={{ fontSize: 11, color: T.accent, fontWeight: 600 }}>
             {stats.submitted}/{stats.total}
           </span>
         )}
+        <Icon name="arrowRight" size={12} stroke={2} style={{ color: T.accent }} />
       </div>
       <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
         {loading ? '読み込み中...'
