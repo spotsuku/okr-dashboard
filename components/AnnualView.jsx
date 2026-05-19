@@ -5,6 +5,7 @@ import { buildQuarterMap } from '../lib/objectiveMatching'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import KASection from './KASection'
 import { useLayerLabels } from '../lib/levelLabels'
+import Icon from './Icon'
 
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
 function makeKATheme(t) {
@@ -441,7 +442,9 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
   if (!filteredObjs.length) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, border: `1px dashed ${T().borderDash}`, borderRadius: 14, maxWidth: 600, margin: '40px auto' }}>
-      <div style={{ fontSize: 36, marginBottom: 12 }}>📅</div>
+      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+        <Icon name="calendar" size={36} stroke={1.4} />
+      </div>
       <div style={{ fontSize: 15, marginBottom: 6, color: T().text }}>{activeLevelId ? 'この組織の' : ''}{fiscalYear}年度の通期OKRがありません</div>
       <div style={{ fontSize: 13 }}>まず「通期」の目標を追加してください</div>
     </div>
@@ -452,7 +455,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       <div style={{ position: 'relative', zIndex: 1 }}>
       {/* コンパクト見出し: 縦幅を抑えて OKR 本体に画面を譲る */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 6px', marginBottom: 8, flexWrap: 'wrap' }}>
-        <h1 style={{ fontSize: 16, fontWeight: 800, color: T().text, margin: 0, letterSpacing: '-0.01em' }}>📊 年間ブレイクダウン</h1>
+        <h1 style={{ fontSize: 16, fontWeight: 700, color: T().text, margin: 0, letterSpacing: '-0.01em', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="target" size={16} stroke={1.8} style={{ color: T().textSub }} />
+          年間ブレイクダウン
+        </h1>
         <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textSub }}>
           {fiscalYear}年度
         </span>
@@ -533,7 +539,8 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                   {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
                   {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }}
                     title="この OKR をアーカイブします (アーカイブ画面から復元・完全削除可能)"
-                    style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textSub, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📦 アーカイブ</button>}
+                    style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textSub, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ</button>}
                   <div style={{ fontSize: 16, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
                 </div>
               </div>
@@ -1233,7 +1240,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
               </span>
             )}
             <span style={{ fontSize: 10, color: T().textFaint, marginLeft: 'auto' }}>
-              💡 ⋮⋮ をドラッグして紐付け / 空セルをクリックで KR 追加
+              ⋮⋮ をドラッグして紐付け / 空セルをクリックで KR 追加
             </span>
           </div>
         )
@@ -1306,7 +1313,9 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
                     {onDelete && <button onClick={() => onDelete(qObj.id)}
                       title="この Q 期 OKR をアーカイブ"
-                      style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textMuted, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>📦</button>}
+                      style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textMuted, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center' }}>
+                      <Icon name="workspace" size={9} stroke={1.8} />
+                    </button>}
                   </div>
                 </div>
               )) : (
