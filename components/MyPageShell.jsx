@@ -151,6 +151,23 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [viewingName, setViewingName] = useState(myName)
   useEffect(() => { if (myName && !viewingName) setViewingName(myName) }, [myName, viewingName])
 
+  // SupervisorInbox 等から「別メンバーの振り返りに移動」をトリガーされたら viewingName を切替
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (e) => {
+      const name = e?.detail?.name
+      if (name) { setViewingName(name); setSummaryMode(false) }
+    }
+    window.addEventListener('change-viewing-member', handler)
+    // 初回マウント時に URL の ?member= も拾う
+    try {
+      const url = new URL(window.location.href)
+      const m = url.searchParams.get('member')
+      if (m) { setViewingName(m); setSummaryMode(false) }
+    } catch {}
+    return () => window.removeEventListener('change-viewing-member', handler)
+  }, [])
+
   // 全社サマリーモード (個別メンバーの代わりに全社の今日タスクを集約表示)
   // ワークスペース起動時は全社サマリーをデフォルト表示。
   const [summaryMode, setSummaryMode] = useState(true)
@@ -768,7 +785,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               chatState={cooChatState} setChatState={setCooChatState} />
           )}
           {activeTab === 'retrospect' && (
-            <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} myName={myName} />
+            <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} myName={myName} isAdmin={isAdmin} />
           )}
           {activeTab === 'strategy' && (
             <CompanyStrategyTab T={T} levels={levels} members={members} fiscalYear={fiscalYear} />
@@ -2019,8 +2036,98 @@ function Monthly1on1Card({ T, viewingName, myName }) {
           <div style={{ marginTop: 10, fontSize: 11, color: T.textMuted, textAlign: 'center' }}>
             KR進捗 / KR・KA 記入率 / ログイン日数は ↓ のバッジコレクションで確認できます
           </div>
+
+          {/* 自分が上司として担当している部下リスト (= 上司視点の inbox) */}
+          {isMySelf && <SupervisorInbox T={T} myName={myName} month={month} />}
         </>
       )}
+    </div>
+  )
+}
+
+// ─── SupervisorInbox: 自分が supervisor として指定されている部下の月次1on1 一覧
+//   - 自分のページにだけ表示。記入状況 + 部下ページへの導線を提供
+function SupervisorInbox({ T, myName, month }) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    if (!myName || !month) return
+    let alive = true
+    supabase.from('monthly_1on1')
+      .select('id, owner, month, boss_keep, boss_problem, boss_try, self_keep, self_problem, self_try, updated_at')
+      .eq('supervisor', myName).eq('month', month)
+      .order('updated_at', { ascending: false })
+      .then(({ data }) => { if (alive) setRows(data || []) })
+    return () => { alive = false }
+  }, [myName, month])
+
+  if (rows === null) return null
+  if (rows.length === 0) {
+    return (
+      <div style={{
+        marginTop: 14, padding: '10px 12px',
+        background: T.sectionBg, border: `1px dashed ${T.border}`, borderRadius: 8,
+        fontSize: 11, color: T.textMuted, textAlign: 'center',
+      }}>
+        あなたを上司として指定しているメンバーはまだいません
+      </div>
+    )
+  }
+  return (
+    <div style={{ marginTop: 14, padding: '12px 14px', background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <Icon name="org" size={13} stroke={1.8} style={{ color: T.accent }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+          あなたが上司を担当中のメンバー
+        </span>
+        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 'auto' }}>
+          {rows.length} 名 · 部下名をクリックすると「上司から見た KPT」を記入できます
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {rows.map(r => {
+          const bossWritten = (r.boss_keep || '').trim() || (r.boss_problem || '').trim() || (r.boss_try || '').trim()
+          const selfWritten = (r.self_keep || '').trim() || (r.self_problem || '').trim() || (r.self_try || '').trim()
+          return (
+            <a key={r.id} href={`?page=mycoach&member=${encodeURIComponent(r.owner)}`}
+              onClick={(e) => {
+                e.preventDefault()
+                // クライアントサイドナビ: 同じ orgSlug + page=mycoach + member 切替で別メンバーの振り返りページへ
+                const url = new URL(window.location.href)
+                url.searchParams.set('page', 'mycoach')
+                url.searchParams.set('member', r.owner)
+                window.history.pushState({}, '', url.toString())
+                window.dispatchEvent(new CustomEvent('change-viewing-member', { detail: { name: r.owner } }))
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 7,
+                background: T.bgCard, border: `1px solid ${T.border}`,
+                textDecoration: 'none', color: T.text, cursor: 'pointer',
+              }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text, flex: 1 }}>{r.owner}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                padding: '2px 8px', borderRadius: 99,
+                background: selfWritten ? `${T.success}1a` : T.sectionBg,
+                color: selfWritten ? T.success : T.textMuted,
+                border: `1px solid ${selfWritten ? `${T.success}40` : T.border}`,
+              }}>
+                {selfWritten ? '✓ セルフ記入済' : 'セルフ未記入'}
+              </span>
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                padding: '2px 8px', borderRadius: 99,
+                background: bossWritten ? `${T.accent}1a` : T.warnBg || `${T.warn}1a`,
+                color: bossWritten ? T.accent : T.warn,
+                border: `1px solid ${bossWritten ? `${T.accent}40` : `${T.warn}40`}`,
+              }}>
+                {bossWritten ? '✓ あなたが記入済' : '✎ あなたが要記入'}
+              </span>
+              <Icon name="arrowRight" size={11} stroke={2} style={{ color: T.textMuted }} />
+            </a>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -3453,10 +3560,34 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
 }
 
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
-function RetrospectTab({ T, viewingName, viewingMember, myName }) {
+function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false }) {
   const isMobile = useIsMobile()
   const [subTab, setSubTab] = useState('retrospect') // 'retrospect' | 'badges'
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
+
+  // ─── アクセス権限ガード ──────────────────────────────────────────
+  // 振り返りページの閲覧可能者:
+  //   - 自分 (myName === viewingName)
+  //   - 管理者 (isAdmin)
+  //   - 上司 (= monthly_1on1.supervisor として指定された本人)
+  // それ以外は「閲覧権限がありません」画面に
+  const [accessAllowed, setAccessAllowed] = useState(null)  // null=判定中 / true / false
+  useEffect(() => {
+    if (!viewingName) { setAccessAllowed(false); return }
+    if (!myName) { setAccessAllowed(null); return }
+    if (myName === viewingName || isAdmin) { setAccessAllowed(true); return }
+    // 上司判定: 当月の monthly_1on1.supervisor が myName と一致するか
+    const jst = new Date(Date.now() + 9 * 3600 * 1000)
+    const month = `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, '0')}`
+    let alive = true
+    supabase.from('monthly_1on1').select('supervisor')
+      .eq('owner', viewingName).eq('month', month).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        setAccessAllowed(!!(data?.supervisor && data.supervisor === myName))
+      })
+    return () => { alive = false }
+  }, [viewingName, myName, isAdmin])
   const [data, setData] = useState({ days: [], loading: true, taskStats: { onTime: 0, overdue: 0 }, kptSummary: { keep: [], problem: [], try: [] } })
 
   const load = useCallback(async () => {
@@ -3542,6 +3673,35 @@ function RetrospectTab({ T, viewingName, viewingMember, myName }) {
     return sum
   }, 0)
   const totalHrs = Math.floor(totalMinutes / 60), totalMins = totalMinutes % 60
+
+  // アクセス権限判定中 (= myName / 上司情報を取得中)
+  if (accessAllowed === null) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.bg }}>
+        <div style={{ fontSize: 12, color: T.textMuted }}>権限を確認中…</div>
+      </div>
+    )
+  }
+  // アクセス権限なし
+  if (accessAllowed === false) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.bg, padding: 24 }}>
+        <div style={{
+          textAlign: 'center', maxWidth: 360,
+          padding: 28, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
+        }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>🔒</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 8 }}>
+            このメンバーの振り返りは閲覧できません
+          </div>
+          <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.7 }}>
+            振り返りページは本人・上司 (= 当月の supervisor) ・管理者だけが閲覧できます。<br />
+            ご自身の振り返りは左メンバー一覧から自分を選択してください。
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
