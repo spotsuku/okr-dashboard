@@ -785,7 +785,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               chatState={cooChatState} setChatState={setCooChatState} />
           )}
           {activeTab === 'retrospect' && (
-            <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} myName={myName} isAdmin={isAdmin} />
+            <RetrospectTab T={T} viewingName={viewingName} viewingMember={viewingMember} myName={myName} isAdmin={isAdmin} members={members} />
           )}
           {activeTab === 'strategy' && (
             <CompanyStrategyTab T={T} levels={levels} members={members} fiscalYear={fiscalYear} />
@@ -1865,7 +1865,7 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
 // ─── Monthly1on1Card: 月次 1on1 (KPT 共同記入 + 成長テーマ) ─────────────
 //   自分の KPT を編集 + 上司の KPT を閲覧 (上司側からも編集可) + 共同で成長テーマ
 //   KR進捗・KR/KA 記入率は BadgeCollectionDetail を参照することを案内
-function Monthly1on1Card({ T, viewingName, myName }) {
+function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
   // 編集権限:
   //   - 部下本人 (myName === viewingName) → self_* を編集
   //   - 上司 (myName === supervisor) → boss_* を編集
@@ -1971,17 +1971,20 @@ function Monthly1on1Card({ T, viewingName, myName }) {
           <div style={{ marginBottom: 14, padding: '10px 12px', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>上司</span>
             {isMySelf ? (
-              <input
+              <select
                 value={draft.supervisor}
-                onChange={e => setDraft(d => ({ ...d, supervisor: e.target.value }))}
-                onBlur={e => save({ supervisor: e.target.value })}
-                placeholder="上司の名前 (例: 三木浩江)"
+                onChange={e => { setDraft(d => ({ ...d, supervisor: e.target.value })); save({ supervisor: e.target.value }) }}
                 style={{
                   flex: 1, minWidth: 160,
                   padding: '5px 10px', borderRadius: 6,
                   border: `1px solid ${T.border}`, background: T.bg, color: T.text,
-                  fontSize: 12, outline: 'none', fontFamily: 'inherit',
-                }} />
+                  fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer',
+                }}>
+                <option value="">-- 上司を選択 --</option>
+                {(members || []).filter(m => m.name && m.name !== viewingName).map(m => (
+                  <option key={m.id} value={m.name}>{m.name}{m.role ? ` (${m.role})` : ''}</option>
+                ))}
+              </select>
             ) : (
               <span style={{ fontSize: 12, color: T.text }}>{draft.supervisor || '(未設定)'}</span>
             )}
@@ -3560,7 +3563,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
 }
 
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
-function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false }) {
+function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false, members = [] }) {
   const isMobile = useIsMobile()
   const [subTab, setSubTab] = useState('retrospect') // 'retrospect' | 'badges'
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
@@ -3739,13 +3742,14 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false 
         )}
       </div>
 
-      {/* サブタブ: 振り返り / バッジコレクション */}
+      {/* サブタブ: 振り返り / 1on1 / バッジコレクション */}
       <div style={{
         display: 'flex', gap: 4, padding: '6px 14px',
         borderBottom: `1px solid ${T.border}`, flexShrink: 0,
       }}>
         {[
           { key: 'retrospect', label: '💭 振り返り' },
+          { key: 'oneonone',   label: '🤝 1on1' },
           { key: 'badges',     label: '🏅 バッジコレクション' },
         ].map(t => {
           const active = subTab === t.key
@@ -3766,11 +3770,12 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false 
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <BadgeCollectionDetail T={T} viewingName={viewingName} />
           </div>
+        ) : subTab === 'oneonone' ? (
+          <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+            <Monthly1on1Card T={T} viewingName={viewingName} myName={myName} members={members} />
+          </div>
         ) : data.loading ? <Loading T={T} /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
-            {/* 月次 1on1 (= Phase 1: 自分の KPT + 上司の KPT (read-only) + 成長テーマ) */}
-            <Monthly1on1Card T={T} viewingName={viewingName} myName={myName} />
-
             {/* サマリー: タスク統計 + KPT 集約 */}
             <RetrospectSummary T={T} stats={data.taskStats} kpt={data.kptSummary} range={range} />
 
