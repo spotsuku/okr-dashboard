@@ -2142,46 +2142,93 @@ function KPTRow({ T, title, subtitle, keep, problem, tryNote, readOnly, onSave, 
   useEffect(() => { setDraftK(keep || ''); setDraftP(problem || ''); setDraftT(tryNote || '') }, [keep, problem, tryNote])
 
   const allEmpty = !keep && !problem && !tryNote
+  // 上司未記入で readOnly のとき、点線囲み + アクションボタン (リマインドを送る)
+  if (readOnly && allEmpty) {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{title}</span>
+          <span style={{ fontSize: 11, color: T.textMuted }}>· {subtitle}</span>
+        </div>
+        <div style={{
+          padding: '20px 18px', background: T.sectionBg,
+          border: `1px dashed ${T.borderStrong || T.border}`, borderRadius: 10,
+          display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: T.sectionBg, border: `1px solid ${T.border}`,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            color: T.textMuted, flexShrink: 0,
+          }}>
+            <Icon name="user" size={16} stroke={1.8} />
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={{ fontSize: 13, color: T.text }}>{emptyMessage || 'まだ記入されていません'}</div>
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+              リマインドを送ると、平均 1.8日 で記入されています。
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              // Slack DM テンプレを clipboard にコピー (= 簡易実装)
+              if (typeof window !== 'undefined' && navigator?.clipboard) {
+                navigator.clipboard.writeText(`今月の 1on1 用 KPT を記入していただけますか？\n振り返りページから記入できます。`)
+                alert('リマインドメッセージをクリップボードにコピーしました。Slack 等で送信してください。')
+              }
+            }}
+            style={{
+              padding: '6px 12px', borderRadius: 7,
+              background: 'transparent', border: `1px solid ${T.border}`,
+              color: T.text, fontSize: 12, fontWeight: 500,
+              cursor: 'pointer', fontFamily: 'inherit',
+              display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            }}>
+            <Icon name="msg" size={12} stroke={1.8} /> リマインドを送る
+          </button>
+        </div>
+      </div>
+    )
+  }
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{title}</span>
-        <span style={{ fontSize: 10, color: T.textMuted }}>· {subtitle}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{title}</span>
+        <span style={{ fontSize: 11, color: T.textMuted }}>· {subtitle}</span>
         {readOnly && <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 'auto' }}>閲覧のみ</span>}
       </div>
-      {readOnly && allEmpty ? (
-        <div style={{ padding: '12px 14px', background: T.sectionBg, border: `1px dashed ${T.border}`, borderRadius: 7, fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>
-          {emptyMessage || '記入なし'}
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
-          <Monthly1on1Field T={T} label="Keep" color={T.success || '#16a34a'} value={draftK}
-            readOnly={readOnly} placeholder="続けたいこと"
-            onChange={setDraftK} onBlur={v => onSave(v, draftP, draftT)} />
-          <Monthly1on1Field T={T} label="Problem" color={T.warn || '#d97706'} value={draftP}
-            readOnly={readOnly} placeholder="課題に感じたこと"
-            onChange={setDraftP} onBlur={v => onSave(draftK, v, draftT)} />
-          <Monthly1on1Field T={T} label="Try" color={T.info || T.accent || '#5b5bd6'} value={draftT}
-            readOnly={readOnly} placeholder="来月試したいこと"
-            onChange={setDraftT} onBlur={v => onSave(draftK, draftP, v)} />
-        </div>
-      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        <Monthly1on1Field T={T} label="Keep" color={T.success || '#059669'} value={draftK}
+          readOnly={readOnly} placeholder="続けたいこと…"
+          onChange={setDraftK} onBlur={v => onSave(v, draftP, draftT)} />
+        <Monthly1on1Field T={T} label="Problem" color={T.warn || '#d97706'} value={draftP}
+          readOnly={readOnly} placeholder="課題に感じたこと…"
+          onChange={setDraftP} onBlur={v => onSave(draftK, v, draftT)} />
+        <Monthly1on1Field T={T} label="Try" color={T.info || T.accent || '#0284c7'} value={draftT}
+          readOnly={readOnly} placeholder="来月試したいこと…"
+          onChange={setDraftT} onBlur={v => onSave(draftK, draftP, v)} />
+      </div>
     </div>
   )
 }
 
 function Monthly1on1Field({ T, label, color, value, readOnly, placeholder, onChange, onBlur }) {
+  // 左ボーダー塗り廃止 → ドット + 小ラベル (ハンドオフ準拠)
   return (
     <div style={{
-      padding: '8px 10px', background: T.bgCard,
-      border: `1px solid ${color}40`, borderLeft: `3px solid ${color}`,
-      borderRadius: 7,
+      padding: '12px 14px', background: T.bgCard,
+      border: `1px solid ${T.border}`, borderRadius: 10,
+      minHeight: 160, display: 'flex', flexDirection: 'column',
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 4, letterSpacing: '0.04em' }}>
-        {label.toUpperCase()}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <span style={{
+          fontSize: 11, fontWeight: 600, color,
+          letterSpacing: '0.06em', textTransform: 'uppercase',
+        }}>{label}</span>
       </div>
       {readOnly ? (
-        <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', minHeight: 38 }}>
+        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: 'pre-wrap', flex: 1 }}>
           {value || <span style={{ color: T.textFaint, fontStyle: 'italic' }}>記入なし</span>}
         </div>
       ) : (
@@ -2190,12 +2237,11 @@ function Monthly1on1Field({ T, label, color, value, readOnly, placeholder, onCha
           onChange={e => onChange(e.target.value)}
           onBlur={e => onBlur(e.target.value)}
           placeholder={placeholder}
-          rows={3}
           style={{
-            width: '100%', padding: 0, background: 'transparent',
+            flex: 1, width: '100%', padding: 0, background: 'transparent',
             border: 'none', color: T.text,
-            fontSize: 12, fontFamily: 'inherit', resize: 'vertical', outline: 'none',
-            boxSizing: 'border-box', lineHeight: 1.5,
+            fontSize: 12.5, fontFamily: 'inherit', resize: 'none', outline: 'none',
+            boxSizing: 'border-box', lineHeight: 1.55,
           }} />
       )}
     </div>
@@ -4219,79 +4265,101 @@ function ThreeQuestions({ T, viewingName, canEdit, myName }) {
 }
 
 function RetrospectSummary({ T, stats, kpt, range }) {
-  const isMobile = useIsMobile()
   const rangeLabel = range === 'week' ? '今週' : range === 'month' ? '今月' : '全期間'
   const total = stats.onTime + stats.overdue
   const completionPct = total > 0 ? Math.round((stats.onTime / total) * 100) : 0
-  const renderList = (label, items, color, bg) => (
-    <div>
-      <div style={{
-        fontSize: 11, fontWeight: 700, color, marginBottom: 6,
-        padding: '3px 8px', background: bg, borderRadius: 5, display: 'inline-block',
-      }}>{label} ({items.length})</div>
-      {items.length === 0 ? (
-        <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 8px' }}>記入なし</div>
-      ) : (
-        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.7, color: T.text }}>
-          {items.map((it, i) => (
-            <li key={i}>
-              {it.text}
-              <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 6 }}>({it.date.slice(5).replace('-', '/')})</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
+
+  // 4 カラムスタッツ (Indigo Quiet 準拠: 単一色 + caption + 大数値)
+  const cards = [
+    { caption: '完了したタスク', big: stats.onTime, sub: '件', iconName: 'check', tone: T.text },
+    { caption: '遅延中タスク', big: stats.overdue, sub: '件', iconName: 'bell', tone: stats.overdue > 0 ? T.warn : T.textMuted },
+    { caption: 'KPT 記入', big: kpt.keep.length + kpt.problem.length + kpt.try.length, sub: '件',
+      extra: `K ${kpt.keep.length} · P ${kpt.problem.length} · T ${kpt.try.length}`, iconName: 'star', tone: T.text },
+    { caption: '達成率', big: completionPct, sub: '%', iconName: 'target', tone: completionPct >= 80 ? T.success : completionPct >= 50 ? T.accent : T.textMuted },
+  ]
+
   return (
-    <div style={{
-      background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 10,
-      padding: 14, display: 'grid',
-      gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(320px, 2fr)',
-      gap: isMobile ? 14 : 16,
-    }}>
-      {/* 左: 成果 (タスク統計) — モバイルは3カードを1行並び */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
-          📊 {rangeLabel}の成果
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* キャプション */}
+      <div style={{ display: 'flex', alignItems: 'baseline' }}>
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: isMobile ? 6 : 10,
-        }}>
-          <div style={{
-            padding: isMobile ? '10px 6px' : 14, background: 'rgba(0,214,143,0.10)', border: '1px solid rgba(0,214,143,0.3)',
-            borderRadius: 8, textAlign: 'center', minWidth: 0,
-          }}>
-            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 800, color: '#00d68f', lineHeight: 1 }}>{stats.onTime}</div>
-            <div style={{ fontSize: isMobile ? 10 : 11, color: T.textSub, marginTop: 5, fontWeight: 600, whiteSpace: 'nowrap' }}>✅ 完了</div>
-          </div>
-          <div style={{
-            padding: isMobile ? '10px 6px' : 14, background: 'rgba(255,107,107,0.10)', border: '1px solid rgba(255,107,107,0.3)',
-            borderRadius: 8, textAlign: 'center', minWidth: 0,
-          }}>
-            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 800, color: '#ff6b6b', lineHeight: 1 }}>{stats.overdue}</div>
-            <div style={{ fontSize: isMobile ? 10 : 11, color: T.textSub, marginTop: 5, fontWeight: 600, whiteSpace: 'nowrap' }}>🚨 遅延</div>
-          </div>
-          <div style={{
-            padding: isMobile ? '10px 6px' : 14, background: 'rgba(77,159,255,0.10)', border: '1px solid rgba(77,159,255,0.3)',
-            borderRadius: 8, textAlign: 'center', minWidth: 0,
-          }}>
-            <div style={{ fontSize: isMobile ? 22 : 30, fontWeight: 800, color: '#4d9fff', lineHeight: 1 }}>{completionPct}%</div>
-            <div style={{ fontSize: isMobile ? 10 : 11, color: T.textSub, marginTop: 5, fontWeight: 600, whiteSpace: 'nowrap' }}>📈 達成率</div>
-          </div>
-        </div>
+          fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>{rangeLabel}のあなたの足跡</div>
       </div>
 
-      {/* 右: KPT 集約 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: T.textSub, letterSpacing: 0.5 }}>
-          💭 {rangeLabel}の KPT
+      {/* 4 カラムスタッツ */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+        {cards.map(c => (
+          <div key={c.caption} style={{
+            padding: 14, background: T.bgCard, border: `1px solid ${T.border}`,
+            borderRadius: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <span style={{ color: T.textMuted, display: 'inline-flex' }}>
+                <Icon name={c.iconName} size={11} stroke={1.8} />
+              </span>
+              <div style={{
+                fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+                letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}>{c.caption}</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{
+                fontSize: 28, fontWeight: 600, color: c.tone,
+                letterSpacing: '-0.01em',
+                fontFamily: 'ui-monospace, SF Mono, monospace',
+              }}>{c.big}</span>
+              <span style={{ fontSize: 12, color: T.textMuted }}>{c.sub}</span>
+            </div>
+            {c.extra && (
+              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{c.extra}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* KPT 集約 (3 列、ドット + 小ラベル + リスト) */}
+      <div style={{
+        padding: 16, background: T.bgCard, border: `1px solid ${T.border}`,
+        borderRadius: 12,
+      }}>
+        <div style={{
+          fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+          letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 10,
+        }}>{rangeLabel}の KPT</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          {[
+            { key: 'keep',    label: 'KEEP',    color: T.success, items: kpt.keep },
+            { key: 'problem', label: 'PROBLEM', color: T.warn,    items: kpt.problem },
+            { key: 'try',     label: 'TRY',     color: T.info || T.accent, items: kpt.try },
+          ].map(col => (
+            <div key={col.key}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: col.color,
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                }}>{col.label}</span>
+                <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 'auto' }}>({col.items.length})</span>
+              </div>
+              {col.items.length === 0 ? (
+                <div style={{ fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>記入なし</div>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, lineHeight: 1.7, color: T.text }}>
+                  {col.items.slice(0, 6).map((it, i) => (
+                    <li key={i}>
+                      {it.text}
+                      <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 6 }}>
+                        ({it.date.slice(5).replace('-', '/')})
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </div>
-        {renderList('🟢 Keep', kpt.keep, '#00a86b', 'rgba(0,168,107,0.12)')}
-        {renderList('🟡 Problem', kpt.problem, '#d49500', 'rgba(212,149,0,0.12)')}
-        {renderList('🔵 Try', kpt.try, '#4d9fff', 'rgba(77,159,255,0.12)')}
       </div>
     </div>
   )
@@ -4301,44 +4369,98 @@ function RetrospectDay({ T, day }) {
   const isMobile = useIsMobile()
   const dt = new Date(day.date + 'T00:00:00Z')
   const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
-  const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}(${wd})`
+  const isWeekend = dt.getUTCDay() === 0 || dt.getUTCDay() === 6
+  const todayStr = toJSTDateStr(new Date())
+  const isToday = day.date === todayStr
+  const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`
 
   const { start_at, end_at } = day.workLog || {}
   const worked = (start_at && end_at) ? (() => {
     const mins = Math.floor((new Date(end_at) - new Date(start_at)) / 60000)
     return `${Math.floor(mins / 60)}時間${mins % 60}分`
   })() : ''
+  const hasKpt = day.kpts.length > 0
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
+      overflow: 'hidden',
+      opacity: isWeekend && !hasKpt ? 0.6 : 1,
     }}>
+      {/* 日付ヘッダ */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 16px', background: T.sectionBg,
+        padding: '12px 16px',
         borderBottom: `1px solid ${T.border}`,
       }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>{dateLabel}</div>
-        <div style={{ flex: 1 }} />
-        {start_at && (
-          <div style={{ fontSize: 10, color: T.textMuted }}>
-            ⏰ {jstHHMM(start_at)}{end_at ? ` – ${jstHHMM(end_at)}` : ' 〜'}{worked && ` (${worked})`}
+        {/* 日付タイル 32×32 */}
+        <div style={{
+          width: 32, height: 32, borderRadius: 8,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: isToday ? `${T.accent}1f`
+            : isWeekend && !hasKpt ? 'transparent'
+            : T.sectionBg,
+          color: isToday ? T.accent : T.textSub,
+          border: isWeekend && !hasKpt ? `1px dashed ${T.border}` : 'none',
+          flexShrink: 0,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1 }}>{dt.getUTCDate()}</div>
+          <div style={{ fontSize: 8, lineHeight: 1 }}>{wd}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+            {isToday ? '今日' : dateLabel}
           </div>
+          {start_at && (
+            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+              {jstHHMM(start_at)}{end_at ? `〜${jstHHMM(end_at)}` : '〜'}{worked && ` · ${worked}`}
+            </div>
+          )}
+        </div>
+        {hasKpt && (
+          <span style={{
+            fontSize: 10, fontWeight: 600, color: T.success,
+            padding: '2px 8px', borderRadius: 99,
+            background: `${T.success}1a`, border: `1px solid ${T.success}40`,
+          }}>● 記入済</span>
+        )}
+        {!hasKpt && isWeekend && (
+          <span style={{ fontSize: 10, color: T.textMuted, fontStyle: 'italic' }}>
+            休日 · 記入なし
+          </span>
         )}
       </div>
-      {day.kpts.length === 0 ? (
-        <div style={{ padding: 12, fontSize: 11, color: T.textMuted, fontStyle: 'italic' }}>
-          KPTの記入はありません
-        </div>
-      ) : (
-        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+      {/* KPT 本体: 3 列グリッド (ドット + ラベル + 本文) */}
+      {hasKpt && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+          gap: 1, background: T.border,
+        }}>
           {day.kpts.map(kpt => (
-            <div key={kpt.id} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 8 }}>
-              <KPTField T={T} color={T.success} label="🟢 Keep"     text={kpt.keep} />
-              <KPTField T={T} color={T.warn}    label="🟡 Problem" text={kpt.problem} />
-              <KPTField T={T} color={T.info}    label="🔵 Try"     text={kpt.try} />
-            </div>
+            [
+              { key: `${kpt.id}-k`, label: 'KEEP',    color: T.success,         text: kpt.keep },
+              { key: `${kpt.id}-p`, label: 'PROBLEM', color: T.warn,            text: kpt.problem },
+              { key: `${kpt.id}-t`, label: 'TRY',     color: T.info || T.accent, text: kpt.try },
+            ].map(col => (
+              <div key={col.key} style={{
+                background: T.bgCard, padding: '12px 14px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
+                  <span style={{
+                    fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}>{col.label}</span>
+                </div>
+                <div style={{
+                  fontSize: 12.5, color: T.text, lineHeight: 1.55,
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {(col.text || '').trim() || <span style={{ color: T.textFaint, fontStyle: 'italic' }}>—</span>}
+                </div>
+              </div>
+            ))
           ))}
         </div>
       )}
@@ -4347,13 +4469,18 @@ function RetrospectDay({ T, day }) {
 }
 
 function KPTField({ T, color, label, text }) {
+  // Indigo Quiet 準拠: 左ボーダー塗り廃止 → ドット + 小ラベル
   return (
     <div style={{
-      padding: 10, background: T.sectionBg, borderRadius: 6,
-      borderLeft: `3px solid ${color}`,
+      padding: '8px 10px', background: T.bgCard,
+      border: `1px solid ${T.border}`, borderRadius: 7,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 4, letterSpacing: 0.3 }}>
-        {label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <span style={{
+          fontSize: 10, fontWeight: 600, color: T.textMuted,
+          letterSpacing: '0.06em', textTransform: 'uppercase',
+        }}>{label}</span>
       </div>
       <div style={{ fontSize: 12, color: T.text, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
         {(text || '').trim() || <span style={{ color: T.textFaint, fontStyle: 'italic' }}>—</span>}
