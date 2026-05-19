@@ -1422,20 +1422,32 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           )}
         </div>
 
-        {/* ─── 中カラム：Gmail をファーストビューに / その下にリマインダー / カレンダー ─── */}
+        {/* ─── 中カラム：メール + Google カレンダーの 2 つ ─── */}
         <div style={{
           display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
           minHeight: isMobile ? 'auto' : 0,
           minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
-          {/* Gmail Box - 返信必要 / 確認必要 5件 (= ファーストビュー最優先) */}
+          {/* Gmail Box */}
           {showW('gmail') && (
             <GmailBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} onOpenAIReply={onOpenAIReply} readMarks={mailReadMarks || new Set()} onMarkRead={onMarkMailRead} />
           )}
+          {/* Google カレンダー Box */}
+          {showW('calendar') && (
+            <CalendarBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} />
+          )}
+        </div>
 
-          {/* OKR記入漏れ - 集中記入モーダル呼び出し */}
-          <Section T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="OKR・KA記入漏れ" flex={0} headerRight={
+        {/* ─── 右カラム：マイOKR + バッジコレクション (目標管理) ─── */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
+          minHeight: isMobile ? 'auto' : 0,
+          minWidth: 0,
+          overflowY: isMobile ? 'visible' : 'auto',
+        }}>
+          {/* マイOKR (= 旧「OKR・KA記入漏れ」を右カラムへ移動) */}
+          <Section T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="マイOKR" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
               borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1454,7 +1466,6 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <ReminderList T={T} items={items} maxVisible={3}
                     emptyText="✨ 今週分はすべて記入済みです" />
-                  {/* 集中記入モーダル呼び出し: KR/KAそれぞれ */}
                   {(krCount > 0 || kaCount > 0) && (
                     <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
                       {krCount > 0 && (
@@ -1490,93 +1501,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             })()}
           </Section>
 
-          {/* カレンダー Box - 直近8時間の予定 (= 最下) */}
-          {showW('calendar') && (
-            <CalendarBox T={T} viewingName={viewingName} onGoToTab={onGoToTab} />
-          )}
-        </div>
-
-        {/* ─── 右カラム：ポップなゴール3種 + コンパクト成果 ─── */}
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 10,
-          minHeight: isMobile ? 'auto' : 0,
-          minWidth: 0,
-          overflowY: isMobile ? 'visible' : 'auto',
-        }}>
-          {showW('goal_month_main') && (
-            <PopGoalCard
-              T={T} iconName="star" title="今月のメインテーマ"
-              value={monthTheme.main} loading={monthTheme.loading} canEdit={isViewingSelf}
-              placeholder="例: 評議会24社のクロージング完了"
-              onSave={(v) => saveMonthTheme({ main: v, growth: monthTheme.growth })}
-            />
-          )}
-          {showW('goal_month_growth') && (
-            <PopGoalCard
-              T={T} iconName="user" title="今月の成長テーマ"
-              value={monthTheme.growth} loading={monthTheme.loading} canEdit={isViewingSelf}
-              placeholder="例: 1on1で相手の話を引き出す力"
-              onSave={(v) => saveMonthTheme({ main: monthTheme.main, growth: v })}
-            />
-          )}
-          {showW('goal_week') && (
-            <PopGoalCard
-              T={T} iconName="flag" title="今週のゴール"
-              value={weekGoal.goal} loading={weekGoal.loading} canEdit={isViewingSelf}
-              placeholder="例: 提案書v2をクライアントに提出して承認をもらう"
-              onSave={(v) => saveWeekGoal(v)}
-            />
-          )}
-          {showW('team_summary') && (
-            <TeamSummaryNotification T={T} viewingMember={viewingMember}
-              myName={myName} isAdmin={isAdmin} levels={levels}
-              isViewingSelf={isViewingSelf}
-              onGoToSummary={onGoToSummary} />
-          )}
-          {showW('achievements') && (
-            <Section T={T} icon={<Icon name="star" size={14} />} accent={T.warn} title="今週の成果" flex={0} headerRight={
-              <button onClick={loadAchievements} title="再読み込み" style={{
-                background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
-                borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-              }}>↻</button>
-            }>
-              {achievements.loading ? <Loading T={T} /> : (
-                <>
-                  <div style={{
-                    display: 'flex', alignItems: 'baseline', gap: 8,
-                    padding: '8px 10px', marginBottom: 6,
-                    background: T.successBg, border: `1px solid ${T.success}33`,
-                    borderRadius: 7,
-                  }}>
-                    <span style={{ fontSize: 24, fontWeight: 800, color: T.success || '#00d68f' }}>
-                      {achievements.items.length}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>件 タスク完了</span>
-                  </div>
-                  <div style={{ maxHeight: 110, overflowY: 'auto' }}>
-                    {achievements.items.length === 0
-                      ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>今週の完了タスクはまだありません</div>
-                      : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          {achievements.items.map((it, i) => (
-                            <div key={i} style={{
-                              display: 'flex', alignItems: 'flex-start', gap: 6,
-                              padding: '4px 6px', borderRadius: 5,
-                              background: T.successBg, border: `1px solid ${T.success}22`,
-                              fontSize: 10, color: T.text, lineHeight: 1.4,
-                            }}>
-                              <span>{it.icon}</span>
-                              <span style={{ color: T.textMuted, fontWeight: 600, minWidth: 40, fontSize: 9 }}>{it.date || '--'}</span>
-                              <span style={{ flex: 1 }}>{it.text}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                  </div>
-                </>
-              )}
-            </Section>
-          )}
+          {/* バッジコレクション (月次達成度) */}
+          <BadgeCollection T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
+            onGoToRetrospect={() => onGoToTab && onGoToTab('retrospect')} />
         </div>
       </div>
 
@@ -1914,6 +1841,151 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
 }
 
 // ─── 今週のチームサマリー: 個人ダッシュボード用通知行 (詳細は全社サマリーへ誘導) ─
+// ─── BadgeCollection: 月次バッジ達成度 (目標管理) ──────────────────────────
+//   タスク完了率 / KR記入率 / KA記入率 / 月22日以上ログイン / 振り返り記入 /
+//   MyCOO 5回以上相談 / Google連携完了 の 7 種を当月で集計。
+//   80% 以上 or 22 日以上で 1 バッジ獲得。詳細は振り返りページで参照可能。
+function BadgeCollection({ T, viewingName, isViewingSelf, onGoToRetrospect }) {
+  const [stats, setStats] = useState({ loading: true, items: [] })
+
+  useEffect(() => {
+    if (!viewingName) { setStats({ loading: false, items: [] }); return }
+    let alive = true
+    ;(async () => {
+      // 当月の開始 / 終了 (JST)
+      const now = new Date()
+      const jst = new Date(now.getTime() + 9 * 3600 * 1000)
+      const y = jst.getUTCFullYear(), m = jst.getUTCMonth()
+      const monthStart = new Date(Date.UTC(y, m, 1)).toISOString().split('T')[0]
+      const monthEnd = new Date(Date.UTC(y, m + 1, 0)).toISOString().split('T')[0]
+
+      // 並列で各テーブルを集計
+      const [tasksRes, krRes, krReviewsRes, kasRes, logsRes, chatsRes, googleRes] = await Promise.all([
+        supabase.from('ka_tasks').select('id, done, due_date')
+          .eq('assignee', viewingName)
+          .gte('due_date', monthStart).lte('due_date', monthEnd),
+        supabase.from('key_results').select('id').eq('owner', viewingName).is('archived_at', null).limit(200),
+        supabase.from('kr_weekly_reviews').select('kr_id, good, more, focus, focus_output, week_start')
+          .gte('week_start', monthStart).lte('week_start', monthEnd),
+        supabase.from('weekly_reports').select('id, owner, good, more, focus_output, week_start')
+          .eq('owner', viewingName).gte('week_start', monthStart).lte('week_start', monthEnd),
+        supabase.from('coaching_logs').select('id, log_type, created_at')
+          .eq('owner', viewingName).gte('created_at', `${monthStart}T00:00:00`).lte('created_at', `${monthEnd}T23:59:59`),
+        supabase.from('coaching_chats').select('id, role, created_at')
+          .eq('owner', viewingName).eq('role', 'user').eq('kind', 'mycoach')
+          .gte('created_at', `${monthStart}T00:00:00`).lte('created_at', `${monthEnd}T23:59:59`),
+        supabase.from('members').select('google_refresh_token').ilike('name', viewingName).limit(1),
+      ])
+      if (!alive) return
+
+      // 1. タスク完了率
+      const tasks = tasksRes.data || []
+      const taskRate = tasks.length > 0
+        ? Math.round((tasks.filter(t => t.done).length / tasks.length) * 100)
+        : 0
+      // 2. KR記入率: 自分の KR × 月内の週数で「記入された個数 / 期待値」
+      const krIds = new Set((krRes.data || []).map(k => k.id))
+      const monthlyKrReviews = (krReviewsRes.data || []).filter(r => krIds.has(r.kr_id) &&
+        ((r.good || '').trim() || (r.more || '').trim() || (r.focus || '').trim() || (r.focus_output || '').trim()))
+      const weeksInMonth = Math.ceil((new Date(monthEnd).getTime() - new Date(monthStart).getTime()) / (7 * 86400000)) + 1
+      const krExpected = Math.max(krIds.size * weeksInMonth, 1)
+      const krRate = Math.round((monthlyKrReviews.length / krExpected) * 100)
+      // 3. KA記入率: weekly_reports のうち何かしら記入された行 / 全行
+      const kas = kasRes.data || []
+      const kaWritten = kas.filter(k => (k.good || '').trim() || (k.more || '').trim() || (k.focus_output || '').trim())
+      const kaRate = kas.length > 0 ? Math.round((kaWritten.length / kas.length) * 100) : 0
+      // 4. ログイン日数: 当月の work_log のユニーク日付
+      const logs = logsRes.data || []
+      const workDays = new Set(logs.filter(l => l.log_type === 'work_log')
+        .map(l => l.created_at?.split('T')[0])).size
+      // 5. 振り返り (KPT) 日数
+      const kptDays = new Set(logs.filter(l => l.log_type === 'kpt')
+        .map(l => l.created_at?.split('T')[0])).size
+      // 6. MyCOO 相談回数 (user role chat 件数)
+      const mycooCount = (chatsRes.data || []).length
+      // 7. Google 連携
+      const googleConnected = !!(googleRes.data?.[0]?.google_refresh_token)
+
+      const items = [
+        { key: 'tasks', label: 'タスク完了率', value: `${taskRate}%`, achieved: taskRate >= 80, iconName: 'check', desc: '80%以上' },
+        { key: 'kr',    label: 'KR記入率',     value: `${krRate}%`, achieved: krRate >= 80, iconName: 'target', desc: '80%以上' },
+        { key: 'ka',    label: 'KA記入率',     value: `${kaRate}%`, achieved: kaRate >= 80, iconName: 'workspace', desc: '80%以上' },
+        { key: 'login', label: 'ログイン',     value: `${workDays}日`, achieved: workDays >= 22, iconName: 'morning', desc: '22日以上' },
+        { key: 'kpt',   label: '振り返り',     value: `${kptDays}日`, achieved: kptDays >= 22, iconName: 'refresh', desc: '22日以上' },
+        { key: 'mycoo', label: 'MyCOO 相談',   value: `${mycooCount}回`, achieved: mycooCount >= 5, iconName: 'ai', desc: '5回以上' },
+        { key: 'google',label: 'Google 連携',  value: googleConnected ? '完了' : '未', achieved: googleConnected, iconName: 'link', desc: '連携済' },
+      ]
+      setStats({ loading: false, items })
+    })()
+    return () => { alive = false }
+  }, [viewingName])
+
+  const achievedCount = stats.items.filter(i => i.achieved).length
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`,
+      borderRadius: 12, padding: 14,
+      flexShrink: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <span style={{ color: T.warn, display: 'inline-flex' }}>
+          <Icon name="star" size={13} stroke={1.8} />
+        </span>
+        <div style={{
+          fontSize: 10.5, fontWeight: 700, color: T.warn, flex: 1,
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>バッジコレクション</div>
+        <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
+          {achievedCount}/7
+        </span>
+      </div>
+      {stats.loading ? <Loading T={T} /> : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {stats.items.map(b => (
+            <div key={b.key} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 10px',
+              background: b.achieved ? `${T.success}10` : 'transparent',
+              border: `1px solid ${b.achieved ? `${T.success}40` : T.border}`,
+              borderRadius: 8,
+              opacity: b.achieved ? 1 : 0.7,
+            }}>
+              <span style={{
+                width: 28, height: 28, borderRadius: 99,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: b.achieved ? T.success : T.sectionBg,
+                color: b.achieved ? '#fff' : T.textMuted,
+                flexShrink: 0,
+              }}>
+                <Icon name={b.iconName} size={14} stroke={2} />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {b.label}
+                </div>
+                <div style={{ fontSize: 10, color: T.textMuted }}>
+                  {b.value} / {b.desc}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {onGoToRetrospect && (
+        <button onClick={onGoToRetrospect}
+          style={{
+            marginTop: 10, width: '100%',
+            padding: '6px 10px', border: `1px dashed ${T.border}`,
+            background: 'transparent', color: T.textSub,
+            borderRadius: 6, fontSize: 11, fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>振り返りページで詳細を見る →</button>
+      )}
+    </div>
+  )
+}
+
 function TeamSummaryNotification({ T, viewingMember, myName, isAdmin, levels = [], isViewingSelf, onGoToSummary }) {
   const monday = useMemo(() => getMondayJSTStr(), [])
   const [stats, setStats] = useState({ total: 0, submitted: 0, myTeams: 0, myTeamsSubmitted: 0 })
