@@ -97,6 +97,22 @@ export async function POST(request) {
       return json({ error: '組織メンバー作成失敗: ' + omErr.message }, { status: 500 })
     }
 
+    // 5) ルート組織 (経営レベル) を「全社」として自動作成
+    //    これで新規組織でも組織図の最上位ノードが存在し、配下に事業部/チームを
+    //    すぐ追加できる状態になる。失敗してもロールバックはしない (= 後から
+    //    「組織を管理」画面で手動追加できるため致命的でない)
+    const { error: lvlErr } = await sb.from('levels').insert({
+      name: '全社',
+      icon: '🏢',
+      parent_id: null,
+      color: '#4d9fff',
+      fiscal_year: fiscal_year_default,
+      organization_id: org.id,
+    })
+    if (lvlErr) {
+      console.warn('[org/create] default root level insert failed:', lvlErr.message)
+    }
+
     return json({ ok: true, organization: org })
   } catch (e) {
     return json({ error: e.message || String(e) }, { status: 500 })
