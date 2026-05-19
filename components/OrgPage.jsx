@@ -3502,10 +3502,11 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
   })
 
   const save = async () => {
-    if (!name.trim() || !parentId) return
+    if (!name.trim()) return
     setSaving(true)
-    await onAdd({ name: name.trim(), icon, parent_id: parseInt(parentId) })
-    setName(''); setSaving(false)
+    // 親組織未選択 = ルート (経営レベル) として追加
+    await onAdd({ name: name.trim(), icon, parent_id: parentId ? parseInt(parentId) : null })
+    setName(''); setParentId(''); setSaving(false)
   }
   const confirmDelete = async (level) => {
     const children = getChildren(level.id)
@@ -3561,16 +3562,12 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
               <span style={{ fontSize:13 }}>{level.icon}</span>
               <span style={{ flex:1, fontSize:12, fontWeight:500, color:T().text }}>{level.name}</span>
               <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
-              {!isRoot && (
-                <button onClick={() => startEdit(level)} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>編集</button>
-              )}
-              {!isRoot && (
-                <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
-                  background: T().warnBg, border:`1px solid ${T().warnBg}`, color: T().warn,
-                  borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
-                  opacity: deleting === level.id ? 0.5 : 1,
-                }}>{deleting === level.id ? '削除中' : '削除'}</button>
-              )}
+              <button onClick={() => startEdit(level)} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>編集</button>
+              <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
+                background: T().warnBg, border:`1px solid ${T().warnBg}`, color: T().warn,
+                borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
+                opacity: deleting === level.id ? 0.5 : 1,
+              }}>{deleting === level.id ? '削除中' : '削除'}</button>
             </div>
           )}
         </div>
@@ -3616,7 +3613,7 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:T().textMuted, marginBottom:5 }}>親組織</div>
             <select value={parentId} onChange={e => setParentId(e.target.value)} style={{ width:'100%', background:T().sectionBg, border:`1px solid ${T().border}`, borderRadius:8, padding:'9px 12px', color: parentId ? T().text : T().textMuted, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer' }}>
-              <option value=''>選択してください</option>
+              <option value=''>（親なし・経営レベルとして追加）</option>
               {addableParents.map(l => {
                 const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
                 const label = d===0 ? '事業部として追加' : 'チームとして追加'
@@ -3641,7 +3638,7 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
             <button onClick={onClose} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={save} disabled={saving || !name.trim() || !parentId} style={{ background: (!name.trim() || !parentId) ? T().textFaint : T().accent, border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: (!name.trim() || !parentId) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
+            <button onClick={save} disabled={saving || !name.trim()} style={{ background: !name.trim() ? T().textFaint : T().accent, border:'none', color:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor: !name.trim() ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>{saving ? '追加中...' : '＋ 追加する'}</button>
           </div>
         </div>
       </div>

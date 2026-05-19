@@ -16,6 +16,11 @@
 -- 冪等 (IF NOT EXISTS) なので何度実行しても安全
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- license_grandfathered カラムがまだ無い環境のために先に追加 (冪等)
+ALTER TABLE organizations
+  ADD COLUMN IF NOT EXISTS license_grandfathered BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- 30日トライアル基準日カラム
 ALTER TABLE organizations
   ADD COLUMN IF NOT EXISTS admin_first_login_at TIMESTAMPTZ;
 
