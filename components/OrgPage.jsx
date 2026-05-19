@@ -3561,16 +3561,12 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
               <span style={{ fontSize:13 }}>{level.icon}</span>
               <span style={{ flex:1, fontSize:12, fontWeight:500, color:T().text }}>{level.name}</span>
               <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
-              {!isRoot && (
-                <button onClick={() => startEdit(level)} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>編集</button>
-              )}
-              {!isRoot && (
-                <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
-                  background: T().warnBg, border:`1px solid ${T().warnBg}`, color: T().warn,
-                  borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
-                  opacity: deleting === level.id ? 0.5 : 1,
-                }}>{deleting === level.id ? '削除中' : '削除'}</button>
-              )}
+              <button onClick={() => startEdit(level)} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>編集</button>
+              <button onClick={() => confirmDelete(level)} disabled={deleting === level.id} style={{
+                background: T().warnBg, border:`1px solid ${T().warnBg}`, color: T().warn,
+                borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit',
+                opacity: deleting === level.id ? 0.5 : 1,
+              }}>{deleting === level.id ? '削除中' : '削除'}</button>
             </div>
           )}
         </div>
