@@ -2258,9 +2258,60 @@ async function fetchBadgeStats(viewingName) {
   ]
 }
 
+// ─── BadgeIcon: ゴールド/琥珀/グレーの 3 状態の円形バッジアイコン ─────
+function BadgeIcon({ state, iconName, size = 64 }) {
+  const iconSize = Math.round(size * 0.42)
+  const base = {
+    width: size, height: size, borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    position: 'relative', flexShrink: 0,
+  }
+  if (state === 'done') {
+    return (
+      <div style={{
+        ...base,
+        background: 'radial-gradient(circle at 30% 25%, #fde68a 0%, #f59e0b 45%, #b45309 100%)',
+        color: '#fff',
+        boxShadow: '0 0 0 4px rgba(245,158,11,.16), 0 2px 8px rgba(180,83,9,.25), inset 0 -2px 4px rgba(124,45,18,.3), inset 0 2px 3px rgba(255,255,255,.45)',
+      }}>
+        <Icon name={iconName} size={iconSize} stroke={2} />
+        {/* ハイライト装飾 */}
+        <span aria-hidden style={{
+          position: 'absolute', top: '12%', left: '22%',
+          width: '20%', height: '12%',
+          background: 'rgba(255,255,255,.55)',
+          borderRadius: '50%', filter: 'blur(2px)',
+          transform: 'rotate(-25deg)', pointerEvents: 'none',
+        }} />
+      </div>
+    )
+  }
+  if (state === 'near') {
+    return (
+      <div style={{
+        ...base,
+        background: 'radial-gradient(circle at 30% 25%, #fef3c7 0%, #fcd34d 45%, #d97706 100%)',
+        color: '#fff',
+        boxShadow: '0 0 0 3px rgba(217,119,6,.14), inset 0 -2px 3px rgba(146,64,14,.25), inset 0 2px 2px rgba(255,255,255,.4)',
+      }}>
+        <Icon name={iconName} size={iconSize} stroke={2} />
+      </div>
+    )
+  }
+  // far
+  return (
+    <div style={{
+      ...base,
+      background: 'linear-gradient(160deg, #f4f4f5 0%, #e4e4e7 70%, #d4d4d8 100%)',
+      color: '#a1a1aa',
+      boxShadow: 'inset 0 -1px 2px rgba(0,0,0,.04), inset 0 1px 2px rgba(255,255,255,.6)',
+    }}>
+      <Icon name={iconName} size={iconSize} stroke={1.6} />
+    </div>
+  )
+}
+
 // ─── BadgeCollectionDetail: 振り返りページ用のグリッド表示 ─────────────────
-//   各バッジを大きく表示。獲得済はゴールドの円形アイコン + 「✓ 獲得」ピル、
-//   未獲得はグレー + 進捗 % を表示。
 function BadgeCollectionDetail({ T, viewingName }) {
   const [stats, setStats] = useState({ loading: true, items: [] })
   useEffect(() => {
@@ -2274,9 +2325,16 @@ function BadgeCollectionDetail({ T, viewingName }) {
 
   const achievedCount = stats.items.filter(i => i.achieved).length
   const totalCount = stats.items.length
+  const nearCount = stats.items.filter(i => !i.achieved && i.progress >= 60).length
   const monthLabel = (() => {
     const jst = new Date(Date.now() + 9 * 3600 * 1000)
     return `${jst.getUTCFullYear()}年${jst.getUTCMonth() + 1}月`
+  })()
+  // 残り日数 (= 月末まで)
+  const daysLeft = (() => {
+    const jst = new Date(Date.now() + 9 * 3600 * 1000)
+    const lastDay = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth() + 1, 0)).getUTCDate()
+    return lastDay - jst.getUTCDate()
   })()
 
   return (
@@ -2285,18 +2343,42 @@ function BadgeCollectionDetail({ T, viewingName }) {
       borderRadius: 14, padding: 18,
     }}>
       {/* ヘッダ */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <span style={{ fontSize: 20 }}>🏅</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>
-            バッジコレクション ({achievedCount} / {totalCount})
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+        <BadgeIcon state={achievedCount > 0 ? 'done' : 'near'} iconName="star" size={48} />
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 17, fontWeight: 600, color: T.text, letterSpacing: '-0.005em' }}>
+            バッジコレクション{' '}
+            <span style={{ color: T.textMuted, fontWeight: 500 }}>{achievedCount} / {totalCount}</span>
           </div>
           <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-            {monthLabel} の達成状況 · 月次でリセットされます
+            {monthLabel} · 月次でリセット · 残り {daysLeft}日
           </div>
         </div>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
-          達成率 {totalCount > 0 ? Math.round(achievedCount / totalCount * 100) : 0}%
+        {nearCount > 0 && (
+          <div style={{
+            padding: '8px 14px', borderRadius: 10,
+            background: `${T.warn}1f`, border: `1px solid ${T.warn}`,
+            fontSize: 12, fontWeight: 600, color: T.warn,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            <Icon name="bolt" size={13} stroke={2} />
+            あと一歩 · {nearCount}件が達成間近
+          </div>
+        )}
+        <div style={{ minWidth: 200 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
+            <span>今月の達成</span>
+            <span style={{ color: T.text, fontWeight: 600 }}>
+              {totalCount > 0 ? Math.round(achievedCount / totalCount * 100) : 0}%
+            </span>
+          </div>
+          <div style={{ height: 5, borderRadius: 99, background: T.sectionBg, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${totalCount > 0 ? Math.round(achievedCount / totalCount * 100) : 0}%`,
+              background: T.success || '#16a34a', transition: 'width 300ms ease-out',
+            }} />
+          </div>
         </div>
       </div>
 
@@ -2317,65 +2399,110 @@ function BadgeCollectionDetail({ T, viewingName }) {
 }
 
 function BadgeCard({ T, badge }) {
-  const achieved = badge.achieved
+  const state = badge.achieved ? 'done' : badge.progress >= 60 ? 'near' : 'far'
+  // 残り (= ターゲット - 現在値)
+  const remaining = (() => {
+    const m = badge.value.match(/(\d+)/)
+    const cur = m ? Number(m[1]) : 0
+    const tgtM = badge.target.match(/(\d+)/)
+    const tgt = tgtM ? Number(tgtM[1]) : 0
+    const unit = badge.target.replace(/[\d.]/g, '') || '%'
+    return tgt > cur ? `${tgt - cur}${unit}` : ''
+  })()
+  const containerStyle = state === 'done' ? {
+    background: 'linear-gradient(170deg, #fffbeb 0%, #fef3c7 100%)',
+    border: '1px solid #fcd34d',
+  } : state === 'near' ? {
+    background: T.bgCard, border: `1px solid ${T.warn}`,
+  } : {
+    background: T.bgCard, border: `1px solid ${T.border}`,
+  }
+  const titleColor = state === 'done' ? '#7c2d12' : T.text
+  const descColor = state === 'done' ? '#92400e' : T.textMuted
+
   return (
     <div style={{
-      position: 'relative',
-      padding: '18px 14px 14px',
-      background: achieved ? `linear-gradient(180deg, ${T.warn}1a 0%, ${T.warn}05 100%)` : T.sectionBg,
-      border: `1px solid ${achieved ? `${T.warn}66` : T.border}`,
-      borderRadius: 14,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-      gap: 10,
+      position: 'relative', overflow: 'hidden',
+      padding: '20px 16px 16px', borderRadius: 14,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      textAlign: 'center', cursor: 'pointer',
+      transition: 'transform .2s, box-shadow .2s',
+      ...containerStyle,
     }}>
-      {achieved && (
+      {/* far のときストライプ装飾 */}
+      {state === 'far' && (
+        <span aria-hidden style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 18px, rgba(0,0,0,.018) 18px 19px)',
+        }} />
+      )}
+      {/* 獲得 / 達成間近 ピル */}
+      {state === 'done' && (
         <span style={{
-          position: 'absolute', top: 8, right: 8,
-          fontSize: 10, fontWeight: 700, color: T.warn,
-          padding: '2px 8px', borderRadius: 99,
-          background: `${T.warn}1a`, border: `1px solid ${T.warn}80`,
-          letterSpacing: '0.02em',
+          position: 'absolute', top: 10, right: 10,
+          padding: '2px 8px',
+          background: 'rgba(255,255,255,.7)', backdropFilter: 'blur(4px)',
+          border: '1px solid rgba(180,83,9,.25)', borderRadius: 99,
+          fontSize: 10, fontWeight: 700, color: '#92400e',
+          letterSpacing: '0.04em',
         }}>✓ 獲得</span>
       )}
-      {/* 大きな円形アイコン */}
+      {state === 'near' && remaining && (
+        <span style={{
+          position: 'absolute', top: 10, right: 10,
+          padding: '2px 7px',
+          background: T.warn, color: '#fff',
+          borderRadius: 99, fontSize: 9.5, fontWeight: 700,
+        }}>あと {remaining}</span>
+      )}
+
+      <BadgeIcon state={state} iconName={badge.iconName} size={64} />
+
       <div style={{
-        width: 64, height: 64, borderRadius: 99,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: achieved
-          ? `linear-gradient(135deg, #facc15 0%, #d97706 100%)`
-          : T.bg,
-        border: achieved ? `2px solid ${T.warn}` : `2px solid ${T.border}`,
-        boxShadow: achieved ? `0 4px 14px ${T.warn}40` : 'none',
-        color: achieved ? '#fff' : T.textMuted,
-      }}>
-        <Icon name={badge.iconName} size={28} stroke={achieved ? 2.4 : 1.8} />
-      </div>
-      {/* タイトル */}
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
-        {badge.label}
-      </div>
-      {/* 説明文 */}
-      <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5, minHeight: 32 }}>
-        {badge.desc}
-      </div>
-      {/* 進捗 */}
-      <div style={{ width: '100%' }}>
+        fontSize: 13.5, fontWeight: 600, marginTop: 12, marginBottom: 4,
+        letterSpacing: '-0.005em', color: titleColor,
+      }}>{badge.label}</div>
+
+      <div style={{
+        fontSize: 11, lineHeight: 1.45, minHeight: 30,
+        color: descColor,
+      }}>{badge.desc}</div>
+
+      {/* フッタ */}
+      {state === 'done' ? (
         <div style={{
-          height: 4, borderRadius: 99, background: T.border,
-          overflow: 'hidden', marginBottom: 4,
+          marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '5px 10px',
+          background: 'rgba(255,255,255,.55)',
+          border: '1px solid rgba(180,83,9,.2)',
+          borderRadius: 99,
+          fontSize: 10.5, fontWeight: 600, color: '#92400e',
         }}>
+          <Icon name="star" size={10} stroke={2} />
+          達成済
+        </div>
+      ) : (
+        <div style={{ width: '100%', marginTop: 10 }}>
           <div style={{
-            height: '100%',
-            width: `${badge.progress}%`,
-            background: achieved ? T.warn : T.accent,
-            transition: 'width 0.3s ease',
-          }} />
+            height: 4, borderRadius: 99, background: T.sectionBg,
+            overflow: 'hidden', marginBottom: 4,
+          }}>
+            <div style={{
+              height: '100%', width: `${badge.progress}%`,
+              background: state === 'near' ? T.warn : T.accent,
+              transition: 'width 0.3s ease-out',
+            }} />
+          </div>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            fontSize: 10, color: T.textMuted,
+            fontFamily: 'ui-monospace, SF Mono, monospace',
+          }}>
+            <span>{badge.value}</span>
+            <span>目標 {badge.target}</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: T.textMuted }}>
-          <span>{badge.value}</span>
-          <span>目標 {badge.target}</span>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -3776,6 +3903,12 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
           </div>
         ) : data.loading ? <Loading T={T} /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
+            {/* ストリークバナー (連続記入日数 + 当月ヒートマップ) */}
+            <StreakBanner T={T} viewingName={viewingName} />
+
+            {/* 今日の 3 つの問い (Keep / Problem / Try の問いかけ式フォーム) */}
+            <ThreeQuestions T={T} viewingName={viewingName} canEdit={myName === viewingName} myName={myName} />
+
             {/* サマリー: タスク統計 + KPT 集約 */}
             <RetrospectSummary T={T} stats={data.taskStats} kpt={data.kptSummary} range={range} />
 
@@ -3793,6 +3926,293 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
             )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── StreakBanner: 連続記入日数 + 当月ヒートマップ ──────────────────────
+function StreakBanner({ T, viewingName }) {
+  const [data, setData] = useState({ loading: true, current: 0, best: 0, monthDays: [], thisMonthCount: 0, totalMonthDays: 0 })
+  useEffect(() => {
+    if (!viewingName) return
+    let alive = true
+    ;(async () => {
+      // 過去 90 日の kpt log を取得 → 日次に集約
+      const ninety = new Date(Date.now() - 90 * 86400000).toISOString()
+      const { data: logs } = await supabase.from('coaching_logs')
+        .select('created_at, log_type')
+        .eq('owner', viewingName).eq('log_type', 'kpt')
+        .gte('created_at', ninety)
+      const writtenDays = new Set((logs || []).map(l => toJSTDateStr(new Date(l.created_at))))
+
+      // 連続記入日数 (今日 or 直近の記入から遡る)
+      const today = toJSTDateStr(new Date())
+      let cur = 0
+      const cursor = new Date(today + 'T00:00:00Z')
+      while (writtenDays.has(toJSTDateStr(cursor))) {
+        cur++
+        cursor.setUTCDate(cursor.getUTCDate() - 1)
+      }
+      // 自己ベスト
+      const sorted = Array.from(writtenDays).sort()
+      let best = 0, streak = 0, prev = null
+      sorted.forEach(d => {
+        if (prev) {
+          const diff = (new Date(d).getTime() - new Date(prev).getTime()) / 86400000
+          if (diff <= 1.5) streak++; else streak = 1
+        } else streak = 1
+        if (streak > best) best = streak
+        prev = d
+      })
+
+      // 当月ヒートマップ (1日〜月末)
+      const jst = new Date(Date.now() + 9 * 3600 * 1000)
+      const y = jst.getUTCFullYear(), m = jst.getUTCMonth()
+      const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+      const monthDays = []
+      for (let d = 1; d <= last; d++) {
+        const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        const dow = new Date(Date.UTC(y, m, d)).getUTCDay()
+        const isFuture = dateStr > today
+        const isWeekend = dow === 0 || dow === 6
+        monthDays.push({ d, dateStr, written: writtenDays.has(dateStr), isFuture, isWeekend })
+      }
+      const thisMonthCount = monthDays.filter(x => x.written).length
+      const totalMonthDays = monthDays.filter(x => !x.isFuture && !x.isWeekend).length
+
+      if (alive) setData({ loading: false, current: cur, best, monthDays, thisMonthCount, totalMonthDays })
+    })()
+    return () => { alive = false }
+  }, [viewingName])
+
+  if (data.loading) return null
+  const targetDays = 22
+  const remainingForBadge = Math.max(0, targetDays - data.current)
+  const monthPct = data.totalMonthDays > 0 ? Math.round(data.thisMonthCount / data.totalMonthDays * 100) : 0
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+      {/* 連続記入カード */}
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.border}`,
+        borderRadius: 12, padding: 18, position: 'relative',
+      }}>
+        <div style={{
+          position: 'absolute', top: 12, right: 12,
+          padding: '2px 8px', borderRadius: 99,
+          background: `${T.warn}1f`, border: `1px solid ${T.warn}`,
+          color: T.warn, fontSize: 10, fontWeight: 700,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}>
+          <Icon name="bolt" size={11} stroke={2} /> 継続中
+        </div>
+        <div style={{
+          fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+          letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6,
+        }}>連続記入</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
+          <span style={{
+            fontSize: 32, fontWeight: 600, color: T.text,
+            letterSpacing: '-0.02em', fontFamily: 'ui-monospace, SF Mono, monospace',
+          }}>{data.current}</span>
+          <span style={{ fontSize: 14, color: T.textSub }}>日</span>
+          <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 'auto' }}>
+            自己ベスト {data.best}日
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
+          {data.current === 0
+            ? '今日から始めましょう。1 行でも書けば連続記入スタートです。'
+            : remainingForBadge > 0
+              ? <>今日も書いて <b>{data.current + 1}日</b> にしましょう。あと <b style={{ color: T.warn }}>{remainingForBadge}日</b> で「振り返り皆勤」バッジに手が届きます。</>
+              : '✨ 振り返り皆勤バッジを達成しています！'}
+        </div>
+      </div>
+
+      {/* 当月ヒートマップ */}
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.border}`,
+        borderRadius: 12, padding: 18,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 10 }}>
+          <div style={{
+            fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+            letterSpacing: '0.04em', textTransform: 'uppercase',
+          }}>今月の記入</div>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, color: T.textSub, fontFamily: 'ui-monospace, SF Mono, monospace' }}>
+            {data.thisMonthCount} / {data.totalMonthDays}日 ({monthPct}%)
+          </span>
+        </div>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(16px, 1fr))', gap: 3,
+          marginBottom: 8,
+        }}>
+          {data.monthDays.map(x => (
+            <div key={x.d} title={`${x.dateStr}${x.written ? ' (記入済)' : x.isWeekend ? ' (休日)' : x.isFuture ? ' (未来)' : ' (未記入)'}`}
+              style={{
+                aspectRatio: '1 / 1', borderRadius: 4,
+                background: x.written ? T.accent : x.isWeekend ? 'transparent' : x.isFuture ? 'transparent' : T.sectionBg,
+                border: x.isWeekend && !x.written ? `1px solid ${T.border}` : 'none',
+                opacity: x.isFuture ? 0.3 : 1,
+              }} />
+          ))}
+        </div>
+        {/* レジェンド */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: T.textMuted }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: T.accent }} /> 記入済
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: T.sectionBg }} /> 未記入
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, border: `1px solid ${T.border}` }} /> 休日
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── ThreeQuestions: 今日の 3 つの問い (Keep / Problem / Try の問いかけ式) ──
+function ThreeQuestions({ T, viewingName, canEdit, myName }) {
+  const todayStr = toJSTDateStr(new Date())
+  const [keep, setKeep] = useState('')
+  const [problem, setProblem] = useState('')
+  const [tryNote, setTryNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const save = async () => {
+    if (!myName) return
+    if (!keep.trim() && !problem.trim() && !tryNote.trim()) return
+    setSaving(true)
+    const monday = getMondayJSTStr()
+    const { error } = await supabase.from('coaching_logs').insert({
+      owner: myName, log_type: 'kpt', week_start: monday,
+      content: JSON.stringify({ keep: keep.trim(), problem: problem.trim(), try: tryNote.trim() }),
+    })
+    setSaving(false)
+    if (error) { alert('保存失敗: ' + error.message); return }
+    setSaved(true)
+    setKeep(''); setProblem(''); setTryNote('')
+    setTimeout(() => setSaved(false), 1500)
+  }
+
+  const handleKey = (e) => {
+    if (e.isComposing || e.keyCode === 229) return
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save() }
+  }
+
+  const cols = [
+    { key: 'keep',    label: 'KEEP',    color: T.success || '#16a34a', q: '今日うまくいったことは何でしたか？',
+      hint: '小さなことで OK — 集中できた瞬間、いい判断ができた場面、声をかけてもらえたこと…',
+      value: keep,    setValue: setKeep },
+    { key: 'problem', label: 'PROBLEM', color: T.warn    || '#d97706', q: '今日「もっとうまくやれた」と感じたことは？',
+      hint: '誰かを責める必要はありません — 自分のやり方で改善できそうな点を一つ。',
+      value: problem, setValue: setProblem },
+    { key: 'try',     label: 'TRY',     color: T.info    || T.accent || '#0284c7', q: '明日、試したい小さなことは何ですか？',
+      hint: '15分でできる行動レベルで。例:「朝イチに会議準備の枠を作る」',
+      value: tryNote, setValue: setTryNote },
+  ]
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`,
+      borderRadius: 12, overflow: 'hidden',
+    }}>
+      {/* ヘッダ */}
+      <div style={{
+        padding: '14px 20px 12px',
+        background: `linear-gradient(180deg, ${T.accent}1a 0%, transparent 100%)`,
+        borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span style={{
+          width: 18, height: 18, borderRadius: '50%',
+          background: T.accent, color: '#fff',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon name="bolt" size={11} stroke={2.4} />
+        </span>
+        <div style={{
+          fontSize: 10.5, fontWeight: 600, color: T.accent,
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>今日の 3 つの問い · {todayStr.slice(5).replace('-', '/')}</div>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: T.textMuted }}>
+          1問だけでも OK · 後から書き足せます
+        </span>
+      </div>
+      {/* 3 列グリッド */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 1, background: T.border,
+      }}>
+        {cols.map(c => (
+          <div key={c.key} style={{
+            background: T.bgCard, padding: '14px 16px 12px',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: c.color,
+                letterSpacing: '0.06em', textTransform: 'uppercase',
+              }}>{c.label}</span>
+            </div>
+            <div style={{
+              fontSize: 14, fontWeight: 600, color: T.text,
+              letterSpacing: '-0.005em', lineHeight: 1.45, marginBottom: 6,
+            }}>{c.q}</div>
+            <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
+              {c.hint}
+            </div>
+            <textarea
+              value={c.value} onChange={e => c.setValue(e.target.value)}
+              onKeyDown={handleKey}
+              disabled={!canEdit}
+              placeholder="一行から、気軽に。"
+              style={{
+                width: '100%', minHeight: 56, padding: '8px 10px',
+                background: T.sectionBg, border: `1px solid ${T.border}`,
+                borderRadius: 8, color: T.text, fontSize: 13,
+                fontFamily: 'inherit', resize: 'vertical', outline: 'none',
+                boxSizing: 'border-box', lineHeight: 1.5,
+              }} />
+          </div>
+        ))}
+      </div>
+      {/* フッタ */}
+      <div style={{
+        background: T.sectionBg, borderTop: `1px solid ${T.border}`,
+        padding: '10px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 8,
+      }}>
+        <span style={{ fontSize: 11, color: T.textMuted }}>
+          書いた内容は今日の KPT として保存され、明日まとめて整理できます
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {saved && <span style={{ fontSize: 11, color: T.success, fontWeight: 600 }}>✓ 保存しました</span>}
+          <span style={{ fontSize: 10, color: T.textMuted }}>
+            <kbd style={{ padding: '1px 5px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 4, fontSize: 10, fontFamily: 'ui-monospace, SF Mono, monospace' }}>⌘</kbd>
+            +
+            <kbd style={{ padding: '1px 5px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 4, fontSize: 10, fontFamily: 'ui-monospace, SF Mono, monospace' }}>↵</kbd>
+            で保存
+          </span>
+          <button onClick={save} disabled={saving || !canEdit || (!keep.trim() && !problem.trim() && !tryNote.trim())}
+            style={{
+              padding: '6px 14px', borderRadius: 7, border: 'none',
+              background: T.accent, color: '#fff',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              opacity: (saving || !canEdit || (!keep.trim() && !problem.trim() && !tryNote.trim())) ? 0.5 : 1,
+            }}>
+            {saving ? '保存中...' : '今日の記録を保存'}
+          </button>
+        </div>
       </div>
     </div>
   )
