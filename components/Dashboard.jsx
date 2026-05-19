@@ -1628,8 +1628,8 @@ export default function Dashboard({ user, onSignOut }) {
           />
         </div>
       </div>
-      {/* Owner View (= 旧「担当」ビュー、現在 UI からは到達しないが内部状態として保持) */}
-      <div style={{ display: 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {/* 年間 + 個人 → OwnerOKRView (メンバー選択 + その人の担当 OKR ビュー) */}
+      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && okrViewScope === 'personal' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1668,8 +1668,8 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {/* 年間 + 個人 / 週次 + 個人 → 自分の OKR (MyOKRPage) */}
-      {activePage === 'okr' && okrViewScope === 'personal' && (
+      {/* 年間 + 個人 / 週次 + 個人 → 自分の OKR (MyOKRPage) は週次のみ */}
+      {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'personal' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <MyOKRPageNew
             user={user} levels={levels} members={members}
