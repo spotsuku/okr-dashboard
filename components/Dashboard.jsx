@@ -927,8 +927,9 @@ export default function Dashboard({ user, onSignOut }) {
   }, [isMobile])  // activePage を依存に入れると無限ループになるので除外
 
   // URL にページ・年度を同期（リロード時に復元される）
+  //   既存クエリ (例: ?myai_force_gate=1) を上書きしないように、現在の search をベースに変更
   useEffect(() => {
-    const params = new URLSearchParams()
+    const params = new URLSearchParams(window.location.search)
     params.set('page', activePage)
     params.set('fy', fiscalYear)
     const newUrl = `${window.location.pathname}?${params.toString()}`
@@ -1402,8 +1403,15 @@ export default function Dashboard({ user, onSignOut }) {
       <DemoBanner />
       {/* myAI ライセンス: 初回ログインのフルスクリーンゲート (SaaS化 Phase 5) */}
       <LicenseGate T={T} myEmail={user?.email} />
-      {/* myAI ライセンス無効時のソフトロックバナー (SaaS化 Phase 5) */}
-      <LicenseBanner T={T} />
+      {/* myAI ライセンス無効時 + 無料体験中の残日数バナー */}
+      <LicenseBanner T={T} onRegisterKey={() => {
+        // クエリに myai_force_gate=1 を追加して LicenseGate を強制表示
+        if (typeof window === 'undefined') return
+        const url = new URL(window.location.href)
+        url.searchParams.set('myai_force_gate', '1')
+        window.history.replaceState(null, '', url.toString())
+        window.location.reload()
+      }} />
       {/* Header (Glass: backdrop blur + 56px / スマホでは非表示) */}
       <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)', position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
