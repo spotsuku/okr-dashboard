@@ -2271,7 +2271,7 @@ async function fetchBadgeStats(viewingName) {
     supabase.from('coaching_chats').select('id, role, created_at')
       .eq('owner', viewingName).eq('role', 'user').eq('kind', 'mycoach')
       .gte('created_at', `${monthStart}T00:00:00`).lte('created_at', `${monthEnd}T23:59:59`),
-    supabase.from('members').select('google_refresh_token').ilike('name', viewingName).limit(1),
+    supabase.from('user_integrations').select('refresh_token').eq('owner', viewingName).eq('service', 'google').limit(1),
   ])
 
   const tasks = tasksRes.data || []
@@ -2291,7 +2291,7 @@ async function fetchBadgeStats(viewingName) {
   const kptDays = new Set(logs.filter(l => l.log_type === 'kpt')
     .map(l => l.created_at?.split('T')[0])).size
   const mycooCount = (chatsRes.data || []).length
-  const googleConnected = !!(googleRes.data?.[0]?.google_refresh_token)
+  const googleConnected = !!(googleRes.data?.[0]?.refresh_token)
 
   return [
     { key: 'tasks', label: 'タスク完了率', value: `${taskRate}%`, achieved: taskRate >= 80, progress: Math.min(100, taskRate), iconName: 'check', desc: '完了率 80% 以上', target: '80%' },
@@ -2333,14 +2333,15 @@ function BadgeIcon({ state, iconName, size = 64 }) {
     )
   }
   if (state === 'near') {
+    // near: 達成手前。ゴールドで誤解を生まないようグレー + warn アクセントの控えめ表示
     return (
       <div style={{
         ...base,
-        background: 'radial-gradient(circle at 30% 25%, #fef3c7 0%, #fcd34d 45%, #d97706 100%)',
-        color: '#fff',
-        boxShadow: '0 0 0 3px rgba(217,119,6,.14), inset 0 -2px 3px rgba(146,64,14,.25), inset 0 2px 2px rgba(255,255,255,.4)',
+        background: 'linear-gradient(160deg, #f4f4f5 0%, #e4e4e7 70%, #d4d4d8 100%)',
+        color: '#92400e',
+        boxShadow: 'inset 0 -1px 2px rgba(0,0,0,.04), inset 0 1px 2px rgba(255,255,255,.6)',
       }}>
-        <Icon name={iconName} size={iconSize} stroke={2} />
+        <Icon name={iconName} size={iconSize} stroke={1.8} />
       </div>
     )
   }
@@ -2459,7 +2460,8 @@ function BadgeCard({ T, badge }) {
     background: 'linear-gradient(170deg, #fffbeb 0%, #fef3c7 100%)',
     border: '1px solid #fcd34d',
   } : state === 'near' ? {
-    background: T.bgCard, border: `1px solid ${T.warn}`,
+    // near: 達成風に見えないよう控えめに (border は warn の半透明)
+    background: T.bgCard, border: `1px solid ${T.warn}40`,
   } : {
     background: T.bgCard, border: `1px solid ${T.border}`,
   }
@@ -2582,7 +2584,7 @@ function BadgeCollection({ T, viewingName, isViewingSelf, onGoToRetrospect }) {
         supabase.from('coaching_chats').select('id, role, created_at')
           .eq('owner', viewingName).eq('role', 'user').eq('kind', 'mycoach')
           .gte('created_at', `${monthStart}T00:00:00`).lte('created_at', `${monthEnd}T23:59:59`),
-        supabase.from('members').select('google_refresh_token').ilike('name', viewingName).limit(1),
+        supabase.from('user_integrations').select('refresh_token').eq('owner', viewingName).eq('service', 'google').limit(1),
       ])
       if (!alive) return
 
@@ -2612,7 +2614,7 @@ function BadgeCollection({ T, viewingName, isViewingSelf, onGoToRetrospect }) {
       // 6. MyCOO 相談回数 (user role chat 件数)
       const mycooCount = (chatsRes.data || []).length
       // 7. Google 連携
-      const googleConnected = !!(googleRes.data?.[0]?.google_refresh_token)
+      const googleConnected = !!(googleRes.data?.[0]?.refresh_token)
 
       const items = [
         { key: 'tasks', label: 'タスク完了率', value: `${taskRate}%`, achieved: taskRate >= 80, iconName: 'check', desc: '80%以上' },
