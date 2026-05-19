@@ -318,15 +318,24 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
         const objKAs = kaReports.filter(r => Number(r.objective_id) === Number(obj.id))
         const totalKaCount = objKAs.length
         return (
-          <div key={obj.id} style={{ marginBottom: 18 }}>
-            {/* Objective Card */}
+          <div key={obj.id} style={{ marginBottom: 24 }}>
+            {/* Objective Card (sticky) */}
             <div style={{
-              padding: 20, marginBottom: 12,
-              background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 12,
-              display: 'flex', alignItems: 'flex-start', gap: 14,
+              position: 'sticky', top: 0, zIndex: 5,
+              padding: '8px 0 0',
+              background: `linear-gradient(180deg, ${t.bg} 0%, ${t.bg} 85%, transparent 100%)`,
+              marginBottom: 4,
             }}>
               <div style={{
-                width: 30, height: 30, borderRadius: 7,
+                padding: 20,
+                background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 12,
+                display: 'flex', alignItems: 'flex-start', gap: 14,
+                backdropFilter: 'blur(16px) saturate(160%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+                boxShadow: '0 4px 14px rgba(15,23,42,.06)',
+              }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 9,
                 background: `${t.accent}1a`, color: t.accent,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
@@ -366,6 +375,20 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                   )}
                 </div>
               </div>
+              </div>
+            </div>
+
+            {/* Key Results → Key Actions セパレータ */}
+            <div style={{
+              padding: '14px 4px 10px',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span style={{ width: 18, height: 1, background: t.border }} />
+              <span style={{
+                fontSize: 10.5, fontWeight: 600, color: t.textMuted,
+                letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+              }}>Key Results → Key Actions</span>
+              <span style={{ flex: 1, height: 1, background: t.border }} />
             </div>
 
             {/* KR Blocks */}

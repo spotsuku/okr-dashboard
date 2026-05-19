@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS } from '../lib/themeTokens'
 import { useCurrentOrg } from '../lib/orgContext'
@@ -927,8 +927,9 @@ export default function Dashboard({ user, onSignOut }) {
   }, [isMobile])  // activePage を依存に入れると無限ループになるので除外
 
   // URL にページ・年度を同期（リロード時に復元される）
+  //   既存クエリ (例: ?myai_force_gate=1) を上書きしないように、現在の search をベースに変更
   useEffect(() => {
-    const params = new URLSearchParams()
+    const params = new URLSearchParams(window.location.search)
     params.set('page', activePage)
     params.set('fy', fiscalYear)
     const newUrl = `${window.location.pathname}?${params.toString()}`
@@ -1402,8 +1403,15 @@ export default function Dashboard({ user, onSignOut }) {
       <DemoBanner />
       {/* myAI ライセンス: 初回ログインのフルスクリーンゲート (SaaS化 Phase 5) */}
       <LicenseGate T={T} myEmail={user?.email} />
-      {/* myAI ライセンス無効時のソフトロックバナー (SaaS化 Phase 5) */}
-      <LicenseBanner T={T} />
+      {/* myAI ライセンス無効時 + 無料体験中の残日数バナー */}
+      <LicenseBanner T={T} onRegisterKey={() => {
+        // クエリに myai_force_gate=1 を追加して LicenseGate を強制表示
+        if (typeof window === 'undefined') return
+        const url = new URL(window.location.href)
+        url.searchParams.set('myai_force_gate', '1')
+        window.history.replaceState(null, '', url.toString())
+        window.location.reload()
+      }} />
       {/* Header (Glass: backdrop blur + 56px / スマホでは非表示) */}
       <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)', position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
@@ -1517,57 +1525,110 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
         </div>
 
-        {/* 2行目: OKR サブタブナビ (年間 / 週次)
-            各タブ内で「全社/個人」のビュー切替を持つ */}
+        {/* OKR ページの UnifiedTopStrip — 1 行に「期間 + 対象 + ブレッドクラム + アクション」を集約
+            (旧 2 段タブ「年間/週次 + 組織/個人」を統合) */}
         {activePage === 'okr' && (
-          <div style={{ padding: '5px 20px', display: 'flex', gap: 4, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
-            {[
-              { key: 'annual', label: '📊 年間' },
-              { key: 'weekly', label: '📅 週次' },
-            ].map(t => {
-              const active = okrSubTab === t.key
-              return (
-                <button key={t.key} onClick={() => setOkrSubTab(t.key)} style={{
-                  padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: active ? T.navActiveBg : 'transparent',
-                  color: active ? T.navActiveText : T.textSub,
-                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-                }}>{t.label}</button>
-              )
-            })}
-          </div>
-        )}
-
-        {/* 3行目: OKRページ・全タブ共通 (組織/個人 切替 + 年間サブタブの OKR追加) */}
-        {activePage === 'okr' && (
-          <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
-            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {[{key:'company',label:'🏢 組織'},{key:'personal',label:'👤 個人'}].map(v => (
-                <button key={v.key} onClick={() => setOkrViewScope(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: okrViewScope === v.key ? T.navActiveBg : 'transparent', color: okrViewScope === v.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
-              ))}
+          <div style={{
+            padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 14,
+            borderTop: `1px solid ${T.border}`, background: T.headerBg,
+            flexWrap: 'wrap',
+          }}>
+            {/* 期間セグメント (年間 / 週次) */}
+            <div style={{
+              display: 'inline-flex', padding: 2,
+              background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+            }}>
+              {[
+                { key: 'annual', label: '年間', iconName: 'calendar' },
+                { key: 'weekly', label: '週次', iconName: 'refresh' },
+              ].map(t => {
+                const active = okrSubTab === t.key
+                return (
+                  <button key={t.key} onClick={() => setOkrSubTab(t.key)} style={{
+                    padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: active ? T.bgCard : 'transparent',
+                    color: active ? T.text : T.textSub,
+                    fontSize: 12, fontWeight: active ? 600 : 500, fontFamily: 'inherit',
+                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                    transition: 'all 0.12s',
+                  }}>
+                    <Icon name={t.iconName} size={12} stroke={1.8} /> {t.label}
+                  </button>
+                )
+              })}
             </div>
+            {/* 縦罫線 */}
+            <span style={{ width: 1, height: 22, background: T.border }} />
+            {/* 対象セグメント (組織 / 個人) */}
+            <div style={{
+              display: 'inline-flex', padding: 2,
+              background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+            }}>
+              {[
+                { key: 'company',  label: '組織', iconName: 'building' },
+                { key: 'personal', label: '個人', iconName: 'user' },
+              ].map(v => {
+                const active = okrViewScope === v.key
+                return (
+                  <button key={v.key} onClick={() => setOkrViewScope(v.key)} style={{
+                    padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: active ? T.bgCard : 'transparent',
+                    color: active ? T.text : T.textSub,
+                    fontSize: 12, fontWeight: active ? 600 : 500, fontFamily: 'inherit',
+                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                    transition: 'all 0.12s',
+                  }}>
+                    <Icon name={v.iconName} size={12} stroke={1.8} /> {v.label}
+                  </button>
+                )
+              })}
+            </div>
+            {/* ブレッドクラム */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, minWidth: 0 }}>
+              <span style={{ color: T.textMuted }}>{fiscalYear}年度</span>
+              <Icon name="chevronR" size={11} stroke={1.6} style={{ color: T.textFaint }} />
+              <span style={{ color: T.textSub }}>
+                {okrSubTab === 'annual' ? '通期＋四半期' : '週次レビュー'}
+              </span>
+              <Icon name="chevronR" size={11} stroke={1.6} style={{ color: T.textFaint }} />
+              <span style={{ color: T.text, fontWeight: 500 }}>
+                {okrViewScope === 'company' ? '組織全体' : 'メンバー個別'}
+              </span>
+            </div>
+            {/* spacer + アクション (年間+組織 のみ) */}
             <div style={{ flex: 1 }} />
             {okrSubTab === 'annual' && okrViewScope === 'company' && canEditOKR && (
               <>
                 <button onClick={() => setShowArchive(p => !p)}
-                  title={showArchive ? '通常のOKR画面に戻る' : 'アーカイブされたOKRを一覧表示'}
+                  title={showArchive ? '通常の OKR 画面に戻る' : 'アーカイブされた OKR を一覧'}
                   style={{
                     background: showArchive ? T.accentSolid : 'transparent',
                     border: `1px solid ${showArchive ? T.accentSolid : T.border}`,
                     color: showArchive ? '#fff' : T.textSub,
-                    borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                    borderRadius: 7, padding: '5px 11px', fontSize: 11.5, fontWeight: 500,
                     cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
                   }}>
-                  {showArchive ? '← 戻る' : '📦 アーカイブ OKR'}
+                  <Icon name="workspace" size={12} stroke={1.8} />
+                  {showArchive ? '戻る' : 'アーカイブ'}
                 </button>
-                <button onClick={() => setModal({ type: 'add', obj: { period: 'annual' } })} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                  ＋ OKR を追加
+                <button onClick={() => setModal({ type: 'add', obj: { period: 'annual' } })}
+                  style={{
+                    background: T.accentSolid, border: 'none', color: '#fff',
+                    borderRadius: 7, padding: '5px 12px', fontSize: 11.5, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                  }}>
+                  <Icon name="plus" size={12} stroke={2} /> OKR を追加
                 </button>
               </>
             )}
             {okrSubTab === 'annual' && okrViewScope === 'company' && !canEditOKR && (
-              <span style={{ fontSize: 11, color: T.textMuted }} title="OKR / KR の編集には組織の admin / owner ロールが必要です">
-                👁 閲覧のみ
+              <span style={{ fontSize: 11, color: T.textMuted, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                title="OKR / KR の編集には組織の admin / owner ロールが必要です">
+                <Icon name="user" size={11} stroke={1.6} /> 閲覧のみ
               </span>
             )}
           </div>
@@ -1682,7 +1743,7 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
 
-      {/* 週次 + 全社 → WeeklyMTGPage 一覧モード */}
+      {/* 週次 + 組織 → WeeklyMTGPage (内部に既に組織サイドバーがあるためそれを利用) */}
       {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'company' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <WeeklyMTGPage
@@ -1762,4 +1823,101 @@ function OrgSettingsPanelWrapper({ onClose }) {
     supabase.auth.getUser().then(({ data }) => setUser(data?.user || null))
   }, [])
   return <OrgSettingsPanel T={{ ...T, accentBg: 'rgba(10,132,255,0.16)', warnBg: 'rgba(255,159,10,0.16)', sectionBg: 'rgba(255,255,255,0.04)' }} myEmail={user?.email} onClose={onClose} />
+}
+
+// ─── WeeklyOrgPanel: OKRタブ「週次+組織」のパネル式ビュー ───────────────
+//   左に部署サイドバー (240px) + 右に選択中の部署の WeeklyMTGPage 一覧
+//   スクロールが長くなりがちな週次 KA を、部署単位で絞り込んで見やすく
+function WeeklyOrgPanel({ T, levels, themeKey, fiscalYear, user, initialPeriod }) {
+  // ルート組織 (= 経営レベル) と事業部レベル (= ルート直下)
+  const rootIds = useMemo(() => new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id))), [levels])
+  const departments = useMemo(
+    () => (levels || []).filter(l => l.parent_id && rootIds.has(Number(l.parent_id))),
+    [levels, rootIds]
+  )
+  const [selectedLevelId, setSelectedLevelId] = useState(null)
+  const [query, setQuery] = useState('')
+  const filtered = useMemo(() => {
+    if (!query.trim()) return departments
+    const q = query.trim().toLowerCase()
+    return departments.filter(d => (d.name || '').toLowerCase().includes(q))
+  }, [departments, query])
+
+  return (
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+      {/* 左: 部署レール 240px */}
+      <div style={{
+        width: 240, flexShrink: 0,
+        borderRight: `1px solid ${T.border}`,
+        background: T.bgCard, display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* ヘッダ */}
+        <div style={{ padding: '12px 14px 8px', borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
+            <span style={{
+              fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+              letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}>組織階層</span>
+            <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 'auto' }}>
+              {departments.length}件
+            </span>
+          </div>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="部署を検索"
+            style={{
+              width: '100%', padding: '5px 8px',
+              background: T.sectionBg, border: `1px solid ${T.border}`,
+              borderRadius: 7, color: T.text, fontSize: 11.5,
+              outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+            }} />
+        </div>
+        {/* リスト */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 6 }}>
+          {/* 全部署 */}
+          <div onClick={() => setSelectedLevelId(null)} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 10px', borderRadius: 7, cursor: 'pointer',
+            background: selectedLevelId === null ? `${T.accent}1a` : 'transparent',
+            color: selectedLevelId === null ? T.accent : T.textSub,
+            fontWeight: selectedLevelId === null ? 600 : 500,
+            fontSize: 12.5, marginBottom: 2,
+          }}>
+            <Icon name="building" size={13} stroke={1.8} />
+            <span>全部署</span>
+          </div>
+          {filtered.map(d => {
+            const active = Number(selectedLevelId) === Number(d.id)
+            return (
+              <div key={d.id} onClick={() => setSelectedLevelId(Number(d.id))} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 10px', borderRadius: 7, cursor: 'pointer',
+                background: active ? `${T.accent}1a` : 'transparent',
+                color: active ? T.accent : T.textSub,
+                fontWeight: active ? 600 : 500,
+                fontSize: 12.5, marginBottom: 2,
+              }}>
+                <span style={{ fontSize: 13 }}>{d.icon || '📁'}</span>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {d.name}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 右: 選択中の部署の WeeklyMTGPage */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
+        <WeeklyMTGPage
+          levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
+          user={user} initialPeriod={initialPeriod}
+          forceMode="list"
+          forceLevelId={selectedLevelId}
+        />
+      </div>
+    </div>
+  )
 }
