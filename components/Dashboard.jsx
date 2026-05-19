@@ -1735,15 +1735,8 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
 
-      {/* 週次 + 組織 → パネル式 (左: 部署レール / 右: 選択中の部署の WeeklyMTGPage) */}
+      {/* 週次 + 組織 → WeeklyMTGPage (内部に既に組織サイドバーがあるためそれを利用) */}
       {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'company' && (
-        <WeeklyOrgPanel
-          T={T} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
-          user={user} initialPeriod={activePeriod}
-        />
-      )}
-      {/* 旧 WeeklyMTGPage 直挿しは撤去 — 上の WeeklyOrgPanel に置き換え */}
-      {false && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <WeeklyMTGPage
             levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
