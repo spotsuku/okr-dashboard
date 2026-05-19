@@ -1845,6 +1845,245 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
 //   タスク完了率 / KR記入率 / KA記入率 / 月22日以上ログイン / 振り返り記入 /
 //   MyCOO 5回以上相談 / Google連携完了 の 7 種を当月で集計。
 //   80% 以上 or 22 日以上で 1 バッジ獲得。詳細は振り返りページで参照可能。
+// ─── Monthly1on1Card: 月次 1on1 (KPT 共同記入 + 成長テーマ) ─────────────
+//   自分の KPT を編集 + 上司の KPT を閲覧 (上司側からも編集可) + 共同で成長テーマ
+//   KR進捗・KR/KA 記入率は BadgeCollectionDetail を参照することを案内
+function Monthly1on1Card({ T, viewingName, isViewingSelf }) {
+  // 月を YYYY-MM 形式で。default は当月
+  const currentMonth = (() => {
+    const jst = new Date(Date.now() + 9 * 3600 * 1000)
+    return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, '0')}`
+  })()
+  const [month, setMonth] = useState(currentMonth)
+  const [row, setRow] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState({
+    supervisor: '', self_keep: '', self_problem: '', self_try: '',
+    boss_keep: '', boss_problem: '', boss_try: '', growth_theme: '',
+  })
+
+  const load = useCallback(async () => {
+    if (!viewingName) { setLoading(false); return }
+    setLoading(true)
+    const { data, error } = await supabase.from('monthly_1on1')
+      .select('*').eq('owner', viewingName).eq('month', month).maybeSingle()
+    if (error) console.warn('[monthly_1on1] load error:', error.message)
+    setRow(data || null)
+    setDraft({
+      supervisor: data?.supervisor || '',
+      self_keep: data?.self_keep || '',
+      self_problem: data?.self_problem || '',
+      self_try: data?.self_try || '',
+      boss_keep: data?.boss_keep || '',
+      boss_problem: data?.boss_problem || '',
+      boss_try: data?.boss_try || '',
+      growth_theme: data?.growth_theme || '',
+    })
+    setLoading(false)
+  }, [viewingName, month])
+
+  useEffect(() => { load() }, [load])
+
+  async function save(patch) {
+    if (!viewingName) return
+    setSaving(true)
+    const payload = {
+      owner: viewingName, month,
+      supervisor: patch.supervisor !== undefined ? patch.supervisor : draft.supervisor,
+      self_keep: patch.self_keep !== undefined ? patch.self_keep : draft.self_keep,
+      self_problem: patch.self_problem !== undefined ? patch.self_problem : draft.self_problem,
+      self_try: patch.self_try !== undefined ? patch.self_try : draft.self_try,
+      boss_keep: patch.boss_keep !== undefined ? patch.boss_keep : draft.boss_keep,
+      boss_problem: patch.boss_problem !== undefined ? patch.boss_problem : draft.boss_problem,
+      boss_try: patch.boss_try !== undefined ? patch.boss_try : draft.boss_try,
+      growth_theme: patch.growth_theme !== undefined ? patch.growth_theme : draft.growth_theme,
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = await supabase.from('monthly_1on1')
+      .upsert(payload, { onConflict: 'owner,month' })
+    if (error) console.warn('[monthly_1on1] save error:', error.message)
+    setSaving(false)
+    load()
+  }
+
+  // 月候補: 当月から過去 6 ヶ月
+  const monthOptions = useMemo(() => {
+    const jst = new Date(Date.now() + 9 * 3600 * 1000)
+    const out = []
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth() - i, 1))
+      const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      const label = `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`
+      out.push({ value: ym, label: i === 0 ? `${label} (今月)` : label })
+    }
+    return out
+  }, [])
+
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.border}`,
+      borderRadius: 14, padding: 18,
+    }}>
+      {/* ヘッダ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 20 }}>🤝</span>
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>月次 1on1</div>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+            自分と上司が 1ヶ月の KPT をお互い書いて、1on1 で話す材料に
+          </div>
+        </div>
+        <select value={month} onChange={e => setMonth(e.target.value)}
+          style={{
+            padding: '5px 10px', borderRadius: 7, border: `1px solid ${T.border}`,
+            background: T.bg, color: T.text, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
+          }}>
+          {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
+      {loading ? <Loading T={T} /> : (
+        <>
+          {/* 上司 (supervisor) 設定 */}
+          <div style={{ marginBottom: 14, padding: '10px 12px', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>上司</span>
+            {isViewingSelf ? (
+              <input
+                value={draft.supervisor}
+                onChange={e => setDraft(d => ({ ...d, supervisor: e.target.value }))}
+                onBlur={e => save({ supervisor: e.target.value })}
+                placeholder="上司の名前 (例: 三木浩江)"
+                style={{
+                  flex: 1, minWidth: 160,
+                  padding: '5px 10px', borderRadius: 6,
+                  border: `1px solid ${T.border}`, background: T.bg, color: T.text,
+                  fontSize: 12, outline: 'none', fontFamily: 'inherit',
+                }} />
+            ) : (
+              <span style={{ fontSize: 12, color: T.text }}>{draft.supervisor || '(未設定)'}</span>
+            )}
+            <span style={{ fontSize: 10, color: T.textMuted }}>
+              指定すると、その人が boss_* 欄を編集できます
+            </span>
+          </div>
+
+          {/* 自分の KPT */}
+          <KPTRow
+            T={T} title="自分の KPT" subtitle="部下が記入"
+            keep={draft.self_keep} problem={draft.self_problem} tryNote={draft.self_try}
+            readOnly={!isViewingSelf}
+            onSave={(k, p, t) => save({ self_keep: k, self_problem: p, self_try: t })}
+            saving={saving}
+          />
+
+          {/* 上司の KPT */}
+          <KPTRow
+            T={T} title="上司から見た KPT" subtitle="上司が記入"
+            keep={draft.boss_keep} problem={draft.boss_problem} tryNote={draft.boss_try}
+            readOnly={isViewingSelf}
+            onSave={(k, p, t) => save({ boss_keep: k, boss_problem: p, boss_try: t })}
+            saving={saving}
+            emptyMessage="上司がまだ記入していません"
+          />
+
+          {/* 成長テーマ */}
+          <div style={{ marginTop: 14, padding: '12px 14px', background: `${T.accent}0a`, border: `1px solid ${T.accent}30`, borderRadius: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <Icon name="rocket" size={13} stroke={1.8} style={{ color: T.accent }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>来月の成長テーマ</span>
+              <span style={{ fontSize: 10, color: T.textMuted }}>(双方で合意して記入)</span>
+            </div>
+            <textarea
+              value={draft.growth_theme}
+              onChange={e => setDraft(d => ({ ...d, growth_theme: e.target.value }))}
+              onBlur={e => save({ growth_theme: e.target.value })}
+              placeholder="例: 1on1で相手の話を引き出す力を伸ばす"
+              rows={2}
+              style={{
+                width: '100%', padding: 8, background: T.bg,
+                border: `1px solid ${T.border}`, borderRadius: 6, color: T.text,
+                fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none',
+                boxSizing: 'border-box',
+              }} />
+          </div>
+
+          <div style={{ marginTop: 10, fontSize: 11, color: T.textMuted, textAlign: 'center' }}>
+            KR進捗 / KR・KA 記入率 / ログイン日数は ↓ のバッジコレクションで確認できます
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function KPTRow({ T, title, subtitle, keep, problem, tryNote, readOnly, onSave, saving, emptyMessage }) {
+  const [draftK, setDraftK] = useState(keep || '')
+  const [draftP, setDraftP] = useState(problem || '')
+  const [draftT, setDraftT] = useState(tryNote || '')
+  useEffect(() => { setDraftK(keep || ''); setDraftP(problem || ''); setDraftT(tryNote || '') }, [keep, problem, tryNote])
+
+  const allEmpty = !keep && !problem && !tryNote
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{title}</span>
+        <span style={{ fontSize: 10, color: T.textMuted }}>· {subtitle}</span>
+        {readOnly && <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 'auto' }}>閲覧のみ</span>}
+      </div>
+      {readOnly && allEmpty ? (
+        <div style={{ padding: '12px 14px', background: T.sectionBg, border: `1px dashed ${T.border}`, borderRadius: 7, fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>
+          {emptyMessage || '記入なし'}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
+          <Monthly1on1Field T={T} label="Keep" color={T.success || '#16a34a'} value={draftK}
+            readOnly={readOnly} placeholder="続けたいこと"
+            onChange={setDraftK} onBlur={v => onSave(v, draftP, draftT)} />
+          <Monthly1on1Field T={T} label="Problem" color={T.warn || '#d97706'} value={draftP}
+            readOnly={readOnly} placeholder="課題に感じたこと"
+            onChange={setDraftP} onBlur={v => onSave(draftK, v, draftT)} />
+          <Monthly1on1Field T={T} label="Try" color={T.info || T.accent || '#5b5bd6'} value={draftT}
+            readOnly={readOnly} placeholder="来月試したいこと"
+            onChange={setDraftT} onBlur={v => onSave(draftK, draftP, v)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Monthly1on1Field({ T, label, color, value, readOnly, placeholder, onChange, onBlur }) {
+  return (
+    <div style={{
+      padding: '8px 10px', background: T.bgCard,
+      border: `1px solid ${color}40`, borderLeft: `3px solid ${color}`,
+      borderRadius: 7,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 4, letterSpacing: '0.04em' }}>
+        {label.toUpperCase()}
+      </div>
+      {readOnly ? (
+        <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', minHeight: 38 }}>
+          {value || <span style={{ color: T.textFaint, fontStyle: 'italic' }}>記入なし</span>}
+        </div>
+      ) : (
+        <textarea
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onBlur={e => onBlur(e.target.value)}
+          placeholder={placeholder}
+          rows={3}
+          style={{
+            width: '100%', padding: 0, background: 'transparent',
+            border: 'none', color: T.text,
+            fontSize: 12, fontFamily: 'inherit', resize: 'vertical', outline: 'none',
+            boxSizing: 'border-box', lineHeight: 1.5,
+          }} />
+      )}
+    </div>
+  )
+}
+
 // ─── バッジ集計ロジック (BadgeCollection / BadgeCollectionDetail で共有) ──
 async function fetchBadgeStats(viewingName) {
   if (!viewingName) return []
@@ -3208,6 +3447,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
 // ─── 振り返りタブ：KPT + work_log の時系列一覧 ──────────────────────
 function RetrospectTab({ T, viewingName, viewingMember }) {
   const isMobile = useIsMobile()
+  const [subTab, setSubTab] = useState('retrospect') // 'retrospect' | 'badges'
   const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
   const [data, setData] = useState({ days: [], loading: true, taskStats: { onTime: 0, overdue: 0 }, kptSummary: { keep: [], problem: [], try: [] } })
 
@@ -3331,12 +3571,37 @@ function RetrospectTab({ T, viewingName, viewingMember }) {
         )}
       </div>
 
+      {/* サブタブ: 振り返り / バッジコレクション */}
+      <div style={{
+        display: 'flex', gap: 4, padding: '6px 14px',
+        borderBottom: `1px solid ${T.border}`, flexShrink: 0,
+      }}>
+        {[
+          { key: 'retrospect', label: '💭 振り返り' },
+          { key: 'badges',     label: '🏅 バッジコレクション' },
+        ].map(t => {
+          const active = subTab === t.key
+          return (
+            <button key={t.key} onClick={() => setSubTab(t.key)} style={{
+              padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+              background: active ? T.navActiveBg : 'transparent',
+              color: active ? T.navActiveText : T.textSub,
+              fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
+            }}>{t.label}</button>
+          )
+        })}
+      </div>
+
       {/* 本体 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
-        {data.loading ? <Loading T={T} /> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
-            {/* バッジコレクション詳細 (グリッド表示) */}
+        {subTab === 'badges' ? (
+          <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <BadgeCollectionDetail T={T} viewingName={viewingName} />
+          </div>
+        ) : data.loading ? <Loading T={T} /> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
+            {/* 月次 1on1 (= Phase 1: 自分の KPT + 上司の KPT (read-only) + 成長テーマ) */}
+            <Monthly1on1Card T={T} viewingName={viewingName} isViewingSelf={!viewingMember || viewingName === viewingMember?.name} />
 
             {/* サマリー: タスク統計 + KPT 集約 */}
             <RetrospectSummary T={T} stats={data.taskStats} kpt={data.kptSummary} range={range} />
