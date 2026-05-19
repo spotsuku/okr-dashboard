@@ -869,10 +869,10 @@ export default function Dashboard({ user, onSignOut }) {
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showAI, setShowAI]                 = useState(false)
-  // OKR タブのサブタブ (年間 / 個人 / 週次)
-  // okr_full=true 組織: 年間 / 個人 / 週次 全部
-  // okr_full=false 組織: 個人のみ
+  // OKR タブのサブタブ (年間 / 週次)
+  // 各サブタブ内で「全社」「個人」のビュー切替を持つ
   const [okrSubTab, setOkrSubTab]           = useState('annual')
+  const [okrViewScope, setOkrViewScope]     = useState('company') // 'company' | 'personal'
   // 組織設定モーダル: OrgIconBar の「⚙ 設定」ボタンから window event 経由で開かれる
   const [orgSettingsOpen, setOrgSettingsOpen] = useState(false)
   useEffect(() => {
@@ -1514,13 +1514,12 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
         </div>
 
-        {/* 2行目: OKR サブタブナビ (年間 / 個人 / 週次)
-            標準設計として全プランで 3 タブ表示 */}
+        {/* 2行目: OKR サブタブナビ (年間 / 週次)
+            各タブ内で「全社/個人」のビュー切替を持つ */}
         {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', gap: 4, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             {[
               { key: 'annual', label: '📊 年間' },
-              { key: 'personal', label: '👤 個人' },
               { key: 'weekly', label: '📅 週次' },
             ].map(t => {
               const active = okrSubTab === t.key
@@ -1536,16 +1535,16 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
         )}
 
-        {/* 3行目: OKRページ・年間サブタブのみ (ビュー切替・期間フィルタ + OKR追加) */}
-        {activePage === 'okr' && okrSubTab === 'annual' && (
+        {/* 3行目: OKRページ・全タブ共通 (全社/個人 切替 + 年間サブタブの OKR追加) */}
+        {activePage === 'okr' && (
           <div style={{ padding: '5px 20px', display: 'flex', alignItems: 'center', gap: 6, borderTop: `1px solid ${T.border}`, background: T.headerBg }}>
             <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}` }}>
-              {[{key:'annual',label:'📅 年間'},{key:'owner',label:'👤 担当'}].map(v => (
-                <button key={v.key} onClick={() => setViewMode(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: viewMode === v.key ? T.navActiveBg : 'transparent', color: viewMode === v.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
+              {[{key:'company',label:'🏢 全社'},{key:'personal',label:'👤 個人'}].map(v => (
+                <button key={v.key} onClick={() => setOkrViewScope(v.key)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: okrViewScope === v.key ? T.navActiveBg : 'transparent', color: okrViewScope === v.key ? T.navActiveText : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{v.label}</button>
               ))}
             </div>
             <div style={{ flex: 1 }} />
-            {canEditOKR && (
+            {okrSubTab === 'annual' && okrViewScope === 'company' && canEditOKR && (
               <>
                 <button onClick={() => setShowArchive(p => !p)}
                   title={showArchive ? '通常のOKR画面に戻る' : 'アーカイブされたOKRを一覧表示'}
@@ -1563,7 +1562,7 @@ export default function Dashboard({ user, onSignOut }) {
                 </button>
               </>
             )}
-            {!canEditOKR && (
+            {okrSubTab === 'annual' && okrViewScope === 'company' && !canEditOKR && (
               <span style={{ fontSize: 11, color: T.textMuted }} title="OKR / KR の編集には組織の admin / owner ロールが必要です">
                 👁 閲覧のみ
               </span>
@@ -1599,13 +1598,13 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
 
-      {/* Archive View (📦 アーカイブ OKR ボタンで切替) */}
-      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
+      {/* Archive View (📦 アーカイブ OKR ボタンで切替・年間+全社のみ) */}
+      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && okrViewScope === 'company' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
         <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
           onRestore={handleRestoreArchived} onPurge={handlePurgeArchived} refreshKey={annualRefreshKey} />
       </div>
-      {/* Annual View */}
-      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && viewMode === 'annual' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {/* 年間 + 全社 → AnnualView (組織階層 OKR ビュー) */}
+      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && okrViewScope === 'company' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1629,8 +1628,8 @@ export default function Dashboard({ user, onSignOut }) {
           />
         </div>
       </div>
-      {/* Owner View */}
-      <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && viewMode === 'owner' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {/* Owner View (= 旧「担当」ビュー、現在 UI からは到達しないが内部状態として保持) */}
+      <div style={{ display: 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
@@ -1669,8 +1668,8 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       </div>
 
-      {/* OKR サブタブ: 個人 (= MyOKRPage を埋め込み。自分の OKR を見る) */}
-      {activePage === 'okr' && okrSubTab === 'personal' && (
+      {/* 年間 + 個人 / 週次 + 個人 → 自分の OKR (MyOKRPage) */}
+      {activePage === 'okr' && okrViewScope === 'personal' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <MyOKRPageNew
             user={user} levels={levels} members={members}
@@ -1680,8 +1679,8 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
 
-      {/* OKR サブタブ: 週次 (= 全 KR/KA 一覧。WeeklyMTGPage を一覧モード固定で表示) */}
-      {activePage === 'okr' && okrSubTab === 'weekly' && (
+      {/* 週次 + 全社 → WeeklyMTGPage 一覧モード */}
+      {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'company' && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <WeeklyMTGPage
             levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
