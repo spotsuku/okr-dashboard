@@ -1735,8 +1735,15 @@ export default function Dashboard({ user, onSignOut }) {
         </div>
       )}
 
-      {/* 週次 + 全社 → WeeklyMTGPage 一覧モード */}
+      {/* 週次 + 組織 → パネル式 (左: 部署レール / 右: 選択中の部署の WeeklyMTGPage) */}
       {activePage === 'okr' && okrSubTab === 'weekly' && okrViewScope === 'company' && (
+        <WeeklyOrgPanel
+          T={T} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
+          user={user} initialPeriod={activePeriod}
+        />
+      )}
+      {/* 旧 WeeklyMTGPage 直挿しは撤去 — 上の WeeklyOrgPanel に置き換え */}
+      {false && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <WeeklyMTGPage
             levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
@@ -1815,4 +1822,101 @@ function OrgSettingsPanelWrapper({ onClose }) {
     supabase.auth.getUser().then(({ data }) => setUser(data?.user || null))
   }, [])
   return <OrgSettingsPanel T={{ ...T, accentBg: 'rgba(10,132,255,0.16)', warnBg: 'rgba(255,159,10,0.16)', sectionBg: 'rgba(255,255,255,0.04)' }} myEmail={user?.email} onClose={onClose} />
+}
+
+// ─── WeeklyOrgPanel: OKRタブ「週次+組織」のパネル式ビュー ───────────────
+//   左に部署サイドバー (240px) + 右に選択中の部署の WeeklyMTGPage 一覧
+//   スクロールが長くなりがちな週次 KA を、部署単位で絞り込んで見やすく
+function WeeklyOrgPanel({ T, levels, themeKey, fiscalYear, user, initialPeriod }) {
+  // ルート組織 (= 経営レベル) と事業部レベル (= ルート直下)
+  const rootIds = useMemo(() => new Set((levels || []).filter(l => !l.parent_id).map(l => Number(l.id))), [levels])
+  const departments = useMemo(
+    () => (levels || []).filter(l => l.parent_id && rootIds.has(Number(l.parent_id))),
+    [levels, rootIds]
+  )
+  const [selectedLevelId, setSelectedLevelId] = useState(null)
+  const [query, setQuery] = useState('')
+  const filtered = useMemo(() => {
+    if (!query.trim()) return departments
+    const q = query.trim().toLowerCase()
+    return departments.filter(d => (d.name || '').toLowerCase().includes(q))
+  }, [departments, query])
+
+  return (
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+      {/* 左: 部署レール 240px */}
+      <div style={{
+        width: 240, flexShrink: 0,
+        borderRight: `1px solid ${T.border}`,
+        background: T.bgCard, display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* ヘッダ */}
+        <div style={{ padding: '12px 14px 8px', borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
+            <span style={{
+              fontSize: 10.5, fontWeight: 600, color: T.textMuted,
+              letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}>組織階層</span>
+            <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 'auto' }}>
+              {departments.length}件
+            </span>
+          </div>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="部署を検索"
+            style={{
+              width: '100%', padding: '5px 8px',
+              background: T.sectionBg, border: `1px solid ${T.border}`,
+              borderRadius: 7, color: T.text, fontSize: 11.5,
+              outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+            }} />
+        </div>
+        {/* リスト */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 6 }}>
+          {/* 全部署 */}
+          <div onClick={() => setSelectedLevelId(null)} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 10px', borderRadius: 7, cursor: 'pointer',
+            background: selectedLevelId === null ? `${T.accent}1a` : 'transparent',
+            color: selectedLevelId === null ? T.accent : T.textSub,
+            fontWeight: selectedLevelId === null ? 600 : 500,
+            fontSize: 12.5, marginBottom: 2,
+          }}>
+            <Icon name="building" size={13} stroke={1.8} />
+            <span>全部署</span>
+          </div>
+          {filtered.map(d => {
+            const active = Number(selectedLevelId) === Number(d.id)
+            return (
+              <div key={d.id} onClick={() => setSelectedLevelId(Number(d.id))} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 10px', borderRadius: 7, cursor: 'pointer',
+                background: active ? `${T.accent}1a` : 'transparent',
+                color: active ? T.accent : T.textSub,
+                fontWeight: active ? 600 : 500,
+                fontSize: 12.5, marginBottom: 2,
+              }}>
+                <span style={{ fontSize: 13 }}>{d.icon || '📁'}</span>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {d.name}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 右: 選択中の部署の WeeklyMTGPage */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
+        <WeeklyMTGPage
+          levels={levels} themeKey={themeKey} fiscalYear={fiscalYear}
+          user={user} initialPeriod={initialPeriod}
+          forceMode="list"
+          forceLevelId={selectedLevelId}
+        />
+      </div>
+    </div>
+  )
 }

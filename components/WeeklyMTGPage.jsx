@@ -990,7 +990,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
 function getCurrentQ() { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
-export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod, forceMode = null }) {
+export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='2026', user, initialPeriod, forceMode = null, forceLevelId = undefined }) {
   const wT = () => W_THEMES[themeKey] || W_THEMES.dark
   const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
   // 組織別の会議リスト (新規組織は空、NEO福岡は旧固定リスト)
@@ -1004,10 +1004,16 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const [members,       setMembers]       = useState([])
   const [loading,       setLoading]       = useState(false)
   const [activeLevelId, setActiveLevelId] = useState(() => {
+    // forceLevelId が指定されたらそれを優先 (= OKR タブ「週次+組織」のパネル式から)
+    if (forceLevelId !== undefined) return forceLevelId
     if (typeof window === 'undefined') return null
     const saved = localStorage.getItem('weeklyMTG_activeLevelId')
     return saved && saved !== 'null' ? Number(saved) : null
   })
+  // forceLevelId が後から変わったら state も追従
+  useEffect(() => {
+    if (forceLevelId !== undefined) setActiveLevelId(forceLevelId)
+  }, [forceLevelId])
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (activeLevelId == null) localStorage.removeItem('weeklyMTG_activeLevelId')
