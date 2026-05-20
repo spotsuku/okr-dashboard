@@ -68,7 +68,7 @@ export default function LegalPage({ title, lastUpdated, sections }) {
           ...TYPO.footnote, color: T.textMuted,
           textAlign: 'center',
         }}>
-          © {new Date().getFullYear()} NEO 運営DB / aiworkspace.jp
+          © {new Date().getFullYear()} AI WorkSpace / aiworkspace.jp
         </footer>
       </article>
     </div>

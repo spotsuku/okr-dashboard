@@ -1,15 +1,15 @@
 import LegalPage from '../../components/LegalPage'
 
 export const metadata = {
-  title: 'プライバシーポリシー | NEO 運営DB',
-  description: 'NEO 運営DB (aiworkspace.jp) のプライバシーポリシー',
+  title: 'プライバシーポリシー | AI WorkSpace',
+  description: 'AI WorkSpace (aiworkspace.jp) のプライバシーポリシー',
 }
 
 const sections = [
   {
     heading: 'はじめに',
     paragraphs: [
-      'NEO 運営DB (以下「本サービス」) は、ユーザーのプライバシーを尊重し、個人情報の保護に最大限の注意を払って運営されます。本ポリシーは、本サービスがユーザーから取得する情報の種類、その利用方法、および管理方法について定めるものです。',
+      'AI WorkSpace (以下「本サービス」) は、ユーザーのプライバシーを尊重し、個人情報の保護に最大限の注意を払って運営されます。本ポリシーは、本サービスがユーザーから取得する情報の種類、その利用方法、および管理方法について定めるものです。',
       '本サービスを利用された場合、ユーザーは本ポリシーに同意したものとみなされます。',
     ],
   },
