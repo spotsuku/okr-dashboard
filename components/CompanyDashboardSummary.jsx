@@ -986,15 +986,30 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
         })}
       </div>
 
-      {/* セレクタ行 (チームプルダウン + マネージャ表示) */}
+      {/* セレクタ行 (チーム横並びタブ + マネージャ表示) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, flexWrap: 'wrap', marginBottom: SPACING.md }}>
         <span style={{ ...TYPO.footnote, color: T.textSub, fontWeight: 700 }}>チーム</span>
-        <select value={selectedTeamId || ''} onChange={(e) => setSelectedTeamId(Number(e.target.value))} style={selectSt}>
-          {teamsInSelectedDept.length === 0 && <option value="">(チームなし)</option>}
-          {teamsInSelectedDept.map(t => (
-            <option key={t.id} value={t.id}>{t.icon || ''} {t.name}</option>
-          ))}
-        </select>
+        {teamsInSelectedDept.length === 0 ? (
+          <span style={{ fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>(チームなし)</span>
+        ) : (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {teamsInSelectedDept.map(t => {
+              const active = Number(selectedTeamId) === Number(t.id)
+              return (
+                <button key={t.id} onClick={() => setSelectedTeamId(Number(t.id))} style={{
+                  padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  background: active ? T.accent : T.sectionBg,
+                  color: active ? '#fff' : T.textSub,
+                  fontSize: 12, fontWeight: active ? 700 : 500,
+                  fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  transition: 'all 0.12s',
+                }}>
+                  {t.icon || ''} {t.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
         {managerName && (
           <span style={pillStyle({ color: T.textSub, size: 'sm' })}>📌 責任者: {managerName}</span>
         )}
