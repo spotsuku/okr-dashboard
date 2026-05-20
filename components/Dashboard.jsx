@@ -1401,28 +1401,30 @@ export default function Dashboard({ user, onSignOut }) {
     <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
       {/* Demo モードバナー */}
       <DemoBanner />
-      {/* サービス無料公開中バナー (myAI ライセンス機能は一時停止中) */}
-      <div role="status" style={{
-        background: `${T.accent}10`,
-        borderBottom: `1px solid ${T.accent}30`,
-        color: T.text,
-        padding: `${SPACING.sm}px ${SPACING.lg}px`,
-        display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
-        flexWrap: 'wrap', flexShrink: 0,
-      }}>
-        <span style={{
-          fontSize: 11, fontWeight: 700,
-          padding: '2px 8px', borderRadius: RADIUS.pill,
-          background: T.accent, color: '#fff',
-          letterSpacing: '0.04em', whiteSpace: 'nowrap',
-        }}>無料公開中</span>
-        <span style={{ ...TYPO.callout, color: T.text, fontWeight: 700 }}>
-          このサービスは無料公開中です。
-        </span>
-        <span style={{ ...TYPO.footnote, color: T.textSub }}>
-          有料化する場合は1ヶ月前に告知いたします。
-        </span>
-      </div>
+      {/* サービス無料公開中バナー (myAI ライセンス機能は一時停止中) — NEO福岡は元から無料のため非表示 */}
+      {currentOrg?.slug !== 'neo-fukuoka' && (
+        <div role="status" style={{
+          background: `${T.accent}10`,
+          borderBottom: `1px solid ${T.accent}30`,
+          color: T.text,
+          padding: `${SPACING.sm}px ${SPACING.lg}px`,
+          display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+          flexWrap: 'wrap', flexShrink: 0,
+        }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700,
+            padding: '2px 8px', borderRadius: RADIUS.pill,
+            background: T.accent, color: '#fff',
+            letterSpacing: '0.04em', whiteSpace: 'nowrap',
+          }}>無料公開中</span>
+          <span style={{ ...TYPO.callout, color: T.text, fontWeight: 700 }}>
+            このサービスは無料公開中です。
+          </span>
+          <span style={{ ...TYPO.footnote, color: T.textSub }}>
+            有料化する場合は1ヶ月前に告知いたします。
+          </span>
+        </div>
+      )}
       {/* myAI ライセンス機能は一時停止中 (将来再開する場合は false → true)
       <LicenseGate T={T} myEmail={user?.email} />
       <LicenseBanner T={T} onRegisterKey={() => {
