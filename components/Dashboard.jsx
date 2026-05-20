@@ -1441,7 +1441,7 @@ export default function Dashboard({ user, onSignOut }) {
         <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0, overflow: 'visible' }}>
           {/* ブランド (ロゴ + AI WorkSpace + 開いている組織名) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${T.border}` }}>
-            <img src="/icon.png" alt="AI WorkSpace" width={28} height={28} style={{ borderRadius: 7, display: 'block', objectFit: 'cover' }} />
+            <img src="/icon.svg" alt="AI WorkSpace" width={28} height={28} style={{ borderRadius: 7, display: 'block', objectFit: 'cover' }} />
             {!isMobile && (
               <div style={{ lineHeight: 1.1 }}>
                 <div style={{ fontSize: 9, color: T.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>AI WorkSpace</div>
