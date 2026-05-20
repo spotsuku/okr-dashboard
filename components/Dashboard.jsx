@@ -1439,18 +1439,15 @@ export default function Dashboard({ user, onSignOut }) {
       <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)', position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}
         <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0, overflow: 'visible' }}>
-          {/* ブランド (24px 黒角丸 N + キャプション + 運営DB) */}
+          {/* ブランド (ロゴ + AI WorkSpace + 開いている組織名) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${T.border}` }}>
-            <div style={{
-              width: 26, height: 26, borderRadius: 7,
-              background: T.text, color: T.bgCard,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 800, letterSpacing: '-0.02em',
-            }}>N</div>
+            <img src="/icon.png" alt="AI WorkSpace" width={28} height={28} style={{ borderRadius: 7, display: 'block', objectFit: 'cover' }} />
             {!isMobile && (
               <div style={{ lineHeight: 1.1 }}>
-                <div style={{ fontSize: 9, color: T.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>NEO Management</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginTop: 1 }}>NEO 運営DB</div>
+                <div style={{ fontSize: 9, color: T.textMuted, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>AI WorkSpace</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginTop: 1 }}>
+                  {currentOrg?.name || 'AI WorkSpace'}
+                </div>
               </div>
             )}
           </div>
@@ -1538,6 +1535,9 @@ export default function Dashboard({ user, onSignOut }) {
                   ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent }}>✅ Google連携済み</div>
                   : <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
                 }
+                <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>プライバシーポリシー</a>
+                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>利用規約</a>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <button onClick={onSignOut} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.warn, fontSize: 12, fontFamily: 'inherit' }}>ログアウト</button>
               </div>

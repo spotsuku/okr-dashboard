@@ -1,15 +1,15 @@
 import LegalPage from '../../components/LegalPage'
 
 export const metadata = {
-  title: '利用規約 | NEO 運営DB',
-  description: 'NEO 運営DB (aiworkspace.jp) の利用規約',
+  title: '利用規約 | AI WorkSpace',
+  description: 'AI WorkSpace (aiworkspace.jp) の利用規約',
 }
 
 const sections = [
   {
     heading: '適用',
     paragraphs: [
-      '本利用規約 (以下「本規約」) は、NEO 運営DB (以下「本サービス」) の提供条件および本サービスの利用に関する運営者と利用者との間の権利義務関係を定めるものです。',
+      '本利用規約 (以下「本規約」) は、AI WorkSpace (以下「本サービス」) の提供条件および本サービスの利用に関する運営者と利用者との間の権利義務関係を定めるものです。',
       '利用者は本サービスを利用することにより、本規約に同意したものとみなされます。',
     ],
   },

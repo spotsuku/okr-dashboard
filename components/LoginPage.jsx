@@ -149,6 +149,11 @@ export default function LoginPage({ orgName = null }) {
             {isSignUp ? '既にアカウントをお持ちの方はこちら' : '新規アカウントを作成'}
           </button>
         </div>
+        <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: '#8a8d99' }}>
+          <a href="/privacy" style={{ color: '#8a8d99', textDecoration: 'none' }}>プライバシーポリシー</a>
+          <span style={{ margin: '0 8px' }}>·</span>
+          <a href="/terms" style={{ color: '#8a8d99', textDecoration: 'none' }}>利用規約</a>
+        </div>
       </div>
     </div>
   )
