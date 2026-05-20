@@ -1,6 +1,7 @@
 "use client"
 // screens/landing.jsx — AI WorkSpace 新規ユーザー向け LP
 // Chatwork の構成を参考に、AI WorkSpace 用に再設計
+import * as React from 'react'
 
 const NAV = [
   { label: '特徴・機能', href: '#features' },
@@ -21,7 +22,30 @@ function LandingPage() {
         'linear-gradient(180deg, #f6fafd 0%, #eef4f9 100%)',
     }}>
       <style>{`
-        .lp-frame { box-sizing: border-box; }
+        .lp-frame {
+          box-sizing: border-box;
+          --bg:            #f3f6fa;
+          --bg-soft:       rgba(255,255,255,.55);
+          --card:          rgba(255,255,255,.74);
+          --sunken:        rgba(255,255,255,.5);
+          --border:        rgba(15,23,42,.08);
+          --border-strong: rgba(15,23,42,.16);
+          --text:          #0f172a;
+          --sub:           #475569;
+          --muted:         #94a3b8;
+          --accent:        #0ea5e9;
+          --accent-hover:  #0284c7;
+          --accent-soft:   rgba(14,165,233,.14);
+          --accent-text:   #0369a1;
+          --success:       #059669;
+          --success-soft:  rgba(5,150,105,.14);
+          --warn:          #d97706;
+          --warn-soft:     rgba(217,119,6,.14);
+          --danger:        #e11d48;
+          --danger-soft:   rgba(225,29,72,.12);
+          --info:          #0284c7;
+          --info-soft:     rgba(2,132,199,.14);
+        }
         .lp-frame *, .lp-frame *::before, .lp-frame *::after { box-sizing: border-box; }
         .lp-section { padding: 96px 24px; }
         .lp-container { max-width: 1180px; margin: 0 auto; }
