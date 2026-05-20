@@ -103,6 +103,7 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          {/* ライセンス機能は一時停止中 (サービス無料公開のため)
           {currentOrg?.id && (
             <LicenseSection
               T={T}
@@ -111,6 +112,7 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
               canManage={canManage}
             />
           )}
+          */}
           {!canManage && (
             <div style={{ padding: 10, marginBottom: 10, background: T.bgSection, borderRadius: 8, fontSize: 11, color: T.textMuted }}>
               閲覧権限のみ。owner / admin に依頼してください。
