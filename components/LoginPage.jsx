@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ★ 本番URLを固定（これ以外のURLに飛ばない）
-const PRODUCTION_URL = 'https://okr-dashboard-taupe.vercel.app'
+const PRODUCTION_URL = 'https://aiworkspace.jp'
 
 // orgName を渡すと「{orgName} にサインイン」と組織名入りの見出しになる (SaaS化 Plan B)
 export default function LoginPage({ orgName = null }) {

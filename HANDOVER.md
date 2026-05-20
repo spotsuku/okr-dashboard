@@ -7,7 +7,7 @@ Claude Code引継ぎ用（2026-03-16）
 | 項目 | 値 |
 |------|-----|
 | GitHub | spotsuku/okr-dashboard（Public） |
-| Vercel URL | https://okr-dashboard-taupe.vercel.app/ |
+| 本番 URL | https://aiworkspace.jp/ (旧 Vercel URL: okr-dashboard-taupe.vercel.app — 308リダイレクト) |
 | Supabase | dzqxwbdjvgdkayisasyg.supabase.co（NEO福岡） |
 | Framework | Next.js + React（'use client'） |
 | 認証 | Supabase Auth（Google OAuth） |

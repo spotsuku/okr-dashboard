@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, SPACING, RADIUS, TYPO } from '../lib/themeTokens'
 import { useCurrentOrg } from '../lib/orgContext'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 import { useLayerLabels } from '../lib/levelLabels'
@@ -1401,17 +1401,40 @@ export default function Dashboard({ user, onSignOut }) {
     <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
       {/* Demo モードバナー */}
       <DemoBanner />
-      {/* myAI ライセンス: 初回ログインのフルスクリーンゲート (SaaS化 Phase 5) */}
+      {/* サービス無料公開中バナー (myAI ライセンス機能は一時停止中) — NEO福岡は元から無料のため非表示 */}
+      {currentOrg?.slug !== 'neo-fukuoka' && (
+        <div role="status" style={{
+          background: `${T.accent}10`,
+          borderBottom: `1px solid ${T.accent}30`,
+          color: T.text,
+          padding: `${SPACING.sm}px ${SPACING.lg}px`,
+          display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+          flexWrap: 'wrap', flexShrink: 0,
+        }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700,
+            padding: '2px 8px', borderRadius: RADIUS.pill,
+            background: T.accent, color: '#fff',
+            letterSpacing: '0.04em', whiteSpace: 'nowrap',
+          }}>無料公開中</span>
+          <span style={{ ...TYPO.callout, color: T.text, fontWeight: 700 }}>
+            このサービスは無料公開中です。
+          </span>
+          <span style={{ ...TYPO.footnote, color: T.textSub }}>
+            有料化する場合は1ヶ月前に告知いたします。
+          </span>
+        </div>
+      )}
+      {/* myAI ライセンス機能は一時停止中 (将来再開する場合は false → true)
       <LicenseGate T={T} myEmail={user?.email} />
-      {/* myAI ライセンス無効時 + 無料体験中の残日数バナー */}
       <LicenseBanner T={T} onRegisterKey={() => {
-        // クエリに myai_force_gate=1 を追加して LicenseGate を強制表示
         if (typeof window === 'undefined') return
         const url = new URL(window.location.href)
         url.searchParams.set('myai_force_gate', '1')
         window.history.replaceState(null, '', url.toString())
         window.location.reload()
       }} />
+      */}
       {/* Header (Glass: backdrop blur + 56px / スマホでは非表示) */}
       <div style={{ display: isMobile ? 'none' : 'block', borderBottom: `1px solid ${T.border}`, background: T.headerBg, backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)', position: 'sticky', top: 0, zIndex: 50, overflow: 'visible' }}>
         {/* 1行目 */}

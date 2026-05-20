@@ -110,7 +110,7 @@ App の **OAuth & Permissions** ページで:
 
 **Redirect URLs** に以下を追加:
 ```
-https://okr-dashboard-taupe.vercel.app/api/integrations/slack/callback
+https://aiworkspace.jp/api/integrations/slack/callback
 https://<staging-preview-url>/api/integrations/slack/callback
 ```
 
@@ -156,7 +156,7 @@ Channel の **LINE Login設定** で:
 
 **Callback URL** に追加:
 ```
-https://okr-dashboard-taupe.vercel.app/api/integrations/line/callback
+https://aiworkspace.jp/api/integrations/line/callback
 https://<staging-preview-url>/api/integrations/line/callback
 ```
 

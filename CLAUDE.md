@@ -6,7 +6,7 @@
 ## プロジェクト概要
 
 OKR管理ダッシュボードアプリ（Next.js 14 / Vercel）
-- 本番URL: https://okr-dashboard-taupe.vercel.app
+- 本番URL: https://aiworkspace.jp (旧: okr-dashboard-taupe.vercel.app — 308リダイレクトで残存)
 - GitHubリポジトリ: spotsuku/okr-dashboard
 
 ## ブランチ運用ルール（必須・絶対遵守）
@@ -39,7 +39,7 @@ OKR管理ダッシュボードアプリ（Next.js 14 / Vercel）
 
 | 環境 | ブランチ | URL |
 |---|---|---|
-| 本番 | `main` | okr-dashboard-taupe.vercel.app |
+| 本番 | `main` | aiworkspace.jp |
 | ステージング | `staging` | Vercelが自動発行するプレビューURL |
 
 ## 技術スタック
