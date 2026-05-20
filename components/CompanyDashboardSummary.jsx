@@ -764,7 +764,7 @@ function RankingCard({ T, title, emoji, accent = '#007AFF', subtitle, entries })
   )
 }
 
-// ─── チームサマリー (1チーム拡大表示 + プルダウン + 3カラム編集) ──
+// ─── チームサマリー (部署タブ + チーム縦並び 3カラム編集) ──
 function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingMember, isAdmin, tableMissing = false }) {
   // テーブル未作成 (PGRST205) のときは編集 UI を出さず案内だけ表示する
   if (tableMissing) {
@@ -799,122 +799,27 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
     return m
   }, [levels, rootIds])
 
-  const initialTeam = useMemo(() => {
+  // 初期選択部署: 自分が責任者 or 所属しているチームの部署を優先
+  const initialDeptId = useMemo(() => {
     const allTeamLevels = Object.values(teamsByDept).flat()
-    if (allTeamLevels.length === 0) return null
+    if (allTeamLevels.length === 0) return departments[0]?.id ?? null
     const mgrTeam = allTeamLevels.find(l => Number(l.manager_id) === Number(viewingMember?.id))
-    if (mgrTeam) return mgrTeam
+    if (mgrTeam) return Number(mgrTeam.parent_id)
     const memberLvls = Array.isArray(viewingMember?.sub_level_ids) ? viewingMember.sub_level_ids
       : viewingMember?.level_id ? [viewingMember.level_id] : []
     const myTeam = allTeamLevels.find(l => memberLvls.includes(Number(l.id)))
-    if (myTeam) return myTeam
-    return allTeamLevels[0]
-  }, [teamsByDept, viewingMember])
+    if (myTeam) return Number(myTeam.parent_id)
+    return departments[0]?.id ?? null
+  }, [teamsByDept, viewingMember, departments])
 
   const [selectedDeptId, setSelectedDeptId] = useState(null)
-  const [selectedTeamId, setSelectedTeamId] = useState(null)
   useEffect(() => {
-    if (initialTeam && !selectedTeamId) {
-      setSelectedDeptId(Number(initialTeam.parent_id))
-      setSelectedTeamId(Number(initialTeam.id))
+    if (selectedDeptId == null && initialDeptId != null) {
+      setSelectedDeptId(Number(initialDeptId))
     }
-  }, [initialTeam, selectedTeamId])
+  }, [initialDeptId, selectedDeptId])
 
   const teamsInSelectedDept = useMemo(() => teamsByDept[selectedDeptId] || [], [teamsByDept, selectedDeptId])
-  const selectedTeam = useMemo(() => (levels || []).find(l => Number(l.id) === Number(selectedTeamId)), [levels, selectedTeamId])
-  const isManagerOfActive = !!selectedTeam && Number(selectedTeam.manager_id) === Number(viewingMember?.id)
-  const canEdit = !!viewingMember && (isManagerOfActive || isAdmin)
-  const managerName = useMemo(() => {
-    if (!selectedTeam?.manager_id) return null
-    const mgr = (members || []).find(mm => Number(mm.id) === Number(selectedTeam.manager_id))
-    return mgr?.name || null
-  }, [selectedTeam, members])
-
-  const [good, setGood] = useState('')
-  const [more, setMore] = useState('')
-  const [focus, setFocus] = useState('')
-  const [rowId, setRowId] = useState(null)
-  const [rowLoading, setRowLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [aiBusy, setAiBusy] = useState(false)
-  const [aiError, setAiError] = useState('')
-  const focusedRef = useRef(null)
-  const saveTimer = useRef(null)
-
-  useEffect(() => {
-    if (!selectedTeamId || !monday) return
-    let alive = true
-    setRowLoading(true); setRowId(null); setGood(''); setMore(''); setFocus('')
-    supabase.from('team_weekly_summary').select('*')
-      .eq('level_id', selectedTeamId).eq('week_start', monday).maybeSingle()
-      .then(({ data }) => {
-        if (!alive) return
-        if (data) {
-          setRowId(data.id)
-          setGood(data.good || ''); setMore(data.more || ''); setFocus(data.focus || '')
-        }
-        setRowLoading(false)
-      })
-    return () => { alive = false }
-  }, [selectedTeamId, monday])
-
-  useEffect(() => {
-    if (!selectedTeamId || !monday) return
-    const ch = supabase.channel(`tws_dash_${selectedTeamId}_${monday}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'team_weekly_summary', filter: `level_id=eq.${selectedTeamId}` },
-        payload => {
-          const row = payload.new || payload.old
-          if (!row || row.week_start !== monday) return
-          if (payload.eventType === 'DELETE') { setRowId(null); return }
-          setRowId(row.id)
-          if (focusedRef.current !== 'good')  setGood(row.good || '')
-          if (focusedRef.current !== 'more')  setMore(row.more || '')
-          if (focusedRef.current !== 'focus') setFocus(row.focus || '')
-        })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [selectedTeamId, monday])
-
-  const save = useCallback(async (g, m, f) => {
-    if (!selectedTeamId || !canEdit) return
-    setSaving(true)
-    const payload = { level_id: selectedTeamId, week_start: monday, good: g, more: m, focus: f, updated_by: myName, updated_at: new Date().toISOString() }
-    const { data, error } = await supabase.from('team_weekly_summary')
-      .upsert(payload, { onConflict: 'level_id,week_start' }).select().single()
-    setSaving(false)
-    if (error) { console.error('team summary save error:', error); return }
-    if (data) { setRowId(data.id); setSaved(true); setTimeout(() => setSaved(false), 1200) }
-  }, [selectedTeamId, monday, myName, canEdit])
-
-  const scheduleSave = (g, m, f) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => save(g, m, f), 800)
-  }
-
-  const generateAI = async () => {
-    if (!selectedTeamId || !monday || aiBusy) return
-    if ((good || more || focus).trim().length > 0) {
-      if (!window.confirm('現在の内容を AI 生成結果で上書きします。よろしいですか？')) return
-    }
-    setAiBusy(true); setAiError('')
-    try {
-      const res = await fetch('/api/ai/team-summary', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level_id: selectedTeamId, week_start: monday }),
-      })
-      const j = await res.json()
-      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)
-      if (j.message) { setAiError(j.message); return }
-      setGood(j.good || ''); setMore(j.more || ''); setFocus(j.focus || '')
-      save(j.good || '', j.more || '', j.focus || '')
-    } catch (e) {
-      setAiError(e.message || 'AI生成に失敗しました')
-    } finally {
-      setAiBusy(false)
-    }
-  }
 
   if (departments.length === 0) {
     return (
@@ -925,53 +830,21 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
   }
 
   // 外側コンテナはダッシュボード他カードと同じ cardStyle に統一 (T.success accent)。
-  // 過去の独自グラデは CLAUDE.md デザインルールに反していたため撤去。
   const containerStyle = cardStyle({ T, accent: T.success, padding: SPACING.lg })
-
-  const selectSt = {
-    ...inputStyle({ T }),
-    padding: '6px 10px', fontSize: TYPO.subhead.fontSize,
-    cursor: 'pointer',
-    width: 'auto', minWidth: 140,
-  }
-
-  const cellAccent = {
-    good:  T.success,
-    more:  T.warn,
-    focus: T.accent,
-  }
-  // 内側 3 カラムも cardStyle に揃える。accent 色は cardStyle が背景に薄くグラデで反映する。
-  // 視認性のためタイトル文字色だけ accent で強調。
-  const cellStyleFn = (key) => ({
-    ...cardStyle({ T, accent: cellAccent[key], padding: SPACING.md }),
-    display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
-    minHeight: 220,
-  })
-  const taStyle = {
-    ...inputStyle({ T }),
-    flex: 1, padding: SPACING.sm,
-    fontSize: TYPO.body.fontSize, lineHeight: 1.6,
-    resize: 'none', minHeight: 160,
-  }
 
   return (
     <div style={containerStyle}>
       {/* 部署タブ (横並びボタン) */}
       <div style={{
         display: 'flex', gap: 6, flexWrap: 'wrap',
-        marginBottom: SPACING.sm,
+        marginBottom: SPACING.md,
         paddingBottom: SPACING.sm,
         borderBottom: `1px solid ${T.border}`,
       }}>
         {departments.map(d => {
           const active = Number(selectedDeptId) === Number(d.id)
           return (
-            <button key={d.id} onClick={() => {
-              const did = Number(d.id)
-              setSelectedDeptId(did)
-              const teams = teamsByDept[did] || []
-              if (teams.length > 0) setSelectedTeamId(Number(teams[0].id))
-            }} style={{
+            <button key={d.id} onClick={() => setSelectedDeptId(Number(d.id))} style={{
               padding: '6px 14px', borderRadius: RADIUS.md,
               border: `1px solid ${active ? T.accent : T.border}`,
               background: active ? `${T.accent}18` : T.bgCard,
@@ -986,36 +859,155 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
         })}
       </div>
 
-      {/* セレクタ行 (チーム横並びタブ + マネージャ表示) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, flexWrap: 'wrap', marginBottom: SPACING.md }}>
-        <span style={{ ...TYPO.footnote, color: T.textSub, fontWeight: 700 }}>チーム</span>
-        {teamsInSelectedDept.length === 0 ? (
-          <span style={{ fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>(チームなし)</span>
-        ) : (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {teamsInSelectedDept.map(t => {
-              const active = Number(selectedTeamId) === Number(t.id)
-              return (
-                <button key={t.id} onClick={() => setSelectedTeamId(Number(t.id))} style={{
-                  padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  background: active ? T.accent : T.sectionBg,
-                  color: active ? '#fff' : T.textSub,
-                  fontSize: 12, fontWeight: active ? 700 : 500,
-                  fontFamily: 'inherit', whiteSpace: 'nowrap',
-                  transition: 'all 0.12s',
-                }}>
-                  {t.icon || ''} {t.name}
-                </button>
-              )
-            })}
-          </div>
-        )}
+      {/* 同じ部署のチームを縦に並べて全件表示 */}
+      {teamsInSelectedDept.length === 0 ? (
+        <div style={{
+          ...TYPO.body, color: T.textMuted, fontStyle: 'italic',
+          textAlign: 'center', padding: SPACING.xl,
+        }}>
+          この部署にはチームが登録されていません
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+          {teamsInSelectedDept.map(t => (
+            <TeamSummaryRow key={t.id} T={T} team={t} members={members}
+              weekStart={monday} myName={myName}
+              viewingMember={viewingMember} isAdmin={isAdmin} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 1チーム分の Good/More/Focus 編集ブロック (独立して保存/AI生成/realtime)
+function TeamSummaryRow({ T, team, members, weekStart, myName, viewingMember, isAdmin }) {
+  const monday = weekStart
+  const teamId = team?.id ? Number(team.id) : null
+  const isManagerOfActive = !!team && Number(team.manager_id) === Number(viewingMember?.id)
+  const canEdit = !!viewingMember && (isManagerOfActive || isAdmin)
+  const managerName = useMemo(() => {
+    if (!team?.manager_id) return null
+    const mgr = (members || []).find(mm => Number(mm.id) === Number(team.manager_id))
+    return mgr?.name || null
+  }, [team, members])
+
+  const [good, setGood] = useState('')
+  const [more, setMore] = useState('')
+  const [focus, setFocus] = useState('')
+  const [rowId, setRowId] = useState(null)
+  const [rowLoading, setRowLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState('')
+  const focusedRef = useRef(null)
+  const saveTimer = useRef(null)
+
+  useEffect(() => {
+    if (!teamId || !monday) return
+    let alive = true
+    setRowLoading(true); setRowId(null); setGood(''); setMore(''); setFocus('')
+    supabase.from('team_weekly_summary').select('*')
+      .eq('level_id', teamId).eq('week_start', monday).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        if (data) {
+          setRowId(data.id)
+          setGood(data.good || ''); setMore(data.more || ''); setFocus(data.focus || '')
+        }
+        setRowLoading(false)
+      })
+    return () => { alive = false }
+  }, [teamId, monday])
+
+  useEffect(() => {
+    if (!teamId || !monday) return
+    const ch = supabase.channel(`tws_dash_${teamId}_${monday}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'team_weekly_summary', filter: `level_id=eq.${teamId}` },
+        payload => {
+          const row = payload.new || payload.old
+          if (!row || row.week_start !== monday) return
+          if (payload.eventType === 'DELETE') { setRowId(null); return }
+          setRowId(row.id)
+          if (focusedRef.current !== 'good')  setGood(row.good || '')
+          if (focusedRef.current !== 'more')  setMore(row.more || '')
+          if (focusedRef.current !== 'focus') setFocus(row.focus || '')
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [teamId, monday])
+
+  const save = useCallback(async (g, m, f) => {
+    if (!teamId || !canEdit) return
+    setSaving(true)
+    const payload = { level_id: teamId, week_start: monday, good: g, more: m, focus: f, updated_by: myName, updated_at: new Date().toISOString() }
+    const { data, error } = await supabase.from('team_weekly_summary')
+      .upsert(payload, { onConflict: 'level_id,week_start' }).select().single()
+    setSaving(false)
+    if (error) { console.error('team summary save error:', error); return }
+    if (data) { setRowId(data.id); setSaved(true); setTimeout(() => setSaved(false), 1200) }
+  }, [teamId, monday, myName, canEdit])
+
+  const scheduleSave = (g, m, f) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => save(g, m, f), 800)
+  }
+
+  const generateAI = async () => {
+    if (!teamId || !monday || aiBusy) return
+    if ((good || more || focus).trim().length > 0) {
+      if (!window.confirm('現在の内容を AI 生成結果で上書きします。よろしいですか？')) return
+    }
+    setAiBusy(true); setAiError('')
+    try {
+      const res = await fetch('/api/ai/team-summary', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level_id: teamId, week_start: monday }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)
+      if (j.message) { setAiError(j.message); return }
+      setGood(j.good || ''); setMore(j.more || ''); setFocus(j.focus || '')
+      save(j.good || '', j.more || '', j.focus || '')
+    } catch (e) {
+      setAiError(e.message || 'AI生成に失敗しました')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const cellAccent = { good: T.success, more: T.warn, focus: T.accent }
+  const cellStyleFn = (key) => ({
+    ...cardStyle({ T, accent: cellAccent[key], padding: SPACING.md }),
+    display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
+    minHeight: 220,
+  })
+  const taStyle = {
+    ...inputStyle({ T }),
+    flex: 1, padding: SPACING.sm,
+    fontSize: TYPO.body.fontSize, lineHeight: 1.6,
+    resize: 'none', minHeight: 160,
+  }
+
+  return (
+    <div style={cardStyle({ T, accent: T.accent, padding: SPACING.md + 2 })}>
+      {/* チーム名 + 責任者 + AI生成 + 保存ステータス */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        gap: SPACING.sm + 2, flexWrap: 'wrap',
+        marginBottom: SPACING.sm + 2,
+      }}>
+        <span style={{ ...TYPO.headline, color: T.text, fontWeight: 800 }}>
+          {team.icon || ''} {team.name}
+        </span>
         {managerName && (
           <span style={pillStyle({ color: T.textSub, size: 'sm' })}>📌 責任者: {managerName}</span>
         )}
         <div style={{ flex: 1 }} />
         {canEdit && (
-          <button onClick={generateAI} disabled={aiBusy || rowLoading || !selectedTeamId}
+          <button onClick={generateAI} disabled={aiBusy || rowLoading}
             title="チーム内のKR/KA週次レビューを集約してAIで自動生成"
             style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), cursor: aiBusy || rowLoading ? 'wait' : 'pointer', opacity: aiBusy ? 0.7 : 1 }}>
             {aiBusy ? '⟳ 生成中…' : '🤖 AIで生成'}
@@ -1045,7 +1037,6 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
         </div>
       )}
 
-      {/* 3カラム */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: SPACING.sm + 2 }}>
         <div style={cellStyleFn('good')}>
           <div style={{ ...TYPO.callout, color: T.success }}>Good — チーム全体の良かったこと</div>
