@@ -901,7 +901,7 @@ export default function Dashboard({ user, onSignOut }) {
   })
   const [viewMode, setViewMode]             = useState('annual')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
-  const [themeKey, setThemeKey]                 = useState('light')
+  const themeKey = 'light' // ダークモードは廃止 (light 固定)
   const [syncStatus, setSyncStatus]             = useState('connecting')
   const [selectedOwner, setSelectedOwner]       = useState(null)
   const [taskViewMode, setTaskViewMode]         = useState('my') // 'my' | 'all'
@@ -1526,11 +1526,8 @@ export default function Dashboard({ user, onSignOut }) {
               </button>
               <div className="user-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, zIndex: 200, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: 4, minWidth: 220, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
                 <div style={{ padding: '8px 12px', fontSize: 12, color: T.textMuted, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>{user.email}</div>
-                {/* テーマ切替 + 同期状態 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>
-                  <button onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')} title={themeKey === 'dark' ? 'ライトモードに切替' : 'ダークモードに切替'} style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bg, color: T.textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-                    {themeKey === 'dark' ? '☀️ ライト' : '🌙 ダーク'}
-                  </button>
+                {/* 同期状態 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '7px 12px', fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>
                   <span title={syncStatus === 'synced' ? '同期済み' : syncStatus === 'error' ? '同期エラー' : '同期中'} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
                     {syncStatus === 'synced' ? '🟢 同期済' : syncStatus === 'error' ? '🔴 エラー' : '🟡 同期中'}
                   </span>
