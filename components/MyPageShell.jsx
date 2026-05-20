@@ -4094,7 +4094,7 @@ function StreakBanner({ T, viewingName }) {
           </span>
         </div>
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(16px, 1fr))', gap: 3,
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(24px, 1fr))', gap: 3,
           marginBottom: 8,
         }}>
           {data.monthDays.map(x => (
@@ -4103,8 +4103,11 @@ function StreakBanner({ T, viewingName }) {
                 aspectRatio: '1 / 1', borderRadius: 4,
                 background: x.written ? T.accent : x.isWeekend ? 'transparent' : x.isFuture ? 'transparent' : T.sectionBg,
                 border: x.isWeekend && !x.written ? `1px solid ${T.border}` : 'none',
-                opacity: x.isFuture ? 0.3 : 1,
-              }} />
+                opacity: x.isFuture ? 0.4 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 600,
+                color: x.written ? '#fff' : x.isFuture ? T.textFaint : T.textMuted,
+              }}>{x.d}</div>
           ))}
         </div>
         {/* レジェンド */}
@@ -4194,9 +4197,9 @@ function ThreeQuestions({ T, viewingName, canEdit, myName }) {
           1問だけでも OK · 後から書き足せます
         </span>
       </div>
-      {/* 3 列グリッド */}
+      {/* 3 列グリッド (モバイルでは 1 列縦並びに折り返し) */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
         gap: 1, background: T.border,
       }}>
         {cols.map(c => (
