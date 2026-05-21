@@ -217,7 +217,7 @@ export default function MyCOOOrb({ user, members = [] }) {
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send() } }}
+                onKeyDown={e => { if (e.key === 'Enter' && !(e.nativeEvent?.isComposing || e.keyCode === 229)) { e.preventDefault(); send() } }}
                 placeholder="MyCOO に聞く..."
                 style={{
                   flex: 1, padding: '10px 14px', background: '#fff', border: '1px solid rgba(15,23,42,.1)',

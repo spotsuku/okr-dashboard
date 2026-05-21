@@ -167,7 +167,11 @@ export default function QuickTaskPalette({ user, members = [] }) {
   }
 
   function onInputKey(e) {
-    if (e.key === 'Enter') { e.preventDefault(); add(e.shiftKey) }
+    // IME 変換中の Enter は確定操作なので追加しない
+    if (e.key === 'Enter') {
+      if (e.nativeEvent?.isComposing || e.keyCode === 229) return
+      e.preventDefault(); add(e.shiftKey)
+    }
     else if (e.key === 'Escape') { e.preventDefault(); setOpen(false) }
   }
 
