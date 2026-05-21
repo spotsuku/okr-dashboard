@@ -36,8 +36,56 @@ const STEPS = [
     target: '[data-tour="nav-mycoach"]',
     page: 'mycoach',
     title: 'ワークスペース',
-    body: 'AI コーチと対話しながら、日々の仕事やタスクを整理できる作業スペースです。',
+    body: 'AI コーチと対話しながら、日々の仕事やタスクを整理できる作業スペースです。中の主要ブロックを順に見ていきましょう。',
     placement: 'bottom',
+  },
+  {
+    target: '[data-tour="ws-today"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: '今日やること',
+    body: '今日が期限・着手すべきタスクがここに集まります。チェックでそのまま完了にできます。',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="ws-week"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: '今週やること',
+    body: '今週の予定タスクを曜日ごとに俯瞰できます。週の段取りはここで確認します。',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="ws-gmail"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'Gmail（要対応）',
+    body: '返信が必要なメールを抽出して表示します。「AI返信」でその場で下書きも作れます。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="ws-calendar"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'Google カレンダー',
+    body: '直近の予定を表示します。今日の空き時間を意識して動けます。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="ws-okr"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'マイOKR',
+    body: '自分の KR / KA の記入漏れがひと目で分かります。ボタンからその場で記入できます。',
+    placement: 'left',
+  },
+  {
+    target: '[data-tour="ws-badge"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'バッジコレクション',
+    body: 'タスク完了率や記入率などの達成度をバッジで可視化。継続のモチベーションに。',
+    placement: 'left',
   },
   {
     target: '[data-tour="nav-okr"]',
@@ -82,6 +130,7 @@ const STEPS = [
   {
     target: null,
     page: 'mycoach',
+    mycoachDashboard: true,
     title: '準備完了 🎉',
     body: '早速ワークスペースで仕事を開始しましょう。',
     placement: 'center',
@@ -117,6 +166,12 @@ export default function OnboardingTour({ onNavigate }) {
     if (!active) return
     const step = STEPS[idx]
     if (step.page && typeof onNavigate === 'function') onNavigate(step.page)
+    // ワークスペース内ブロックのステップは、全社サマリーではなく
+    // 個人ダッシュボードを開くよう MyPageShell に依頼する
+    if (step.mycoachDashboard && typeof window !== 'undefined') {
+      window.__okrOpenMyDashboard = true
+      window.dispatchEvent(new CustomEvent('okr:open-my-dashboard'))
+    }
   }, [active, idx, onNavigate])
 
   // ステップ対象を画面内へスクロール (モバイルの横スクロールナビ等で
@@ -198,8 +253,21 @@ export default function OnboardingTour({ onNavigate }) {
   } : null
 
   // 吹き出しの位置計算 (狭い画面では画面幅に合わせて縮める)
-  const TOOLTIP_W = Math.min(320, (typeof window !== 'undefined' ? window.innerWidth : 360) - 32)
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 360
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const TOOLTIP_W = Math.min(320, vw - 32)
   const TOOLTIP_GAP = 14
+  const EST_TIP_H = 240
+  // 縦方向: 画面下にはみ出すなら対象の上へ回し、最後は画面内にクランプ
+  const clampTop = (top) => {
+    let t = top
+    if (highlight && t + EST_TIP_H > vh - 12) {
+      const above = highlight.top - TOOLTIP_GAP - EST_TIP_H
+      if (above > 12) t = above
+    }
+    return Math.max(12, Math.min(t, vh - EST_TIP_H - 12))
+  }
+  const clampLeft = (left) => Math.max(16, Math.min(vw - TOOLTIP_W - 16, left))
   let tooltipStyle = { position: 'fixed', zIndex: 100000, width: TOOLTIP_W }
   if (!highlight) {
     // center
@@ -208,20 +276,27 @@ export default function OnboardingTour({ onNavigate }) {
       top: '50%', left: '50%',
       transform: 'translate(-50%, -50%)',
     }
+  } else if (step.placement === 'right' || step.placement === 'left') {
+    // 対象の横 (はみ出す側は反対へフォールバック)
+    const wantRight = step.placement === 'right'
+    const rightSpace = vw - (highlight.left + highlight.width)
+    const useRight = wantRight ? rightSpace >= TOOLTIP_W + 24 : !(highlight.left >= TOOLTIP_W + 24)
+    const left = useRight
+      ? clampLeft(highlight.left + highlight.width + TOOLTIP_GAP)
+      : clampLeft(highlight.left - TOOLTIP_W - TOOLTIP_GAP)
+    tooltipStyle = { ...tooltipStyle, top: clampTop(highlight.top), left }
   } else if (step.placement === 'bottom-end') {
     tooltipStyle = {
       ...tooltipStyle,
-      top: highlight.top + highlight.height + TOOLTIP_GAP,
-      right: Math.max(16, window.innerWidth - (highlight.left + highlight.width)),
+      top: clampTop(highlight.top + highlight.height + TOOLTIP_GAP),
+      right: Math.max(16, vw - (highlight.left + highlight.width)),
     }
   } else {
     // bottom default
-    let left = highlight.left + highlight.width / 2 - TOOLTIP_W / 2
-    left = Math.max(16, Math.min(window.innerWidth - TOOLTIP_W - 16, left))
     tooltipStyle = {
       ...tooltipStyle,
-      top: highlight.top + highlight.height + TOOLTIP_GAP,
-      left,
+      top: clampTop(highlight.top + highlight.height + TOOLTIP_GAP),
+      left: clampLeft(highlight.left + highlight.width / 2 - TOOLTIP_W / 2),
     }
   }
 
