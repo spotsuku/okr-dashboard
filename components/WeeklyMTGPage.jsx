@@ -1485,7 +1485,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   if (!activeMeetingKey || needsDeptSelect) {
     const topDepts = (levels || []).filter(l => !l.parent_id)
     return (
-      <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif', overflow:'auto' }}>
+      <div style={{ display:'flex', flexDirection:'column', height:'100%', flex:1, width:'100%', minWidth:0, background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif', overflow:'auto' }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '20px 24px 24px', width: '100%', boxSizing:'border-box' }}>
           {needsDeptSelect ? (
             // 事業部選択モード（マネージャー定例など）
@@ -1544,7 +1544,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     }}>+ 会議を新規作成</button>
                 </div>
               )}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:14 }}>
+              <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, minmax(0,1fr))', gap:14 }}>
                 {displayMeetings.map(m => {
                   const wm = m.weeklyMTG || {}
                   const viewBadge = wm.withDiscussion ? 'チームサマリー'
