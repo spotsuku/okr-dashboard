@@ -36,7 +36,7 @@ export default function LoginPage({ orgName = null }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: PRODUCTION_URL, // ★ 固定URLに変更
+        redirectTo: PRODUCTION_URL,
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
@@ -44,28 +44,52 @@ export default function LoginPage({ orgName = null }) {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#090d18',
+      minHeight: '100vh',
+      fontFamily: '"Inter", "Noto Sans JP", -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
+      fontFeatureSettings: '"palt" 1',
+      color: '#0f172a',
+      background:
+        'radial-gradient(1200px 800px at 8% 0%, rgba(186,230,253,.55), transparent 60%),' +
+        'radial-gradient(1100px 900px at 100% 22%, rgba(187,247,208,.45), transparent 60%),' +
+        'radial-gradient(900px 700px at 80% 100%, rgba(224,242,254,.6), transparent 60%),' +
+        'linear-gradient(180deg, #f6fafd 0%, #eef4f9 100%)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: "'Noto Sans JP','Hiragino Sans',sans-serif",
+      padding: '24px',
     }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');`}</style>
       <div style={{
-        width: '100%', maxWidth: 400, padding: '40px 36px',
-        background: '#111828', border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 20, boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+        width: '100%', maxWidth: 420, padding: '40px 36px',
+        background: 'rgba(255,255,255,.74)',
+        backdropFilter: 'blur(20px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+        border: '1px solid rgba(15,23,42,.06)',
+        borderRadius: 22,
+        boxShadow:
+          '0 1px 0 rgba(255,255,255,.7) inset,' +
+          '0 12px 36px rgba(15,23,42,.08),' +
+          '0 24px 64px rgba(15,23,42,.06)',
       }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4d9fff', boxShadow: '0 0 12px #4d9fff' }} />
-            <span style={{ fontSize: 11, color: '#4d9fff', letterSpacing: '0.18em', textTransform: 'uppercase' }}>NEO Management</span>
-          </div>
-          <h1 style={{ color: '#e8eaf0', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
-            {isSignUp ? 'アカウント作成' : 'ログイン'}
+        {/* Logo + Brand */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <a href="/lp" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, textDecoration: 'none', marginBottom: 16 }}>
+            <img src="/icon.png" alt="AI WorkSpace" width={40} height={40} style={{ borderRadius: 9, boxShadow: '0 2px 6px rgba(37,99,235,.18)' }} />
+            <span style={{
+              fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em',
+              color: '#0f172a',
+            }}>AI WorkSpace</span>
+          </a>
+          <h1 style={{
+            fontSize: 26, fontWeight: 700, margin: '8px 0 0 0',
+            letterSpacing: '-0.02em', color: '#0f172a', lineHeight: 1.3,
+          }}>
+            {isSignUp ? 'アカウント作成' : 'おかえりなさい'}
           </h1>
-          {orgName && (
-            <div style={{ marginTop: 10, fontSize: 13, color: '#9ca3af', lineHeight: 1.6 }}>
-              <span style={{ fontWeight: 700, color: '#e8eaf0' }}>{orgName}</span> にサインイン
+          {orgName ? (
+            <div style={{ marginTop: 8, fontSize: 13, color: '#475569', lineHeight: 1.6 }}>
+              <span style={{ fontWeight: 700, color: '#0f172a' }}>{orgName}</span> にサインイン
+            </div>
+          ) : (
+            <div style={{ marginTop: 6, fontSize: 13, color: '#475569' }}>
+              {isSignUp ? '無料でアカウントを作成して、はじめましょう' : 'ログインして続ける'}
             </div>
           )}
         </div>
@@ -74,13 +98,23 @@ export default function LoginPage({ orgName = null }) {
         <button
           onClick={handleGoogle} disabled={googleLoading}
           style={{
-            width: '100%', background: '#fff', border: '1px solid rgba(0,0,0,0.15)',
-            borderRadius: 10, padding: '11px 14px', fontSize: 14, fontWeight: 600,
-            cursor: googleLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            width: '100%',
+            background: '#fff',
+            border: '1px solid rgba(15,23,42,.12)',
+            borderRadius: 12,
+            padding: '12px 14px',
+            fontSize: 14, fontWeight: 600,
+            cursor: googleLoading ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            color: '#333', marginBottom: 18, opacity: googleLoading ? 0.6 : 1,
-            transition: 'opacity 0.15s',
+            color: '#0f172a',
+            marginBottom: 18,
+            opacity: googleLoading ? 0.6 : 1,
+            boxShadow: '0 1px 2px rgba(15,23,42,.04)',
+            transition: 'all .15s',
           }}
+          onMouseEnter={e => { if (!googleLoading) { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.transform = 'translateY(-1px)' } }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.transform = 'none' }}
         >
           <svg width="18" height="18" viewBox="0 0 48 48">
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -92,51 +126,91 @@ export default function LoginPage({ orgName = null }) {
         </button>
 
         {/* 区切り線 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-          <span style={{ fontSize: 11, color: '#404660' }}>または</span>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(15,23,42,.08)' }} />
+          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>または</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(15,23,42,.08)' }} />
         </div>
 
-        {/* メール/パスワード */}
+        {/* メール */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>メールアドレス</div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>メールアドレス</label>
           <input
             type="email" value={email} onChange={e => setEmail(e.target.value)}
             placeholder="your@company.com"
             onKeyDown={e => e.key === 'Enter' && handleAuth()}
             style={{
-              width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 8, padding: '10px 14px', color: '#e8eaf0', fontSize: 14, outline: 'none',
+              width: '100%',
+              background: 'rgba(255,255,255,.6)',
+              border: '1px solid rgba(15,23,42,.12)',
+              borderRadius: 10, padding: '11px 14px',
+              color: '#0f172a', fontSize: 14, outline: 'none',
               fontFamily: 'inherit', boxSizing: 'border-box',
+              transition: 'border-color .15s, box-shadow .15s',
             }}
+            onFocus={e => { e.target.style.borderColor = '#0ea5e9'; e.target.style.boxShadow = '0 0 0 3px rgba(14,165,233,.15)' }}
+            onBlur={e => { e.target.style.borderColor = 'rgba(15,23,42,.12)'; e.target.style.boxShadow = 'none' }}
           />
         </div>
+
+        {/* パスワード */}
         <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 11, color: '#606880', marginBottom: 5 }}>パスワード</div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>パスワード</label>
           <input
             type="password" value={password} onChange={e => setPassword(e.target.value)}
             placeholder="••••••••"
             onKeyDown={e => e.key === 'Enter' && handleAuth()}
             style={{
-              width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 8, padding: '10px 14px', color: '#e8eaf0', fontSize: 14, outline: 'none',
+              width: '100%',
+              background: 'rgba(255,255,255,.6)',
+              border: '1px solid rgba(15,23,42,.12)',
+              borderRadius: 10, padding: '11px 14px',
+              color: '#0f172a', fontSize: 14, outline: 'none',
               fontFamily: 'inherit', boxSizing: 'border-box',
+              transition: 'border-color .15s, box-shadow .15s',
             }}
+            onFocus={e => { e.target.style.borderColor = '#0ea5e9'; e.target.style.boxShadow = '0 0 0 3px rgba(14,165,233,.15)' }}
+            onBlur={e => { e.target.style.borderColor = 'rgba(15,23,42,.12)'; e.target.style.boxShadow = 'none' }}
           />
         </div>
 
-        {error && <div style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 14, padding: '8px 12px', background: 'rgba(255,107,107,0.1)', borderRadius: 8 }}>{error}</div>}
-        {message && <div style={{ color: '#00d68f', fontSize: 12, marginBottom: 14, padding: '8px 12px', background: 'rgba(0,214,143,0.1)', borderRadius: 8 }}>{message}</div>}
+        {error && (
+          <div style={{
+            color: '#e11d48', fontSize: 13, fontWeight: 500, marginBottom: 14,
+            padding: '10px 14px', background: 'rgba(225,29,72,.08)',
+            border: '1px solid rgba(225,29,72,.18)', borderRadius: 10,
+          }}>{error}</div>
+        )}
+        {message && (
+          <div style={{
+            color: '#059669', fontSize: 13, fontWeight: 500, marginBottom: 14,
+            padding: '10px 14px', background: 'rgba(5,150,105,.1)',
+            border: '1px solid rgba(5,150,105,.22)', borderRadius: 10,
+          }}>{message}</div>
+        )}
 
+        {/* メインCTA: ブランドグラデーション */}
         <button
           onClick={handleAuth} disabled={loading || !email || !password}
           style={{
-            width: '100%', background: loading ? 'rgba(77,159,255,0.4)' : '#4d9fff',
-            border: 'none', color: '#fff', borderRadius: 10, padding: '12px',
-            fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit', transition: 'background 0.15s',
+            width: '100%',
+            background: (loading || !email || !password)
+              ? 'rgba(37,99,235,.4)'
+              : 'linear-gradient(120deg, #2563eb 0%, #22d3ee 100%)',
+            border: '1px solid #2563eb',
+            color: '#fff', borderRadius: 999,
+            padding: '12px 22px',
+            fontSize: 14, fontWeight: 600,
+            letterSpacing: '0.01em',
+            cursor: (loading || !email || !password) ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: (loading || !email || !password)
+              ? 'none'
+              : '0 4px 14px rgba(37,99,235,.32), inset 0 1px 0 rgba(255,255,255,.3)',
+            transition: 'transform .12s, box-shadow .12s',
           }}
+          onMouseEnter={e => { if (!(loading || !email || !password)) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 22px rgba(37,99,235,.4)' } }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = (loading || !email || !password) ? 'none' : '0 4px 14px rgba(37,99,235,.32), inset 0 1px 0 rgba(255,255,255,.3)' }}
         >
           {loading ? '処理中...' : (isSignUp ? 'アカウントを作成' : 'ログイン')}
         </button>
@@ -144,15 +218,20 @@ export default function LoginPage({ orgName = null }) {
         <div style={{ textAlign: 'center', marginTop: 18 }}>
           <button
             onClick={() => { setIsSignUp(p => !p); setError(''); setMessage('') }}
-            style={{ background: 'none', border: 'none', color: '#4d9fff', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{
+              background: 'none', border: 'none',
+              color: '#0369a1', fontSize: 13, fontWeight: 500,
+              cursor: 'pointer', fontFamily: 'inherit',
+              textDecoration: 'underline', textUnderlineOffset: 3,
+            }}
           >
             {isSignUp ? '既にアカウントをお持ちの方はこちら' : '新規アカウントを作成'}
           </button>
         </div>
-        <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: '#8a8d99' }}>
-          <a href="/privacy" style={{ color: '#8a8d99', textDecoration: 'none' }}>プライバシーポリシー</a>
+        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 11, color: '#94a3b8' }}>
+          <a href="/privacy" style={{ color: '#94a3b8', textDecoration: 'none' }}>プライバシーポリシー</a>
           <span style={{ margin: '0 8px' }}>·</span>
-          <a href="/terms" style={{ color: '#8a8d99', textDecoration: 'none' }}>利用規約</a>
+          <a href="/terms" style={{ color: '#94a3b8', textDecoration: 'none' }}>利用規約</a>
         </div>
       </div>
     </div>
