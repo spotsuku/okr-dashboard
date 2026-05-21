@@ -9,11 +9,16 @@
 // Response: { text, actions, context_used }
 
 export const dynamic = 'force-dynamic'
+// マルチステップの tool-use ループ + Anthropic リトライで処理が長くなるため、
+// Vercel のデフォルト関数タイムアウト (約10秒) では応答前に切られて
+// クライアントに「Failed to fetch」が出る。実行時間の上限を明示的に延ばす。
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
 import { getAdminClient, getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 const MODEL = 'claude-sonnet-4-5'
-const MAX_STEPS = 6
+const MAX_STEPS = 4
 const DRIVE_CACHE_HOURS = 1   // この時間以内なら cached_text を再利用
 const KNOWLEDGE_CHAR_BUDGET = 8000  // 全知識を合計でこの上限まで圧縮
 
@@ -515,7 +520,10 @@ ${memberList}
   const actions = []
   let finalText = ''
 
-  async function callAnthropic(reqBody, maxRetries = 4) {
+  // リトライは時間予算 (maxDuration) を食い潰さない範囲に抑える。
+  // 過負荷時 (529) はリトライで粘るより、友好的なエラーを早く返して
+  // クライアント側の「Failed to fetch」(関数タイムアウト) を避ける方を優先する。
+  async function callAnthropic(reqBody, maxRetries = 2) {
     let lastStatus = 0, lastRaw = ''
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -530,7 +538,7 @@ ${memberList}
       if (r.ok) return { ok: true, data: await r.json() }
       lastStatus = r.status; lastRaw = await r.text()
       if ([429, 500, 502, 503, 504, 529].includes(r.status) && attempt < maxRetries - 1) {
-        await new Promise(res => setTimeout(res, Math.min(8000, 1000 * Math.pow(2, attempt))))
+        await new Promise(res => setTimeout(res, Math.min(2000, 800 * Math.pow(2, attempt))))
         continue
       }
       break
