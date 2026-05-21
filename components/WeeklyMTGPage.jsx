@@ -721,6 +721,14 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
     if (ok) { setKrSaved(true); setTimeout(() => setKrSaved(false), 1500); setKrEditing(false) }
   }
 
+  // 完了 KR をアーカイブ (この会議カードから非表示。アーカイブ画面から復元可能)
+  const krDone = kr.target > 0 && (kr.lower_is_better ? kr.current <= kr.target : kr.current >= kr.target)
+  const archiveKR = async () => {
+    if (!onKRUpdate) return
+    if (!window.confirm(`「${kr.title}」をアーカイブしますか？\nこの会議の KR 一覧から非表示になります (アーカイブ画面から復元可能)`)) return
+    await onKRUpdate(kr.id, { archived_at: new Date().toISOString() })
+  }
+
   const addKA = async () => {
     const maxOrder = activeReports.reduce((max, r) => Math.max(max, r.sort_order||0), 0)
     const payload = {
@@ -819,7 +827,14 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'#ff9f43', textTransform:'uppercase', letterSpacing:'0.08em' }}>📝 KR設定</div>
               {!krEditing && (
-                <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:`1px solid rgba(255,159,67,0.3)`, background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
+                <div style={{ display:'flex', gap:6 }}>
+                  {krDone && (
+                    <button onClick={archiveKR}
+                      title="完了した KR をアーカイブ (この会議の一覧から非表示・アーカイブ画面から復元可能)"
+                      style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:`1px solid ${wT().borderMid}`, background:'transparent', color:wT().textSub, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>📦 アーカイブ</button>
+                  )}
+                  <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:`1px solid rgba(255,159,67,0.3)`, background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
+                </div>
               )}
             </div>
             {!krEditing ? (
@@ -1415,7 +1430,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   // フィルタした visible 版を作る (objectives 自体は load 時に archived_at で除外済み)
   const visibleKeyResults = useMemo(() => {
     const validObjIds = new Set(objectives.map(o => Number(o.id)))
-    return keyResults.filter(kr => validObjIds.has(Number(kr.objective_id)))
+    return keyResults.filter(kr => !kr.archived_at && validObjIds.has(Number(kr.objective_id)))
   }, [keyResults, objectives])
 
   const selectedObjKRs = useMemo(() => {

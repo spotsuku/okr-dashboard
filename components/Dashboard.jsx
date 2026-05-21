@@ -710,8 +710,9 @@ function NodeBlock({ levelId, levels, nodeObjectives, onEdit, onDelete, _depth =
 // archived_at IS NOT NULL の objectives を新しい順に表示し、復元ボタンを提供。
 // 親 OKR (annual) を復元する際は子の Q 期 obj は archived_at を変更しないので、
 // もし子も archive されていたら個別に復元が必要 (現状は親のみアーカイブ前提)。
-function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, refreshKey }) {
+function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, onRestoreKR, onPurgeKR, refreshKey }) {
   const [items, setItems] = useState([])
+  const [krItems, setKrItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
   const [purgingId, setPurgingId] = useState(null)
@@ -730,6 +731,25 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, 
       setItems([])
     } else {
       setItems(data || [])
+    }
+    // アーカイブ済み KR も取得 (親 Objective のタイトルを併記)
+    const { data: krData, error: krErr } = await supabase
+      .from('key_results')
+      .select('id, title, current, target, unit, owner, objective_id, archived_at')
+      .not('archived_at', 'is', null)
+      .order('archived_at', { ascending: false })
+      .range(0, 999)
+    if (krErr) {
+      console.warn('[ArchivedOKRPanel] key_results.archived_at 列が見つかりません。supabase_key_results_archive.sql を実行してください。', krErr.message)
+      setKrItems([])
+    } else {
+      const objIds = [...new Set((krData || []).map(k => k.objective_id).filter(Boolean))]
+      let objTitleMap = {}
+      if (objIds.length > 0) {
+        const { data: objs } = await supabase.from('objectives').select('id, title').in('id', objIds)
+        ;(objs || []).forEach(o => { objTitleMap[o.id] = o.title })
+      }
+      setKrItems((krData || []).map(k => ({ ...k, objectiveTitle: objTitleMap[k.objective_id] || '' })))
     }
     setLoading(false)
   }, [])
@@ -763,22 +783,39 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, 
     load()
   }
 
+  const handleRestoreKR = async (id) => {
+    setBusyId(`kr-${id}`)
+    await onRestoreKR(id)
+    setBusyId(null)
+    load()
+  }
+
+  const handlePurgeKR = async (kr) => {
+    setPurgingId(`kr-${kr.id}`)
+    await onPurgeKR(kr)
+    setPurgingId(null)
+    load()
+  }
+
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, letterSpacing: '-0.01em' }}>📦 アーカイブ OKR</h1>
-        <span style={{ fontSize: 12, color: T.textMuted }}>{loading ? '読み込み中…' : `${items.length} 件`}</span>
+        <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, letterSpacing: '-0.01em' }}>📦 アーカイブ</h1>
+        <span style={{ fontSize: 12, color: T.textMuted }}>{loading ? '読み込み中…' : `OKR ${items.length} 件 / KR ${krItems.length} 件`}</span>
         <span style={{ flex: 1 }} />
         <button onClick={load} title="再読み込み"
           style={{ background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
           ⟳ 更新
         </button>
       </div>
-      {!loading && items.length === 0 && (
+      {!loading && items.length === 0 && krItems.length === 0 && (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: T.textFaint, border: `1px dashed ${T.border}`, borderRadius: 12, background: T.bgCard }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
-          <div style={{ fontSize: 13, color: T.textSub }}>アーカイブされた OKR はありません</div>
+          <div style={{ fontSize: 13, color: T.textSub }}>アーカイブされた OKR / KR はありません</div>
         </div>
+      )}
+      {items.length > 0 && (
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, margin: '4px 0 8px', letterSpacing: '0.04em' }}>OKR</div>
       )}
       {items.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -828,6 +865,68 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, 
                       whiteSpace: 'nowrap',
                     }}>
                     {purgingId === o.id ? '削除中…' : '🗑 完全削除'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {krItems.length > 0 && (
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, margin: '20px 0 8px', letterSpacing: '0.04em' }}>KR</div>
+      )}
+      {krItems.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {krItems.map(kr => {
+            const m = memberOf(kr.owner)
+            const busyKey = `kr-${kr.id}`
+            return (
+              <div key={kr.id} style={{
+                background: T.bgCard,
+                border: `1px solid ${T.border}`,
+                borderRadius: 12,
+                padding: '12px 16px',
+                display: 'flex', alignItems: 'center', gap: 12,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${T.accent}15`, color: T.accent }}>KR</span>
+                    {kr.objectiveTitle && <span style={{ fontSize: 10, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }} title={kr.objectiveTitle}>{kr.objectiveTitle}</span>}
+                    <span style={{ fontSize: 10, color: T.textMuted }}>アーカイブ日時: {fmtDate(kr.archived_at)}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={kr.title}>{kr.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 11, color: T.textMuted }}>
+                    <span>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
+                    {kr.owner && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {m?.avatar_url
+                          ? <img src={m.avatar_url} alt={kr.owner} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
+                          : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)' }} />}
+                        <span>{kr.owner}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => handleRestoreKR(kr.id)} disabled={busyId === busyKey || purgingId === busyKey}
+                    style={{
+                      background: T.accentSolid, border: 'none', color: '#fff',
+                      borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
+                      cursor: busyId === busyKey ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {busyId === busyKey ? '復元中…' : '↩ 復元'}
+                  </button>
+                  <button onClick={() => handlePurgeKR(kr)} disabled={busyId === busyKey || purgingId === busyKey}
+                    title="完全削除 (DB から物理削除・復元不可)"
+                    style={{
+                      background: 'transparent', border: `1px solid ${T.danger}`, color: T.danger,
+                      borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
+                      cursor: purgingId === busyKey ? 'wait' : 'pointer', fontFamily: 'inherit',
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {purgingId === busyKey ? '削除中…' : '🗑 完全削除'}
                   </button>
                 </div>
               </div>
@@ -1300,6 +1399,24 @@ export default function Dashboard({ user, onSignOut }) {
     setAnnualRefreshKey(k => k + 1)
   }
 
+  // アーカイブ済み KR の復元 (アーカイブ画面の「↩ 復元」ボタンから)
+  const handleRestoreArchivedKR = async (krId) => {
+    const { error } = await supabase.from('key_results').update({ archived_at: null }).eq('id', krId)
+    if (error) { alert('復元に失敗しました: ' + error.message); return }
+    await loadSubtree(activeLevelId, activePeriod, levels, fiscalYear)
+    setAnnualRefreshKey(k => k + 1)
+  }
+
+  // アーカイブ済み KR の完全削除 (DB から物理 DELETE)。紐付く KA / 週次レビューも CASCADE で消える。
+  const handlePurgeArchivedKR = async (kr) => {
+    if (!kr?.id) return
+    const ok = window.confirm(`KR「${kr.title}」を完全に削除します。\n紐付く KA / 週次レビューもすべて DB から消え、復元できなくなります。\n本当に削除しますか？`)
+    if (!ok) return
+    const { error } = await supabase.from('key_results').delete().eq('id', kr.id)
+    if (error) { alert('完全削除に失敗しました: ' + error.message); return }
+    setAnnualRefreshKey(k => k + 1)
+  }
+
   const handleLinkGoogle = async () => {
     const { error } = await supabase.auth.linkIdentity({
       provider: 'google',
@@ -1691,7 +1808,9 @@ export default function Dashboard({ user, onSignOut }) {
       {/* Archive View (📦 アーカイブ OKR ボタンで切替・年間+全社のみ) */}
       <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && okrViewScope === 'company' && showArchive ? 'flex' : 'none', flex: 1, overflow: 'auto', flexDirection: 'column' }}>
         <ArchivedOKRPanel T={T} levels={levels} members={members} fiscalYear={fiscalYear}
-          onRestore={handleRestoreArchived} onPurge={handlePurgeArchived} refreshKey={annualRefreshKey} />
+          onRestore={handleRestoreArchived} onPurge={handlePurgeArchived}
+          onRestoreKR={handleRestoreArchivedKR} onPurgeKR={handlePurgeArchivedKR}
+          refreshKey={annualRefreshKey} />
       </div>
       {/* 年間 + 全社 → AnnualView (組織階層 OKR ビュー) */}
       <div style={{ display: activePage === 'okr' && okrSubTab === 'annual' && okrViewScope === 'company' && !showArchive ? 'flex' : 'none', flex: 1, overflow: 'hidden', position: 'relative' }}>

@@ -189,7 +189,8 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
       extraObjs = filterByFY(data)
     }
     const allObjs = [...filtered, ...extraObjs].filter((o, i, arr) => arr.findIndex(x => x.id === o.id) === i)
-    const allKRs = [...objKRs, ...(myKRs || [])].filter((kr, i, arr) => arr.findIndex(k => k.id === kr.id) === i)
+    // アーカイブ済み KR はカードに表示しない
+    const allKRs = [...objKRs, ...(myKRs || [])].filter(kr => !kr.archived_at).filter((kr, i, arr) => arr.findIndex(k => k.id === kr.id) === i)
     const krMap = {}
     allKRs.forEach(kr => {
       if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
@@ -199,6 +200,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
     if (extraIds.length > 0) {
       const { data } = await supabase.from('key_results').select('*').in('objective_id', extraIds).range(0, 49999)
       ;(data || []).forEach(kr => {
+        if (kr.archived_at) return // アーカイブ済み KR は非表示
         if (!krMap[kr.objective_id]) krMap[kr.objective_id] = []
         krMap[kr.objective_id].push(kr)
       })
