@@ -1403,7 +1403,7 @@ export default function Dashboard({ user, onSignOut }) {
       {/* Demo モードバナー */}
       <DemoBanner />
       {/* 初回ユーザー向けスポットライト・ツアー (localStorage で完了状態を管理) */}
-      <OnboardingTour />
+      <OnboardingTour onNavigate={setActivePage} />
       {/* サービス無料公開中バナー (myAI ライセンス機能は一時停止中) — NEO福岡は元から無料のため非表示 */}
       {currentOrg?.slug !== 'neo-fukuoka' && (
         <div role="status" style={{
@@ -1471,6 +1471,7 @@ export default function Dashboard({ user, onSignOut }) {
                 return (
                   <button
                     key={it.id}
+                    data-tour={'nav-' + it.id}
                     onClick={() => setActivePage(it.id)}
                     style={{
                       padding: isMobile ? '5px 8px' : '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
