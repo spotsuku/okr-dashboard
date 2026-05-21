@@ -104,12 +104,30 @@ export default function OnboardingTour({ onNavigate }) {
     return () => clearTimeout(t)
   }, [])
 
+  // 「ツアーをもう一度見る」: ユーザーメニュー等から発火される手動再生イベント。
+  // 完了/スキップ済み (localStorage='1') でも、いつでも最初から見直せる。
+  React.useEffect(() => {
+    function startTour() { setIdx(0); setActive(true) }
+    window.addEventListener('okr:start-tour', startTour)
+    return () => window.removeEventListener('okr:start-tour', startTour)
+  }, [])
+
   // ステップに対応するタブへ実際に移動する
   React.useEffect(() => {
     if (!active) return
     const step = STEPS[idx]
     if (step.page && typeof onNavigate === 'function') onNavigate(step.page)
   }, [active, idx, onNavigate])
+
+  // ステップ対象を画面内へスクロール (モバイルの横スクロールナビ等で
+  // 対象ボタンが画面外にあるとハイライトがずれるため)
+  React.useEffect(() => {
+    if (!active) return
+    const step = STEPS[idx]
+    if (!step.target) return
+    const el = document.querySelector(step.target)
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [active, idx])
 
   // 対象要素の位置を取得 (リサイズ / スクロール対応)
   React.useEffect(() => {
@@ -147,17 +165,23 @@ export default function OnboardingTour({ onNavigate }) {
 
   if (!active) return null
 
+  // 表示可能なステップだけを対象にする。対象要素が DOM に無い/非表示の
+  // ステップ (フィーチャーフラグで隠れたタブ・モバイルで非表示の要素など) はスキップ。
+  const showable = STEPS.map((_, i) => i).filter(i => stepShowable(STEPS[i]))
   const step = STEPS[idx]
-  const total = STEPS.length
-  const isLast = idx === total - 1
-  const isFirst = idx === 0
+  const total = showable.length
+  const pos = showable.indexOf(idx)
+  const isLast = pos === -1 || pos === total - 1
+  const isFirst = pos <= 0
 
   function next() {
-    if (isLast) finish(false)
-    else setIdx(i => Math.min(total - 1, i + 1))
+    const nextIdx = showable.find(i => i > idx)
+    if (nextIdx === undefined) finish(false)
+    else setIdx(nextIdx)
   }
   function prev() {
-    if (!isFirst) setIdx(i => Math.max(0, i - 1))
+    const before = showable.filter(i => i < idx)
+    if (before.length) setIdx(before[before.length - 1])
   }
   function finish(skipped) {
     try { localStorage.setItem(STORAGE_KEY, '1') } catch { /* noop */ }
@@ -173,8 +197,8 @@ export default function OnboardingTour({ onNavigate }) {
     height: rect.height + PAD * 2,
   } : null
 
-  // 吹き出しの位置計算
-  const TOOLTIP_W = 320
+  // 吹き出しの位置計算 (狭い画面では画面幅に合わせて縮める)
+  const TOOLTIP_W = Math.min(320, (typeof window !== 'undefined' ? window.innerWidth : 360) - 32)
   const TOOLTIP_GAP = 14
   let tooltipStyle = { position: 'fixed', zIndex: 100000, width: TOOLTIP_W }
   if (!highlight) {
@@ -259,7 +283,7 @@ export default function OnboardingTour({ onNavigate }) {
             textTransform: 'uppercase',
             padding: '2px 8px', borderRadius: 99,
             background: 'rgba(14,165,233,.12)', color: '#0369a1',
-          }}>STEP {idx + 1} / {total}</span>
+          }}>STEP {(pos < 0 ? 0 : pos) + 1} / {total}</span>
           <button onClick={() => finish(true)} style={{
             border: 'none', background: 'transparent',
             color: '#94a3b8', cursor: 'pointer',
@@ -326,6 +350,17 @@ function Kbd({ children }) {
       color: '#475569',
     }}>{children}</span>
   )
+}
+
+// 対象要素が DOM に存在し、表示されている (サイズを持つ) ステップだけを見せる。
+// フィーチャーフラグで隠れたタブやモバイルで非表示の要素のステップは自動スキップ。
+function stepShowable(step) {
+  if (!step.target) return true // center ステップ (target なし) は常に表示
+  if (typeof document === 'undefined') return true
+  const el = document.querySelector(step.target)
+  if (!el) return false
+  const r = el.getBoundingClientRect()
+  return r.width > 0 && r.height > 0
 }
 
 function overlayStyle(s) {

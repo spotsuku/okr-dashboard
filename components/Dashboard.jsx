@@ -1658,6 +1658,7 @@ export default function Dashboard({ user, onSignOut }) {
                 }
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/lp" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.text, fontSize: 12, textDecoration: 'none' }}>サービス紹介を見る</a>
+                <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>🔍 ツアーをもう一度見る</button>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>プライバシーポリシー</a>
                 <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>利用規約</a>
