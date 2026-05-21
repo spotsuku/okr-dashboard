@@ -1149,13 +1149,21 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     }
   })
 
-  // フィルタ済みタスク (担当は表示名 + email の両方で一致判定)
+  // フィルタ済みタスク (email を持つタスクは email 主、無いタスクのみ表示名フォールバック)
   const myEmail = (user?.email || '').toLowerCase()
   const selEmail = (members?.find(m => m.name === selectedMember)?.email || '').toLowerCase()
+  const matchSelf = (t) => {
+    const te = (t.assignee_email || '').toLowerCase()
+    return te ? te === myEmail : t.assignee === myName
+  }
+  const matchSel = (t) => {
+    const te = (t.assignee_email || '').toLowerCase()
+    return te ? (!!selEmail && te === selEmail) : t.assignee === selectedMember
+  }
   const filteredTasks = viewMode === 'my'
-    ? allTasks.filter(t => t.assignee === myName || (myEmail && (t.assignee_email || '').toLowerCase() === myEmail))
+    ? allTasks.filter(matchSelf)
     : selectedMember
-      ? allTasks.filter(t => t.assignee === selectedMember || (selEmail && (t.assignee_email || '').toLowerCase() === selEmail))
+      ? allTasks.filter(matchSel)
       : allTasks
 
   const targetName = viewMode === 'my' ? myName : selectedMember

@@ -1050,14 +1050,15 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     const sunday = sundayD.toISOString().split('T')[0]
 
     // 自分担当の未完了タスクを全件取得。
-    // 担当の特定は「表示名(assignee)一致」に加えて「実ユーザ(assignee_email)一致」も
-    // 加算でマージ (別アプリ由来タスク・名前の表記揺れを email で吸収)。
+    // email を持つタスクは email で本人特定 (canonical)。
+    // email 未設定タスクのみ表示名でフォールバック (移行期)。
     const sel = '*, weekly_reports(kr_title, ka_title, owner)'
     const byNameRes = await supabase
       .from('ka_tasks').select(sel)
       .eq('assignee', viewingName)
       .order('due_date', { ascending: true, nullsFirst: false })
-    let rows = byNameRes.data || []
+    // assignee_email が入っているタスクは email 側で拾うので、ここでは未設定分のみ採用
+    let rows = (byNameRes.data || []).filter(t => !t.assignee_email)
     const viewingEmail = (members?.find(m => m.name === viewingName)?.email || '').toLowerCase()
     if (viewingEmail) {
       // assignee_email 列が無い環境ではエラーになるので無視 (名前一致のみで動作)
