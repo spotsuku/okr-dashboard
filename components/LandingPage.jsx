@@ -195,10 +195,10 @@ function LPHero() {
               無料ではじめる
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-6-6 6 6-6 6" /></svg>
             </a>
-            <button className="lp-btn lp-btn-ghost">
+            <a href="/tour" className="lp-btn lp-btn-ghost">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 5l5 7-5 7M14 5h5v14h-5" /></svg>
               3分で分かるツアー
-            </button>
+            </a>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 12, color: 'var(--muted)' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
