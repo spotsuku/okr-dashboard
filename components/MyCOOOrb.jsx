@@ -9,6 +9,7 @@
 //   - クイックタスク作成成功 (okr:task-created) でオーブに ✓ + ナッジ
 //   - チャット内「＋ タスクを追加」でクイックタスクへ転送 (okr:open-quicktask)
 import * as React from 'react'
+import { supabase } from '../lib/supabase'
 
 const MYCOO_GRAD = 'linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%)'
 
@@ -30,11 +31,41 @@ export default function MyCOOOrb({ user, members = [] }) {
   )
   const [open, setOpen] = React.useState(false)
   const [messages, setMessages] = React.useState([])
+  const [historyLoaded, setHistoryLoaded] = React.useState(false)
   const [input, setInput] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [nudge, setNudge] = React.useState(null) // { message, primaryLabel, primaryAction }
   const [checkmark, setCheckmark] = React.useState(false)
   const scrollRef = React.useRef(null)
+
+  // 既存タブ MyCOO と同じ会話履歴 (coaching_chats / kind='coo') を共有。
+  // タブで話した続きをオーブから、オーブで話した続きをタブから続けられる。
+  React.useEffect(() => {
+    if (!myName || historyLoaded) return
+    let alive = true
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('coaching_chats')
+        .select('role, content, created_at')
+        .eq('owner', myName).eq('kind', 'coo')
+        .order('created_at', { ascending: true })
+        .limit(200)
+      if (!alive) return
+      if (error && error.code !== '42P01' && error.code !== '42703') {
+        console.warn('coo orb history load error:', error)
+      }
+      if (data && data.length > 0) setMessages(data.map(r => ({ role: r.role, content: r.content })))
+      setHistoryLoaded(true)
+    })()
+    return () => { alive = false }
+  }, [myName, historyLoaded])
+
+  const saveMessage = React.useCallback(async (role, content) => {
+    if (!myName || !content) return
+    try {
+      await supabase.from('coaching_chats').insert({ owner: myName, kind: 'coo', role, content, metadata: null })
+    } catch (e) { console.warn('coo orb save error:', e) }
+  }, [myName])
 
   // ⌘J / Ctrl+J で開閉、Esc で閉じる
   React.useEffect(() => {
@@ -80,6 +111,7 @@ export default function MyCOOOrb({ user, members = [] }) {
     setInput('')
     const history = messages.map(m => ({ role: m.role, content: m.content }))
     setMessages(p => [...p, { role: 'user', content: msg }])
+    saveMessage('user', msg)
     setBusy(true)
     try {
       const r = await fetch('/api/integrations/coo/ai', {
@@ -89,8 +121,11 @@ export default function MyCOOOrb({ user, members = [] }) {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
-      setMessages(p => [...p, { role: 'assistant', content: j.text || '(応答なし)' }])
+      const aiContent = j.text || '(応答なし)'
+      setMessages(p => [...p, { role: 'assistant', content: aiContent }])
+      saveMessage('assistant', aiContent)
     } catch (e) {
+      // エラーメッセージは履歴に保存しない (再質問を促す)
       setMessages(p => [...p, { role: 'assistant', content: `⚠️ ${e.message || 'エラー'}` }])
     } finally {
       setBusy(false)
