@@ -121,6 +121,7 @@ export default function QuickTaskPalette({ user, members = [] }) {
   const [draft, setDraft] = React.useState('')
   const [saving, setSaving] = React.useState(false)
   const inputRef = React.useRef(null)
+  const composingRef = React.useRef(false)
 
   const parsed = React.useMemo(() => parseTask(draft, members), [draft, members])
   const resolvedAssignee = parsed.assignee || myName
@@ -176,9 +177,9 @@ export default function QuickTaskPalette({ user, members = [] }) {
   }
 
   function onInputKey(e) {
-    // IME 変換中の Enter は確定操作なので追加しない
+    // IME 変換中の Enter は確定操作なので追加しない (compositionref + isComposing 二重判定)
     if (e.key === 'Enter') {
-      if (e.nativeEvent?.isComposing || e.keyCode === 229) return
+      if (composingRef.current || e.nativeEvent?.isComposing || e.keyCode === 229) return
       e.preventDefault(); add(e.shiftKey)
     }
     else if (e.key === 'Escape') { e.preventDefault(); setOpen(false) }
@@ -213,6 +214,8 @@ export default function QuickTaskPalette({ user, members = [] }) {
           </div>
           <input
             ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={onInputKey}
+            onCompositionStart={() => { composingRef.current = true }}
+            onCompositionEnd={() => { composingRef.current = false }}
             placeholder="例: 明日 11時 提案資料を送る @佐藤 #目標2 !high"
             style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 16, color: '#0f172a', fontFamily: 'inherit' }}
           />
