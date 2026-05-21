@@ -24,6 +24,8 @@ import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
 import Icon from './Icon'
 import OnboardingTour from './OnboardingTour'
+import MyCOOOrb from './MyCOOOrb'
+import QuickTaskPalette from './QuickTaskPalette'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -1001,6 +1003,12 @@ export default function Dashboard({ user, onSignOut }) {
   })
   const [viewMode, setViewMode]             = useState('annual')
   const [annualRefreshKey, setAnnualRefreshKey] = useState(0)
+  // MyCOO オーブ等から okr:goto でタブ遷移を要求された時のハンドラ
+  useEffect(() => {
+    const onGoto = (e) => { const p = e?.detail?.page; if (p) setActivePage(p) }
+    window.addEventListener('okr:goto', onGoto)
+    return () => window.removeEventListener('okr:goto', onGoto)
+  }, [])
   const themeKey = 'light' // ダークモードは廃止 (light 固定)
   const [syncStatus, setSyncStatus]             = useState('connecting')
   const [selectedOwner, setSelectedOwner]       = useState(null)
@@ -1521,6 +1529,8 @@ export default function Dashboard({ user, onSignOut }) {
       <DemoBanner />
       {/* 初回ユーザー向けスポットライト・ツアー (localStorage で完了状態を管理) */}
       <OnboardingTour onNavigate={setActivePage} />
+      <QuickTaskPalette user={user} members={members} />
+      <MyCOOOrb user={user} members={members} />
       {/* サービス無料公開中バナー (myAI ライセンス機能は一時停止中) — NEO福岡は元から無料のため非表示 */}
       {currentOrg?.slug !== 'neo-fukuoka' && (
         <div role="status" style={{
