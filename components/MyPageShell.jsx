@@ -3646,55 +3646,23 @@ function CompanySummaryTab({ T, members }) {
                         <span>⚠️ 遅延タスク</span>
                         <span style={{ color: T.textMuted, fontWeight: 600 }}>({overdue.length}件)</span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {overdue.map(t => (
-                          <div key={t.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 6,
-                            padding: '5px 8px',
-                            background: '#ff6b6b10',
-                            border: '1px solid #ff6b6b30',
-                            borderRadius: 6, fontSize: 11,
-                            color: T.text,
-                          }}>
-                            <span>⚠️</span>
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {t.title || '(無題)'}
-                            </span>
-                            <span style={{ fontSize: 9, color: '#ff6b6b', fontWeight: 700, flexShrink: 0 }}>
-                              {t.due_date?.slice(5)}
-                            </span>
-                          </div>
-                        ))}
+                      <div style={{ margin: '0 -12px' }}>
+                        <TaskList T={T} tasks={overdue} canEdit={false} showDue />
                       </div>
                     </div>
                   )}
 
                   {/* 今日のタスク一覧 */}
                   {ts.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div>
                       {overdue.length > 0 && (
-                        <div style={{ fontSize: 10, fontWeight: 700, color: T.textSub, marginBottom: 2 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: T.textSub, marginBottom: 2, paddingTop: 2 }}>
                           本日のタスク
                         </div>
                       )}
-                      {ts.map(t => {
-                        const isDone = t.done || t.status === 'done'
-                        return (
-                          <div key={t.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 6,
-                            padding: '5px 8px',
-                            background: isDone ? T.successBg : T.sectionBg,
-                            borderRadius: 6, fontSize: 11,
-                            color: isDone ? T.textMuted : T.text,
-                            textDecoration: isDone ? 'line-through' : 'none',
-                          }}>
-                            <span>{isDone ? '✅' : '⬜'}</span>
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {t.title || '(無題)'}
-                            </span>
-                          </div>
-                        )
-                      })}
+                      <div style={{ margin: '0 -12px' }}>
+                        <TaskList T={T} tasks={ts} canEdit={false} showDue />
+                      </div>
                     </div>
                   )}
                 </div>
