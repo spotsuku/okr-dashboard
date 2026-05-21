@@ -20,14 +20,51 @@ const STORAGE_KEY = 'onboarding_v1_completed'
 const STEPS = [
   {
     target: '[data-tour="brand"]',
+    page: 'portal',
     title: 'いま開いている組織はここ',
     body: 'ヘッダー左に「AI WORKSPACE / 〔組織名〕」が表示されます。複数組織に所属しているなら、左端の組織アイコン列から切り替えできます。',
     placement: 'bottom',
   },
   {
-    target: '[data-tour="nav"]',
-    title: '機能の切り替えはここから',
-    body: 'ホーム / ワークスペース / OKR / 週次MTG / 朝会 / 組織 など、主要機能をタブで切り替えできます。',
+    target: '[data-tour="nav-portal"]',
+    page: 'portal',
+    title: 'ホーム',
+    body: 'よく使うリンクやお知らせをまとめたホーム画面です。まずはここから一日を始めましょう。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="nav-mycoach"]',
+    page: 'mycoach',
+    title: 'ワークスペース',
+    body: 'AI コーチと対話しながら、日々の仕事やタスクを整理できる作業スペースです。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="nav-okr"]',
+    page: 'okr',
+    title: 'OKR',
+    body: '組織・チーム・個人の目標 (OKR) を確認・管理できます。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="nav-weekly"]',
+    page: 'weekly',
+    title: '週次MTG',
+    body: '週次ミーティングの進行と、KR / KA の進捗確認をここで行います。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="nav-morning"]',
+    page: 'morning',
+    title: '朝会',
+    body: '朝会の進行をサポート。今日の予定や共有事項をチームで確認できます。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="nav-orgjd"]',
+    page: 'orgjd',
+    title: '組織',
+    body: 'メンバーや組織体制 (JD) を確認・管理できます。',
     placement: 'bottom',
   },
   {
@@ -44,13 +81,14 @@ const STEPS = [
   },
   {
     target: null,
+    page: 'mycoach',
     title: '準備完了 🎉',
-    body: 'これで AI WorkSpace のキホンは OK です。さっそく OKR を立てて、チームの仕事を整えていきましょう。',
+    body: '早速ワークスペースで仕事を開始しましょう。',
     placement: 'center',
   },
 ]
 
-export default function OnboardingTour() {
+export default function OnboardingTour({ onNavigate }) {
   const [active, setActive] = React.useState(false)
   const [idx, setIdx] = React.useState(0)
   const [rect, setRect] = React.useState(null)
@@ -65,6 +103,13 @@ export default function OnboardingTour() {
     const t = setTimeout(() => setActive(true), 800)
     return () => clearTimeout(t)
   }, [])
+
+  // ステップに対応するタブへ実際に移動する
+  React.useEffect(() => {
+    if (!active) return
+    const step = STEPS[idx]
+    if (step.page && typeof onNavigate === 'function') onNavigate(step.page)
+  }, [active, idx, onNavigate])
 
   // 対象要素の位置を取得 (リサイズ / スクロール対応)
   React.useEffect(() => {
