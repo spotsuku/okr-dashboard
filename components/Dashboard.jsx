@@ -23,6 +23,7 @@ import MorningMeetingPage from './MorningMeetingPage'
 import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
 import Icon from './Icon'
+import OnboardingTour from './OnboardingTour'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -1401,6 +1402,8 @@ export default function Dashboard({ user, onSignOut }) {
     <div style={{ height: '100vh', background: T.bg, color: T.text, fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
       {/* Demo モードバナー */}
       <DemoBanner />
+      {/* 初回ユーザー向けスポットライト・ツアー (localStorage で完了状態を管理) */}
+      <OnboardingTour />
       {/* サービス無料公開中バナー (myAI ライセンス機能は一時停止中) — NEO福岡は元から無料のため非表示 */}
       {currentOrg?.slug !== 'neo-fukuoka' && (
         <div role="status" style={{
@@ -1440,7 +1443,7 @@ export default function Dashboard({ user, onSignOut }) {
         {/* 1行目 */}
         <div style={{ padding: isMobile ? '8px 12px' : '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0, overflow: 'visible' }}>
           {/* ブランド (ロゴ + AI WorkSpace + 開いている組織名) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${T.border}` }}>
+          <div data-tour="brand" style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${T.border}` }}>
             <img src="/icon.png" alt="AI WorkSpace" width={28} height={28} style={{ borderRadius: 7, display: 'block', objectFit: 'cover' }} />
             {!isMobile && (
               <div style={{ lineHeight: 1.1 }}>
@@ -1453,7 +1456,7 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
 
           {/* ページナビ (Glass: 絵文字 → SVG Icon) */}
-          <div style={{ display: 'flex', gap: 2, background: T.bgSoft || 'rgba(255,255,255,0.55)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+          <div data-tour="nav" style={{ display: 'flex', gap: 2, background: T.bgSoft || 'rgba(255,255,255,0.55)', padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
             {(() => {
               const navItems = [
                 { id: 'portal',  label: 'ホーム',         icon: 'home' },
@@ -1501,7 +1504,7 @@ export default function Dashboard({ user, onSignOut }) {
           </div>
 
           {/* 年度切り替え */}
-          <div style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <div data-tour="year" style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
             {['2025', '2026'].map(yr => (
               <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accent : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
             ))}
@@ -1516,7 +1519,7 @@ export default function Dashboard({ user, onSignOut }) {
               </button>
             )}
             {/* ユーザーメニュー (テーマ切替・同期状態もここに集約) */}
-            <div style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
+            <div data-tour="user-menu" style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
               <button style={{ background: T.bgCard, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, height: 32, padding: '0 8px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Icon name="user" size={14} />
                 <Icon name="chevronD" size={10} />
