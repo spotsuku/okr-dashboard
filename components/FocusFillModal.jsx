@@ -174,7 +174,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const prevMon = new Date(Date.UTC(cy, cm - 1, cd - 7)).toISOString().split('T')[0]
 
     const [krsRes, krReviewsRes, kasRes, objsRes, prevKrReviewsRes, prevKasRes] = await Promise.all([
-      supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName).range(0, 49999),
+      supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id, archived_at').eq('owner', viewingName).range(0, 49999),
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart).range(0, 49999),
       supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start, reference_urls, ka_key')
         .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done').range(0, 49999),
@@ -231,7 +231,14 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     if (chosenKaWeek !== kaWeekStart) setKaWeekStart(chosenKaWeek)
     const chosenKas = allKas.filter(k => k.week_start === chosenKaWeek)
 
-    const krs = krsRes.data || []
+    // archived_at 列が無い古い環境向けフォールバック (列なしで再取得)
+    let krsData = krsRes.data
+    if (krsRes.error && /archived_at|column/i.test(krsRes.error.message || '')) {
+      const r = await supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id').eq('owner', viewingName).range(0, 49999)
+      krsData = r.data
+    }
+    // アーカイブ済み KR は記入モーダルに表示しない
+    const krs = (krsData || []).filter(kr => !kr.archived_at)
     const krReviewsMap = Object.fromEntries((krReviewsRes.data || []).map(r => [r.kr_id, r]))
     const om = {}; (objsRes.data || []).forEach(o => { om[o.id] = o }); setObjMap(om)
 

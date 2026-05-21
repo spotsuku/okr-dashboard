@@ -36,8 +36,56 @@ const STEPS = [
     target: '[data-tour="nav-mycoach"]',
     page: 'mycoach',
     title: 'ワークスペース',
-    body: 'AI コーチと対話しながら、日々の仕事やタスクを整理できる作業スペースです。',
+    body: 'AI コーチと対話しながら、日々の仕事やタスクを整理できる作業スペースです。中の主要ブロックを順に見ていきましょう。',
     placement: 'bottom',
+  },
+  {
+    target: '[data-tour="ws-today"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: '今日やること',
+    body: '今日が期限・着手すべきタスクがここに集まります。チェックでそのまま完了にできます。',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="ws-week"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: '今週やること',
+    body: '今週の予定タスクを曜日ごとに俯瞰できます。週の段取りはここで確認します。',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="ws-gmail"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'Gmail（要対応）',
+    body: '返信が必要なメールを抽出して表示します。「AI返信」でその場で下書きも作れます。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="ws-calendar"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'Google カレンダー',
+    body: '直近の予定を表示します。今日の空き時間を意識して動けます。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="ws-okr"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'マイOKR',
+    body: '自分の KR / KA の記入漏れがひと目で分かります。ボタンからその場で記入できます。',
+    placement: 'left',
+  },
+  {
+    target: '[data-tour="ws-badge"]',
+    page: 'mycoach',
+    mycoachDashboard: true,
+    title: 'バッジコレクション',
+    body: 'タスク完了率や記入率などの達成度をバッジで可視化。継続のモチベーションに。',
+    placement: 'left',
   },
   {
     target: '[data-tour="nav-okr"]',
@@ -82,6 +130,7 @@ const STEPS = [
   {
     target: null,
     page: 'mycoach',
+    mycoachDashboard: true,
     title: '準備完了 🎉',
     body: '早速ワークスペースで仕事を開始しましょう。',
     placement: 'center',
@@ -104,12 +153,36 @@ export default function OnboardingTour({ onNavigate }) {
     return () => clearTimeout(t)
   }, [])
 
+  // 「ツアーをもう一度見る」: ユーザーメニュー等から発火される手動再生イベント。
+  // 完了/スキップ済み (localStorage='1') でも、いつでも最初から見直せる。
+  React.useEffect(() => {
+    function startTour() { setIdx(0); setActive(true) }
+    window.addEventListener('okr:start-tour', startTour)
+    return () => window.removeEventListener('okr:start-tour', startTour)
+  }, [])
+
   // ステップに対応するタブへ実際に移動する
   React.useEffect(() => {
     if (!active) return
     const step = STEPS[idx]
     if (step.page && typeof onNavigate === 'function') onNavigate(step.page)
+    // ワークスペース内ブロックのステップは、全社サマリーではなく
+    // 個人ダッシュボードを開くよう MyPageShell に依頼する
+    if (step.mycoachDashboard && typeof window !== 'undefined') {
+      window.__okrOpenMyDashboard = true
+      window.dispatchEvent(new CustomEvent('okr:open-my-dashboard'))
+    }
   }, [active, idx, onNavigate])
+
+  // ステップ対象を画面内へスクロール (モバイルの横スクロールナビ等で
+  // 対象ボタンが画面外にあるとハイライトがずれるため)
+  React.useEffect(() => {
+    if (!active) return
+    const step = STEPS[idx]
+    if (!step.target) return
+    const el = document.querySelector(step.target)
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [active, idx])
 
   // 対象要素の位置を取得 (リサイズ / スクロール対応)
   React.useEffect(() => {
@@ -147,17 +220,23 @@ export default function OnboardingTour({ onNavigate }) {
 
   if (!active) return null
 
+  // 表示可能なステップだけを対象にする。対象要素が DOM に無い/非表示の
+  // ステップ (フィーチャーフラグで隠れたタブ・モバイルで非表示の要素など) はスキップ。
+  const showable = STEPS.map((_, i) => i).filter(i => stepShowable(STEPS[i]))
   const step = STEPS[idx]
-  const total = STEPS.length
-  const isLast = idx === total - 1
-  const isFirst = idx === 0
+  const total = showable.length
+  const pos = showable.indexOf(idx)
+  const isLast = pos === -1 || pos === total - 1
+  const isFirst = pos <= 0
 
   function next() {
-    if (isLast) finish(false)
-    else setIdx(i => Math.min(total - 1, i + 1))
+    const nextIdx = showable.find(i => i > idx)
+    if (nextIdx === undefined) finish(false)
+    else setIdx(nextIdx)
   }
   function prev() {
-    if (!isFirst) setIdx(i => Math.max(0, i - 1))
+    const before = showable.filter(i => i < idx)
+    if (before.length) setIdx(before[before.length - 1])
   }
   function finish(skipped) {
     try { localStorage.setItem(STORAGE_KEY, '1') } catch { /* noop */ }
@@ -173,9 +252,22 @@ export default function OnboardingTour({ onNavigate }) {
     height: rect.height + PAD * 2,
   } : null
 
-  // 吹き出しの位置計算
-  const TOOLTIP_W = 320
+  // 吹き出しの位置計算 (狭い画面では画面幅に合わせて縮める)
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 360
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const TOOLTIP_W = Math.min(320, vw - 32)
   const TOOLTIP_GAP = 14
+  const EST_TIP_H = 240
+  // 縦方向: 画面下にはみ出すなら対象の上へ回し、最後は画面内にクランプ
+  const clampTop = (top) => {
+    let t = top
+    if (highlight && t + EST_TIP_H > vh - 12) {
+      const above = highlight.top - TOOLTIP_GAP - EST_TIP_H
+      if (above > 12) t = above
+    }
+    return Math.max(12, Math.min(t, vh - EST_TIP_H - 12))
+  }
+  const clampLeft = (left) => Math.max(16, Math.min(vw - TOOLTIP_W - 16, left))
   let tooltipStyle = { position: 'fixed', zIndex: 100000, width: TOOLTIP_W }
   if (!highlight) {
     // center
@@ -184,20 +276,27 @@ export default function OnboardingTour({ onNavigate }) {
       top: '50%', left: '50%',
       transform: 'translate(-50%, -50%)',
     }
+  } else if (step.placement === 'right' || step.placement === 'left') {
+    // 対象の横 (はみ出す側は反対へフォールバック)
+    const wantRight = step.placement === 'right'
+    const rightSpace = vw - (highlight.left + highlight.width)
+    const useRight = wantRight ? rightSpace >= TOOLTIP_W + 24 : !(highlight.left >= TOOLTIP_W + 24)
+    const left = useRight
+      ? clampLeft(highlight.left + highlight.width + TOOLTIP_GAP)
+      : clampLeft(highlight.left - TOOLTIP_W - TOOLTIP_GAP)
+    tooltipStyle = { ...tooltipStyle, top: clampTop(highlight.top), left }
   } else if (step.placement === 'bottom-end') {
     tooltipStyle = {
       ...tooltipStyle,
-      top: highlight.top + highlight.height + TOOLTIP_GAP,
-      right: Math.max(16, window.innerWidth - (highlight.left + highlight.width)),
+      top: clampTop(highlight.top + highlight.height + TOOLTIP_GAP),
+      right: Math.max(16, vw - (highlight.left + highlight.width)),
     }
   } else {
     // bottom default
-    let left = highlight.left + highlight.width / 2 - TOOLTIP_W / 2
-    left = Math.max(16, Math.min(window.innerWidth - TOOLTIP_W - 16, left))
     tooltipStyle = {
       ...tooltipStyle,
-      top: highlight.top + highlight.height + TOOLTIP_GAP,
-      left,
+      top: clampTop(highlight.top + highlight.height + TOOLTIP_GAP),
+      left: clampLeft(highlight.left + highlight.width / 2 - TOOLTIP_W / 2),
     }
   }
 
@@ -259,7 +358,7 @@ export default function OnboardingTour({ onNavigate }) {
             textTransform: 'uppercase',
             padding: '2px 8px', borderRadius: 99,
             background: 'rgba(14,165,233,.12)', color: '#0369a1',
-          }}>STEP {idx + 1} / {total}</span>
+          }}>STEP {(pos < 0 ? 0 : pos) + 1} / {total}</span>
           <button onClick={() => finish(true)} style={{
             border: 'none', background: 'transparent',
             color: '#94a3b8', cursor: 'pointer',
@@ -326,6 +425,17 @@ function Kbd({ children }) {
       color: '#475569',
     }}>{children}</span>
   )
+}
+
+// 対象要素が DOM に存在し、表示されている (サイズを持つ) ステップだけを見せる。
+// フィーチャーフラグで隠れたタブやモバイルで非表示の要素のステップは自動スキップ。
+function stepShowable(step) {
+  if (!step.target) return true // center ステップ (target なし) は常に表示
+  if (typeof document === 'undefined') return true
+  const el = document.querySelector(step.target)
+  if (!el) return false
+  const r = el.getBoundingClientRect()
+  return r.width > 0 && r.height > 0
 }
 
 function overlayStyle(s) {
