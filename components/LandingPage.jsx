@@ -86,6 +86,38 @@ function LandingPage() {
           .lp-section { padding: 64px 20px; }
           .lp-h2 { font-size: 28px; }
         }
+        @media (max-width: 768px) {
+          .lp-section { padding: 56px 18px; }
+          .lp-h2 { font-size: 26px; }
+          /* ヘッダ: ナビ・補助項目を畳んでロゴ + CTA のみ */
+          .lp-header-inner { gap: 10px !important; padding: 12px 16px !important; }
+          .lp-nav, .lp-header-badge, .lp-header-login { display: none !important; }
+          /* ヒーロー: 1カラム化 + タイトル縮小 + 装飾カード非表示 */
+          .lp-hero { padding: 40px 18px 48px !important; }
+          .lp-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .lp-hero-h1 { font-size: 34px !important; }
+          .lp-hero-float { display: none !important; }
+          .lp-hero-main { transform: none !important; }
+          /* 各セクションのグリッドを段組み解除 */
+          .lp-what-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+          .lp-feature-grid { grid-template-columns: 1fr !important; }
+          .lp-small-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          .lp-reasons-grid { grid-template-columns: 1fr !important; }
+          .lp-pricing-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+          .lp-pricing-card { transform: none !important; }
+          .lp-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+          .lp-footer-bottom { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+          /* CTA: 縦並び + 余白圧縮 */
+          .lp-cta-box { padding: 36px 22px !important; }
+          .lp-cta-row { flex-direction: column !important; align-items: flex-start !important; gap: 24px !important; }
+          .lp-cta-h2 { font-size: 26px !important; }
+          .lp-cta-actions { width: 100% !important; }
+        }
+        @media (max-width: 480px) {
+          .lp-hero-h1 { font-size: 30px !important; }
+          .lp-small-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .lp-footer-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
       <LPHeader />
       <LPHero />
@@ -113,7 +145,7 @@ function LPHeader() {
       WebkitBackdropFilter: 'blur(18px) saturate(160%)',
       borderBottom: '1px solid rgba(15,23,42,.06)',
     }}>
-      <div style={{
+      <div className="lp-header-inner" style={{
         maxWidth: 1180, margin: '0 auto',
         padding: '14px 24px',
         display: 'flex', alignItems: 'center', gap: 28,
@@ -122,7 +154,7 @@ function LPHeader() {
           <img src="/icon.png" width="32" height="32" alt="AI WorkSpace" style={{ borderRadius: 7, boxShadow: '0 2px 6px rgba(37,99,235,.18)' }} />
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.005em' }}>AI WorkSpace</span>
         </a>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 22, marginLeft: 12 }}>
+        <nav className="lp-nav" style={{ display: 'flex', alignItems: 'center', gap: 22, marginLeft: 12 }}>
           {NAV.map(n => (
             <a key={n.label} href={n.href} style={{
               fontSize: 13, fontWeight: 500, color: 'var(--sub)',
@@ -131,7 +163,7 @@ function LPHeader() {
           ))}
         </nav>
         <div style={{ flex: 1 }} />
-        <span style={{
+        <span className="lp-header-badge" style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '4px 12px', fontSize: 11.5, fontWeight: 600,
           background: 'var(--warn-soft)', color: 'var(--warn)',
@@ -140,7 +172,7 @@ function LPHeader() {
           <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--warn)' }} />
           現在 無料公開中
         </span>
-        <a href="/signin" style={{ fontSize: 13, fontWeight: 500, color: 'var(--sub)', textDecoration: 'none' }}>ログイン</a>
+        <a href="/signin" className="lp-header-login" style={{ fontSize: 13, fontWeight: 500, color: 'var(--sub)', textDecoration: 'none' }}>ログイン</a>
         <a href="/signin" className="lp-btn lp-btn-primary" style={{ padding: '8px 18px', fontSize: 13 }}>無料ではじめる</a>
       </div>
     </header>
@@ -152,8 +184,8 @@ function LPHeader() {
    ============================================================ */
 function LPHero() {
   return (
-    <section style={{ padding: '76px 24px 64px', position: 'relative', overflow: 'hidden' }}>
-      <div className="lp-container" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 56, alignItems: 'center' }}>
+    <section className="lp-hero" style={{ padding: '76px 24px 64px', position: 'relative', overflow: 'hidden' }}>
+      <div className="lp-container lp-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 56, alignItems: 'center' }}>
         <div>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 7,
@@ -169,7 +201,7 @@ function LPHero() {
             }}>NEW</span>
             タスク・メール・カレンダー・会議・振り返り・目標管理を 1 つで運用する業務 OS
           </div>
-          <h1 style={{
+          <h1 className="lp-hero-h1" style={{
             fontSize: 56, fontWeight: 700, lineHeight: 1.15,
             letterSpacing: '-0.025em', color: 'var(--text)',
             margin: '0 0 22px 0',
@@ -226,7 +258,7 @@ function HeroMockup() {
   return (
     <div style={{ position: 'relative', perspective: 1400 }}>
       {/* 後ろに浮かぶ補助カード */}
-      <div className="lp-card" style={{
+      <div className="lp-card lp-hero-float" style={{
         position: 'absolute', top: -32, right: -24, width: 240,
         padding: 14, transform: 'rotate(3deg) translateZ(0)',
         zIndex: 1,
@@ -248,7 +280,7 @@ function HeroMockup() {
         </div>
       </div>
       {/* 前のメインカード（タスク） */}
-      <div className="lp-card" style={{
+      <div className="lp-card lp-hero-main" style={{
         position: 'relative', padding: 20, zIndex: 2,
         transform: 'rotate(-1.5deg)',
       }}>
@@ -309,7 +341,7 @@ function HeroMockup() {
         ))}
       </div>
       {/* 右下に振り返りバッジ */}
-      <div className="lp-card" style={{
+      <div className="lp-card lp-hero-float" style={{
         position: 'absolute', bottom: -28, right: -36, width: 200,
         padding: 14, zIndex: 3, transform: 'rotate(4deg)',
       }}>
@@ -386,7 +418,7 @@ function LPLogoStrip() {
 function LPWhat() {
   return (
     <section className="lp-section" id="about">
-      <div className="lp-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 56, alignItems: 'center' }}>
+      <div className="lp-container lp-what-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 56, alignItems: 'center' }}>
         <div>
           <div className="lp-h2-sub">ABOUT</div>
           <h2 className="lp-h2" style={{ margin: '0 0 18px 0' }}>
@@ -474,7 +506,7 @@ function LPFeatureBig({ id }) {
             個別ツールを行き来する必要がありません。
           </p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div className="lp-feature-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <BigFeatureCard
             tone="accent"
             label="タスク管理"
@@ -772,7 +804,7 @@ function LPFeatureSmall() {
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <h3 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>他にも使える便利機能</h3>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14 }}>
+        <div className="lp-small-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14 }}>
           {feats.map((f, i) => (
             <div key={i} className="lp-card" style={{
               padding: 16, display: 'flex', flexDirection: 'column',
@@ -849,7 +881,7 @@ function LPReasons() {
             AI WorkSpace が選ばれる 3 つの理由
           </h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        <div className="lp-reasons-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
           {reasons.map((r, i) => (
             <div key={i} className="lp-card" style={{ padding: 28 }}>
               <div style={{
@@ -892,7 +924,7 @@ function LPCTA() {
   return (
     <section style={{ padding: '64px 24px' }}>
       <div className="lp-container">
-        <div style={{
+        <div className="lp-cta-box" style={{
           position: 'relative', overflow: 'hidden',
           padding: '52px 56px',
           borderRadius: 24,
@@ -910,7 +942,7 @@ function LPCTA() {
             background: 'radial-gradient(circle, rgba(187,247,208,.25), transparent 70%)',
             pointerEvents: 'none',
           }} />
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 40 }}>
+          <div className="lp-cta-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 40 }}>
             <div style={{ flex: 1 }}>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7,
@@ -921,14 +953,14 @@ function LPCTA() {
                 <span style={{ width: 6, height: 6, borderRadius: 99, background: '#fde68a' }} />
                 現在 すべての機能を無料公開中
               </div>
-              <h2 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.25, margin: '0 0 12px 0' }}>
+              <h2 className="lp-cta-h2" style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.25, margin: '0 0 12px 0' }}>
                 3 分で、明日の朝が変わる。
               </h2>
               <p style={{ fontSize: 15, lineHeight: 1.7, color: 'rgba(255,255,255,.85)', margin: 0 }}>
                 クレジットカード不要。Google アカウントですぐ始められます。
               </p>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'stretch' }}>
+            <div className="lp-cta-actions" style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'stretch' }}>
               <a href="/signin" className="lp-btn" style={{
                 background: '#fff', color: '#2563eb',
                 padding: '14px 28px', fontSize: 15,
@@ -1090,9 +1122,9 @@ function LPPricing() {
             現在、AI WorkSpace は <b style={{ color: 'var(--warn)' }}>主要機能を無料公開中</b> です。
           </p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+        <div className="lp-pricing-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
           {plans.map((p, i) => (
-            <div key={i} className="lp-card" style={{
+            <div key={i} className="lp-card lp-pricing-card" style={{
               padding: 30, position: 'relative',
               border: p.featured ? '2px solid var(--accent)' : '1px solid rgba(15,23,42,.06)',
               transform: p.featured ? 'scale(1.03)' : 'scale(1)',
@@ -1240,7 +1272,7 @@ function LPFooter() {
   return (
     <footer style={{ background: 'rgba(15,23,42,.04)', borderTop: '1px solid rgba(15,23,42,.06)', padding: '56px 24px 24px' }}>
       <div className="lp-container">
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 36, marginBottom: 40 }}>
+        <div className="lp-footer-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 36, marginBottom: 40 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <img src="/icon.png" width="28" height="28" alt="AI WorkSpace" style={{ borderRadius: 6 }} />
@@ -1278,7 +1310,7 @@ function LPFooter() {
             </div>
           ))}
         </div>
-        <div style={{
+        <div className="lp-footer-bottom" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           paddingTop: 24, borderTop: '1px solid rgba(15,23,42,.06)',
           fontSize: 12, color: 'var(--muted)',
