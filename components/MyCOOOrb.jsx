@@ -37,6 +37,7 @@ export default function MyCOOOrb({ user, members = [] }) {
   const [nudge, setNudge] = React.useState(null) // { message, primaryLabel, primaryAction }
   const [checkmark, setCheckmark] = React.useState(false)
   const scrollRef = React.useRef(null)
+  const composingRef = React.useRef(false)
 
   // 既存タブ MyCOO と同じ会話履歴 (coaching_chats / kind='coo') を共有。
   // タブで話した続きをオーブから、オーブで話した続きをタブから続けられる。
@@ -252,7 +253,9 @@ export default function MyCOOOrb({ user, members = [] }) {
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !(e.nativeEvent?.isComposing || e.keyCode === 229)) { e.preventDefault(); send() } }}
+                onCompositionStart={() => { composingRef.current = true }}
+                onCompositionEnd={() => { composingRef.current = false }}
+                onKeyDown={e => { if (e.key === 'Enter' && !(composingRef.current || e.nativeEvent?.isComposing || e.keyCode === 229)) { e.preventDefault(); send() } }}
                 placeholder="MyCOO に聞く..."
                 style={{
                   flex: 1, padding: '10px 14px', background: '#fff', border: '1px solid rgba(15,23,42,.1)',
