@@ -1049,12 +1049,25 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     const sundayD = new Date(monday + 'T00:00:00Z'); sundayD.setUTCDate(sundayD.getUTCDate() + 6)
     const sunday = sundayD.toISOString().split('T')[0]
 
-    // 自分担当の未完了タスクを全件取得
-    const { data } = await supabase
-      .from('ka_tasks')
-      .select('*, weekly_reports(kr_title, ka_title, owner)')
+    // 自分担当の未完了タスクを全件取得。
+    // 担当の特定は「表示名(assignee)一致」に加えて「実ユーザ(assignee_email)一致」も
+    // 加算でマージ (別アプリ由来タスク・名前の表記揺れを email で吸収)。
+    const sel = '*, weekly_reports(kr_title, ka_title, owner)'
+    const byNameRes = await supabase
+      .from('ka_tasks').select(sel)
       .eq('assignee', viewingName)
       .order('due_date', { ascending: true, nullsFirst: false })
+    let rows = byNameRes.data || []
+    const viewingEmail = (members?.find(m => m.name === viewingName)?.email || '').toLowerCase()
+    if (viewingEmail) {
+      // assignee_email 列が無い環境ではエラーになるので無視 (名前一致のみで動作)
+      const byEmailRes = await supabase.from('ka_tasks').select(sel).eq('assignee_email', viewingEmail)
+      if (!byEmailRes.error && byEmailRes.data) {
+        const seen = new Set(rows.map(t => t.id))
+        rows = [...rows, ...byEmailRes.data.filter(t => !seen.has(t.id))]
+      }
+    }
+    const data = rows
 
     const undone = (data || []).filter(t => t.status !== 'done' && !t.done)
 
@@ -3462,18 +3475,17 @@ function CompanySummaryTab({ T, members }) {
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    const [todayRes, overdueRes] = await Promise.all([
-      supabase.from('ka_tasks')
-        .select('id, title, assignee, due_date, done, status')
-        .eq('due_date', today)
-        .order('assignee')
-        .order('id', { ascending: false }),
-      supabase.from('ka_tasks')
-        .select('id, title, assignee, due_date, done, status')
-        .lt('due_date', today)
-        .order('assignee')
-        .order('due_date', { ascending: true }),
+    const cols = 'id, title, assignee, assignee_email, due_date, done, status'
+    const colsNoEmail = 'id, title, assignee, due_date, done, status'
+    const fetchBoth = (sel) => Promise.all([
+      supabase.from('ka_tasks').select(sel).eq('due_date', today).order('assignee').order('id', { ascending: false }),
+      supabase.from('ka_tasks').select(sel).lt('due_date', today).order('assignee').order('due_date', { ascending: true }),
     ])
+    let [todayRes, overdueRes] = await fetchBoth(cols)
+    // assignee_email 列が無い環境向けフォールバック (列なしで再取得)
+    if ((todayRes.error || overdueRes.error) && /assignee_email|column/i.test((todayRes.error || overdueRes.error).message || '')) {
+      ;[todayRes, overdueRes] = await fetchBoth(colsNoEmail)
+    }
     if (todayRes.error || overdueRes.error) {
       setError((todayRes.error || overdueRes.error).message)
       setTasks([]); setOverdueTasks([]); setLoading(false); return
@@ -3488,17 +3500,32 @@ function CompanySummaryTab({ T, members }) {
 
   // メンバー別に集計
   const byMember = useMemo(() => {
+    // 表示名ではなく email を優先キーにして同一人物のタスクを 1 グループへ集約
+    // (名前の表記揺れ・別アプリ由来でも email が一致すれば 1 人にまとまる)
+    const emailToMember = new Map(); const nameToMember = new Map()
+    for (const m of (members || [])) {
+      if (m.email) emailToMember.set(m.email.toLowerCase(), m)
+      nameToMember.set(m.name, m)
+    }
+    const resolve = (t) => {
+      const em = (t.assignee_email || '').toLowerCase()
+      const member = (em && emailToMember.get(em)) || nameToMember.get(t.assignee) || { name: t.assignee || em || '(不明)' }
+      const key = member.id != null ? `id:${member.id}` : (em ? `em:${em}` : `nm:${t.assignee}`)
+      return { key, member }
+    }
     const map = new Map()
-    for (const m of (members || [])) map.set(m.name, { member: m, tasks: [], overdue: [] })
+    for (const m of (members || [])) map.set(`id:${m.id}`, { member: m, tasks: [], overdue: [] })
     for (const t of tasks) {
-      if (!t.assignee) continue
-      if (!map.has(t.assignee)) map.set(t.assignee, { member: { name: t.assignee }, tasks: [], overdue: [] })
-      map.get(t.assignee).tasks.push(t)
+      if (!t.assignee && !t.assignee_email) continue
+      const { key, member } = resolve(t)
+      if (!map.has(key)) map.set(key, { member, tasks: [], overdue: [] })
+      map.get(key).tasks.push(t)
     }
     for (const t of overdueTasks) {
-      if (!t.assignee) continue
-      if (!map.has(t.assignee)) map.set(t.assignee, { member: { name: t.assignee }, tasks: [], overdue: [] })
-      map.get(t.assignee).overdue.push(t)
+      if (!t.assignee && !t.assignee_email) continue
+      const { key, member } = resolve(t)
+      if (!map.has(key)) map.set(key, { member, tasks: [], overdue: [] })
+      map.get(key).overdue.push(t)
     }
     // 今日のタスク or 遅延タスクがあるメンバーだけ抽出 + sort_order 順
     const arr = Array.from(map.values()).filter(x => x.tasks.length > 0 || x.overdue.length > 0)

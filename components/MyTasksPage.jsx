@@ -242,7 +242,12 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
       report_id: noKaLink ? null : parseInt(reportId),
       ka_key: computeKAKey(selectedKA),
     }
-    const { error } = await supabase.from('ka_tasks').insert(payload)
+    // 突合用の安定キー (担当の email)。列が無い環境では付けずに再挿入。
+    const assigneeEmail = (members?.find(m => m.name === assignee)?.email || '').toLowerCase()
+    let { error } = await supabase.from('ka_tasks').insert({ ...payload, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
+    if (error && /assignee_email|column/i.test(error.message || '')) {
+      ;({ error } = await supabase.from('ka_tasks').insert(payload))
+    }
     setSaving(false)
     if (error) { alert('タスクの作成に失敗しました: ' + error.message); return }
     onCreated()
@@ -1144,11 +1149,13 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     }
   })
 
-  // フィルタ済みタスク
+  // フィルタ済みタスク (担当は表示名 + email の両方で一致判定)
+  const myEmail = (user?.email || '').toLowerCase()
+  const selEmail = (members?.find(m => m.name === selectedMember)?.email || '').toLowerCase()
   const filteredTasks = viewMode === 'my'
-    ? allTasks.filter(t => t.assignee === myName)
+    ? allTasks.filter(t => t.assignee === myName || (myEmail && (t.assignee_email || '').toLowerCase() === myEmail))
     : selectedMember
-      ? allTasks.filter(t => t.assignee === selectedMember)
+      ? allTasks.filter(t => t.assignee === selectedMember || (selEmail && (t.assignee_email || '').toLowerCase() === selEmail))
       : allTasks
 
   const targetName = viewMode === 'my' ? myName : selectedMember
