@@ -151,14 +151,23 @@ export default function QuickTaskPalette({ user, members = [] }) {
   async function add(keepOpen) {
     if (!parsed.title || saving) return
     setSaving(true)
-    const payload = {
+    // 担当の email を解決 (突合用の安定キー)。@担当ならそのメンバー、未指定なら自分。
+    const assigneeEmail = (
+      members.find(m => m.name === resolvedAssignee)?.email ||
+      (resolvedAssignee === myName ? user?.email : '') || ''
+    ).toLowerCase()
+    const base = {
       title: parsed.title,
       assignee: resolvedAssignee || '',
       status: 'not_started',
       done: false,
       ...(parsed.date ? { due_date: fmtDate(parsed.date) } : {}),
     }
-    const { error } = await supabase.from('ka_tasks').insert(payload)
+    let { error } = await supabase.from('ka_tasks').insert({ ...base, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
+    // assignee_email 列が無い古い環境向けフォールバック (列なしで再挿入)
+    if (error && /assignee_email|column/i.test(error.message || '')) {
+      ;({ error } = await supabase.from('ka_tasks').insert(base))
+    }
     setSaving(false)
     if (error) { alert('タスク追加に失敗しました: ' + error.message); return }
     window.dispatchEvent(new CustomEvent('okr:task-created', { detail: { count: 1 } }))

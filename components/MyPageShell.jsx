@@ -1049,12 +1049,25 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     const sundayD = new Date(monday + 'T00:00:00Z'); sundayD.setUTCDate(sundayD.getUTCDate() + 6)
     const sunday = sundayD.toISOString().split('T')[0]
 
-    // 自分担当の未完了タスクを全件取得
-    const { data } = await supabase
-      .from('ka_tasks')
-      .select('*, weekly_reports(kr_title, ka_title, owner)')
+    // 自分担当の未完了タスクを全件取得。
+    // 担当の特定は「表示名(assignee)一致」に加えて「実ユーザ(assignee_email)一致」も
+    // 加算でマージ (別アプリ由来タスク・名前の表記揺れを email で吸収)。
+    const sel = '*, weekly_reports(kr_title, ka_title, owner)'
+    const byNameRes = await supabase
+      .from('ka_tasks').select(sel)
       .eq('assignee', viewingName)
       .order('due_date', { ascending: true, nullsFirst: false })
+    let rows = byNameRes.data || []
+    const viewingEmail = (members?.find(m => m.name === viewingName)?.email || '').toLowerCase()
+    if (viewingEmail) {
+      // assignee_email 列が無い環境ではエラーになるので無視 (名前一致のみで動作)
+      const byEmailRes = await supabase.from('ka_tasks').select(sel).eq('assignee_email', viewingEmail)
+      if (!byEmailRes.error && byEmailRes.data) {
+        const seen = new Set(rows.map(t => t.id))
+        rows = [...rows, ...byEmailRes.data.filter(t => !seen.has(t.id))]
+      }
+    }
+    const data = rows
 
     const undone = (data || []).filter(t => t.status !== 'done' && !t.done)
 
