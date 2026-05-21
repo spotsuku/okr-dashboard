@@ -173,6 +173,23 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(true)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+
+  // オンボーディングツアーが「個人ダッシュボードを開く」要求を送ってきたら、
+  // 全社サマリー → 自分の個人ダッシュボード (ダッシュボードタブ) へ切替える。
+  // これにより 今日やること / Gmail / マイOKR 等のブロックがツアーで表示できる。
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const openMine = () => {
+      setSummaryMode(false)
+      if (myName) setViewingName(myName)
+      setActiveTab('dashboard')
+    }
+    window.addEventListener('okr:open-my-dashboard', openMine)
+    // MyPageShell マウント前にツアーが発火していた場合はフラグで拾う
+    if (window.__okrOpenMyDashboard) { openMine(); window.__okrOpenMyDashboard = false }
+    return () => window.removeEventListener('okr:open-my-dashboard', openMine)
+  }, [myName])
+
   // SaaS 化 Phase C: 組織別 feature flag を取得 (現在の組織で有効なモジュール集合)
   const enabledModules = useFeatureFlags()
   // 全社サマリーと個人モードでタブ構成が違うため、モード切替で隠れるタブに
@@ -1418,7 +1435,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           minWidth: 0,
         }}>
           {showW('today') && (
-            <Section T={T} icon={<Icon name="bolt" size={14} />} accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
+            <Section dataTour="ws-today" T={T} icon={<Icon name="bolt" size={14} />} accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
               <button onClick={loadTasks} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -1431,7 +1448,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             </Section>
           )}
           {showW('week') && (
-            <Section T={T} icon={<Icon name="calendar" size={14} />} accent={T.success} title="今週やること" flex={1}>
+            <Section dataTour="ws-week" T={T} icon={<Icon name="calendar" size={14} />} accent={T.success} title="今週やること" flex={1}>
               {taskBoard.loading ? <Loading T={T} /> : (
                 <WeekTasks T={T} byWeekday={taskBoard.byWeekday} canEdit={isViewingSelf} onToggle={toggleTaskDone} />
               )}
@@ -1464,7 +1481,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
           {/* マイOKR (= 旧「OKR・KA記入漏れ」を右カラムへ移動) */}
-          <Section T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="マイOKR" flex={0} headerRight={
+          <Section dataTour="ws-okr" T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="マイOKR" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
               borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -2633,7 +2650,7 @@ function BadgeCollection({ T, viewingName, isViewingSelf, onGoToRetrospect }) {
   const achievedCount = stats.items.filter(i => i.achieved).length
 
   return (
-    <div style={{
+    <div data-tour="ws-badge" style={{
       background: T.bgCard, border: `1px solid ${T.border}`,
       borderRadius: 12, padding: 14,
       flexShrink: 0,
@@ -3699,7 +3716,7 @@ function Stat({ T, label, value, color }) {
   )
 }
 
-function Section({ T, icon, title, children, flex = 1, headerRight = null, accent }) {
+function Section({ T, icon, title, children, flex = 1, headerRight = null, accent, dataTour }) {
   const isMobile = useIsMobile()
   // flex=0 の場合は内容に合わせて自動サイズ (flex-basis:0 の罠を回避)
   // flex>=1 の場合は grow して親の残りスペースを埋める
@@ -3716,7 +3733,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
   // icon は文字列 (絵文字) も ReactNode (<Icon />) も受け取れる
   const isEmoji = typeof icon === 'string'
   return (
-    <div style={outerStyle}>
+    <div data-tour={dataTour} style={outerStyle}>
       <div style={sectionHeaderStyle({ T, accent })}>
         {icon && (
           <span style={{
@@ -4866,7 +4883,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
   const extra = Math.max(0, items.length - visible.length)
 
   return (
-    <Section T={T} icon={<Icon name="calendar" size={14} />} accent={T.info} title="Google カレンダー (直近8時間)" flex={0}>
+    <Section dataTour="ws-calendar" T={T} icon={<Icon name="calendar" size={14} />} accent={T.info} title="Google カレンダー (直近8時間)" flex={0}>
       {loading ? (
         <div style={{ padding: 12, color: T.textMuted, fontSize: 11 }}>読み込み中...</div>
       ) : isUnconnected ? (
@@ -4963,7 +4980,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
 
   return (
     <Section
-      T={T} icon={<Icon name="mail" size={14} />} accent={T.danger} title="Gmail (要対応 5件)" flex={0}
+      dataTour="ws-gmail" T={T} icon={<Icon name="mail" size={14} />} accent={T.danger} title="Gmail (要対応 5件)" flex={0}
       headerRight={
         !isUnconnected && !error ? (
           <button onClick={() => onGoToTab?.('mail')} style={{
