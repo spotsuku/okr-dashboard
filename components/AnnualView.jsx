@@ -321,8 +321,8 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     // 新カラム (parent_kr_id / aggregation_type / sort_order) を含めて SELECT。
     // SQL 未実行 (列なし) の環境でも壊れないよう、エラー時は段階的にフォールバックする。
     // 末尾の program_tags は新規追加列。列が無い古い環境では Mid / Min にフォールバック
-    const annSelectFull   = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order,program_tags'
-    const annSelectMid    = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type'
+    const annSelectFull   = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,sort_order,program_tags,archived_at'
+    const annSelectMid    = 'id,objective_id,title,target,current,unit,lower_is_better,owner,parent_kr_id,aggregation_type,archived_at'
     const annSelectMin    = 'id,objective_id,title,target,current,unit,lower_is_better,owner'
     // Step 1: 全カラム + sort_order で order
     let annKRsRes = await supabase
@@ -355,6 +355,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
     const annKRMap = {}
     ;(annKRs || []).forEach(kr => {
+      if (kr.archived_at) return // アーカイブ済み KR は非表示
       if (!annKRMap[kr.objective_id]) annKRMap[kr.objective_id] = []
       annKRMap[kr.objective_id].push(kr)
     })
@@ -410,6 +411,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
 
     const qKRMap = {}
     ;(qKRs || []).forEach(kr => {
+      if (kr.archived_at) return // アーカイブ済み KR は非表示
       if (!qKRMap[kr.objective_id]) qKRMap[kr.objective_id] = []
       qKRMap[kr.objective_id].push(kr)
     })
@@ -783,6 +785,21 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
     if (!window.confirm(`「${qkr.title}」を削除しますか？\n紐づく KA / 週次レビューも消えます (CASCADE)`)) return
     const { error } = await supabase.from('key_results').delete().eq('id', qkr.id)
     if (error) { alert('削除失敗: ' + error.message); return }
+    if (onDataChanged) await onDataChanged()
+  }
+  // 完了 KR をアーカイブ (ソフトデリート)。各画面のカードから非表示になり、
+  // 「📦 アーカイブ」画面から復元できる。KA / 週次レビューは消さない。
+  async function archiveKr(qkr) {
+    if (!window.confirm(`「${qkr.title}」をアーカイブしますか？\n各画面のカードから非表示になります (アーカイブ画面から復元可能)`)) return
+    const { error } = await supabase.from('key_results').update({ archived_at: new Date().toISOString() }).eq('id', qkr.id)
+    if (error) {
+      if (/archived_at|column/i.test(error.message || '')) {
+        alert('アーカイブ列が未作成です。supabase_key_results_archive.sql を実行してください。')
+      } else {
+        alert('アーカイブ失敗: ' + error.message)
+      }
+      return
+    }
     if (onDataChanged) await onDataChanged()
   }
 
@@ -1394,6 +1411,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid rgba(232,155,155,0.30)`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
                         削除
                       </button>
+                      {(Number(annKr.target) > 0 && (annKr.lower_is_better ? Number(annKr.current) <= Number(annKr.target) : Number(annKr.current) >= Number(annKr.target))) && (
+                        <button onClick={() => archiveKr(annKr)} disabled={editSaving}
+                          title="完了した KR をアーカイブ (各画面のカードから非表示・アーカイブ画面から復元可能)"
+                          style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          📦 アーカイブ
+                        </button>
+                      )}
                       <div style={{ flex: 1 }} />
                       <button onClick={cancelEditKr} disabled={editSaving}
                         style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1564,6 +1588,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                                 style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || 'rgba(232,155,155,0.30)'}`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
                                 削除
                               </button>
+                              {(Number(qkr.target) > 0 && (qkr.lower_is_better ? Number(qkr.current) <= Number(qkr.target) : Number(qkr.current) >= Number(qkr.target))) && (
+                                <button onClick={() => archiveKr(qkr)} disabled={editSaving}
+                                  title="完了した KR をアーカイブ (各画面のカードから非表示・アーカイブ画面から復元可能)"
+                                  style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  📦 アーカイブ
+                                </button>
+                              )}
                               <div style={{ flex: 1 }} />
                               <button onClick={cancelEditKr} disabled={editSaving}
                                 style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
