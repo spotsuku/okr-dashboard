@@ -23,9 +23,13 @@ alter table public.ka_tasks
 create index if not exists ka_tasks_assignee_email_lower_idx
   on public.ka_tasks (lower(assignee_email));
 
--- PM由来タスクを冪等に upsert するための一意キー
+-- PM由来タスクを冪等に upsert するための一意キー。
+-- ※ 部分インデックス (where pm_task_id is not null) は PostgREST の
+--   on_conflict=pm_task_id の推論ターゲットにできず upsert が落ちるため、
+--   「通常の」一意インデックスにする (NULL 同士は一意制約上衝突しない=WS行は共存)。
+drop index if exists ka_tasks_pm_task_id_uniq;
 create unique index if not exists ka_tasks_pm_task_id_uniq
-  on public.ka_tasks (pm_task_id) where pm_task_id is not null;
+  on public.ka_tasks (pm_task_id);
 
 -- ── 2. members.email を正規化キーに (事前チェック済・重複なし) ───────────────
 create unique index if not exists members_email_lower_uniq
