@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase'
 import { OrgProvider, useCurrentOrg } from '../lib/orgContext'
 import { LicenseProvider } from '../lib/license/licenseContext'
 import LoginPage from './LoginPage'
+import LandingPage from './LandingPage'
 import Dashboard from './Dashboard'
 import CreateOrgModal from './CreateOrgModal'
 import OrgIconBar from './OrgIconBar'
@@ -67,7 +68,8 @@ export default function AppRoot({ urlSlug = null }) {
     // SaaS化 Plan B: URL に slug が入っている = 招待リンク経由などで特定組織への
     // サインインを意図している。組織名を fetch してログイン画面に表示する。
     if (urlSlug) return <OrgBrandedLogin slug={urlSlug} />
-    return <LoginPage />
+    // ルート "/" 未ログイン → LPを表示 (ログインは /signin で別ルート)
+    return <LandingPage />
   }
 
   return (
