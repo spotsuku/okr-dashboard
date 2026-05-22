@@ -164,7 +164,7 @@ function TourPage() {
         backdropFilter: 'blur(18px)',
       }}>
         <a href="/lp" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <img src="assets/logo.png" width="28" height="28" alt="AI WorkSpace" style={{ borderRadius: 6 }} />
+          <img src="/icon.png" width="28" height="28" alt="AI WorkSpace" style={{ borderRadius: 6 }} />
           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>AI WorkSpace</span>
         </a>
         <span style={{ width: 1, height: 18, background: 'var(--border)' }} />
