@@ -59,24 +59,24 @@ async function handleCreate(targetWeek) {
     return Response.json({ ok: true, created: 0, week: targetMon, source: srcWeek })
   }
 
-  // 既に targetMon に存在するKAキー
+  // 既に targetMon に存在するKAキー (組織を跨いだ衝突を防ぐため organization_id も含める)
   const { data: existingTarget } = await supabase
     .from('weekly_reports')
-    .select('kr_id,ka_title,owner')
+    .select('kr_id,ka_title,owner,organization_id')
     .eq('week_start', targetMon)
-  const existingKeys = new Set(
-    (existingTarget || []).map(r => `${r.kr_id ?? ''}_${r.ka_title ?? ''}_${r.owner ?? ''}`)
-  )
+  const keyOf = (r) => `${r.organization_id ?? ''}_${r.kr_id ?? ''}_${r.ka_title ?? ''}_${r.owner ?? ''}`
+  const existingKeys = new Set((existingTarget || []).map(keyOf))
 
-  const toCopy = srcKAs.filter(r =>
-    !existingKeys.has(`${r.kr_id ?? ''}_${r.ka_title ?? ''}_${r.owner ?? ''}`)
-  )
+  const toCopy = srcKAs.filter(r => !existingKeys.has(keyOf(r)))
   if (toCopy.length === 0) {
     return Response.json({ ok: true, created: 0, week: targetMon, source: srcWeek, reason: 'all already exist' })
   }
 
+  // service role での INSERT は org 自動付与トリガが現在ユーザーを解決できず NEO福岡 に
+  // フォールバックするため、コピー元行の organization_id を明示的に引き継ぐ。
   const copies = toCopy.map(r => ({
     week_start: targetMon,
+    organization_id: r.organization_id,
     level_id: r.level_id,
     objective_id: r.objective_id,
     kr_id: r.kr_id,

@@ -547,6 +547,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
 // (方式2: Bot Token は User ID 取得のみ、通知投稿は Webhook 経由)
 // ══════════════════════════════════════════════════
 function SlackSyncPanel() {
+  const { currentOrg } = useCurrentOrg()
   const [syncing, setSyncing] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
@@ -554,7 +555,11 @@ function SlackSyncPanel() {
   const sync = async () => {
     setSyncing(true); setResult(null); setError('')
     try {
-      const r = await fetch('/api/integrations/slack/sync-users', { method: 'POST' })
+      const r = await fetch('/api/integrations/slack/sync-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization_id: currentOrg?.id }),
+      })
       const j = await r.json()
       if (!r.ok || !j.ok) { setError(j.error || `HTTP ${r.status}`); return }
       setResult(j)

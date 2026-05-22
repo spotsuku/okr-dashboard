@@ -47,15 +47,19 @@ async function fetchAllSlackUsers(token) {
   return all
 }
 
-export async function POST() {
+export async function POST(request) {
   try {
     const token = process.env.SLACK_BOT_TOKEN
     if (!token) return json({ error: 'SLACK_BOT_TOKEN が未設定です' }, { status: 500 })
 
+    const { organization_id } = await request.json().catch(() => ({}))
+    if (!organization_id) return json({ error: 'organization_id が必要です' }, { status: 400 })
+
     const supabase = admin()
 
-    // 1. アプリ側のメンバー一覧
-    const { data: members, error: memErr } = await supabase.from('members').select('id, name, email, slack_user_id')
+    // 1. アプリ側のメンバー一覧 (現在の組織のみ)
+    const { data: members, error: memErr } = await supabase.from('members')
+      .select('id, name, email, slack_user_id').eq('organization_id', organization_id)
     if (memErr) return json({ error: memErr.message }, { status: 500 })
 
     // 2. Slack 側のユーザー一覧

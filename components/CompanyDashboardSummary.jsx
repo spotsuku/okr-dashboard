@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
 import {
   cardStyle, pillStyle, btnPrimary, accentRingStyle,
@@ -882,6 +883,7 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
 
 // 1チーム分の Good/More/Focus 編集ブロック (独立して保存/AI生成/realtime)
 function TeamSummaryRow({ T, team, members, weekStart, myName, viewingMember, isAdmin }) {
+  const { currentOrg } = useCurrentOrg()
   const monday = weekStart
   const teamId = team?.id ? Number(team.id) : null
   const isManagerOfActive = !!team && Number(team.manager_id) === Number(viewingMember?.id)
@@ -964,7 +966,7 @@ function TeamSummaryRow({ T, team, members, weekStart, myName, viewingMember, is
     try {
       const res = await fetch('/api/ai/team-summary', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level_id: teamId, week_start: monday }),
+        body: JSON.stringify({ level_id: teamId, week_start: monday, organization_id: currentOrg?.id }),
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)

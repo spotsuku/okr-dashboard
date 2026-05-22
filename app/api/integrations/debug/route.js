@@ -19,6 +19,12 @@ function mask(val) {
 
 export async function GET(request) {
   const url = new URL(request.url)
+  // この診断は全組織の連携メタデータ(owner/email等)を返すため、
+  // 本番では秘密キー必須にして無認証の横断的な情報漏洩を防ぐ。
+  const secret = process.env.CRON_SECRET
+  if (secret && url.searchParams.get('key') !== secret) {
+    return json({ error: 'forbidden' }, { status: 403 })
+  }
   const owner = url.searchParams.get('owner')
 
   const env = {
