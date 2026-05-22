@@ -795,8 +795,8 @@ function LPFeatureSmall() {
     { i: 'ai',     l: 'AI コーチ MyCOO' },
     { i: 'badge',  l: 'バッジ' },
     { i: '1on1',   l: '1on1' },
-    { i: 'search', l: '横断検索' },
-    { i: 'api',    l: 'API 連携' },
+    { i: 'search', l: 'クイック追加 (⌘K)' },
+    { i: 'mobile', l: 'スマホ対応' },
   ];
   return (
     <section className="lp-section" style={{ paddingTop: 64 }}>
@@ -970,15 +970,15 @@ function LPCTA() {
                 無料ではじめる
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-6-6 6 6-6 6" /></svg>
               </a>
-              <button className="lp-btn" style={{
+              <a href="/tour" className="lp-btn" style={{
                 background: 'rgba(255,255,255,.12)', color: '#fff',
                 border: '1px solid rgba(255,255,255,.3)',
                 padding: '12px 24px', fontSize: 13,
                 backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-                fontWeight: 500,
+                fontWeight: 500, textAlign: 'center', justifyContent: 'center',
               }}>
-                資料をダウンロード
-              </button>
+                3分ツアーを見る
+              </a>
             </div>
           </div>
         </div>
@@ -1071,12 +1071,11 @@ function LPPricing() {
       featured: true,
       bullets: [
         'タスク・メール・カレンダー・会議・振り返り・目標管理',
-        'AI コーチ MyCOO（月 20 回まで）',
+        'AI コーチ MyCOO（ぺろっぺ）',
         'メンバー数 無制限',
-        'Google カレンダー・Gmail 連携',
+        'Google カレンダー・Gmail 連携 / Slack 通知',
       ],
       notes: [
-        'モバイルアプリは Business 以上で提供',
         '一部機能は今後 有料プランに移行する可能性があります',
       ],
     },
@@ -1087,10 +1086,10 @@ function LPPricing() {
       sub: '正式版リリース時に通知します',
       cta: '通知を受け取る',
       bullets: [
-        'Free のすべて + モバイルアプリ',
-        'OKR 機能(高度な目標管理)',
+        'Free のすべて',
+        '高度な OKR 分析・レポート',
         '会議カスタマイズ(テンプレと集計)',
-        'AI コーチ MyCOO 無制限',
+        'AI コーチ MyCOO 優先利用',
         '監査ログ',
         'SSO(SAML)',
         '優先サポート',
@@ -1205,7 +1204,7 @@ function LPFAQ() {
     },
     {
       q: 'Google カレンダー / Gmail 以外との連携はできますか？',
-      a: 'Slack と Notion との連携を順次リリース予定です。API も公開しているため、独自ツールとの連携も可能です。',
+      a: 'Slack 通知に対応しています（共有・確認事項やリマインドを指定チャンネルへ投稿）。データ管理は Notion とも連携できます。Google カレンダー・Gmail とあわせてご利用いただけます。',
     },
     {
       q: 'AI（MyCOO）は何のモデルを使っていますか？',
@@ -1213,11 +1212,11 @@ function LPFAQ() {
     },
     {
       q: 'スマートフォンでも使えますか？',
-      a: 'iOS / Android のアプリを提供しています。タスク追加・通知・KPT 記入はモバイルアプリから行えます。',
+      a: '現在は Web アプリとして提供しており、スマートフォンのブラウザからもご利用いただけます。専用のネイティブアプリ（iOS / Android）は今後提供予定です。',
     },
     {
       q: 'セキュリティはどうなっていますか？',
-      a: 'すべての通信は TLS 1.3 で暗号化、保存データは AES-256 で暗号化されています。SOC 2 取得に向けて準備中です。',
+      a: '通信はすべて TLS で暗号化し、データは暗号化された基盤（Supabase / Vercel）上に保管しています。ログインは Google アカウント認証を採用し、セキュリティ強化に継続的に取り組んでいます。',
     },
   ];
   return (
@@ -1296,8 +1295,8 @@ function LPFooter() {
             </div>
           </div>
           {[
-            { h: 'プロダクト', l: ['特徴・機能', '料金プラン', 'ダウンロード'] },
-            { h: 'リソース',   l: ['ヘルプ', 'API ドキュメント', 'お役立ち資料', '公式ブログ'] },
+            { h: 'プロダクト', l: ['特徴・機能', '料金プラン', 'よくある質問'] },
+            { h: 'リソース',   l: ['ヘルプ', 'お役立ち資料', '公式ブログ'] },
             { h: '会社情報',   l: ['会社概要', '採用情報', 'プライバシーポリシー', 'お問い合わせ'] },
           ].map((c, i) => (
             <div key={i}>
