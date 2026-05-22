@@ -213,7 +213,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           loading={loading}
           onReload={fetchEvents}
         />
-        <MemberChips
+        <MemberSelect
           T={T}
           members={members}
           selected={selected}
@@ -477,57 +477,169 @@ function btnSm(T, active = false) {
   }
 }
 
-// ─── メンバー チップ選択 ─────────────────────────────────────────────
-function MemberChips({ T, members, selected, setSelected, myName, colorOf, statusByName }) {
+// ─── メンバー選択 (ドロップダウン式: 多人数でも省スペース) ─────────────
+function MemberSelect({ T, members, selected, setSelected, myName, colorOf, statusByName }) {
   const sorted = useMemo(() => {
     const arr = [...(members || [])]
     arr.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
     return arr
   }, [members])
+
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const wrapRef = useRef(null)
+
+  // 外側クリックで閉じる
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
   const toggle = (name) => {
     setSelected(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])
   }
+  const selectAll = () => setSelected(sorted.map(m => m.name))
+  const clearAll = () => setSelected([])
+  const onlyMe = () => setSelected(myName ? [myName] : [])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return sorted
+    return sorted.filter(m => (m.name || '').toLowerCase().includes(q))
+  }, [sorted, query])
+
+  // トリガーに出す選択中サマリ (色ドット最大5 + 余りを +N)
+  const DOT_MAX = 5
+  const selectedSorted = sorted.filter(m => selected.includes(m.name))
+
   return (
-    <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: 6,
+    <div ref={wrapRef} style={{
+      position: 'relative',
       padding: '8px 16px', borderBottom: `1px solid ${T.border}`,
       background: T.bgCard, flexShrink: 0,
+      display: 'flex', alignItems: 'center', gap: 8,
     }}>
-      <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center', marginRight: 4 }}>
-        メンバー:
-      </span>
-      {sorted.map(m => {
-        const on = selected.includes(m.name)
-        const st = statusByName[m.name]
-        const isUnconnected = on && st && !st.connected
-        const c = on ? colorOf(m.name) : T.textMuted
-        return (
-          <button
-            key={m.id}
-            onClick={() => toggle(m.name)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px', borderRadius: 99,
-              background: on ? `${c}22` : 'transparent',
-              border: `1px solid ${on ? c : T.border}`,
-              color: on ? c : T.textSub,
-              fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
-              cursor: 'pointer',
-            }}
-            title={isUnconnected ? '未連携' : (m.name === myName ? '自分' : '')}
-          >
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: on ? c : 'transparent',
-              border: `1px solid ${c}`,
+      <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>メンバー:</span>
+
+      {/* トリガーボタン */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '5px 10px', borderRadius: 8,
+          background: open ? `${T.accent}14` : 'transparent',
+          border: `1px solid ${open ? T.accent : T.border}`,
+          color: T.text, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          cursor: 'pointer', maxWidth: '100%',
+        }}
+      >
+        {/* 選択中の色ドット */}
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+          {selectedSorted.slice(0, DOT_MAX).map((m, i) => (
+            <span key={m.id} style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: colorOf(m.name),
+              border: `1.5px solid ${T.bgCard}`,
+              marginLeft: i === 0 ? 0 : -4,
             }} />
-            {m.name}
-            {isUnconnected && <span style={{ color: T.warn, marginLeft: 2 }}>⚠</span>}
-          </button>
-        )
-      })}
+          ))}
+        </span>
+        <span style={{ whiteSpace: 'nowrap' }}>
+          {selected.length === 0 ? '選択してください'
+            : selected.length === 1 ? selectedSorted[0]?.name || '1人'
+            : `${selected.length}人を表示中`}
+        </span>
+        <span style={{ color: T.textMuted, fontSize: 10 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {/* ドロップダウンパネル */}
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 16, marginTop: 4, zIndex: 30,
+          width: 'min(300px, calc(100vw - 32px))',
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
+          boxShadow: '0 12px 32px rgba(15,23,42,0.22)',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}>
+          {/* 検索 (人数が多いときのみ) */}
+          {sorted.length > 6 && (
+            <div style={{ padding: 8, borderBottom: `1px solid ${T.border}` }}>
+              <input
+                autoFocus value={query} onChange={e => setQuery(e.target.value)}
+                placeholder="名前で絞り込み"
+                style={{
+                  width: '100%', boxSizing: 'border-box', padding: '6px 9px',
+                  borderRadius: 7, border: `1px solid ${T.border}`,
+                  background: T.bg, color: T.text, fontSize: 12, outline: 'none', fontFamily: 'inherit',
+                }}
+              />
+            </div>
+          )}
+
+          {/* 一括操作 */}
+          <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderBottom: `1px solid ${T.border}` }}>
+            <button onClick={selectAll} style={miniBtn(T)}>全員</button>
+            {myName && <button onClick={onlyMe} style={miniBtn(T)}>自分のみ</button>}
+            <button onClick={clearAll} style={miniBtn(T)}>クリア</button>
+          </div>
+
+          {/* メンバー一覧 */}
+          <div style={{ maxHeight: 280, overflowY: 'auto', padding: 6 }}>
+            {filtered.length === 0 && (
+              <div style={{ padding: 12, fontSize: 12, color: T.textMuted, textAlign: 'center' }}>
+                該当なし
+              </div>
+            )}
+            {filtered.map(m => {
+              const on = selected.includes(m.name)
+              const st = statusByName[m.name]
+              const isUnconnected = on && st && !st.connected
+              const c = on ? colorOf(m.name) : T.textMuted
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => toggle(m.name)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+                    padding: '7px 9px', borderRadius: 8, border: 'none',
+                    background: on ? `${c}14` : 'transparent',
+                    color: on ? T.text : T.textSub,
+                    fontSize: 12, fontWeight: on ? 700 : 500, fontFamily: 'inherit',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{
+                    width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
+                    background: on ? c : 'transparent',
+                    border: `1.5px solid ${on ? c : T.border}`,
+                  }} />
+                  <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {m.name}
+                    {m.name === myName && <span style={{ color: T.textMuted, fontWeight: 500 }}> (自分)</span>}
+                  </span>
+                  {isUnconnected && <span style={{ color: T.warn, fontSize: 11 }} title="未連携">⚠</span>}
+                  {on && <span style={{ color: c, fontSize: 12 }}>✓</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+function miniBtn(T) {
+  return {
+    flex: 1, padding: '5px 8px', borderRadius: 7,
+    background: 'transparent', border: `1px solid ${T.border}`,
+    color: T.textSub, fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+    cursor: 'pointer', whiteSpace: 'nowrap',
+  }
 }
 
 // ─── 週グリッド (時間 × 日) ───────────────────────────────────────────
