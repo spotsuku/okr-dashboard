@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
+import { useCurrentOrg } from '../lib/orgContext'
 
 function useIsMobile(bp = 768) {
   const [m, setM] = useState(() => typeof window === 'undefined' ? false : window.innerWidth < bp)
@@ -20,6 +21,7 @@ export default function COOTab({
 }) {
   // SaaS化: coo_knowledge モジュール OFF テナントは何も描画しない (二重防御)
   const cooEnabled = useFeatureFlag(MODULE_KEYS.COO_KNOWLEDGE)
+  const { currentOrg } = useCurrentOrg()
   const isMobile = useIsMobile()
   const owner = viewingName || myName
 
@@ -126,6 +128,7 @@ export default function COOTab({
         body: JSON.stringify({
           owner, message: msg, mode,
           history: history.map(h => ({ role: h.role, content: h.content })),
+          organization_id: currentOrg?.id,
         }),
       })
       const j = await r.json()

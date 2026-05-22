@@ -26,7 +26,7 @@ function Sparkle({ size = 26, fill = '#fff' }) {
 
 const CHIPS = ['今日の優先順位は？', '今週の目標を確認', '振り返りを書く']
 
-export default function MyCOOOrb({ user, members = [], T }) {
+export default function MyCOOOrb({ user, members = [], T, orgId }) {
   const { isMobile } = useResponsive()
   const myName = React.useMemo(
     () => members.find(m => m.email === user?.email)?.name || '',
@@ -123,7 +123,7 @@ export default function MyCOOOrb({ user, members = [], T }) {
       const r = await fetch('/api/integrations/coo/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner: myName, message: msg, mode: 'speed', history }),
+        body: JSON.stringify({ owner: myName, message: msg, mode: 'speed', history, organization_id: orgId }),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
