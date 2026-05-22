@@ -84,10 +84,14 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // モバイル: 1日だけ表示。PC: 月曜起点の7日
+  // 表示ビュー (日/週) 手動切替。初期値は画面幅で決定 (モバイル=日 / PC=週)
+  const [view, setView] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768) ? 'day' : 'week')
+  const isDay = view === 'day'
+
+  // 日ビュー=1日 / 週ビュー=月曜起点の7日
   const days = useMemo(
-    () => isMobile ? [mobileDay] : Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart, mobileDay, isMobile]
+    () => isDay ? [mobileDay] : Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
+    [weekStart, mobileDay, isDay]
   )
   const startISO = useMemo(() => isoFromJST(jstYMD(days[0]), HOUR_FROM), [days])
   const endISO = useMemo(() => isoFromJST(jstYMD(days[days.length - 1]), HOUR_TO), [days])
@@ -138,6 +142,8 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
 
   // ─── 予定作成/更新/削除の確認モーダル (複数提案をまとめて承認) ───
   const [pendingProposals, setPendingProposals] = useState(null)  // [{ type, plan }, ...] or null
+  // 空き枠タップ → 予定作成フォーム { ymd, startMin, endMin }
+  const [createSlot, setCreateSlot] = useState(null)
 
   // AI からの提案を承認 → 実行
   const executeProposal = useCallback(async (type, plan) => {
@@ -191,11 +197,13 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           T={T}
           weekStart={weekStart}
           mobileDay={mobileDay}
-          isMobile={isMobile}
-          onPrev={() => isMobile ? setMobileDay(addDays(mobileDay, -1)) : setWeekStart(addDays(weekStart, -7))}
-          onNext={() => isMobile ? setMobileDay(addDays(mobileDay, 1)) : setWeekStart(addDays(weekStart, 7))}
+          isDay={isDay}
+          view={view}
+          onToggleView={setView}
+          onPrev={() => isDay ? setMobileDay(addDays(mobileDay, -1)) : setWeekStart(addDays(weekStart, -7))}
+          onNext={() => isDay ? setMobileDay(addDays(mobileDay, 1)) : setWeekStart(addDays(weekStart, 7))}
           onToday={() => {
-            if (isMobile) {
+            if (isDay) {
               const j = new Date(Date.now() + 9 * 3600 * 1000)
               setMobileDay(new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate())))
             } else {
@@ -227,6 +235,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           colorOf={colorOf}
           emailOf={emailOf}
           freeSlots={freeSlots}
+          onSlotClick={(ymd, startMin) => setCreateSlot({ ymd, startMin, endMin: Math.min(startMin + 60, HOUR_TO * 60) })}
         />
       </div>
 
@@ -274,12 +283,155 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           }}
         />
       )}
+
+      {/* 空き枠タップ → 予定作成フォーム (GCal風) */}
+      {createSlot && (
+        <CreateEventModal
+          T={T}
+          slot={createSlot}
+          ownerName={viewingName || myName}
+          members={members}
+          emailOf={emailOf}
+          orgPath={orgPath}
+          onClose={() => setCreateSlot(null)}
+          onCreated={async () => { setCreateSlot(null); await fetchEvents() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── 予定作成モーダル (空き枠タップで開く / Googleカレンダーへ作成) ────────
+function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, onClose, onCreated }) {
+  const pad = (n) => String(n).padStart(2, '0')
+  const minToTime = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState(slot.ymd)
+  const [startT, setStartT] = useState(minToTime(slot.startMin))
+  const [endT, setEndT] = useState(minToTime(slot.endMin))
+  const [attendees, setAttendees] = useState([]) // member names
+  const [addMeet, setAddMeet] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const candidates = (members || []).filter(m => m.name && m.name !== ownerName && m.email)
+
+  const submit = async () => {
+    if (!title.trim() || saving) return
+    const [sh, sm] = startT.split(':').map(Number)
+    const [eh, em] = endT.split(':').map(Number)
+    const start_iso = isoFromJST(date, sh, sm)
+    const end_iso = isoFromJST(date, eh, em)
+    if (new Date(end_iso) <= new Date(start_iso)) { setErr('終了は開始より後にしてください'); return }
+    setSaving(true); setErr('')
+    try {
+      const r = await fetch('/api/integrations/calendar/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner: ownerName,
+          summary: title.trim(),
+          start_iso, end_iso,
+          attendee_emails: attendees.map(emailOf).filter(Boolean),
+          add_meet: addMeet,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        const msg = j.error || `HTTP ${r.status}`
+        if (/403|Insufficient|insufficient auth/i.test(msg)) {
+          if (window.confirm('Google の書き込み権限が不足しています。連携タブで再認証しますか？')) {
+            window.location.href = `${orgPath}?page=integrations`
+          }
+          throw new Error('権限不足')
+        }
+        throw new Error(msg)
+      }
+      await onCreated()
+    } catch (e) {
+      setErr(e.message || '作成に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const field = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 16, outline: 'none', fontFamily: 'inherit' }
+  const lbl = { fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 4 }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: 'min(420px, 100%)', maxHeight: '85vh', overflowY: 'auto',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
+        boxShadow: '0 24px 60px rgba(15,23,42,0.28)', padding: 18,
+        fontFamily: 'inherit', color: T.text,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>📅 予定を作成</div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={lbl}>タイトル</div>
+          <input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="予定のタイトル" style={field} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={lbl}>日付</div>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={field} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={lbl}>開始</div>
+            <input type="time" value={startT} onChange={e => setStartT(e.target.value)} step={1800} style={field} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={lbl}>終了</div>
+            <input type="time" value={endT} onChange={e => setEndT(e.target.value)} step={1800} style={field} />
+          </div>
+        </div>
+
+        {candidates.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={lbl}>参加者（任意）</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {candidates.map(m => {
+                const on = attendees.includes(m.name)
+                return (
+                  <button key={m.id} onClick={() => setAttendees(a => on ? a.filter(x => x !== m.name) : [...a, m.name])}
+                    style={{
+                      padding: '5px 10px', borderRadius: 99, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                      border: `1px solid ${on ? T.accent : T.borderMid}`,
+                      background: on ? `${T.accent}1a` : 'transparent',
+                      color: on ? T.accent : T.textSub, fontWeight: on ? 700 : 500,
+                    }}>{on ? '✓ ' : ''}{m.name}</button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={addMeet} onChange={e => setAddMeet(e.target.checked)} />
+          Google Meet を追加
+        </label>
+
+        {err && <div style={{ fontSize: 12, color: T.danger, marginBottom: 10 }}>⚠️ {err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 8, border: `1px solid ${T.borderMid}`, background: 'transparent', color: T.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+          <button onClick={submit} disabled={!title.trim() || saving} style={{
+            padding: '9px 18px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 700,
+            background: title.trim() ? T.accent : T.borderMid, color: '#fff',
+            cursor: title.trim() && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+          }}>{saving ? '作成中…' : 'Googleカレンダーに作成'}</button>
+        </div>
+      </div>
     </div>
   )
 }
 
 // ─── ヘッダ (前後/今週) ────────────────────────────────────────────────
-function CalendarHeader({ T, weekStart, mobileDay, isMobile, onPrev, onNext, onToday, loading, onReload }) {
+function CalendarHeader({ T, weekStart, mobileDay, isDay, view, onToggleView, onPrev, onNext, onToday, loading, onReload }) {
   const end = addDays(weekStart, 6)
   return (
     <div style={{
@@ -288,17 +440,22 @@ function CalendarHeader({ T, weekStart, mobileDay, isMobile, onPrev, onNext, onT
       background: 'rgba(255,255,255,0.65)',
       backdropFilter: 'blur(20px) saturate(180%)',
       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-      flexShrink: 0,
+      flexShrink: 0, flexWrap: 'wrap',
     }}>
       <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 9 }}>
-        <button onClick={onPrev} style={btnSm(T)}>← {isMobile ? '前日' : '前週'}</button>
-        <button onClick={onToday} style={btnSm(T, true)}>{isMobile ? '今日' : '今週'}</button>
-        <button onClick={onNext} style={btnSm(T)}>{isMobile ? '翌日' : '翌週'} →</button>
+        <button onClick={onPrev} style={btnSm(T)}>← {isDay ? '前日' : '前週'}</button>
+        <button onClick={onToday} style={btnSm(T, true)}>{isDay ? '今日' : '今週'}</button>
+        <button onClick={onNext} style={btnSm(T)}>{isDay ? '翌日' : '翌週'} →</button>
       </div>
-      <div style={{ marginLeft: 6, fontSize: 14, fontWeight: 800, color: T.text, flex: isMobile ? 1 : 'none', letterSpacing: '-0.01em' }}>
-        {isMobile ? jstLabel(mobileDay) : `${jstLabel(weekStart)} 〜 ${jstLabel(end)}`}
+      {/* 日/週 切替トグル */}
+      <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 9 }}>
+        <button onClick={() => onToggleView('day')} style={btnSm(T, view === 'day')}>日</button>
+        <button onClick={() => onToggleView('week')} style={btnSm(T, view === 'week')}>週</button>
       </div>
-      {!isMobile && <div style={{ flex: 1 }} />}
+      <div style={{ marginLeft: 6, fontSize: 14, fontWeight: 800, color: T.text, flex: isDay ? 1 : 'none', letterSpacing: '-0.01em' }}>
+        {isDay ? jstLabel(mobileDay) : `${jstLabel(weekStart)} 〜 ${jstLabel(end)}`}
+      </div>
+      {!isDay && <div style={{ flex: 1 }} />}
       <button onClick={onReload} disabled={loading} style={{
         padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
         background: 'rgba(120,120,128,0.12)', color: T.textSub,
@@ -374,7 +531,7 @@ function MemberChips({ T, members, selected, setSelected, myName, colorOf, statu
 }
 
 // ─── 週グリッド (時間 × 日) ───────────────────────────────────────────
-function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots }) {
+function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots, onSlotClick }) {
   const TIME_COL = 56
   // 0:00 JST 起点での当日経過分 → top px
   const minToPx = (mins) => ((mins - HOUR_FROM * 60) / SLOT_MIN) * SLOT_PX
@@ -477,11 +634,22 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots 
               }}>
                 {jstLabel(d)}
               </div>
-              {/* 時間グリッド本体 */}
-              <div style={{
-                position: 'relative', height: TOTAL_HEIGHT,
-                background: T.bg,
-              }}>
+              {/* 時間グリッド本体 (空き枠タップで予定作成) */}
+              <div
+                onClick={(e) => {
+                  // 既存イベント等の子要素クリックは無視、背景の素クリックのみ作成
+                  if (e.target !== e.currentTarget || !onSlotClick) return
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const offsetY = e.clientY - rect.top
+                  const absMin = HOUR_FROM * 60 + (offsetY / SLOT_PX) * SLOT_MIN
+                  let snapped = Math.floor(absMin / SLOT_MIN) * SLOT_MIN
+                  snapped = Math.max(HOUR_FROM * 60, Math.min(snapped, HOUR_TO * 60 - SLOT_MIN))
+                  onSlotClick(ymd, snapped)
+                }}
+                style={{
+                  position: 'relative', height: TOTAL_HEIGHT,
+                  background: T.bg, cursor: 'pointer',
+                }}>
                 {/* 時間境界線 (イベントの top と同じ y 座標で完全一致させる) */}
                 {Array.from({ length: HOURS_PER_DAY }, (_, i) => {
                   const h = HOUR_FROM + 1 + i
