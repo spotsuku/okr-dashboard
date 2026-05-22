@@ -32,12 +32,13 @@ async function extractPdfText(arrayBuffer) {
   return text || ''
 }
 
-async function isAdmin(supabase, ownerName) {
-  if (!ownerName) return false
+async function isAdmin(supabase, ownerName, orgId) {
+  if (!ownerName || !orgId) return false
   const { data } = await supabase
     .from('members')
     .select('is_admin')
     .eq('name', ownerName)
+    .eq('organization_id', orgId)
     .limit(1)
   return !!(data && data[0] && data[0].is_admin)
 }
@@ -47,12 +48,14 @@ export async function POST(request, { params }) {
     const supabase = getAdminClient()
     const url = new URL(request.url)
     const owner = url.searchParams.get('owner')
-    if (!(await isAdmin(supabase, owner))) {
+    const orgId = url.searchParams.get('organization_id')
+    if (!orgId) return json({ error: 'organization_id が必要です' }, { status: 400 })
+    if (!(await isAdmin(supabase, owner, orgId))) {
       return json({ error: 'admin 権限が必要です' }, { status: 403 })
     }
-    // 対象エントリ取得
+    // 対象エントリ取得 (他組織の行を id 指定で触れないよう org でも絞る)
     const { data: row, error: e1 } = await supabase
-      .from('coo_knowledge').select('*').eq('id', params.id).limit(1)
+      .from('coo_knowledge').select('*').eq('id', params.id).eq('organization_id', orgId).limit(1)
     if (e1) return json({ error: e1.message }, { status: 500 })
     if (!row || !row[0]) return json({ error: 'エントリが見つかりません' }, { status: 404 })
     const entry = row[0]

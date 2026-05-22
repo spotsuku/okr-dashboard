@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useCurrentOrg } from '../lib/orgContext'
 
 // ぺろっぺの組織知識を CRUD する admin 用パネル (モーダル形式で開く)
 // Props: { T, owner (=自分の名前), onClose }
@@ -20,6 +21,8 @@ function extractDriveFileId(input) {
 }
 
 export default function COOKnowledgePanel({ T, owner, onClose }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -27,28 +30,29 @@ export default function COOKnowledgePanel({ T, owner, onClose }) {
   const [creating, setCreating] = useState(false)
 
   const load = useCallback(async () => {
+    if (!orgId) return
     setLoading(true); setError('')
     try {
-      const r = await fetch('/api/coo/knowledge')
+      const r = await fetch(`/api/coo/knowledge?organization_id=${encodeURIComponent(orgId)}`)
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
       setItems(j.items || [])
     } catch (e) {
       setError(e.message)
     } finally { setLoading(false) }
-  }, [])
+  }, [orgId])
 
   useEffect(() => { load() }, [load])
 
   const remove = async (id) => {
     if (!window.confirm('この組織知を削除しますか?')) return
-    const r = await fetch(`/api/coo/knowledge/${id}?owner=${encodeURIComponent(owner)}`, { method: 'DELETE' })
+    const r = await fetch(`/api/coo/knowledge/${id}?owner=${encodeURIComponent(owner)}&organization_id=${encodeURIComponent(orgId)}`, { method: 'DELETE' })
     if (r.ok) load()
     else { const j = await r.json().catch(() => ({})); alert('削除失敗: ' + (j.error || r.status)) }
   }
 
   const refresh = async (id) => {
-    const r = await fetch(`/api/coo/knowledge/${id}/refresh?owner=${encodeURIComponent(owner)}`, { method: 'POST' })
+    const r = await fetch(`/api/coo/knowledge/${id}/refresh?owner=${encodeURIComponent(owner)}&organization_id=${encodeURIComponent(orgId)}`, { method: 'POST' })
     const j = await r.json().catch(() => ({}))
     if (!r.ok) { alert('Drive 取得失敗: ' + (j.error || r.status)); return }
     alert(`${j.fileName || 'ファイル'} を取得しました (${j.fullLen || 0}文字)`)
@@ -92,7 +96,7 @@ export default function COOKnowledgePanel({ T, owner, onClose }) {
             }}>+ 新規追加</button>
           )}
           {creating && (
-            <KnowledgeForm T={T} owner={owner}
+            <KnowledgeForm T={T} owner={owner} orgId={orgId}
               onCancel={() => setCreating(false)}
               onSaved={() => { setCreating(false); load() }} />
           )}
@@ -109,7 +113,7 @@ export default function COOKnowledgePanel({ T, owner, onClose }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {items.map(it => editingId === it.id ? (
-                <KnowledgeForm key={it.id} T={T} owner={owner} initial={it}
+                <KnowledgeForm key={it.id} T={T} owner={owner} orgId={orgId} initial={it}
                   onCancel={() => setEditingId(null)}
                   onSaved={() => { setEditingId(null); load() }} />
               ) : (
@@ -196,7 +200,7 @@ function btn(T, color) {
   }
 }
 
-function KnowledgeForm({ T, owner, initial, onCancel, onSaved }) {
+function KnowledgeForm({ T, owner, orgId, initial, onCancel, onSaved }) {
   const [kind, setKind] = useState(initial?.kind || 'text')
   const [title, setTitle] = useState(initial?.title || '')
   const [content, setContent] = useState(initial?.content || '')
@@ -218,9 +222,10 @@ function KnowledgeForm({ T, owner, initial, onCancel, onSaved }) {
     const payload = { kind, title: title.trim(), priority: Number(priority) || 0, enabled }
     if (kind === 'text') payload.content = content
     else payload.drive_file_id = driveFileId
+    const orgQ = `&organization_id=${encodeURIComponent(orgId)}`
     const url = initial
-      ? `/api/coo/knowledge/${initial.id}?owner=${encodeURIComponent(owner)}`
-      : `/api/coo/knowledge?owner=${encodeURIComponent(owner)}`
+      ? `/api/coo/knowledge/${initial.id}?owner=${encodeURIComponent(owner)}${orgQ}`
+      : `/api/coo/knowledge?owner=${encodeURIComponent(owner)}${orgQ}`
     const r = await fetch(url, {
       method: initial ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -234,7 +239,7 @@ function KnowledgeForm({ T, owner, initial, onCancel, onSaved }) {
     if (kind === 'drive_file' && j.item?.id) {
       const idChanged = !initial || initial.drive_file_id !== driveFileId
       if (idChanged) {
-        await fetch(`/api/coo/knowledge/${j.item.id}/refresh?owner=${encodeURIComponent(owner)}`, { method: 'POST' })
+        await fetch(`/api/coo/knowledge/${j.item.id}/refresh?owner=${encodeURIComponent(owner)}&organization_id=${encodeURIComponent(orgId)}`, { method: 'POST' })
       }
     }
     onSaved()
