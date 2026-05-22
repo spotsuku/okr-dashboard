@@ -10,6 +10,7 @@
 //   - チャット内「＋ タスクを追加」でクイックタスクへ転送 (okr:open-quicktask)
 import * as React from 'react'
 import { supabase } from '../lib/supabase'
+import { useResponsive } from '../lib/useResponsive'
 
 const MYCOO_GRAD = 'linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%)'
 
@@ -25,6 +26,7 @@ function Sparkle({ size = 26, fill = '#fff' }) {
 const CHIPS = ['今日の優先順位は？', '今週の目標を確認', '振り返りを書く']
 
 export default function MyCOOOrb({ user, members = [] }) {
+  const { isMobile } = useResponsive()
   const myName = React.useMemo(
     () => members.find(m => m.email === user?.email)?.name || '',
     [members, user]
@@ -140,7 +142,10 @@ export default function MyCOOOrb({ user, members = [] }) {
         @keyframes mycoo-pop { from { opacity:0; transform:translateY(8px) scale(.96); } to { opacity:1; transform:translateY(0) scale(1); } }
       `}</style>
       <div style={{
-        position: 'fixed', bottom: 24, right: 24, zIndex: 50,
+        position: 'fixed',
+        // モバイルは下部ナビ(約64px)と重ならないよう持ち上げ、左右余白も詰める
+        bottom: isMobile ? 84 : 24, right: isMobile ? 12 : 24, left: isMobile ? 12 : 'auto',
+        zIndex: 50,
         display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12,
         pointerEvents: 'none',
         fontFamily: '"Inter", "Noto Sans JP", system-ui, sans-serif',
@@ -180,7 +185,11 @@ export default function MyCOOOrb({ user, members = [] }) {
         {/* チャットパネル */}
         {open && (
           <div style={{
-            pointerEvents: 'auto', width: 380, height: 520,
+            pointerEvents: 'auto',
+            // モバイルは画面幅に合わせ、高さもビューポート内に収めて内部スクロールを効かせる
+            width: isMobile ? 'calc(100vw - 24px)' : 380,
+            height: isMobile ? 'min(68vh, 560px)' : 520,
+            maxWidth: '100%', minHeight: 0,
             display: 'flex', flexDirection: 'column',
             background: 'rgba(255,255,255,.92)',
             backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)',
@@ -208,7 +217,7 @@ export default function MyCOOOrb({ user, members = [] }) {
             </div>
 
             {/* メッセージ */}
-            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {messages.length === 0 && (
                 <div style={{
                   maxWidth: '88%', alignSelf: 'flex-start', padding: '10px 14px',
@@ -258,8 +267,9 @@ export default function MyCOOOrb({ user, members = [] }) {
                 onKeyDown={e => { if (e.key === 'Enter' && !(composingRef.current || e.nativeEvent?.isComposing || e.keyCode === 229)) { e.preventDefault(); send() } }}
                 placeholder="MyCOO に聞く..."
                 style={{
-                  flex: 1, padding: '10px 14px', background: '#fff', border: '1px solid rgba(15,23,42,.1)',
-                  borderRadius: 99, fontSize: 13, outline: 'none', fontFamily: 'inherit', color: '#0f172a',
+                  flex: 1, minWidth: 0, padding: '10px 14px', background: '#fff', border: '1px solid rgba(15,23,42,.1)',
+                  // iOS は font-size < 16px の入力でフォーカス時に自動ズームするため 16px に
+                  borderRadius: 99, fontSize: 16, outline: 'none', fontFamily: 'inherit', color: '#0f172a',
                 }}
               />
               <button onClick={() => send()} disabled={busy} style={{

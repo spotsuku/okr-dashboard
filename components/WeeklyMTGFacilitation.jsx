@@ -465,25 +465,42 @@ export default function WeeklyMTGFacilitation({
 
   const goToStep = async (step) => {
     if (!session?.id) return
-    await supabase.from('weekly_mtg_sessions').update({ step }).eq('id', session.id)
+    // 操作した本人は realtime 配信を待たず即時にステップを反映 (配信未達でも会議を進められる)
+    setSession(prev => prev ? { ...prev, step } : prev)
+    const { error } = await supabase.from('weekly_mtg_sessions').update({ step }).eq('id', session.id)
+    if (error) console.error('[WeeklyMTG] goToStep failed:', error)
   }
 
   const finishMeeting = async () => {
     if (!session?.id) return
     if (!window.confirm('会議を終了しますか？')) return
     const lastStepN = stepsForFlow(meeting).slice(-1)[0]?.n ?? 4
-    await supabase.from('weekly_mtg_sessions').update({
-      step: lastStepN, finished_at: new Date().toISOString(),
+    const finishedAt = new Date().toISOString()
+    setSession(prev => prev ? { ...prev, step: lastStepN, finished_at: finishedAt } : prev)
+    const { error } = await supabase.from('weekly_mtg_sessions').update({
+      step: lastStepN, finished_at: finishedAt,
     }).eq('id', session.id)
+    if (error) console.error('[WeeklyMTG] finishMeeting failed:', error)
   }
 
   const resetMeeting = async () => {
     if (!session?.id) return
     if (!window.confirm('会議をリセット（最初からやり直し）しますか？')) return
-    await supabase.from('weekly_mtg_sessions').update({
+    const startedAt = new Date().toISOString()
+    setSession(prev => prev ? { ...prev, step: 0, current_item_id: null, current_team_id: null, completed_item_ids: [], finished_at: null, started_at: startedAt } : prev)
+    const { error } = await supabase.from('weekly_mtg_sessions').update({
       step: 0, current_item_id: null, current_team_id: null,
-      completed_item_ids: [], finished_at: null, started_at: new Date().toISOString(),
+      completed_item_ids: [], finished_at: null, started_at: startedAt,
     }).eq('id', session.id)
+    if (error) console.error('[WeeklyMTG] resetMeeting failed:', error)
+  }
+
+  // セッション更新の共通ヘルパー (楽観更新 + DB + エラーログ)。realtime 未達でも反映される。
+  const patchSession = async (patch) => {
+    if (!session?.id) return
+    setSession(prev => prev ? { ...prev, ...patch } : prev)
+    const { error } = await supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)
+    if (error) console.error('[WeeklyMTG] updateSession failed:', error)
   }
 
   // ── レンダー ───────────────────────────────────────────
@@ -659,7 +676,7 @@ export default function WeeklyMTGFacilitation({
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
-                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onUpdateSession={patchSession}
                 onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
                 onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
                 onBackToPrep={() => setViewingPrep(true)}
@@ -670,7 +687,7 @@ export default function WeeklyMTGFacilitation({
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
-                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onUpdateSession={patchSession}
                 onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
                 onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
                 onBackToPrep={() => setViewingPrep(true)}
@@ -689,7 +706,7 @@ export default function WeeklyMTGFacilitation({
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
-                onUpdateSession={(patch) => supabase.from('weekly_mtg_sessions').update(patch).eq('id', session.id)}
+                onUpdateSession={patchSession}
                 onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
                 onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
                 onBackToPrep={() => setViewingPrep(true)}
