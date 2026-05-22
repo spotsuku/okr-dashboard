@@ -7,12 +7,13 @@ export const dynamic = 'force-dynamic'
 
 import { getAdminClient, getIntegration, callGoogleApiWithRetry, json } from '../../../integrations/_shared'
 
-async function isAdmin(supabase, ownerName) {
-  if (!ownerName) return false
+async function isAdmin(supabase, ownerName, orgId) {
+  if (!ownerName || !orgId) return false
   const { data } = await supabase
     .from('members')
     .select('is_admin')
     .eq('name', ownerName)
+    .eq('organization_id', orgId)
     .limit(1)
   return !!(data && data[0] && data[0].is_admin)
 }
@@ -22,7 +23,9 @@ export async function PATCH(request, { params }) {
     const supabase = getAdminClient()
     const url = new URL(request.url)
     const owner = url.searchParams.get('owner')
-    if (!(await isAdmin(supabase, owner))) {
+    const orgId = url.searchParams.get('organization_id')
+    if (!orgId) return json({ error: 'organization_id が必要です' }, { status: 400 })
+    if (!(await isAdmin(supabase, owner, orgId))) {
       return json({ error: 'admin 権限が必要です' }, { status: 403 })
     }
     const body = await request.json()
@@ -36,10 +39,12 @@ export async function PATCH(request, { params }) {
     if (updates.kind === 'text') updates.drive_file_id = null
     if (updates.kind === 'drive_file') updates.content = null
 
+    // 他組織の行を id 指定で書き換えられないよう organization_id でも絞る
     const { data, error } = await supabase
       .from('coo_knowledge')
       .update(updates)
       .eq('id', params.id)
+      .eq('organization_id', orgId)
       .select()
       .single()
     if (error) return json({ error: error.message }, { status: 500 })
@@ -54,13 +59,16 @@ export async function DELETE(request, { params }) {
     const supabase = getAdminClient()
     const url = new URL(request.url)
     const owner = url.searchParams.get('owner')
-    if (!(await isAdmin(supabase, owner))) {
+    const orgId = url.searchParams.get('organization_id')
+    if (!orgId) return json({ error: 'organization_id が必要です' }, { status: 400 })
+    if (!(await isAdmin(supabase, owner, orgId))) {
       return json({ error: 'admin 権限が必要です' }, { status: 403 })
     }
     const { error } = await supabase
       .from('coo_knowledge')
       .delete()
       .eq('id', params.id)
+      .eq('organization_id', orgId)
     if (error) return json({ error: error.message }, { status: 500 })
     return json({ ok: true })
   } catch (e) {

@@ -8,12 +8,13 @@ export const dynamic = 'force-dynamic'
 
 import { getAdminClient, json } from '../../integrations/_shared'
 
-async function isAdmin(supabase, ownerName) {
-  if (!ownerName) return false
+async function isAdmin(supabase, ownerName, orgId) {
+  if (!ownerName || !orgId) return false
   const { data } = await supabase
     .from('members')
     .select('is_admin')
     .eq('name', ownerName)
+    .eq('organization_id', orgId)
     .limit(1)
   return !!(data && data[0] && data[0].is_admin)
 }
@@ -21,9 +22,14 @@ async function isAdmin(supabase, ownerName) {
 export async function GET(request) {
   try {
     const supabase = getAdminClient()
+    const url = new URL(request.url)
+    const orgId = url.searchParams.get('organization_id')
+    // service role は RLS をバイパスするため org フィルタを必須化
+    if (!orgId) return json({ error: 'organization_id が必要です' }, { status: 400 })
     const { data, error } = await supabase
       .from('coo_knowledge')
       .select('*')
+      .eq('organization_id', orgId)
       .order('priority', { ascending: false })
       .order('id', { ascending: true })
     if (error) return json({ error: error.message }, { status: 500 })
@@ -38,7 +44,9 @@ export async function POST(request) {
     const supabase = getAdminClient()
     const url = new URL(request.url)
     const owner = url.searchParams.get('owner')
-    if (!(await isAdmin(supabase, owner))) {
+    const orgId = url.searchParams.get('organization_id')
+    if (!orgId) return json({ error: 'organization_id が必要です' }, { status: 400 })
+    if (!(await isAdmin(supabase, owner, orgId))) {
       return json({ error: 'admin 権限が必要です' }, { status: 403 })
     }
     const body = await request.json()
@@ -52,6 +60,7 @@ export async function POST(request) {
       content: kind === 'text' ? content : null,
       drive_file_id: kind === 'drive_file' ? drive_file_id : null,
       priority, enabled,
+      organization_id: Number(orgId),
       updated_by: owner || null,
       updated_at: new Date().toISOString(),
     }
