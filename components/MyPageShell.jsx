@@ -305,20 +305,22 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   // スマホ (LINE風 下メニュー) 対応
   const isMobile = useIsMobile()
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  // モバイルでは折りたたみ(52px化)は使わず常に展開。閉じるはドロワーのclose扱い。
+  const collapsed = isMobile ? false : sidebarCollapsed
 
   // 下メニュー項目 (モバイル時のみ表示)
   const MOBILE_NAV = [
-    { key: 'dashboard',  icon: '🏠', label: 'ホーム' },
-    { key: 'wbs',        icon: '✅', label: 'タスク' },
-    { key: 'mail',       icon: '📧', label: 'メール' },
-    { key: 'calendar',   icon: '📅', label: 'カレンダー' },
-    { key: 'retrospect', icon: '💭', label: '振り返り' },
+    { key: 'dashboard',  icon: 'home',     label: 'ホーム' },
+    { key: 'wbs',        icon: 'check',    label: 'タスク' },
+    { key: 'mail',       icon: 'mail',     label: 'メール' },
+    { key: 'calendar',   icon: 'calendar', label: 'カレンダー' },
+    { key: 'retrospect', icon: 'refresh',  label: '振り返り' },
   ]
   // サイドバードロワー下部の「その他」メニュー
   const SIDEBAR_OTHER = [
-    { key: 'drive',        icon: '📁', label: 'ドライブ' },
-    { key: 'okr_edit',     icon: '🎯', label: 'OKR' },
-    { key: 'integrations', icon: '🔌', label: '連携' },
+    { key: 'drive',        icon: 'drive',  label: 'ドライブ' },
+    { key: 'okr_edit',     icon: 'target', label: 'OKR' },
+    { key: 'integrations', icon: 'link',   label: '連携' },
   ]
 
   return (
@@ -335,7 +337,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 
       {/* ─── 左サイドバー：メンバー一覧 ─── */}
       <div style={{
-        width: isMobile ? 240 : (sidebarCollapsed ? 52 : 220),
+        width: isMobile ? 240 : (collapsed ? 52 : 220),
         background: T.bgSidebar,
         borderRight: `1px solid ${T.border}`,
         display: isMobile && !mobileSidebarOpen ? 'none' : 'flex',
@@ -348,27 +350,27 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
       }}>
         {/* サイドバーヘッダー */}
         <div style={{
-          padding: sidebarCollapsed ? '10px 8px' : '10px 12px',
+          padding: collapsed ? '10px 8px' : '10px 12px',
           borderBottom: `1px solid ${T.border}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
         }}>
-          {!sidebarCollapsed && (
+          {!collapsed && (
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.5 }}>
               メンバー ({filteredMembers.length})
             </div>
           )}
           <button
-            onClick={() => setSidebarCollapsed(v => !v)}
-            title={sidebarCollapsed ? '展開' : '折り畳む'}
+            onClick={() => isMobile ? setMobileSidebarOpen(false) : setSidebarCollapsed(v => !v)}
+            title={isMobile ? '閉じる' : (collapsed ? '展開' : '折り畳む')}
             style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub,
               padding: '3px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
             }}
-          >{sidebarCollapsed ? '»' : '«'}</button>
+          >{isMobile ? '✕' : (collapsed ? '»' : '«')}</button>
         </div>
 
         {/* 検索 */}
-        {!sidebarCollapsed && (
+        {!collapsed && (
           <div style={{ padding: '8px 10px', borderBottom: `1px solid ${T.border}` }}>
             <input
               type="text"
@@ -387,7 +389,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
         {/* メンバー一覧（内部スクロール） */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
           {/* ▼ 全社サマリー (メンバー一覧の上) */}
-          {!sidebarCollapsed && (
+          {!collapsed && (
             <button
               onClick={() => { setSummaryMode(true); if (isMobile) setMobileSidebarOpen(false) }}
               style={{
@@ -420,7 +422,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               </div>
             </button>
           )}
-          {sidebarCollapsed && (
+          {collapsed && (
             <button
               onClick={() => { setSummaryMode(true); if (isMobile) setMobileSidebarOpen(false) }}
               title="全社サマリー"
@@ -450,7 +452,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             const content = parseLogContent(log?.content)
             const isSelected = !summaryMode && m.name === viewingName
             const isMe = m.name === myName
-            if (sidebarCollapsed) {
+            if (collapsed) {
               return (
                 <button
                   key={m.id}
@@ -503,7 +505,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
         </div>
 
         {/* サイドバー下部: その他メニュー (モバイル時のみ、下メニュー外のタブへアクセス) */}
-        {isMobile && !sidebarCollapsed && (
+        {isMobile && !collapsed && (
           <div style={{
             borderTop: `1px solid ${T.border}`,
             padding: '8px 0',
@@ -530,7 +532,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                     cursor: 'pointer', textAlign: 'left',
                   }}
                 >
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  <span style={{ display: 'inline-flex', width: 16 }}><Icon name={item.icon} size={16} /></span>
                   <span>{item.label}</span>
                 </button>
               )
@@ -880,7 +882,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                     borderTop: `2px solid ${active ? T.accent : 'transparent'}`,
                   }}
                 >
-                  <div style={{ fontSize: 20 }}>{item.icon}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 22 }}><Icon name={item.icon} size={22} /></div>
                   <div style={{ fontSize: 10, fontWeight: 700 }}>{item.label}</div>
                 </button>
               )
@@ -2019,7 +2021,7 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
             ) : (
               <span style={{ fontSize: 12, color: T.text }}>{draft.supervisor || '(未設定)'}</span>
             )}
-            <span style={{ fontSize: 10, color: T.textMuted }}>
+            <span style={{ fontSize: 10, color: T.textMuted, flex: '1 1 100%', minWidth: 0, lineHeight: 1.5 }}>
               ここで指定された上司本人が、そのメンバーの「振り返り」ページを開くと「上司から見た KPT」を編集できます
             </span>
           </div>
