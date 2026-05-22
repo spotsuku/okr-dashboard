@@ -11,6 +11,7 @@
 import * as React from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import ProposalDialog from './ProposalDialog'
 
 const MYCOO_GRAD = 'linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%)'
 
@@ -25,7 +26,7 @@ function Sparkle({ size = 26, fill = '#fff' }) {
 
 const CHIPS = ['今日の優先順位は？', '今週の目標を確認', '振り返りを書く']
 
-export default function MyCOOOrb({ user, members = [] }) {
+export default function MyCOOOrb({ user, members = [], T }) {
   const { isMobile } = useResponsive()
   const myName = React.useMemo(
     () => members.find(m => m.email === user?.email)?.name || '',
@@ -38,6 +39,8 @@ export default function MyCOOOrb({ user, members = [] }) {
   const [busy, setBusy] = React.useState(false)
   const [nudge, setNudge] = React.useState(null) // { message, primaryLabel, primaryAction }
   const [checkmark, setCheckmark] = React.useState(false)
+  // カレンダー予定の作成/更新/削除提案 (承認ダイアログ用)
+  const [pendingProposals, setPendingProposals] = React.useState(null)
   const scrollRef = React.useRef(null)
   const composingRef = React.useRef(false)
 
@@ -127,12 +130,63 @@ export default function MyCOOOrb({ user, members = [] }) {
       const aiContent = j.text || '(応答なし)'
       setMessages(p => [...p, { role: 'assistant', content: aiContent }])
       saveMessage('assistant', aiContent)
+      // カレンダーの作成/更新/削除提案があれば承認ダイアログを出す
+      const proposalActions = (j.actions || []).filter(a =>
+        a.result?.proposal && ['create', 'update', 'delete'].includes(a.result.proposal)
+      )
+      if (proposalActions.length > 0) {
+        setPendingProposals(proposalActions.map(a => ({ type: a.result.proposal, plan: a.result.plan })))
+      }
     } catch (e) {
       // エラーメッセージは履歴に保存しない (再質問を促す)
       setMessages(p => [...p, { role: 'assistant', content: `⚠️ ${e.message || 'エラー'}` }])
     } finally {
       setBusy(false)
     }
+  }
+
+  // 承認された提案を /api/integrations/calendar/event で実行 (owner = 本人)
+  async function executeProposal(type, plan) {
+    const url = '/api/integrations/calendar/event'
+    let body, method
+    if (type === 'create') {
+      method = 'POST'
+      body = {
+        owner: myName,
+        summary: plan.summary,
+        description: plan.description || '',
+        start_iso: plan.start_iso,
+        end_iso: plan.end_iso,
+        attendee_emails: plan.attendee_emails || [],
+        add_meet: !!plan.add_meet,
+        recurrence: plan.recurrence || [],
+      }
+    } else if (type === 'update') {
+      method = 'PATCH'
+      body = {
+        owner: myName,
+        event_id: plan.event_id,
+        updates: {
+          summary: plan.summary,
+          description: plan.description,
+          start_iso: plan.start_iso,
+          end_iso: plan.end_iso,
+          attendee_emails: plan.attendee_emails,
+          recurrence: plan.recurrence,
+        },
+      }
+    } else if (type === 'delete') {
+      method = 'DELETE'
+      body = { owner: myName, event_id: plan.event_id }
+    } else {
+      throw new Error(`unknown proposal type: ${type}`)
+    }
+    const r = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+    return j
   }
 
   return (
@@ -310,6 +364,35 @@ export default function MyCOOOrb({ user, members = [] }) {
           </button>
         </div>
       </div>
+
+      {/* カレンダー予定の確認ダイアログ (作成/更新/削除を承認後に実行) */}
+      {T && pendingProposals && pendingProposals.length > 0 && (
+        <ProposalDialog
+          T={T}
+          proposals={pendingProposals}
+          onClose={() => setPendingProposals(null)}
+          onConfirm={async () => {
+            const remaining = [...pendingProposals]
+            try {
+              while (remaining.length > 0) {
+                await executeProposal(remaining[0].type, remaining[0].plan)
+                remaining.shift()
+              }
+              setPendingProposals(null)
+              const okMsg = '✅ カレンダーに反映しました。'
+              setMessages(p => [...p, { role: 'assistant', content: okMsg }])
+              saveMessage('assistant', okMsg)
+            } catch (e) {
+              const msg = e.message || 'エラー'
+              if (/403|Insufficient|insufficient auth/i.test(msg)) {
+                alert('Google の予定作成権限が不足しています。連携タブで再認証してください。')
+              } else {
+                alert(`実行エラー: ${msg}`)
+              }
+            }
+          }}
+        />
+      )}
     </>
   )
 }
