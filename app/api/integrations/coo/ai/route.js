@@ -18,7 +18,7 @@ export const maxDuration = 60
 import { getAdminClient, getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 const MODEL = 'claude-sonnet-4-5'
-const MAX_STEPS = 4
+const MAX_STEPS = 6
 const DRIVE_CACHE_HOURS = 1   // この時間以内なら cached_text を再利用
 const KNOWLEDGE_CHAR_BUDGET = 8000  // 全知識を合計でこの上限まで圧縮
 
@@ -73,7 +73,172 @@ const TOOLS = [
       required: ['query'],
     },
   },
+  // ─── カレンダー操作 (旧カレンダーAIから集約) ───
+  {
+    name: 'list_events',
+    description: '指定メンバーの指定期間のカレンダー予定を取得する。空き状況の確認や日程調整の前提に使う。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        members: { type: 'array', items: { type: 'string' }, description: 'メンバー名の配列 (日本語氏名)' },
+        start_iso: { type: 'string', description: '開始日時 ISO 8601 (JST, 例: 2026-04-22T09:00:00+09:00)' },
+        end_iso:   { type: 'string', description: '終了日時 ISO 8601' },
+      },
+      required: ['members', 'start_iso', 'end_iso'],
+    },
+  },
+  {
+    name: 'find_free_slots',
+    description: '指定メンバー全員が空いている時間枠を検索する。日程調整で使う。営業時間は 9:00-22:00 JST デフォルト。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        members: { type: 'array', items: { type: 'string' } },
+        start_iso: { type: 'string' },
+        end_iso:   { type: 'string' },
+        duration_min: { type: 'number', description: '必要な連続空き時間 (分)' },
+        working_hours: { type: 'object', properties: { from: { type: 'number' }, to: { type: 'number' } }, description: '営業時間帯 (例: from:9, to:22) JST。省略時 9-22。' },
+      },
+      required: ['members', 'start_iso', 'end_iso', 'duration_min'],
+    },
+  },
+  {
+    name: 'create_event',
+    description: '対話相手のカレンダーに予定を作成し、指定メンバーを招待する。Google Meet リンクも任意で付与。繰り返し予定も RRULE 配列で指定可能。実行はユーザー承認後に行われる。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string' },
+        start_iso: { type: 'string' },
+        end_iso:   { type: 'string' },
+        attendee_names: { type: 'array', items: { type: 'string' }, description: '招待するメンバー名' },
+        description: { type: 'string' },
+        add_meet: { type: 'boolean', description: 'Google Meet リンクを自動発行' },
+        recurrence: { type: 'array', items: { type: 'string' }, description: "RRULE 配列。例: 毎週金曜 10回は ['RRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=10']、毎月最終木曜は ['RRULE:FREQ=MONTHLY;BYDAY=-1TH']" },
+      },
+      required: ['summary', 'start_iso', 'end_iso'],
+    },
+  },
+  {
+    name: 'update_event',
+    description: '既存の予定を更新する (時刻変更や招待追加)。event_id は list_events で取得。実行はユーザー承認後。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string' },
+        summary: { type: 'string' },
+        start_iso: { type: 'string' },
+        end_iso: { type: 'string' },
+        attendee_names: { type: 'array', items: { type: 'string' } },
+        description: { type: 'string' },
+        recurrence: { type: 'array', items: { type: 'string' }, description: 'RRULE 配列で繰り返しルールを変更' },
+      },
+      required: ['event_id'],
+    },
+  },
+  {
+    name: 'delete_event',
+    description: '対話相手が作成した予定を削除する。実行はユーザー承認後。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string' },
+      },
+      required: ['event_id'],
+    },
+  },
 ]
+
+// ─── カレンダー操作ヘルパー (旧 calendar/ai から移植) ───
+function resolveEmails(names, members) {
+  return (names || []).map(n => {
+    const m = (members || []).find(x => x.name === n)
+    return m?.email || null
+  }).filter(Boolean)
+}
+
+async function getEventsForMember(name, startIso, endIso) {
+  const res = await getIntegration(name, 'google')
+  if (res.error || !res.integration) return { name, events: [], error: res.error || '未連携' }
+  if (res.expired) return { name, events: [], error: 'トークン期限切れ' }
+  const apiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
+  apiUrl.searchParams.set('timeMin', startIso)
+  apiUrl.searchParams.set('timeMax', endIso)
+  apiUrl.searchParams.set('singleEvents', 'true')
+  apiUrl.searchParams.set('orderBy', 'startTime')
+  apiUrl.searchParams.set('maxResults', '100')
+  const { response: r } = await callGoogleApiWithRetry(res.integration, async (token) => {
+    return fetch(apiUrl.toString(), { headers: { Authorization: `Bearer ${token}` } })
+  })
+  if (!r.ok) return { name, events: [], error: `Calendar API ${r.status}` }
+  const data = await r.json()
+  return {
+    name,
+    events: (data.items || []).map(ev => ({
+      id: ev.id,
+      title: ev.summary || '(無題)',
+      start: ev.start?.dateTime || ev.start?.date,
+      end: ev.end?.dateTime || ev.end?.date,
+      allDay: !!ev.start?.date,
+    })),
+  }
+}
+
+// 空き時間を計算: 指定期間内で、全メンバーの予定が重ならない連続 duration_min 分以上の枠
+function computeFreeSlots(memberEvents, startIso, endIso, durationMin, workingHours) {
+  const start = new Date(startIso).getTime()
+  const end = new Date(endIso).getTime()
+  const durMs = durationMin * 60 * 1000
+  const busy = []
+  for (const m of memberEvents) {
+    for (const ev of m.events || []) {
+      if (!ev.start || !ev.end || ev.allDay) continue
+      const s = new Date(ev.start).getTime()
+      const e = new Date(ev.end).getTime()
+      if (isNaN(s) || isNaN(e)) continue
+      busy.push([Math.max(s, start), Math.min(e, end)])
+    }
+  }
+  busy.sort((a, b) => a[0] - b[0])
+  const merged = []
+  for (const [s, e] of busy) {
+    if (merged.length && s <= merged[merged.length - 1][1]) {
+      merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], e)
+    } else {
+      merged.push([s, e])
+    }
+  }
+  const free = []
+  let cursor = start
+  for (const [s, e] of merged) {
+    if (s > cursor) free.push([cursor, s])
+    cursor = Math.max(cursor, e)
+  }
+  if (cursor < end) free.push([cursor, end])
+  const fromH = workingHours?.from ?? 9
+  const toH = workingHours?.to ?? 22
+  const slots = []
+  for (const [s, e] of free) {
+    let t = new Date(s)
+    while (t.getTime() < e) {
+      const jst = new Date(t.getTime() + 9 * 3600 * 1000)
+      const y = jst.getUTCFullYear(), mo = jst.getUTCMonth(), d = jst.getUTCDate()
+      const dayStart = Date.UTC(y, mo, d, fromH - 9, 0, 0)
+      const dayEnd   = Date.UTC(y, mo, d, toH   - 9, 0, 0)
+      const slotStart = Math.max(t.getTime(), dayStart)
+      const slotEnd   = Math.min(e, dayEnd)
+      if (slotEnd - slotStart >= durMs) {
+        slots.push({
+          start_iso: new Date(slotStart).toISOString(),
+          end_iso:   new Date(slotEnd).toISOString(),
+          duration_min: Math.floor((slotEnd - slotStart) / 60000),
+        })
+      }
+      t = new Date(Date.UTC(y, mo, d + 1, 0 - 9, 0, 0))
+    }
+  }
+  return slots.slice(0, 20)
+}
 
 // ─── 知識ベース読み込み (text + drive_file キャッシュ) ───────────────────────
 async function loadKnowledge(supabase) {
@@ -290,7 +455,7 @@ async function loadUserContext(supabase, owner) {
 }
 
 // ─── ツール実行 ───────────────────────────────────────────────────
-async function execTool(supabase, owner, name, input) {
+async function execTool(supabase, owner, name, input, ctx = {}) {
   try {
     if (name === 'get_member_workload') {
       const target = input.name
@@ -427,6 +592,64 @@ async function execTool(supabase, owner, name, input) {
         })),
       }
     }
+    // ─── カレンダー操作 ───
+    if (name === 'list_events') {
+      const results = await Promise.all((input.members || []).map(n =>
+        getEventsForMember(n, input.start_iso, input.end_iso)
+      ))
+      return { ok: true, results }
+    }
+    if (name === 'find_free_slots') {
+      const memberEvents = await Promise.all((input.members || []).map(n =>
+        getEventsForMember(n, input.start_iso, input.end_iso)
+      ))
+      const slots = computeFreeSlots(memberEvents, input.start_iso, input.end_iso, input.duration_min, input.working_hours)
+      return { ok: true, slots, memberStatuses: memberEvents.map(m => ({ name: m.name, error: m.error, eventCount: m.events.length })) }
+    }
+    // mutate 系 (create/update/delete) は即実行せず「提案」を返す。
+    // UI 側で確認ダイアログを出し、ユーザー承認後に /api/integrations/calendar/event を叩く。
+    if (name === 'create_event') {
+      const emails = resolveEmails(input.attendee_names, ctx.members)
+      const unresolved = (input.attendee_names || []).filter(n =>
+        !(ctx.members || []).find(x => x.name === n)
+      )
+      const summary = /^\s*\[仮\]/.test(input.summary || '') ? input.summary : `[仮] ${input.summary || ''}`.trim()
+      return {
+        ok: true,
+        proposal: 'create',
+        plan: {
+          summary,
+          description: input.description || '',
+          start_iso: input.start_iso,
+          end_iso: input.end_iso,
+          attendee_names: input.attendee_names || [],
+          attendee_emails: emails,
+          unresolved_names: unresolved,
+          add_meet: !!input.add_meet,
+          recurrence: input.recurrence || [],
+        },
+      }
+    }
+    if (name === 'update_event') {
+      const emails = input.attendee_names ? resolveEmails(input.attendee_names, ctx.members) : undefined
+      return {
+        ok: true,
+        proposal: 'update',
+        plan: {
+          event_id: input.event_id,
+          summary: input.summary,
+          description: input.description,
+          start_iso: input.start_iso,
+          end_iso: input.end_iso,
+          attendee_names: input.attendee_names,
+          attendee_emails: emails,
+          recurrence: input.recurrence,
+        },
+      }
+    }
+    if (name === 'delete_event') {
+      return { ok: true, proposal: 'delete', plan: { event_id: input.event_id } }
+    }
     return { ok: false, error: `unknown tool: ${name}` }
   } catch (e) {
     return { ok: false, error: e.message }
@@ -456,10 +679,25 @@ async function handle(request) {
     loadUserContext(supabase, owner),
   ])
 
-  // 全メンバーの簡易リスト (AI が他人を呼び出す時の参照)
+  // 全メンバーの簡易リスト (AI が他人を呼び出す時の参照 / カレンダー招待のメール解決)
   const { data: allMembers } = await supabase.from('members')
-    .select('name, role').order('sort_order', { ascending: true })
+    .select('name, role, email').order('sort_order', { ascending: true })
   const memberList = (allMembers || []).map(m => `- ${m.name}${m.role ? ` (${m.role})` : ''}`).join('\n')
+  const membersWithEmail = (allMembers || []).map(m => ({ name: m.name, email: m.email }))
+
+  // 日付・曜日参照表 (JST、確定値) — LLM の曜日推論誤りを防ぐためカレンダー操作向けに注入
+  const DOW_JA = ['日', '月', '火', '水', '木', '金', '土']
+  const refBase = new Date(Date.now() + 9 * 3600 * 1000)
+  const dateRefLines = []
+  for (let i = 0; i < 21; i++) {
+    const dt = new Date(Date.UTC(refBase.getUTCFullYear(), refBase.getUTCMonth(), refBase.getUTCDate() + i))
+    const y = dt.getUTCFullYear()
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+    const dd = String(dt.getUTCDate()).padStart(2, '0')
+    const label = i === 0 ? ' ← 今日' : i === 1 ? ' ← 明日' : ''
+    dateRefLines.push(`- ${y}-${mm}-${dd}(${DOW_JA[dt.getUTCDay()]})${label}`)
+  }
+  const dateRefStr = dateRefLines.join('\n')
 
   const isSelfChat = owner === '三木智弘'  // 三木CEO本人かどうか
 
@@ -509,6 +747,18 @@ ${userCtx.text}
 
 ## メンバー一覧 (tool 呼び出し用)
 ${memberList}
+
+## カレンダー操作 (list_events / find_free_slots / create_event / update_event / delete_event)
+予定の確認・日程調整・作成/更新/削除も依頼に応じて行えます。
+- 日付・曜日参照表 (JST、確定値・必ずこの表から曜日を引くこと。自分で計算しない):
+${dateRefStr}
+- 空き時間を探す時は必ず find_free_slots を使う (勘で答えない)
+- 時刻は JST (+09:00) の ISO 8601 で指定する
+- 招待者は attendee_names にメンバー名を渡す (メール解決は裏で行う)
+- 繰り返しは recurrence に RRULE 配列で指定 (例: 毎週金曜10回は ['RRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=10'])
+- Google Meet が必要そうな会議は add_meet: true
+- **重要**: create_event / update_event / delete_event は「提案」として返り、実際の実行はユーザーが確認ダイアログで承認した後に行われる。したがって最終返答では「作成しました」ではなく「以下の内容で作成します。よろしければ承認を押してください」のように表現する
+- 仮押さえは件名の先頭に「[仮]」が自動付与される
 
 ツールは最大 ${MAX_STEPS} ステップ連続実行できます。`
 
@@ -570,7 +820,7 @@ ${memberList}
     }
     const toolResults = []
     for (const tu of toolUses) {
-      const result = await execTool(supabase, owner, tu.name, tu.input)
+      const result = await execTool(supabase, owner, tu.name, tu.input, { members: membersWithEmail })
       actions.push({ tool: tu.name, input: tu.input, result })
       toolResults.push({
         type: 'tool_result',

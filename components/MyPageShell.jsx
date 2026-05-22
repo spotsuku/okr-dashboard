@@ -539,6 +539,42 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             })}
           </div>
         )}
+
+        {/* サイドバー最下部: アカウント (モバイルはログアウト導線がここだけ) */}
+        {isMobile && !collapsed && (
+          <div style={{
+            borderTop: `1px solid ${T.border}`,
+            padding: '10px 12px 14px',
+            background: T.bgSidebar,
+          }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: T.textMuted,
+              letterSpacing: 0.5, padding: '0 2px 6px',
+            }}>アカウント</div>
+            {user?.email && (
+              <div style={{
+                fontSize: 11, color: T.textSub, padding: '0 2px 8px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>{user.email}</div>
+            )}
+            <button
+              onClick={async () => {
+                try { await supabase.auth.signOut() } catch {}
+                window.location.href = '/'
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '9px 12px', borderRadius: 8,
+                background: 'transparent', border: `1px solid ${T.border}`,
+                color: T.danger, fontSize: 13, fontWeight: 700,
+                fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{ display: 'inline-flex', width: 16 }}><Icon name="logout" size={16} /></span>
+              <span>ログアウト</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ─── メインエリア ─── */}
