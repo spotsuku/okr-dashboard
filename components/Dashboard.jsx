@@ -1530,7 +1530,7 @@ export default function Dashboard({ user, onSignOut }) {
       {/* 初回ユーザー向けスポットライト・ツアー (localStorage で完了状態を管理) */}
       <OnboardingTour onNavigate={setActivePage} />
       <QuickTaskPalette user={user} members={members} />
-      <MyCOOOrb user={user} members={members} T={T} />
+      <MyCOOOrb user={user} members={members} T={T} orgId={currentOrg?.id} />
       {/* サービス無料公開中バナー (myAI ライセンス機能は一時停止中) — NEO福岡は元から無料のため非表示 */}
       {currentOrg?.slug !== 'neo-fukuoka' && (
         <div role="status" style={{

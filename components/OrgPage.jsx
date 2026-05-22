@@ -547,6 +547,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
 // (方式2: Bot Token は User ID 取得のみ、通知投稿は Webhook 経由)
 // ══════════════════════════════════════════════════
 function SlackSyncPanel() {
+  const { currentOrg } = useCurrentOrg()
   const [syncing, setSyncing] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
@@ -554,7 +555,11 @@ function SlackSyncPanel() {
   const sync = async () => {
     setSyncing(true); setResult(null); setError('')
     try {
-      const r = await fetch('/api/integrations/slack/sync-users', { method: 'POST' })
+      const r = await fetch('/api/integrations/slack/sync-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization_id: currentOrg?.id }),
+      })
       const j = await r.json()
       if (!r.ok || !j.ok) { setError(j.error || `HTTP ${r.status}`); return }
       setResult(j)
@@ -921,7 +926,7 @@ const JD_DEFAULT = {
 // ══════════════════════════════════════════════════
 // データ取得フック
 // ══════════════════════════════════════════════════
-function useOrgData(fiscalYear) {
+function useOrgData(fiscalYear, orgId) {
   const [levels, setLevels] = useState([])
   const [teamMeta, setTeamMeta] = useState({})
   const [members, setMembers] = useState([])
@@ -934,15 +939,22 @@ function useOrgData(fiscalYear) {
   const [orgTableError, setOrgTableError] = useState(false)
 
   const reload = useCallback(async () => {
+    // 組織未選択のときは何も読まない (他組織のデータ混入を防ぐ)
+    if (!orgId) {
+      setLevels([]); setTeamMeta({}); setMembers([]); setTasks([])
+      setJdRows({}); setTaskHistory([]); setManuals([]); setLoading(false)
+      return
+    }
     setLoading(true)
+    // 全クエリを active org でスコープ (RLS が無くても他組織の行を取得しない多層防御)
     const results = await Promise.all([
-      supabase.from('levels').select('*').order('id'),
-      supabase.from('org_team_meta').select('*'),
-      supabase.from('members').select('*').order('id'),
-      supabase.from('org_tasks').select('*').order('id'),
-      supabase.from('org_member_jd').select('*').order('version_idx'),
-      supabase.from('org_task_history').select('*').order('changed_at'),
-      supabase.from('org_task_manuals').select('*').order('sort_order'),
+      supabase.from('levels').select('*').eq('organization_id', orgId).order('id'),
+      supabase.from('org_team_meta').select('*').eq('organization_id', orgId),
+      supabase.from('members').select('*').eq('organization_id', orgId).order('id'),
+      supabase.from('org_tasks').select('*').eq('organization_id', orgId).order('id'),
+      supabase.from('org_member_jd').select('*').eq('organization_id', orgId).order('version_idx'),
+      supabase.from('org_task_history').select('*').eq('organization_id', orgId).order('changed_at'),
+      supabase.from('org_task_manuals').select('*').eq('organization_id', orgId).order('sort_order'),
     ])
     const [lvls, meta, mems, taskData, jdData, histData, manualData] = results.map(r => r.data)
     const orgErrors = results.slice(3).filter(r => r.error)
@@ -974,7 +986,7 @@ function useOrgData(fiscalYear) {
     setTaskHistory(histData || [])
     setManuals(manualData || [])
     setLoading(false)
-  }, [fiscalYear])
+  }, [fiscalYear, orgId])
 
   // Supabase Realtime
   useEffect(() => {
@@ -1035,7 +1047,7 @@ function useOrgData(fiscalYear) {
         setSyncStatus(status === 'SUBSCRIBED' ? 'synced' : status === 'CHANNEL_ERROR' ? 'error' : 'connecting')
       })
     return () => { supabase.removeChannel(channel) }
-  }, [fiscalYear]) // eslint-disable-line
+  }, [fiscalYear, orgId]) // eslint-disable-line
 
   return { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows }
 }
@@ -3650,11 +3662,14 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   // グローバルテーマを更新
   _T = THEMES[themeKey] || THEMES.dark
 
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id
+
   const [activeTab, setActiveTab] = useState('chart')
   const [jumpMemberName, setJumpMemberName] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear)
+  const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear, orgId)
   const [showOrgManage, setShowOrgManage] = useState(false)
   const [showProgramManage, setShowProgramManage] = useState(false)
 
@@ -3665,7 +3680,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
     return ids
   }
   const handleAddLevel = async ({ name, icon, parent_id }) => {
-    const { data, error } = await supabase.from('levels').insert({ name, icon, parent_id: parent_id || null, color: T().accent, fiscal_year: fiscalYear }).select().single()
+    const { data, error } = await supabase.from('levels').insert({ name, icon, parent_id: parent_id || null, color: T().accent, fiscal_year: fiscalYear, organization_id: orgId }).select().single()
     if (error) { console.error('add level error:', error); return }
     setLevels(p => [...p, data])
   }
@@ -3739,7 +3754,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 28px 28px', position: 'relative', zIndex: 1 }}>
         <LargeTitle T={T()}
           title="🏢 組織"
-          subtitle={`${fiscalYear}年度 ・ NEO福岡の組織図・業務一覧・業務マニュアル・メンバー別JD`}
+          subtitle={`${fiscalYear}年度 ・ ${currentOrg?.name || ''}の組織図・業務一覧・業務マニュアル・メンバー別JD`}
           right={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: T().accentBg, color: T().accent }}>{fiscalYear}年度</span>

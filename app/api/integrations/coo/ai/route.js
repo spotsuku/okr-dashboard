@@ -241,11 +241,12 @@ function computeFreeSlots(memberEvents, startIso, endIso, durationMin, workingHo
 }
 
 // ─── 知識ベース読み込み (text + drive_file キャッシュ) ───────────────────────
-async function loadKnowledge(supabase) {
+async function loadKnowledge(supabase, orgId) {
   const { data } = await supabase
     .from('coo_knowledge')
     .select('*')
     .eq('enabled', true)
+    .eq('organization_id', orgId)
     .order('priority', { ascending: false })
     .order('id', { ascending: true })
   const items = data || []
@@ -335,7 +336,7 @@ function fmtTime(iso) {
 }
 
 // ─── ユーザーの「いま」のコンテキスト取得 ───────────────────────────────
-async function loadUserContext(supabase, owner) {
+async function loadUserContext(supabase, owner, orgId) {
   const today = new Date().toISOString().slice(0, 10)
   const monday = (() => {
     const j = new Date(Date.now() + 9 * 3600 * 1000)
@@ -347,12 +348,12 @@ async function loadUserContext(supabase, owner) {
 
   // 並行取得 (Google Calendar も含む)
   const [memberRes, krsRes, krReviewsRes, tasksRes, kptsRes, workLogRes, calendarEvents] = await Promise.all([
-    supabase.from('members').select('name, role, is_admin').eq('name', owner).limit(1),
-    supabase.from('key_results').select('id, title, owner').eq('owner', owner),
-    supabase.from('kr_weekly_reviews').select('*').eq('week_start', monday),
-    supabase.from('ka_tasks').select('id, title, due_date, done, status').eq('assignee', owner).neq('status', 'done').order('due_date'),
-    supabase.from('coaching_logs').select('content, created_at').eq('owner', owner).eq('log_type', 'kpt').order('created_at', { ascending: false }).limit(3),
-    supabase.from('coaching_logs').select('content').eq('owner', owner).eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 18 * 3600 * 1000).toISOString()).order('created_at', { ascending: false }).limit(1),
+    supabase.from('members').select('name, role, is_admin').eq('name', owner).eq('organization_id', orgId).limit(1),
+    supabase.from('key_results').select('id, title, owner').eq('owner', owner).eq('organization_id', orgId),
+    supabase.from('kr_weekly_reviews').select('*').eq('week_start', monday).eq('organization_id', orgId),
+    supabase.from('ka_tasks').select('id, title, due_date, done, status').eq('assignee', owner).eq('organization_id', orgId).neq('status', 'done').order('due_date'),
+    supabase.from('coaching_logs').select('content, created_at').eq('owner', owner).eq('organization_id', orgId).eq('log_type', 'kpt').order('created_at', { ascending: false }).limit(3),
+    supabase.from('coaching_logs').select('content').eq('owner', owner).eq('organization_id', orgId).eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 18 * 3600 * 1000).toISOString()).order('created_at', { ascending: false }).limit(1),
     fetchTodayCalendar(owner),
   ])
 
@@ -461,7 +462,7 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
       const target = input.name
       const { data } = await supabase.from('ka_tasks')
         .select('id, title, due_date, done, status')
-        .eq('assignee', target).neq('status', 'done')
+        .eq('assignee', target).eq('organization_id', ctx.orgId).neq('status', 'done')
         .order('due_date')
       const tasks = data || []
       const today = new Date().toISOString().slice(0, 10)
@@ -469,7 +470,7 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
       // 直近の workLog
       const { data: wl } = await supabase.from('coaching_logs')
         .select('content, created_at')
-        .eq('owner', target).eq('log_type', 'work_log')
+        .eq('owner', target).eq('organization_id', ctx.orgId).eq('log_type', 'work_log')
         .order('created_at', { ascending: false }).limit(1)
       let workStatus = '未始業'
       if (wl?.[0]) {
@@ -505,9 +506,9 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
         return m.toISOString().slice(0, 10)
       })()
       const { data: krs } = await supabase.from('key_results')
-        .select('id, title, owner').eq('owner', target)
+        .select('id, title, owner').eq('owner', target).eq('organization_id', ctx.orgId)
       const { data: reviews } = await supabase.from('kr_weekly_reviews')
-        .select('*').eq('week_start', monday)
+        .select('*').eq('week_start', monday).eq('organization_id', ctx.orgId)
       const reviewsMap = Object.fromEntries((reviews || []).map(r => [r.kr_id, r]))
       return {
         ok: true, member: target,
@@ -529,7 +530,7 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
       const since = new Date(Date.now() - weeks * 7 * 86400000).toISOString()
       const { data } = await supabase.from('coaching_logs')
         .select('content, created_at')
-        .eq('owner', target).eq('log_type', 'kpt')
+        .eq('owner', target).eq('organization_id', ctx.orgId).eq('log_type', 'kpt')
         .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(20)
@@ -544,7 +545,7 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
       const today = new Date().toISOString().slice(0, 10)
       const { data: tasks } = await supabase.from('ka_tasks')
         .select('id, assignee, due_date, done, status')
-        .eq('due_date', today)
+        .eq('due_date', today).eq('organization_id', ctx.orgId)
       const arr = tasks || []
       const done = arr.filter(t => t.done || t.status === 'done').length
       const byMember = {}
@@ -665,7 +666,7 @@ export async function POST(request) {
 async function handle(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
-  const { owner, message, history = [], mode = 'coach' } = body || {}
+  const { owner, message, history = [], mode = 'coach', organization_id } = body || {}
   if (!owner || !message) return json({ error: 'owner / message が必要です' }, { status: 400 })
 
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -673,15 +674,24 @@ async function handle(request) {
 
   const supabase = getAdminClient()
 
-  // 知識ベース + ユーザーコンテキストを並行取得
+  // service role は RLS をバイパスするため、組織スコープはアプリ側で必須。
+  // organization_id はクライアントから受け取る。未指定なら owner の所属から解決 (フォールバック)。
+  let orgId = organization_id
+  if (!orgId) {
+    const { data: om } = await supabase.from('members').select('organization_id').eq('name', owner).limit(1)
+    orgId = om?.[0]?.organization_id
+  }
+  if (!orgId) return json({ error: 'organization_id を解決できませんでした' }, { status: 400 })
+
+  // 知識ベース + ユーザーコンテキストを並行取得 (組織スコープ)
   const [knowledgeText, userCtx] = await Promise.all([
-    loadKnowledge(supabase),
-    loadUserContext(supabase, owner),
+    loadKnowledge(supabase, orgId),
+    loadUserContext(supabase, owner, orgId),
   ])
 
-  // 全メンバーの簡易リスト (AI が他人を呼び出す時の参照 / カレンダー招待のメール解決)
+  // 全メンバーの簡易リスト (AI が他人を呼び出す時の参照 / カレンダー招待のメール解決) — 組織スコープ
   const { data: allMembers } = await supabase.from('members')
-    .select('name, role, email').order('sort_order', { ascending: true })
+    .select('name, role, email').eq('organization_id', orgId).order('sort_order', { ascending: true })
   const memberList = (allMembers || []).map(m => `- ${m.name}${m.role ? ` (${m.role})` : ''}`).join('\n')
   const membersWithEmail = (allMembers || []).map(m => ({ name: m.name, email: m.email }))
 
@@ -820,7 +830,7 @@ ${dateRefStr}
     }
     const toolResults = []
     for (const tu of toolUses) {
-      const result = await execTool(supabase, owner, tu.name, tu.input, { members: membersWithEmail })
+      const result = await execTool(supabase, owner, tu.name, tu.input, { members: membersWithEmail, orgId })
       actions.push({ tool: tu.name, input: tu.input, result })
       toolResults.push({
         type: 'tool_result',

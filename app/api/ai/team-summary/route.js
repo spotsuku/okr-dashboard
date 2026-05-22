@@ -18,43 +18,49 @@ function getAdminClient() {
 
 export async function POST(request) {
   try {
-    const { level_id, week_start } = await request.json()
+    const { level_id, week_start, organization_id } = await request.json()
     if (!level_id || !week_start) {
       return Response.json({ error: 'level_id と week_start が必要です' }, { status: 400 })
+    }
+    if (!organization_id) {
+      return Response.json({ error: 'organization_id が必要です' }, { status: 400 })
     }
 
     const supabase = getAdminClient()
 
-    // 1) level の情報取得
+    // 1) level の情報取得 (service role は RLS バイパスのため org 一致を明示検証)
     const { data: level } = await supabase.from('levels')
-      .select('id, name, parent_id').eq('id', level_id).maybeSingle()
+      .select('id, name, parent_id, organization_id').eq('id', level_id).maybeSingle()
+    if (!level || Number(level.organization_id) !== Number(organization_id)) {
+      return Response.json({ error: '指定の level は現在の組織に属していません' }, { status: 403 })
+    }
     const teamName = level?.name || `level#${level_id}`
 
-    // 2) このチームに属する objectives → KR ids
+    // 2) このチームに属する objectives → KR ids (org スコープ)
     const { data: objs } = await supabase.from('objectives')
-      .select('id, title, period').eq('level_id', level_id)
+      .select('id, title, period').eq('level_id', level_id).eq('organization_id', organization_id)
     const objIds = (objs || []).map(o => o.id)
     let krs = []
     let krReviews = []
     if (objIds.length > 0) {
       const krsRes = await supabase.from('key_results')
-        .select('id, title, target, current, unit, owner, objective_id').in('objective_id', objIds)
+        .select('id, title, target, current, unit, owner, objective_id').in('objective_id', objIds).eq('organization_id', organization_id)
       krs = krsRes.data || []
       const krIds = krs.map(k => k.id)
       if (krIds.length > 0) {
         const revRes = await supabase.from('kr_weekly_reviews')
-          .select('kr_id, weather, good, more, focus').in('kr_id', krIds).eq('week_start', week_start)
+          .select('kr_id, weather, good, more, focus').in('kr_id', krIds).eq('week_start', week_start).eq('organization_id', organization_id)
         krReviews = revRes.data || []
       }
     }
     const reviewByKr = new Map(krReviews.map(r => [Number(r.kr_id), r]))
 
-    // 3) このチームの KA (weekly_reports) 当週分
+    // 3) このチームの KA (weekly_reports) 当週分 (org スコープ)
     let kas = []
     if (objIds.length > 0) {
       const kasRes = await supabase.from('weekly_reports')
         .select('id, ka_title, kr_title, owner, status, good, more, focus_output')
-        .in('objective_id', objIds).eq('week_start', week_start)
+        .in('objective_id', objIds).eq('week_start', week_start).eq('organization_id', organization_id)
       kas = kasRes.data || []
     }
 

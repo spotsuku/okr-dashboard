@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, RADIUS } from '../lib/themeTokens'
 import { cardStyle, sectionHeaderStyle } from '../lib/iosStyles'
 import Icon from './Icon'
@@ -2938,6 +2939,7 @@ function TeamWeeklySummaryCard({ T, viewingMember, myName, isAdmin, members = []
 }
 
 function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = false, level, managerName, tabs, allLevels = [], activeLevelId, onSelectLevel }) {
+  const { currentOrg } = useCurrentOrg()
   const [good, setGood] = useState('')
   const [more, setMore] = useState('')
   const [focus, setFocus] = useState('')
@@ -3017,7 +3019,7 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
       const res = await fetch('/api/ai/team-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level_id: levelId, week_start: weekStart }),
+        body: JSON.stringify({ level_id: levelId, week_start: weekStart, organization_id: currentOrg?.id }),
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)

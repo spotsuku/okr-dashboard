@@ -40,15 +40,16 @@ export async function POST(request) {
     if (!conf) return json({ error: 'confirmation not found' }, { status: 404 })
 
     // 2. 宛先メンバー情報 (slack_user_id があれば実メンション <@USERID> を使う)
+    //    同名の別組織メンバーへの誤通知を防ぐため confirmation の組織で絞る
     const { data: toMember } = await supabase.from('members')
-      .select('id, name, email, level_id, slack_user_id').eq('name', conf.to_name).maybeSingle()
+      .select('id, name, email, level_id, slack_user_id').eq('name', conf.to_name).eq('organization_id', conf.organization_id).maybeSingle()
     const toMention = toMember?.slack_user_id
       ? `<@${toMember.slack_user_id}>`           // 実メンション (push 通知発火)
       : `@${conf.to_name}`                        // フォールバック (文字列)
 
     // 送信者 (任意・本文中に表示)
     const { data: fromMember } = await supabase.from('members')
-      .select('slack_user_id').eq('name', conf.from_name).maybeSingle()
+      .select('slack_user_id').eq('name', conf.from_name).eq('organization_id', conf.organization_id).maybeSingle()
     const fromMention = fromMember?.slack_user_id
       ? `<@${fromMember.slack_user_id}>`
       : conf.from_name

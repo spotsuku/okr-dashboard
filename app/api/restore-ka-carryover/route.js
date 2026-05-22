@@ -57,10 +57,14 @@ export async function GET(req) {
   const search = url.searchParams.get('search')
   const kaTitle = url.searchParams.get('ka')
   const owner = url.searchParams.get('owner')
+  const orgId = url.searchParams.get('organization_id')
 
-  const { data: allReports, error } = await supabase
+  let q = supabase
     .from('weekly_reports')
     .select('id,week_start,kr_id,ka_title,owner,good,more,focus_output,status,sort_order,level_id,objective_id,kr_title,created_at')
+  // 保守ツール: organization_id を渡せばその組織のみに限定 (service role は RLS バイパスのため)
+  if (orgId) q = q.eq('organization_id', orgId)
+  const { data: allReports, error } = await q
     .order('week_start', { ascending: true })
     .order('id', { ascending: true })
 
