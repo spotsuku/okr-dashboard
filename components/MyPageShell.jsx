@@ -2021,7 +2021,7 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
             ) : (
               <span style={{ fontSize: 12, color: T.text }}>{draft.supervisor || '(未設定)'}</span>
             )}
-            <span style={{ fontSize: 10, color: T.textMuted }}>
+            <span style={{ fontSize: 10, color: T.textMuted, flex: '1 1 100%', minWidth: 0, lineHeight: 1.5 }}>
               ここで指定された上司本人が、そのメンバーの「振り返り」ページを開くと「上司から見た KPT」を編集できます
             </span>
           </div>
