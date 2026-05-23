@@ -177,24 +177,15 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
 
   return (
     <div style={{
-      border:`1px solid ${open ? pctColor+'40' : pctColor+'15'}`,
+      border:`1px solid ${wT().border}`,
       borderRadius:RADIUS.lg, marginBottom:SPACING.sm, overflow:'hidden',
       position: 'relative',
-      boxShadow: open
-        ? SHADOWS.hover(pctColor)
-        : SHADOWS.sm,
+      boxShadow: open ? SHADOWS.md : SHADOWS.sm,
       transition:'all 0.2s ease',
     }}>
-      {/* 上端に色グラデ帯 (左太線の代わり) */}
-      <div aria-hidden style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-        background: `linear-gradient(90deg, ${pctColor} 0%, ${pctColor}80 100%)`,
-      }} />
       <div onClick={() => setOpen(p=>!p)} style={{
         padding:'14px 16px',
-        background: open
-          ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${pctColor}08 100%)`
-          : wT().bgCard,
+        background: wT().bgCard,
         cursor:'pointer', userSelect:'none',
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:5 }}>
@@ -1076,12 +1067,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             const pctColor = okrPctColor(wT(), avgPct)
             return (
               <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{
-                padding:isActive?'12px 14px 12px 11px':'12px 14px', borderRadius:RADIUS.md, marginBottom:SPACING.sm, cursor:'pointer',
-                border:`1px solid ${wT().border}`,
-                borderLeft: isActive ? `3px solid ${wT().accent}` : `1px solid ${wT().border}`,
-                background: isActive
-                  ? `linear-gradient(120deg, ${wT().accentBg} 0%, transparent 100%)`
-                  : wT().bgCard,
+                padding:'12px 14px', borderRadius:RADIUS.md, marginBottom:SPACING.sm, cursor:'pointer',
+                border:`1px solid ${isActive ? wT().accent : wT().border}`,
+                background: isActive ? wT().accentBg : wT().bgCard,
                 boxShadow: isActive ? SHADOWS.sm : SHADOWS.xs,
                 transition:'all 0.2s ease',
               }}>
@@ -1096,7 +1084,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 <div style={{ height:5, borderRadius:RADIUS.pill, background:wT().borderLight, overflow:'hidden', marginBottom:7 }}>
                   <div style={{
                     height:'100%', width:`${Math.min(avgPct,100)}%`,
-                    background:`linear-gradient(90deg, ${pctColor} 0%, ${pctColor}cc 100%)`,
+                    background: pctColor,
                     borderRadius:RADIUS.pill, transition:'width 0.4s',
                   }} />
                 </div>
