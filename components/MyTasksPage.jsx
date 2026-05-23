@@ -1043,11 +1043,13 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
 }
 
 // ─── メイン ─────────────────────────────────────────
-export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange, fiscalYear = '2026' }) {
+export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange, fiscalYear = '2026', lockViewMode = null }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { isMobile } = useResponsive()
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
-  const [viewMode, setViewMode] = useState(initialViewMode)
+  // lockViewMode が指定された場合は 'my' / 'all' に固定し、マイ/全社トグルを隠す
+  // (マイページ側=マイ固定 / 全社サマリー側=全社固定 で重複導線をなくす)
+  const [viewMode, setViewMode] = useState(lockViewMode || initialViewMode)
   const [displayMode, setDisplayMode] = useState('list') // 'list' | 'board' | 'gantt'
   // モバイルは常に list ビューに強制
   useEffect(() => { if (isMobile && displayMode !== 'list') setDisplayMode('list') }, [isMobile, displayMode])
@@ -1077,8 +1079,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
   const oneWeekAgo = toDateStr(new Date(Date.now() - 7 * 86400000))
 
-  // ヘッダードロップダウンから viewMode が変わったら同期
-  useEffect(() => { setViewMode(initialViewMode) }, [initialViewMode])
+  // ヘッダードロップダウンから viewMode が変わったら同期 (lockViewMode 優先)
+  useEffect(() => { setViewMode(lockViewMode || initialViewMode) }, [initialViewMode, lockViewMode])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1256,8 +1258,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                 display: 'flex', alignItems: 'center', gap: 4,
                 minHeight: isMobile ? 44 : 'auto',
               }} title="⌘ + N でも追加できます"><Icon name="plus" size={isMobile ? 16 : 14} /> タスク追加</button>
-              {/* マイ/全社 切替 (モバイルはマイタスクに固定、切替不可) */}
-              {!isMobile && (
+              {/* マイ/全社 切替 (モバイルはマイタスクに固定。lockViewMode 指定時は非表示) */}
+              {!isMobile && !lockViewMode && (
                 <div style={{ display: 'flex', background: T.sectionBg, borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                   <button onClick={() => handleViewModeChange('my')} style={{
                     padding: '6px 14px', border: 'none', cursor: 'pointer', ...TYPO.subhead, fontFamily: 'inherit',
