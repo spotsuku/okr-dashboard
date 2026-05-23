@@ -8,6 +8,10 @@ import Icon, { DataIcon } from './Icon'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
+import ObjectiveHeader from './okr/ObjectiveHeader'
+import AssigneeChip from './okr/AssigneeChip'
+import QTabs from './okr/QTabs'
+import AICoachCard from './okr/AICoachCard'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -949,7 +953,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
       {/* メンバー一覧サイドバー (最左・全高。年間×個人と同じシェル。showMemberPicker のときだけ) */}
       {!isMobile && showMemberPicker && (
-        <div style={{ width: isTablet ? 160 : 220, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'12px 10px', overflowY:'auto', background:wT().bgSidebar }}>
+        <div style={{ width: isTablet ? 180 : 240, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'12px 10px', overflowY:'auto', background:wT().bgSidebar }}>
           <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>メンバー</div>
           {/* 部署フィルタ */}
           <select value={deptFilter ?? ''} onChange={e => setDeptFilter(e.target.value ? Number(e.target.value) : null)}
@@ -1042,11 +1046,17 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         </div>
       </div>
 
-      {/* 期間タブ (iOS SegmentedControl) */}
-      <div style={{ display:'flex', gap:SPACING.sm, padding:'10px 20px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center' }}>
-        <span style={{ fontSize:TYPO.footnote.fontSize, color:wT().textMuted, fontWeight:700 }}>期間</span>
-        <SegmentedControl T={wT()} value={activePeriod} onChange={key => { setActivePeriod(key); setActiveObjId(null) }}
-          items={periodTabs.map(([key, label]) => ({ key, label }))} size="sm" />
+      {/* 期間タブ (共通 QTabs) */}
+      <div style={{ padding:'10px 20px 0', flexShrink:0 }}>
+        <QTabs
+          T={wT()}
+          tabs={periodTabs.map(([key, label]) => ({
+            key, label,
+            count: objectives.filter(o => key === 'all' ? true : rawPeriod(o.period) === key).length,
+          }))}
+          active={activePeriod}
+          onChange={key => { setActivePeriod(key); setActiveObjId(null) }}
+        />
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
@@ -1113,60 +1123,30 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           ) : (
             <>
               {(() => {
-                // OBJECTIVE ヘッダ (.objh) — 全ビュー共通構造 [§2厳守]
+                // OBJECTIVE ヘッダ (.objh) — 共通 ObjectiveHeader 部品で全ビュー統一 [§2厳守]
                 const objAvgPct = objKRs.length > 0
                   ? Math.round(objKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/objKRs.length)
                   : 0
-                const objColor = okrPctColor(wT(), objAvgPct)
-                const objColorBg = okrPctColorBg(wT(), objAvgPct)
                 const objLevel = levels.find(l=>Number(l.id)===Number(selectedObj.level_id))
-                const ownerAv = avatarColor(viewName)
-                const objKACount = objKAs.length
                 return (
-                  <div style={{
-                    padding:'18px 22px',
-                    background:wT().bgCard,
-                    backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
-                    border:`1px solid ${wT().border}`,
-                    borderRadius:RADIUS.lg, marginBottom:SPACING.lg,
-                    boxShadow:SHADOWS.sm,
-                    display:'flex', gap:SPACING.lg,
-                  }}>
-                    {/* 32×32 accent-bg アイコン */}
-                    <div style={{ width:32, height:32, borderRadius:9, background:wT().accentBg, color:wT().accentText, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      <Icon name="target" size={18} />
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      {/* meta 行 */}
-                      <div style={{ display:'flex', alignItems:'center', gap:SPACING.xs+2, marginBottom:SPACING.xs+2, flexWrap:'wrap' }}>
-                        {objLevel && <span style={{ padding:'2px 8px', fontSize:10.5, fontWeight:700, borderRadius:RADIUS.pill, background:wT().borderLight, color:wT().textSub }}>{objLevel.name}</span>}
-                        <span style={{ padding:'2px 8px', fontSize:10.5, fontWeight:700, borderRadius:RADIUS.pill, background:wT().borderLight, color:wT().textSub }}>{periodLabel(selectedObj.period)}</span>
-                        <span style={{ padding:'2px 8px', fontSize:10.5, fontWeight:700, borderRadius:RADIUS.pill, background:objColorBg, color:objColor }}>{objAvgPct>=100?'達成':objAvgPct>=60?'順調':objAvgPct>=30?'要注意':'未達'}</span>
-                        {/* 担当チップ (.ot.ow) */}
-                        <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px 3px 4px', background:'rgba(255,255,255,.7)', border:`1px solid ${wT().border}`, borderRadius:RADIUS.pill, fontSize:11, color:wT().textSub }}>
-                          <span style={{ width:18, height:18, borderRadius:RADIUS.pill, background:`linear-gradient(135deg, ${ownerAv}, ${ownerAv}99)`, color:'#fff', fontSize:9, fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>{viewName.slice(0,1)}</span>
-                          {viewName}
-                        </span>
-                      </div>
-                      {/* h2 タイトル */}
-                      <h2 style={{ fontSize:17, fontWeight:700, margin:0, lineHeight:1.45, letterSpacing:'-0.005em', color:wT().text }}>{selectedObj.title}</h2>
-                      {/* footer 行 */}
-                      <div style={{ display:'flex', alignItems:'center', gap:SPACING.lg, marginTop:SPACING.md-2 }}>
-                        <div style={{ flex:'0 0 140px', height:4, background:wT().sunken, borderRadius:RADIUS.pill, overflow:'hidden' }}>
-                          <div style={{ height:'100%', width:`${Math.min(objAvgPct,100)}%`, background:objColor }} />
-                        </div>
-                        <span style={{ fontSize:13, fontWeight:700, fontFamily:'ui-monospace, monospace', color:objColor }}>{objAvgPct}%</span>
-                        <span style={{ padding:'2px 10px', fontSize:11, fontWeight:600, borderRadius:RADIUS.pill, background:wT().accentBg, color:wT().accentText }}>KR {objKRs.length}件</span>
-                        <span style={{ padding:'2px 10px', fontSize:11, fontWeight:600, borderRadius:RADIUS.pill, background:wT().borderLight, color:wT().textSub }}>KA {objKACount}件</span>
-                      </div>
-                    </div>
-                  </div>
+                  <ObjectiveHeader
+                    T={wT()}
+                    deptName={objLevel?.name}
+                    periodLabel={periodLabel(selectedObj.period)}
+                    pct={objAvgPct}
+                    ownerName={viewName}
+                    ownerAvatarUrl={viewMember?.avatar_url}
+                    title={selectedObj.title}
+                    krCount={objKRs.length}
+                    kaCount={objKAs.length}
+                    style={{ marginBottom:SPACING.lg }}
+                  />
                 )
               })()}
 
               {onAIFeedback && (
                 <div style={{ marginBottom:14 }}>
-                  <button onClick={() => {
+                  <AICoachCard T={wT()} onClick={() => {
                     const krSummary = objKRs.map(kr => {
                       const rev = reviews[kr.id]
                       const pct = calcPct(kr.current, kr.target, kr.lower_is_better)
@@ -1182,16 +1162,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     ).join('\n')
                     const msg = `${viewName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
                     onAIFeedback(msg)
-                  }} style={{ display:'flex', alignItems:'center', gap:SPACING.sm+2, width:'100%', padding:'12px 14px', borderRadius:RADIUS.md, border:'1px solid rgba(37,99,235,.18)', background:'linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))', cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}
-                    onMouseEnter={e=>e.currentTarget.style.background='linear-gradient(135deg, rgba(37,99,235,.11), rgba(34,211,238,.11))'}
-                    onMouseLeave={e=>e.currentTarget.style.background='linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))'}>
-                    <div style={{ width:28, height:28, borderRadius:RADIUS.sm, background:'linear-gradient(135deg, #3b82f6, #1e3a8a)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0, boxShadow:'0 2px 6px rgba(30,58,138,.24)' }}><Icon name="sparkle" size={16} /></div>
-                    <div style={{ textAlign:'left' }}>
-                      <div style={{ ...TYPO.subhead, fontWeight:700, color:wT().accentText }}>AIコーチにフィードバックをもらう</div>
-                      <div style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textSub, marginTop:1 }}>現在のKR・KA状況をもとにアドバイスをもらえます</div>
-                    </div>
-                    <span style={{ marginLeft:'auto', color:wT().accentText, display:'inline-flex', alignItems:'center' }}><Icon name="arrowRight" size={12} /></span>
-                  </button>
+                  }} />
                 </div>
               )}
 

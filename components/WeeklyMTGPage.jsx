@@ -13,6 +13,8 @@ import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 import Icon, { DataIcon } from './Icon'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
+import AssigneeChip from './okr/AssigneeChip'
+import QTabs from './okr/QTabs'
 
 // 会議ごとのアイコン (SVG・currentColor を継承)
 const Ico = ({ size=22, children }) => (
@@ -164,7 +166,7 @@ function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor
           <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 8px', borderRadius:RADIUS.pill, background:wT().successBg, color:wT().success, display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="trophy" size={11} /> 達成済み</span>
         )}
         {ownerName && <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
-          <OwnerBadge name={ownerName} members={members} size={20} />
+          <OwnerBadge name={ownerName} members={members} size={18} T={wT()} />
         </div>}
         <button
           onClick={toggle}
@@ -255,15 +257,10 @@ function Avatar({ name, avatarUrl, size = 22 }) {
     </div>
   )
 }
-function OwnerBadge({ name, members, size = 18 }) {
+function OwnerBadge({ name, members, size = 18, T = DARK_T }) {
   if (!name) return null
   const m = members.find(x => x.name === name)
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
-      <Avatar name={name} avatarUrl={m?.avatar_url} size={size} />
-      <span style={{ fontSize:size*0.65, color:avatarColor(name), fontWeight:600 }}>{name}</span>
-    </div>
-  )
+  return <AssigneeChip T={T} name={name} avatarUrl={m?.avatar_url} size={size} />
 }
 
 // ─── 天気 ──────────────────────────────────────────────────────────────────────
@@ -547,7 +544,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
             </select>
           </div>
         ) : (
-          <OwnerBadge name={ownerDraft||report.owner} members={members} size={20} />
+          <OwnerBadge name={ownerDraft||report.owner} members={members} size={18} T={wT()} />
         )}
       </td>
       {/* KAタイトル */}
@@ -801,7 +798,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             {kr.title}
           </span>
           <span style={{ ...TYPO.footnote, fontWeight:500, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
-          {kr.owner && <OwnerBadge name={kr.owner} members={members} size={20} />}
+          {kr.owner && <OwnerBadge name={kr.owner} members={members} size={18} T={wT()} />}
           <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
             <select value={kr.owner||''} onChange={e => onKROwnerChange(kr.id, e.target.value)}
               style={{ background:wT().bgCard2, border:`1px solid ${wT().borderMid}`, borderRadius:RADIUS.xs - 1, padding:'3px 8px', color:kr.owner?avatarColor(kr.owner):wT().textMuted, ...TYPO.footnote, fontWeight:500, cursor:'pointer', fontFamily:'inherit', outline:'none', minWidth:80 }}>
@@ -1777,8 +1774,8 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* 部署サイドバー */}
-        <div style={{ width: isMobile ? 0 : isTablet ? 120 : 155, flexShrink:0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, padding: isMobile ? 0 : `${SPACING.sm + 2}px ${SPACING.sm}px`, overflowY:'auto', background:wT().bgSidebar, display: isMobile ? 'none' : 'block' }}>
+        {/* 部署サイドバー (組織階層) — 幅 240px に統一 */}
+        <div style={{ width: isMobile ? 0 : isTablet ? 120 : 240, flexShrink:0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, padding: isMobile ? 0 : `${SPACING.sm + 2}px ${SPACING.sm}px`, overflowY:'auto', background:wT().bgSidebar, display: isMobile ? 'none' : 'block' }}>
           <div style={{ ...TYPO.caption, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>部署</div>
           <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:`6px ${SPACING.sm}px`, borderRadius:RADIUS.xs + 1, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?wT().accent:'transparent'}`, background:!activeLevelId?wT().accentBg:'transparent' }}>
             <Icon name="building" size={13} style={{ color:!activeLevelId?wT().accent:wT().textSub }} /><span style={{ ...TYPO.footnote, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?wT().accent:wT().textSub }}>全部署</span>
@@ -1806,7 +1803,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><DataIcon value={level.icon} size={12}/> {level.name}</span>}
                 </div>
                 <div style={{ ...TYPO.subhead, lineHeight:1.4, marginBottom:5, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
-                {obj.owner && <div style={{ marginBottom:5 }}><OwnerBadge name={obj.owner} members={members} size={16} /></div>}
+                {obj.owner && <div style={{ marginBottom:5 }}><OwnerBadge name={obj.owner} members={members} size={16} T={wT()} /></div>}
                 <div style={{ display:'flex', gap:SPACING.sm, ...TYPO.caption, fontWeight:600, color:wT().textMuted }}>
                   <span>KR {krs.length}件</span>
                   <span style={{ color:kaCount>0?wT().accent:wT().textFaint }}>KA {kaCount}件</span>
@@ -1866,23 +1863,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 style={{ marginBottom: SPACING.sm + 2 }}
               />
 
-              {/* 期間切替タブ (.qtab: 下線スタイル) */}
-              <div style={{ display:'flex', alignItems:'baseline', gap:0, borderBottom:`1px solid ${wT().border}`, marginBottom:SPACING.sm + 2 }}>
-                {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => {
-                  const on = rightPeriod===key
-                  return (
-                    <button key={key} onClick={()=>setRightPeriod(key)} style={{
-                      padding:`8px 14px`, cursor:'pointer', fontFamily:'inherit', fontSize:12.5,
-                      fontWeight:on?700:500, background:'none', border:0,
-                      borderBottom:`2px solid ${on?wT().accent:'transparent'}`,
-                      color:on?wT().accentText:wT().textSub,
-                    }}>{lbl}</button>
-                  )
-                })}
-                <span style={{ marginLeft:'auto', ...TYPO.caption, fontWeight:600, letterSpacing:0, color:wT().textMuted, padding:'0 4px' }}>
-                  {fiscalYear}年度 · {getPeriodLabel(rightPeriod === 'annual' ? 'annual' : rightPeriod)}
-                </span>
-              </div>
+              {/* 期間切替タブ (.qtab: 下線スタイル・共有部品) */}
+              <QTabs
+                T={wT()}
+                tabs={[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,label]) => ({ key, label }))}
+                active={rightPeriod}
+                onChange={(key)=>setRightPeriod(key)}
+                trailing={`${fiscalYear}年度 · ${getPeriodLabel(rightPeriod === 'annual' ? 'annual' : rightPeriod)}`}
+              />
 
               {/* 選択期間のObjective表示 (コンパクト) */}
               {rightObj && rightPeriod !== 'annual' && (
