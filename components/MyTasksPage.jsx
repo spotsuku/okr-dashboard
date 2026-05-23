@@ -359,14 +359,14 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
                   <select value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setSelectedTeam(''); setReportId('') }} style={{ ...inputSt, fontSize: TYPO.subhead.fontSize, flex: 1 }}>
                     <option value="">全部署</option>
                     {departmentLevels.map(l => (
-                      <option key={l.id} value={l.id}>{l.icon || '📁'} {l.name}</option>
+                      <option key={l.id} value={l.id}>{l.name}</option>
                     ))}
                   </select>
                   {childLevels.length > 0 && (
                     <select value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); setReportId('') }} style={{ ...inputSt, fontSize: TYPO.subhead.fontSize, flex: 1 }}>
                       <option value="">全チーム</option>
                       {childLevels.map(l => (
-                        <option key={l.id} value={l.id}>{l.icon || '📁'} {l.name}</option>
+                        <option key={l.id} value={l.id}>{l.name}</option>
                       ))}
                     </select>
                   )}

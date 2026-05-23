@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { AVAILABLE_MODULES, MODULE_META } from '../lib/meetings/moduleRegistry'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { inputStyle, btnSecondary, btnBrand } from '../lib/iosStyles'
 
@@ -17,7 +17,7 @@ import { inputStyle, btnSecondary, btnBrand } from '../lib/iosStyles'
 //   onSaved      - 保存成功時のコールバック (一覧再読み込みなど)
 // ─────────────────────────────────────────────────────────────
 
-const PRESET_ICONS = ['🌅', '🚀', '🌱', '🏛️', '💰', '👔', '📋', '📊', '🏷', '🎯', '📅', '⚡']
+const PRESET_ICONS = ['sun', 'rocket', 'leaf', 'building', 'coin', 'user', 'note', 'chart', 'tag', 'target', 'calendar', 'bolt']
 const PRESET_COLORS = [
   '#ff9f43', '#4d9fff', '#ffd166', '#ff6b6b', '#FF9500', '#00d68f',
   '#a855f7', '#5856d6', '#6B96C7', '#34C759',
@@ -32,7 +32,7 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   const isNew = !meeting
   const [title, setTitle]       = useState(meeting?.title || '')
   const [key, setKey]           = useState(meeting?.key || '')
-  const [icon, setIcon]         = useState(meeting?.icon || '📋')
+  const [icon, setIcon]         = useState(meeting?.icon || 'note')
   const [color, setColor]       = useState(meeting?.color || '#4d9fff')
   const [dayOfWeek, setDayOfWeek] = useState(meeting?.day_of_week ?? null)
   const [modules, setModules]   = useState(() => {
@@ -207,8 +207,10 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
                     width: 32, height: 32, borderRadius: RADIUS.sm,
                     border: `1px solid ${icon === i ? T.accent : T.border}`,
                     background: icon === i ? T.accentBg : T.bgCard,
-                    fontSize: 16, cursor: 'pointer',
-                  }}>{i}</button>
+                    color: icon === i ? T.accent : T.text,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}><Icon name={i} size={18} /></button>
                 ))}
               </div>
             </div>
@@ -269,7 +271,7 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
                   >
                     <span style={{ color: T.textMuted, width: 14, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="ドラッグして並び替え"><Icon name="more" size={14} /></span>
                     <span style={{ ...TYPO.footnote, color: T.textMuted, width: 18, textAlign: 'center' }}>{idx + 1}</span>
-                    <span style={{ fontSize: 18 }}>{meta.icon}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', color: T.textSub }}><DataIcon value={meta.icon} size={18} /></span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.text }}>{meta.label}</div>
                       <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted }}>{meta.desc}</div>
@@ -297,7 +299,8 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
                       border: `1px dashed ${T.border}`,
                       background: 'transparent', color: T.text,
                       ...TYPO.footnote, cursor: 'pointer', fontFamily: 'inherit',
-                    }}>+ {m.icon} {m.label}</button>
+                      display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                    }}>+ <DataIcon value={m.icon} size={14} /> {m.label}</button>
                   ))}
                 </div>
               </>

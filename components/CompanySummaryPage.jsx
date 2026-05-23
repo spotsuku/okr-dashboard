@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { cardStyle, pillStyle, sectionHeaderStyle } from '../lib/iosStyles'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
 import { useLayerLabels } from '../lib/levelLabels'
 
@@ -436,7 +436,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
                     <Ring value={dept.avgProgress} color={dept.rating.color} size={44} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, marginBottom: 3 }}>
-                        <span style={{ ...TYPO.callout, color: wT().text }}>{dept.level.icon} {dept.level.name}</span>
+                        <span style={{ ...TYPO.callout, color: wT().text, display: 'inline-flex', alignItems: 'center', gap: 4 }}><DataIcon value={dept.level.icon} size={13}/> {dept.level.name}</span>
                         {layerLabel && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: RADIUS.pill, background: `${layerColor}18`, color: layerColor }}>{layerLabel}</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
@@ -493,7 +493,7 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
                   borderTop: gi > 0 ? `1px solid ${wT().border}` : 'none',
                   display: 'flex', alignItems: 'center', gap: SPACING.xs,
                 }}>
-                  <span style={{ fontSize: 11, color: LAYER_COLORS[group.depth] || '#a0a8be' }}>{group.level.icon}</span>
+                  <span style={{ display: 'inline-flex', color: LAYER_COLORS[group.depth] || '#a0a8be' }}><DataIcon value={group.level.icon} size={11}/></span>
                   <span style={{ ...TYPO.footnote, fontWeight: 700, color: wT().textSub }}>{group.level.name}</span>
                   <span style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: wT().textMuted }}>{group.objectives.length}件</span>
                 </div>

@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { MEETINGS } from '../lib/meetings'
 import { renderTextWithLinks } from '../lib/renderTextWithLinks'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { btnPrimary, inputStyle, accentRingStyle } from '../lib/iosStyles'
 
@@ -334,7 +334,7 @@ function ConfirmationCard({ T, item, tab, companyWide = false, replies, myName, 
             background: T.sectionBg, color: T.textSub,
             ...TYPO.caption, fontWeight: 700,
             border: `1px solid ${T.border}`,
-          }}>{m.icon} {m.title}</span>
+          }}><DataIcon value={m.icon} size={12} fallback="note" /> {m.title}</span>
         ))}
         <span style={{ ...TYPO.caption, fontWeight: 700, color: T.textMuted, marginLeft: 'auto' }}>
           {formatRelTime(item.created_at)}
@@ -623,7 +623,7 @@ function ComposeModal({ T, myName, members, onClose, onSaved, presetTo = '', pre
                   background: a ? T.accentBg : 'transparent',
                   color: a ? T.accent : T.textSub,
                   ...TYPO.caption, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}>{m.icon} {m.title}</button>
+                }}><DataIcon value={m.icon} size={12} fallback="note" /> {m.title}</button>
               )
             })}
           </div>

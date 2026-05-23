@@ -8,7 +8,7 @@ import {
   progressBarStyle, progressFillStyle,
   kpiNumber, inputStyle,
 } from '../lib/iosStyles'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 
 // ─── 日付ユーティリティ ──────────────────────────────────────
 function getMondayJSTStr(d = new Date()) {
@@ -858,7 +858,7 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
               whiteSpace: 'nowrap',
               fontFamily: 'inherit',
             }}>
-              {d.icon || ''} {d.name}
+              <DataIcon value={d.icon} size={13} /> {d.name}
             </button>
           )
         })}
@@ -1006,7 +1006,7 @@ function TeamSummaryRow({ T, team, members, weekStart, myName, viewingMember, is
         marginBottom: SPACING.sm + 2,
       }}>
         <span style={{ ...TYPO.headline, color: T.text, fontWeight: 800 }}>
-          {team.icon || ''} {team.name}
+          <DataIcon value={team.icon} size={13} /> {team.name}
         </span>
         {managerName && (
           <span style={pillStyle({ color: T.textSub, size: 'sm' })}><Icon name="pin" size={11} /> 責任者: {managerName}</span>
@@ -1098,7 +1098,8 @@ function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
           : '期限未設定'
         // 所属組織のラベル (ms.org_id → level.name)
         const lvl = ms.org_id != null ? levelById.get(Number(ms.org_id)) : null
-        const orgLabel = lvl ? `${lvl.icon || ''} ${lvl.name}` : '全社'
+        // アイコンは JSX (DataIcon) で別途描画するため、ラベルは名前のみ
+        const orgLabel = lvl ? lvl.name : '全社'
         return (
           <div key={ms.id} style={{
             background: T.bgCard,
@@ -1109,8 +1110,8 @@ function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
             display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ ...TYPO.caption, fontWeight: 700, padding: '1px 8px', borderRadius: RADIUS.pill, background: T.sectionBg, color: T.textSub, whiteSpace: 'nowrap', letterSpacing: 0 }}>
-                {orgLabel}
+              <span style={{ ...TYPO.caption, fontWeight: 700, padding: '1px 8px', borderRadius: RADIUS.pill, background: T.sectionBg, color: T.textSub, whiteSpace: 'nowrap', letterSpacing: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                {lvl && <DataIcon value={lvl.icon} size={11} />}{orgLabel}
               </span>
             </div>
             <div style={{ ...TYPO.subhead, color: T.text, fontWeight: 800, lineHeight: 1.4 }}>

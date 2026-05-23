@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger, inputStyle, sectionHeaderStyle, btnBrand } from '../lib/iosStyles'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 
 // テーマは lib/themeTokens.js で一元管理 (CsvPage は dark 固定)
 const T = { ...COMMON_TOKENS.dark }
@@ -70,7 +70,7 @@ function DeptSelect({ value, onChange, levels }) {
     const prefix = '　'.repeat(indent)
     const result = [
       <option key={level.id} value={level.name}>
-        {prefix}{level.icon} {level.name}({label})
+        {prefix}{level.name}({label})
       </option>
     ]
     levels.filter(l => Number(l.parent_id) === Number(levelId)).forEach(child => {
@@ -230,7 +230,7 @@ function OKRCsvTab({ levels, fiscalYear }) {
                 {levels.map(l => {
                   const depth = getLevelDepth(l.id, levels)
                   const color = LAYER_COLORS[depth] || T.textMuted
-                  return <span key={l.id} style={pillStyle({ color, size: 'md' })}>{l.icon} {l.name}</span>
+                  return <span key={l.id} style={pillStyle({ color, size: 'md' })}><DataIcon value={l.icon} size={13} /> {l.name}</span>
                 })}
               </div>
             </div>
@@ -485,7 +485,7 @@ function KACsvTab({ levels, fiscalYear }) {
                 {levels.map(l => {
                   const depth = getLevelDepth(l.id, levels)
                   const color = LAYER_COLORS[depth] || T.textMuted
-                  return <span key={l.id} style={pillStyle({ color, size: 'md' })}>{l.icon} {l.name}</span>
+                  return <span key={l.id} style={pillStyle({ color, size: 'md' })}><DataIcon value={l.icon} size={13} /> {l.name}</span>
                 })}
               </div>
             </div>

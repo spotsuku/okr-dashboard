@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { MODULE_META } from '../lib/meetings/moduleRegistry'
 import MeetingShell from './meetings/MeetingShell'
 import MeetingEditModal from './MeetingEditModal'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 
 // ─────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
                 background: `${m.color || T.accent}20`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 14, flexShrink: 0,
-              }}>{m.icon || '📋'}</div>
+              }}><DataIcon value={m.icon} size={14} fallback="note" /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...TYPO.callout, color: T.text }}>{m.title}</div>
                 <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, display: 'flex', gap: SPACING.xs, flexWrap: 'wrap', marginTop: 2 }}>
@@ -144,7 +144,7 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
                     return (
                       <span key={i} style={{
                         padding: '1px 5px', background: T.sectionBg, borderRadius: RADIUS.xs - 2,
-                      }}>{meta.icon} {meta.label}</span>
+                      }}><DataIcon value={meta.icon} size={11} /> {meta.label}</span>
                     )
                   })}
                 </div>

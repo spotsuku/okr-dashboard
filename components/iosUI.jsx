@@ -11,7 +11,7 @@ import {
 } from '../lib/iosStyles'
 import { SHADOWS, RADIUS, SPACING, TYPO, GLASS, TRANSITION } from '../lib/themeTokens'
 // 共有 Icon (絵文字置換用)。本ファイル下部の自家製 Icon と名前衝突を避けるため別名 import。
-import GlyphIcon from './Icon'
+import GlyphIcon, { DataIcon } from './Icon'
 // （以下の本体はまだ inline 値を一部残していますが、新規利用は上記ファクトリに統一）
 // - SegmentedControl: 「今週/今月/全期間」のような3〜5択タブ
 // - Toggle: チェックボックスの代替となる丸いトグル
@@ -454,7 +454,7 @@ export function GroupedList({ T, title, items, footer }) {
                   color: it.color || T.accent,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 16, flexShrink: 0,
-                }}>{it.icon}</div>
+                }}><DataIcon value={it.icon} size={16} /></div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{

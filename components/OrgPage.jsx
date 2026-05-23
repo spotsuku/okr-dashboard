@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS } from '../lib/themeTokens'
-import Icon from './Icon'
+import Icon, { DataIcon, iconName } from './Icon'
 import { LargeTitle, BgGlow } from './iosUI'
 import TaskManualPage from './TaskManualPage'
 import WorkforceTab from './WorkforceTab'
@@ -1138,7 +1138,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                 color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 18,
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${color}55`,
-              }}>{dept.icon}</div>
+              }}><DataIcon value={dept.icon} size={18} /></div>
               <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: '-0.01em' }}>{dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
               {isAdmin && (
@@ -2032,7 +2032,7 @@ function AddMemberModal({ levels, onClose, onAdded }) {
               const color = getDeptColor(dept.name)
               return (
                 <div key={dept.id} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 6 }}>{dept.icon} {dept.name}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}><DataIcon value={dept.icon} size={12} /> {dept.name}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingLeft: 10 }}>
                     {teams.map(team => {
                       const isSel = selectedIds.includes(team.id)
@@ -2535,7 +2535,7 @@ ${versions.length > 1 ? `
                   const color = getDeptColor(dept.name)
                   return (
                     <div key={dept.id} style={{ marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 5 }}>{dept.icon} {dept.name}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color, marginBottom: 5, display: 'inline-flex', alignItems: 'center', gap: 4 }}><DataIcon value={dept.icon} size={12} /> {dept.name}</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingLeft: 10 }}>
                         {teams.map(team => {
                           const isSel = selectedIds.includes(team.id)
@@ -3206,7 +3206,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
               <div style={S.hero(accent)}>
                 {selectedDept && <div style={{ fontSize: 11, color: accent, fontWeight: 700, marginBottom: 6 }}>{selectedDept.name}</div>}
                 <div style={{ fontSize: 26, fontWeight: 800, color: T().text, marginBottom: teamDesc ? 10 : 0 }}>
-                  {selectedLevel?.icon && <span style={{ marginRight: 8 }}>{selectedLevel.icon}</span>}
+                  {selectedLevel?.icon && <span style={{ marginRight: 8, display: 'inline-flex', verticalAlign: 'middle' }}><DataIcon value={selectedLevel.icon} size={24} /></span>}
                   {selectedLevel?.name}
                 </div>
                 {teamDesc && <div style={{ fontSize: 14, color: T().textSub, lineHeight: 1.75 }}>{teamDesc}</div>}
@@ -3497,7 +3497,7 @@ function ProgramManageModal({ onClose, T }) {
 // ══════════════════════════════════════════════════
 function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear, onCopyFromYear }) {
   const [name, setName] = useState('')
-  const [icon, setIcon] = useState('👥')
+  const [icon, setIcon] = useState('users')
   const [parentId, setParentId] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(null)
@@ -3531,8 +3531,8 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
     await onDelete(level.id)
     setDeleting(null)
   }
-  const ICONS = ['🏢','🚀','⚙️','💼','👥','📊','🎯','💡','🌟','🔥','📈','🤝']
-  const startEdit = (level) => { setEditingId(level.id); setEditName(level.name); setEditIcon(level.icon || '📁') }
+  const ICONS = ['building','rocket','settings','briefcase','users','chart','target','bulb','star','fire','flag','handshake']
+  const startEdit = (level) => { setEditingId(level.id); setEditName(level.name); setEditIcon(iconName(level.icon, 'folder')) }
   const cancelEdit = () => { setEditingId(null); setEditName(''); setEditIcon('') }
   const saveEdit = async (level, nameOverride) => {
     const finalName = nameOverride || editName
@@ -3554,7 +3554,7 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
           {isEditing ? (
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
-                <span style={{ fontSize:13 }}>{editIcon}</span>
+                <span style={{ display:'inline-flex', alignItems:'center' }}><Icon name={iconName(editIcon, 'folder')} size={14} /></span>
                 <input defaultValue={editName} ref={el => { if (el && !el._inited) { el._inited = true; el.focus() } }}
                   onCompositionStart={() => { composingRef.current = true }}
                   onCompositionEnd={() => { composingRef.current = false }}
@@ -3566,13 +3566,13 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
               </div>
               <div style={{ display:'flex', gap:3, flexWrap:'wrap' }}>
                 {ICONS.map(ic => (
-                  <button key={ic} onClick={() => setEditIcon(ic)} style={{ width:24, height:24, borderRadius:5, border:`1px solid ${editIcon===ic ? T().accent : T().border}`, background: editIcon===ic ? T().accentBg : 'transparent', cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>{ic}</button>
+                  <button key={ic} onClick={() => setEditIcon(ic)} style={{ width:24, height:24, borderRadius:5, border:`1px solid ${editIcon===ic ? T().accent : T().border}`, background: editIcon===ic ? T().accentBg : 'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', padding:0, color:T().text }}><Icon name={ic} size={16} /></button>
                 ))}
               </div>
             </div>
           ) : (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:13 }}>{level.icon}</span>
+              <span style={{ display:'inline-flex', alignItems:'center' }}><DataIcon value={level.icon} size={14} /></span>
               <span style={{ flex:1, fontSize:12, fontWeight:500, color:T().text }}>{level.name}</span>
               <span style={{ fontSize:9, padding:'2px 6px', borderRadius:99, background:`${col}18`, color:col, fontWeight:700 }}>{lbl}</span>
               <button onClick={() => startEdit(level)} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>編集</button>
@@ -3630,7 +3630,8 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
               {addableParents.map(l => {
                 const d = (() => { let dep=0,cur=l; while(cur&&cur.parent_id){dep++;cur=levels.find(x=>x.id===cur.parent_id)} return dep })()
                 const label = d===0 ? '事業部として追加' : 'チームとして追加'
-                return <option key={l.id} value={l.id}>{l.icon} {l.name}の下に（{label}）</option>
+                {/* <option> はSVGを描画できないため、組織アイコンはここでは省略（旧: {l.icon}） */}
+                return <option key={l.id} value={l.id}>{l.name}の下に（{label}）</option>
               })}
             </select>
           </div>
@@ -3645,7 +3646,7 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
             <div style={{ fontSize:11, color:T().textMuted, marginBottom:8 }}>アイコン</div>
             <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
               {ICONS.map(ic => (
-                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? T().accent : T().border}`, background: icon===ic ? T().accentBg : T().sectionBg, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{ic}</button>
+                <button key={ic} onClick={() => setIcon(ic)} style={{ width:34, height:34, borderRadius:7, border:`1px solid ${icon===ic ? T().accent : T().border}`, background: icon===ic ? T().accentBg : T().sectionBg, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:T().text }}><Icon name={ic} size={18} /></button>
               ))}
             </div>
           </div>
