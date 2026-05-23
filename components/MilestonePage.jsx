@@ -483,15 +483,13 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   const [showAllOrgs, setShowAllOrgs] = useState(false)
   const [viewMode, setViewMode] = useState('annual') // 'annual' | 'q1' | 'q2' | 'q3' | 'q4'
 
-  // admin判定
+  // admin判定: members は組織で絞り込み済みの prop。per-org 行のため
+  // email で DB を引くと複数組織分が返って壊れる → prop から判定する。
   useEffect(() => {
-    const checkAdmin = async () => {
-      if (!user?.email) return
-      const { data } = await supabase.from('members').select('is_admin').eq('email', user.email).single()
-      if (data?.is_admin) setIsAdmin(true)
-    }
-    checkAdmin()
-  }, [user])
+    if (!user?.email) return
+    const me = members.find(m => m.email === user.email)
+    if (me?.is_admin) setIsAdmin(true)
+  }, [user, members])
 
   // マイルストーン取得
   const loadMilestones = useCallback(async () => {
