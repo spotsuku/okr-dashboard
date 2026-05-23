@@ -22,6 +22,7 @@ import LandingPage from './LandingPage'
 import Dashboard from './Dashboard'
 import CreateOrgModal from './CreateOrgModal'
 import OrgIconBar from './OrgIconBar'
+import Icon from './Icon'
 
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 const DEMO_GUEST_EMAIL    = process.env.NEXT_PUBLIC_DEMO_GUEST_EMAIL    || 'guest@demo.local'
@@ -155,7 +156,7 @@ function FullPageError({ text }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     }}>
       <div style={{ maxWidth: 480, textAlign: 'center', fontFamily: 'sans-serif' }}>
-        <div style={{ fontSize: 28, marginBottom: 8 }}>⚠️</div>
+        <div style={{ marginBottom: 8 }}><Icon name="alert" size={28} /></div>
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>エラー</div>
         <div style={{ fontSize: 13, color: '#9ca3af' }}>{text}</div>
       </div>
@@ -172,7 +173,7 @@ function NoOrgScreen({ email }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     }}>
       <div style={{ maxWidth: 480, textAlign: 'center', fontFamily: 'sans-serif' }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>🏢</div>
+        <div style={{ marginBottom: 12 }}><Icon name="building" size={32} /></div>
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>所属組織がありません</div>
         <div style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, marginBottom: 20 }}>
           {email} は現在どの組織にも所属していません。<br />
@@ -182,7 +183,8 @@ function NoOrgScreen({ email }) {
           <button onClick={() => setCreateOpen(true)} style={{
             padding: '10px 20px', borderRadius: 8, background: '#4d9fff', color: '#fff',
             border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-          }}>＋ 新しい組織を作成</button>
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}><Icon name="plus" size={15} /> 新しい組織を作成</button>
           <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }} style={{
             padding: '10px 18px', borderRadius: 8, background: '#374151', color: '#fff',
             border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,

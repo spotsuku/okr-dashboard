@@ -2,8 +2,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLicense } from '../lib/license/licenseContext'
 import { useCurrentOrg } from '../lib/orgContext'
-import { TYPO, SPACING, RADIUS } from '../lib/themeTokens'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { btnPrimary, btnGhost, inputStyle, accentRingStyle } from '../lib/iosStyles'
+import Icon from './Icon'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LicenseGate (SaaS化 Phase 5)
@@ -159,13 +160,13 @@ export default function LicenseGate({ T, myEmail }) {
         width: '100%',
         maxWidth: 480,
         padding: SPACING['2xl'],
-        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        boxShadow: SHADOWS.xl,
         color: T.text,
         fontFamily: 'inherit',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.lg }}>
           <div style={accentRingStyle({ color: T.accent, size: 44 })}>
-            <span style={{ fontSize: 20 }}>🔑</span>
+            <Icon name="alert" size={20} />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ ...TYPO.title2, color: T.text }}>
@@ -201,8 +202,8 @@ export default function LicenseGate({ T, myEmail }) {
               }}
             />
             {errorMsg && (
-              <div style={{ ...TYPO.footnote, color: T.danger, marginTop: SPACING.sm }}>
-                ⚠ {errorMsg}
+              <div style={{ ...TYPO.footnote, color: T.danger, marginTop: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                <Icon name="alert" size={12} /> {errorMsg}
               </div>
             )}
             <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.lg, flexWrap: 'wrap' }}>
@@ -221,8 +222,9 @@ export default function LicenseGate({ T, myEmail }) {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                gap: SPACING.xs,
               }}>
-                myAI で購入 ↗
+                myAI で購入 <Icon name="external" size={13} />
               </a>
             </div>
           </>
@@ -235,8 +237,9 @@ export default function LicenseGate({ T, myEmail }) {
             justifyContent: 'center',
             width: '100%',
             marginBottom: SPACING.sm,
+            gap: SPACING.xs,
           }}>
-            myAI を見る ↗
+            myAI を見る <Icon name="external" size={13} />
           </a>
         )}
 
