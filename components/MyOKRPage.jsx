@@ -657,6 +657,11 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || user?.email || ''
+  // 週次+個人ビュー: 左のメンバー一覧で選んだ人の OKR を表示する (null=自分)。
+  // 年間+個人と同じ「メンバーを選ぶ → その人の OKR」UX に揃える。
+  const [selectedMember, setSelectedMember] = useState(null)
+  const viewName = selectedMember || myName
+  const viewMember = members.find(m => m.name === viewName) || myMember
 
   const [objectives, setObjectives] = useState([])
   const [keyResults, setKeyResults] = useState([])
@@ -710,7 +715,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const selectedWeek = weekMode === 'next' ? nextWeek : currentWeek
 
   useEffect(() => {
-    if (!myName) return
+    if (!viewName) return
     const load = async () => {
       setLoading(true)
       // 今週と翌週のみを対象とする (週次MTG の内容を引用するビュー)
@@ -720,10 +725,10 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
       // ① 自分がOwner/KR担当/KA担当のデータを並行取得
       const [{ data: myObjs }, { data: myKRs }, { data: myKAs }, { data: myAssignedTasks }] = await Promise.all([
-        supabase.from('objectives').select('id,title,level_id,period,owner,archived_at').eq('owner', myName).order('period').range(0, 49999).then(r => ({ ...r, data: (r.data || []).filter(o => !o.archived_at) })),
-        supabase.from('key_results').select('*').eq('owner', myName).range(0, 49999),
-        supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done').in('week_start', weeksToLoad).range(0, 49999),
-        supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).range(0, 49999),
+        supabase.from('objectives').select('id,title,level_id,period,owner,archived_at').eq('owner', viewName).order('period').range(0, 49999).then(r => ({ ...r, data: (r.data || []).filter(o => !o.archived_at) })),
+        supabase.from('key_results').select('*').eq('owner', viewName).range(0, 49999),
+        supabase.from('weekly_reports').select('*').eq('owner', viewName).neq('status', 'done').in('week_start', weeksToLoad).range(0, 49999),
+        supabase.from('ka_tasks').select('*').eq('assignee', viewName).eq('done', false).range(0, 49999),
       ])
       // ★ 年度フィルタを適用
       const filterByFY = (objs) => (objs || []).filter(o => {
@@ -822,14 +827,13 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       setLoading(false)
     }
     load()
-  }, [myName, fiscalYear, currentWeek, selectedWeek])
+  }, [viewName, fiscalYear, currentWeek, selectedWeek])
 
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
   const visibleObjs = objectives.filter(o => {
     if (activePeriod !== 'all' && rawPeriod(o.period) !== activePeriod) return false
-    if (activeLevelId && Number(o.level_id) !== Number(activeLevelId)) return false
     return true
   })
 
@@ -848,7 +852,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       kr_id: kr.id,
       kr_title: kr.title,
       ka_title: '新しいKA',
-      owner: myName || '',
+      owner: viewName || '',
       status: 'normal',
     }
     // sort_order 付きで試し、カラムが無ければフォールバック
@@ -928,21 +932,21 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       }}>
-        {/* ユーザーアバター（画像 or イニシャル） */}
-        {myMember?.avatar_url ? (
+        {/* ユーザーアバター（閲覧中メンバーの画像 or イニシャル） */}
+        {viewMember?.avatar_url ? (
           <img
-            src={myMember.avatar_url}
-            alt={myName}
-            style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover', border:`2px solid ${avatarColor(myName)}60`, flexShrink:0 }}
+            src={viewMember.avatar_url}
+            alt={viewName}
+            style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover', border:`2px solid ${avatarColor(viewName)}60`, flexShrink:0 }}
           />
         ) : (
-          <div style={{ width:36, height:36, borderRadius:'50%', background:`${avatarColor(myName)}25`, border:`2px solid ${avatarColor(myName)}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:TYPO.headline.fontSize, fontWeight:700, color:avatarColor(myName), flexShrink:0 }}>
-            {myName.slice(0,2)}
+          <div style={{ width:36, height:36, borderRadius:'50%', background:`${avatarColor(viewName)}25`, border:`2px solid ${avatarColor(viewName)}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:TYPO.headline.fontSize, fontWeight:700, color:avatarColor(viewName), flexShrink:0 }}>
+            {viewName.slice(0,2)}
           </div>
         )}
         <div>
-          <div style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted, marginBottom:1 }}>{myMember?.role || 'メンバー'}</div>
-          <div style={{ fontSize:TYPO.title3.fontSize, fontWeight:700 }}>{myName} のOKR</div>
+          <div style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted, marginBottom:1 }}>{viewMember?.role || 'メンバー'}</div>
+          <div style={{ fontSize:TYPO.title3.fontSize, fontWeight:700 }}>{viewName} のOKR</div>
         </div>
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:SPACING.sm }}>
           <div style={{ fontSize:TYPO.footnote.fontSize, fontWeight:700, padding:'3px 10px', borderRadius:RADIUS.pill, background: fiscalYear==='2026'?wT().infoBg:wT().warnBg, color: fiscalYear==='2026'?wT().info:wT().warn, border:`1px solid ${fiscalYear==='2026'?`${wT().info}4d`:`${wT().warn}4d`}`, display:'inline-flex', alignItems:'center', gap:5 }}>
@@ -986,14 +990,28 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* 組織図サイドバー */}
+        {/* メンバー一覧サイドバー (選択した人の OKR を表示。年間+個人と同じUX) */}
         {!isMobile && (
-          <div style={{ width: isTablet ? 120 : 155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
-            <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>部署</div>
-            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', paddingLeft:!activeLevelId?5:8, borderRadius:RADIUS.xs, cursor:'pointer', marginBottom:2, borderLeft:`3px solid ${!activeLevelId?wT().accent:'transparent'}`, background:!activeLevelId?wT().accentBg:'transparent', color:!activeLevelId?wT().accentText:wT().textSub }}>
-              <Icon name="building" size={12} /><span style={{ fontSize:TYPO.footnote.fontSize, flex:1, fontWeight:!activeLevelId?700:500 }}>全部署</span>
-            </div>
-            {roots.map(r=>renderSb(r,0))}
+          <div style={{ width: isTablet ? 150 : 190, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
+            <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>メンバー</div>
+            {(members || []).map(m => {
+              const active = m.name === viewName
+              return (
+                <div key={m.id} onClick={()=>{ setSelectedMember(m.name); setActiveObjId(null) }}
+                  style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', borderRadius:RADIUS.sm, cursor:'pointer', marginBottom:2,
+                    background: active?wT().navActiveBg:'transparent', border: active?`1px solid ${wT().accent}`:'1px solid transparent', transition:'all 0.15s' }}>
+                  {m.avatar_url ? (
+                    <img src={m.avatar_url} alt={m.name} style={{ width:24, height:24, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+                  ) : (
+                    <div style={{ width:24, height:24, borderRadius:'50%', background:`${avatarColor(m.name)}25`, border:`1.5px solid ${avatarColor(m.name)}50`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:avatarColor(m.name), flexShrink:0 }}>{m.name.slice(0,2)}</div>
+                  )}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:TYPO.footnote.fontSize, fontWeight: active?700:500, color: active?wT().navActiveText:wT().text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name}</div>
+                    {m.role && <div style={{ fontSize:9, color:wT().textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.role}</div>}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -1093,7 +1111,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                       (r.good ? ` Good:${r.good}` : '') +
                       (r.more ? ` More:${r.more}` : '')
                     ).join('\n')
-                    const msg = `${myName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
+                    const msg = `${viewName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
                     onAIFeedback(msg)
                   }} style={{ display:'flex', alignItems:'center', gap:SPACING.sm+2, width:'100%', padding:'12px 14px', borderRadius:RADIUS.md, border:'1px solid rgba(37,99,235,.18)', background:'linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))', cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}
                     onMouseEnter={e=>e.currentTarget.style.background='linear-gradient(135deg, rgba(37,99,235,.11), rgba(34,211,238,.11))'}
