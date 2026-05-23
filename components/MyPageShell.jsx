@@ -196,8 +196,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   // 全社サマリーと個人モードでタブ構成が違うため、モード切替で隠れるタブに
   // いる場合は dashboard にフォールバック。
   useEffect(() => {
-    const summaryOnly = ['strategy', 'milestone']
-    // okr_edit はヘッダーナビへ移動したため全社サマリーでは非表示 → 個人モード扱い
+    const summaryOnly = ['strategy', 'milestone', 'team_summary']
+    // 個人モードのみのタブ (全社サマリーでは非表示)。連携はタブから外したが
+    // ?tab=integrations 等で開いた場合に全社モードへ切替えたら dashboard へ戻す。
     const individualOnly = ['okr_edit', 'calendar', 'drive', 'coo', 'retrospect', 'integrations']
     if (summaryMode && individualOnly.includes(activeTab)) setActiveTab('dashboard')
     if (!summaryMode && summaryOnly.includes(activeTab)) setActiveTab('dashboard')
@@ -630,43 +631,56 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             padding: 3, borderRadius: 11,
           }}>
           {(() => {
-            // 全社サマリーのタブは 2 グループ構成:
-            //   [全社]      ダッシュボード / 経営戦略 / マイルストーン  (初期表示・経営レベル)
-            //   [チーム機能] チームサマリー / 共有・確認 / タスク / メール (無料期間は公開だが「オプション」)
-            // OKR はヘッダーナビに集約したため全社サマリーからは除外 (summary:false / individual のみ)。
-            // 個人モードでは個人依存タブ (カレンダー/ドライブ/MyCOO/振り返り/連携) を追加表示。
-            // SaaS 化 Phase C: requiresFlag が指定されたタブは
-            //   currentOrg.enabled_modules[flag] が true のときだけ表示。
-            //   neo-fukuoka は grandfathered で全モジュール ON なので変化なし。
-            const allTabs = [
-              // ── 全社グループ (経営レベル / 初期表示・無料期間は常に公開) ──
-              { key: 'dashboard',    icon: 'chart', label: 'ダッシュボード', summary: true,  individual: true,  group: 'company' },
-              { key: 'strategy',     icon: 'cmd', label: '経営戦略',       summary: true,  individual: false, group: 'company' },
-              { key: 'milestone',    icon: 'flag', label: 'マイルストーン', summary: true,  individual: false, group: 'company' },
-              // ── チーム機能グループ (無料期間は公開・オプション) ──
-              { key: 'team_summary', icon: 'note', label: 'チームサマリー', summary: true,  individual: false, group: 'team' },
-              { key: 'confirm',      icon: 'bell', label: '共有・確認',     summary: true,  individual: true,  group: 'team' },
-              { key: 'wbs',          icon: 'calendar', label: 'タスク',         summary: true,  individual: true,  group: 'team' },
-              { key: 'mail',         icon: 'mail', label: 'メール',         summary: true,  individual: true,  group: 'team', requiresFlag: 'google_integration' },
-              // ── OKR: ヘッダーナビに移動済 (個人モードのみ残す) ──
-              { key: 'okr_edit',     icon: 'target', label: 'OKR',            summary: false, individual: true  },
-              // ── 個人モード専用 (全社では非表示) ──
-              { key: 'calendar',     icon: 'calendar', label: 'カレンダー',     summary: false, individual: true,  requiresFlag: 'google_integration' },
-              { key: 'drive',        icon: 'drive', label: 'ドライブ',       summary: false, individual: true,  requiresFlag: 'google_integration' },
-              { key: 'coo',          icon: 'ai', label: 'MyCOO',          summary: false, individual: true,  requiresFlag: 'coo_knowledge' },
-              { key: 'retrospect',   icon: 'msg', label: '振り返り',       summary: false, individual: true },
-              { key: 'integrations', icon: 'link', label: '連携',           summary: false, individual: true },
+            // タブ構成はモードで異なる:
+            //   [全社サマリー] 全社グループ(ダッシュボード/経営戦略/マイルストーン)
+            //                  + チーム機能グループ(チームサマリー/共有・確認/タスク/メール)
+            //   [個人(マイページ)] 個人グループ(ダッシュボード/タスク/メール/OKR/振り返り
+            //                      /カレンダー/ドライブ/MyCOO) + チーム機能グループ(共有・確認)
+            // 連携は一度きりの設定のためタブには出さない (?tab=integrations や設定から到達)。
+            // OKR はヘッダーナビにもあるが、個人モードでは編集導線として残す。
+            // requiresFlag は currentOrg.enabled_modules[flag] が true のときだけ表示。
+            const META = {
+              dashboard:    { icon: 'chart',    label: 'ダッシュボード' },
+              strategy:     { icon: 'cmd',      label: '経営戦略' },
+              milestone:    { icon: 'flag',     label: 'マイルストーン' },
+              team_summary: { icon: 'note',     label: 'チームサマリー' },
+              confirm:      { icon: 'bell',     label: '共有・確認' },
+              wbs:          { icon: 'calendar', label: 'タスク' },
+              mail:         { icon: 'mail',     label: 'メール', requiresFlag: 'google_integration' },
+              okr_edit:     { icon: 'target',   label: 'OKR' },
+              retrospect:   { icon: 'msg',      label: '振り返り' },
+              calendar:     { icon: 'calendar', label: 'カレンダー', requiresFlag: 'google_integration' },
+              drive:        { icon: 'drive',    label: 'ドライブ',   requiresFlag: 'google_integration' },
+              coo:          { icon: 'ai',       label: 'MyCOO',     requiresFlag: 'coo_knowledge' },
+            }
+            const summaryOrder = [
+              { key: 'dashboard',    group: 'company' },
+              { key: 'strategy',     group: 'company' },
+              { key: 'milestone',    group: 'company' },
+              { key: 'team_summary', group: 'team' },
+              { key: 'confirm',      group: 'team' },
+              { key: 'wbs',          group: 'team' },
+              { key: 'mail',         group: 'team' },
             ]
-            return allTabs.filter(t => {
-              if (!(summaryMode ? t.summary : t.individual)) return false
-              if (t.requiresFlag && !enabledModules?.[t.requiresFlag]) return false
-              return true
-            })
+            const individualOrder = [
+              { key: 'dashboard',  group: 'main' },
+              { key: 'wbs',        group: 'main' },
+              { key: 'mail',       group: 'main' },
+              { key: 'okr_edit',   group: 'main' },
+              { key: 'retrospect', group: 'main' },
+              { key: 'calendar',   group: 'main' },
+              { key: 'drive',      group: 'main' },
+              { key: 'coo',        group: 'main' },
+              { key: 'confirm',    group: 'team' },
+            ]
+            return (summaryMode ? summaryOrder : individualOrder)
+              .map(t => ({ ...t, ...META[t.key] }))
+              .filter(t => !t.requiresFlag || enabledModules?.[t.requiresFlag])
           })().map((t, idx, arr) => {
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
             const active = activeTab === t.key
-            // 全社モードのみ: チーム機能グループの先頭で区切り + 「チーム機能（オプション）」ラベルを挿入
-            const showGroupLabel = summaryMode && t.group === 'team' && (idx === 0 || arr[idx - 1]?.group !== 'team')
+            // チーム機能グループの先頭で区切り + 「チーム機能（オプション）」ラベルを挿入 (両モード)
+            const showGroupLabel = t.group === 'team' && (idx === 0 || arr[idx - 1]?.group !== 'team')
             return (
               <Fragment key={t.key}>
                 {showGroupLabel && (
