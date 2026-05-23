@@ -2466,7 +2466,7 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
   return (
     <div style={{ background: T.bgSection, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 18 }}>{team?.icon || '🤝'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={team?.icon} size={18} fallback="handshake" /></span>
         <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{team?.name}</div>
         {kaCount > 0 && (
           <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
@@ -3162,7 +3162,7 @@ function TeamSummaryCard({ T, teamData, members, weekStart }) {
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '22px 26px' }}>
       {/* ヘッダー: チーム名 + 担当者リスト */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 24 }}>{team?.icon || '🤝'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={team?.icon} size={24} fallback="handshake" /></span>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{team?.name}</div>
         <span style={{
           padding: '3px 10px', borderRadius: 99, background: `${T.accent}18`,
@@ -3393,7 +3393,7 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
 
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14 }}>{team?.icon || '🏢'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={team?.icon} size={14} fallback="building" /></span>
         <strong style={{ color: T.textSub, fontWeight: 700 }}>{team?.name}</strong>
         <span>›</span>
         <span style={{ color: T.textSub }}>{objective?.title}</span>
@@ -3636,7 +3636,7 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
 
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span>{level?.icon || '🏢'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={level?.icon} size={14} fallback="building" /></span>
         <strong style={{ color: T.textSub }}>{level?.name}</strong>
         <span>›</span>
         <span style={{ color: T.textSub }}>{objective?.title}</span>
