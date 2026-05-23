@@ -5,6 +5,7 @@ import KASection from './KASection'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, GLASS } from '../lib/themeTokens'
 import { btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
+import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 
 // 担当チップ (.ot.ow) [厳守] — 18×18 グラデアバター + 名前
 function OwnerChip({ t, name, mono = false }) {
@@ -59,20 +60,10 @@ let _t = THEMES.dark
 const T = () => _t
 
 // 進捗率に応じた色 (4 段階): 0-29 danger / 30-59 warn / 60-99 success / 100+ accent
-function progressColor(t, pct) {
-  if (pct >= 100) return t.accent
-  if (pct >= 60)  return t.success
-  if (pct >= 30)  return t.warn
-  return t.danger
-}
+function progressColor(t, pct) { return okrPctColor(t, pct) }
 
 // 進捗率に応じた淡背景 (pill 用)
-function progStatusBg(t, pct) {
-  if (pct >= 100) return t.accentBg
-  if (pct >= 60)  return t.successBg
-  if (pct >= 30)  return t.warnBg
-  return t.dangerBg
-}
+function progStatusBg(t, pct) { return okrPctColorBg(t, pct) }
 
 function calcObjProgress(krs) {
   if (!krs?.length) return 0

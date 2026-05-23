@@ -12,6 +12,7 @@ import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 import Icon, { DataIcon } from './Icon'
+import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 
 // 会議ごとのアイコン (SVG・currentColor を継承)
 const Ico = ({ size=22, children }) => (
@@ -76,12 +77,7 @@ function statusCfg(key, T) {
 const STATUS_ORDER = ['normal','focus','good','more','done']
 
 // 達成率 % → 4 段階の状態色 (0-29 danger / 30-59 warn / 60-99 success / 100+ accent)
-function pctColorOf(pct, T) {
-  if (pct >= 100) return T.accent
-  if (pct >= 60)  return T.success
-  if (pct >= 30)  return T.warn
-  return T.danger
-}
+function pctColorOf(pct, T) { return okrPctColor(T, pct) }
 
 function getPeriodLabel(periodKey) {
   if (!periodKey) return ''
