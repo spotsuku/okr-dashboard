@@ -145,9 +145,9 @@ function PeriodInput({ value, onChange }) {
 // 定数
 // ══════════════════════════════════════════════════
 const STATUS_OPTS = [
-  { value: 'active',    label: '🔵 現役',     bg: 'rgba(93,202,165,0.15)',  color: '#5DCAA5', border: 'rgba(93,202,165,0.3)' },
-  { value: 'expanding', label: '🟡 拡充中',   bg: 'rgba(240,153,123,0.15)', color: '#F0997B', border: 'rgba(240,153,123,0.3)' },
-  { value: 'future',    label: '🟣 追加予定', bg: 'rgba(176,186,200,0.15)', color: '#B0BAC8', border: 'rgba(176,186,200,0.3)' },
+  { value: 'active',    label: '現役',     bg: 'rgba(93,202,165,0.15)',  color: '#5DCAA5', border: 'rgba(93,202,165,0.3)' },
+  { value: 'expanding', label: '拡充中',   bg: 'rgba(240,153,123,0.15)', color: '#F0997B', border: 'rgba(240,153,123,0.3)' },
+  { value: 'future',    label: '追加予定', bg: 'rgba(176,186,200,0.15)', color: '#B0BAC8', border: 'rgba(176,186,200,0.3)' },
 ]
 const EMP_BADGE = {
   '業務委託':        { bg: 'rgba(93,202,165,0.15)',  color: '#5DCAA5' },
@@ -649,13 +649,13 @@ function ConfirmationsWebhookPanel({ currentUser }) {
         const j = await r.json().catch(() => ({}))
         if (aborted) return
         if (!r.ok) {
-          setMessage('❌ 取得失敗: ' + (j.error || `HTTP ${r.status}`))
+          setMessage('取得失敗: ' + (j.error || `HTTP ${r.status}`))
           return
         }
         const v = j.url || ''
         setUrl(v); setInitialUrl(v)
       })
-      .catch(e => { if (!aborted) setMessage('❌ 取得失敗: ' + (e.message || String(e))) })
+      .catch(e => { if (!aborted) setMessage('取得失敗: ' + (e.message || String(e))) })
       .finally(() => { if (!aborted) setLoading(false) })
     return () => { aborted = true }
   }, [currentOrg?.id])
@@ -679,7 +679,7 @@ function ConfirmationsWebhookPanel({ currentUser }) {
       const j = await r.json().catch(() => ({}))
       if (!r.ok) {
         setSaving(false)
-        setMessage('❌ 保存失敗: ' + (j.error || `HTTP ${r.status}`))
+        setMessage('保存失敗: ' + (j.error || `HTTP ${r.status}`))
         return
       }
       // 二重確認: 即座に GET で再取得し、DB に確実に書き込まれたかを検証
@@ -688,19 +688,19 @@ function ConfirmationsWebhookPanel({ currentUser }) {
       const vj = await vr.json().catch(() => ({}))
       setSaving(false)
       if (!vr.ok) {
-        setMessage('❌ 検証失敗: ' + (vj.error || `HTTP ${vr.status}`))
+        setMessage('検証失敗: ' + (vj.error || `HTTP ${vr.status}`))
         return
       }
       const stored = vj.url || ''
       setUrl(stored); setInitialUrl(stored)
       if (stored === (url || '')) {
-        setMessage(stored ? '✅ 保存しました (DB反映確認済)' : '✅ 設定を解除しました')
+        setMessage(stored ? '保存しました (DB反映確認済)' : '設定を解除しました')
       } else {
-        setMessage(`⚠️ 保存処理は完了したが DB の値 (「${stored || '(空)'}」) が入力値と一致しません。ブラウザキャッシュをハードリロード (Cmd+Shift+R / Ctrl+Shift+R) してください`)
+        setMessage(`保存処理は完了したが DB の値 (「${stored || '(空)'}」) が入力値と一致しません。ブラウザキャッシュをハードリロード (Cmd+Shift+R / Ctrl+Shift+R) してください`)
       }
     } catch (e) {
       setSaving(false)
-      setMessage('❌ 保存失敗: ' + (e.message || String(e)))
+      setMessage('保存失敗: ' + (e.message || String(e)))
     }
   }
 
@@ -713,14 +713,14 @@ function ConfirmationsWebhookPanel({ currentUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url,
-          text: `✅ テスト通知: 共有・確認事項チャンネルへのSlack通知が正常に動作しています (${currentOrg?.name || ''})`,
+          text: `テスト通知: 共有・確認事項チャンネルへのSlack通知が正常に動作しています (${currentOrg?.name || ''})`,
         }),
       })
       const j = await r.json().catch(() => ({}))
-      setMessage(r.ok ? '✅ テスト通知を送信しました (Slackで確認してください)'
-                     : `❌ テスト送信失敗: ${j.error || `HTTP ${r.status}`}`)
+      setMessage(r.ok ? 'テスト通知を送信しました (Slackで確認してください)'
+                     : `テスト送信失敗: ${j.error || `HTTP ${r.status}`}`)
     } catch (e) {
-      setMessage('❌ テスト送信失敗: ' + (e.message || String(e)))
+      setMessage('テスト送信失敗: ' + (e.message || String(e)))
     } finally {
       setTesting(false)
     }
