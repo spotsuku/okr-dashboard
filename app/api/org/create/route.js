@@ -67,11 +67,12 @@ export async function POST(request) {
       .single()
     if (orgErr) return json({ error: '組織作成失敗: ' + orgErr.message }, { status: 500 })
 
-    // 3) members upsert (owner)
+    // 3) この組織用の member 行を作成 (members は per-org 行。同一人物でも組織ごとに別行を持つ)
     let memberId
-    const { data: existing } = await sb.from('members').select('id').eq('email', owner_email).maybeSingle()
-    if (existing) {
-      memberId = existing.id
+    const { data: existingInOrg } = await sb.from('members')
+      .select('id').eq('email', owner_email).eq('organization_id', org.id).maybeSingle()
+    if (existingInOrg) {
+      memberId = existingInOrg.id
     } else {
       const { data: ins, error: mErr } = await sb.from('members')
         .insert({
@@ -82,11 +83,18 @@ export async function POST(request) {
         })
         .select('id').single()
       if (mErr) {
-        // ロールバック (organizations 削除)
-        await sb.from('organizations').delete().eq('id', org.id)
-        return json({ error: 'オーナー member 作成失敗: ' + mErr.message }, { status: 500 })
+        // 旧グローバル一意制約 (members_email_lower_uniq) が残る環境向けフォールバック:
+        // supabase_org_member_peruser.sql 適用後はこの分岐に入らない。
+        const { data: anyExisting } = await sb.from('members').select('id').eq('email', owner_email).maybeSingle()
+        if (anyExisting) {
+          memberId = anyExisting.id
+        } else {
+          await sb.from('organizations').delete().eq('id', org.id)
+          return json({ error: 'オーナー member 作成失敗: ' + mErr.message }, { status: 500 })
+        }
+      } else {
+        memberId = ins.id
       }
-      memberId = ins.id
     }
 
     // 4) organization_members に owner として追加 (新規組織なので is_default=true)
@@ -103,7 +111,7 @@ export async function POST(request) {
     //    「組織を管理」画面で手動追加できるため致命的でない)
     const { error: lvlErr } = await sb.from('levels').insert({
       name: '全社',
-      icon: '🏢',
+      icon: 'building',
       parent_id: null,
       color: '#4d9fff',
       fiscal_year: fiscal_year_default,
