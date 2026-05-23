@@ -801,14 +801,14 @@ function Avatar({ name, size = 36, avatar_url }) {
   if (avatar_url) {
     return (
       <img src={avatar_url} alt={name || ''} style={{
-        width: size, height: size, borderRadius: Math.round(size * 0.28),
+        width: size, height: size, borderRadius: '50%',
         objectFit: 'cover', border: `1.5px solid ${avatarColor(name)}60`, flexShrink: 0
       }} />
     )
   }
   const color = avatarColor(name)
   return (
-    <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.28), background: `${color}28`, border: `1.5px solid ${color}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.42, fontWeight: 800, color, flexShrink: 0 }}>
+    <div style={{ width: size, height: size, borderRadius: '50%', background: `${color}28`, border: `1.5px solid ${color}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.42, fontWeight: 800, color, flexShrink: 0 }}>
       {name ? name[0] : '?'}
     </div>
   )
@@ -1579,8 +1579,9 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
         const color = getDeptColor(dept)
         return (
           <div key={dept} style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '8px 14px', background: `${color}12`, border: `1px solid ${color}55`, borderRadius: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color }}>{dept}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '8px 14px', background: 'linear-gradient(120deg, rgba(37,99,235,.08), rgba(34,211,238,.05))', border: `1px solid ${T().border}`, borderRadius: 8 }}>
+              <span style={{ width: 22, height: 22, borderRadius: 6, background: `linear-gradient(135deg, ${color}, ${color}c0)`, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon name="building" size={13} /></span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: T().text }}>{dept}</span>
             </div>
             {Object.entries(teams).map(([team, teamTasks]) => {
               const isAddingHere = addingTeam?.dept === dept && addingTeam?.team === team
