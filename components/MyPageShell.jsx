@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
-import { COMMON_TOKENS, RADIUS } from '../lib/themeTokens'
+import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
 import { cardStyle, sectionHeaderStyle } from '../lib/iosStyles'
 import Icon from './Icon'
 import { SegmentedControl, EmptyState } from './iosUI'
@@ -135,9 +135,9 @@ function SummaryPlaceholder({ T, title, note }) {
         padding: '28px 32px', borderRadius: 14,
         border: `1px dashed ${T.borderMid}`, background: T.sectionBg,
       }}>
-        <div style={{ fontSize: 30, marginBottom: 10 }}>🚧</div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 6 }}>{title}</div>
-        <div style={{ fontSize: 12, color: T.textMuted }}>{note}</div>
+        <div style={{ marginBottom: SPACING.sm, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="tools" size={30} /></div>
+        <div style={{ ...TYPO.title3, fontSize: 15, color: T.text, marginBottom: SPACING.xs }}>{title}</div>
+        <div style={{ ...TYPO.subhead, color: T.textMuted }}>{note}</div>
       </div>
     </div>
   )
@@ -346,7 +346,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
         flexShrink: 0, transition: 'width 0.18s ease',
         ...(isMobile ? {
           position: 'fixed', top: 0, bottom: 0, left: 0, zIndex: 50,
-          boxShadow: '4px 0 18px rgba(0,0,0,0.35)',
+          boxShadow: SHADOWS.lg,
         } : {}),
       }}>
         {/* サイドバーヘッダー */}
@@ -367,7 +367,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub,
               padding: '3px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
             }}
-          >{isMobile ? '✕' : (collapsed ? '»' : '«')}</button>
+          >{isMobile ? <Icon name="cross" size={11} /> : (collapsed ? '»' : '«')}</button>
         </div>
 
         {/* 検索 */}
@@ -375,7 +375,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           <div style={{ padding: '8px 10px', borderBottom: `1px solid ${T.border}` }}>
             <input
               type="text"
-              placeholder="🔍 名前で検索"
+              placeholder="名前で検索"
               value={memberSearch}
               onChange={e => setMemberSearch(e.target.value)}
               style={{
@@ -409,7 +409,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 color: summaryMode ? '#fff' : T.textSub,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 13, fontWeight: 700,
-              }}>📊</div>
+              }}><Icon name="chart" size={14} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontSize: 12, fontWeight: 700,
@@ -443,7 +443,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 color: summaryMode ? '#fff' : T.textSub,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 14,
-              }}>📊</div>
+              }}><Icon name="chart" size={15} /></div>
             </button>
           )}
 
@@ -595,7 +595,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 color: T.text, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit',
               }}
               title="メンバー一覧"
-            >☰</button>
+            ><Icon name="workspace" size={16} /></button>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 6,
               fontSize: 12, color: T.text, flex: 1, overflow: 'hidden',
@@ -637,20 +637,20 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             //   currentOrg.enabled_modules[flag] が true のときだけ表示。
             //   neo-fukuoka は grandfathered で全モジュール ON なので変化なし。
             const allTabs = [
-              { key: 'dashboard',    icon: '📊', label: 'ダッシュボード', summary: true,  individual: true  },
-              { key: 'strategy',     icon: '🧭', label: '経営戦略',       summary: true,  individual: false, requiresFlag: 'okr_full' },
-              { key: 'team_summary', icon: '📋', label: 'チームサマリー', summary: true,  individual: false },
-              { key: 'confirm',      icon: '📢', label: '共有・確認',     summary: true,  individual: true  },
-              { key: 'wbs',          icon: '📅', label: 'タスク',         summary: true,  individual: true  },
-              { key: 'mail',         icon: '📧', label: 'メール',         summary: true,  individual: true,  requiresFlag: 'google_integration' },
-              { key: 'milestone',    icon: '🚩', label: 'マイルストーン', summary: true,  individual: false, requiresFlag: 'milestones' },
-              { key: 'okr_edit',     icon: '🎯', label: 'OKR',            summary: true,  individual: true  },
+              { key: 'dashboard',    icon: 'chart', label: 'ダッシュボード', summary: true,  individual: true  },
+              { key: 'strategy',     icon: 'cmd', label: '経営戦略',       summary: true,  individual: false, requiresFlag: 'okr_full' },
+              { key: 'team_summary', icon: 'note', label: 'チームサマリー', summary: true,  individual: false },
+              { key: 'confirm',      icon: 'bell', label: '共有・確認',     summary: true,  individual: true  },
+              { key: 'wbs',          icon: 'calendar', label: 'タスク',         summary: true,  individual: true  },
+              { key: 'mail',         icon: 'mail', label: 'メール',         summary: true,  individual: true,  requiresFlag: 'google_integration' },
+              { key: 'milestone',    icon: 'flag', label: 'マイルストーン', summary: true,  individual: false, requiresFlag: 'milestones' },
+              { key: 'okr_edit',     icon: 'target', label: 'OKR',            summary: true,  individual: true  },
               // 個人モード専用 (全社では非表示)
-              { key: 'calendar',     icon: '📅', label: 'カレンダー',     summary: false, individual: true,  requiresFlag: 'google_integration' },
-              { key: 'drive',        icon: '📁', label: 'ドライブ',       summary: false, individual: true,  requiresFlag: 'google_integration' },
-              { key: 'coo',          icon: '🐸', label: 'MyCOO',          summary: false, individual: true,  requiresFlag: 'coo_knowledge' },
-              { key: 'retrospect',   icon: '💭', label: '振り返り',       summary: false, individual: true },
-              { key: 'integrations', icon: '🔌', label: '連携',           summary: false, individual: true },
+              { key: 'calendar',     icon: 'calendar', label: 'カレンダー',     summary: false, individual: true,  requiresFlag: 'google_integration' },
+              { key: 'drive',        icon: 'drive', label: 'ドライブ',       summary: false, individual: true,  requiresFlag: 'google_integration' },
+              { key: 'coo',          icon: 'ai', label: 'MyCOO',          summary: false, individual: true,  requiresFlag: 'coo_knowledge' },
+              { key: 'retrospect',   icon: 'msg', label: '振り返り',       summary: false, individual: true },
+              { key: 'integrations', icon: 'link', label: '連携',           summary: false, individual: true },
             ]
             return allTabs.filter(t => {
               if (!(summaryMode ? t.summary : t.individual)) return false
@@ -703,7 +703,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 padding: '2px 8px', borderRadius: 99,
                 background: isViewingSelf ? T.successBg : 'transparent',
               }}>
-                {isViewingSelf ? '✏️ 編集可' : '👁 閲覧のみ'}
+                {isViewingSelf ? <><Icon name="pencil" size={11} /> 編集可</> : <><Icon name="eye" size={11} /> 閲覧のみ</>}
               </span>
             </div>
           )}
@@ -1288,7 +1288,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       .gte('due_date', monday).lte('due_date', sunday)
 
     const items = (doneTasks || []).map(t => ({
-      kind: 'task', date: t.due_date, icon: '✅',
+      kind: 'task', date: t.due_date, icon: 'check',
       text: t.title || t.weekly_reports?.ka_title || '(無題)',
     }))
     items.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
@@ -1397,7 +1397,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         padding: isMobile ? '12px 16px' : '14px 20px',
         flexWrap: 'wrap',
-        background: 'rgba(255,255,255,0.65)',
+        background: T.sectionBg,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         borderBottom: `1px solid ${T.border}`,
@@ -1446,16 +1446,18 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               boxShadow: `0 2px 6px ${T.info}55, 0 1px 2px rgba(0,0,0,0.08)`,
               opacity: busy ? 0.6 : 1,
               letterSpacing: '0.01em',
-            }}>🌙 終業する</button>
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="clock" size={14} /> 終業する</button>
           )}
           {isViewingSelf && st === 'off' && (
             <div style={{
               fontSize: 12, color: T.success, padding: '6px 12px', fontWeight: 700,
               background: T.successBg, borderRadius: 99,
-            }}>お疲れさまでした 🎉</div>
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}>お疲れさまでした <Icon name="sparkle" size={12} /></div>
           )}
           <button onClick={() => setSettingsOpen(v => !v)} title="ウィジェットの表示設定" style={{
-            background: settingsOpen ? T.accentBg : 'rgba(120,120,128,0.12)',
+            background: settingsOpen ? T.accentBg : T.sectionBg,
             border: 'none', color: settingsOpen ? T.accent : T.textSub,
             borderRadius: 10, padding: '8px 10px',
             display: 'inline-flex', alignItems: 'center',
@@ -1492,11 +1494,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               <button onClick={loadTasks} title="再読み込み" style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
                 borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-              }}>↻</button>
+              }}><Icon name="refresh" size={11} /></button>
             }>
               {taskBoard.loading ? <Loading T={T} /> :
                 taskBoard.today.length === 0
-                  ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>✨ 今日のタスクはありません</div>
+                  ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sparkle" size={12} /> 今日のタスクはありません</div>
                   : <TaskList T={T} tasks={taskBoard.today} canEdit={isViewingSelf} onToggle={toggleTaskDone} showDue />}
             </Section>
           )}
@@ -1538,13 +1540,13 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
               borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-            }}>↻</button>
+            }}><Icon name="refresh" size={11} /></button>
           }>
             {reminders.loading ? <Loading T={T} /> : (() => {
               const items = [
-                ...reminders.missingKRs.map(kr => ({ icon: '🎯', sev: 'warn',
+                ...reminders.missingKRs.map(kr => ({ icon: 'target', sev: 'warn',
                   text: `KR「${truncate(kr.title, 28)}」未記入` })),
-                ...reminders.missingKAs.map(ka => ({ icon: '📋', sev: 'warn',
+                ...reminders.missingKAs.map(ka => ({ icon: 'note', sev: 'warn',
                   text: `KA「${truncate(ka.ka_title || ka.kr_title, 28)}」未記入` })),
               ]
               const krCount = reminders.missingKRs.length
@@ -1552,7 +1554,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <ReminderList T={T} items={items} maxVisible={3}
-                    emptyText="✨ 今週分はすべて記入済みです" />
+                    emptyText={<><Icon name="sparkle" size={12} /> 今週分はすべて記入済みです</>} />
                   {(krCount > 0 || kaCount > 0) && (
                     <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
                       {krCount > 0 && (
@@ -1563,7 +1565,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
                             borderRadius: 6, fontSize: 11, fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                          }}><Icon name="target" size={12} /> KR記入 ({krCount}) →</button>
+                          }}><Icon name="target" size={12} /> KR記入 ({krCount}) <Icon name="arrowRight" size={12} /></button>
                       )}
                       {kaCount > 0 && (
                         <button onClick={() => onOpenFocusFill && onOpenFocusFill('ka')}
@@ -1573,7 +1575,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
                             borderRadius: 6, fontSize: 11, fontWeight: 700,
                             cursor: 'pointer', fontFamily: 'inherit',
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                          }}><Icon name="check" size={12} /> KA記入 ({kaCount}) →</button>
+                          }}><Icon name="check" size={12} /> KA記入 ({kaCount}) <Icon name="arrowRight" size={12} /></button>
                       )}
                     </div>
                   )}
@@ -1582,7 +1584,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
                       background: 'transparent', border: `1px dashed ${T.borderMid}`,
                       color: T.textMuted, borderRadius: 6, padding: '4px 8px',
                       fontSize: 10, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                    }}>一覧で見る →</button>
+                      display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                    }}>一覧で見る <Icon name="arrowRight" size={11} /></button>
                 </div>
               )
             })()}
@@ -1615,15 +1618,15 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
     }}>
       <div style={{
         textAlign: 'center', padding: '40px 50px',
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
-        boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.xl,
+        boxShadow: SHADOWS.xl,
         maxWidth: 480, width: '100%',
       }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
           <Avatar member={viewingMember} size={64} />
         </div>
         <div style={{ fontSize: 22, fontWeight: 700, color: T.text, marginBottom: 4 }}>
-          {greet}、{viewingName}さん 👋
+          {greet}、{viewingName}さん
         </div>
         <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 30 }}>
           {dateStr} · 良い1日を始めましょう
@@ -1632,24 +1635,26 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
           onClick={onStart}
           disabled={busy}
           style={{
-            background: 'linear-gradient(135deg, #00d68f 0%, #4d9fff 100%)',
-            color: '#fff', border: 'none', borderRadius: 14,
+            background: `linear-gradient(135deg, ${T.success} 0%, ${T.info} 100%)`,
+            color: '#fff', border: 'none', borderRadius: RADIUS.lg,
             padding: '16px 48px', fontSize: 18, fontWeight: 800,
             cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
             opacity: busy ? 0.6 : 1, letterSpacing: 1,
-            boxShadow: '0 8px 24px rgba(0,214,143,0.35)',
+            boxShadow: SHADOWS.hover(T.success),
             transition: 'transform 0.1s',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
           }}
           onMouseEnter={e => !busy && (e.currentTarget.style.transform = 'translateY(-2px)')}
           onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
-        >☀️ 始業する</button>
+        ><Icon name="sun" size={18} /> 始業する</button>
         {weekday && (
           <div style={{
             marginTop: 20, padding: '8px 14px',
             background: T.accentBg, color: T.accent,
             borderRadius: 8, fontSize: 11, fontWeight: 600, lineHeight: 1.5,
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
           }}>
-            💡 平日は始業時に「今日やること」を最低1件 登録してから始業します
+            <Icon name="sparkle" size={12} /> 平日は始業時に「今日やること」を最低1件 登録してから始業します
           </div>
         )}
         <div style={{ marginTop: 14, fontSize: 10, color: T.textFaint }}>
@@ -1701,14 +1706,14 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
       zIndex: 9998, padding: 20,
     }}>
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.lg,
         padding: 22, width: '100%', maxWidth: 560, maxHeight: '90vh',
-        overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        overflowY: 'auto', boxShadow: SHADOWS.xl,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <Avatar member={viewingMember} size={42} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>☀️ 今日やること</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sun" size={16} /> 今日やること</div>
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
               {viewingName}さん、朝会でも使えるように今日やることを最低1件 登録してから始業してください
             </div>
@@ -1718,12 +1723,13 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
         <div style={{
           padding: '8px 12px', background: T.accentBg, color: T.accent,
           borderRadius: 6, fontSize: 11, marginBottom: 14, lineHeight: 1.5,
+          display: 'flex', alignItems: 'center', gap: SPACING.xs,
         }}>
-          💡 タスクタブと同じ登録機能です。OKR紐付けも可能です。
+          <Icon name="sparkle" size={12} /> タスクタブと同じ登録機能です。OKR紐付けも可能です。
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>
-          ✅ 本日({today})のタスク
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="check" size={13} /> 本日({today})のタスク
           <span style={{
             marginLeft: 8, padding: '1px 8px', borderRadius: 99,
             background: canStart ? T.successBg : T.warnBg,
@@ -1754,7 +1760,7 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
                 borderBottom: i < todayTasks.length - 1 ? `1px solid ${T.border}` : 'none',
                 fontSize: 12, color: T.text,
               }}>
-                <span style={{ fontSize: 14 }}>✅</span>
+                <span style={{ display: 'inline-flex', color: T.success }}><Icon name="check" size={14} /></span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {t.title}
                 </span>
@@ -1782,8 +1788,9 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
               background: 'transparent', border: `1px dashed ${T.warn}`,
               color: T.warn, fontSize: 12, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
             }}
-          >+ 📢 共有事項 (任意)</button>
+          >+ <Icon name="bell" size={13} /> 共有事項 (任意)</button>
           <button
             onClick={() => setComposeKind('confirmation')}
             style={{
@@ -1791,8 +1798,9 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
               background: 'transparent', border: `1px dashed ${T.accent}`,
               color: T.accent, fontSize: 12, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
             }}
-          >+ 📬 確認事項 (任意)</button>
+          >+ <Icon name="mail" size={13} /> 確認事項 (任意)</button>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1800,14 +1808,15 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
             onClick={onStart}
             disabled={busy || !canStart}
             style={{
-              background: canStart ? 'linear-gradient(135deg, #00d68f 0%, #4d9fff 100%)' : T.border,
-              color: '#fff', border: 'none', borderRadius: 10,
+              background: canStart ? `linear-gradient(135deg, ${T.success} 0%, ${T.info} 100%)` : T.border,
+              color: '#fff', border: 'none', borderRadius: RADIUS.md,
               padding: '12px 28px', fontSize: 14, fontWeight: 800,
               cursor: busy || !canStart ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit', opacity: busy ? 0.6 : 1,
-              boxShadow: canStart ? '0 4px 14px rgba(0,214,143,0.3)' : 'none',
+              boxShadow: canStart ? SHADOWS.hover(T.success) : 'none',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
             }}
-          >{busy ? '始業中…' : canStart ? '☀️ 始業する' : '⚠️ タスクを追加してください'}</button>
+          >{busy ? '始業中…' : canStart ? <><Icon name="sun" size={14} /> 始業する</> : <><Icon name="alert" size={14} /> タスクを追加してください</>}</button>
         </div>
       </div>
 
@@ -1844,19 +1853,19 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
 function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
   const groups = [
     { title: 'タスク', items: [
-      { key: 'today', label: '⚡ 今日やること' },
-      { key: 'week',  label: '📅 今週やること' },
+      { key: 'today', icon: 'bolt', label: '今日やること' },
+      { key: 'week',  icon: 'calendar', label: '今週やること' },
     ]},
     { title: '外部連携', items: [
-      { key: 'calendar', label: '📅 Google カレンダー' },
-      { key: 'gmail',    label: '📧 Gmail (重要メール)' },
+      { key: 'calendar', icon: 'calendar', label: 'Google カレンダー' },
+      { key: 'gmail',    icon: 'mail', label: 'Gmail (重要メール)' },
     ]},
     { title: 'ゴール / 成果', items: [
-      { key: 'goal_month_main',   label: '🌟 今月のメインテーマ' },
-      { key: 'goal_month_growth', label: '💪 今月の成長テーマ' },
-      { key: 'goal_week',         label: '🚀 今週のゴール' },
-      { key: 'team_summary',      label: '📊 今週のチームサマリー' },
-      { key: 'achievements',      label: '🏆 今週の成果' },
+      { key: 'goal_month_main',   icon: 'star', label: '今月のメインテーマ' },
+      { key: 'goal_month_growth', icon: 'target', label: '今月の成長テーマ' },
+      { key: 'goal_week',         icon: 'rocket', label: '今週のゴール' },
+      { key: 'team_summary',      icon: 'chart', label: '今週のチームサマリー' },
+      { key: 'achievements',      icon: 'trophy', label: '今週の成果' },
     ]},
   ]
   // ※ リマインダーBox (OKR/タスク/Googleカレンダー/Gmail/Slack/LINE) は常時表示
@@ -1867,27 +1876,28 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
       }} />
       <div style={{
         position: 'absolute', right: 16, top: '100%', marginTop: 8,
-        background: 'rgba(255,255,255,0.95)',
+        background: T.bgCard,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        borderRadius: 14,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.10), 0 24px 56px rgba(0,0,0,0.10)',
+        borderRadius: RADIUS.lg,
+        boxShadow: SHADOWS.xl,
         zIndex: 101, padding: 14, minWidth: 260, maxHeight: '70vh', overflowY: 'auto',
         border: `1px solid ${T.border}`,
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
-            ⚙️ 表示するウィジェット
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            <Icon name="settings" size={14} /> 表示するウィジェット
           </div>
           <button
             onClick={() => { if (window.confirm('初期状態に戻しますか?')) resetPrefs() }}
             title="全ての表示/非表示設定を初期値に戻す"
             style={{
-              background: 'rgba(120,120,128,0.12)', border: 'none',
+              background: T.sectionBg, border: 'none',
               color: T.textSub, borderRadius: 7, padding: '4px 10px',
               fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}
-          >↻ リセット</button>
+          ><Icon name="refresh" size={11} /> リセット</button>
         </div>
         {groups.map(g => (
           <div key={g.title} style={{ marginBottom: 12 }}>
@@ -1904,7 +1914,7 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
                 cursor: 'pointer', fontSize: 13, color: T.text,
                 borderBottom: i < g.items.length - 1 ? `0.5px solid ${T.border}` : 'none',
               }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
+                onMouseEnter={e => e.currentTarget.style.background = T.sectionBg}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <input
@@ -1913,7 +1923,7 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
                   onChange={() => togglePref(it.key)}
                   style={{ cursor: 'pointer', accentColor: T.accent }}
                 />
-                <span>{it.label}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.sm }}><Icon name={it.icon} size={14} /> {it.label}</span>
               </label>
             ))}
             </div>
@@ -4729,7 +4739,7 @@ function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
 
 function ReminderList({ T, items, emptyText, maxVisible, detailLabel, onDetail }) {
   if (!items || items.length === 0) {
-    return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>{emptyText}</div>
+    return <div style={{ fontSize: 11, color: T.textMuted, padding: 6, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>{emptyText}</div>
   }
   const sevColor = (sev) => sev === 'danger' ? T.danger : sev === 'warn' ? T.warn : T.info
   const sevBg    = (sev) => sev === 'danger' ? T.dangerBg : sev === 'warn' ? T.warnBg : T.infoBg
@@ -4747,7 +4757,7 @@ function ReminderList({ T, items, emptyText, maxVisible, detailLabel, onDetail }
           fontSize: 11, color: T.text, lineHeight: 1.5,
           minWidth: 0,
         }}>
-          <span style={{ flexShrink: 0 }}>{it.icon}</span>
+          <span style={{ flexShrink: 0, display: 'inline-flex', color: sevColor(it.sev) }}><Icon name={it.icon} size={13} /></span>
           <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{it.text}</span>
         </div>
       ))}
