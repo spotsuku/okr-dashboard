@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
-import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger, inputStyle, sectionHeaderStyle, largeTitle, btnBrand } from '../lib/iosStyles'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger, inputStyle, sectionHeaderStyle, largeTitle, btnBrand, accentRingStyle } from '../lib/iosStyles'
 import Icon from './Icon'
 import { SheetModal } from './iosUI'
 import { computeKAKey } from '../lib/kaKey'
@@ -371,12 +371,12 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
                     </select>
                   )}
                 </div>
-                <input value={kaSearch} onChange={e => setKaSearch(e.target.value)} placeholder="🔍 KAを検索（タイトル・担当者・OKR名）" style={{ ...inputSt, marginBottom: SPACING.xs + 2, fontSize: TYPO.subhead.fontSize }} />
+                <input value={kaSearch} onChange={e => setKaSearch(e.target.value)} placeholder="KAを検索（タイトル・担当者・OKR名）" style={{ ...inputSt, marginBottom: SPACING.xs + 2, fontSize: TYPO.subhead.fontSize }} />
                 {(kaSearch || selectedDept) && <div style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, marginBottom: SPACING.xs }}>{filteredKAs.length}件のKAが見つかりました</div>}
                 <select value={reportId} onChange={e => setReportId(e.target.value)} style={{ ...inputSt, cursor: 'pointer', borderColor: !reportId ? T.danger : T.border }} size={Math.min(filteredKAs.length + 2, 10)}>
                   <option value="">-- KAを選択してください --</option>
                   {myKAs.length > 0 && (
-                    <optgroup label={`⭐ 自分のKA (${myKAs.length}件)`}>
+                    <optgroup label={`自分のKA (${myKAs.length}件)`}>
                       {myKAs.map(ka => {
                         const obj = objMap[ka.objective_id]
                         return <option key={ka.id} value={ka.id}>{ka.ka_title || '(無題)'}{obj ? ` [${obj.title.slice(0,20)}]` : ''}</option>
@@ -434,17 +434,26 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
 
   useEffect(() => { if (editingId && editRef.current) editRef.current.focus() }, [editingId])
 
+  // 期限超過カード: 行全体を真っ赤に塗らず、淡赤グラデ + 赤枠で表現
+  const rowBg = isDone
+    ? `linear-gradient(180deg, ${T.successBg} 0%, ${T.bgCard} 100%)`
+    : isOverdue
+      ? `linear-gradient(180deg, ${T.dangerSoft} 0%, ${T.bgCard} 100%)`
+      : T.bgCard
+  const rowBorder = isDone ? T.successBg : isOverdue ? T.dangerSoft : T.border
+
   return (
     <div style={{
-      display: 'flex', alignItems: compact ? 'center' : 'flex-start', gap: SPACING.sm + 2,
-      padding: compact ? '10px 12px' : '12px 14px',
-      background: isDone ? T.doneBg : isOverdue ? T.overdueBg : T.bgCard,
-      border: `1px solid ${isDone ? T.doneBorder : isOverdue ? T.overdueBorder : T.border}`,
-      borderRadius: RADIUS.md, marginBottom: SPACING.sm, opacity: isDone ? 0.6 : 1,
+      display: 'flex', alignItems: compact ? 'flex-start' : 'flex-start',
+      flexDirection: compact ? 'column' : 'row', gap: compact ? SPACING.xs + 3 : SPACING.sm + 2,
+      padding: compact ? '10px 11px' : '14px 16px',
+      background: rowBg,
+      border: `1px solid ${rowBorder}`,
+      borderRadius: RADIUS.md, marginBottom: compact ? 0 : SPACING.sm, opacity: isDone && !compact ? 0.85 : 1,
       boxShadow: isDone ? SHADOWS.none : SHADOWS.xs,
       transition: 'all 0.2s ease',
     }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: compact ? 'none' : 1, width: compact ? '100%' : 'auto', minWidth: 0 }}>
         {isEditing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <input ref={editRef} value={editTitle} onChange={e => setEditTitle(e.target.value)}
@@ -467,12 +476,12 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
-              <span onClick={() => !isDone && startEdit()} style={{ ...TYPO.body, fontWeight: 600, color: isDone ? T.textMuted : T.text, textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4, cursor: isDone ? 'default' : 'pointer' }} title={isDone ? '' : 'クリックして編集'}>
+            <div style={{ display: 'flex', alignItems: compact ? 'flex-start' : 'center', flexDirection: compact ? 'column' : 'row', gap: compact ? 3 : SPACING.xs + 2 }}>
+              <span onClick={() => !isDone && startEdit()} style={{ fontSize: 13.5, fontWeight: 600, color: isDone ? T.textMuted : T.text, textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.45, cursor: isDone ? 'default' : 'pointer' }} title={isDone ? '' : 'クリックして編集'}>
                 {task.title || '(未入力)'}
               </span>
               {task.assignee && (
-                <span style={{ ...TYPO.caption, letterSpacing: 0, color: avatarColor(task.assignee), fontWeight: 600 }}>
+                <span style={{ fontSize: compact ? 10.5 : 12, letterSpacing: 0, color: T.accentText, fontWeight: 500 }}>
                   @{task.assignee}
                 </span>
               )}
@@ -501,23 +510,43 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
         )}
       </div>
       {!isEditing && (
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
+        <div style={{ flexShrink: 0, width: compact ? '100%' : 'auto', display: 'flex', alignItems: 'center', gap: compact ? SPACING.xs + 2 : SPACING.xs + 2 }}>
           <StatusBadge status={status} onChange={(s) => onStatusChange(task.id, s)} T={T} />
-          {!isDone && (
-            <span onClick={startEdit} style={{ display: 'inline-flex', color: T.textFaint, cursor: 'pointer', padding: '2px 4px' }} title="編集"><Icon name="pencil" size={13} /></span>
+          {!compact && !isDone && (
+            <button onClick={startEdit} title="編集" style={{
+              width: 26, height: 26, borderRadius: RADIUS.xs, background: 'transparent',
+              border: `1px solid ${T.border}`, color: T.textMuted, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+            }}><Icon name="pencil" size={12} /></button>
           )}
-          <span onClick={() => { if (window.confirm(`「${task.title}」を削除しますか？`)) onDeleteTask(task.id) }} style={{ display: 'inline-flex', color: T.danger, cursor: 'pointer', padding: '2px 4px', opacity: 0.6 }} title="削除"><Icon name="trash" size={13} /></span>
+          {!compact && (
+            <button onClick={() => { if (window.confirm(`「${task.title}」を削除しますか？`)) onDeleteTask(task.id) }} title="削除" style={{
+              width: 26, height: 26, borderRadius: RADIUS.xs, background: 'transparent',
+              border: `1px solid ${T.border}`, color: T.textMuted, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+            }}><Icon name="trash" size={12} /></button>
+          )}
           {task.due_date ? (
-            <span style={{
-              ...TYPO.footnote, fontWeight: 600, padding: '2px 8px', borderRadius: RADIUS.xs,
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              color: isOverdue ? T.danger : task.due_date <= thisSunday ? T.warn : T.textMuted,
-              background: isOverdue ? T.dangerBg : 'transparent',
-            }}>
-              {isOverdue && <Icon name="alert" size={11} />}{formatDate(task.due_date)}
-            </span>
+            isOverdue ? (
+              <span style={{
+                ...pillStyle({ color: T.danger, size: 'md' }),
+                marginLeft: compact ? 'auto' : 0,
+                fontWeight: 700, fontFamily: 'ui-monospace, monospace',
+              }}>
+                <Icon name="alert" size={11} /> {formatDate(task.due_date)}
+              </span>
+            ) : (
+              <span style={{
+                fontSize: compact ? 9.5 : TYPO.footnote.fontSize, fontWeight: 600,
+                marginLeft: compact ? 'auto' : 0,
+                fontFamily: 'ui-monospace, monospace',
+                color: isDone ? T.success : task.due_date <= thisSunday ? T.warn : T.textMuted,
+              }}>
+                {formatDate(task.due_date)}
+              </span>
+            )
           ) : (
-            <span style={{ ...TYPO.footnote, fontWeight: 600, color: T.textFaint }}>期限なし</span>
+            <span style={{ fontSize: compact ? 9.5 : TYPO.footnote.fontSize, fontWeight: 600, marginLeft: compact ? 'auto' : 0, color: T.textFaint }}>期限なし</span>
           )}
         </div>
       )}
@@ -551,10 +580,14 @@ function ListView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDel
     if (items.length === 0) return null
     return (
       <div style={{ marginBottom: SPACING.xl }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}>
           <span style={{ display: 'inline-flex', color: color || T.text }}><Icon name={icon} size={14} /></span>
-          <span style={{ ...TYPO.callout, color: color || T.text }}>{title}</span>
-          <span style={{ ...TYPO.footnote, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: RADIUS.pill, border: `1px solid ${T.border}` }}>{items.length}件</span>
+          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.04em', color: color || T.text }}>{title}</span>
+          {color ? (
+            <span style={{ ...pillStyle({ color, size: 'sm' }), fontWeight: 700, padding: '2px 9px', fontSize: 10.5 }}>{items.length}件</span>
+          ) : (
+            <span style={{ ...TYPO.footnote, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: RADIUS.pill, border: `1px solid ${T.border}` }}>{items.length}件</span>
+          )}
         </div>
         {items.map(t => <TaskCard key={t.id} task={t} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={onStatusChange} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} myName={myName} />)}
       </div>
@@ -563,24 +596,25 @@ function ListView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDel
 
   return (
     <>
-      {/* サマリーバー */}
-      <div style={{ display: 'flex', gap: SPACING.md, marginBottom: SPACING.xl, flexWrap: 'wrap' }}>
-        {STATUS_ORDER.map(s => {
-          const cfg = STATUS_CONFIG[s]
-          const count = s === 'done' ? done.length : tasks.filter(t => getTaskStatus(t) === s).length
-          return (
-            <div key={s} style={{ padding: '8px 16px', borderRadius: RADIUS.sm, background: cfg.bg, border: `1px solid ${cfg.border}`, fontSize: TYPO.subhead.fontSize }}>
-              <span style={{ fontWeight: 700, fontSize: 18, color: cfg.color }}>{count}</span>
-              <span style={{ color: cfg.color, marginLeft: 6, opacity: 0.8 }}>{cfg.label}</span>
-            </div>
-          )
-        })}
-        {overdue.length > 0 && (
-          <div style={{ padding: '8px 16px', borderRadius: RADIUS.sm, background: T.dangerBg, border: `1px solid ${T.danger}`, fontSize: TYPO.subhead.fontSize }}>
-            <span style={{ fontWeight: 700, fontSize: 18, color: T.danger }}>{overdue.length}</span>
-            <span style={{ color: T.danger, marginLeft: 6 }}>期限超過</span>
+      {/* 統計タイル (未着手 / 進行中 / 完了 / 期限超過) */}
+      <div style={{ display: 'flex', gap: SPACING.sm + 2, marginBottom: SPACING.xl, flexWrap: 'wrap' }}>
+        {[
+          { key: 'not_started', label: '未着手', count: tasks.filter(t => getTaskStatus(t) === 'not_started').length, color: T.textSub,    tint: null },
+          { key: 'in_progress', label: '進行中', count: tasks.filter(t => getTaskStatus(t) === 'in_progress').length, color: T.accentText, tint: T.accent },
+          { key: 'done',        label: '完了',   count: done.length,                                                  color: T.success,    tint: T.success },
+          { key: 'overdue',     label: '期限超過', count: overdue.length,                                              color: T.danger,     tint: T.danger },
+        ].map(tile => (
+          <div key={tile.key} style={{
+            flex: 1, minWidth: 120,
+            ...cardStyle({ T, padding: '14px 16px' }),
+            border: `1px solid ${tile.tint ? `${tile.tint}33` : T.border}`,
+            background: tile.tint ? `linear-gradient(180deg, ${tile.tint}0d 0%, ${T.bgCard} 100%)` : T.bgCard,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: T.textSub }}>{tile.label}</span>
+            <span style={{ fontSize: 22, fontWeight: 700, fontFamily: 'ui-monospace, monospace', letterSpacing: '-0.01em', color: tile.color }}>{tile.count}</span>
           </div>
-        )}
+        ))}
       </div>
 
       {totalIncomplete === 0 && done.length === 0 && (
@@ -635,10 +669,14 @@ function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
     }
   }
 
+  // カラムのアクセント色 (handoff: 未着手=muted / 進行中=accent / 完了=success)
+  const COL_COLOR = { not_started: T.textMuted, in_progress: T.accent, done: T.success }
+
   return (
-    <div style={{ display: 'flex', gap: SPACING.lg, minHeight: 400, overflowX: 'auto', paddingBottom: SPACING.sm }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.md, minHeight: 400 }}>
       {STATUS_ORDER.map(s => {
         const cfg = STATUS_CONFIG[s]
+        const colColor = COL_COLOR[s] || T.textMuted
         const colTasks = tasks.filter(t => getTaskStatus(t) === s)
         const isOver = dragOverCol === s
         return (
@@ -647,39 +685,31 @@ function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, s)}
             style={{
-              flex: 1, minWidth: 240, maxWidth: 400, display: 'flex', flexDirection: 'column',
-              background: isOver
-                ? `linear-gradient(180deg, ${cfg.bg} 0%, ${cfg.color}10 100%)`
-                : `linear-gradient(180deg, ${T.bgCard} 0%, ${cfg.color}06 100%)`,
-              border: `1px solid ${isOver ? cfg.color + '60' : cfg.color + '1a'}`,
-              borderRadius: RADIUS.xl, padding: SPACING.lg - 2,
-              boxShadow: SHADOWS.sm,
+              ...cardStyle({ T, padding: 0 }),
+              display: 'flex', flexDirection: 'column', minWidth: 0,
+              border: `1px solid ${isOver ? `${colColor}66` : T.border}`,
               transition: 'all 0.2s ease',
             }}
           >
-            {/* カラムヘッダー (iOS 風) */}
+            {/* カラムヘッダー (カラーアイコンタイル + 件数) */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.lg - 2, paddingBottom: SPACING.sm + 2,
-              borderBottom: `1px solid ${cfg.color}26`,
+              display: 'flex', alignItems: 'center', gap: SPACING.sm,
+              padding: '11px 14px', borderBottom: `1px solid ${T.border}`,
             }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: RADIUS.sm,
-                background: `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.color}c0 100%)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontWeight: 800,
-                boxShadow: `0 2px 4px ${cfg.color}55`,
-              }}><Icon name={cfg.icon} size={14} /></div>
-              <span style={{ ...TYPO.headline, fontWeight: 800, color: cfg.color, letterSpacing: '-0.01em' }}>{cfg.label}</span>
+              <span style={accentRingStyle({ color: colColor, size: 18 })}><Icon name={cfg.icon} size={11} /></span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{cfg.label}</span>
               <span style={{
-                marginLeft: 'auto',
-                ...TYPO.footnote, fontWeight: 800, color: cfg.color,
-                background: `${cfg.color}1f`, padding: '2px 10px', borderRadius: RADIUS.pill,
+                marginLeft: 'auto', fontSize: 11, fontWeight: 600,
+                color: T.textMuted, fontFamily: 'ui-monospace, monospace',
               }}>{colTasks.length}</span>
             </div>
             {/* カード */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: SPACING.sm + 2, minHeight: 120, display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
               {colTasks.length === 0 && (
-                <div style={{ padding: '20px 8px', textAlign: 'center', color: T.textFaint, fontSize: TYPO.subhead.fontSize }}>
+                <div style={{
+                  padding: '20px 8px', textAlign: 'center', color: T.textMuted, fontSize: 11,
+                  border: `1px dashed ${T.borderMid}`, borderRadius: RADIUS.sm,
+                }}>
                   ここにドラッグ
                 </div>
               )}
@@ -832,15 +862,15 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             }
           }}
           style={{
-            padding: '4px 10px', border: `1px solid ${T.border}`, cursor: 'pointer',
-            background: T.sectionBg, color: T.textSub, ...TYPO.footnote, fontWeight: 600,
+            padding: '6px 12px', border: `1px solid ${T.accent}40`, cursor: 'pointer',
+            background: T.accentBg, color: T.accentText, ...TYPO.footnote, fontWeight: 600,
             borderRadius: RADIUS.xs + 1, fontFamily: 'inherit',
-            display: 'inline-flex', alignItems: 'center', gap: 3,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
           }}
         ><Icon name="pin" size={11} /> 今日へ</button>
         <div style={{ flex: 1 }} />
         <div style={{ ...TYPO.caption, letterSpacing: 0, color: T.textMuted }}>
-          凡例: <span style={{ color: STATUS_CONFIG.not_started.color }}>■未着手</span> <span style={{ color: STATUS_CONFIG.in_progress.color, marginLeft: 6 }}>■進行中</span> <span style={{ color: STATUS_CONFIG.done.color, marginLeft: 6 }}>■完了</span> <span style={{ color: T.danger, marginLeft: 6 }}>│今日</span>
+          凡例: <span style={{ color: T.accent }}>■進行中</span> <span style={{ color: T.warn, marginLeft: 6 }}>■近日締切</span> <span style={{ color: T.success, marginLeft: 6 }}>■完了</span> <span style={{ color: T.danger, marginLeft: 6 }}>■期限超過</span> <span style={{ color: T.accent, marginLeft: 6 }}>│今日</span>
         </div>
       </div>
 
@@ -913,14 +943,18 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                 const ymd = toYMD(d)
                 const isToday = ymd === toYMD(today)
                 const wd = d.getUTCDay()
-                const isWeekend = wd === 0 || wd === 6
+                const isSat = wd === 6
+                const isSun = wd === 0
+                const isWeekend = isSat || isSun
                 const isMonthStart = d.getUTCDate() === 1
+                // 曜日色: 土=info / 日=danger / 今日=accent-text
+                const dateColor = isToday ? T.accentText : isSat ? T.info : isSun ? T.danger : T.textMuted
                 return (
                   <div key={ymd} style={{
                     width: dayWidth, flexShrink: 0, textAlign: 'center',
                     borderRight: isMonthStart ? `1px solid ${T.borderMid}` : `1px solid ${T.border}`,
-                    background: isToday ? T.dangerBg : isWeekend ? T.sectionBg : 'transparent',
-                    color: isToday ? T.danger : isWeekend ? T.textFaint : T.textMuted,
+                    background: isToday ? T.accentBg : isWeekend ? T.sectionBg : 'transparent',
+                    color: dateColor,
                     fontSize: 9, fontWeight: isToday ? 700 : 500,
                     display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
                     padding: '4px 0',
@@ -932,8 +966,8 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                     )}
                     {zoom === 'day' && (
                       <>
-                        <div>{d.getUTCDate()}</div>
-                        <div style={{ fontSize: 8 }}>{weekdayJa[wd]}</div>
+                        <div style={{ fontWeight: 700, color: dateColor }}>{d.getUTCDate()}</div>
+                        <div style={{ fontSize: 8 }}>{isToday ? '今日' : weekdayJa[wd]}</div>
                       </>
                     )}
                     {zoom === 'week' && wd === 1 && (
@@ -944,12 +978,19 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
               })}
             </div>
 
+            {/* 今日カラムのハイライト (accent-bg) */}
+            <div style={{
+              position: 'absolute',
+              left: todayLeft, top: HEADER_H, bottom: 0, width: dayWidth,
+              background: T.accentBg, opacity: 0.6,
+              pointerEvents: 'none', zIndex: 1,
+            }} />
             {/* 今日の縦線 */}
             <div style={{
               position: 'absolute',
               left: todayLeft + dayWidth / 2 - 1,
               top: 0, bottom: 0, width: 2,
-              background: T.danger, opacity: 0.55,
+              background: T.accent, opacity: 0.6,
               pointerEvents: 'none', zIndex: 2,
             }} />
 
@@ -962,6 +1003,11 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
               const left = startOffset * dayWidth
               const width = duration * dayWidth - 4
               const isOverdue = end < today && st !== 'done'
+              // バーは4色のみ: 完了=success / 期限超過=danger / 近日締切(7日以内)=warn / それ以外=accent
+              const soonThreshold = addDays(today, 7)
+              const barColor = st === 'done' ? T.success
+                : isOverdue ? T.danger
+                : (end <= soonThreshold ? T.warn : T.accent)
               return (
                 <div key={task.id} style={{
                   height: ROW_H, borderBottom: `1px solid ${T.border}`,
@@ -987,18 +1033,19 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                       left: left + 2, top: 6,
                       width: Math.max(width, 8),
                       height: ROW_H - 12,
-                      background: isOverdue ? T.danger : cfg.color,
-                      borderRadius: RADIUS.xs - 1,
-                      opacity: st === 'done' ? 0.5 : noDue ? 0.4 : 0.85,
-                      border: isOverdue ? `2px solid ${T.danger}` : noDue ? `1px dashed ${cfg.color}` : `1px solid ${cfg.color}`,
+                      background: barColor,
+                      borderRadius: 5,
+                      opacity: st === 'done' ? 0.85 : noDue ? 0.5 : 1,
+                      border: noDue ? `1px dashed ${barColor}` : 'none',
+                      boxShadow: SHADOWS.xs,
                       display: 'flex', alignItems: 'center',
-                      padding: '0 6px',
-                      ...TYPO.caption, letterSpacing: 0, color: '#fff',
+                      padding: '0 8px',
+                      fontSize: 10.5, fontWeight: 600, color: '#fff',
                       overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                       zIndex: 2,
                     }}
                   >
-                    {width > 40 && <span>{task.title || ''}</span>}
+                    {width > 40 && <span style={{ textDecoration: st === 'done' ? 'line-through' : 'none' }}>{task.title || ''}</span>}
                     {isOverdue && <span style={{ marginLeft: 'auto', display: 'inline-flex' }}><Icon name="alert" size={10} /></span>}
                   </div>
                 </div>
@@ -1253,7 +1300,7 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
               </div>
               {/* タスク追加 */}
               <button onClick={() => setShowCreateModal(true)} style={{
-                ...btnPrimary({ T, size: isMobile ? 'lg' : 'md' }),
+                ...btnBrand({ size: isMobile ? 'lg' : 'md' }),
                 whiteSpace: 'nowrap',
                 display: 'flex', alignItems: 'center', gap: 4,
                 minHeight: isMobile ? 44 : 'auto',

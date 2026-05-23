@@ -2,8 +2,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
-import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
-import { cardStyle, sectionHeaderStyle, btnBrand, btnSecondary, pillStyle, progressBarStyle, progressFillStyle } from '../lib/iosStyles'
+import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS, GLASS, TRANSITION } from '../lib/themeTokens'
+import { cardStyle, sectionHeaderStyle, btnBrand, btnPrimary, btnSecondary, pillStyle, progressBarStyle, progressFillStyle } from '../lib/iosStyles'
 import Icon, { DataIcon } from './Icon'
 import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
@@ -3573,10 +3573,12 @@ function CompanyTasksView({ T, members, themeKey, user, fiscalYear }) {
           return (
             <button key={t.key} onClick={() => setMode(t.key)} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-              fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700,
-              background: active ? T.accent : 'transparent',
-              color: active ? '#fff' : T.textSub,
+              ...(active ? btnBrand({ size: 'sm' }) : {
+                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                background: 'transparent', color: T.textSub,
+              }),
+              padding: '7px 14px', borderRadius: RADIUS.sm,
+              fontSize: 12.5, fontWeight: 500,
             }}>
               <Icon name={t.icon} size={13} />
               <span>{t.label}</span>
@@ -5282,22 +5284,22 @@ function CompanyMailTab({ T, members }) {
   }
 
   const sectionStyle = {
-    background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-    padding: 16, marginBottom: 14,
-    width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden',
+    ...cardStyle({ T, padding: SPACING.lg }),
+    marginBottom: SPACING.lg,
+    width: '100%', maxWidth: '100%', boxSizing: 'border-box',
   }
   const itemRow = (it, accent) => (
     <div key={`${it._ownerName}_${it.id}`} style={{
-      display: 'flex', alignItems: 'flex-start', gap: 10,
-      padding: '8px 10px', borderRadius: 8,
+      display: 'flex', alignItems: 'flex-start', gap: SPACING.sm + 2,
+      padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.sm,
       background: T.sectionBg, border: `1px solid ${T.borderLight}`,
-      marginBottom: 6,
+      marginBottom: SPACING.xs + 2,
       width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden',
     }}>
-      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, background: `${accent}18`, color: accent, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="mail" size={10} /> {it._ownerName}</span>
+      <span style={{ ...pillStyle({ color: accent, size: 'sm' }), flexShrink: 0 }}><Icon name="mail" size={10} /> {it._ownerName}</span>
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.subject || '(件名なし)'}</div>
-        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.subject || '(件名なし)'}</div>
+        <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {it.from || ''} ・ {it.snippet || ''}
         </div>
       </div>
@@ -5308,24 +5310,24 @@ function CompanyMailTab({ T, members }) {
     <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
       <div style={{ padding: '14px 18px', maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
       {loading && (
-        <div style={{ marginBottom: 10, padding: '6px 12px', background: `${T.accent}10`, borderRadius: 8, fontSize: 12, color: T.textSub, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+        <div style={{ marginBottom: SPACING.sm + 2, padding: `${SPACING.xs + 2}px ${SPACING.md}px`, background: T.accentBg, borderRadius: RADIUS.sm, ...TYPO.subhead, color: T.textSub, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
           <Icon name="mail" size={12} /> 取得中 {progress.done}/{progress.total} メンバー (順次更新)
         </div>
       )}
 
       {/* 要返信件数 */}
       <div style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.sm + 2 }}>
           <span style={{ display: 'inline-flex', color: T.accent }}><Icon name="mail" size={18} /></span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>要返信件数</span>
-          <span style={{ marginLeft: 'auto', fontSize: 24, fontWeight: 800, color: needsReplyTotal > 0 ? T.warn : T.textMuted }}>{needsReplyTotal} 件</span>
+          <span style={{ ...TYPO.title3, color: T.text }}>要返信件数</span>
+          <span style={{ marginLeft: 'auto', ...TYPO.title1, color: needsReplyTotal > 0 ? T.warn : T.textMuted }}>{needsReplyTotal} 件</span>
         </div>
         {Object.keys(needsReplyByMember).length === 0 ? (
-          <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>未返信メールはありません</div>
+          <div style={{ ...TYPO.subhead, fontWeight: 500, color: T.textMuted, padding: SPACING.sm }}>未返信メールはありません</div>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs + 2 }}>
             {Object.entries(needsReplyByMember).sort((a, b) => b[1] - a[1]).map(([name, n]) => (
-              <span key={name} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 99, background: T.sectionBg, border: `1px solid ${T.borderLight}`, color: T.textSub }}>
+              <span key={name} style={{ ...TYPO.footnote, fontWeight: 500, padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.pill, background: T.sectionBg, border: `1px solid ${T.borderLight}`, color: T.textSub }}>
                 {name} <strong style={{ color: T.warn, marginLeft: 4 }}>{n}</strong>
               </span>
             ))}
@@ -5335,14 +5337,14 @@ function CompanyMailTab({ T, members }) {
 
       {/* 重要アラート (クレーム等) */}
       <div style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.sm + 2 }}>
           <span style={{ display: 'inline-flex', color: T.danger }}><Icon name="alert" size={18} /></span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>重要アラート</span>
-          <span style={{ fontSize: 11, color: T.textMuted }}>クレーム / 苦情 / 至急対応</span>
-          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: claims.length > 0 ? T.danger : T.textMuted }}>{claims.length}</span>
+          <span style={{ ...TYPO.title3, color: T.text }}>重要アラート</span>
+          <span style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted }}>クレーム / 苦情 / 至急対応</span>
+          <span style={{ marginLeft: 'auto', ...TYPO.headline, color: claims.length > 0 ? T.danger : T.textMuted }}>{claims.length}</span>
         </div>
         {claims.length === 0 ? (
-          <div style={{ fontSize: 12, color: T.textMuted, padding: 8, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>該当メールはありません <Icon name="sparkle" size={12} /></div>
+          <div style={{ ...TYPO.subhead, fontWeight: 500, color: T.textMuted, padding: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>該当メールはありません <Icon name="sparkle" size={12} /></div>
         ) : (
           <div>{claims.slice(0, 10).map(it => itemRow(it, T.danger))}</div>
         )}
@@ -5350,20 +5352,20 @@ function CompanyMailTab({ T, members }) {
 
       {/* 称賛メール */}
       <div style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.sm + 2 }}>
           <span style={{ display: 'inline-flex', color: T.success }}><Icon name="sparkle" size={18} /></span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>称賛メール</span>
-          <span style={{ fontSize: 11, color: T.textMuted }}>感謝 / お礼 / 高評価</span>
-          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: praises.length > 0 ? T.success : T.textMuted }}>{praises.length}</span>
+          <span style={{ ...TYPO.title3, color: T.text }}>称賛メール</span>
+          <span style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted }}>感謝 / お礼 / 高評価</span>
+          <span style={{ marginLeft: 'auto', ...TYPO.headline, color: praises.length > 0 ? T.success : T.textMuted }}>{praises.length}</span>
         </div>
         {praises.length === 0 ? (
-          <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>まだ無し</div>
+          <div style={{ ...TYPO.subhead, fontWeight: 500, color: T.textMuted, padding: SPACING.sm }}>まだ無し</div>
         ) : (
           <div>{praises.slice(0, 10).map(it => itemRow(it, T.success))}</div>
         )}
       </div>
 
-      <div style={{ fontSize: 10, color: T.textFaint, fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
+      <div style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: T.textFaint, fontStyle: 'italic', textAlign: 'center', marginTop: SPACING.sm }}>
         ※ 件名・本文のキーワードから自動分類しています。Google 連携済みのメンバーのみ対象。
       </div>
       </div>
@@ -5436,43 +5438,40 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: 0, marginBottom: 12, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-          <Icon name="mail" size={16} /> メール
+        <h2 style={{ ...TYPO.title3, color: T.text, margin: 0, marginBottom: SPACING.md, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <span style={{ display: 'inline-flex', color: T.accent }}><Icon name="mail" size={16} /></span> メール
         </h2>
 
         {isUnconnected ? (
           <div style={{
-            padding: 24, background: T.bgCard, border: `1px solid ${T.border}`,
-            borderRadius: 10, fontSize: 13, color: T.textMuted, textAlign: 'center',
+            ...cardStyle({ T, padding: SPACING['2xl'] }),
+            ...TYPO.body, color: T.textMuted, textAlign: 'center',
           }}>
             Google と連携するとメールが表示されます。
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: SPACING.sm + 2 }}>
               <button onClick={() => onGoToTab?.('integrations')} style={{
-                padding: '8px 16px', borderRadius: 8,
-                background: T.accent, color: '#fff', border: 'none',
-                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                ...btnBrand({ size: 'sm' }),
                 display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               }}><Icon name="link" size={12} /> 連携タブへ</button>
             </div>
           </div>
         ) : error ? (
           <div style={{
-            padding: 14, background: T.dangerBg, border: `1px solid ${T.danger}40`,
-            borderRadius: 8, fontSize: 12, color: T.danger,
+            padding: SPACING.md + 2, background: T.dangerBg, border: `1px solid ${T.danger}40`,
+            borderRadius: RADIUS.sm, ...TYPO.subhead, color: T.danger,
             display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap',
           }}>
             <Icon name="alert" size={12} /> {error}
             {needsReauth && (
               <button onClick={() => onGoToTab?.('integrations')} style={{
-                marginLeft: 8, padding: '4px 12px', borderRadius: 6,
-                background: T.warn, color: '#fff', border: 'none',
-                fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                ...btnPrimary({ T, size: 'sm', color: T.warn }),
+                marginLeft: SPACING.sm,
                 display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               }}><Icon name="refresh" size={11} /> 再連携</button>
             )}
           </div>
         ) : loading ? (
-          <div style={{ padding: 20, color: T.textMuted, fontSize: 12, textAlign: 'center' }}>
+          <div style={{ padding: SPACING.xl, color: T.textMuted, ...TYPO.subhead, fontWeight: 500, textAlign: 'center' }}>
             読み込み中...
           </div>
         ) : (
@@ -5485,31 +5484,34 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
               flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch',
               scrollbarWidth: 'none',
             }}>
-              {CATS.map(c => (
+              {CATS.map(c => {
+                const isActive = activeCat === c.key
+                const isUrgent = c.key === 'to_me'
+                return (
                 <button
                   key={c.key}
                   onClick={() => setActiveCat(c.key)}
                   style={{
-                    padding: '8px 12px',
-                    background: activeCat === c.key ? T.bgCard : 'transparent',
-                    color: activeCat === c.key ? c.color : T.textMuted,
+                    padding: `${SPACING.sm}px ${SPACING.md}px`,
+                    background: isActive ? T.bgCard : 'transparent',
+                    color: isActive ? c.color : T.textMuted,
                     border: 'none',
-                    borderBottom: activeCat === c.key ? `3px solid ${c.color}` : '3px solid transparent',
-                    borderRadius: '8px 8px 0 0',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    borderBottom: isActive ? `${isUrgent ? 3.5 : 2.5}px solid ${c.color}` : '2.5px solid transparent',
+                    borderRadius: `${RADIUS.sm}px ${RADIUS.sm}px 0 0`,
+                    ...TYPO.subhead, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                     whiteSpace: 'nowrap', flexShrink: 0,
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                   }}
                 >
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name={c.icon} size={12} /> {c.label}</span>
                   <span style={{
-                    padding: '1px 7px', borderRadius: 99,
-                    background: activeCat === c.key ? `${c.color}22` : T.bgSection,
-                    color: activeCat === c.key ? c.color : T.textMuted,
-                    fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
+                    ...pillStyle({ color: c.color, size: 'sm' }),
+                    background: isActive ? `${c.color}22` : T.sectionBg,
+                    color: isActive ? c.color : T.textMuted,
+                    minWidth: 16, justifyContent: 'center',
                   }}>{c.items.length}</span>
                 </button>
-              ))}
+              )})}
             </div>
 
             {/* メール一覧 */}
@@ -5584,81 +5586,77 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
 
   return (
     <div style={{
-      background: `linear-gradient(180deg, ${T.bgCard} 0%, ${color}05 100%)`,
-      border: `1px solid ${color}1a`,
-      borderLeft: `4px solid ${color}`,
-      borderRadius: RADIUS.lg, padding: '14px 16px',
-      boxShadow: SHADOWS.sm,
+      background: `linear-gradient(180deg, ${T.bgCard} 0%, ${color}08 100%)`,
+      border: `1px solid ${color}33`,
+      borderRadius: RADIUS.lg, padding: `${SPACING.md + 2}px ${SPACING.lg}px`,
+      boxShadow: `${SHADOWS.xs}, ${SHADOWS.glassInset}`,
+      backdropFilter: GLASS.blur, WebkitBackdropFilter: GLASS.blur,
       opacity: dimmed ? 0.55 : 1,
-      transition: 'all 0.2s ease',
+      transition: TRANSITION.base,
     }}>
       {/* 返信済み / 既読バッジ */}
       {(mail.replied || readMarked) && (
-        <div style={{ marginBottom: 6 }}>
+        <div style={{ marginBottom: SPACING.xs + 2 }}>
           {mail.replied && (
             <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, padding: '2px 8px', borderRadius: 10,
-              background: `${T.success}22`, color: T.success,
-              fontSize: 10, fontWeight: 700, marginRight: 6,
+              ...pillStyle({ color: T.success, size: 'sm' }), marginRight: SPACING.xs + 2,
             }}><Icon name="refresh" size={10} /> 返信済み{repliedAtStr ? ` (${repliedAtStr})` : ''}</span>
           )}
           {readMarked && !mail.replied && (
             <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, padding: '2px 8px', borderRadius: 10,
+              ...pillStyle({ color: T.textMuted, size: 'sm' }),
               background: T.sectionBg, color: T.textMuted,
-              fontSize: 10, fontWeight: 700,
             }}><Icon name="check" size={10} /> 確認済み</span>
           )}
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.sm + 2 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4,
-            fontSize: 11, color: T.textMuted,
+            display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs,
+            ...TYPO.footnote, fontWeight: 500, color: T.textMuted,
           }}>
-            <span style={{ fontWeight: 700, color: T.textSub }}>{mail.from}</span>
-            <span>・{dateStr}</span>
+            <span style={{ ...TYPO.subhead, fontWeight: 700, color: T.textSub }}>{mail.from}</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 10.5 }}>・{dateStr}</span>
           </div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+          <div style={{ ...TYPO.callout, color: T.text, marginBottom: SPACING.xs }}>
             {mail.subject}
           </div>
           {/* 本文表示: 展開前はスニペット clamped、展開時は全文を遅延ロード */}
           {!expanded ? (
             <div style={{
-              fontSize: 11, color: T.textSub, lineHeight: 1.6,
+              fontSize: 11.5, color: T.textSub, lineHeight: 1.6,
               overflow: 'hidden', textOverflow: 'ellipsis',
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
             }}>
               {mail.snippet}
             </div>
           ) : loadingBody ? (
-            <div style={{ fontSize: 11, color: T.textMuted, padding: '6px 0' }}>読み込み中...</div>
+            <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted, padding: '6px 0' }}>読み込み中...</div>
           ) : bodyError ? (
-            <div style={{ fontSize: 11, color: T.danger, padding: '6px 0', display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={11} /> {bodyError}</div>
+            <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.danger, padding: '6px 0', display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={11} /> {bodyError}</div>
           ) : (
             <pre style={{
-              fontSize: 11, color: T.textSub, lineHeight: 1.6, margin: 0,
+              fontSize: 11.5, color: T.textSub, lineHeight: 1.6, margin: 0,
               fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               maxHeight: 500, overflowY: 'auto',
-              padding: '6px 8px', background: T.sectionBg, borderRadius: 6,
+              padding: `${SPACING.xs + 2}px ${SPACING.sm}px`, background: T.sectionBg, borderRadius: RADIUS.xs,
             }}>{fullBody ?? mail.snippet}</pre>
           )}
           <button onClick={handleExpand} style={{
-            marginTop: 4, background: 'transparent', border: 'none', color: T.accent,
-            fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+            marginTop: SPACING.xs, background: 'transparent', border: 'none', color: T.accentText,
+            fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
             display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
           }}>{expanded ? <><Icon name="chevronU" size={11} /> 閉じる</> : <><Icon name="chevronD" size={11} /> もっと見る</>}</button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2, alignItems: 'stretch', minWidth: 88, flexShrink: 0 }}>
           {canReply && !mail.replied && (
             <button onClick={() => onOpenAIReply?.(mail)} style={{
               ...btnBrand({ size: 'sm' }),
-              padding: '5px 12px', borderRadius: 6, fontSize: 11,
               whiteSpace: 'nowrap',
-              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
             }}><Icon name="sparkle" size={11} /> AI返信</button>
           )}
 
@@ -5666,21 +5664,16 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
           {!mail.replied && canReply && (
             readMarked ? (
               <button onClick={() => onUnmarkRead?.(mail.id)} style={{
-                padding: '4px 10px', borderRadius: 6,
-                background: 'transparent', color: T.textMuted,
-                border: `1px solid ${T.border}`,
-                fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                ...btnSecondary({ T, size: 'sm' }),
+                color: T.textMuted, whiteSpace: 'nowrap',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
               }}><Icon name="refresh" size={10} /> 未読に戻す</button>
             ) : (
               <button onClick={() => onMarkRead?.(mail.id)} style={{
-                padding: '4px 10px', borderRadius: 6,
+                ...btnSecondary({ T, size: 'sm' }),
                 background: T.successBg, color: T.success,
-                border: `1px solid ${T.success}40`,
-                fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                border: `1px solid ${T.success}40`, fontWeight: 700, whiteSpace: 'nowrap',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
               }}><Icon name="check" size={10} /> 既読にする</button>
             )
           )}
@@ -5689,11 +5682,9 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
             href={`https://mail.google.com/mail/u/0/#inbox/${mail.threadId}`}
             target="_blank" rel="noreferrer"
             style={{
-              padding: '4px 10px', borderRadius: 6,
-              background: 'transparent', color: T.textMuted,
-              border: `1px solid ${T.border}`,
-              fontSize: 10, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap',
-              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              ...btnSecondary({ T, size: 'sm' }),
+              color: T.textMuted, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
             }}
           >Gmail で開く <Icon name="external" size={10} /></a>
         </div>
