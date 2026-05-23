@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS, SPACING, RADIUS, TYPO } from '../lib/themeTokens'
+import { COMMON_TOKENS, SPACING, RADIUS, TYPO, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary } from '../lib/iosStyles'
 import { useCurrentOrg } from '../lib/orgContext'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 import { useLayerLabels } from '../lib/levelLabels'
@@ -801,72 +802,58 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, 
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, letterSpacing: '-0.01em' }}>📦 アーカイブ</h1>
-        <span style={{ fontSize: 12, color: T.textMuted }}>{loading ? '読み込み中…' : `OKR ${items.length} 件 / KR ${krItems.length} 件`}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.lg }}>
+        <h1 style={{ ...TYPO.title2, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <Icon name="inbox" size={20} />アーカイブ
+        </h1>
+        <span style={{ ...TYPO.subhead, color: T.textMuted }}>{loading ? '読み込み中…' : `OKR ${items.length} 件 / KR ${krItems.length} 件`}</span>
         <span style={{ flex: 1 }} />
         <button onClick={load} title="再読み込み"
-          style={{ background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          ⟳ 更新
+          style={{ ...btnSecondary({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="refresh" size={13} />更新
         </button>
       </div>
       {!loading && items.length === 0 && krItems.length === 0 && (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: T.textFaint, border: `1px dashed ${T.border}`, borderRadius: 12, background: T.bgCard }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
-          <div style={{ fontSize: 13, color: T.textSub }}>アーカイブされた OKR / KR はありません</div>
+        <div style={{ padding: `${SPACING['2xl'] + SPACING.lg}px ${SPACING.xl}px`, textAlign: 'center', color: T.textFaint, border: `1px dashed ${T.border}`, borderRadius: RADIUS.lg, background: T.bgCard }}>
+          <div style={{ color: T.textFaint, marginBottom: SPACING.sm, display: 'flex', justifyContent: 'center' }}><Icon name="inbox" size={28} /></div>
+          <div style={{ ...TYPO.body, color: T.textSub }}>アーカイブされた OKR / KR はありません</div>
         </div>
       )}
       {items.length > 0 && (
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, margin: '4px 0 8px', letterSpacing: '0.04em' }}>OKR</div>
+        <div style={{ ...TYPO.footnote, color: T.textSub, margin: `${SPACING.xs}px 0 ${SPACING.sm}px`, letterSpacing: '0.04em' }}>OKR</div>
       )}
       {items.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
           {items.map(o => {
             const m = memberOf(o.owner)
+            const busy = busyId === o.id || purgingId === o.id
             return (
-              <div key={o.id} style={{
-                background: T.bgCard,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: '12px 16px',
-                display: 'flex', alignItems: 'center', gap: 12,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-              }}>
+              <div key={o.id} style={{ ...cardStyle({ T, padding: '12px 16px' }), display: 'flex', alignItems: 'center', gap: SPACING.md }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub }}>{levelOf(o.level_id)}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub }}>{periodLabel(o.period)}</span>
-                    <span style={{ fontSize: 10, color: T.textMuted }}>アーカイブ日時: {fmtDate(o.archived_at)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, flexWrap: 'wrap', marginBottom: SPACING.xs }}>
+                    <span style={pillStyle({ color: T.textMuted, size: 'sm' })}>{levelOf(o.level_id)}</span>
+                    <span style={pillStyle({ color: T.textMuted, size: 'sm' })}>{periodLabel(o.period)}</span>
+                    <span style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, letterSpacing: 0 }}>アーカイブ日時: {fmtDate(o.archived_at)}</span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={o.title}>{o.title}</div>
+                  <div style={{ ...TYPO.headline, color: T.text, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={o.title}>{o.title}</div>
                   {o.owner && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, fontSize: 11, color: T.textMuted }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: SPACING.xs, ...TYPO.footnote, color: T.textMuted }}>
                       {m?.avatar_url
                         ? <img src={m.avatar_url} alt={o.owner} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
-                        : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)' }} />}
+                        : <div style={{ width: 16, height: 16, borderRadius: '50%', background: T.border }} />}
                       <span>{o.owner}</span>
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button onClick={() => handleRestore(o.id)} disabled={busyId === o.id || purgingId === o.id}
-                    style={{
-                      background: T.accentSolid, border: 'none', color: '#fff',
-                      borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                      cursor: busyId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {busyId === o.id ? '復元中…' : '↩ 復元'}
+                <div style={{ display: 'flex', gap: SPACING.xs + 2, flexShrink: 0 }}>
+                  <button onClick={() => handleRestore(o.id)} disabled={busy}
+                    style={{ ...btnPrimary({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: busyId === o.id ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="refresh" size={12} />{busyId === o.id ? '復元中…' : '復元'}
                   </button>
-                  <button onClick={() => handlePurge(o)} disabled={busyId === o.id || purgingId === o.id}
+                  <button onClick={() => handlePurge(o)} disabled={busy}
                     title="完全削除 (DB から物理削除・復元不可)"
-                    style={{
-                      background: 'transparent', border: `1px solid ${T.danger}`, color: T.danger,
-                      borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
-                      cursor: purgingId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {purgingId === o.id ? '削除中…' : '🗑 完全削除'}
+                    style={{ ...btnSecondary({ T, size: 'sm' }), border: `1px solid ${T.danger}`, color: T.danger, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: purgingId === o.id ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="trash" size={12} />{purgingId === o.id ? '削除中…' : '完全削除'}
                   </button>
                 </div>
               </div>
@@ -875,60 +862,44 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, 
         </div>
       )}
       {krItems.length > 0 && (
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, margin: '20px 0 8px', letterSpacing: '0.04em' }}>KR</div>
+        <div style={{ ...TYPO.footnote, color: T.textSub, margin: `${SPACING.xl}px 0 ${SPACING.sm}px`, letterSpacing: '0.04em' }}>KR</div>
       )}
       {krItems.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
           {krItems.map(kr => {
             const m = memberOf(kr.owner)
             const busyKey = `kr-${kr.id}`
+            const busy = busyId === busyKey || purgingId === busyKey
             return (
-              <div key={kr.id} style={{
-                background: T.bgCard,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: '12px 16px',
-                display: 'flex', alignItems: 'center', gap: 12,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-              }}>
+              <div key={kr.id} style={{ ...cardStyle({ T, padding: '12px 16px' }), display: 'flex', alignItems: 'center', gap: SPACING.md }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${T.accent}15`, color: T.accent }}>KR</span>
-                    {kr.objectiveTitle && <span style={{ fontSize: 10, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }} title={kr.objectiveTitle}>{kr.objectiveTitle}</span>}
-                    <span style={{ fontSize: 10, color: T.textMuted }}>アーカイブ日時: {fmtDate(kr.archived_at)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, flexWrap: 'wrap', marginBottom: SPACING.xs }}>
+                    <span style={pillStyle({ color: T.accent, size: 'sm' })}>KR</span>
+                    {kr.objectiveTitle && <span style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, letterSpacing: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }} title={kr.objectiveTitle}>{kr.objectiveTitle}</span>}
+                    <span style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, letterSpacing: 0 }}>アーカイブ日時: {fmtDate(kr.archived_at)}</span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={kr.title}>{kr.title}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 11, color: T.textMuted }}>
+                  <div style={{ ...TYPO.headline, color: T.text, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={kr.title}>{kr.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginTop: SPACING.xs, ...TYPO.footnote, color: T.textMuted }}>
                     <span>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
                     {kr.owner && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         {m?.avatar_url
                           ? <img src={m.avatar_url} alt={kr.owner} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
-                          : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)' }} />}
+                          : <div style={{ width: 16, height: 16, borderRadius: '50%', background: T.border }} />}
                         <span>{kr.owner}</span>
                       </span>
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button onClick={() => handleRestoreKR(kr.id)} disabled={busyId === busyKey || purgingId === busyKey}
-                    style={{
-                      background: T.accentSolid, border: 'none', color: '#fff',
-                      borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                      cursor: busyId === busyKey ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {busyId === busyKey ? '復元中…' : '↩ 復元'}
+                <div style={{ display: 'flex', gap: SPACING.xs + 2, flexShrink: 0 }}>
+                  <button onClick={() => handleRestoreKR(kr.id)} disabled={busy}
+                    style={{ ...btnPrimary({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: busyId === busyKey ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="refresh" size={12} />{busyId === busyKey ? '復元中…' : '復元'}
                   </button>
-                  <button onClick={() => handlePurgeKR(kr)} disabled={busyId === busyKey || purgingId === busyKey}
+                  <button onClick={() => handlePurgeKR(kr)} disabled={busy}
                     title="完全削除 (DB から物理削除・復元不可)"
-                    style={{
-                      background: 'transparent', border: `1px solid ${T.danger}`, color: T.danger,
-                      borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
-                      cursor: purgingId === busyKey ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {purgingId === busyKey ? '削除中…' : '🗑 完全削除'}
+                    style={{ ...btnSecondary({ T, size: 'sm' }), border: `1px solid ${T.danger}`, color: T.danger, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: purgingId === busyKey ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="trash" size={12} />{purgingId === busyKey ? '削除中…' : '完全削除'}
                   </button>
                 </div>
               </div>
