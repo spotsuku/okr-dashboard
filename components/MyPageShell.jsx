@@ -3552,46 +3552,52 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
 }
 
 // ─── 全社サマリー: タスクタブ ──────────────────────────────────────────
-// 全社タスク (リスト/カード/ガント) を主表示しつつ、上部に「本日の全メンバーの
-// タスク状況」(CompanySummaryTab) を折りたたみで併置する。
-//   ・全社タスクの一覧/カンバン/ガントで全体像を見る
-//   ・同じ画面で本日の各メンバーの稼働・遅延状況も確認できる
+// 「本日」「全て」のタブで切替える:
+//   ・本日 = 本日の全メンバーのタスク状況 (達成率/稼働/遅延/メンバー別)
+//   ・全て = 全社タスクをリスト/カード/ガントで一覧 (メンバーサイドバーは非表示)
 function CompanyTasksView({ T, members, themeKey, user, fiscalYear }) {
-  const [showStatus, setShowStatus] = useState(true)
+  const [mode, setMode] = useState('today') // 'today' | 'all'
+  const TABS = [
+    { key: 'today', icon: 'chart', label: '本日' },
+    { key: 'all',   icon: 'note',  label: '全て' },
+  ]
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* 折りたたみヘッダ: 本日の全メンバーのタスク状況 */}
-      <div style={{ flexShrink: 0 }}>
-        <button
-          onClick={() => setShowStatus(s => !s)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-            padding: '10px 16px', background: T.sectionBg, border: 'none',
-            borderBottom: `1px solid ${T.border}`, cursor: 'pointer',
-            fontFamily: 'inherit', color: T.text, textAlign: 'left',
-          }}
-        >
-          <Icon name={showStatus ? 'chevronD' : 'chevronR'} size={14} />
-          <span style={{ fontSize: 12.5, fontWeight: 700 }}>本日の全メンバーのタスク状況</span>
-          <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
-            {showStatus ? '（クリックで折りたたむ）' : '（クリックで開く）'}
-          </span>
-        </button>
-        {showStatus && (
-          <div style={{ maxHeight: 360, overflowY: 'auto', borderBottom: `1px solid ${T.border}` }}>
-            <CompanySummaryTab T={T} members={members} />
-          </div>
-        )}
+      {/* 本日 / 全て 切替 */}
+      <div style={{
+        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
+        padding: '8px 16px', borderBottom: `1px solid ${T.border}`, background: T.sectionBg,
+      }}>
+        {TABS.map(t => {
+          const active = mode === t.key
+          return (
+            <button key={t.key} onClick={() => setMode(t.key)} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700,
+              background: active ? T.accent : 'transparent',
+              color: active ? '#fff' : T.textSub,
+            }}>
+              <Icon name={t.icon} size={13} />
+              <span>{t.label}</span>
+            </button>
+          )
+        })}
       </div>
-      {/* 全社タスク (リスト/カード/ガント) */}
+      {/* コンテンツ */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        <MyTasksPage
-          user={user}
-          members={members}
-          themeKey={themeKey}
-          lockViewMode="all"
-          fiscalYear={fiscalYear}
-        />
+        {mode === 'today' ? (
+          <CompanySummaryTab T={T} members={members} />
+        ) : (
+          <MyTasksPage
+            user={user}
+            members={members}
+            themeKey={themeKey}
+            lockViewMode="all"
+            hideMemberSidebar
+            fiscalYear={fiscalYear}
+          />
+        )}
       </div>
     </div>
   )

@@ -1043,7 +1043,7 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
 }
 
 // ─── メイン ─────────────────────────────────────────
-export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange, fiscalYear = '2026', lockViewMode = null }) {
+export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange, fiscalYear = '2026', lockViewMode = null, hideMemberSidebar = false }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { isMobile } = useResponsive()
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
@@ -1184,8 +1184,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif' }}>
-      {/* 全社モード時のサイドバー (モバイル非表示 - マイタスクに限定) */}
-      {viewMode === 'all' && !isMobile && (
+      {/* 全社モード時のサイドバー (モバイル非表示。hideMemberSidebar 指定時も非表示) */}
+      {viewMode === 'all' && !isMobile && !hideMemberSidebar && (
         <div style={{
           width: 200, flexShrink: 0, overflowY: 'auto', background: T.sidebarBg,
           borderRight: `1px solid ${T.border}`, padding: '12px 0',
