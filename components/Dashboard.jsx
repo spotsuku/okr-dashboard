@@ -1868,6 +1868,7 @@ export default function Dashboard({ user, onSignOut }) {
           <OwnerOKRView
             ownerName={selectedOwner}
             levels={levels}
+            members={members}
             fiscalYear={fiscalYear}
             themeKey={themeKey}
             onEdit={canEditOKR ? (obj => setModal({ type: 'edit', obj })) : null}

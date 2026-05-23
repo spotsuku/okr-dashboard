@@ -165,7 +165,7 @@ function KARowMini({ t, ka }) {
   )
 }
 
-export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', themeKey = 'dark', onEdit, onDelete, refreshKey }) {
+export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYear = '2026', themeKey = 'dark', onEdit, onDelete, refreshKey }) {
   _t = THEMES[themeKey] || THEMES.dark
 
   const [objectives, setObjectives] = useState([])
@@ -281,20 +281,30 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
 
   return (
     <div style={{ padding: '24px 28px 80px', maxWidth: 1100, margin: '0 auto', background: t.bg, minHeight: '100%' }}>
-      {/* ヘッダー: メンバー名 + 年度 */}
-      <div style={{ marginBottom: SPACING.xl }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACING.md, marginBottom: SPACING.xs }}>
-          <div style={{ ...TYPO.title1, fontWeight: 600, color: t.text, letterSpacing: '-0.005em' }}>
-            {ownerName} さんの OKR
+      {/* ヘッダー: アバター + 役職 + {名前} のOKR + 年度 (週次ビューと統一様式) */}
+      {(() => {
+        const om = (members || []).find(m => m.name === ownerName)
+        const palette = ['#5A8A7A','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
+        const ac = palette[Math.abs([...ownerName].reduce((h, ch) => ch.charCodeAt(0) + ((h << 5) - h), 0)) % palette.length]
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.xl }}>
+            {om?.avatar_url ? (
+              <img src={om.avatar_url} alt={ownerName} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${ac}60`, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: `${ac}25`, border: `2px solid ${ac}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: TYPO.headline.fontSize, fontWeight: 700, color: ac, flexShrink: 0 }}>{ownerName.slice(0, 2)}</div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...TYPO.caption, fontWeight: 500, color: t.textMuted, marginBottom: 1 }}>{om?.role || 'メンバー'}</div>
+              <div style={{ ...TYPO.title3, fontWeight: 700, color: t.text }}>{ownerName} のOKR</div>
+            </div>
+            <span style={{
+              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: RADIUS.pill,
+              background: t.accentBg, color: t.accentText,
+            }}><Icon name="calendar" size={12} /> {fiscalYear}年度</span>
           </div>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center',
-            padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: RADIUS.pill,
-            background: t.accentBg, color: t.accentText,
-          }}>{fiscalYear}年度</span>
-        </div>
-        <div style={{ ...TYPO.subhead, fontWeight: 500, color: t.textMuted }}>担当する OKR の一覧と進捗状況</div>
-      </div>
+        )
+      })()}
 
       {/* Q タブ (.qtab) — 下線スタイル + 件数バッジ */}
       <div style={{
