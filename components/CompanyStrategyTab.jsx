@@ -3,22 +3,25 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
 import {
-  cardStyle, pillStyle, btnPrimary, accentRingStyle,
+  cardStyle, pillStyle, btnPrimary, btnSecondary, accentRingStyle,
   largeTitle, pageSubtitle, progressBarStyle, progressFillStyle,
   kpiNumber, inputStyle,
 } from '../lib/iosStyles'
+import Icon from './Icon'
 
 const THEMES = { dark: COMMON_TOKENS.dark, light: COMMON_TOKENS.light }
 
+// 注: color は分類/ステータスを示すデータパレット (テーマ非依存) のため固定値を維持。
+// icon はテキスト絵文字 → Icon name に変更 (🧭→target, 🔧→tools, ⏳→clock, ✓→check, ✗→cross, ⏸→circle: 一致が無いため近似)
 const MODE_META = {
-  exploit: { label: '深化', icon: '🔧', color: '#007AFF', desc: '既存パターンを伸ばす' },
-  explore: { label: '探索', icon: '🧭', color: '#AF52DE', desc: '新しい打ち手を試す' },
+  exploit: { label: '深化', icon: 'tools', color: '#007AFF', desc: '既存パターンを伸ばす' },
+  explore: { label: '探索', icon: 'target', color: '#AF52DE', desc: '新しい打ち手を試す' },
 }
 const STATUS_META = {
-  testing: { label: '検証中', icon: '⏳', color: '#FF9500' },
-  success: { label: '成功',   icon: '✓',  color: '#34C759' },
-  failure: { label: '失敗',   icon: '✗',  color: '#FF3B30' },
-  paused:  { label: '停止',   icon: '⏸',  color: '#8E8E93' },
+  testing: { label: '検証中', icon: 'clock',  color: '#FF9500' },
+  success: { label: '成功',   icon: 'check',  color: '#34C759' },
+  failure: { label: '失敗',   icon: 'cross',  color: '#FF3B30' },
+  paused:  { label: '停止',   icon: 'circle', color: '#8E8E93' },
 }
 
 function calcKRPct(kr) {
@@ -158,7 +161,7 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
         {/* ヘッダ (コンパクト) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.md, flexWrap: 'wrap' }}>
           <div style={accentRingStyle({ color: '#AF52DE', size: 32 })}>
-            <span style={{ fontSize: 16 }}>🧭</span>
+            <Icon name="target" size={16} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ ...TYPO.title2, color: T.text, margin: 0 }}>経営戦略</h1>
@@ -220,12 +223,12 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
                       <div style={{ flex: 1, ...progressBarStyle({ T, height: 4 }) }}>
                         <div style={progressFillStyle({ color: pct < 50 ? T.danger : pct < 80 ? T.warn : T.success, value: pct })} />
                       </div>
-                      <span style={{ ...TYPO.caption, color: pct < 50 ? T.danger : pct < 80 ? T.warn : T.success, fontWeight: 800, fontSize: 11 }}>{Math.round(pct)}%</span>
+                      <span style={{ ...TYPO.caption, color: pct < 50 ? T.danger : pct < 80 ? T.warn : T.success, fontWeight: 800, fontSize: TYPO.footnote.fontSize }}>{Math.round(pct)}%</span>
                     </div>
                     <div style={{ display: 'flex', gap: 4, ...TYPO.caption, color: T.textMuted, fontWeight: 600 }}>
-                      {cTesting > 0 && <span style={{ color: STATUS_META.testing.color }}>⏳{cTesting}</span>}
-                      {cSuccess > 0 && <span style={{ color: STATUS_META.success.color }}>✓{cSuccess}</span>}
-                      {cFailure > 0 && <span style={{ color: STATUS_META.failure.color }}>✗{cFailure}</span>}
+                      {cTesting > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: STATUS_META.testing.color }}><Icon name={STATUS_META.testing.icon} size={11} />{cTesting}</span>}
+                      {cSuccess > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: STATUS_META.success.color }}><Icon name={STATUS_META.success.icon} size={11} />{cSuccess}</span>}
+                      {cFailure > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: STATUS_META.failure.color }}><Icon name={STATUS_META.failure.icon} size={11} />{cFailure}</span>}
                       {(cTesting + cSuccess + cFailure) === 0 && <span>施策未登録</span>}
                       <span style={{ marginLeft: 'auto' }}>{kr.owner || '−'}</span>
                     </div>
@@ -381,27 +384,27 @@ function StrategyMessageEditor({ T, kr, messages, myName, onChanged }) {
   return (
     <div style={cardStyle({ T, accent: '#AF52DE', padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
-        <div style={accentRingStyle({ color: '#AF52DE', size: 28 })}><span style={{ fontSize: 14 }}>📝</span></div>
+        <div style={accentRingStyle({ color: '#AF52DE', size: 28 })}><Icon name="note" size={14} /></div>
         <div style={{ ...TYPO.callout, color: T.text, flex: 1 }}>経営からのメッセージ</div>
         {!editing && isToday && (
-          <button onClick={() => setEditing(true)} style={{ ...btnPrimary({ T, size: 'sm', color: '#AF52DE' }), padding: '4px 10px', fontSize: 11 }}>
-            ✎ 編集
+          <button onClick={() => setEditing(true)} style={{ ...btnPrimary({ T, size: 'sm', color: '#AF52DE' }), padding: '4px 10px', fontSize: TYPO.footnote.fontSize, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="pencil" size={11} /> 編集
           </button>
         )}
         {!editing && !isToday && (
-          <button onClick={() => { setActiveDate(today); setEditing(true) }} style={{ padding: '4px 10px', borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            ✎ 今日の版で編集
+          <button onClick={() => { setActiveDate(today); setEditing(true) }} style={{ ...btnSecondary({ T, size: 'sm' }), padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="pencil" size={11} /> 今日の版で編集
           </button>
         )}
         {editing && (
           <>
             <button onClick={() => { setEditing(false); setText(active.message || '') }} disabled={saving}
-              style={{ padding: '4px 10px', borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ ...btnSecondary({ T, size: 'sm' }), padding: '4px 10px' }}>
               キャンセル
             </button>
             <button onClick={save} disabled={saving}
-              style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), padding: '4px 10px', fontSize: 11 }}>
-              {saving ? '保存中…' : `✓ ${formatMessageDate(today)} で保存`}
+              style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), padding: '4px 10px', fontSize: TYPO.footnote.fontSize, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {saving ? '保存中…' : <><Icon name="check" size={11} /> {formatMessageDate(today)} で保存</>}
             </button>
           </>
         )}
@@ -421,9 +424,9 @@ function StrategyMessageEditor({ T, kr, messages, myName, onChanged }) {
                 style={{
                   padding: '4px 10px', borderRadius: RADIUS.pill,
                   border: `1px solid ${isActive ? '#AF52DE' : T.border}`,
-                  background: isActive ? 'rgba(175,82,222,0.12)' : 'transparent',
+                  background: isActive ? '#AF52DE1f' : 'transparent',
                   color: isActive ? '#AF52DE' : T.textSub,
-                  fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                  fontSize: TYPO.footnote.fontSize, fontWeight: 700, fontFamily: 'inherit',
                   cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
                 title={t.updated_by ? `更新: ${t.updated_by}` : ''}
@@ -460,7 +463,7 @@ function StrategyMessageEditor({ T, kr, messages, myName, onChanged }) {
         ) : (
           <div style={{ padding: SPACING.md, ...TYPO.body, color: T.textMuted, textAlign: 'center', fontStyle: 'italic' }}>
             {isToday
-              ? 'まだメッセージが登録されていません。「✎ 編集」から経営の意図を記入してください。'
+              ? 'まだメッセージが登録されていません。「編集」から経営の意図を記入してください。'
               : 'この日のメッセージはありません。'}
           </div>
         )
@@ -476,7 +479,7 @@ function InitiativesSection({ T, kr, initiatives, exploitInits, exploreInits, my
   return (
     <div style={cardStyle({ T, padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm + 2 }}>
-        <div style={accentRingStyle({ color: T.accent, size: 28 })}><span style={{ fontSize: 14 }}>🎯</span></div>
+        <div style={accentRingStyle({ color: T.accent, size: 28 })}><Icon name="target" size={14} /></div>
         <div style={{ ...TYPO.callout, color: T.text, flex: 1 }}>施策一覧</div>
         <span style={{ ...TYPO.caption, color: T.textMuted }}>合計 {initiatives.length} 件</span>
       </div>
@@ -514,15 +517,15 @@ function ModeBlock({ T, mode, inits, kr, onAdd, myName, isAdmin, onChanged }) {
         padding: `${SPACING.sm}px ${SPACING.md}px`,
         borderBottom: `1px solid ${meta.color}20`,
       }}>
-        <span style={{ fontSize: 14 }}>{meta.icon}</span>
+        <span style={{ color: meta.color, display: 'inline-flex' }}><Icon name={meta.icon} size={14} /></span>
         <span style={{ ...TYPO.subhead, color: meta.color, fontWeight: 800 }}>{meta.label}</span>
         <span style={{ ...TYPO.caption, color: T.textMuted }}>{meta.desc}</span>
         <span style={{ ...TYPO.caption, color: T.textMuted, marginLeft: 'auto' }}>{inits.length} 件</span>
         <button onClick={onAdd} style={{
           padding: '3px 10px', borderRadius: RADIUS.sm, border: `1px solid ${meta.color}`,
-          background: 'transparent', color: meta.color, fontSize: 11, fontWeight: 800,
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}>＋ 追加</button>
+          background: 'transparent', color: meta.color, fontSize: TYPO.footnote.fontSize, fontWeight: 800,
+          cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}><Icon name="plus" size={11} /> 追加</button>
       </div>
       <div style={{ padding: SPACING.sm, display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
         {inits.length === 0 ? (
@@ -569,8 +572,9 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
         <span style={{
           padding: '2px 8px', borderRadius: RADIUS.pill,
           background: `${meta.color}1f`, color: meta.color,
-          fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap',
-        }}>{meta.icon} {meta.label}</span>
+          fontSize: TYPO.caption.fontSize, fontWeight: 800, whiteSpace: 'nowrap',
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+        }}><Icon name={meta.icon} size={10} /> {meta.label}</span>
         <span style={{ ...TYPO.subhead, color: T.text, flex: 1, minWidth: 0 }}>{initiative.title}</span>
         {initiative.target_value != null && (
           <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -580,12 +584,12 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
         )}
         <button onClick={() => setEditing(true)} style={{
           padding: '2px 6px', borderRadius: RADIUS.xs, border: `1px solid ${T.border}`,
-          background: 'transparent', color: T.textSub, fontSize: 10, fontWeight: 700,
+          background: 'transparent', color: T.textSub, fontSize: TYPO.caption.fontSize, fontWeight: 700,
           cursor: 'pointer', fontFamily: 'inherit',
         }}>編集</button>
         <button onClick={removeInit} style={{
           padding: '2px 6px', borderRadius: RADIUS.xs, border: `1px solid ${T.danger}40`,
-          background: 'transparent', color: T.danger, fontSize: 10, fontWeight: 700,
+          background: 'transparent', color: T.danger, fontSize: TYPO.caption.fontSize, fontWeight: 700,
           cursor: 'pointer', fontFamily: 'inherit',
         }}>削除</button>
       </div>
@@ -600,7 +604,7 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
           background: `${T.danger}10`, border: `1px solid ${T.danger}30`,
           ...TYPO.footnote, color: T.danger, lineHeight: 1.55,
         }}>
-          <strong style={{ fontWeight: 800 }}>✗ 失敗の理由: </strong>{initiative.failure_reason}
+          <strong style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'middle' }}><Icon name="cross" size={11} /> 失敗の理由: </strong>{initiative.failure_reason}
         </div>
       )}
       <div style={{ ...TYPO.caption, color: T.textMuted, display: 'flex', gap: 8, fontWeight: 600, flexWrap: 'wrap' }}>
@@ -631,7 +635,7 @@ function InitiativeFormModal({ T, kr, mode, myName, onCancel, onSaved }) {
     <div onClick={onCancel} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000, padding: 20,
+      zIndex: 1000, padding: SPACING.xl,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: T.bgCard, borderRadius: RADIUS.lg,
@@ -697,7 +701,7 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
     if (onSaved) onSaved()
   }
 
-  const inputBase = { ...inputStyle({ T }), padding: '6px 10px', fontSize: 12 }
+  const inputBase = { ...inputStyle({ T }), padding: '6px 10px', fontSize: TYPO.subhead.fontSize }
   const Label = ({ children }) => <div style={{ ...TYPO.caption, color: T.textSub, fontWeight: 700, marginBottom: 3 }}>{children}</div>
 
   return (
@@ -726,18 +730,18 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
           <Label>分類</Label>
           <select value={mode} onChange={e => setMode(e.target.value)} disabled={saving}
             style={{ ...inputBase, width: '100%' }}>
-            <option value="exploit">🔧 深化 (既存パターンを伸ばす)</option>
-            <option value="explore">🧭 探索 (新しい打ち手)</option>
+            <option value="exploit">深化 (既存パターンを伸ばす)</option>
+            <option value="explore">探索 (新しい打ち手)</option>
           </select>
         </div>
         <div>
           <Label>ステータス</Label>
           <select value={status} onChange={e => setStatus(e.target.value)} disabled={saving}
             style={{ ...inputBase, width: '100%' }}>
-            <option value="testing">⏳ 検証中</option>
-            <option value="success">✓ 成功</option>
-            <option value="failure">✗ 失敗</option>
-            <option value="paused">⏸ 停止</option>
+            <option value="testing">検証中</option>
+            <option value="success">成功</option>
+            <option value="failure">失敗</option>
+            <option value="paused">停止</option>
           </select>
         </div>
       </div>
@@ -792,14 +796,12 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
 
       <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xs }}>
         <button onClick={onCancel} disabled={saving}
-          style={{ flex: 1, padding: '8px 14px', borderRadius: RADIUS.md,
-            border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub,
-            fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          style={{ flex: 1, ...btnSecondary({ T, size: 'md' }), textAlign: 'center' }}>
           キャンセル
         </button>
         <button onClick={save} disabled={saving}
-          style={{ flex: 1, ...btnPrimary({ T, size: 'md' }), opacity: saving ? 0.7 : 1 }}>
-          {saving ? '保存中…' : (initial.id ? '✓ 更新' : '✓ 追加')}
+          style={{ flex: 1, ...btnPrimary({ T, size: 'md' }), opacity: saving ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+          {saving ? '保存中…' : <><Icon name="check" size={13} /> {initial.id ? '更新' : '追加'}</>}
         </button>
       </div>
     </div>

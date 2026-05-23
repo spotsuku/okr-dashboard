@@ -1,6 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger, inputStyle, btnBrand } from '../lib/iosStyles'
 
 // ─── 日付ユーティリティ (JST) ─────────────────────────
 function toJSTDateStr(d) {
@@ -51,39 +54,45 @@ function formatCountdown(deadlineMs) {
 
 const MODE_CONFIG = {
   kr: {
-    title: '🎯 KR記入モード',
+    title: 'KR記入モード',
+    iconName: 'target',
     cta: '今週のKRを振り返り確認しよう！',
     deadlineLabel: '木曜 00:00 JST まで',
     deadlineOffset: 3,  // 月曜+3 = 木曜
-    accent: '#4d9fff',
-    accentBg: 'rgba(77,159,255,0.12)',
+    // accent/accentBg は mode 別アクセント。T が無い module スコープのため
+    // 近似トークン値 (kr=info/accent, ka=success) を直値で保持。
+    accent: '#0284c7',
+    accentBg: 'rgba(2,132,199,0.14)',
   },
   ka: {
-    title: '📋 KA記入モード',
+    title: 'KA記入モード',
+    iconName: 'note',
     cta: 'KAの振り返りと注力事項を確認しよう！',
     deadlineLabel: '金曜 00:00 JST まで',
     deadlineOffset: 4,  // 月曜+4 = 金曜
-    accent: '#00d68f',
-    accentBg: 'rgba(0,214,143,0.12)',
+    accent: '#059669',
+    accentBg: 'rgba(5,150,105,0.14)',
   },
 }
 
+// 天気 (KR 自信度): icon は Icon name に変更
 const WEATHER_OPTIONS = [
-  { v: 0, icon: '⚪', label: '未設定' },
-  { v: 1, icon: '🌧️', label: '雨' },
-  { v: 2, icon: '☁️', label: '曇り' },
-  { v: 3, icon: '⛅', label: '晴れ時々曇り' },
-  { v: 4, icon: '☀️', label: '晴れ' },
-  { v: 5, icon: '🌟', label: '快晴' },
+  { v: 0, icon: 'circle', label: '未設定' },
+  { v: 1, icon: 'rain',   label: '雨' },
+  { v: 2, icon: 'cloud',  label: '曇り' },
+  { v: 3, icon: 'partly', label: '晴れ時々曇り' },
+  { v: 4, icon: 'sun',    label: '晴れ' },
+  { v: 5, icon: 'sun',    label: '快晴' },
 ]
 
 // KA ステータス選択肢 (MyCoachPage と同じ値・色味で揃える)
+// label の emoji は Icon に置換、color は近似トークン直値
 const KA_STATUS_OPTIONS = [
-  { key: 'focus',  label: '🎯 Focus', color: '#4d9fff' },
-  { key: 'good',   label: '✅ Good',  color: '#00d68f' },
-  { key: 'more',   label: '🔺 More',  color: '#ff6b6b' },
-  { key: 'normal', label: '未着手',   color: '#8E8E93' },
-  { key: 'done',   label: '✓ 完了',   color: '#7a8599' },
+  { key: 'focus',  iconName: 'target', label: 'Focus', color: '#0284c7' },
+  { key: 'good',   iconName: 'check',  label: 'Good',  color: '#059669' },
+  { key: 'more',   iconName: 'flag',   label: 'More',  color: '#e11d48' },
+  { key: 'normal', iconName: null,     label: '未着手', color: '#8E8E93' },
+  { key: 'done',   iconName: 'check',  label: '完了',   color: '#7a8599' },
 ]
 
 // ─── メインコンポーネント ───────────────────────────
@@ -501,7 +510,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
       backdropFilter: 'blur(20px) saturate(180%)',
       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
+      padding: SPACING.xl,
       animation: 'focusFillFade 0.2s ease',
     }}>
       <style>{`
@@ -509,17 +518,17 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         @keyframes focusFillSlide { from {transform:translateY(20px); opacity:0} to {transform:translateY(0); opacity:1} }
       `}</style>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, borderRadius: 18,
+        background: T.bgCard, borderRadius: RADIUS.xl,
         width: '100%', maxWidth: 720, maxHeight: '92vh',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 24px 60px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.08)',
+        boxShadow: SHADOWS.xl,
         animation: 'focusFillSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
       }}>
         {/* ─── モード切替タブ ─── */}
         <div style={{
           display: 'flex', alignItems: 'center',
           borderBottom: `1px solid ${T.border}`, background: T.sectionBg,
-          padding: '10px 14px 0 14px', gap: 0, flexWrap: 'wrap',
+          padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px 0 ${SPACING.md + 2}px`, gap: 0, flexWrap: 'wrap',
         }}>
           {['kr', 'ka'].map(m => {
             const isActive = mode === m
@@ -527,18 +536,20 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
             const count = queue[m]?.length || 0
             return (
               <button key={m} onClick={() => setMode(m)} style={{
-                padding: '8px 14px 10px 14px', border: 'none',
+                padding: `${SPACING.sm}px ${SPACING.md + 2}px ${SPACING.sm + 2}px ${SPACING.md + 2}px`, border: 'none',
                 background: isActive ? T.bgCard : 'transparent',
-                borderRadius: '8px 8px 0 0',
+                borderRadius: `${RADIUS.sm}px ${RADIUS.sm}px 0 0`,
                 borderBottom: isActive ? `2px solid ${mc.accent}` : '2px solid transparent',
                 color: isActive ? T.text : T.textMuted,
-                fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                ...TYPO.callout, cursor: 'pointer', fontFamily: 'inherit',
                 marginBottom: -1,
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs + 2,
               }}>
+                <Icon name={mc.iconName} size={14} />
                 {mc.title}
                 {count > 0 && <span style={{
-                  marginLeft: 6, padding: '1px 7px', borderRadius: 99,
-                  background: mc.accent, color: '#fff', fontSize: 10,
+                  marginLeft: SPACING.xs + 2, padding: '1px 7px', borderRadius: RADIUS.pill,
+                  background: mc.accent, color: '#fff', ...TYPO.caption, fontWeight: 700,
                 }}>{count}</span>}
               </button>
             )
@@ -547,12 +558,12 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
           {/* 期間フィルタ */}
           <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value)}
             title="期間で絞り込み" style={{
-              fontSize: 10, color: T.textSub, background: T.bgCard,
-              border: `1px solid ${T.border}`, borderRadius: 6,
-              padding: '3px 8px', marginRight: 6, marginBottom: 6,
-              cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+              ...TYPO.caption, fontWeight: 700, color: T.textSub, background: T.bgCard,
+              border: `1px solid ${T.border}`, borderRadius: RADIUS.xs,
+              padding: `${SPACING.xs - 1}px ${SPACING.sm}px`, marginRight: SPACING.xs + 2, marginBottom: SPACING.xs + 2,
+              cursor: 'pointer', fontFamily: 'inherit',
             }}>
-            <option value="auto">📅 自動 (現Q+通期)</option>
+            <option value="auto">自動 (現Q+通期)</option>
             <option value="q1">Q1</option>
             <option value="q2">Q2</option>
             <option value="q3">Q3</option>
@@ -564,12 +575,12 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
           {deptOptions.length > 0 && (
             <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
               title="事業部で絞り込み" style={{
-                fontSize: 10, color: T.textSub, background: T.bgCard,
-                border: `1px solid ${T.border}`, borderRadius: 6,
-                padding: '3px 8px', marginRight: 6, marginBottom: 6,
-                cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, maxWidth: 180,
+                ...TYPO.caption, fontWeight: 700, color: T.textSub, background: T.bgCard,
+                border: `1px solid ${T.border}`, borderRadius: RADIUS.xs,
+                padding: `${SPACING.xs - 1}px ${SPACING.sm}px`, marginRight: SPACING.xs + 2, marginBottom: SPACING.xs + 2,
+                cursor: 'pointer', fontFamily: 'inherit', maxWidth: 180,
               }}>
-              <option value="all">🏢 全事業部</option>
+              <option value="all">全事業部</option>
               {deptOptions.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
@@ -577,58 +588,65 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
           )}
           {/* 全件表示 トグル */}
           <button onClick={() => setShowAll(v => !v)} style={{
-            fontSize: 10, color: showAll ? '#fff' : T.textSub,
+            ...TYPO.caption, fontWeight: 700, color: showAll ? '#fff' : T.textSub,
             background: showAll ? cfg.accent : 'transparent',
             border: `1px solid ${showAll ? cfg.accent : T.border}`,
-            borderRadius: 6, padding: '3px 10px', marginRight: 6, marginBottom: 6,
-            cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+            borderRadius: RADIUS.xs, padding: `${SPACING.xs - 1}px ${SPACING.sm + 2}px`, marginRight: SPACING.xs + 2, marginBottom: SPACING.xs + 2,
+            cursor: 'pointer', fontFamily: 'inherit',
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
           }} title="記入済みカードも含めて見直す">
-            {showAll ? '📋 全件表示 ON' : '📋 全件表示'}
+            <Icon name="note" size={11} />
+            {showAll ? '全件表示 ON' : '全件表示'}
           </button>
           {/* 閲覧中のユーザー + 権限バッジ */}
           <div style={{
-            fontSize: 10, color: T.textMuted, padding: '4px 8px',
-            background: canEdit ? (isViewingSelf ? 'rgba(77,159,255,0.12)' : 'rgba(255,209,102,0.15)') : 'rgba(122,133,153,0.12)',
-            borderRadius: 6, marginRight: 8, marginBottom: 6,
+            ...TYPO.caption, fontWeight: 700, color: T.textMuted, padding: `${SPACING.xs}px ${SPACING.sm}px`,
+            background: canEdit ? (isViewingSelf ? T.accentBg : T.warnBg) : 'rgba(122,133,153,0.12)',
+            borderRadius: RADIUS.xs, marginRight: SPACING.sm, marginBottom: SPACING.xs + 2,
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
           }}>
-            {isViewingSelf ? `✏️ ${viewingName} (自分)`
-              : isAdmin ? `👑 ${viewingName} (管理者編集)`
-              : `👁 ${viewingName} (閲覧のみ)`}
+            <Icon name={isViewingSelf ? 'pencil' : isAdmin ? 'star' : 'eye'} size={11} />
+            {isViewingSelf ? `${viewingName} (自分)`
+              : isAdmin ? `${viewingName} (管理者編集)`
+              : `${viewingName} (閲覧のみ)`}
           </div>
           <button onClick={onClose} style={{
             background: 'transparent', border: 'none', color: T.textMuted,
-            fontSize: 22, cursor: 'pointer', fontFamily: 'inherit', padding: '2px 10px',
-            marginBottom: 6,
-          }}>×</button>
+            cursor: 'pointer', fontFamily: 'inherit', padding: `${SPACING.xs - 2}px ${SPACING.sm + 2}px`,
+            marginBottom: SPACING.xs + 2,
+            display: 'inline-flex', alignItems: 'center',
+          }}><Icon name="cross" size={20} /></button>
         </div>
 
         {/* ─── CTA + 進捗 + 締切 ─── */}
-        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}`, background: cfg.accentBg }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: cfg.accent, marginBottom: 6 }}>
+        <div style={{ padding: `${SPACING.md + 2}px ${SPACING.xl}px`, borderBottom: `1px solid ${T.border}`, background: cfg.accentBg }}>
+          <div style={{ ...TYPO.title3, color: cfg.accent, marginBottom: SPACING.xs + 2 }}>
             {cfg.cta}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: T.textSub }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, ...TYPO.footnote, fontWeight: 600, color: T.textSub }}>
             <div style={{ flex: 1 }}>
               <div style={{
-                height: 6, background: 'rgba(255,255,255,0.3)', borderRadius: 99, overflow: 'hidden',
+                height: 6, background: 'rgba(255,255,255,0.3)', borderRadius: RADIUS.pill, overflow: 'hidden',
               }}>
                 <div style={{
                   height: '100%', width: `${progressPct}%`, background: cfg.accent,
                   transition: 'width 0.3s',
                 }} />
               </div>
-              <div style={{ marginTop: 4, fontWeight: 600 }}>
+              <div style={{ marginTop: SPACING.xs, fontWeight: 600 }}>
                 {done} / {total} 完了 (残り{remaining}件)
               </div>
             </div>
             <div style={{
-              padding: '4px 10px', borderRadius: 7,
-              background: countdown.overdue ? 'rgba(255,107,107,0.15)' :
-                          countdown.urgent ? 'rgba(255,209,102,0.15)' : 'rgba(255,255,255,0.3)',
-              color: countdown.overdue ? '#ff6b6b' : countdown.urgent ? '#ffa94d' : T.text,
-              fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap',
+              padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs,
+              background: countdown.overdue ? T.dangerBg :
+                          countdown.urgent ? T.warnBg : 'rgba(255,255,255,0.3)',
+              color: countdown.overdue ? T.danger : countdown.urgent ? T.warn : T.text,
+              fontWeight: 700, ...TYPO.footnote, whiteSpace: 'nowrap',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}>
-              {countdown.overdue ? '🚨 ' : countdown.urgent ? '⚠️ ' : '⏰ '}{cfg.deadlineLabel.split(' ')[0]} · {countdown.text}
+              <Icon name={countdown.overdue ? 'alert' : countdown.urgent ? 'alert' : 'clock'} size={12} />
+              {cfg.deadlineLabel.split(' ')[0]} · {countdown.text}
             </div>
           </div>
         </div>
@@ -639,7 +657,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
           style={{
-            flex: 1, overflowY: 'auto', padding: 24, minHeight: 0,
+            flex: 1, overflowY: 'auto', padding: SPACING['2xl'], minHeight: 0,
             transform: `translateX(${swipeDelta}px)`,
             transition: swipeDelta === 0 ? 'transform 0.2s ease' : 'none',
             opacity: Math.abs(swipeDelta) > 120 ? 0.5 : 1,
@@ -667,42 +685,39 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         {/* ─── フッター操作 ─── */}
         {!loading && !completed[mode] && q.length > 0 && (
           <div style={{
-            display: 'flex', gap: 8, padding: '12px 20px',
+            display: 'flex', gap: SPACING.sm, padding: `${SPACING.md}px ${SPACING.xl}px`,
             borderTop: `1px solid ${T.border}`, background: T.sectionBg,
             alignItems: 'center',
           }}>
             <button onClick={skipCard} disabled={saving || q.length <= 1} style={{
-              background: 'transparent', border: `1px solid ${T.borderMid}`,
-              color: T.textSub, borderRadius: 8, padding: '8px 14px',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              ...btnSecondary({ T, size: 'md' }), border: `1px solid ${T.borderMid}`,
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               opacity: q.length <= 1 ? 0.5 : 1,
-            }}>⏭ 後で</button>
+            }}><Icon name="chevronR" size={13} /> 後で</button>
             <button onClick={moveBack} disabled={saving || index[mode] === 0} style={{
-              background: 'transparent', border: `1px solid ${T.borderMid}`,
-              color: T.textSub, borderRadius: 8, padding: '8px 14px',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              ...btnSecondary({ T, size: 'md' }), border: `1px solid ${T.borderMid}`,
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               opacity: index[mode] === 0 ? 0.4 : 1,
-            }}>← 戻る</button>
-            <div style={{ flex: 1, fontSize: 10, color: T.textFaint, textAlign: 'center', display: 'none' }} className="swipe-hint">
-              ← スワイプで戻る / 右スワイプで保存 →
+            }}><Icon name="chevronL" size={13} /> 戻る</button>
+            <div style={{ flex: 1, ...TYPO.caption, fontWeight: 700, color: T.textFaint, textAlign: 'center', display: 'none' }} className="swipe-hint">
+              スワイプで戻る / 右スワイプで保存
             </div>
             <div style={{ flex: 1 }} />
             {canEdit ? (
               <button onClick={handleSaveNext} disabled={saving} style={{
-                background: cfg.accent, border: 'none', color: '#fff',
-                borderRadius: 8, padding: '8px 20px',
-                fontSize: 13, fontWeight: 800, cursor: saving ? 'wait' : 'pointer',
-                fontFamily: 'inherit', opacity: saving ? 0.6 : 1,
+                ...btnPrimary({ T, size: 'lg', color: cfg.accent }),
+                cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1,
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               }}>
-                {saving ? '保存中...' : (index[mode] === q.length - 1 ? '✅ 保存して完了 🎉' : '✅ 保存して次へ →')}
+                <Icon name={index[mode] === q.length - 1 ? 'trophy' : 'check'} size={14} />
+                {saving ? '保存中...' : (index[mode] === q.length - 1 ? '保存して完了' : '保存して次へ')}
               </button>
             ) : (
               <button onClick={moveNext} disabled={index[mode] === q.length - 1} style={{
-                background: T.accent, border: 'none', color: '#fff',
-                borderRadius: 8, padding: '8px 20px',
-                fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                ...btnPrimary({ T, size: 'lg' }),
                 opacity: index[mode] === q.length - 1 ? 0.5 : 1,
-              }}>次へ →</button>
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}>次へ <Icon name="arrowRight" size={14} /></button>
             )}
           </div>
         )}
@@ -734,33 +749,33 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
   const curPct = tgtVal ? Math.round((curVal / tgtVal) * 100) : 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
       {/* 反映先会議 */}
       {meetingText && (
         <div style={{
-          fontSize: 11, fontWeight: 700, color: cfg.accent,
-          background: cfg.accentBg, padding: '6px 10px',
-          borderRadius: 6, display: 'inline-block', alignSelf: 'flex-start',
-        }}>↪ {meetingText} に反映</div>
+          ...TYPO.footnote, fontWeight: 700, color: cfg.accent,
+          background: cfg.accentBg, padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`,
+          borderRadius: RADIUS.xs, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, alignSelf: 'flex-start',
+        }}><Icon name="arrowRight" size={12} /> {meetingText} に反映</div>
       )}
       {/* コンテキスト: 部署·チーム → Objective → タイトル */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-          {/* 期間バッジ (通期 / Q1〜Q4 を一目で分ける) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, flexWrap: 'wrap', marginBottom: SPACING.xs }}>
+          {/* 期間バッジ (通期 / Q1〜Q4 を一目で分ける) — 期間別カラーは data palette */}
           {obj && (() => {
             const periodBase = (obj.period || '').toString().includes('_')
               ? obj.period.split('_').pop()
               : obj.period
             const periodCfg = {
-              annual: { label: '🌐 通期', bg: 'rgba(142,142,147,0.18)', fg: '#6b7280', border: 'rgba(142,142,147,0.40)' },
-              q1:     { label: '🔵 Q1',  bg: 'rgba(0,122,255,0.18)',   fg: '#1d4ed8', border: 'rgba(0,122,255,0.45)' },
-              q2:     { label: '🟢 Q2',  bg: 'rgba(52,199,89,0.18)',   fg: '#0a8f5a', border: 'rgba(52,199,89,0.45)' },
-              q3:     { label: '🟠 Q3',  bg: 'rgba(255,149,0,0.18)',   fg: '#c2410c', border: 'rgba(255,149,0,0.45)' },
-              q4:     { label: '🟣 Q4',  bg: 'rgba(175,82,222,0.18)',  fg: '#7e22ce', border: 'rgba(175,82,222,0.45)' },
+              annual: { label: '通期', bg: 'rgba(142,142,147,0.18)', fg: '#6b7280', border: 'rgba(142,142,147,0.40)' },
+              q1:     { label: 'Q1',  bg: 'rgba(0,122,255,0.18)',   fg: '#1d4ed8', border: 'rgba(0,122,255,0.45)' },
+              q2:     { label: 'Q2',  bg: 'rgba(52,199,89,0.18)',   fg: '#0a8f5a', border: 'rgba(52,199,89,0.45)' },
+              q3:     { label: 'Q3',  bg: 'rgba(255,149,0,0.18)',   fg: '#c2410c', border: 'rgba(255,149,0,0.45)' },
+              q4:     { label: 'Q4',  bg: 'rgba(175,82,222,0.18)',  fg: '#7e22ce', border: 'rgba(175,82,222,0.45)' },
             }[periodBase] || { label: (obj.period || '?').toUpperCase(), bg: 'rgba(0,0,0,0.06)', fg: T.textSub, border: 'rgba(0,0,0,0.10)' }
             return (
               <span style={{
-                fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 8,
+                ...TYPO.footnote, fontWeight: 800, padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.sm,
                 background: periodCfg.bg, color: periodCfg.fg,
                 border: `1px solid ${periodCfg.border}`,
                 letterSpacing: '0.04em',
@@ -769,39 +784,39 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
           })()}
           {deptLabel && (
             <span style={{
-              fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 99,
+              ...pillStyle({ color: T.textSub, size: 'sm' }), gap: SPACING.xs,
               background: 'rgba(122,133,153,0.15)', color: T.textSub, letterSpacing: 0.3,
-            }}>🏢 {deptLabel}</span>
+            }}><Icon name="building" size={11} /> {deptLabel}</span>
           )}
           {obj && (
-            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: 0.5 }}>
-              OBJECTIVE {obj.title && <span style={{ color: T.textSub, fontWeight: 500, marginLeft: 4 }}>{obj.title}</span>}
+            <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 700, letterSpacing: 0.5 }}>
+              OBJECTIVE {obj.title && <span style={{ color: T.textSub, fontWeight: 500, marginLeft: SPACING.xs }}>{obj.title}</span>}
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACING.sm, marginBottom: SPACING.xs + 2 }}>
           <span style={{
-            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99,
+            ...TYPO.caption, fontWeight: 700, padding: `${SPACING.xs - 1}px ${SPACING.sm}px`, borderRadius: RADIUS.pill,
             background: cfg.accentBg, color: cfg.accent,
           }}>{isKR ? 'KR' : 'KA'}</span>
-          <div style={{ fontSize: 17, fontWeight: 700, color: T.text, lineHeight: 1.4 }}>
+          <div style={{ ...TYPO.title3, fontSize: 17, color: T.text, lineHeight: 1.4 }}>
             {title}
           </div>
         </div>
         {isKR && kr.target != null && kr.target !== '' && (
-          <div style={{ fontSize: 11, color: T.textMuted }}>
+          <div style={{ ...TYPO.footnote, color: T.textMuted }}>
             目標 {kr.target}{kr.unit || ''} · 現在 {curVal}{kr.unit || ''} ({curPct}%)
           </div>
         )}
         {!isKR && ka.kr_title && (
-          <div style={{ fontSize: 11, color: T.textMuted }}>
+          <div style={{ ...TYPO.footnote, color: T.textMuted }}>
             所属KR: {ka.kr_title}
           </div>
         )}
         {/* KA ステータス切替 (完了にすると一覧から非表示) */}
         {!isKR && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, marginRight: 2 }}>状態</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginTop: SPACING.sm, flexWrap: 'wrap' }}>
+            <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 700, marginRight: 2 }}>状態</span>
             {KA_STATUS_OPTIONS.map(opt => {
               const active = (ka.status || 'normal') === opt.key
               return (
@@ -810,14 +825,17 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
                   disabled={readOnly}
                   title={opt.key === 'done' ? '完了にすると次回からこのKAは表示されません' : undefined}
                   style={{
-                    fontSize: 10, padding: '3px 9px', borderRadius: 99,
+                    ...TYPO.caption, padding: `${SPACING.xs - 1}px ${SPACING.sm + 1}px`, borderRadius: RADIUS.pill,
                     background: active ? `${opt.color}22` : 'transparent',
                     color: active ? opt.color : T.textFaint,
                     border: `1px solid ${active ? opt.color : T.border}`,
                     fontWeight: 700, fontFamily: 'inherit',
                     cursor: readOnly ? 'not-allowed' : 'pointer',
                     opacity: readOnly ? 0.6 : 1,
-                  }}>{opt.label}</button>
+                    display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                  }}>
+                  {opt.iconName && <Icon name={opt.iconName} size={11} />}{opt.label}
+                </button>
               )
             })}
           </div>
@@ -827,22 +845,21 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
       {/* KR のみ: 進捗更新 */}
       {isKR && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>
-            📊 今週時点の進捗を更新
+          <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.textSub, marginBottom: SPACING.xs + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            <Icon name="chart" size={13} /> 今週時点の進捗を更新
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
             <input type="number"
               value={draft.current}
               onChange={e => !readOnly && setDraft(d => ({ ...d, current: e.target.value }))}
               readOnly={readOnly}
               style={{
-                width: 120, padding: '8px 10px', fontSize: 14,
+                ...inputStyle({ T }), width: 120,
                 background: T.sectionBg, border: `1px solid ${T.borderMid}`,
-                borderRadius: 8, color: T.text, outline: 'none', fontFamily: 'inherit',
                 fontWeight: 700,
               }} />
-            <span style={{ fontSize: 13, color: T.textSub, fontWeight: 700 }}>{kr.unit || ''}</span>
-            <span style={{ fontSize: 11, color: T.textMuted }}>
+            <span style={{ ...TYPO.callout, color: T.textSub }}>{kr.unit || ''}</span>
+            <span style={{ ...TYPO.footnote, color: T.textMuted }}>
               / 目標 {kr.target || 0}{kr.unit || ''} ({curPct}%)
             </span>
           </div>
@@ -852,23 +869,23 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
       {/* KR のみ: 天気 */}
       {isKR && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>
-            🌤️ {goodMoreWk} の体感・主観
+          <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.textSub, marginBottom: SPACING.xs + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            <Icon name="partly" size={13} /> {goodMoreWk} の体感・主観
           </div>
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ display: 'flex', gap: SPACING.xs }}>
             {WEATHER_OPTIONS.slice(1).map(w => (
               <button key={w.v}
                 onClick={() => !readOnly && setDraft(d => ({ ...d, weather: w.v }))}
                 disabled={readOnly}
                 style={{
-                  flex: 1, padding: '10px 4px',
+                  flex: 1, padding: `${SPACING.sm + 2}px ${SPACING.xs}px`,
                   background: Number(draft.weather) === w.v ? cfg.accentBg : 'transparent',
                   border: `1px solid ${Number(draft.weather) === w.v ? cfg.accent : T.border}`,
-                  borderRadius: 8, cursor: readOnly ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                  borderRadius: RADIUS.sm, cursor: readOnly ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                  color: T.text, fontSize: 10, opacity: readOnly ? 0.6 : 1,
+                  color: T.text, ...TYPO.caption, fontWeight: 700, opacity: readOnly ? 0.6 : 1,
                 }}>
-                <span style={{ fontSize: 18 }}>{w.icon}</span>
+                <Icon name={w.icon} size={18} />
                 <span>{w.label}</span>
               </button>
             ))}
@@ -880,16 +897,16 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
       <PrevReferenceBlock T={T} prev={prevRecord} isKR={isKR} weekStart={weekStart} />
 
       {/* 3 フィールド (絶対日のみ) */}
-      <FieldRow T={T} label={`✅ ${goodMoreWk} good — 良かったこと・続けたいこと`}
-        color="#00d68f" readOnly={readOnly}
+      <FieldRow T={T} iconName="check" label={`${goodMoreWk} good — 良かったこと・続けたいこと`}
+        color={T.success} readOnly={readOnly}
         value={draft.good} onChange={v => setDraft(d => ({ ...d, good: v }))}
         placeholder="例: 評議会で3社のクロージングが確定した" />
-      <FieldRow T={T} label={`🔺 ${goodMoreWk} more — 課題・改善点`}
-        color="#ff6b6b" readOnly={readOnly}
+      <FieldRow T={T} iconName="flag" label={`${goodMoreWk} more — 課題・改善点`}
+        color={T.danger} readOnly={readOnly}
         value={draft.more} onChange={v => setDraft(d => ({ ...d, more: v }))}
         placeholder="例: 午前中の集中が切れがちだった" />
-      <FieldRow T={T} label={`🎯 ${focusWk} focus — ${isKR ? '注力アクション' : 'Moreへの対応策'}`}
-        color="#4d9fff" readOnly={readOnly}
+      <FieldRow T={T} iconName="target" label={`${focusWk} focus — ${isKR ? '注力アクション' : 'Moreへの対応策'}`}
+        color={T.accent} readOnly={readOnly}
         value={draft.focus} onChange={v => setDraft(d => ({ ...d, focus: v }))}
         placeholder="例: 月曜朝90分はSlack offで提案書作成に集中" />
 
@@ -909,53 +926,51 @@ function RefUrlsEditor({ T, value, onChange, readOnly }) {
   const update = (i, field, v) => onChange(list.map((u, j) => j === i ? { ...u, [field]: v } : u))
   return (
     <div style={{
-      padding: '12px 14px', background: T.sectionBg, borderRadius: 10,
+      padding: `${SPACING.md}px ${SPACING.md + 2}px`, background: T.sectionBg, borderRadius: RADIUS.md,
       border: `1px solid ${T.border}`,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub }}>🔗 参考URL (任意)</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+        <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.textSub, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="link" size={13} /> 参考URL (任意)
+        </div>
         {!readOnly && (
           <button type="button" onClick={add} style={{
-            padding: '3px 10px', borderRadius: 6,
+            padding: `${SPACING.xs - 1}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs,
             background: 'transparent', color: T.accent, border: `1px solid ${T.accent}40`,
-            fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>＋ 追加</button>
+            ...TYPO.caption, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="plus" size={11} /> 追加</button>
         )}
       </div>
       {list.length === 0 ? (
-        <div style={{ fontSize: 10, color: T.textFaint }}>
+        <div style={{ ...TYPO.caption, fontWeight: 700, color: T.textFaint }}>
           {readOnly ? '(なし)' : 'URL を貼り付けると会議メモなどへリンクできます'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
           {list.map((u, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div key={i} style={{ display: 'flex', gap: SPACING.xs + 2, alignItems: 'center' }}>
               <input type="text" value={u.label || ''}
                 onChange={e => !readOnly && update(i, 'label', e.target.value)}
                 placeholder="ラベル"
                 disabled={readOnly}
                 style={{
-                  flex: '0 0 130px', padding: '6px 9px', fontSize: 11, fontFamily: 'inherit',
-                  background: T.bgCard, color: T.text,
-                  border: `1px solid ${T.border}`, borderRadius: 6,
-                  outline: 'none', boxSizing: 'border-box',
+                  ...inputStyle({ T }), flex: '0 0 130px', padding: `${SPACING.xs + 2}px ${SPACING.sm + 1}px`, ...TYPO.footnote,
                 }} />
               <input type="url" value={u.url || ''}
                 onChange={e => !readOnly && update(i, 'url', e.target.value)}
                 placeholder="https://..."
                 disabled={readOnly}
                 style={{
-                  flex: 1, padding: '6px 9px', fontSize: 11, fontFamily: 'inherit',
-                  background: T.bgCard, color: T.text,
-                  border: `1px solid ${T.border}`, borderRadius: 6,
-                  outline: 'none', boxSizing: 'border-box',
+                  ...inputStyle({ T }), flex: 1, padding: `${SPACING.xs + 2}px ${SPACING.sm + 1}px`, ...TYPO.footnote,
                 }} />
               {!readOnly && (
                 <button type="button" onClick={() => remove(i)} style={{
-                  flexShrink: 0, padding: '4px 8px', borderRadius: 6,
+                  flexShrink: 0, padding: `${SPACING.xs}px ${SPACING.sm}px`, borderRadius: RADIUS.xs,
                   background: 'transparent', color: T.danger, border: `1px solid ${T.danger}30`,
-                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}>×</button>
+                  ...TYPO.caption, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'inline-flex', alignItems: 'center',
+                }}><Icon name="cross" size={11} /></button>
               )}
             </div>
           ))}
@@ -983,72 +998,74 @@ function PrevReferenceBlock({ T, prev, isKR, weekStart }) {
   if (allEmpty) {
     return (
       <div style={{
-        fontSize: 11, color: T.textMuted, padding: '6px 12px',
-        background: T.sectionBg, borderRadius: 8,
+        ...TYPO.footnote, color: T.textMuted, padding: `${SPACING.xs + 2}px ${SPACING.md}px`,
+        background: T.sectionBg, borderRadius: RADIUS.sm,
         fontStyle: 'italic',
+        display: 'flex', alignItems: 'center', gap: SPACING.xs,
       }}>
-        📅 先週 ({label}) は未記入でした
+        <Icon name="calendar" size={12} /> 先週 ({label}) は未記入でした
       </div>
     )
   }
 
   return (
     <div style={{
-      background: T.sectionBg, borderRadius: 8, padding: '8px 12px 10px',
+      background: T.sectionBg, borderRadius: RADIUS.sm, padding: `${SPACING.sm}px ${SPACING.md}px ${SPACING.sm + 2}px`,
       border: `1px solid ${T.border}`,
-      display: 'flex', flexDirection: 'column', gap: 6,
+      display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
     }}>
       <button type="button" onClick={() => setOpen(o => !o)}
         style={{
           background: 'transparent', border: 'none', cursor: 'pointer',
-          fontSize: 11, fontWeight: 700, color: T.textSub,
-          display: 'flex', alignItems: 'center', gap: 6, padding: 0,
+          ...TYPO.footnote, fontWeight: 700, color: T.textSub,
+          display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, padding: 0,
           fontFamily: 'inherit', textAlign: 'left',
         }}>
-        <span style={{ fontSize: 9, color: T.textMuted }}>{open ? '▼' : '▶'}</span>
-        <span>📅 先週 ({label}) の記入 — 参考</span>
+        <Icon name={open ? 'chevronD' : 'chevronR'} size={11} style={{ color: T.textMuted }} />
+        <Icon name="calendar" size={12} />
+        <span>先週 ({label}) の記入 — 参考</span>
       </button>
       {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 2 }}>
-          {good && <PrevLine T={T} label="✅ good" text={good} color="#00d68f" />}
-          {more && <PrevLine T={T} label="🔺 more" text={more} color="#ff6b6b" />}
-          {focus && <PrevLine T={T} label="🎯 focus" text={focus} color="#4d9fff" />}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, marginTop: 2 }}>
+          {good && <PrevLine T={T} iconName="check" label="good" text={good} color={T.success} />}
+          {more && <PrevLine T={T} iconName="flag" label="more" text={more} color={T.danger} />}
+          {focus && <PrevLine T={T} iconName="target" label="focus" text={focus} color={T.accent} />}
         </div>
       )}
     </div>
   )
 }
 
-function PrevLine({ T, label, text, color }) {
+function PrevLine({ T, iconName, label, text, color }) {
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: SPACING.sm, alignItems: 'flex-start' }}>
       <span style={{
-        fontSize: 10, fontWeight: 700, color, flexShrink: 0,
-        padding: '2px 7px', borderRadius: 4, background: `${color}15`,
+        ...TYPO.caption, fontWeight: 700, color, flexShrink: 0,
+        padding: `2px ${SPACING.xs + 3}px`, borderRadius: RADIUS.xs, background: `${color}15`,
         whiteSpace: 'nowrap',
-      }}>{label}</span>
-      <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5, whiteSpace: 'pre-wrap', flex: 1, minWidth: 0 }}>{text}</span>
+        display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+      }}><Icon name={iconName} size={10} />{label}</span>
+      <span style={{ ...TYPO.subhead, fontWeight: 500, color: T.textSub, lineHeight: 1.5, whiteSpace: 'pre-wrap', flex: 1, minWidth: 0 }}>{text}</span>
     </div>
   )
 }
 
-function FieldRow({ T, label, color, value, onChange, placeholder, readOnly = false }) {
+function FieldRow({ T, iconName, label, color, value, onChange, placeholder, readOnly = false }) {
   return (
     <div>
       <div style={{
-        display: 'inline-block', fontSize: 11, fontWeight: 700,
-        color, background: `${color}18`, borderRadius: 5,
-        padding: '3px 8px', marginBottom: 4,
-      }}>{label}</div>
+        display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, ...TYPO.footnote, fontWeight: 700,
+        color, background: `${color}18`, borderRadius: RADIUS.xs,
+        padding: `${SPACING.xs - 1}px ${SPACING.sm}px`, marginBottom: SPACING.xs,
+      }}><Icon name={iconName} size={12} />{label}</div>
       <textarea
         value={value} onChange={e => onChange(e.target.value)}
         readOnly={readOnly}
         rows={3} placeholder={readOnly ? '' : placeholder}
         style={{
-          width: '100%', boxSizing: 'border-box',
-          padding: '10px 12px', fontSize: 13, lineHeight: 1.6,
+          ...inputStyle({ T }),
+          ...TYPO.callout, fontWeight: 500, lineHeight: 1.6,
           background: T.sectionBg, border: `1px solid ${T.borderMid}`,
-          borderRadius: 8, color: T.text, outline: 'none', fontFamily: 'inherit',
           resize: 'vertical', minHeight: 72,
           cursor: readOnly ? 'default' : 'text',
         }}
@@ -1062,28 +1079,28 @@ function CompletionScreen({ T, mode, q, onClose, showAll, onShowAll }) {
   const mc = MODE_CONFIG[mode]
   const isEmpty = q.length === 0
   return (
-    <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{isEmpty ? '✨' : '🎉'}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 6 }}>
+    <div style={{ textAlign: 'center', padding: `${SPACING['3xl'] + 8}px ${SPACING.xl}px` }}>
+      <div style={{ marginBottom: SPACING.md, color: isEmpty ? T.accent : T.warn, display: 'flex', justifyContent: 'center' }}>
+        <Icon name={isEmpty ? 'sparkle' : 'trophy'} size={48} stroke={1.4} />
+      </div>
+      <div style={{ ...TYPO.title2, color: T.text, marginBottom: SPACING.xs + 2 }}>
         {isEmpty ? '記入すべき項目はありません' : '完璧です！お疲れさまでした'}
       </div>
-      <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 24 }}>
+      <div style={{ ...TYPO.subhead, fontWeight: 500, color: T.textMuted, marginBottom: SPACING['2xl'] }}>
         {isEmpty
-          ? `${mc.title.replace(/^[^ ]+ /, '')}の未記入項目はありません。`
+          ? `${mc.title}の未記入項目はありません。`
           : `${q.length}件の ${mode === 'kr' ? 'KR' : 'KA'} レビューを完成しました。`}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: SPACING.sm, flexWrap: 'wrap' }}>
         {!showAll && onShowAll && (
           <button onClick={onShowAll} style={{
-            background: 'transparent', border: `1px solid ${mc.accent}`,
-            color: mc.accent, borderRadius: 8, padding: '10px 20px',
-            fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>📋 記入済みも含めて見直す</button>
+            ...btnSecondary({ T, size: 'lg' }), border: `1px solid ${mc.accent}`,
+            color: mc.accent,
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="note" size={13} /> 記入済みも含めて見直す</button>
         )}
         <button onClick={onClose} style={{
-          background: mc.accent, border: 'none', color: '#fff',
-          borderRadius: 8, padding: '10px 24px',
-          fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          ...btnPrimary({ T, size: 'lg', color: mc.accent }),
         }}>閉じる</button>
       </div>
     </div>
