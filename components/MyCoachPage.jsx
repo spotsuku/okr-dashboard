@@ -2,7 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnSecondary, btnGhost, btnBrand, inputStyle } from '../lib/iosStyles'
 import { computeKAKey } from '../lib/kaKey'
 import Icon from './Icon'
 
@@ -61,12 +62,12 @@ const SUGGESTIONS = [
   'タスクの優先順位を整理して',
 ]
 
-// iOS システムカラー
-const TASK_STATUS_CONFIG = {
-  not_started: { label: '未着手', color: '#8E8E93', bg: 'rgba(142,142,147,0.12)', border: 'rgba(142,142,147,0.30)', icon: '○' },
-  in_progress: { label: '進行中', color: '#007AFF', bg: 'rgba(0,122,255,0.12)',   border: 'rgba(0,122,255,0.30)',   icon: '◐' },
-  done:        { label: '完了',   color: '#34C759', bg: 'rgba(52,199,89,0.12)',   border: 'rgba(52,199,89,0.30)',   icon: '●' },
-}
+// iOS システムカラー (T を受けてトークン化)
+const taskStatusConfig = (T) => ({
+  not_started: { label: '未着手', color: T.textMuted, bg: T.sectionBg, border: T.border, dot: 'circle' },
+  in_progress: { label: '進行中', color: T.info,      bg: T.infoBg,    border: T.border, dot: 'half' },
+  done:        { label: '完了',   color: T.success,   bg: T.successBg, border: T.border, dot: 'filled' },
+})
 const TASK_STATUS_ORDER = ['not_started', 'in_progress', 'done']
 
 export default function MyCoachPage({ user, members, levels, themeKey = 'dark', fiscalYear = '2026' }) {
@@ -505,71 +506,71 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
   }
   const maxDone = Math.max(1, ...weeks4.map(w => doneTasksByWeek[w] || 0))
 
-  const sectionStyle = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
+  const sectionStyle = { ...cardStyle({ T, padding: SPACING.md + 2 }), borderRadius: RADIUS.md, display: 'flex', flexDirection: 'column' }
   const sH = (icon, text, extra) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginBottom: SPACING.sm, flexShrink: 0 }}>
       {typeof icon === 'string'
-        ? <span style={{ fontSize: 14 }}>{icon}</span>
+        ? <span style={{ ...TYPO.headline }}>{icon}</span>
         : <span style={{ display: 'inline-flex', alignItems: 'center', color: T.textSub }}>{icon}</span>}
-      <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{text}</span>
+      <span style={{ ...TYPO.subhead, fontWeight: 700, color: T.text }}>{text}</span>
       {extra}
     </div>
   )
 
-  if (loading) return <div style={{ padding: 40, color: T.accent, fontSize: 14, background: T.bg, height: '100%' }}>読み込み中...</div>
+  if (loading) return <div style={{ padding: SPACING['3xl'] + 8, color: T.accent, ...TYPO.headline, fontWeight: 500, background: T.bg, height: '100%' }}>読み込み中...</div>
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif', height: '100%', position: 'relative' }}>
       {/* Left: Main Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 固定ヘッダー */}
-        <div style={{ padding: isMobile ? '10px 12px 8px' : '14px 20px 10px', borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ padding: isMobile ? '10px 12px 8px' : '14px 20px 10px', borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700 }}>マイページ</div>
-            {!isMobile && <div style={{ fontSize: 11, color: T.textMuted }}>{myName} さんのOKRコーチング</div>}
+            <div style={{ ...(isMobile ? TYPO.title3 : TYPO.title2), color: T.text }}>マイページ</div>
+            {!isMobile && <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted }}>{myName} さんのOKRコーチング</div>}
           </div>
           {/* サマリーバッジ */}
-          <div style={{ display: 'flex', gap: isMobile ? 6 : 10, alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: isMobile ? SPACING.xs + 2 : SPACING.sm + 2, alignItems: 'center', flexShrink: 0 }}>
             {isMobileOrTablet && (
               <button onClick={() => setShowChat(p => !p)} title="AIチャット"
-                style={{ padding: '6px 10px', borderRadius: 7, border: `1px solid rgba(77,159,255,0.3)`, background: showChat ? 'rgba(77,159,255,0.15)' : 'transparent', color: '#4d9fff', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
-                🤖
+                style={{ ...btnSecondary({ T, size: 'sm' }), border: `1px solid ${T.accent}4d`, background: showChat ? T.accentBg : 'transparent', color: T.accent, display: 'inline-flex', alignItems: 'center' }}>
+                <Icon name="ai" size={15} />
               </button>
             )}
             <button onClick={() => setShowPremises(true)} title="AI前提設定"
-              style={{ padding: '6px 10px', borderRadius: 7, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
-              ⚙
+              style={{ ...btnSecondary({ T, size: 'sm' }), color: T.textMuted, display: 'inline-flex', alignItems: 'center' }}>
+              <Icon name="settings" size={15} />
             </button>
-            <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}` }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{tasks.length}</div>
-              <div style={{ fontSize: 9, color: T.textMuted }}>未完了</div>
+            <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: RADIUS.sm, background: T.sectionBg, border: `1px solid ${T.border}` }}>
+              <div style={{ ...TYPO.title3, fontWeight: 700, color: T.accent }}>{tasks.length}</div>
+              <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 0, color: T.textMuted }}>未完了</div>
             </div>
             {overdueTasks.length > 0 && (
-              <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: 8, background: T.overdueBg, border: `1px solid ${T.overdueBorder}` }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#ff6b6b' }}>{overdueTasks.length}</div>
-                <div style={{ fontSize: 9, color: '#ff6b6b' }}>期限超過</div>
+              <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: RADIUS.sm, background: T.overdueBg, border: `1px solid ${T.overdueBorder}` }}>
+                <div style={{ ...TYPO.title3, fontWeight: 700, color: T.danger }}>{overdueTasks.length}</div>
+                <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 0, color: T.danger }}>期限超過</div>
               </div>
             )}
-            <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: 8, background: T.doneBg, border: `1px solid ${T.doneBorder}` }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</div>
-              <div style={{ fontSize: 9, color: T.textMuted }}>完了(4週)</div>
+            <div style={{ textAlign: 'center', padding: isMobile ? '3px 8px' : '4px 14px', borderRadius: RADIUS.sm, background: T.doneBg, border: `1px solid ${T.doneBorder}` }}>
+              <div style={{ ...TYPO.title3, fontWeight: 700, color: T.success }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</div>
+              <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 0, color: T.textMuted }}>完了(4週)</div>
             </div>
           </div>
         </div>
 
         {/* スクロール可能コンテンツ */}
         <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '10px' : '14px 20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 10 : 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? SPACING.sm + 2 : SPACING.md }}>
 
             {/* 左上: 今週のアクションプラン */}
-            <div style={{ ...sectionStyle, borderColor: 'rgba(168,85,247,0.3)', background: themeKey === 'dark' ? 'rgba(168,85,247,0.04)' : 'rgba(168,85,247,0.03)', maxHeight: isMobile ? 'none' : 260 }}>
+            <div style={{ ...sectionStyle, borderColor: `${T.accent}4d`, background: T.accentBg, maxHeight: isMobile ? 'none' : 260 }}>
               {sH(<Icon name="target" size={14} />, '今週のアクションプラン',
                 <button onClick={() => { coachingGenerated.current = false; generateWeeklyCoaching() }} disabled={coachingLoading}
-                  style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,0.3)', background: 'transparent', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                  style={{ ...btnGhost({ T, size: 'sm' }), marginLeft: 'auto', ...TYPO.caption, fontWeight: 600, letterSpacing: 0, padding: '3px 10px', background: 'transparent', color: T.accent }}>
                   {coachingLoading ? '生成中...' : '更新'}
                 </button>
               )}
-              <div style={{ flex: 1, overflowY: 'auto', fontSize: 12, lineHeight: 1.65, color: T.textSub }}>
+              <div style={{ flex: 1, overflowY: 'auto', ...TYPO.subhead, fontWeight: 500, lineHeight: 1.65, color: T.textSub }}>
                 {coachingLoading ? (
                   <div style={{ color: T.textMuted, padding: '16px 0', textAlign: 'center' }}>AIが今週のプランを生成中...</div>
                 ) : weeklyCoaching ? (
@@ -584,17 +585,17 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
               {sH(<Icon name="flag" size={14} />, `KA一覧（${allKAs.length}件）`)}
               {/* タブ */}
-              <div style={{ display: 'flex', gap: 2, marginBottom: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 2, marginBottom: SPACING.xs + 2, flexShrink: 0, flexWrap: 'wrap' }}>
                 {[
                   ['all', '全体', allKAs.length, T.textMuted],
-                  ['focus', 'Focus', focusKAs.length, '#4d9fff'],
-                  ['good', 'Good', goodKAs.length, '#00d68f'],
-                  ['more', 'More', moreKAs.length, '#ff6b6b'],
+                  ['focus', 'Focus', focusKAs.length, T.accent],
+                  ['good', 'Good', goodKAs.length, T.success],
+                  ['more', 'More', moreKAs.length, T.danger],
                   ['normal', '未着手', allKAs.filter(k => !k.status || k.status === 'normal').length, T.textFaint],
-                  ['done', '完了', allKAs.filter(k => k.status === 'done').length, '#7a8599'],
+                  ['done', '完了', allKAs.filter(k => k.status === 'done').length, T.textMuted],
                 ].map(([key, lbl, cnt, col]) => (
                   <button key={key} onClick={() => setKaTab(key)} style={{
-                    fontSize: 9, padding: '3px 8px', borderRadius: 4, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
+                    ...TYPO.caption, letterSpacing: 0, padding: '3px 8px', borderRadius: RADIUS.xs, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
                     background: kaTab === key ? `${col}18` : 'transparent',
                     border: `1px solid ${kaTab === key ? col : T.border}`,
                     color: kaTab === key ? col : T.textFaint,
@@ -604,18 +605,18 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {(() => {
                   const filtered = kaTab === 'all' ? allKAs : allKAs.filter(ka => (ka.status || 'normal') === kaTab)
-                  if (filtered.length === 0) return <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>{kaTab === 'all' ? 'KAなし' : '該当KAなし'}</div>
+                  if (filtered.length === 0) return <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>{kaTab === 'all' ? 'KAなし' : '該当KAなし'}</div>
                   return filtered.map(ka => {
                     const st = ka.status || 'normal'
-                    const stColors = { focus: { bg: 'rgba(77,159,255,0.1)', border: 'rgba(77,159,255,0.3)', text: '#4d9fff' }, good: { bg: T.doneBg, border: T.doneBorder, text: '#00d68f' }, more: { bg: T.overdueBg, border: T.overdueBorder, text: '#ff6b6b' }, done: { bg: T.sectionBg, border: T.border, text: '#7a8599' }, normal: { bg: T.sectionBg, border: T.border, text: T.textMuted } }
+                    const stColors = { focus: { bg: T.accentBg, border: `${T.accent}4d`, text: T.accent }, good: { bg: T.doneBg, border: T.doneBorder, text: T.success }, more: { bg: T.overdueBg, border: T.overdueBorder, text: T.danger }, done: { bg: T.sectionBg, border: T.border, text: T.textMuted }, normal: { bg: T.sectionBg, border: T.border, text: T.textMuted } }
                     const c = stColors[st] || stColors.normal
                     return (
-                      <div key={ka.id} style={{ padding: '5px 8px', borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, marginBottom: 3, opacity: st === 'done' ? 0.6 : 1 }}>
-                        <div style={{ fontSize: 11, color: st === 'done' ? T.textFaint : T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: st === 'done' ? 'line-through' : 'none' }}>{ka.ka_title}</div>
-                        <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
-                          {[['focus','Focus','#4d9fff'],['good','Good','#00d68f'],['more','More','#ff6b6b'],['normal','--',T.textFaint]].map(([key,lbl,col]) => (
+                      <div key={ka.id} style={{ padding: '5px 8px', borderRadius: RADIUS.xs, background: c.bg, border: `1px solid ${c.border}`, marginBottom: 3, opacity: st === 'done' ? 0.6 : 1 }}>
+                        <div style={{ ...TYPO.footnote, fontWeight: 500, color: st === 'done' ? T.textFaint : T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: st === 'done' ? 'line-through' : 'none' }}>{ka.ka_title}</div>
+                        <div style={{ display: 'flex', gap: 3, marginTop: SPACING.xs }}>
+                          {[['focus','Focus',T.accent],['good','Good',T.success],['more','More',T.danger],['normal','--',T.textFaint]].map(([key,lbl,col]) => (
                             <button key={key} onClick={() => changeKAStatus(ka, key)} style={{
-                              fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
+                              ...TYPO.caption, letterSpacing: 0, padding: '2px 7px', borderRadius: RADIUS.xs, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
                               background: st === key ? `${col}20` : 'transparent',
                               border: `1px solid ${st === key ? col : T.border}`,
                               color: st === key ? col : T.textFaint,
@@ -633,22 +634,23 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
               {sH(<Icon name="target" size={14} />, 'マイOKR')}
               <div style={{ flex: 1, overflowY: 'auto' }}>
-                {objectives.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>担当Objectiveなし</div>}
+                {objectives.length === 0 && <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textFaint }}>担当Objectiveなし</div>}
                 {objectives.map(obj => {
                   const krs = keyResults.filter(kr => kr.objective_id === obj.id)
                   return (
-                    <div key={obj.id} style={{ marginBottom: 10, padding: 10, borderRadius: 7, background: T.sectionBg, border: `1px solid ${T.border}` }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 6, lineHeight: 1.3 }}>{obj.title}</div>
+                    <div key={obj.id} style={{ marginBottom: SPACING.sm + 2, padding: SPACING.sm + 2, borderRadius: RADIUS.xs, background: T.sectionBg, border: `1px solid ${T.border}` }}>
+                      <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.text, marginBottom: SPACING.xs + 2, lineHeight: 1.3 }}>{obj.title}</div>
                       {krs.map(kr => {
                         const pct = kr.target ? Math.round((kr.current / kr.target) * 100) : 0
+                        const pctColor = pct >= 70 ? T.success : pct >= 40 ? T.warn : T.danger
                         return (
-                          <div key={kr.id} style={{ marginBottom: 5 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 2 }}>
-                              <span style={{ color: T.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{kr.title}</span>
-                              <span style={{ fontWeight: 700, color: pct >= 70 ? '#00d68f' : pct >= 40 ? '#ffd166' : '#ff6b6b', flexShrink: 0 }}>{pct}%</span>
+                          <div key={kr.id} style={{ marginBottom: SPACING.xs + 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', ...TYPO.caption, fontWeight: 600, letterSpacing: 0, marginBottom: 2 }}>
+                              <span style={{ color: T.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: SPACING.sm }}>{kr.title}</span>
+                              <span style={{ fontWeight: 700, color: pctColor, flexShrink: 0 }}>{pct}%</span>
                             </div>
                             <div style={{ height: 3, borderRadius: 2, background: T.border }}>
-                              <div style={{ height: '100%', borderRadius: 2, width: `${Math.min(100, pct)}%`, background: pct >= 70 ? '#00d68f' : pct >= 40 ? '#ffd166' : '#ff6b6b' }} />
+                              <div style={{ height: '100%', borderRadius: 2, width: `${Math.min(100, pct)}%`, background: pctColor }} />
                             </div>
                           </div>
                         )
@@ -656,8 +658,8 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
                       <button onClick={() => {
                         const krInfo = krs.map(kr => `${kr.title}: ${kr.target ? Math.round((kr.current/kr.target)*100) : 0}% (${kr.current}${kr.unit}/${kr.target}${kr.unit})`).join('\n')
                         sendToAI(`以下のOKRについて具体的なアドバイスをください。\n\nObjective: ${obj.title}\n${krInfo}\n\n達成率を上げるための具体的なアクションを提案してください。`)
-                      }} style={{ marginTop: 6, fontSize: 10, padding: '4px 10px', borderRadius: 5, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.06)', color: '#a855f7', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                        🤖 AIアドバイス
+                      }} style={{ ...btnGhost({ T, size: 'sm' }), marginTop: SPACING.xs + 2, ...TYPO.caption, fontWeight: 600, letterSpacing: 0, padding: '4px 10px', background: T.accentBg, color: T.accent, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+                        <Icon name="ai" size={11} /> AIアドバイス
                       </button>
                     </div>
                   )
@@ -669,69 +671,70 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
             <div style={{ ...sectionStyle, maxHeight: isMobile ? 'none' : 260 }}>
               {sH(<Icon name="workspace" size={14} />, `タスク（${tasks.length}件）`,
                 <button onClick={proposeTasksFromAI} disabled={proposingTasks}
-                  style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 5, border: `1px solid ${T.info}4d`, background: `${T.info}10`, color: T.info, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  style={{ ...btnGhost({ T, size: 'sm' }), marginLeft: 'auto', ...TYPO.caption, fontWeight: 600, letterSpacing: 0, padding: '3px 10px', border: `1px solid ${T.info}4d`, background: T.infoBg, color: T.info, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
                   {proposingTasks ? '検討中...' : (<><Icon name="ai" size={11} /> AIでタスク検討</>)}
                 </button>
               )}
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {/* AI提案タスク */}
                 {proposedTasks.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#a855f7', marginBottom: 3 }}>AI提案</div>
+                  <div style={{ marginBottom: SPACING.sm }}>
+                    <div style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 700, color: T.accent, marginBottom: 3 }}>AI提案</div>
                     {proposedTasks.map(t => (
-                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 5, background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)', marginBottom: 2, fontSize: 11 }}>
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, padding: '4px 8px', borderRadius: RADIUS.xs, background: T.accentBg, border: `1px solid ${T.accent}33`, marginBottom: 2, ...TYPO.footnote, fontWeight: 500 }}>
                         <span style={{ color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
                         {t.accepted ? (
-                          <span style={{ fontSize: 9, color: '#00d68f', fontWeight: 700, flexShrink: 0 }}>登録済</span>
+                          <span style={{ ...TYPO.caption, letterSpacing: 0, color: T.success, fontWeight: 700, flexShrink: 0 }}>登録済</span>
                         ) : (
-                          <button onClick={() => acceptTask(t)} style={{ fontSize: 9, padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(0,214,143,0.4)', background: T.doneBg, color: '#00d68f', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>採用</button>
+                          <button onClick={() => acceptTask(t)} style={{ ...TYPO.caption, letterSpacing: 0, padding: '2px 8px', borderRadius: RADIUS.xs, border: `1px solid ${T.success}66`, background: T.doneBg, color: T.success, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>採用</button>
                         )}
                       </div>
                     ))}
-                    <button onClick={() => setProposedTasks([])} style={{ fontSize: 9, color: T.textFaint, background: 'none', border: 'none', cursor: 'pointer', marginTop: 2, fontFamily: 'inherit' }}>提案を閉じる</button>
+                    <button onClick={() => setProposedTasks([])} style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.textFaint, background: 'none', border: 'none', cursor: 'pointer', marginTop: 2, fontFamily: 'inherit' }}>提案を閉じる</button>
                   </div>
                 )}
                 {(() => {
+                  const STATUS_CFG = taskStatusConfig(T)
                   const taskRow = (t, bgStyle) => {
                     const status = t.status || 'not_started'
-                    const cfg = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG.not_started
+                    const cfg = STATUS_CFG[status] || STATUS_CFG.not_started
                     const nextStatus = TASK_STATUS_ORDER[(TASK_STATUS_ORDER.indexOf(status) + 1) % TASK_STATUS_ORDER.length]
                     return (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', borderRadius: 5, ...bgStyle, marginBottom: 2 }}>
-                      <button onClick={() => changeTaskStatus(t, nextStatus)} title={`クリックで「${TASK_STATUS_CONFIG[nextStatus].label}」に変更`}
-                        style={{ padding: '1px 6px', borderRadius: 4, border: `1px solid ${cfg.border}`, background: cfg.bg, color: cfg.color, fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap', lineHeight: 1.4 }}>
-                        {cfg.icon} {cfg.label}
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, padding: '3px 6px', borderRadius: RADIUS.xs, ...bgStyle, marginBottom: 2 }}>
+                      <button onClick={() => changeTaskStatus(t, nextStatus)} title={`クリックで「${STATUS_CFG[nextStatus].label}」に変更`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', borderRadius: RADIUS.xs, border: `1px solid ${cfg.border}`, background: cfg.bg, color: cfg.color, ...TYPO.caption, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: cfg.dot === 'filled' ? cfg.color : 'transparent', border: cfg.dot === 'filled' ? 'none' : `1.5px solid ${cfg.color}`, boxShadow: cfg.dot === 'half' ? `inset 4px 0 0 ${cfg.color}` : 'none' }} /> {cfg.label}
                       </button>
                       <input value={t.title} onChange={e => setTasks(prev => prev.map(x => x.id === t.id ? { ...x, title: e.target.value } : x))}
                         onBlur={e => updateTaskField(t.id, 'title', e.target.value)}
-                        style={{ flex: 1, background: 'transparent', border: 'none', color: T.text, fontSize: 11, outline: 'none', fontFamily: 'inherit', padding: '1px 2px', minWidth: 0 }} />
+                        style={{ flex: 1, background: 'transparent', border: 'none', color: T.text, ...TYPO.footnote, fontWeight: 500, outline: 'none', fontFamily: 'inherit', padding: '1px 2px', minWidth: 0 }} />
                       <input type="date" value={t.due_date || ''} onChange={e => updateTaskField(t.id, 'due_date', e.target.value)}
-                        style={{ width: 85, background: 'transparent', border: 'none', color: t.due_date && t.due_date < today ? '#ff6b6b' : T.textMuted, fontSize: 9, outline: 'none', fontFamily: 'inherit', flexShrink: 0 }} />
-                      <button onClick={() => deleteTask(t.id)} title="削除" style={{ width: 16, height: 16, borderRadius: 3, border: 'none', background: 'transparent', color: '#ff6b6b', cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.6 }}>✕</button>
+                        style={{ width: 85, background: 'transparent', border: 'none', color: t.due_date && t.due_date < today ? T.danger : T.textMuted, ...TYPO.caption, fontWeight: 600, letterSpacing: 0, outline: 'none', fontFamily: 'inherit', flexShrink: 0 }} />
+                      <button onClick={() => deleteTask(t.id)} title="削除" style={{ width: 16, height: 16, borderRadius: RADIUS.xs, border: 'none', background: 'transparent', color: T.danger, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.6 }}><Icon name="cross" size={11} /></button>
                     </div>
                     )
                   }
                   return (
                     <>
                       {overdueTasks.length > 0 && (
-                        <div style={{ marginBottom: 6 }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#ff6b6b', marginBottom: 3 }}>期限超過 ({overdueTasks.length})</div>
+                        <div style={{ marginBottom: SPACING.xs + 2 }}>
+                          <div style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 700, color: T.danger, marginBottom: 3 }}>期限超過 ({overdueTasks.length})</div>
                           {overdueTasks.map(t => taskRow(t, { background: T.overdueBg, border: `1px solid ${T.overdueBorder}` }))}
                         </div>
                       )}
                       {thisWeekTasks.length > 0 && (
-                        <div style={{ marginBottom: 6 }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#ffd166', marginBottom: 3 }}>今週 ({thisWeekTasks.length})</div>
+                        <div style={{ marginBottom: SPACING.xs + 2 }}>
+                          <div style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 700, color: T.warn, marginBottom: 3 }}>今週 ({thisWeekTasks.length})</div>
                           {thisWeekTasks.map(t => taskRow(t, { background: T.sectionBg, border: `1px solid ${T.border}` }))}
                         </div>
                       )}
                       {otherTasks.length > 0 && (
                         <div>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, marginBottom: 3 }}>その他 ({otherTasks.length})</div>
+                          <div style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 700, color: T.textMuted, marginBottom: 3 }}>その他 ({otherTasks.length})</div>
                           {otherTasks.map(t => taskRow(t, { background: T.sectionBg, border: `1px solid ${T.border}` }))}
                         </div>
                       )}
-                      {tasks.length === 0 && proposedTasks.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>未完了タスクなし</div>}
+                      {tasks.length === 0 && proposedTasks.length === 0 && <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textFaint, textAlign: 'center', padding: '10px 0' }}>未完了タスクなし</div>}
                     </>
                   )
                 })()}
@@ -740,38 +743,38 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
 
             {/* 下段: 過去の努力（横幅いっぱい） */}
             <div style={{ ...sectionStyle, gridColumn: '1 / -1' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.lg }}>
                 {sH(<Icon name="star" size={14} />, '過去の努力')}
-                <div style={{ display: 'flex', gap: 16, marginLeft: 'auto', marginBottom: 8 }}>
+                <div style={{ display: 'flex', gap: SPACING.lg, marginLeft: 'auto', marginBottom: SPACING.sm }}>
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: '#00d68f' }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</span>
-                    <span style={{ fontSize: 9, color: T.textMuted, marginLeft: 4 }}>完了タスク(4週)</span>
+                    <span style={{ ...TYPO.title3, fontWeight: 700, color: T.success }}>{Object.values(doneTasksByWeek).reduce((a, b) => a + b, 0)}</span>
+                    <span style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.textMuted, marginLeft: SPACING.xs }}>完了タスク(4週)</span>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{doneKACount}</span>
-                    <span style={{ fontSize: 9, color: T.textMuted, marginLeft: 4 }}>完了KA</span>
+                    <span style={{ ...TYPO.title3, fontWeight: 700, color: T.accent }}>{doneKACount}</span>
+                    <span style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.textMuted, marginLeft: SPACING.xs }}>完了KA</span>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: '#a855f7' }}>{focusKAs.length}</span>
-                    <span style={{ fontSize: 9, color: T.textMuted, marginLeft: 4 }}>Focus KA</span>
+                    <span style={{ ...TYPO.title3, fontWeight: 700, color: T.accent }}>{focusKAs.length}</span>
+                    <span style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.textMuted, marginLeft: SPACING.xs }}>Focus KA</span>
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 40 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: SPACING.sm, height: 40 }}>
                 {weeks4.map(w => {
                   const count = doneTasksByWeek[w] || 0
                   const h = Math.max(3, (count / maxDone) * 36)
                   return (
                     <div key={w} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: T.textMuted }}>{count}</div>
-                      <div style={{ width: '100%', height: h, borderRadius: 3, background: 'linear-gradient(180deg, #4d9fff, #a855f7)', opacity: w === thisMonday ? 1 : 0.5 }} />
+                      <div style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 700, color: T.textMuted }}>{count}</div>
+                      <div style={{ width: '100%', height: h, borderRadius: 3, background: `linear-gradient(180deg, ${T.accent}, ${T.accent}99)`, opacity: w === thisMonday ? 1 : 0.5 }} />
                     </div>
                   )
                 })}
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xs }}>
                 {weeks4.map(w => (
-                  <div key={w} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: T.textFaint }}>{formatDate(w)}~</div>
+                  <div key={w} style={{ flex: 1, textAlign: 'center', fontSize: 8, fontWeight: 700, color: T.textFaint }}>{formatDate(w)}~</div>
                 ))}
               </div>
             </div>
@@ -788,11 +791,11 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
         ...(isMobileOrTablet ? { position: 'absolute', top: 0, right: 0, bottom: 0, zIndex: 100, boxShadow: '-4px 0 20px rgba(0,0,0,0.3)' } : {}),
       }}>
         {/* Chat Header */}
-        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.chatBorder}`, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(77,159,255,0.04)', flexShrink: 0 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🤖</div>
+        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.chatBorder}`, display: 'flex', alignItems: 'center', gap: SPACING.sm, background: T.accentBg, flexShrink: 0 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: `linear-gradient(135deg, ${T.accent}, ${T.accent}99)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ai" size={15} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>OKR AIコーチ</div>
-            <div style={{ fontSize: 9, color: '#4d9fff' }}>
+            <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.text }}>OKR AIコーチ</div>
+            <div style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.accent }}>
               パーソナルコーチング
               {messages.length > 1 && ` ・ 履歴 ${messages.length - 1} 件`}
             </div>
@@ -803,36 +806,37 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
               title="履歴をクリア"
               style={{
                 background: 'transparent', border: `1px solid ${T.chatBorder}`,
-                color: T.textMuted, padding: '4px 8px', borderRadius: 6,
-                cursor: 'pointer', fontSize: 10, fontFamily: 'inherit',
+                color: T.textMuted, padding: '4px 8px', borderRadius: RADIUS.xs,
+                cursor: 'pointer', ...TYPO.caption, letterSpacing: 0, fontWeight: 600, fontFamily: 'inherit',
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               }}
-            >🗑 履歴</button>
+            ><Icon name="trash" size={11} /> 履歴</button>
           )}
-          {isMobileOrTablet && <button onClick={() => setShowChat(false)} style={{ background: 'transparent', border: `1px solid ${T.chatBorder}`, color: T.textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>}
+          {isMobileOrTablet && <button onClick={() => setShowChat(false)} style={{ background: 'transparent', border: `1px solid ${T.chatBorder}`, color: T.textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={14} /></button>}
         </div>
 
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 12px 4px' }}>
           {messages.map((m, i) => (
-            <div key={i} style={{ marginBottom: 10, display: 'flex', flexDirection: m.role === 'user' ? 'row-reverse' : 'row', gap: 6, alignItems: 'flex-start' }}>
+            <div key={i} style={{ marginBottom: SPACING.sm + 2, display: 'flex', flexDirection: m.role === 'user' ? 'row-reverse' : 'row', gap: SPACING.xs + 2, alignItems: 'flex-start' }}>
               {m.role === 'assistant' && (
-                <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>🤖</div>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: `linear-gradient(135deg, ${T.accent}, ${T.accent}99)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ai" size={12} /></div>
               )}
               <div style={{
                 maxWidth: '84%',
-                background: m.role === 'user' ? '#4d9fff' : themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg,
+                background: m.role === 'user' ? T.accent : T.sectionBg,
                 border: m.role === 'user' ? 'none' : `1px solid ${T.chatBorder}`,
                 borderRadius: m.role === 'user' ? '11px 11px 3px 11px' : '11px 11px 11px 3px',
-                padding: '8px 11px', fontSize: 11.5, lineHeight: 1.6,
+                padding: '8px 11px', ...TYPO.footnote, fontWeight: 500, lineHeight: 1.6,
                 color: m.role === 'user' ? '#fff' : T.textSub, whiteSpace: 'pre-wrap',
               }}>{m.content}</div>
             </div>
           ))}
           {chatLoading && (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 10 }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #4d9fff, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>🤖</div>
-              <div style={{ background: themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: '11px 11px 11px 3px', padding: '9px 13px', display: 'flex', gap: 4 }}>
-                {[0,1,2].map(i => (<div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: '#4d9fff', animation: 'coachBounce 1.2s infinite', animationDelay: `${i*0.2}s` }} />))}
+            <div style={{ display: 'flex', gap: SPACING.xs + 2, alignItems: 'flex-start', marginBottom: SPACING.sm + 2 }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `linear-gradient(135deg, ${T.accent}, ${T.accent}99)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ai" size={12} /></div>
+              <div style={{ background: T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: '11px 11px 11px 3px', padding: '9px 13px', display: 'flex', gap: SPACING.xs }}>
+                {[0,1,2].map(i => (<div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: T.accent, animation: 'coachBounce 1.2s infinite', animationDelay: `${i*0.2}s` }} />))}
               </div>
             </div>
           )}
@@ -842,13 +846,13 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
         {/* Suggestions */}
         {messages.length <= 1 && (
           <div style={{ padding: '0 12px 6px' }}>
-            <div style={{ fontSize: 9, color: T.textFaint, marginBottom: 4, letterSpacing: '0.1em' }}>おすすめ</div>
+            <div style={{ ...TYPO.caption, color: T.textFaint, marginBottom: SPACING.xs, letterSpacing: '0.1em' }}>おすすめ</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {SUGGESTIONS.map((s, i) => (
                 <button key={i} onClick={() => sendToAI(s)} style={{
-                  background: 'rgba(77,159,255,0.06)', border: '1px solid rgba(77,159,255,0.2)',
-                  borderRadius: 6, padding: '6px 9px', color: '#8ab4ff',
-                  fontSize: 10.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  background: T.accentBg, border: `1px solid ${T.accent}33`,
+                  borderRadius: RADIUS.xs, padding: '6px 9px', color: T.accentText,
+                  ...TYPO.caption, letterSpacing: 0, fontWeight: 600, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 }}>{s}</button>
               ))}
             </div>
@@ -856,18 +860,19 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
         )}
 
         {/* Input */}
-        <div style={{ padding: '6px 10px 10px', borderTop: `1px solid ${T.chatBorder}`, display: 'flex', gap: 6, alignItems: 'flex-end', flexShrink: 0 }}>
+        <div style={{ padding: '6px 10px 10px', borderTop: `1px solid ${T.chatBorder}`, display: 'flex', gap: SPACING.xs + 2, alignItems: 'flex-end', flexShrink: 0 }}>
           <textarea value={chatInput} onChange={e => setChatInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendToAI() } }}
             placeholder="何でも聞いてください..." rows={2}
-            style={{ flex: 1, background: themeKey === 'dark' ? 'rgba(255,255,255,0.05)' : T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: 7, padding: '7px 9px', color: T.text, fontSize: 11.5, outline: 'none', fontFamily: 'inherit', resize: 'none', lineHeight: 1.4 }}
+            style={{ ...inputStyle({ T }), flex: 1, background: T.sectionBg, border: `1px solid ${T.chatBorder}`, borderRadius: RADIUS.sm, padding: '7px 9px', ...TYPO.footnote, fontWeight: 500, resize: 'none', lineHeight: 1.4 }}
           />
           <button onClick={() => sendToAI()} disabled={!chatInput.trim() || chatLoading} style={{
-            width: 32, height: 32, borderRadius: 7, border: 'none',
-            background: chatInput.trim() && !chatLoading ? 'linear-gradient(135deg, #4d9fff, #a855f7)' : themeKey === 'dark' ? 'rgba(255,255,255,0.08)' : T.border,
+            ...(chatInput.trim() && !chatLoading ? btnBrand({ size: 'md' }) : {}),
+            width: 32, height: 32, borderRadius: RADIUS.sm, border: 'none', padding: 0,
+            background: chatInput.trim() && !chatLoading ? BRAND_GRADIENT.cta : T.border,
             color: '#fff', cursor: chatInput.trim() && !chatLoading ? 'pointer' : 'not-allowed',
-            fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>↑</button>
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}><Icon name="arrowUp" size={16} /></button>
         </div>
         <style>{`@keyframes coachBounce { 0%,60%,100% { transform:translateY(0) } 30% { transform:translateY(-5px) } }`}</style>
       </div>
@@ -875,30 +880,30 @@ ${tasks.slice(0, 5).map(t => `- ${t.title}`).join('\n') || 'なし'}
       {/* AI前提設定モーダル */}
       {showPremises && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPremises(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, width: 500, maxHeight: '70vh', overflowY: 'auto' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 14 }}>AI前提設定</div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 12 }}>AIコーチが守るべきルール・前提知識を設定できます</div>
+          <div onClick={e => e.stopPropagation()} style={{ ...cardStyle({ T, padding: SPACING.xl }), borderRadius: RADIUS.lg, width: 500, maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ ...TYPO.title3, color: T.text, marginBottom: SPACING.md + 2 }}>AI前提設定</div>
+            <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted, marginBottom: SPACING.md }}>AIコーチが守るべきルール・前提知識を設定できます</div>
             {premises.map(p => (
-              <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
-                <div style={{ flex: 1, fontSize: 12, color: T.textSub, padding: '6px 10px', background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 6, lineHeight: 1.5 }}>{p.content}</div>
+              <div key={p.id} style={{ display: 'flex', gap: SPACING.sm, alignItems: 'flex-start', marginBottom: SPACING.sm }}>
+                <div style={{ flex: 1, ...TYPO.subhead, fontWeight: 500, color: T.textSub, padding: '6px 10px', background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: RADIUS.xs, lineHeight: 1.5 }}>{p.content}</div>
                 <button onClick={async () => {
                   await supabase.from('ai_premises').delete().eq('id', p.id)
                   setPremises(prev => prev.filter(x => x.id !== p.id))
-                }} style={{ padding: '4px 8px', borderRadius: 5, border: `1px solid ${T.overdueBorder}`, background: T.overdueBg, color: '#ff6b6b', cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', flexShrink: 0 }}>削除</button>
+                }} style={{ padding: '4px 8px', borderRadius: RADIUS.xs, border: `1px solid ${T.overdueBorder}`, background: T.overdueBg, color: T.danger, cursor: 'pointer', ...TYPO.footnote, fontWeight: 600, fontFamily: 'inherit', flexShrink: 0 }}>削除</button>
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.md }}>
               <textarea value={premiseEdit} onChange={e => setPremiseEdit(e.target.value)} placeholder="新しい前提を入力..." rows={2}
-                style={{ flex: 1, background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', resize: 'none', outline: 'none' }}
+                style={{ ...inputStyle({ T }), flex: 1, background: T.sectionBg, borderRadius: RADIUS.xs, padding: '6px 10px', ...TYPO.subhead, fontWeight: 500, resize: 'none' }}
               />
               <button onClick={async () => {
                 if (!premiseEdit.trim()) return
                 const { data } = await supabase.from('ai_premises').insert({ content: premiseEdit.trim(), sort_order: premises.length, created_by: myName }).select()
                 if (data?.[0]) setPremises(prev => [...prev, data[0]])
                 setPremiseEdit('')
-              }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: T.accent, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', flexShrink: 0, alignSelf: 'flex-end' }}>追加</button>
+              }} style={{ ...btnBrand({ size: 'sm' }), padding: '6px 14px', flexShrink: 0, alignSelf: 'flex-end' }}>追加</button>
             </div>
-            <button onClick={() => setShowPremises(false)} style={{ marginTop: 14, padding: '6px 16px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', width: '100%' }}>閉じる</button>
+            <button onClick={() => setShowPremises(false)} style={{ ...btnSecondary({ T, size: 'sm' }), marginTop: SPACING.md + 2, padding: '6px 16px', width: '100%' }}>閉じる</button>
           </div>
         </div>
       )}
