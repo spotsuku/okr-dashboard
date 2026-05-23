@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
-import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { btnBrand } from '../lib/iosStyles'
 import { HeroCard, DashboardTile } from './iosUI'
 import { useAutoSave } from '../lib/useAutoSave'
@@ -49,6 +49,9 @@ function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f', 3: '#ffd166' }
+// 部署スコープ用の定義済みパープル (success/accent/warn 以外の第4軸として既存パープルを踏襲)
+const PURPLE    = '#a855f7'
+const PURPLE_BG = 'rgba(168,85,247,0.14)'
 
 // ★ doneを追加した5種ステータス
 const STATUS_CFG = {
@@ -1552,13 +1555,22 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     : '両方'
                   const scope = wm.levelName || (wm.levelSelect === 'department' ? '事業部選択' : '全社')
                   const Icon = MEETING_ICONS[m.key] || MEETING_ICONS._default
+                  // scope ピル: 両方=accent / チームサマリー=success / 部署系=purple
+                  const isDeptScope = wm.levelSelect === 'department' || !!wm.levelName
+                  const pillBg   = viewBadge === 'チームサマリー' ? wT().successBg
+                    : isDeptScope ? PURPLE_BG
+                    : wT().accentBg
+                  const pillFg   = viewBadge === 'チームサマリー' ? wT().success
+                    : isDeptScope ? PURPLE
+                    : wT().accentText
                   return (
                     <button key={m.key} onClick={() => selectMeeting(m.key)}
                       style={{
                         textAlign:'left', cursor:'pointer', fontFamily:'inherit',
                         background: wT().bgCard,
+                        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
                         border: `1px solid ${wT().border}`,
-                        borderRadius: RADIUS.xl - 2, padding: `${SPACING.xl}px ${SPACING['2xl'] - 2}px`,
+                        borderRadius: RADIUS.lg, padding: SPACING.lg,
                         display: 'flex', flexDirection:'column', gap: SPACING.md + 2,
                         position: 'relative', overflow: 'hidden',
                         transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
@@ -1566,37 +1578,30 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                         minHeight: 132,
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.borderColor = `${m.color}66`
-                        e.currentTarget.style.transform = 'translateY(-3px)'
-                        e.currentTarget.style.boxShadow = SHADOWS.hover(m.color)
+                        e.currentTarget.style.borderColor = wT().borderMid
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = SHADOWS.md
                       }}
                       onMouseLeave={e => {
                         e.currentTarget.style.borderColor = wT().border
                         e.currentTarget.style.transform = 'translateY(0)'
                         e.currentTarget.style.boxShadow = SHADOWS.sm
                       }}>
-                      {/* 装飾: 右上に淡いカラーグロー */}
-                      <div aria-hidden style={{
-                        position: 'absolute', top: -40, right: -40, width: 140, height: 140,
-                        background: `radial-gradient(circle, ${m.color}1c 0%, transparent 65%)`,
-                        pointerEvents: 'none',
-                      }} />
                       {/* ヘッダ行: アイコン + ビューバッジ */}
                       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', position:'relative', zIndex:1 }}>
                         <div style={{
-                          flexShrink:0, width:46, height:46, borderRadius:RADIUS.md + 2,
-                          background: `linear-gradient(135deg, ${m.color} 0%, ${m.color}c0 100%)`,
+                          flexShrink:0, width:38, height:38, borderRadius:RADIUS.md,
+                          background: BRAND_GRADIENT.cta,
                           color:'#fff',
                           display:'flex', alignItems:'center', justifyContent:'center',
-                          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px ${m.color}55`,
+                          boxShadow: SHADOWS.glassInset,
                         }}>
-                          <Icon size={22} />
+                          <Icon size={20} />
                         </div>
                         <span style={{
                           flexShrink:0, ...TYPO.caption, fontWeight:800,
                           padding:'3px 10px', borderRadius:RADIUS.pill,
-                          background:`${m.color}14`, color:m.color, whiteSpace:'nowrap',
-                          border: `1px solid ${m.color}30`,
+                          background:pillBg, color:pillFg, whiteSpace:'nowrap',
                         }}>{viewBadge}</span>
                       </div>
                       {/* タイトル */}
@@ -1616,7 +1621,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                       <div style={{
                         marginTop:'auto', position:'relative', zIndex:1,
                         display:'flex', alignItems:'center', gap:6,
-                        ...TYPO.footnote, fontWeight:800, color: m.color,
+                        ...TYPO.footnote, fontSize:12, fontWeight:600, color: wT().accentText,
                       }}>会議を開始 <Icon name="arrowRight" size={13} /></div>
                     </button>
                   )
