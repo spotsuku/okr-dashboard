@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { SegmentedControl } from './iosUI'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
 
@@ -914,7 +914,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       <div key={level.id}>
         <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
           style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', paddingLeft:8+indent*14, borderRadius:RADIUS.xs, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent', opacity:hasMyObj?1:0.5 }}>
-          <span style={{ fontSize:TYPO.subhead.fontSize }}>{level.icon}</span>
+          <span style={{display:'inline-flex'}}><DataIcon value={level.icon} size={13}/></span>
           <span style={{ fontSize:TYPO.footnote.fontSize, flex:1, fontWeight:isActive?700:hasMyObj?600:400, color:isActive?color:hasMyObj?wT().textSub:wT().textFaint }}>{level.name}</span>
           {hasMyObj && <span style={{ width:6, height:6, borderRadius:'50%', background:color, flexShrink:0 }} />}
         </div>
@@ -1039,7 +1039,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     background:`linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`, color:'#fff',
                     boxShadow: `0 1px 2px ${color}55`,
                   }}>{periodLabel(obj.period)}</span>
-                  {level && <span style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted }}>{level.icon} {level.name}</span>}
+                  {level && <span style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted }}><DataIcon value={level.icon} size={11}/> {level.name}</span>}
                 </div>
                 <div style={{ fontSize:TYPO.body.fontSize, fontWeight:700, lineHeight:1.4, marginBottom:SPACING.sm, color:wT().text, letterSpacing:'-0.01em' }}>{obj.title}</div>
                 <div style={{ height:5, borderRadius:RADIUS.pill, background:wT().borderLight, overflow:'hidden', marginBottom:7 }}>

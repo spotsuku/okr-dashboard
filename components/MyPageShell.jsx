@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
 import { cardStyle, sectionHeaderStyle, btnBrand } from '../lib/iosStyles'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
@@ -3070,7 +3070,7 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
             padding:'2px 8px', borderRadius: 99,
             background:'rgba(255,255,255,0.55)', color:'#064e3b',
           }}>
-            <span>{level.icon || '🤝'}</span>{level.name}
+            <span style={{display:'inline-flex'}}><DataIcon value={level.icon} size={13} fallback="handshake"/></span>{level.name}
           </span>
         )}
         {managerName && (
@@ -3170,7 +3170,7 @@ function TeamTabSelector({ tabs, allLevels = [], activeLevelId, onSelect }) {
               background: a ? '#064e3b' : 'rgba(255,255,255,0.55)',
               color: a ? '#fff' : '#065f46',
               fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            }}>{t.icon || '🤝'} {t.name}</button>
+            }}><DataIcon value={t.icon} size={13} fallback="handshake"/> {t.name}</button>
           )
         })}
       </div>
@@ -3259,7 +3259,7 @@ function TeamTabSelector({ tabs, allLevels = [], activeLevelId, onSelect }) {
                   background: a ? '#10b981' : 'rgba(255,255,255,0.8)',
                   color: a ? '#fff' : '#065f46',
                   fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}>{t.icon || '🤝'} {t.name}</button>
+                }}><DataIcon value={t.icon} size={13} fallback="handshake"/> {t.name}</button>
               )
             })}
           </div>
