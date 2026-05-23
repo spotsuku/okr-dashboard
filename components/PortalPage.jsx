@@ -56,6 +56,15 @@ function relativeTime(ts) {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+// メンバー名から決定的に色を割り当て (アバター用)
+const AVATAR_HUES = ['#f59e0b', '#3b82f6', '#10b981', '#a855f7', '#ec4899', '#06b6d4', '#ef6b6b', '#84cc16', '#f97316', '#8b5cf6']
+function avatarColor(name) {
+  if (!name) return '#94a3b8'
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_HUES[Math.abs(h) % AVATAR_HUES.length]
+}
+
 // ─── テーマは lib/themeTokens.js で一元管理 ─────────────────────
 const THEMES = {
   dark:  { ...COMMON_TOKENS.dark,  cardHover: 'rgba(255,255,255,0.04)' },
@@ -242,24 +251,25 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
 
       // ── 最近の動き (KRレビュー / KPT / 解決された確認事項を時系列で統合) ──
       const krOwnerMap = {}
-      ;(r.krs?.data || []).forEach(kr => { krOwnerMap[kr.id] = kr.owner })
+      const krTitleMap = {}
+      ;(r.krs?.data || []).forEach(kr => { krOwnerMap[kr.id] = kr.owner; krTitleMap[kr.id] = kr.title })
       const recent = []
       ;(r.recentKrRevs?.data || []).forEach(rv => {
         if (!((rv.good || '').trim() || (rv.more || '').trim() || (rv.focus || '').trim())) return
         const name = krOwnerMap[rv.kr_id]
         if (!name) return
-        recent.push({ name, action: 'KR の週次レビューを記入しました', ts: rv.updated_at || rv.created_at })
+        recent.push({ name, action: 'KR の週次レビューを記入しました', detail: krTitleMap[rv.kr_id] || '', ts: rv.updated_at || rv.created_at })
       })
       ;(r.recentKpt?.data || []).forEach(row => {
         if (!row.owner) return
         let c
         try { c = typeof row.content === 'string' ? JSON.parse(row.content) : row.content } catch { c = {} }
         if (!((c?.keep || '').trim() || (c?.problem || '').trim() || (c?.try || '').trim())) return
-        recent.push({ name: row.owner, action: '振り返り (KPT) を記入しました', ts: row.created_at })
+        recent.push({ name: row.owner, action: '振り返り (KPT) を記入しました', detail: '', ts: row.created_at })
       })
       ;(r.recentResolved?.data || []).forEach(row => {
         if (!row.to_name) return
-        recent.push({ name: row.to_name, action: '確認事項を解決しました', ts: row.resolved_at || row.created_at })
+        recent.push({ name: row.to_name, action: '確認事項を解決しました', detail: row.content || '', ts: row.resolved_at || row.created_at })
       })
       recent.sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
       setRecentItems(recent.slice(0, 5))
@@ -430,21 +440,25 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     )
   }
 
-  // 最近の動き 1行: "{name} が {action}" + 相対時間
+  // 最近の動き 1行: [丸アバター] {name} が {action} —「{detail}」  + 相対時刻
   function ActivityRow({ item, last }) {
+    const mem = members.find(m => m.name === item.name)
+    const c = avatarColor(item.name)
     return (
       <div style={{
-        display: 'flex', alignItems: 'flex-start', gap: 9,
+        display: 'flex', alignItems: 'center', gap: 10,
         padding: '9px 14px',
         borderBottom: last ? 'none' : `1px solid ${T.border}`,
+        fontSize: 12,
       }}>
-        <span style={{ color: T.accent, flexShrink: 0, marginTop: 1, display: 'inline-flex' }}>
-          <Icon name="check" size={13} stroke={1.8} />
-        </span>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.5, color: T.text }}>
-          <span style={{ fontWeight: 700 }}>{item.name}</span> が {item.action}
+        {mem?.avatar_url
+          ? <img src={mem.avatar_url} alt={item.name} style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+          : <span style={{ width: 24, height: 24, borderRadius: '50%', background: `linear-gradient(135deg, ${c}, ${c}aa)`, color: '#fff', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.name ? item.name[0] : '?'}</span>}
+        <div style={{ flex: 1, minWidth: 0, lineHeight: 1.5 }}>
+          <span style={{ fontWeight: 600, color: T.text }}>{item.name}</span>
+          <span style={{ color: T.textSub }}> が {item.action}{item.detail ? ` —「${item.detail}」` : ''}</span>
         </div>
-        <span style={{ fontSize: 10.5, color: T.textMuted, flexShrink: 0, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 10.5, color: T.textMuted, fontFamily: 'ui-monospace, monospace', flexShrink: 0, whiteSpace: 'nowrap' }}>
           {relativeTime(item.ts)}
         </span>
       </div>
