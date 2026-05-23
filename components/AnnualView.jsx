@@ -6,6 +6,7 @@ import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeToken
 import KASection from './KASection'
 import { useLayerLabels } from '../lib/levelLabels'
 import Icon, { DataIcon } from './Icon'
+import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
 function makeKATheme(t) {
@@ -86,13 +87,7 @@ const tColor = (r) => {
 // % 4段階色マッピング (デザイン統一仕様 .objh / .krc 共通):
 //   0-29 danger / 30-59 warn / 60-99 success / 100+ accent
 // 値色 (進捗バー fill / 大%数値) に使う。色はテーマトークンから派生 (hex 直書きなし)
-const pctColor = (p) => {
-  if (p == null) return T().textFaint
-  if (p >= 100) return T().accent
-  if (p >= 60)  return T().success
-  if (p >= 30)  return T().warn
-  return T().danger
-}
+const pctColor = (p) => okrPctColor(T(), p)
 
 function calcObjProgress(krs) {
   if (!krs?.length) return 0

@@ -5,6 +5,7 @@ import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { SegmentedControl } from './iosUI'
 import Icon, { DataIcon } from './Icon'
+import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
 
@@ -122,7 +123,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const pct      = calcPct(parseFloat(currentVal)||0, kr.target, kr.lower_is_better)
   const stars    = calcKRStars(parseFloat(currentVal)||0, kr.target, kr.lower_is_better)
   const starCfg  = KR_STAR_CFG[stars]
-  const pctColor = pct >= 100 ? wT().accent : pct >= 60 ? wT().success : pct >= 30 ? wT().warn : wT().danger
+  const pctColor = okrPctColor(wT(), pct)
 
   useEffect(() => {
     // 週が変わったら入力をリセットして新しい週のレビューを読み込む
@@ -1060,7 +1061,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             const objKAsCount = kaReports.filter(r=>Number(r.objective_id)===Number(obj.id)).length
             const myKRs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const avgPct = myKRs.length > 0 ? Math.round(myKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/myKRs.length) : 0
-            const pctColor = avgPct>=100?wT().accent:avgPct>=60?wT().success:avgPct>=30?wT().warn:wT().danger
+            const pctColor = okrPctColor(wT(), avgPct)
             return (
               <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{
                 padding:isActive?'12px 14px 12px 11px':'12px 14px', borderRadius:RADIUS.md, marginBottom:SPACING.sm, cursor:'pointer',
@@ -1114,8 +1115,8 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 const objAvgPct = objKRs.length > 0
                   ? Math.round(objKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/objKRs.length)
                   : 0
-                const objColor = objAvgPct>=100?wT().accent:objAvgPct>=60?wT().success:objAvgPct>=30?wT().warn:wT().danger
-                const objColorBg = objAvgPct>=100?wT().accentBg:objAvgPct>=60?wT().successBg:objAvgPct>=30?wT().warnBg:wT().dangerBg
+                const objColor = okrPctColor(wT(), objAvgPct)
+                const objColorBg = okrPctColorBg(wT(), objAvgPct)
                 const objLevel = levels.find(l=>Number(l.id)===Number(selectedObj.level_id))
                 const ownerAv = avatarColor(viewName)
                 const objKACount = objKAs.length
