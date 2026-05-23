@@ -639,10 +639,10 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             //   currentOrg.enabled_modules[flag] が true のときだけ表示。
             //   neo-fukuoka は grandfathered で全モジュール ON なので変化なし。
             const allTabs = [
-              // ── 全社グループ (経営レベル / 初期表示) ──
+              // ── 全社グループ (経営レベル / 初期表示・無料期間は常に公開) ──
               { key: 'dashboard',    icon: 'chart', label: 'ダッシュボード', summary: true,  individual: true,  group: 'company' },
-              { key: 'strategy',     icon: 'cmd', label: '経営戦略',       summary: true,  individual: false, group: 'company', requiresFlag: 'okr_full' },
-              { key: 'milestone',    icon: 'flag', label: 'マイルストーン', summary: true,  individual: false, group: 'company', requiresFlag: 'milestones' },
+              { key: 'strategy',     icon: 'cmd', label: '経営戦略',       summary: true,  individual: false, group: 'company' },
+              { key: 'milestone',    icon: 'flag', label: 'マイルストーン', summary: true,  individual: false, group: 'company' },
               // ── チーム機能グループ (無料期間は公開・オプション) ──
               { key: 'team_summary', icon: 'note', label: 'チームサマリー', summary: true,  individual: false, group: 'team' },
               { key: 'confirm',      icon: 'bell', label: '共有・確認',     summary: true,  individual: true,  group: 'team' },
