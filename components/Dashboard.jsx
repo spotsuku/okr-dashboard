@@ -142,7 +142,7 @@ function Avatar({ name, color, size = 28 }) {
 function Stars({ score, size = 13 }) {
   return (
     <div style={{ display: 'flex', gap: 1 }}>
-      {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: size, opacity: i <= score ? 1 : 0.18 }}>★</span>)}
+      {[1,2,3,4,5].map(i => <span key={i} style={{ display: 'inline-flex', opacity: i <= score ? 1 : 0.18 }}><Icon name="star" size={size} /></span>)}
     </div>
   )
 }
@@ -193,7 +193,7 @@ function Modal({ title, onClose, children }) {
             background: getT().border, border: 'none', color: getT().textSub,
             width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>✕</button>
+          }}><Icon name="cross" size={14} /></button>
         </div>
         {children}
       </div>
@@ -364,7 +364,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           color: '#fff',
           fontSize: 13, fontWeight: 700,
         }}>
-          📅 {fiscalYear}年度
+          <Icon name="calendar" size={14} /> {fiscalYear}年度
         </div>
       </div>
       <FSelect label="所属組織" value={levelId} onChange={setLevelId}
@@ -403,17 +403,17 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       </div>
       {/* プログラムタグ: マスタ (program_definitions) から選択。新規追加は組織ページで管理。 */}
       <div style={{ marginBottom: 13 }}>
-        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>
-          🏷 プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
+        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5, display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <Icon name="flag" size={12} /> プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
           {programTags.map(t => {
             const isOrphan = !allTags.includes(t)
             return (
               <span key={t} title={isOrphan ? 'マスタから削除されたタグです。組織ページで再定義してください。' : ''}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isOrphan ? 'rgba(232,155,155,0.15)' : 'rgba(107,150,199,0.15)', color: isOrphan ? '#E89B9B' : '#6B96C7', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
-                {isOrphan ? '⚠ ' : ''}{t}
-                <button type="button" onClick={() => removeTag(t)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isOrphan ? `${getT().danger}26` : `${getT().accent}26`, color: isOrphan ? getT().danger : getT().accent, borderRadius: RADIUS.pill, fontSize: 11, fontWeight: 700 }}>
+                {isOrphan ? <Icon name="alert" size={11} /> : null}{t}
+                <button type="button" onClick={() => removeTag(t)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, display: 'inline-flex' }}><Icon name="cross" size={10} /></button>
               </span>
             )
           })}
@@ -435,7 +435,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       {parentObj && (
         <div style={{ marginBottom: 16, padding: '14px 16px', background: getT().navActiveBg, border: `1px solid ${getT().navActiveBorder}40`, borderRadius: 10 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            📌 通期OKR（参照）
+            <Icon name="pin" size={12} /> 通期OKR（参照）
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: getT().text, marginBottom: 10, lineHeight: 1.4 }}>{parentObj.title}</div>
           {parentObj.key_results.map((kr, i) => {
@@ -488,7 +488,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
             {/* Q期 KR: 親 (通期) KR を選択。マトリクス表示で同じ行に並ぶ。 */}
             {isQuarterly && parentObj?.key_results?.length > 0 && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>↗ 紐付け先 通期KR</span>
+                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="arrowRight" size={11} /> 紐付け先 通期KR</span>
                 <select value={kr.parent_kr_id || ''} onChange={e => updateKR(key, 'parent_kr_id', e.target.value ? Number(e.target.value) : null)}
                   style={{ flex: 1, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8, padding: '5px 8px', color: kr.parent_kr_id ? getT().text : getT().textFaint, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                   <option value="">(未紐付け)</option>
@@ -501,7 +501,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
             {/* 通期 KR: 集計方法を選択 (Q期 KR の current から自動算出) */}
             {isAnnualPeriod && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>📊 集計方法</span>
+                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chart" size={11} /> 集計方法</span>
                 <select value={kr.aggregation_type || 'manual'} onChange={e => updateKR(key, 'aggregation_type', e.target.value)}
                   style={{ flex: 1, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8, padding: '5px 8px', color: getT().text, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                   <option value="manual">手動 (子から集計しない)</option>
@@ -558,15 +558,15 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: getT().textMuted,
               width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>✎</button>
+            }}><Icon name="pencil" size={12} /></button>
             <button onClick={e => { e.stopPropagation(); onDelete(obj.id) }}
               title="アーカイブ (アーカイブ画面から復元・完全削除可能)"
               style={{
                 background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: getT().textMuted,
                 width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 12,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>📦</button>
-            <span style={{ color: getT().textFaint, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+              }}><Icon name="inbox" size={13} /></button>
+            <span style={{ color: getT().textFaint, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-flex' }}><Icon name="chevronD" size={13} /></span>
           </div>
         </div>
 
@@ -1455,7 +1455,7 @@ export default function Dashboard({ user, onSignOut }) {
       <>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
           <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-          {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
+          {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16, display: 'inline-flex' }}><Icon name="cross" size={16} /></button>}
         </div>
         {roots.map(l => <LevelItem key={l.id} level={l} />)}
         <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
@@ -1482,7 +1482,7 @@ export default function Dashboard({ user, onSignOut }) {
             </button>
           )}
           {hasGoogle && (
-            <div style={{ fontSize: 11, color: T.accent, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>✅ Google連携済み</div>
+            <div style={{ fontSize: 11, color: T.accent, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
           )}
           <button onClick={onSignOut} style={{
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -1628,18 +1628,19 @@ export default function Dashboard({ user, onSignOut }) {
                 {/* 同期状態 */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '7px 12px', fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>
                   <span title={syncStatus === 'synced' ? '同期済み' : syncStatus === 'error' ? '同期エラー' : '同期中'} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
-                    {syncStatus === 'synced' ? '🟢 同期済' : syncStatus === 'error' ? '🔴 エラー' : '🟡 同期中'}
+                    <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginRight: 5, verticalAlign: 'middle', background: syncStatus === 'synced' ? T.success : syncStatus === 'error' ? T.danger : T.warn }} />
+                    {syncStatus === 'synced' ? '同期済' : syncStatus === 'error' ? 'エラー' : '同期中'}
                   </span>
                 </div>
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
                 {hasGoogle
-                  ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent }}>✅ Google連携済み</div>
+                  ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
                   : <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
                 }
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/lp" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.text, fontSize: 12, textDecoration: 'none' }}>サービス紹介を見る</a>
-                <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>🔍 ツアーをもう一度見る</button>
+                <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="search" size={12} /> ツアーをもう一度見る</button>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>プライバシーポリシー</a>
                 <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>利用規約</a>
@@ -1909,7 +1910,7 @@ export default function Dashboard({ user, onSignOut }) {
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: T.text, minWidth: 300 }}>
           <span style={{ flex: 1 }}>「{undoDelete.obj.title?.slice(0, 20)}{undoDelete.obj.title?.length > 20 ? '…' : ''}」を{undoDelete.hardDelete ? '削除' : 'アーカイブ'}しました</span>
           <button onClick={handleUndoDelete} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>元に戻す</button>
-          <button onClick={() => { clearTimeout(undoDelete.timer); setUndoDelete(null) }} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: '0 4px' }}>✕</button>
+          <button onClick={() => { clearTimeout(undoDelete.timer); setUndoDelete(null) }} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: '0 4px', display: 'inline-flex' }}><Icon name="cross" size={15} /></button>
         </div>
       )}
     </div>
