@@ -1179,7 +1179,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                   return (
                     <div key={team.id} style={{ background: T().bgCard2, border: `1px solid ${color}55`, borderRadius: 10, padding: '14px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: T().text, flex: 1, lineHeight: 1.4 }}>{team.icon} {team.name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: T().text, flex: 1, lineHeight: 1.4, display:'inline-flex', alignItems:'center', gap:5 }}><DataIcon value={team.icon} size={13} /> {team.name}</span>
                         {isEditing ? (
                           <select value={metaBuf.status} onChange={e => setMetaBuf(p => ({ ...p, status: e.target.value }))}
                             style={{ background: T().selectBg, border: `1px solid ${T().borderMid}`, borderRadius: 5, padding: '2px 6px', color: T().text, fontSize: 10, outline: 'none', fontFamily: 'inherit' }}>
@@ -3171,7 +3171,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
                   onClick={() => setSelectedId(team.id)}
                   onMouseEnter={e => { if (selectedId !== team.id) e.currentTarget.style.background = T().bgHover }}
                   onMouseLeave={e => { if (selectedId !== team.id) e.currentTarget.style.background = 'transparent' }}>
-                  {team.icon && <span style={{ marginRight: 5 }}>{team.icon}</span>}{team.name}
+                  {team.icon && <span style={{ marginRight: 5, display:'inline-flex' }}><DataIcon value={team.icon} size={13} /></span>}{team.name}
                 </div>
               ))}
             </div>
@@ -3318,7 +3318,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 11, marginBottom: 28 }}>
                     {mindsets.map((m, i) => (
                       <div key={i} style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 12, padding: '16px' }}>
-                        <div style={{ fontSize: 19, marginBottom: 7 }}>{m.icon}</div>
+                        <div style={{ marginBottom: 7, display:'inline-flex' }}><DataIcon value={m.icon} size={19} /></div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T().text, marginBottom: 4 }}>{m.title}</div>
                         <div style={{ fontSize: 12.5, color: T().textSub, lineHeight: 1.7 }}>{m.body}</div>
                       </div>
