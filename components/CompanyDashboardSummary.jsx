@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
-import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS, BRAND_GRADIENT, GLASS } from '../lib/themeTokens'
 import {
   cardStyle, pillStyle, btnPrimary, btnBrand, accentRingStyle,
   progressBarStyle, progressFillStyle,
