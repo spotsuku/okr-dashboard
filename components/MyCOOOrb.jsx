@@ -11,6 +11,9 @@
 import * as React from 'react'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { inputStyle } from '../lib/iosStyles'
+import Icon from './Icon'
 import ProposalDialog from './ProposalDialog'
 
 const MYCOO_GRAD = 'linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%)'
@@ -208,24 +211,24 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
         {nudge && !open && (
           <div style={{
             pointerEvents: 'auto', position: 'relative', maxWidth: 280,
-            background: '#1e293b', color: '#fff', padding: '12px 16px',
-            borderRadius: 14, fontSize: 13, lineHeight: 1.55, fontWeight: 500,
-            boxShadow: '0 8px 24px rgba(15,23,42,.18)',
+            background: '#1e293b', color: '#fff', padding: `${SPACING.md}px ${SPACING.lg}px`,
+            borderRadius: RADIUS.lg, ...TYPO.body, lineHeight: 1.55,
+            boxShadow: SHADOWS.lg,
             animation: 'mycoo-pop .3s cubic-bezier(.16,1,.3,1)',
           }}>
             <button onClick={() => setNudge(null)} style={{
               position: 'absolute', top: 8, right: 10, border: 'none', background: 'transparent',
-              color: 'rgba(255,255,255,.5)', cursor: 'pointer', fontSize: 10, padding: 0,
-            }}>✕</button>
-            <div style={{ marginRight: 12 }}>{nudge.message}</div>
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 10 }}>
+              color: 'rgba(255,255,255,.5)', cursor: 'pointer', padding: 0,
+            }}><Icon name="cross" size={10} /></button>
+            <div style={{ marginRight: SPACING.md }}>{nudge.message}</div>
+            <div style={{ display: 'flex', gap: SPACING.xs + 2, justifyContent: 'flex-end', marginTop: SPACING.sm + 2 }}>
               <button onClick={nudge.primaryAction} style={{
-                background: '#fff', color: '#1d4ed8', border: '1px solid rgba(15,23,42,.1)',
-                padding: '6px 12px', fontSize: 11.5, fontWeight: 600, borderRadius: 99, cursor: 'pointer', fontFamily: 'inherit',
+                background: '#fff', color: '#1d4ed8', border: `1px solid ${T.borderMid}`,
+                padding: '6px 12px', ...TYPO.footnote, fontWeight: 600, borderRadius: RADIUS.pill, cursor: 'pointer', fontFamily: 'inherit',
               }}>{nudge.primaryLabel}</button>
               <button onClick={() => setNudge(null)} style={{
-                background: 'rgba(255,255,255,.7)', color: '#475569', border: 'none',
-                padding: '6px 12px', fontSize: 11.5, fontWeight: 600, borderRadius: 99, cursor: 'pointer', fontFamily: 'inherit',
+                background: 'rgba(255,255,255,.7)', color: T.textSub, border: 'none',
+                padding: '6px 12px', ...TYPO.footnote, fontWeight: 600, borderRadius: RADIUS.pill, cursor: 'pointer', fontFamily: 'inherit',
                 backdropFilter: 'blur(8px)',
               }}>あとで</button>
             </div>
@@ -245,39 +248,39 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
             height: isMobile ? 'min(68vh, 560px)' : 520,
             maxWidth: '100%', minHeight: 0,
             display: 'flex', flexDirection: 'column',
-            background: 'rgba(255,255,255,.92)',
+            background: T.bgCard,
             backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-            border: '1px solid rgba(15,23,42,.08)', borderRadius: 18, overflow: 'hidden',
-            boxShadow: '0 24px 60px rgba(15,23,42,.18), 0 1px 0 rgba(255,255,255,.7) inset',
+            border: `1px solid ${T.border}`, borderRadius: RADIUS.xl, overflow: 'hidden',
+            boxShadow: `${SHADOWS.xl}, ${SHADOWS.glassInset}`,
             animation: 'mycoo-pop .3s cubic-bezier(.16,1,.3,1)',
           }}>
             {/* ヘッダ */}
-            <div style={{ padding: '14px 16px', background: MYCOO_GRAD, color: '#fff', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <div style={{ padding: '14px 16px', background: MYCOO_GRAD, color: '#fff', display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, flexShrink: 0 }}>
               <div style={{
-                width: 32, height: 32, borderRadius: 99, flexShrink: 0,
+                width: 32, height: 32, borderRadius: RADIUS.pill, flexShrink: 0,
                 background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.4)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}><Sparkle size={16} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>MyCOO</div>
+                <div style={{ ...TYPO.headline }}>MyCOO</div>
                 <div style={{ fontSize: 10.5, opacity: 0.75, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 99, background: '#34d399' }} />
+                  <span style={{ width: 6, height: 6, borderRadius: RADIUS.pill, background: T.success }} />
                   あなたの仕事を見てます
                 </div>
               </div>
               <button onClick={() => setOpen(false)} style={{
-                border: 'none', background: 'transparent', color: 'rgba(255,255,255,.7)', cursor: 'pointer', fontSize: 14, padding: 4,
-              }}>✕</button>
+                border: 'none', background: 'transparent', color: 'rgba(255,255,255,.7)', cursor: 'pointer', padding: SPACING.xs,
+              }}><Icon name="cross" size={14} /></button>
             </div>
 
             {/* メッセージ */}
-            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', padding: SPACING.md + 2, display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
               {messages.length === 0 && (
                 <div style={{
                   maxWidth: '88%', alignSelf: 'flex-start', padding: '10px 14px',
-                  background: 'rgba(255,255,255,.8)', color: '#0f172a',
-                  border: '1px solid rgba(15,23,42,.06)', borderRadius: 12, borderTopLeftRadius: 4,
-                  boxShadow: '0 1px 2px rgba(15,23,42,.04)', fontSize: 12.5, lineHeight: 1.65,
+                  background: T.bgCard2, color: T.text,
+                  border: `1px solid ${T.border}`, borderRadius: RADIUS.md, borderTopLeftRadius: 4,
+                  boxShadow: SHADOWS.xs, fontSize: 12.5, lineHeight: 1.65,
                 }}>
                   こんにちは{myName ? `、${myName}さん` : ''}。今日の優先順位やタスクの整理、何でも相談してください。
                 </div>
@@ -285,34 +288,34 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
               {messages.map((m, i) => (
                 <div key={i} style={m.role === 'user' ? {
                   maxWidth: '88%', alignSelf: 'flex-end', padding: '10px 14px',
-                  background: MYCOO_GRAD, color: '#fff', borderRadius: 12, borderTopRightRadius: 4,
+                  background: MYCOO_GRAD, color: '#fff', borderRadius: RADIUS.md, borderTopRightRadius: 4,
                   boxShadow: '0 2px 8px rgba(30,58,138,.18)', fontSize: 12.5, lineHeight: 1.65, whiteSpace: 'pre-wrap',
                 } : {
                   maxWidth: '88%', alignSelf: 'flex-start', padding: '10px 14px',
-                  background: 'rgba(255,255,255,.8)', color: '#0f172a',
-                  border: '1px solid rgba(15,23,42,.06)', borderRadius: 12, borderTopLeftRadius: 4,
-                  boxShadow: '0 1px 2px rgba(15,23,42,.04)', fontSize: 12.5, lineHeight: 1.65, whiteSpace: 'pre-wrap',
+                  background: T.bgCard2, color: T.text,
+                  border: `1px solid ${T.border}`, borderRadius: RADIUS.md, borderTopLeftRadius: 4,
+                  boxShadow: SHADOWS.xs, fontSize: 12.5, lineHeight: 1.65, whiteSpace: 'pre-wrap',
                 }}>{m.content}</div>
               ))}
               {busy && (
                 <div style={{
-                  alignSelf: 'flex-start', padding: '10px 14px', background: 'rgba(255,255,255,.8)',
-                  border: '1px solid rgba(15,23,42,.06)', borderRadius: 12, borderTopLeftRadius: 4,
-                  fontSize: 12.5, color: '#94a3b8',
+                  alignSelf: 'flex-start', padding: '10px 14px', background: T.bgCard2,
+                  border: `1px solid ${T.border}`, borderRadius: RADIUS.md, borderTopLeftRadius: 4,
+                  fontSize: 12.5, color: T.textMuted,
                 }}>考えています…</div>
               )}
             </div>
 
             {/* サジェスチョンチップ */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: '1px solid rgba(15,23,42,.06)', padding: '6px 12px' }}>
-              <button onClick={() => window.dispatchEvent(new CustomEvent('okr:open-quicktask'))} style={chipStyle}>＋ タスクを追加</button>
+            <div style={{ display: 'flex', gap: SPACING.xs + 2, flexWrap: 'wrap', borderTop: `1px solid ${T.border}`, padding: '6px 12px' }}>
+              <button onClick={() => window.dispatchEvent(new CustomEvent('okr:open-quicktask'))} style={{ ...chipStyle, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="plus" size={11} /> タスクを追加</button>
               {CHIPS.map(c => (
                 <button key={c} onClick={() => send(c)} style={chipStyle}>{c}</button>
               ))}
             </div>
 
             {/* 入力欄 */}
-            <div style={{ padding: '10px 12px 12px', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.5)', borderTop: '1px solid rgba(15,23,42,.06)' }}>
+            <div style={{ padding: '10px 12px 12px', display: 'flex', alignItems: 'center', gap: SPACING.sm, background: T.sectionBg, borderTop: `1px solid ${T.border}` }}>
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -321,13 +324,13 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
                 onKeyDown={e => { if (e.key === 'Enter' && !(composingRef.current || e.nativeEvent?.isComposing || e.keyCode === 229)) { e.preventDefault(); send() } }}
                 placeholder="MyCOO に聞く..."
                 style={{
-                  flex: 1, minWidth: 0, padding: '10px 14px', background: '#fff', border: '1px solid rgba(15,23,42,.1)',
+                  flex: 1, minWidth: 0, padding: '10px 14px', background: '#fff', border: `1px solid ${T.borderMid}`,
                   // iOS は font-size < 16px の入力でフォーカス時に自動ズームするため 16px に
-                  borderRadius: 99, fontSize: 16, outline: 'none', fontFamily: 'inherit', color: '#0f172a',
+                  borderRadius: RADIUS.pill, fontSize: 16, outline: 'none', fontFamily: 'inherit', color: T.text,
                 }}
               />
               <button onClick={() => send()} disabled={busy} style={{
-                width: 36, height: 36, borderRadius: 99, flexShrink: 0, border: 'none',
+                width: 36, height: 36, borderRadius: RADIUS.pill, flexShrink: 0, border: 'none',
                 background: MYCOO_GRAD, color: '#fff', cursor: busy ? 'wait' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 2px 8px rgba(30,58,138,.3)',
@@ -398,7 +401,7 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
 }
 
 const chipStyle = {
-  padding: '5px 10px', fontSize: 11, background: 'rgba(255,255,255,.6)',
-  border: '1px solid rgba(15,23,42,.08)', borderRadius: 99, color: '#475569',
+  padding: '5px 10px', ...TYPO.footnote, background: 'rgba(255,255,255,.6)',
+  border: '1px solid rgba(15,23,42,.08)', borderRadius: RADIUS.pill, color: '#475569',
   cursor: 'pointer', fontFamily: 'inherit',
 }
