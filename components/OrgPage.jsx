@@ -780,14 +780,16 @@ function ConfirmationsWebhookPanel({ currentUser }) {
           <Icon name="alert" size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> Slack Incoming Webhook URL の形式が違います (https://hooks.slack.com/services/... で始まる必要があります)
         </div>
       )}
-      {message && (
+      {message && (() => {
+        const isError = message.includes('失敗') || message.includes('一致しません')
+        return (
         <div style={{
           marginTop: 10, padding: 8, borderRadius: 6,
-          background: message.startsWith('✅') ? T().successBg : T().dangerBg,
-          border: `1px solid ${message.startsWith('✅') ? T().success : T().danger}`,
-          fontSize: 11, color: message.startsWith('✅') ? T().text : T().danger,
+          background: isError ? T().dangerBg : T().successBg,
+          border: `1px solid ${isError ? T().danger : T().success}`,
+          fontSize: 11, color: isError ? T().danger : T().text,
         }}>{message}</div>
-      )}
+      )})()}
     </div>
   )
 }
