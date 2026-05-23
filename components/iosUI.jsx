@@ -10,6 +10,8 @@ import {
   kpiNumber, largeTitle as ts_largeTitle, pageSubtitle,
 } from '../lib/iosStyles'
 import { SHADOWS, RADIUS, SPACING, TYPO, GLASS, TRANSITION } from '../lib/themeTokens'
+// 共有 Icon (絵文字置換用)。本ファイル下部の自家製 Icon と名前衝突を避けるため別名 import。
+import GlyphIcon from './Icon'
 // （以下の本体はまだ inline 値を一部残していますが、新規利用は上記ファクトリに統一）
 // - SegmentedControl: 「今週/今月/全期間」のような3〜5択タブ
 // - Toggle: チェックボックスの代替となる丸いトグル
@@ -32,7 +34,7 @@ export function SegmentedControl({ T, items, value, onChange, size = 'md', fullW
       style={{
         display: 'inline-flex',
         background: T.sectionBg || 'rgba(0,0,0,0.05)',
-        padding: 2, borderRadius: 9, gap: 2,
+        padding: 2, borderRadius: RADIUS.sm, gap: 2,
         width: fullWidth ? '100%' : 'auto',
       }}
     >
@@ -46,7 +48,7 @@ export function SegmentedControl({ T, items, value, onChange, size = 'md', fullW
             onClick={() => onChange && onChange(it.key)}
             style={{
               flex: fullWidth ? 1 : 'none',
-              padding, borderRadius: 7, border: 'none',
+              padding, borderRadius: RADIUS.xs, border: 'none',
               background: active ? (T.bgCard || '#FFFFFF') : 'transparent',
               color: active ? T.text : T.textMuted,
               boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
@@ -59,7 +61,7 @@ export function SegmentedControl({ T, items, value, onChange, size = 'md', fullW
             <span>{it.label}</span>
             {typeof it.count === 'number' && (
               <span style={{
-                padding: '1px 7px', borderRadius: 99,
+                padding: '1px 7px', borderRadius: RADIUS.pill,
                 background: active ? `${T.accent}1f` : 'rgba(0,0,0,0.08)',
                 color: active ? T.accent : T.textMuted,
                 fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
@@ -87,7 +89,7 @@ export function Toggle({ T, checked, onChange, label, disabled = false, size = '
         style={{
           position: 'relative', width: w, height: h, flexShrink: 0,
           background: checked ? (T.success || '#34C759') : 'rgba(120,120,128,0.32)',
-          borderRadius: 99, transition: 'background 0.2s',
+          borderRadius: RADIUS.pill, transition: 'background 0.2s',
         }}
       >
         <span style={{
@@ -133,7 +135,7 @@ export function HeroCard({ T, eyebrow, title, subtitle, color = '#007AFF', right
       marginTop: 16, marginBottom: 22,
       padding: '26px 26px 22px',
       background: `linear-gradient(135deg, ${color}f5 0%, ${color}c0 60%, ${color}80 100%)`,
-      borderRadius: 22,
+      borderRadius: RADIUS['2xl'],
       color: '#FFFFFF',
       position: 'relative', overflow: 'hidden',
       boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${color}33, 0 24px 56px ${color}26`,
@@ -188,7 +190,7 @@ export function Card({ T, children, padding = 18, accent, style, onClick, hovera
         position: 'relative', overflow: 'hidden',
         background: accentBg,
         border: `1px solid ${accentBorder}`,
-        borderRadius: 16, padding,
+        borderRadius: RADIUS.lg, padding,
         boxShadow: shadow,
         height: fullHeight ? '100%' : undefined,
         cursor: onClick ? 'pointer' : 'default',
@@ -285,7 +287,7 @@ export function SheetModal({ T, open, onClose, title, children, footer, maxWidth
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth, maxHeight: '90vh',
-          background: T.bgCard, borderRadius: 18,
+          background: T.bgCard, borderRadius: RADIUS.xl,
           boxShadow: '0 24px 60px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.08)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
           animation: 'iosSheetSlideIn 0.25s cubic-bezier(0.4,0,0.2,1)',
@@ -324,7 +326,7 @@ export function SheetModal({ T, open, onClose, title, children, footer, maxWidth
 }
 
 // ─── 空状態 ─────────────────────────────────────────────────────────────
-export function EmptyState({ T, icon = '📭', title, description, actionLabel, onAction }) {
+export function EmptyState({ T, icon = <GlyphIcon name="inbox" size={44} />, title, description, actionLabel, onAction }) {
   return (
     <div style={{
       padding: '48px 20px', textAlign: 'center',
@@ -341,7 +343,7 @@ export function EmptyState({ T, icon = '📭', title, description, actionLabel, 
       )}
       {actionLabel && onAction && (
         <button onClick={onAction} style={{
-          marginTop: 8, padding: '8px 18px', borderRadius: 9,
+          marginTop: 8, padding: '8px 18px', borderRadius: RADIUS.sm,
           background: T.accent || '#007AFF', color: '#FFFFFF', border: 'none',
           fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
           boxShadow: '0 2px 6px rgba(0,122,255,0.30)',
@@ -361,13 +363,14 @@ export function SearchBar({ T, value, onChange, placeholder = '検索', autoFocu
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
       <div style={{
         flex: 1, position: 'relative', display: 'flex', alignItems: 'center',
-        background: 'rgba(120,120,128,0.12)', borderRadius: 10,
+        background: 'rgba(120,120,128,0.12)', borderRadius: RADIUS.md,
         transition: 'all 0.2s ease',
       }}>
         <span style={{
           position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
           color: T.textMuted, fontSize: 14, pointerEvents: 'none',
-        }}>🔍</span>
+          display: 'flex', alignItems: 'center',
+        }}><GlyphIcon name="search" size={14} /></span>
         <input
           ref={inputRef}
           type="text"
@@ -380,7 +383,7 @@ export function SearchBar({ T, value, onChange, placeholder = '検索', autoFocu
           style={{
             width: '100%', padding: '8px 12px 8px 32px', fontSize: 14,
             background: 'transparent', border: 'none', outline: 'none',
-            color: T.text, fontFamily: 'inherit', borderRadius: 10,
+            color: T.text, fontFamily: 'inherit', borderRadius: RADIUS.md,
             boxSizing: 'border-box',
           }}
         />
@@ -422,7 +425,7 @@ export function GroupedList({ T, title, items, footer }) {
         }}>{title}</div>
       )}
       <div style={{
-        background: T.bgCard, borderRadius: 14,
+        background: T.bgCard, borderRadius: RADIUS.lg,
         boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
         overflow: 'hidden',
       }}>
@@ -446,7 +449,7 @@ export function GroupedList({ T, title, items, footer }) {
             >
               {it.icon && (
                 <div style={{
-                  width: 30, height: 30, borderRadius: 7,
+                  width: 30, height: 30, borderRadius: RADIUS.xs,
                   background: it.color ? `${it.color}1f` : 'rgba(0,122,255,0.10)',
                   color: it.color || T.accent,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -592,7 +595,7 @@ export function DashboardTile({ T, icon, title, sub, color = '#0ea5e9', onClick,
         position: 'relative', overflow: 'hidden', textAlign: 'left',
         background: T.bgCard,
         border: `1px solid ${T.border}`,
-        borderRadius: 14, padding: '18px 16px',
+        borderRadius: RADIUS.lg, padding: '18px 16px',
         cursor: onClick ? 'pointer' : 'default',
         fontFamily: 'inherit',
         boxShadow: '0 1px 2px rgba(15,23,42,.04)',
@@ -614,7 +617,7 @@ export function DashboardTile({ T, icon, title, sub, color = '#0ea5e9', onClick,
     >
       {/* アイコンタイル (Glass: 半透明 accent ringed) */}
       <div style={{
-        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+        width: 36, height: 36, borderRadius: RADIUS.md, flexShrink: 0,
         background: `${color}1f`,
         color: color,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -649,7 +652,7 @@ export function DashboardTile({ T, icon, title, sub, color = '#0ea5e9', onClick,
           )}
           {badge && (
             <span style={{
-              padding: '2px 8px', borderRadius: 99,
+              padding: '2px 8px', borderRadius: RADIUS.pill,
               background: `${color}1f`, color, fontSize: 10, fontWeight: 800,
             }}>{badge}</span>
           )}
