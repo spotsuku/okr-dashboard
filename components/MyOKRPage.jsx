@@ -693,16 +693,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     if (activeObjId == null) localStorage.removeItem('myOKR_activeObjId')
     else localStorage.setItem('myOKR_activeObjId', String(activeObjId))
   }, [activeObjId])
-  const [activeLevelId,setActiveLevelId]= useState(() => {
-    if (typeof window === 'undefined') return null
-    const saved = localStorage.getItem('myOKR_activeLevelId')
-    return saved && saved !== 'null' ? Number(saved) : null
-  })
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (activeLevelId == null) localStorage.removeItem('myOKR_activeLevelId')
-    else localStorage.setItem('myOKR_activeLevelId', String(activeLevelId))
-  }, [activeLevelId])
   // 現在のQを自動判定（4月=Q1, 7月=Q2, 10月=Q3, 1月=Q4）
   const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
   const [activePeriod,setActivePeriod]=useState(getCurrentQ())
@@ -912,26 +902,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   }
 
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
-
-  // 組織図サイドバー
-  const roots = levels.filter(l => !l.parent_id)
-  // 自分のObjectiveがある組織のみハイライト
-  const myLevelIds = new Set(objectives.map(o => Number(o.level_id)))
-  function renderSb(level, indent=0) {
-    const isActive = Number(activeLevelId)===Number(level.id)
-    const hasMyObj = myLevelIds.has(Number(level.id))
-    return (
-      <div key={level.id}>
-        <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
-          style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', paddingLeft:(isActive?5:8)+indent*14, borderRadius:RADIUS.xs, cursor:'pointer', marginBottom:2, borderLeft:`3px solid ${isActive?wT().accent:'transparent'}`, background:isActive?wT().accentBg:'transparent', opacity:hasMyObj?1:0.5 }}>
-          <span style={{display:'inline-flex'}}><DataIcon value={level.icon} size={13}/></span>
-          <span style={{ fontSize:TYPO.footnote.fontSize, flex:1, fontWeight:isActive?700:hasMyObj?600:400, color:isActive?wT().accentText:hasMyObj?wT().textSub:wT().textFaint }}>{level.name}</span>
-          {hasMyObj && <span style={{ width:6, height:6, borderRadius:'50%', background:isActive?wT().accent:wT().success, flexShrink:0 }} />}
-        </div>
-        {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
-      </div>
-    )
-  }
 
   if (loading) return <div style={{ padding:SPACING['3xl']+8, color:wT().info, fontSize:TYPO.headline.fontSize }}>読み込み中...</div>
 
