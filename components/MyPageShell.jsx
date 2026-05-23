@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
@@ -197,7 +197,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   // いる場合は dashboard にフォールバック。
   useEffect(() => {
     const summaryOnly = ['strategy', 'milestone']
-    const individualOnly = ['calendar', 'drive', 'coo', 'retrospect', 'integrations']
+    // okr_edit はヘッダーナビへ移動したため全社サマリーでは非表示 → 個人モード扱い
+    const individualOnly = ['okr_edit', 'calendar', 'drive', 'coo', 'retrospect', 'integrations']
     if (summaryMode && individualOnly.includes(activeTab)) setActiveTab('dashboard')
     if (!summaryMode && summaryOnly.includes(activeTab)) setActiveTab('dashboard')
   }, [summaryMode, activeTab])
@@ -629,23 +630,27 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             padding: 3, borderRadius: 11,
           }}>
           {(() => {
-            // 全社サマリーでは個人依存のタブ (カレンダー/ドライブ/MyCOO/振り返り/連携) を非表示。
-            // メールは全社向けに集約表示するためタブ自体は残す。
-            // 経営戦略 / マイルストーン は全社サマリーのみ表示 (個人タブとして意味が薄い)。
-            // 順序: ダッシュボード/経営戦略/共有・確認/タスク/メール/マイルストーン/OKR
+            // 全社サマリーのタブは 2 グループ構成:
+            //   [全社]      ダッシュボード / 経営戦略 / マイルストーン  (初期表示・経営レベル)
+            //   [チーム機能] チームサマリー / 共有・確認 / タスク / メール (無料期間は公開だが「オプション」)
+            // OKR はヘッダーナビに集約したため全社サマリーからは除外 (summary:false / individual のみ)。
+            // 個人モードでは個人依存タブ (カレンダー/ドライブ/MyCOO/振り返り/連携) を追加表示。
             // SaaS 化 Phase C: requiresFlag が指定されたタブは
             //   currentOrg.enabled_modules[flag] が true のときだけ表示。
             //   neo-fukuoka は grandfathered で全モジュール ON なので変化なし。
             const allTabs = [
-              { key: 'dashboard',    icon: 'chart', label: 'ダッシュボード', summary: true,  individual: true  },
-              { key: 'strategy',     icon: 'cmd', label: '経営戦略',       summary: true,  individual: false, requiresFlag: 'okr_full' },
-              { key: 'team_summary', icon: 'note', label: 'チームサマリー', summary: true,  individual: false },
-              { key: 'confirm',      icon: 'bell', label: '共有・確認',     summary: true,  individual: true  },
-              { key: 'wbs',          icon: 'calendar', label: 'タスク',         summary: true,  individual: true  },
-              { key: 'mail',         icon: 'mail', label: 'メール',         summary: true,  individual: true,  requiresFlag: 'google_integration' },
-              { key: 'milestone',    icon: 'flag', label: 'マイルストーン', summary: true,  individual: false, requiresFlag: 'milestones' },
-              { key: 'okr_edit',     icon: 'target', label: 'OKR',            summary: true,  individual: true  },
-              // 個人モード専用 (全社では非表示)
+              // ── 全社グループ (経営レベル / 初期表示) ──
+              { key: 'dashboard',    icon: 'chart', label: 'ダッシュボード', summary: true,  individual: true,  group: 'company' },
+              { key: 'strategy',     icon: 'cmd', label: '経営戦略',       summary: true,  individual: false, group: 'company', requiresFlag: 'okr_full' },
+              { key: 'milestone',    icon: 'flag', label: 'マイルストーン', summary: true,  individual: false, group: 'company', requiresFlag: 'milestones' },
+              // ── チーム機能グループ (無料期間は公開・オプション) ──
+              { key: 'team_summary', icon: 'note', label: 'チームサマリー', summary: true,  individual: false, group: 'team' },
+              { key: 'confirm',      icon: 'bell', label: '共有・確認',     summary: true,  individual: true,  group: 'team' },
+              { key: 'wbs',          icon: 'calendar', label: 'タスク',         summary: true,  individual: true,  group: 'team' },
+              { key: 'mail',         icon: 'mail', label: 'メール',         summary: true,  individual: true,  group: 'team', requiresFlag: 'google_integration' },
+              // ── OKR: ヘッダーナビに移動済 (個人モードのみ残す) ──
+              { key: 'okr_edit',     icon: 'target', label: 'OKR',            summary: false, individual: true  },
+              // ── 個人モード専用 (全社では非表示) ──
               { key: 'calendar',     icon: 'calendar', label: 'カレンダー',     summary: false, individual: true,  requiresFlag: 'google_integration' },
               { key: 'drive',        icon: 'drive', label: 'ドライブ',       summary: false, individual: true,  requiresFlag: 'google_integration' },
               { key: 'coo',          icon: 'ai', label: 'MyCOO',          summary: false, individual: true,  requiresFlag: 'coo_knowledge' },
@@ -657,34 +662,53 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               if (t.requiresFlag && !enabledModules?.[t.requiresFlag]) return false
               return true
             })
-          })().map(t => {
+          })().map((t, idx, arr) => {
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
             const active = activeTab === t.key
+            // 全社モードのみ: チーム機能グループの先頭で区切り + 「チーム機能（オプション）」ラベルを挿入
+            const showGroupLabel = summaryMode && t.group === 'team' && (idx === 0 || arr[idx - 1]?.group !== 'team')
             return (
-              <button
-                key={t.key}
-                onClick={() => setActiveTab(t.key)}
-                style={{
-                  padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  background: active ? T.bgCard : 'transparent',
-                  color: active ? T.text : T.textSub,
-                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center' }}><Icon name={t.icon} size={14} /></span>
-                <span>{t.label}</span>
-                {showBadge && (
-                  <span style={{
-                    padding: '1px 6px', borderRadius: 99,
-                    background: T.danger, color: '#fff',
-                    fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
-                    lineHeight: 1.4,
-                  }}>{unresolvedConfirmCount}</span>
+              <Fragment key={t.key}>
+                {showGroupLabel && (
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    margin: '0 4px', paddingLeft: 8,
+                    borderLeft: `1px solid ${T.border}`,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>チーム機能</span>
+                    <span style={{
+                      padding: '1px 7px', borderRadius: 99,
+                      background: T.sectionBg, color: T.textMuted,
+                      border: `1px solid ${T.border}`,
+                      fontSize: 9.5, fontWeight: 800, letterSpacing: '0.03em',
+                    }}>オプション</span>
+                  </div>
                 )}
-              </button>
+                <button
+                  onClick={() => setActiveTab(t.key)}
+                  style={{
+                    padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    background: active ? T.bgCard : 'transparent',
+                    color: active ? T.text : T.textSub,
+                    fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}><Icon name={t.icon} size={14} /></span>
+                  <span>{t.label}</span>
+                  {showBadge && (
+                    <span style={{
+                      padding: '1px 6px', borderRadius: 99,
+                      background: T.danger, color: '#fff',
+                      fontSize: 10, fontWeight: 800, minWidth: 16, textAlign: 'center',
+                      lineHeight: 1.4,
+                    }}>{unresolvedConfirmCount}</span>
+                  )}
+                </button>
+              </Fragment>
             )
           })}
           </div>
