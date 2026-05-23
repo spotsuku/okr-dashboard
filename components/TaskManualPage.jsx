@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { btnPrimary, btnSecondary, inputStyle } from '../lib/iosStyles'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 
 // ─────────────────────────────────────────────────
 // テーマ
@@ -566,7 +566,7 @@ function Sidebar({ levels, selected, onSelect, query, onQuery, T }) {
                     style={{ padding: '7px 8px 7px 16px', borderRadius: RADIUS.xs + 1, cursor: 'pointer', marginBottom: 2, fontSize: TYPO.subhead.fontSize, fontWeight: isAct ? 700 : 500, color: isAct ? T.navText : T.textSub, background: isAct ? T.navActiveBg : 'transparent', borderLeft: `2px solid ${isAct ? T.navBorder : 'transparent'}`, transition: 'all 0.15s' }}
                     onMouseEnter={e => { if (!isAct) e.currentTarget.style.background = T.bgHover }}
                     onMouseLeave={e => { if (!isAct) e.currentTarget.style.background = 'transparent' }}>
-                    {team.icon} {team.name}
+                    <DataIcon value={team.icon} size={14} /> {team.name}
                   </div>
                 )
               })}
@@ -753,7 +753,7 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
                 <span style={{ color: T.textMuted }}>{selLevel.name}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, flexWrap: 'wrap' }}>
-                <h1 style={{ fontSize: TYPO.title1.fontSize, fontWeight: 700, color: T.text, margin: 0 }}>{selLevel.icon} {selLevel.name}</h1>
+                <h1 style={{ fontSize: TYPO.title1.fontSize, fontWeight: 700, color: T.text, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}><DataIcon value={selLevel.icon} size={20} /> {selLevel.name}</h1>
                 <span style={{ fontSize: TYPO.footnote.fontSize, fontWeight: 700, padding: '3px 10px', borderRadius: RADIUS.pill, background: `${deptColor}18`, color: deptColor, border: `1px solid ${deptColor}40` }}>
                   {cur.phases.length}フェーズ
                 </span>

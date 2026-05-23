@@ -73,7 +73,7 @@ function DeptSelect({ value, onChange, levels, wT }) {
     if (!level) return []
     const depth = getLevelDepth(levelId, levels)
     const prefix = '\u3000'.repeat(indent)
-    const result = [<option key={level.id} value={String(level.id)}>{prefix}{level.icon} {level.name}（{LAYER_LABELS[depth] || ''}）</option>]
+    const result = [<option key={level.id} value={String(level.id)}>{prefix}{level.name}（{LAYER_LABELS[depth] || ''}）</option>]
     levels.filter(l => Number(l.parent_id) === Number(levelId)).forEach(c => result.push(...renderOpts(c.id, indent + 1)))
     return result
   }
