@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 
 // 必要スコープのチェック
 const REQUIRED_SCOPES = [
@@ -117,12 +119,12 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
   const isExpired = integ?.expires_at && new Date(integ.expires_at) < new Date()
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', background: T.bg }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: `${SPACING.xl}px ${SPACING['2xl']}px`, background: T.bg }}>
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
-        <h2 style={{ fontSize: 24, fontWeight: 800, color: T.text, margin: 0, marginBottom: 4, letterSpacing: '-0.02em' }}>
-          🔌 外部サービス連携
+        <h2 style={{ ...TYPO.largeTitle, fontSize: 24, color: T.text, margin: 0, marginBottom: SPACING.xs, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <Icon name="link" size={24} /> 外部サービス連携
         </h2>
-        <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 22 }}>
+        <div style={{ ...TYPO.body, color: T.textMuted, marginBottom: 22 }}>
           {IS_DEMO
             ? 'デモ環境では外部サービスとの連携は無効化されています。Gmail / Calendar / Drive タブではサンプルデータが表示されます。'
             : 'Google アカウントを連携すると、Gmail の重要メールと Google カレンダーの予定がダッシュボードに表示され、AI返信も使えるようになります。'}
@@ -131,12 +133,12 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
 
         {errorMsg && (
           <div style={{
-            padding: '10px 14px', marginBottom: 14,
+            padding: '10px 14px', marginBottom: SPACING.md + 2,
             background: T.dangerBg, border: `1px solid ${T.danger}40`,
-            borderRadius: 8, fontSize: 12, color: T.danger,
-            display: 'flex', alignItems: 'center', gap: 8,
+            borderRadius: RADIUS.sm, ...TYPO.subhead, color: T.danger,
+            display: 'flex', alignItems: 'center', gap: SPACING.sm,
           }}>
-            <span>⚠️</span>
+            <Icon name="alert" size={14} />
             <span style={{ flex: 1 }}>{errorMsg}</span>
             <button onClick={() => setErrorMsg('')} style={{
               background: 'transparent', border: 'none', color: T.danger,
@@ -147,12 +149,12 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
 
         {successMsg && (
           <div style={{
-            padding: '10px 14px', marginBottom: 14,
+            padding: '10px 14px', marginBottom: SPACING.md + 2,
             background: T.successBg, border: `1px solid ${T.success}40`,
-            borderRadius: 8, fontSize: 12, color: T.success,
-            display: 'flex', alignItems: 'center', gap: 8,
+            borderRadius: RADIUS.sm, ...TYPO.subhead, color: T.success,
+            display: 'flex', alignItems: 'center', gap: SPACING.sm,
           }}>
-            <span>✅</span>
+            <Icon name="check" size={14} />
             <span style={{ flex: 1 }}>{successMsg}</span>
           </div>
         )}
@@ -162,32 +164,32 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
             background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
             border: `1px solid ${T.warn}40`,
             borderLeft: `4px solid ${T.warn}`,
-            borderRadius: 16, padding: 20,
-            display: 'flex', flexDirection: 'column', gap: 10,
+            borderRadius: RADIUS.xl, padding: SPACING.xl,
+            display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md }}>
               <div style={{
-                fontSize: 24, width: 44, height: 44, borderRadius: 10,
+                width: 44, height: 44, borderRadius: RADIUS.md,
                 background: `${T.warn}18`, color: T.warn,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>🚫</div>
+              }}><Icon name="cross" size={24} /></div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>
+                <div style={{ ...TYPO.headline, fontSize: 15, color: T.text }}>
                   デモ環境では Google 連携は無効です
                 </div>
-                <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+                <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginTop: 2 }}>
                   複数の見学者が同じアカウントを共有しているため、安全のため連携機能を停止しています。
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.7, padding: '4px 2px' }}>
+            <div style={{ ...TYPO.subhead, color: T.textSub, lineHeight: 1.7, padding: '4px 2px' }}>
               ・Gmail / Calendar / Drive タブはサンプルデータで動作します<br />
               ・本番環境にデプロイされた際は実際の Google アカウントと連携可能になります<br />
               ・ご自身の Google アカウントを試したい場合は、本番デプロイ後にご利用ください
             </div>
           </div>
         ) : loading ? (
-          <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+          <div style={{ padding: SPACING['3xl'] - 2, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>
             読み込み中...
           </div>
         ) : (
@@ -195,31 +197,31 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
             background: `linear-gradient(180deg, ${T.bgCard} 0%, #4285F406 100%)`,
             border: '1px solid #4285F41a',
             borderLeft: '4px solid #4285F4',
-            borderRadius: 16, padding: 20,
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05)',
-            display: 'flex', flexDirection: 'column', gap: 12,
+            borderRadius: RADIUS.xl, padding: SPACING.xl,
+            boxShadow: SHADOWS.sm,
+            display: 'flex', flexDirection: 'column', gap: SPACING.md,
           }}>
             {/* ヘッダ */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md }}>
               <div style={{
-                fontSize: 24, width: 44, height: 44, borderRadius: 10,
+                width: 44, height: 44, borderRadius: RADIUS.md,
                 background: '#4285F418', color: '#4285F4',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>🔗</div>
+              }}><Icon name="link" size={24} /></div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>
+                <div style={{ ...TYPO.headline, fontSize: 15, color: T.text }}>
                   Google (Gmail + カレンダー)
                 </div>
-                <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+                <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginTop: 2 }}>
                   メール・予定をダッシュボードに集約 + AI返信
                 </div>
               </div>
               {isConnected && (
                 <div style={{
-                  padding: '4px 10px', borderRadius: 99,
+                  padding: '4px 10px', borderRadius: RADIUS.pill,
                   background: isExpired ? T.warnBg : (missingScopes.length ? T.warnBg : T.successBg),
                   color: isExpired ? T.warn : (missingScopes.length ? T.warn : T.success),
-                  fontSize: 11, fontWeight: 700,
+                  ...TYPO.footnote, fontWeight: 700,
                 }}>
                   {isExpired ? '要再認証' : (missingScopes.length ? 'スコープ不足' : '連携中')}
                 </div>
@@ -227,7 +229,7 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
             </div>
 
             {/* 機能リスト */}
-            <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.7 }}>
+            <div style={{ ...TYPO.subhead, color: T.textSub, lineHeight: 1.7 }}>
               <div>・ダッシュボード: 直近8時間の予定 + To/Cc の重要メール5件</div>
               <div>・メールタブ: To/Cc/通知 を整理して表示</div>
               <div>・AI返信: 返信草稿を自動生成して Gmail の下書きに保存</div>
@@ -237,41 +239,43 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
             {isConnected && (
               <div style={{
                 padding: '10px 12px', background: T.sectionBg,
-                borderRadius: 8, fontSize: 11, color: T.textMuted, lineHeight: 1.7,
+                borderRadius: RADIUS.sm, ...TYPO.footnote, fontWeight: 600, color: T.textMuted, lineHeight: 1.7,
               }}>
-                {integ.metadata?.email && <div>📮 {integ.metadata.email}</div>}
+                {integ.metadata?.email && <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="mail" size={12} /> {integ.metadata.email}</div>}
                 <div>接続: {formatRelative(integ.connected_at)}</div>
-                <div style={{ marginTop: 6, color: T.textSub, fontWeight: 600 }}>権限:</div>
+                <div style={{ marginTop: SPACING.xs + 2, color: T.textSub, fontWeight: 600 }}>権限:</div>
                 {REQUIRED_SCOPES.map(s => (
-                  <div key={s.url} style={{ color: hasScope(s.url) ? T.success : T.danger }}>
-                    {hasScope(s.url) ? '✓' : '✗'} {s.label}
+                  <div key={s.url} style={{ color: hasScope(s.url) ? T.success : T.danger, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                    <Icon name={hasScope(s.url) ? 'check' : 'cross'} size={12} /> {s.label}
                   </div>
                 ))}
                 {missingScopes.length > 0 && (
                   <div style={{
-                    marginTop: 8, padding: 8, background: T.warnBg,
-                    color: T.warn, borderRadius: 6, fontSize: 11,
+                    marginTop: SPACING.sm, padding: SPACING.sm, background: T.warnBg,
+                    color: T.warn, borderRadius: RADIUS.xs, ...TYPO.footnote, fontWeight: 600,
+                    display: 'flex', alignItems: 'flex-start', gap: SPACING.xs,
                   }}>
-                    ⚠️ {missingScopes.map(s => s.label).join(' / ')} が付与されていません。同意画面で全てチェックして再連携してください。
+                    <Icon name="alert" size={12} style={{ flexShrink: 0, marginTop: 2 }} /> <span>{missingScopes.map(s => s.label).join(' / ')} が付与されていません。同意画面で全てチェックして再連携してください。</span>
                   </div>
                 )}
               </div>
             )}
 
             {/* アクション */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xs }}>
               {!isConnected ? (
                 <button
                   onClick={handleConnect}
                   disabled={busy || !isViewingSelf}
                   style={{
                     flex: 1, background: '#4285F4', color: '#fff',
-                    border: 'none', borderRadius: 8, padding: '10px 16px',
-                    fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                    border: 'none', borderRadius: RADIUS.sm, padding: '10px 16px',
+                    ...TYPO.callout, fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
                     cursor: busy || !isViewingSelf ? 'not-allowed' : 'pointer',
                     opacity: busy || !isViewingSelf ? 0.5 : 1,
                   }}
-                >{busy ? '接続中...' : '🔌 Google と連携'}</button>
+                >{busy ? '接続中...' : <><Icon name="link" size={14} /> Google と連携</>}</button>
               ) : (
                 <>
                   <button
@@ -282,19 +286,20 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
                       background: (isExpired || missingScopes.length) ? T.warn : 'transparent',
                       color: (isExpired || missingScopes.length) ? '#fff' : T.accent,
                       border: (isExpired || missingScopes.length) ? 'none' : `1px solid ${T.accent}40`,
-                      borderRadius: 8, padding: '8px 14px',
-                      fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                      borderRadius: RADIUS.sm, padding: '8px 14px',
+                      ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
                       cursor: busy || !isViewingSelf ? 'not-allowed' : 'pointer',
                       opacity: busy || !isViewingSelf ? 0.5 : 1,
                     }}
-                  >🔄 {(isExpired || missingScopes.length) ? '再認証が必要' : '再連携'}</button>
+                  ><Icon name="refresh" size={14} /> {(isExpired || missingScopes.length) ? '再認証が必要' : '再連携'}</button>
                   <button
                     onClick={handleDisconnect}
                     disabled={busy || !isViewingSelf}
                     style={{
                       flex: 1, background: 'transparent', color: T.danger,
-                      border: `1px solid ${T.danger}40`, borderRadius: 8,
-                      padding: '8px 14px', fontSize: 12, fontWeight: 600,
+                      border: `1px solid ${T.danger}40`, borderRadius: RADIUS.sm,
+                      padding: '8px 14px', ...TYPO.subhead, fontWeight: 600,
                       fontFamily: 'inherit',
                       cursor: busy || !isViewingSelf ? 'not-allowed' : 'pointer',
                       opacity: busy || !isViewingSelf ? 0.5 : 1,
@@ -309,11 +314,11 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
         {/* セットアップメモ */}
         {!IS_DEMO && (
           <div style={{
-            marginTop: 20, padding: 12,
+            marginTop: SPACING.xl, padding: SPACING.md,
             background: T.sectionBg, border: `1px dashed ${T.border}`,
-            borderRadius: 8, fontSize: 11, color: T.textMuted, lineHeight: 1.6,
+            borderRadius: RADIUS.sm, ...TYPO.footnote, fontWeight: 600, color: T.textMuted, lineHeight: 1.6,
           }}>
-            <div style={{ fontWeight: 700, color: T.textSub, marginBottom: 4 }}>💡 ヒント</div>
+            <div style={{ fontWeight: 700, color: T.textSub, marginBottom: SPACING.xs, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sparkle" size={12} /> ヒント</div>
             同意画面で「メールメッセージの表示」「下書きの管理とメール送信」「予定の表示」すべてにチェックを入れて「許可」してください。
             1つでも外すと一部機能が動作しません。
           </div>
