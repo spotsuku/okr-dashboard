@@ -5,7 +5,7 @@ import KASection from './KASection'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS } from '../lib/themeTokens'
 import { btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
-import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
+import { pctColor as okrPctColor } from '../lib/okrColors'
 import ObjectiveHeader from './okr/ObjectiveHeader'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
@@ -42,9 +42,6 @@ const T = () => _t
 
 // 進捗率に応じた色 (4 段階): 0-29 danger / 30-59 warn / 60-99 success / 100+ accent
 function progressColor(t, pct) { return okrPctColor(t, pct) }
-
-// 進捗率に応じた淡背景 (pill 用)
-function progStatusBg(t, pct) { return okrPctColorBg(t, pct) }
 
 function calcObjProgress(krs) {
   if (!krs?.length) return 0
