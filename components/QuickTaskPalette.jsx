@@ -129,6 +129,17 @@ export default function QuickTaskPalette({ user, members = [] }) {
   const inputRef = React.useRef(null)
   const composingRef = React.useRef(false)
 
+  // モバイル判定: キーボードショートカット表記 (⌘K / ↵ / Esc) はタッチ端末で
+  // 無意味なため非表示にし、アクションバーをボタン主体のレイアウトへ切替える。
+  const [isMobile, setIsMobile] = React.useState(false)
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
   const parsed = React.useMemo(() => parseTask(draft, members), [draft, members])
   const resolvedAssignee = parsed.assignee || myName
 
@@ -226,7 +237,7 @@ export default function QuickTaskPalette({ user, members = [] }) {
             placeholder="例: 明日 11時 提案資料を送る @佐藤 #目標2 !high"
             style={{ ...inputStyle({ T }), width: 'auto', flex: 1, border: 'none', padding: 0, background: 'transparent', fontSize: 16, color: T.text }}
           />
-          <Kbd>⌘K</Kbd>
+          {!isMobile && <Kbd>⌘K</Kbd>}
         </div>
 
         {/* 解析トークン (4色) */}
@@ -255,22 +266,36 @@ export default function QuickTaskPalette({ user, members = [] }) {
           </div>
         </div>
 
-        {/* アクションバー */}
-        <div style={{ padding: `${SPACING.md + 2}px ${SPACING['2xl'] - 2}px`, borderTop: `1px solid ${T.borderLight}`, display: 'flex', alignItems: 'center', gap: SPACING.sm + 2 }}>
+        {/* アクションバー (モバイルではキーボード表記を省きボタン主体に) */}
+        <div style={{
+          padding: `${SPACING.md + 2}px ${SPACING['2xl'] - 2}px`, borderTop: `1px solid ${T.borderLight}`,
+          display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
+        }}>
           <button onClick={() => add(false)} disabled={!parsed.title || saving} style={{
             ...btnBrand({ size: 'md' }),
             ...(parsed.title ? {} : { background: T.textFaint, boxShadow: 'none' }),
             cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
-            display: 'flex', alignItems: 'center', gap: SPACING.sm,
-          }}>{saving ? '追加中…' : '追加'} <Kbd>↵</Kbd></button>
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
+            ...(isMobile ? { flex: '1 1 100%' } : {}),
+          }}>{saving ? '追加中…' : '追加'} {!isMobile && <Kbd>↵</Kbd>}</button>
           <button onClick={() => add(true)} disabled={!parsed.title || saving} style={{
             ...btnGhost({ T, size: 'md' }), fontWeight: 500,
             cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
+            ...(isMobile ? { flex: '1 1 auto' } : {}),
           }}>あとで（続けて投函）</button>
-          <div style={{ flex: 1 }} />
-          <span style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
-            <Kbd>Esc</Kbd> キャンセル · <Kbd>⇧↵</Kbd> 続けて追加
-          </span>
+          {isMobile ? (
+            <button onClick={() => setOpen(false)} style={{
+              ...btnGhost({ T, size: 'md' }), fontWeight: 500, color: T.textMuted, flex: '0 0 auto',
+            }}>キャンセル</button>
+          ) : (
+            <>
+              <div style={{ flex: 1 }} />
+              <span style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
+                <Kbd>Esc</Kbd> キャンセル · <Kbd>⇧↵</Kbd> 続けて追加
+              </span>
+            </>
+          )}
         </div>
       </div>
     </>
