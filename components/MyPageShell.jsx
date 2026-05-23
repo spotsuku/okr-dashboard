@@ -790,14 +790,13 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'wbs' && (
             summaryMode ? (
-              <CompanySummaryTab T={T} members={members} />
+              <CompanyTasksView T={T} members={members} themeKey={themeKey} user={user} fiscalYear={fiscalYear} />
             ) : (
               <MyTasksPage
                 user={isViewingSelf ? user : { ...user, email: viewingMember?.email || user?.email }}
                 members={members}
                 themeKey={themeKey}
-                initialViewMode="my"
-                onViewModeChange={() => {}}
+                lockViewMode="my"
                 fiscalYear={fiscalYear}
               />
             )
@@ -3547,6 +3546,52 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
             }}
           >{force ? <><Icon name="check" size={13} /> 保存して昨日を終業</> : <><Icon name="check" size={13} /> 保存して終業</>}</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── 全社サマリー: タスクタブ ──────────────────────────────────────────
+// 全社タスク (リスト/カード/ガント) を主表示しつつ、上部に「本日の全メンバーの
+// タスク状況」(CompanySummaryTab) を折りたたみで併置する。
+//   ・全社タスクの一覧/カンバン/ガントで全体像を見る
+//   ・同じ画面で本日の各メンバーの稼働・遅延状況も確認できる
+function CompanyTasksView({ T, members, themeKey, user, fiscalYear }) {
+  const [showStatus, setShowStatus] = useState(true)
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* 折りたたみヘッダ: 本日の全メンバーのタスク状況 */}
+      <div style={{ flexShrink: 0 }}>
+        <button
+          onClick={() => setShowStatus(s => !s)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            padding: '10px 16px', background: T.sectionBg, border: 'none',
+            borderBottom: `1px solid ${T.border}`, cursor: 'pointer',
+            fontFamily: 'inherit', color: T.text, textAlign: 'left',
+          }}
+        >
+          <Icon name={showStatus ? 'chevronD' : 'chevronR'} size={14} />
+          <span style={{ fontSize: 12.5, fontWeight: 700 }}>本日の全メンバーのタスク状況</span>
+          <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
+            {showStatus ? '（クリックで折りたたむ）' : '（クリックで開く）'}
+          </span>
+        </button>
+        {showStatus && (
+          <div style={{ maxHeight: 360, overflowY: 'auto', borderBottom: `1px solid ${T.border}` }}>
+            <CompanySummaryTab T={T} members={members} />
+          </div>
+        )}
+      </div>
+      {/* 全社タスク (リスト/カード/ガント) */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <MyTasksPage
+          user={user}
+          members={members}
+          themeKey={themeKey}
+          lockViewMode="all"
+          fiscalYear={fiscalYear}
+        />
       </div>
     </div>
   )
