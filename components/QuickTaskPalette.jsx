@@ -13,12 +13,18 @@
 //     優先度/紐付けはプレビュー表示のみ (列追加なしの方針)。
 import * as React from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from './Icon'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnBrand, btnGhost, inputStyle } from '../lib/iosStyles'
+
+// このオーバーレイは light 固定の Glass UI。トークンは light を参照。
+const T = COMMON_TOKENS.light
 
 const TONE = {
-  date:     { bg: 'rgba(59,130,246,.12)', fg: '#1d4ed8' },
-  assignee: { bg: 'rgba(91,91,214,.12)',  fg: '#4338ca' },
-  goal:     { bg: 'rgba(5,150,105,.12)',  fg: '#047857' },
-  priority: { bg: 'rgba(217,119,6,.12)',  fg: '#d97706' },
+  date:     { bg: T.infoBg,    fg: T.info },
+  assignee: { bg: T.accentBg,  fg: T.accentText },
+  goal:     { bg: T.successBg, fg: T.success },
+  priority: { bg: T.warnBg,    fg: T.warn },
 }
 
 const WD = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 }
@@ -109,10 +115,10 @@ function parseTask(text, members) {
 }
 
 const PRIORITY_LABEL = { high: '高 (!high)', normal: '中', low: '低 (!low)' }
-const PRIORITY_TONE = { high: TONE.priority, normal: { bg: 'rgba(14,165,233,.12)', fg: '#0369a1' }, low: { bg: 'rgba(148,163,184,.16)', fg: '#64748b' } }
+const PRIORITY_TONE = { high: TONE.priority, normal: { bg: T.accentBg, fg: T.accentText }, low: { bg: 'rgba(148,163,184,.16)', fg: T.textSub } }
 
 function Kbd({ children }) {
-  return <span style={{ display: 'inline-block', minWidth: 14, padding: '2px 6px', fontSize: 10, fontWeight: 600, fontFamily: 'ui-monospace, monospace', background: 'rgba(15,23,42,.06)', borderRadius: 4, color: '#94a3b8' }}>{children}</span>
+  return <span style={{ display: 'inline-block', minWidth: 14, padding: '2px 6px', ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', fontFamily: 'ui-monospace, monospace', background: T.border, borderRadius: RADIUS.xs, color: T.textMuted }}>{children}</span>
 }
 
 export default function QuickTaskPalette({ user, members = [] }) {
@@ -189,80 +195,80 @@ export default function QuickTaskPalette({ user, members = [] }) {
 
   const PreviewRow = ({ label, children }) => (
     <>
-      <div style={{ fontSize: 12, color: '#94a3b8' }}>{label}</div>
-      <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>{children}</div>
+      <div style={{ ...TYPO.subhead, fontWeight: 500, color: T.textMuted }}>{label}</div>
+      <div style={{ ...TYPO.subhead, fontWeight: 500, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>{children}</div>
     </>
   )
-  const pill = (tone, text) => (
-    <span style={{ padding: '1px 8px', borderRadius: 99, background: tone.bg, color: tone.fg, fontWeight: 600, fontSize: 11 }}>{text}</span>
+  const pill = (tone, children) => (
+    <span style={{ ...pillStyle({ color: tone.fg, size: 'md' }), background: tone.bg, fontWeight: 600 }}>{children}</span>
   )
 
   return (
     <>
       <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.4)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', zIndex: 100 }} />
       <div style={{
+        ...cardStyle({ T, padding: 0 }),
         position: 'fixed', top: '18%', left: '50%', transform: 'translateX(-50%)', width: 'min(560px, calc(100vw - 32px))',
-        background: 'rgba(255,255,255,.96)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
-        border: '1px solid rgba(15,23,42,.08)', borderRadius: 16, overflow: 'hidden', zIndex: 101,
-        boxShadow: '0 32px 80px rgba(15,23,42,.28)',
-        fontFamily: '"Inter", "Noto Sans JP", system-ui, sans-serif', color: '#0f172a',
+        background: 'rgba(255,255,255,.96)',
+        borderRadius: RADIUS.xl, zIndex: 101,
+        boxShadow: SHADOWS.xl,
+        fontFamily: '"Inter", "Noto Sans JP", system-ui, sans-serif', color: T.text,
       }}>
         {/* 入力行 */}
-        <div style={{ padding: '18px 22px', borderBottom: '1px solid rgba(15,23,42,.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, background: 'linear-gradient(135deg, #3b82f6, #1e3a8a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+        <div style={{ padding: `${SPACING.lg + 2}px ${SPACING['2xl'] - 2}px`, borderBottom: `1px solid ${T.borderLight}`, display: 'flex', alignItems: 'center', gap: SPACING.md }}>
+          <div style={{ width: 28, height: 28, borderRadius: RADIUS.xs + 1, flexShrink: 0, background: 'linear-gradient(135deg, #3b82f6, #1e3a8a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+            <Icon name="plus" size={14} stroke={2.6} />
           </div>
           <input
             ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={onInputKey}
             onCompositionStart={() => { composingRef.current = true }}
             onCompositionEnd={() => { composingRef.current = false }}
             placeholder="例: 明日 11時 提案資料を送る @佐藤 #目標2 !high"
-            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 16, color: '#0f172a', fontFamily: 'inherit' }}
+            style={{ ...inputStyle({ T }), width: 'auto', flex: 1, border: 'none', padding: 0, background: 'transparent', fontSize: 16, color: T.text }}
           />
           <Kbd>⌘K</Kbd>
         </div>
 
         {/* 解析トークン (4色) */}
         {(parsed.dateLabel || parsed.assignee || parsed.goal || parsed.priority) && (
-          <div style={{ padding: '10px 22px 0', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {parsed.dateLabel && pill(TONE.date, `📅 ${parsed.dateLabel}`)}
+          <div style={{ padding: `${SPACING.sm + 2}px ${SPACING['2xl'] - 2}px 0`, display: 'flex', gap: SPACING.xs + 2, flexWrap: 'wrap' }}>
+            {parsed.dateLabel && pill(TONE.date, <><Icon name="calendar" size={11} /> {parsed.dateLabel}</>)}
             {parsed.assignee && pill(TONE.assignee, `@${parsed.assignee}`)}
-            {parsed.goal && pill(TONE.goal, `🎯 ${parsed.goal}`)}
+            {parsed.goal && pill(TONE.goal, <><Icon name="target" size={11} /> {parsed.goal}</>)}
             {parsed.priority && pill(PRIORITY_TONE[parsed.priority], `! ${parsed.priority}`)}
           </div>
         )}
 
         {/* 解釈プレビュー */}
-        <div style={{ padding: '14px 22px', background: 'rgba(255,255,255,.5)' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>解釈プレビュー</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', gap: 8, alignItems: 'center' }}>
-            <PreviewRow label="件名"><span style={{ fontWeight: 500 }}>{parsed.title || <span style={{ color: '#cbd5e1' }}>—</span>}</span></PreviewRow>
-            <PreviewRow label="期日">{parsed.dateLabel ? pill(TONE.date, `📅 ${parsed.dateLabel}`) : <span style={{ color: '#cbd5e1' }}>—</span>}</PreviewRow>
+        <div style={{ padding: `${SPACING.md + 2}px ${SPACING['2xl'] - 2}px`, background: 'rgba(255,255,255,.5)' }}>
+          <div style={{ ...TYPO.caption, color: T.textMuted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: SPACING.sm }}>解釈プレビュー</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', gap: SPACING.sm, alignItems: 'center' }}>
+            <PreviewRow label="件名"><span style={{ fontWeight: 500 }}>{parsed.title || <span style={{ color: T.textFaint }}>—</span>}</span></PreviewRow>
+            <PreviewRow label="期日">{parsed.dateLabel ? pill(TONE.date, <><Icon name="calendar" size={11} /> {parsed.dateLabel}</>) : <span style={{ color: T.textFaint }}>—</span>}</PreviewRow>
             <PreviewRow label="担当">
               {resolvedAssignee
-                ? <><span style={{ width: 18, height: 18, borderRadius: 99, background: '#cbd5e1', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{resolvedAssignee[0]}</span><span>{resolvedAssignee}{!parsed.assignee && '（自分）'}</span></>
-                : <span style={{ color: '#cbd5e1' }}>—</span>}
+                ? <><span style={{ width: 18, height: 18, borderRadius: RADIUS.pill, background: T.textFaint, color: '#fff', ...TYPO.caption, letterSpacing: 'normal', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{resolvedAssignee[0]}</span><span>{resolvedAssignee}{!parsed.assignee && '（自分）'}</span></>
+                : <span style={{ color: T.textFaint }}>—</span>}
             </PreviewRow>
-            <PreviewRow label="紐付け">{parsed.goal ? pill(TONE.goal, `🎯 ${parsed.goal}`) : <span style={{ color: '#cbd5e1' }}>—</span>}</PreviewRow>
-            <PreviewRow label="優先度">{parsed.priority ? pill(PRIORITY_TONE[parsed.priority], PRIORITY_LABEL[parsed.priority]) : <span style={{ color: '#cbd5e1' }}>—</span>}</PreviewRow>
+            <PreviewRow label="紐付け">{parsed.goal ? pill(TONE.goal, <><Icon name="target" size={11} /> {parsed.goal}</>) : <span style={{ color: T.textFaint }}>—</span>}</PreviewRow>
+            <PreviewRow label="優先度">{parsed.priority ? pill(PRIORITY_TONE[parsed.priority], PRIORITY_LABEL[parsed.priority]) : <span style={{ color: T.textFaint }}>—</span>}</PreviewRow>
           </div>
         </div>
 
         {/* アクションバー */}
-        <div style={{ padding: '14px 22px', borderTop: '1px solid rgba(15,23,42,.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: `${SPACING.md + 2}px ${SPACING['2xl'] - 2}px`, borderTop: `1px solid ${T.borderLight}`, display: 'flex', alignItems: 'center', gap: SPACING.sm + 2 }}>
           <button onClick={() => add(false)} disabled={!parsed.title || saving} style={{
-            padding: '8px 16px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 8,
-            background: parsed.title ? 'linear-gradient(135deg, #3b82f6, #1e3a8a)' : '#cbd5e1', color: '#fff',
-            cursor: parsed.title && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
-            boxShadow: '0 2px 6px rgba(30,58,138,.3)', display: 'flex', alignItems: 'center', gap: 8,
+            ...btnBrand({ size: 'md' }),
+            ...(parsed.title ? {} : { background: T.textFaint, boxShadow: 'none' }),
+            cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
+            display: 'flex', alignItems: 'center', gap: SPACING.sm,
           }}>{saving ? '追加中…' : '追加'} <Kbd>↵</Kbd></button>
           <button onClick={() => add(true)} disabled={!parsed.title || saving} style={{
-            padding: '8px 14px', fontSize: 12, fontWeight: 500, borderRadius: 8,
-            background: '#fff', color: '#475569', border: '1px solid rgba(15,23,42,.12)',
-            cursor: parsed.title && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+            ...btnGhost({ T, size: 'md' }), fontWeight: 500,
+            cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
           }}>あとで（続けて投函）</button>
           <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 11, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
             <Kbd>Esc</Kbd> キャンセル · <Kbd>⇧↵</Kbd> 続けて追加
           </span>
         </div>

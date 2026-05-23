@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useCurrentOrg } from '../lib/orgContext'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 
 const IS_DEMO = (typeof process !== 'undefined') && process.env?.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -82,23 +84,23 @@ export default function AIPanel({ onClose, okrContext, initialMessage }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: 'rgba(77,159,255,0.06)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2 }}>
           <div style={{
             width: 32, height: 32, borderRadius: '50%',
             background: 'linear-gradient(135deg, #4d9fff, #a855f7)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, boxShadow: '0 0 16px #4d9fff40',
-          }}>🤖</div>
+            color: '#fff', boxShadow: '0 0 16px #4d9fff40',
+          }}><Icon name="ai" size={16} /></div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#e8eaf0' }}>OKR AIコーチ</div>
-            <div style={{ fontSize: 10, color: '#4d9fff' }}>● オンライン</div>
+            <div style={{ ...TYPO.callout, color: '#e8eaf0' }}>OKR AIコーチ</div>
+            <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: '#4d9fff' }}>● オンライン</div>
           </div>
         </div>
         <button onClick={onClose} style={{
           background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
           color: '#a0a8be', width: 28, height: 28, borderRadius: '50%',
-          cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>✕</button>
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}><Icon name="cross" size={14} /></button>
       </div>
 
       {/* Messages */}
@@ -114,14 +116,14 @@ export default function AIPanel({ onClose, okrContext, initialMessage }) {
               <div style={{
                 width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
                 background: 'linear-gradient(135deg, #4d9fff, #a855f7)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
-              }}>🤖</div>
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+              }}><Icon name="ai" size={12} /></div>
             )}
             <div style={{
               maxWidth: '82%',
               background: m.role === 'user' ? '#4d9fff' : 'rgba(255,255,255,0.05)',
               border: m.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.08)',
-              borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+              borderRadius: m.role === 'user' ? `${RADIUS.lg}px ${RADIUS.lg}px 4px ${RADIUS.lg}px` : `${RADIUS.lg}px ${RADIUS.lg}px ${RADIUS.lg}px 4px`,
               padding: '10px 13px',
               fontSize: 12.5, lineHeight: 1.65, color: m.role === 'user' ? '#fff' : '#d0d4e8',
               whiteSpace: 'pre-wrap',
@@ -135,12 +137,12 @@ export default function AIPanel({ onClose, okrContext, initialMessage }) {
             <div style={{
               width: 26, height: 26, borderRadius: '50%',
               background: 'linear-gradient(135deg, #4d9fff, #a855f7)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
-            }}>🤖</div>
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+            }}><Icon name="ai" size={12} /></div>
             <div style={{
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '14px 14px 14px 4px', padding: '12px 16px',
-              display: 'flex', gap: 4, alignItems: 'center',
+              borderRadius: `${RADIUS.lg}px ${RADIUS.lg}px ${RADIUS.lg}px 4px`, padding: '12px 16px',
+              display: 'flex', gap: SPACING.xs, alignItems: 'center',
             }}>
               {[0,1,2].map(i => (
                 <div key={i} style={{
@@ -158,12 +160,12 @@ export default function AIPanel({ onClose, okrContext, initialMessage }) {
       {/* Suggestions */}
       {messages.length <= 1 && (
         <div style={{ padding: '0 16px 10px' }}>
-          <div style={{ fontSize: 10, color: '#404660', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>よく使う質問</div>
+          <div style={{ ...TYPO.caption, fontWeight: 600, color: '#404660', marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: '0.1em' }}>よく使う質問</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {SUGGESTIONS.map((s, i) => (
               <button key={i} onClick={() => send(s)} style={{
                 background: 'rgba(77,159,255,0.06)', border: '1px solid rgba(77,159,255,0.2)',
-                borderRadius: 8, padding: '8px 12px', color: '#8ab4ff',
+                borderRadius: RADIUS.sm, padding: '8px 12px', color: '#8ab4ff',
                 fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 transition: 'all 0.15s',
               }}>{s}</button>
@@ -185,18 +187,18 @@ export default function AIPanel({ onClose, okrContext, initialMessage }) {
           rows={2}
           style={{
             flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 10, padding: '9px 12px', color: '#e8eaf0', fontSize: 12.5,
+            borderRadius: RADIUS.md, padding: '9px 12px', color: '#e8eaf0', fontSize: 12.5,
             outline: 'none', fontFamily: 'inherit', resize: 'none', lineHeight: 1.5,
           }}
         />
         <button onClick={() => send()} disabled={!input.trim() || loading} style={{
-          width: 36, height: 36, borderRadius: 10, border: 'none',
+          width: 36, height: 36, borderRadius: RADIUS.md, border: 'none',
           background: input.trim() && !loading ? 'linear-gradient(135deg, #4d9fff, #a855f7)' : 'rgba(255,255,255,0.08)',
           color: '#fff', cursor: input.trim() && !loading ? 'pointer' : 'not-allowed',
-          fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0, transition: 'all 0.2s',
           boxShadow: input.trim() && !loading ? '0 0 16px #4d9fff40' : 'none',
-        }}>↑</button>
+        }}><Icon name="arrowUp" size={18} /></button>
       </div>
       <style>{`
         @keyframes bounce {
