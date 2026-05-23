@@ -102,6 +102,36 @@ function saveCustomLinks(email, links) {
   if (typeof window === 'undefined') return
   try { window.localStorage.setItem(CUSTOM_LINKS_KEY(email), JSON.stringify(links)) } catch { /* noop */ }
 }
+// ─── オンボーディング (7ステップ) ──────────────────────────────
+const ONB_DISMISS_KEY = (email) => `home_onboarding_dismissed_${email || 'guest'}`
+const ONB_SEEN_OKR_KEY = 'home_onb_seen_okr'
+// 7ステップ定義 (順序厳守: プロフ→MyCOO→Google→リンク→タスク→振り返り→目標)
+const ONB_STEPS = [
+  { key: 'profile',    icon: 'user',    title: 'プロフィールを設定',     desc: '名前・役職・アバターを設定し、チームから認識されやすくする' },
+  { key: 'mycoo',      icon: 'sparkle', title: 'MyCOO に話しかける',     desc: '右下のオーブが AI コーチであることを早期に知ってもらう' },
+  { key: 'google',     icon: 'link',    title: 'Google 連携',           desc: 'カレンダー・Gmail と連携して AI が予定とタスクを自動整理' },
+  { key: 'links',      icon: 'link',    title: 'カスタムリンクを登録',   desc: 'よく使うツール（Slack / Notion / freee 等）を登録、ホームを作業拠点化' },
+  { key: 'task',       icon: 'bolt',    title: '明日のタスクを追加',     desc: '自然文で書くだけ。AI が日付と担当を解析' },
+  { key: 'reflection', icon: 'refresh', title: '振り返りを書く',         desc: 'Keep / Problem / Try を 1 行から。継続でバッジ' },
+  { key: 'goal',       icon: 'target',  title: '今期の目標を見る',       desc: 'チームの OKR / KR を確認、自分の作業との繋がりを意識' },
+]
+function loadOnbDismissed(email) {
+  if (typeof window === 'undefined') return false
+  try { return window.localStorage.getItem(ONB_DISMISS_KEY(email)) === '1' } catch { return false }
+}
+function saveOnbDismissed(email) {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.setItem(ONB_DISMISS_KEY(email), '1') } catch { /* noop */ }
+}
+function loadOnbSeenOkr() {
+  if (typeof window === 'undefined') return false
+  try { return window.localStorage.getItem(ONB_SEEN_OKR_KEY) === '1' } catch { return false }
+}
+function saveOnbSeenOkr() {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.setItem(ONB_SEEN_OKR_KEY, '1') } catch { /* noop */ }
+}
+
 function normalizeUrl(input) {
   const t = (input || '').trim()
   if (!t) return ''
@@ -132,6 +162,14 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
   const [recentItems, setRecentItems] = useState([])  // 最近の動き
   const [notices, setNotices] = useState([])          // お知らせ
 
+  // オンボーディング state (done 検出は実データのみ。検出不能は未完了扱い・捏造しない)
+  const [onbDismissed, setOnbDismissed] = useState(true) // SSR/初期は非表示、マウント後に判定
+  const [onbSeenOkr, setOnbSeenOkr] = useState(false)
+  const [onbDone, setOnbDone] = useState({
+    profile: false, mycoo: false, google: false, links: false,
+    task: false, reflection: false, goal: false,
+  })
+
   // カスタムリンク state
   const [customLinks, setCustomLinks] = useState([])
   const [showAdd, setShowAdd] = useState(false)
@@ -145,7 +183,14 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
   // localStorage から読み込み (ユーザーごと)
   useEffect(() => {
     setCustomLinks(loadCustomLinks(user?.email))
+    setOnbDismissed(loadOnbDismissed(user?.email))
+    setOnbSeenOkr(loadOnbSeenOkr())
   }, [user?.email])
+
+  // step4 (リンク) / step7 (目標) はクライアント状態から判定
+  useEffect(() => {
+    setOnbDone(prev => ({ ...prev, links: customLinks.length > 0, goal: onbSeenOkr }))
+  }, [customLinks.length, onbSeenOkr])
 
   const persistLinks = useCallback((next) => {
     setCustomLinks(next)
@@ -301,6 +346,83 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     return () => { alive = false }
   }, [orgId, myName])
 
+  // ─── オンボーディング done 検出 (org-scope, best-effort) ───
+  // 1 プロフィール: members から自分の avatar_url / role を判定 (同期)
+  useEffect(() => {
+    const me = members.find(m => m.email === user?.email)
+    const profileDone = !!(me && (me.avatar_url || me.role))
+    setOnbDone(prev => ({ ...prev, profile: profileDone }))
+  }, [members, user?.email])
+
+  // 2 MyCOO / 3 Google / 5 タスク / 6 振り返り: Supabase を個別に問い合わせ。
+  // テーブル/列が無い等のエラーは catch して未完了扱い (捏造しない)。
+  useEffect(() => {
+    if (!orgId || !myName) return
+    let alive = true
+    const today = todayJSTStr()
+    ;(async () => {
+      const probes = [
+        // 2 MyCOO: coaching_chats (owner=myName, kind='coo')
+        ['mycoo', supabase.from('coaching_chats')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId).eq('owner', myName).eq('kind', 'coo')],
+        // 3 Google連携: user_integrations (owner=myName, service='google')
+        ['google', supabase.from('user_integrations')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId).eq('owner', myName).eq('service', 'google')],
+        // 5 明日のタスク: 自分の ka_tasks で due_date >= today
+        ['task', supabase.from('ka_tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId).eq('assignee', myName).gte('due_date', today)],
+        // 6 振り返り: 自分の coaching_logs (log_type='kpt')
+        ['reflection', supabase.from('coaching_logs')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId).eq('owner', myName).eq('log_type', 'kpt')],
+      ]
+      const settled = await Promise.allSettled(probes.map(([, p]) => p))
+      if (!alive) return
+      const next = {}
+      settled.forEach((s, i) => {
+        const key = probes[i][0]
+        if (s.status !== 'fulfilled' || s.value?.error) {
+          const msg = s.status !== 'fulfilled' ? (s.reason?.message || String(s.reason)) : (s.value.error.message || '')
+          console.warn(`[PortalPage] オンボード ${key} 検出失敗 (未完了扱い): ${msg}`)
+          next[key] = false
+          return
+        }
+        next[key] = (s.value.count || 0) > 0
+      })
+      setOnbDone(prev => ({ ...prev, ...next }))
+    })()
+    return () => { alive = false }
+  }, [orgId, myName])
+
+  // ステップごとのクリック動作 (有効な activePage id のみ使用)
+  const onbStepAction = useCallback((key) => {
+    switch (key) {
+      case 'profile':    onNavigate('mycoach'); break
+      case 'mycoo':
+        // MyCOO オーブがあれば開くイベントを送出。無ければ何もしない。
+        try { window.dispatchEvent(new CustomEvent('okr:open-mycoo')) } catch { /* noop */ }
+        break
+      case 'google':     onNavigate('mycoach'); break // 専用の連携ページが無いため MyCOO へ
+      case 'links':
+        // カスタムリンク追加ダイアログを開く
+        openAddDialog()
+        break
+      case 'task':       onNavigate('mytasks'); break
+      case 'reflection': onNavigate('mycoach'); break
+      case 'goal':
+        saveOnbSeenOkr(); setOnbSeenOkr(true); onNavigate('okr'); break
+      default: break
+    }
+  }, [onNavigate])
+
+  function dismissOnboarding() {
+    saveOnbDismissed(user?.email)
+    setOnbDismissed(true)
+  }
+
   function openAddDialog() {
     setEditingId(null); setFormTitle(''); setFormUrl(''); setFormColor('accent'); setFormError(''); setShowAdd(true)
   }
@@ -358,6 +480,17 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     { lbl: 'タスク完了率',   val: fmt(stats.taskDonePct, '%'), color: T.accentText },
     { lbl: '未対応確認事項', val: fmt(stats.openConfirms),    color: T.warn },
   ]
+
+  // ─── オンボーディング 派生値 (完了数 / 次ステップ / 自動 dismiss) ───
+  const onbDoneCount = ONB_STEPS.filter(s => onbDone[s.key]).length
+  const onbAllDone = onbDoneCount === ONB_STEPS.length
+  // 次に取り組むべき (= 最初の未完了) ステップ
+  const onbNextStep = ONB_STEPS.find(s => !onbDone[s.key]) || null
+  // 全完了したら自動で dismiss を永続化
+  useEffect(() => {
+    if (!onbDismissed && onbAllDone) dismissOnboarding()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onbAllDone, onbDismissed])
 
   // ─── 共通スタイル断片 ──────────────────────────────
   const destCard = {
@@ -516,6 +649,116 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
             </div>
           </div>
         </div>
+
+        {/* ─── オンボーディング (7ステップ) ─── */}
+        {!onbDismissed && (
+          <div style={{
+            background: T.bgCard,
+            backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+            border: `1px solid ${T.border}`,
+            borderRadius: RADIUS.xl,
+            boxShadow: SHADOWS.md,
+            overflow: 'hidden',
+            marginBottom: 22,
+          }}>
+            {/* ヘッダ */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '14px 18px',
+              background: 'linear-gradient(120deg, rgba(37,99,235,.08), rgba(34,211,238,.06))',
+              borderBottom: `1px solid ${T.border}`,
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 9, background: BRAND_GRADIENT.cta,
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                boxShadow: '0 4px 12px rgba(37,99,235,.28)',
+              }}>
+                <Icon name="rocket" size={17} stroke={1.8} />
+              </div>
+              <div style={{ minWidth: 0, flexShrink: 0, width: 220 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>AI WorkSpace を使いはじめる</div>
+                <div style={{ fontSize: 11.5, color: T.textSub, marginTop: 1 }}>{onbDoneCount} / {ONB_STEPS.length} 完了 · 所要 約 10 分</div>
+                <div style={{ height: 5, borderRadius: 99, background: 'rgba(15,23,42,.06)', marginTop: 6, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(onbDoneCount / ONB_STEPS.length) * 100}%`, background: BRAND_GRADIENT.cta, borderRadius: 99, transition: 'width .3s' }} />
+                </div>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {onbNextStep && (
+                  <button onClick={() => onbStepAction(onbNextStep.key)}
+                    style={{ ...btnBrand({ size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                    次は「{onbNextStep.title}」へ <Icon name="arrowRight" size={11} stroke={2} />
+                  </button>
+                )}
+                <button onClick={dismissOnboarding} aria-label="閉じる"
+                  style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${T.border}`, background: GLASS.light, color: T.textSub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon name="cross" size={12} stroke={2} />
+                </button>
+              </div>
+            </div>
+
+            {/* 7ステップグリッド */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: T.border }}>
+              {ONB_STEPS.map((s, i) => {
+                const done = !!onbDone[s.key]
+                const active = !done && onbNextStep && onbNextStep.key === s.key
+                return (
+                  <div key={s.key} role="button" tabIndex={0}
+                    onClick={() => onbStepAction(s.key)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onbStepAction(s.key) } }}
+                    style={{
+                      background: active ? T.accentSoft : T.bgCard,
+                      padding: '14px 14px 12px', cursor: 'pointer',
+                      boxShadow: active ? `inset 0 0 0 1.5px ${T.accent}` : 'none',
+                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                      <span style={{
+                        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        background: done ? T.success : 'transparent',
+                        border: done ? 'none' : `1.5px dashed ${T.borderMid}`,
+                        color: '#fff',
+                      }}>
+                        {done && <Icon name="check" size={12} stroke={2.4} />}
+                      </span>
+                      <span style={{
+                        fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',
+                        color: done ? T.success : (active ? T.accentText : T.textMuted),
+                      }}>
+                        STEP {i + 1}{active ? ' · 今ここ' : ''}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text, display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                      <Icon name={s.icon} size={13} stroke={1.8} style={{ color: T.textSub, flexShrink: 0 }} /> {s.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.55 }}>{s.desc}</div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* MyCOO ヒント */}
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              margin: '14px 16px 16px', padding: '12px 14px',
+              background: 'linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))',
+              border: '1px solid rgba(37,99,235,.18)', borderRadius: RADIUS.md,
+            }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                background: 'linear-gradient(135deg,#3b82f6,#1e3a8a)',
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon name="sparkle" size={14} stroke={1.8} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.accentText, marginBottom: 2 }}>MyCOO からのヒント</div>
+                <div style={{ fontSize: 12, lineHeight: 1.6, color: T.text }}>
+                  セットアップは今日中に終わらせると、明日の朝からスムーズに使いはじめられます。
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ─── Destination grid (2 cards) ─── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 24 }}>
