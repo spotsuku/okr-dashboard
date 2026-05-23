@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'rea
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
-import { cardStyle, sectionHeaderStyle, btnBrand } from '../lib/iosStyles'
+import { cardStyle, sectionHeaderStyle, btnBrand, btnSecondary, pillStyle, progressBarStyle, progressFillStyle } from '../lib/iosStyles'
 import Icon, { DataIcon } from './Icon'
 import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
@@ -196,8 +196,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   // 全社サマリーと個人モードでタブ構成が違うため、モード切替で隠れるタブに
   // いる場合は dashboard にフォールバック。
   useEffect(() => {
-    const summaryOnly = ['strategy', 'milestone']
-    // okr_edit はヘッダーナビへ移動したため全社サマリーでは非表示 → 個人モード扱い
+    const summaryOnly = ['strategy', 'milestone', 'team_summary']
+    // 個人モードのみのタブ (全社サマリーでは非表示)。連携はタブから外したが
+    // ?tab=integrations 等で開いた場合に全社モードへ切替えたら dashboard へ戻す。
     const individualOnly = ['okr_edit', 'calendar', 'drive', 'coo', 'retrospect', 'integrations']
     if (summaryMode && individualOnly.includes(activeTab)) setActiveTab('dashboard')
     if (!summaryMode && summaryOnly.includes(activeTab)) setActiveTab('dashboard')
@@ -630,43 +631,56 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             padding: 3, borderRadius: 11,
           }}>
           {(() => {
-            // 全社サマリーのタブは 2 グループ構成:
-            //   [全社]      ダッシュボード / 経営戦略 / マイルストーン  (初期表示・経営レベル)
-            //   [チーム機能] チームサマリー / 共有・確認 / タスク / メール (無料期間は公開だが「オプション」)
-            // OKR はヘッダーナビに集約したため全社サマリーからは除外 (summary:false / individual のみ)。
-            // 個人モードでは個人依存タブ (カレンダー/ドライブ/MyCOO/振り返り/連携) を追加表示。
-            // SaaS 化 Phase C: requiresFlag が指定されたタブは
-            //   currentOrg.enabled_modules[flag] が true のときだけ表示。
-            //   neo-fukuoka は grandfathered で全モジュール ON なので変化なし。
-            const allTabs = [
-              // ── 全社グループ (経営レベル / 初期表示・無料期間は常に公開) ──
-              { key: 'dashboard',    icon: 'chart', label: 'ダッシュボード', summary: true,  individual: true,  group: 'company' },
-              { key: 'strategy',     icon: 'cmd', label: '経営戦略',       summary: true,  individual: false, group: 'company' },
-              { key: 'milestone',    icon: 'flag', label: 'マイルストーン', summary: true,  individual: false, group: 'company' },
-              // ── チーム機能グループ (無料期間は公開・オプション) ──
-              { key: 'team_summary', icon: 'note', label: 'チームサマリー', summary: true,  individual: false, group: 'team' },
-              { key: 'confirm',      icon: 'bell', label: '共有・確認',     summary: true,  individual: true,  group: 'team' },
-              { key: 'wbs',          icon: 'calendar', label: 'タスク',         summary: true,  individual: true,  group: 'team' },
-              { key: 'mail',         icon: 'mail', label: 'メール',         summary: true,  individual: true,  group: 'team', requiresFlag: 'google_integration' },
-              // ── OKR: ヘッダーナビに移動済 (個人モードのみ残す) ──
-              { key: 'okr_edit',     icon: 'target', label: 'OKR',            summary: false, individual: true  },
-              // ── 個人モード専用 (全社では非表示) ──
-              { key: 'calendar',     icon: 'calendar', label: 'カレンダー',     summary: false, individual: true,  requiresFlag: 'google_integration' },
-              { key: 'drive',        icon: 'drive', label: 'ドライブ',       summary: false, individual: true,  requiresFlag: 'google_integration' },
-              { key: 'coo',          icon: 'ai', label: 'MyCOO',          summary: false, individual: true,  requiresFlag: 'coo_knowledge' },
-              { key: 'retrospect',   icon: 'msg', label: '振り返り',       summary: false, individual: true },
-              { key: 'integrations', icon: 'link', label: '連携',           summary: false, individual: true },
+            // タブ構成はモードで異なる:
+            //   [全社サマリー] 全社グループ(ダッシュボード/経営戦略/マイルストーン)
+            //                  + チーム機能グループ(チームサマリー/共有・確認/タスク/メール)
+            //   [個人(マイページ)] 個人グループ(ダッシュボード/タスク/メール/OKR/振り返り
+            //                      /カレンダー/ドライブ/MyCOO) + チーム機能グループ(共有・確認)
+            // 連携は一度きりの設定のためタブには出さない (?tab=integrations や設定から到達)。
+            // OKR はヘッダーナビにもあるが、個人モードでは編集導線として残す。
+            // requiresFlag は currentOrg.enabled_modules[flag] が true のときだけ表示。
+            const META = {
+              dashboard:    { icon: 'chart',    label: 'ダッシュボード' },
+              strategy:     { icon: 'cmd',      label: '経営戦略' },
+              milestone:    { icon: 'flag',     label: 'マイルストーン' },
+              team_summary: { icon: 'note',     label: 'チームサマリー' },
+              confirm:      { icon: 'bell',     label: '共有・確認' },
+              wbs:          { icon: 'calendar', label: 'タスク' },
+              mail:         { icon: 'mail',     label: 'メール', requiresFlag: 'google_integration' },
+              okr_edit:     { icon: 'target',   label: 'OKR' },
+              retrospect:   { icon: 'msg',      label: '振り返り' },
+              calendar:     { icon: 'calendar', label: 'カレンダー', requiresFlag: 'google_integration' },
+              drive:        { icon: 'drive',    label: 'ドライブ',   requiresFlag: 'google_integration' },
+              coo:          { icon: 'ai',       label: 'MyCOO',     requiresFlag: 'coo_knowledge' },
+            }
+            const summaryOrder = [
+              { key: 'dashboard',    group: 'company' },
+              { key: 'strategy',     group: 'company' },
+              { key: 'milestone',    group: 'company' },
+              { key: 'team_summary', group: 'team' },
+              { key: 'confirm',      group: 'team' },
+              { key: 'wbs',          group: 'team' },
+              { key: 'mail',         group: 'team' },
             ]
-            return allTabs.filter(t => {
-              if (!(summaryMode ? t.summary : t.individual)) return false
-              if (t.requiresFlag && !enabledModules?.[t.requiresFlag]) return false
-              return true
-            })
+            const individualOrder = [
+              { key: 'dashboard',  group: 'main' },
+              { key: 'wbs',        group: 'main' },
+              { key: 'mail',       group: 'main' },
+              { key: 'okr_edit',   group: 'main' },
+              { key: 'retrospect', group: 'main' },
+              { key: 'calendar',   group: 'main' },
+              { key: 'drive',      group: 'main' },
+              { key: 'coo',        group: 'main' },
+              { key: 'confirm',    group: 'team' },
+            ]
+            return (summaryMode ? summaryOrder : individualOrder)
+              .map(t => ({ ...t, ...META[t.key] }))
+              .filter(t => !t.requiresFlag || enabledModules?.[t.requiresFlag])
           })().map((t, idx, arr) => {
             const showBadge = t.key === 'confirm' && !summaryMode && unresolvedConfirmCount > 0
             const active = activeTab === t.key
-            // 全社モードのみ: チーム機能グループの先頭で区切り + 「チーム機能（オプション）」ラベルを挿入
-            const showGroupLabel = summaryMode && t.group === 'team' && (idx === 0 || arr[idx - 1]?.group !== 'team')
+            // チーム機能グループの先頭で区切り + 「チーム機能（オプション）」ラベルを挿入 (両モード)
+            const showGroupLabel = t.group === 'team' && (idx === 0 || arr[idx - 1]?.group !== 'team')
             return (
               <Fragment key={t.key}>
                 {showGroupLabel && (
@@ -3624,45 +3638,36 @@ function CompanySummaryTab({ T, members }) {
         <div style={{
           display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16, flexWrap: 'wrap',
         }}>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: SPACING.sm }}><Icon name="chart" size={20} /> 全社サマリー</h2>
-          <div style={{ fontSize: 12, color: T.textMuted }}>{todayLabel} 時点</div>
+          <h2 style={{ ...TYPO.title1, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: SPACING.sm }}><Icon name="chart" size={20} /> 全社サマリー</h2>
+          <div style={{ ...TYPO.subhead, color: T.textMuted, fontWeight: 500 }}>{todayLabel} 時点</div>
           <div style={{ flex: 1 }} />
           <button onClick={load} disabled={loading} style={{
-            padding: '6px 12px', borderRadius: 7,
-            background: 'transparent', border: `1px solid ${T.border}`,
-            color: T.textSub, fontSize: 11, fontWeight: 700,
-            cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
+            ...btnSecondary({ T, size: 'sm' }),
+            cursor: loading ? 'wait' : 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
           }}>{loading ? '更新中…' : <><Icon name="refresh" size={12} /> 再取得</>}</button>
         </div>
 
         {/* 全体統計バー */}
         <div style={{
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-          padding: 18, marginBottom: 18,
+          ...cardStyle({ T, padding: `${SPACING.lg}px ${SPACING.xl}px` }),
+          marginBottom: SPACING.lg,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 4 }}>
+              <div style={{ ...TYPO.subhead, color: T.text, marginBottom: SPACING.sm }}>
                 本日の全社達成率
               </div>
-              <div style={{
-                height: 14, background: T.sectionBg, borderRadius: 99, overflow: 'hidden',
-                border: `1px solid ${T.border}`, position: 'relative',
-              }}>
-                <div style={{
-                  height: '100%', width: `${overallPct}%`,
-                  background: overallPct >= 80 ? T.success : overallPct >= 50 ? T.info : T.warn,
-                  transition: 'width 0.3s ease',
-                }} />
+              <div style={progressBarStyle({ T, height: 6 })}>
+                <div style={progressFillStyle({ color: T.warn, value: overallPct })} />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 14 }}>
-              <Stat T={T} label="達成率" value={`${overallPct}%`} color={overallPct >= 80 ? T.success : overallPct >= 50 ? T.info : T.warn} />
-              <Stat T={T} label="完了" value={totalDone} color={T.success} />
-              <Stat T={T} label="残り" value={totalTasks - totalDone} color={T.warn} />
-              <Stat T={T} label="合計" value={totalTasks} color={T.textSub} />
-              <Stat T={T} label="遅延" value={totalOverdue} color={totalOverdue > 0 ? T.danger : T.textMuted} />
+            <div style={{ display: 'flex', gap: 18 }}>
+              <Stat T={T} label="達成率" value={`${overallPct}%`} color={T.warn} />
+              <Stat T={T} label="完了" value={totalDone} color={T.text} />
+              <Stat T={T} label="残り" value={totalTasks - totalDone} color={T.text} />
+              <Stat T={T} label="合計" value={totalTasks} color={T.text} />
+              <Stat T={T} label="遅延" value={totalOverdue} color={totalOverdue > 0 ? T.danger : T.text} />
             </div>
           </div>
         </div>
@@ -3686,74 +3691,60 @@ function CompanySummaryTab({ T, members }) {
             <span style={{ fontSize: 10 }}>各メンバーが始業時にタスクを登録すると、ここに集約されます</span>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: SPACING.lg }}>
             {byMember.map(({ member, tasks: ts, overdue }) => {
               const done = ts.filter(t => t.done || t.status === 'done').length
               const pct = ts.length > 0 ? Math.round((done / ts.length) * 100) : 0
               const hasToday = ts.length > 0
               const color = !hasToday ? T.textMuted
                 : pct >= 80 ? T.success : pct >= 50 ? T.info : pct > 0 ? T.warn : T.danger
-              // 遅延があるメンバーは左ボーダーを赤に優先
-              const borderColor = overdue.length > 0 ? T.danger : color
               return (
                 <div key={member.name} style={{
-                  background: T.bgCard, border: `1px solid ${T.border}`,
-                  borderLeft: `4px solid ${borderColor}`,
-                  borderRadius: 10, padding: 12,
+                  ...cardStyle({ T, padding: 0 }),
                 }}>
                   {/* メンバーヘッダ */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <Avatar member={member} size={32} />
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: `${SPACING.md + 2}px ${SPACING.lg}px`,
+                    borderBottom: `1px solid ${T.border}`,
+                  }}>
+                    <Avatar member={member} size={30} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{member.name}</div>
                         {overdue.length > 0 && (
-                          <span style={{
-                            padding: '1px 6px', borderRadius: 99,
-                            background: `${T.danger}22`, color: T.danger,
-                            fontSize: 9, fontWeight: 800,
-                            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
-                          }}><Icon name="alert" size={9} /> 遅延 {overdue.length}</span>
+                          <span style={pillStyle({ color: T.danger, size: 'sm' })}>
+                            <Icon name="alert" size={9} /> 遅延 {overdue.length}
+                          </span>
                         )}
                       </div>
-                      <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
+                      <div style={{ fontSize: 10, color: T.textMuted }}>
                         {member.role || ''}
                       </div>
                     </div>
                     {hasToday && (
                       <div style={{
-                        padding: '4px 10px', borderRadius: 99,
-                        background: `${color}22`, color, fontWeight: 800, fontSize: 14,
+                        fontSize: 18, fontWeight: 700,
+                        fontFamily: 'ui-monospace, SF Mono, monospace',
+                        color: pct > 0 ? color : T.textMuted,
                       }}>{pct}%</div>
                     )}
                   </div>
 
-                  {/* 達成率バー */}
-                  {hasToday && (
-                    <>
-                      <div style={{
-                        height: 6, background: T.sectionBg, borderRadius: 99, overflow: 'hidden',
-                        marginBottom: 10,
-                      }}>
-                        <div style={{ height: '100%', width: `${pct}%`, background: color }} />
-                      </div>
-                      <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 8 }}>
-                        完了 {done} / 全 {ts.length} 件
-                      </div>
-                    </>
-                  )}
-
                   {/* 遅延タスク一覧 (未完了のみ) */}
                   {overdue.length > 0 && (
-                    <div style={{ marginBottom: ts.length > 0 ? 10 : 0 }}>
+                    <div style={{
+                      padding: `${SPACING.sm + 2}px ${SPACING.lg}px`,
+                      borderBottom: ts.length > 0 ? `1px solid ${T.border}` : 'none',
+                    }}>
                       <div style={{
-                        fontSize: 10, fontWeight: 700, color: T.danger,
-                        marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4,
+                        fontSize: 10.5, fontWeight: 700, color: T.danger,
+                        marginBottom: SPACING.xs, letterSpacing: '0.04em',
+                        display: 'flex', alignItems: 'center', gap: 5,
                       }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={10} /> 遅延タスク</span>
-                        <span style={{ color: T.textMuted, fontWeight: 600 }}>({overdue.length}件)</span>
+                        <Icon name="alert" size={11} /> 遅延タスク ({overdue.length}件)
                       </div>
-                      <div style={{ margin: '0 -12px' }}>
+                      <div style={{ margin: `0 -${SPACING.lg}px` }}>
                         <TaskList T={T} tasks={overdue} canEdit={false} showDue />
                       </div>
                     </div>
@@ -3761,13 +3752,17 @@ function CompanySummaryTab({ T, members }) {
 
                   {/* 今日のタスク一覧 */}
                   {ts.length > 0 && (
-                    <div>
-                      {overdue.length > 0 && (
-                        <div style={{ fontSize: 10, fontWeight: 700, color: T.textSub, marginBottom: 2, paddingTop: 2 }}>
-                          本日のタスク
-                        </div>
-                      )}
-                      <div style={{ margin: '0 -12px' }}>
+                    <div style={{
+                      padding: `${SPACING.sm + 2}px ${SPACING.lg}px`,
+                      background: 'rgba(15,23,42,.02)',
+                    }}>
+                      <div style={{
+                        fontSize: 10.5, fontWeight: 700, color: T.textSub,
+                        marginBottom: SPACING.xs, letterSpacing: '0.04em',
+                      }}>
+                        本日のタスク
+                      </div>
+                      <div style={{ margin: `0 -${SPACING.lg}px` }}>
                         <TaskList T={T} tasks={ts} canEdit={false} showDue />
                       </div>
                     </div>
@@ -3784,9 +3779,9 @@ function CompanySummaryTab({ T, members }) {
 
 function Stat({ T, label, value, color }) {
   return (
-    <div style={{ textAlign: 'center', minWidth: 50 }}>
-      <div style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 10, color: T.textMuted, marginTop: 4, fontWeight: 600 }}>{label}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 50 }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color, lineHeight: 1, fontFamily: 'ui-monospace, SF Mono, monospace', letterSpacing: '-0.01em' }}>{value}</div>
+      <div style={{ fontSize: 10.5, color: T.textMuted, fontWeight: 600, letterSpacing: '0.04em' }}>{label}</div>
     </div>
   )
 }
