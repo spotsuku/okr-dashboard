@@ -23,7 +23,7 @@ import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
 import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import OnboardingTour from './OnboardingTour'
 import MyCOOOrb from './MyCOOOrb'
 import QuickTaskPalette from './QuickTaskPalette'
@@ -370,7 +370,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       <FSelect label="所属組織" value={levelId} onChange={setLevelId}
         options={levels.map(l => {
           const depth = (() => { let d=0,cur=l; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
-          return { value: String(l.id), label: `${'　'.repeat(depth)}${l.icon} ${l.name}` }
+          return { value: String(l.id), label: `${'　'.repeat(depth)}${l.name}` }
         })} />
       <FSelect label="期間" value={period} onChange={v => { setPeriod(v); if (v === 'annual') setParentId(null) }} options={periodOpts} />
       {['q1','q2','q3','q4'].includes(period) && (
@@ -646,7 +646,7 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
           borderRadius: 8, background: `${layerColor}12`, border: `1px solid ${layerColor}30`,
           borderLeft: `3px solid ${layerColor}`, marginBottom: 10,
         }}>
-          <span style={{ fontSize: 17 }}>{level.icon}</span>
+          <span style={{ display:'inline-flex' }}><DataIcon value={level.icon} size={17}/></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: getT().text }}>{level.name}</div>
             <div style={{ fontSize: 10, color: layerColor, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>{layerLabel}</div>
@@ -1436,7 +1436,7 @@ export default function Dashboard({ user, onSignOut }) {
           border: active ? `1px solid ${col}35` : '1px solid transparent',
           transition: 'all 0.15s',
         }}>
-          <span style={{ fontSize: 17 }}>{level.icon}</span>
+          <span style={{ display:'inline-flex' }}><DataIcon value={level.icon} size={17}/></span>
           <span style={{ flex: 1, fontSize: 14, fontWeight: active ? 600 : 400, color: active ? '#e8eaf0' : T.textSub }}>{level.name}</span>
         </div>
         {children.map(c => <LevelItem key={c.id} level={c} depth={depth + 1} />)}
@@ -2027,7 +2027,7 @@ function WeeklyOrgPanel({ T, levels, themeKey, fiscalYear, user, initialPeriod }
                 fontWeight: active ? 600 : 500,
                 fontSize: 12.5, marginBottom: 2,
               }}>
-                <span style={{ fontSize: 13 }}>{d.icon || '📁'}</span>
+                <DataIcon value={d.icon} size={13} fallback="folder"/>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {d.name}
                 </span>
