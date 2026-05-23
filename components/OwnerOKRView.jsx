@@ -6,31 +6,10 @@ import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, GLASS } from '../lib/the
 import { btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
-
-// 担当チップ (.ot.ow) [厳守] — 18×18 グラデアバター + 名前
-function OwnerChip({ t, name, mono = false }) {
-  if (!name) return null
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '3px 9px 3px 4px',
-      background: 'rgba(255,255,255,.7)',
-      border: `1px solid ${t.border}`,
-      borderRadius: RADIUS.pill,
-      fontSize: 11, fontWeight: 500, color: t.textSub,
-      fontFamily: mono ? 'inherit' : undefined,
-      verticalAlign: mono ? -4 : undefined,
-    }}>
-      <span style={{
-        width: 18, height: 18, borderRadius: RADIUS.pill,
-        background: 'linear-gradient(135deg,#fb923c,#fbbf24)',
-        color: '#fff', fontSize: 9, fontWeight: 700,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      }}>{name.slice(0, 1)}</span>
-      {name}
-    </span>
-  )
-}
+import ObjectiveHeader from './okr/ObjectiveHeader'
+import AssigneeChip from './okr/AssigneeChip'
+import QTabs from './okr/QTabs'
+import AICoachCard from './okr/AICoachCard'
 
 // KASection に渡すテーマオブジェクト (OwnerOKRView の THEMES から抽出)
 function makeKATheme(t) {
@@ -280,7 +259,7 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
   const periodLabel = effectivePeriod === 'annual' ? '通期' : effectivePeriod.toUpperCase()
 
   return (
-    <div style={{ padding: '24px 28px 80px', maxWidth: 1100, margin: '0 auto', background: t.bg, minHeight: '100%' }}>
+    <div style={{ padding: '24px 28px 80px', width: '100%', background: t.bg, minHeight: '100%' }}>
       {/* ヘッダー: アバター + 役職 + {名前} のOKR + 年度 (週次ビューと統一様式) */}
       {(() => {
         const om = (members || []).find(m => m.name === ownerName)
@@ -307,30 +286,13 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
       })()}
 
       {/* Q タブ (.qtab) — 下線スタイル + 件数バッジ */}
-      <div style={{
-        display: 'flex', gap: 0, alignItems: 'baseline',
-        borderBottom: `1px solid ${t.border}`, marginBottom: 14, flexWrap: 'wrap',
-      }}>
-        {allPeriods.map((p) => {
-          const count = (grouped[p] || []).length
-          const isActive = effectivePeriod === p
-          return (
-            <button key={p} onClick={() => setActivePeriod(p)} style={{
-              padding: '8px 14px', fontSize: 12.5,
-              fontWeight: isActive ? 700 : 500, fontFamily: 'inherit', cursor: 'pointer',
-              background: 'none', border: 0,
-              borderBottom: `2px solid ${isActive ? t.accent : 'transparent'}`,
-              color: isActive ? t.accentText : t.textSub,
-            }}>
-              {PERIOD_LABELS[p]}
-              <span style={{ fontSize: 11, fontWeight: 500, color: t.textMuted, marginLeft: 3 }}>({count})</span>
-            </button>
-          )
-        })}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: t.textMuted, padding: '0 4px' }}>
-          {fiscalYear}年度 · {periodLabel}
-        </span>
-      </div>
+      <QTabs
+        T={t}
+        tabs={allPeriods.map((p) => ({ key: p, label: PERIOD_LABELS[p], count: (grouped[p] || []).length }))}
+        active={effectivePeriod}
+        onChange={setActivePeriod}
+        trailing={`${fiscalYear}年度 · ${periodLabel}`}
+      />
 
       {/* Objective Cards */}
       {currentObjs.length === 0 && (
@@ -345,62 +307,24 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
         const totalKaCount = objKAs.length
         return (
           <div key={obj.id} style={{ marginBottom: SPACING['2xl'] }}>
-            {/* OBJECTIVE ヘッダ (.objh) [厳守] */}
-            <div style={{
-              padding: '18px 22px',
-              background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: RADIUS.lg,
-              display: 'flex', gap: 14,
-              backdropFilter: GLASS.blur,
-              WebkitBackdropFilter: GLASS.blur,
-              boxShadow: `${SHADOWS.glassInset}, ${SHADOWS.xs}`,
-              marginBottom: 14,
-            }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 9,
-                background: t.accentBg, color: t.accentText,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                <Icon name="target" size={18} stroke={1.7} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                  <span style={{
-                    padding: '2px 8px', fontSize: 10.5, fontWeight: 700, borderRadius: RADIUS.pill,
-                    background: t.sectionBg, color: t.textSub,
-                  }}>OBJECTIVE</span>
-                  <span style={{
-                    padding: '2px 8px', fontSize: 10.5, fontWeight: 700, borderRadius: RADIUS.pill,
-                    background: progStatusBg(t, prog), color: progressColor(t, prog),
-                  }}>{prog}% 達成</span>
-                  <OwnerChip t={t} name={obj.owner} />
-                </div>
-                <h2 style={{
-                  fontSize: 17, fontWeight: 700, margin: 0, lineHeight: 1.45, letterSpacing: '-0.005em',
-                  color: t.text,
-                }}>{obj.title}</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-                  <ProgressBar t={t} value={prog} fixedWidth={140} />
-                  <span style={{
-                    fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace',
-                    color: progressColor(t, prog),
-                  }}>{prog}%</span>
-                  <span style={{
-                    padding: '2px 10px', fontSize: 11, fontWeight: 600, borderRadius: RADIUS.pill,
-                    background: t.accentBg, color: t.accentText,
-                  }}>KR {obj.key_results.length}件</span>
-                  <span style={{
-                    padding: '2px 10px', fontSize: 11, fontWeight: 600, borderRadius: RADIUS.pill,
-                    background: t.sectionBg, color: t.textSub,
-                  }}>KA {totalKaCount}件</span>
-                  {onEdit && (
-                    <button onClick={() => onEdit(obj)} style={{
-                      ...btnSecondary({ T: t, size: 'sm' }),
-                      marginLeft: 'auto', color: t.textSub,
-                    }}>編集</button>
-                  )}
-                </div>
-              </div>
-            </div>
+            {/* OBJECTIVE ヘッダ (共有部品 ObjectiveHeader) */}
+            <ObjectiveHeader
+              T={t}
+              periodLabel={periodLabel}
+              pct={prog}
+              ownerName={obj.owner}
+              ownerAvatarUrl={(members || []).find(m => m.name === obj.owner)?.avatar_url || undefined}
+              title={obj.title}
+              krCount={obj.key_results.length}
+              kaCount={totalKaCount}
+              right={onEdit ? (
+                <button onClick={() => onEdit(obj)} style={{
+                  ...btnSecondary({ T: t, size: 'sm' }),
+                  color: t.textSub,
+                }}>編集</button>
+              ) : undefined}
+              style={{ marginBottom: 14 }}
+            />
 
             {/* Key Results → Key Actions ストリップ */}
             <div style={{
@@ -442,7 +366,7 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
                         display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
                       }}>
                         {kr.current ?? 0} / {kr.target ?? 0} {kr.unit || ''}
-                        {kr.owner && (<>{' · '}<OwnerChip t={t} name={kr.owner} mono /></>)}
+                        {kr.owner && (<>{' · '}<AssigneeChip T={t} name={kr.owner} avatarUrl={(members || []).find(m => m.name === kr.owner)?.avatar_url || undefined} /></>)}
                       </span>
                       <span style={{
                         fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace',
@@ -480,29 +404,8 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
               )
             })()}
 
-            {/* AI コーチカード (.aifb) — KR カード列の末尾 */}
-            <div style={{
-              padding: '12px 14px',
-              background: 'linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))',
-              border: '1px solid rgba(37,99,235,.18)', borderRadius: RADIUS.md,
-              display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-            }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: RADIUS.sm,
-                background: 'linear-gradient(135deg,#3b82f6,#1e3a8a)', color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 6px rgba(30,58,138,.24)', flexShrink: 0,
-              }}>
-                <Icon name="sparkle" size={14} stroke={1.7} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: t.accentText }}>AI コーチにフィードバックをもらう</div>
-                <div style={{ fontSize: 10.5, color: t.textSub, marginTop: 1 }}>現在の KR・KA 状況をもとにアドバイスをもらえます</div>
-              </div>
-              <span style={{ color: t.accentText, display: 'inline-flex', flexShrink: 0 }}>
-                <Icon name="arrowRight" size={13} stroke={2} />
-              </span>
-            </div>
+            {/* AI コーチカード (共有部品 AICoachCard) — KR カード列の末尾 */}
+            <AICoachCard T={t} />
           </div>
         )
       })}

@@ -6,6 +6,7 @@ import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeToken
 import KASection from './KASection'
 import { useLayerLabels } from '../lib/levelLabels'
 import Icon, { DataIcon } from './Icon'
+import ObjectiveHeader from './okr/ObjectiveHeader'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
@@ -458,7 +459,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   )
 
   return (
-    <div style={{ padding: '0 24px 24px', maxWidth: 1400, margin: '0 auto', position: 'relative' }}>
+    <div style={{ padding: '0 24px 24px', width: '100%', margin: '0', position: 'relative' }}>
       <div style={{ position: 'relative', zIndex: 1 }}>
       {/* コンパクト見出し: 縦幅を抑えて OKR 本体に画面を譲る */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 6px', marginBottom: 8, flexWrap: 'wrap' }}>
@@ -496,88 +497,55 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
             transition: 'all 0.25s ease',
           }}>
 
-            {/* OBJECTIVE ヘッダ (.objh / 全ビュー共通仕様):
-                32×32 accent アイコン + meta(pills + 担当チップ) + h2 + footer(progress + 大% + KR pill) */}
+            {/* OBJECTIVE ヘッダ — 共有部品 ObjectiveHeader で全ビュー統一。
+                クリックで展開 / sticky 化する挙動は外側ラッパーで保持。
+                編集 / アーカイブ / 開閉ボタンは right prop に渡す。 */}
             <div onClick={() => toggleExpand(ann.id)} style={{
-              padding: '18px 22px', cursor: 'pointer',
-              display: 'flex', alignItems: 'flex-start', gap: 14,
+              cursor: 'pointer',
               position: isOpen ? 'sticky' : 'relative',
               top: isOpen ? 0 : 'auto',
               zIndex: 5,
               background: T().bgCard,
               borderBottom: isOpen ? `1px solid ${T().border}` : 'none',
             }}>
-              {/* アイコンタイル 32×32 (accent-bg) */}
-              <div style={{
-                width: 32, height: 32, borderRadius: RADIUS.sm + 1,
-                background: T().accentBg, color: T().accentText,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                {levelIcon ? <DataIcon value={levelIcon} size={18} stroke={1.7} fallback="target" /> : <Icon name="target" size={18} stroke={1.7} />}
-              </div>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* meta 行: 事業部 pill + 通期 pill + 達成状況 pill + 担当チップ (.ot.ow) */}
-                <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub, fontWeight: 700 }}>{levelName}</span>
-                  <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub, fontWeight: 700 }}>通期</span>
-                  {r && (() => {
-                    const overdue = r.label === '未達'
-                    const bg = overdue ? T().dangerBg : T().warnBg
-                    const col = overdue ? T().danger : T().warn
-                    return <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, background: bg, color: col, fontWeight: 700 }}>{r.label}</span>
-                  })()}
-                  {ann.owner && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      padding: '3px 9px 3px 4px',
-                      background: T().sectionBg, border: `1px solid ${T().border}`,
-                      borderRadius: RADIUS.pill, fontSize: 11, color: T().textSub,
-                    }}>
-                      <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={18} />
-                      <span>{ann.owner}</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* h2 タイトル (17 / 700 / -.005em) */}
-                <h2 style={{ fontSize: 17, fontWeight: 700, color: T().text, margin: 0, lineHeight: 1.45, letterSpacing: '-0.005em' }}>{ann.title}</h2>
-
-                {/* footer: progress 140×4 + 大%(monospace,値色) + KR件数 pill(accent) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: '0 0 140px', height: 4, background: T().sunken, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${ann.key_results.length ? Math.min(prog, 100) : 0}%`, background: pctColor(ann.key_results.length ? prog : null), borderRadius: RADIUS.pill }} />
+              <ObjectiveHeader
+                T={T()}
+                deptName={levelName}
+                periodLabel="通期"
+                pct={ann.key_results.length ? prog : null}
+                ownerName={ann.owner}
+                ownerAvatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url}
+                title={ann.title}
+                krCount={ann.key_results.length}
+                style={{ border: '1px solid transparent', boxShadow: 'none', background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', borderRadius: 0 }}
+                right={(
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                    {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                    {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }}
+                      title="この OKR をアーカイブします (アーカイブ画面から復元・完全削除可能)"
+                      style={{ background: T().sectionBg, border: 'none', color: T().textSub, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ</button>}
+                    <div style={{ fontSize: TYPO.title3.fontSize, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-flex' }}><Icon name="chevronD" size={16} stroke={1.8} /></div>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace', color: pctColor(ann.key_results.length ? prog : null) }}>{ann.key_results.length ? `${prog}%` : '−'}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: RADIUS.pill, background: T().accentBg, color: T().accentText }}>KR {ann.key_results.length}件</span>
+                )}
+              />
 
-                  {/* Q% ブレイクダウン (年間×組織 固有 / 値色の neutral pill) */}
-                  <span style={{ width: 1, height: 14, background: T().border, margin: '0 2px' }} />
-                  {Q_KEYS.map(qKey => {
-                    const qObjs = qData[qKey]
-                    const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
-                    const qc = qProg != null ? pctColor(qProg) : T().textFaintest
-                    return (
-                      <span key={qKey} style={{
-                        fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, fontWeight: 700,
-                        background: T().sectionBg,
-                        color: qc,
-                      }}>
-                        {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '−'}
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* 右側: アクション (編集 / アーカイブ / 開閉) */}
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-                {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }}
-                  title="この OKR をアーカイブします (アーカイブ画面から復元・完全削除可能)"
-                  style={{ background: T().sectionBg, border: 'none', color: T().textSub, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ</button>}
-                <div style={{ fontSize: TYPO.title3.fontSize, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-flex' }}><Icon name="chevronD" size={16} stroke={1.8} /></div>
+              {/* Q% ブレイクダウン (年間×組織 固有 / 値色の neutral pill) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 22px 14px 68px', flexWrap: 'wrap' }}>
+                {Q_KEYS.map(qKey => {
+                  const qObjs = qData[qKey]
+                  const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
+                  const qc = qProg != null ? pctColor(qProg) : T().textFaintest
+                  return (
+                    <span key={qKey} style={{
+                      fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, fontWeight: 700,
+                      background: T().sectionBg,
+                      color: qc,
+                    }}>
+                      {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '−'}
+                    </span>
+                  )
+                })}
               </div>
             </div>
 
