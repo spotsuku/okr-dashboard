@@ -8,6 +8,7 @@ import {
   progressBarStyle, progressFillStyle,
   kpiNumber, inputStyle,
 } from '../lib/iosStyles'
+import Icon from './Icon'
 
 // ─── 日付ユーティリティ ──────────────────────────────────────
 function getMondayJSTStr(d = new Date()) {
@@ -446,9 +447,10 @@ export default function CompanyDashboardSummary({
             <button onClick={onGoToMyPage}
               style={{
                 ...btnPrimary({ T, size: 'md' }),
-                padding: '8px 18px', whiteSpace: 'nowrap',
+                padding: `${SPACING.sm}px ${SPACING.lg + 2}px`, whiteSpace: 'nowrap',
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               }}>
-              マイページへ →
+              マイページへ <Icon name="arrowRight" size={12} />
             </button>
           </div>
         )}
@@ -460,8 +462,8 @@ export default function CompanyDashboardSummary({
             borderRadius: RADIUS.md, background: `${T.danger}10`,
             border: `1px solid ${T.danger}40`,
           }}>
-            <div style={{ ...TYPO.headline, color: T.danger, marginBottom: SPACING.xs }}>
-              ⚠️ {queryErrors.length} 件のクエリが失敗しました (admin にのみ表示)
+            <div style={{ ...TYPO.headline, color: T.danger, marginBottom: SPACING.xs, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+              <Icon name="alert" size={14} /> {queryErrors.length} 件のクエリが失敗しました (admin にのみ表示)
             </div>
             <div style={{ ...TYPO.caption, color: T.textSub, fontFamily: 'ui-monospace, monospace' }}>
               {queryErrors.map((e, i) => (
@@ -479,7 +481,7 @@ export default function CompanyDashboardSummary({
         {/* 全社 通期 KR — チームサマリー専用画面では非表示 */}
         {!teamSummaryOnly && companyAnnualKRs.length > 0 && (
           <>
-            <SectionTitle T={T} icon="🎯" iconColor="#007AFF" title="全社 通期 KR"
+            <SectionTitle T={T} icon="target" iconColor={T.accent} title="全社 通期 KR"
               sub={`${fiscalYear}年度 ・ ${companyAnnualKRs.length}件`} />
             <CompanyAnnualKRsCard T={T} krs={companyAnnualKRs} />
           </>
@@ -488,7 +490,7 @@ export default function CompanyDashboardSummary({
         {/* 注力マイルストーン — チームサマリー専用画面では非表示 */}
         {!teamSummaryOnly && focusMilestones.length > 0 && (
           <div style={{ marginTop: SPACING.md, marginBottom: SPACING.md }}>
-            <SectionTitle T={T} iconColor={T.warn} title="⭐ 注力マイルストーン"
+            <SectionTitle T={T} icon="star" iconColor={T.warn} title="注力マイルストーン"
               sub={`全部署横断 ${focusMilestones.length}件 ・ マイルストーンページで「注力」マークを設定`} />
             <FocusMilestonesGrid T={T} milestones={focusMilestones} today={today} levels={levels} />
           </div>
@@ -500,7 +502,7 @@ export default function CompanyDashboardSummary({
         {!teamSummaryOnly && (
           <DashboardTabs T={T} active={activeTab} onChange={setActiveTab} tabs={[
             { key: 'overview',   label: '概要',           accent: T.accent  },
-            { key: 'rankings',   label: '週間ランキング', accent: '#FF9500' },
+            { key: 'rankings',   label: '週間ランキング', accent: T.warn },
             { key: 'milestones', label: 'マイルストーン', accent: T.warn   },
           ]} />
         )}
@@ -520,25 +522,25 @@ export default function CompanyDashboardSummary({
         {/* 週間ランキング (4列) — 先週月曜〜日曜の確定ランキング */}
         {!teamSummaryOnly && activeTab === 'rankings' && rankings && (
           <>
-            <SectionTitle T={T} icon="🏆" iconColor="#FF9500" title="週間ランキング" sub={`先週 (${lastWeekRange.label}) の Top 3`} />
+            <SectionTitle T={T} icon="trophy" iconColor={T.warn} title="週間ランキング" sub={`先週 (${lastWeekRange.label}) の Top 3`} />
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
               gap: SPACING.md, marginBottom: SPACING.xl,
             }}>
-              <RankingCard T={T} title="有言実行王" emoji="🎯" accent="#34C759" subtitle="期限内完了率"
+              <RankingCard T={T} title="有言実行王" emoji="target" accent={T.success} subtitle="期限内完了率"
                 entries={rankings.promiseKeeper.map(r => ({
                   name: r.name, main: `${Math.round(r.score * 100)}%`, sub: `${r.overdue}/${r.total}件遅延`,
                 }))} />
-              <RankingCard T={T} title="タスク完了王" emoji="✅" accent="#007AFF" subtitle="先週の完了数"
+              <RankingCard T={T} title="タスク完了王" emoji="check" accent={T.accent} subtitle="先週の完了数"
                 entries={rankings.taskMaster.map(r => ({ name: r.name, main: `${r.count}件`, sub: '' }))} />
-              <RankingCard T={T} title="振り返り王" emoji="📝" accent="#AF52DE" subtitle="KPT 総文字数"
+              <RankingCard T={T} title="振り返り王" emoji="note" accent={T.accent} subtitle="KPT 総文字数"
                 entries={rankings.reflection.map(r => ({
                   name: r.name,
                   main: `${r.totalChars}字`,
                   sub: `${r.entries}日記入`,
                 }))} />
-              <RankingCard T={T} title="実践王" emoji="🔥" accent="#FF3B30" subtitle="OKR 記入 (KR+KA)"
+              <RankingCard T={T} title="実践王" emoji="fire" accent={T.danger} subtitle="OKR 記入 (KR+KA)"
                 entries={rankings.practiceMaster.map(r => ({
                   name: r.name,
                   main: `${r.totalChars}字`,
@@ -551,7 +553,7 @@ export default function CompanyDashboardSummary({
         {/* チームサマリー (メインタブ「チームサマリー」専用画面のみで表示) */}
         {teamSummaryOnly && (
           <>
-            <SectionTitle T={T} icon="📊" iconColor="#34C759" title="今週のチームサマリー"
+            <SectionTitle T={T} icon="chart" iconColor={T.success} title="今週のチームサマリー"
               sub={`${submittedTeamCount.submitted}/${submittedTeamCount.total} チーム提出済 ・ マネージャー定例/ディレクター確認会議に反映`} />
             <TeamSummarySingleView T={T} levels={levels} members={members}
               weekStart={monday} myName={myName} viewingMember={viewingMember} isAdmin={isAdmin}
@@ -562,7 +564,7 @@ export default function CompanyDashboardSummary({
         {/* マイルストーン (単独タブ) */}
         {!teamSummaryOnly && activeTab === 'milestones' && (
           <>
-            <SectionTitle T={T} icon="🎯" iconColor={T.warn} title="マイルストーン" sub="期限近順 ・ 上位5件" />
+            <SectionTitle T={T} icon="target" iconColor={T.warn} title="マイルストーン" sub="期限近順 ・ 上位5件" />
             <MilestonesCard T={T} milestones={milestones} setMilestones={setMilestones} isAdmin={isAdmin} myName={myName} />
           </>
         )}
@@ -616,11 +618,12 @@ function DashboardTabs({ T, active, onChange, tabs }) {
   )
 }
 
-function SectionTitle({ T, icon, iconColor = '#007AFF', title, sub }) {
-  // icon プロップは互換性のため残すが描画しない (絵文字アイコン廃止)
+function SectionTitle({ T, icon, iconColor, title, sub }) {
+  const accent = iconColor || T.accent
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.sm + 4, marginTop: SPACING.xs, flexWrap: 'wrap' }}>
-      <div style={{ width: 4, height: 18, background: iconColor, borderRadius: 2, flexShrink: 0 }} />
+      <div style={{ width: 4, height: 18, background: accent, borderRadius: 2, flexShrink: 0 }} />
+      {icon && <span style={{ color: accent, display: 'inline-flex' }}><Icon name={icon} size={16} /></span>}
       <span style={{ ...TYPO.title3, color: T.text }}>{title}</span>
       {sub && <span style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>{sub}</span>}
     </div>
@@ -727,13 +730,14 @@ function MiniStat({ T, label, value, color }) {
 }
 
 // ─── ランキングカード ────────────────────────────────────────
-function RankingCard({ T, title, emoji, accent = '#007AFF', subtitle, entries }) {
-  const medals = ['🥇', '🥈', '🥉']
-  const medalColor = ['#FFD60a', '#A1A1AA', '#CD7F32']
+function RankingCard({ T, title, emoji, accent, subtitle, entries }) {
+  const acc = accent || T.accent
+  const medalColor = ['#f59e0b', '#94a3b8', '#b45309']
   return (
-    <div style={cardStyle({ T, accent, padding: SPACING.md })}>
+    <div style={cardStyle({ T, accent: acc, padding: SPACING.md })}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}>
-        <div style={{ width: 3, height: 30, background: accent, borderRadius: 2, marginTop: 2, flexShrink: 0 }} />
+        <div style={{ width: 3, height: 30, background: acc, borderRadius: 2, marginTop: 2, flexShrink: 0 }} />
+        {emoji && <span style={{ color: acc, display: 'inline-flex', marginTop: 1, flexShrink: 0 }}><Icon name={emoji} size={16} /></span>}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...TYPO.callout, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
           <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 1 }}>{subtitle}</div>
@@ -751,12 +755,12 @@ function RankingCard({ T, title, emoji, accent = '#007AFF', subtitle, entries })
               background: i === 0 ? `${medalColor[0]}1a` : T.sectionBg,
               border: `1px solid ${i === 0 ? medalColor[0] + '40' : T.borderLight}`,
             }}>
-              <span style={{ fontSize: 16, width: 18, textAlign: 'center', flexShrink: 0 }}>{medals[i]}</span>
+              <span style={{ color: medalColor[i] || T.textMuted, width: 18, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}><Icon name="medal" size={16} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...TYPO.subhead, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</div>
                 {e.sub && <div style={{ ...TYPO.caption, color: T.textMuted }}>{e.sub}</div>}
               </div>
-              <span style={kpiNumber({ color: accent, size: 16 })}>{e.main}</span>
+              <span style={kpiNumber({ color: acc, size: 16 })}>{e.main}</span>
             </div>
           ))}
         </div>
@@ -772,7 +776,7 @@ function TeamSummarySingleView({ T, levels, members, weekStart, myName, viewingM
     return (
       <div style={cardStyle({ T, accent: T.warn, padding: SPACING.lg })}>
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs }}>
-          <span style={{ fontSize: 18 }}>🛠</span>
+          <span style={{ color: T.warn, display: 'inline-flex' }}><Icon name="tools" size={18} /></span>
           <span style={{ ...TYPO.headline, color: T.text }}>チームサマリー機能はまだ有効化されていません</span>
         </div>
         <div style={{ ...TYPO.body, color: T.textSub, lineHeight: 1.6 }}>
@@ -1005,19 +1009,19 @@ function TeamSummaryRow({ T, team, members, weekStart, myName, viewingMember, is
           {team.icon || ''} {team.name}
         </span>
         {managerName && (
-          <span style={pillStyle({ color: T.textSub, size: 'sm' })}>📌 責任者: {managerName}</span>
+          <span style={pillStyle({ color: T.textSub, size: 'sm' })}><Icon name="pin" size={11} /> 責任者: {managerName}</span>
         )}
         <div style={{ flex: 1 }} />
         {canEdit && (
           <button onClick={generateAI} disabled={aiBusy || rowLoading}
             title="チーム内のKR/KA週次レビューを集約してAIで自動生成"
-            style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), cursor: aiBusy || rowLoading ? 'wait' : 'pointer', opacity: aiBusy ? 0.7 : 1 }}>
-            {aiBusy ? '⟳ 生成中…' : '🤖 AIで生成'}
+            style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), cursor: aiBusy || rowLoading ? 'wait' : 'pointer', opacity: aiBusy ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+            {aiBusy ? <><Icon name="refresh" size={11} /> 生成中…</> : <><Icon name="ai" size={11} /> AIで生成</>}
           </button>
         )}
         <span style={{ ...TYPO.footnote, color: T.textMuted }}>
-          {saving && <span>⟳ 保存中…</span>}
-          {saved && !saving && <span style={{ color: T.success, fontWeight: 800 }}>✓ 保存済</span>}
+          {saving && <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="refresh" size={11} /> 保存中…</span>}
+          {saved && !saving && <span style={{ color: T.success, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="check" size={11} /> 保存済</span>}
         </span>
       </div>
 
@@ -1025,8 +1029,8 @@ function TeamSummaryRow({ T, team, members, weekStart, myName, viewingMember, is
         <div style={{
           marginBottom: SPACING.sm + 2, padding: `${SPACING.xs + 2}px ${SPACING.md}px`,
           borderRadius: RADIUS.md, background: `${T.danger}15`, color: T.danger,
-          ...TYPO.footnote, fontWeight: 700,
-        }}>⚠️ {aiError}</div>
+          ...TYPO.footnote, fontWeight: 700, display: 'flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="alert" size={12} /> {aiError}</div>
       )}
 
       {!canEdit && (
@@ -1105,7 +1109,7 @@ function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
             display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub, whiteSpace: 'nowrap' }}>
+              <span style={{ ...TYPO.caption, fontWeight: 700, padding: '1px 8px', borderRadius: RADIUS.pill, background: T.sectionBg, color: T.textSub, whiteSpace: 'nowrap', letterSpacing: 0 }}>
                 {orgLabel}
               </span>
             </div>
@@ -1132,12 +1136,13 @@ function FocusMilestonesGrid({ T, milestones, today, levels = [] }) {
       {hidden > 0 && (
         <div style={{ marginTop: SPACING.sm + 2, textAlign: 'center' }}>
           <button onClick={() => setExpanded(v => !v)} style={{
-            padding: '6px 16px', borderRadius: 999, fontFamily: 'inherit',
+            padding: `${SPACING.sm - 2}px ${SPACING.lg}px`, borderRadius: RADIUS.pill, fontFamily: 'inherit',
             background: 'transparent', color: T.textSub,
             border: `1px solid ${T.border}`,
-            fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            ...TYPO.footnote, fontWeight: 700, cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
           }}>
-            {expanded ? `▲ 閉じる` : `▼ 残り ${hidden}件 を表示`}
+            {expanded ? <><Icon name="chevronU" size={11} /> 閉じる</> : <><Icon name="chevronD" size={11} /> 残り {hidden}件 を表示</>}
           </button>
         </div>
       )}
@@ -1311,7 +1316,7 @@ function MilestonesCard({ T, milestones, setMilestones, isAdmin, myName }) {
                 border: `1px solid ${acc}30`,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
-                  {ms.focus_level === 'focus' && <span style={{ fontSize: 13 }}>⭐</span>}
+                  {ms.focus_level === 'focus' && <span style={{ color: T.warn, display: 'inline-flex' }}><Icon name="star" size={13} /></span>}
                   <span style={{ ...TYPO.subhead, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ms.title}</span>
                   {ms.due_date && (
                     <span style={pillStyle({ color: acc, size: 'sm', solid: false })}>
@@ -1332,8 +1337,9 @@ function MilestonesCard({ T, milestones, setMilestones, isAdmin, myName }) {
                       cursor: canEdit && !busy ? 'pointer' : 'not-allowed',
                       opacity: busy ? 0.5 : 1,
                       flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
                     }}>
-                    {busy ? '⟳' : '✓ 完了'}
+                    {busy ? <Icon name="refresh" size={11} /> : <><Icon name="check" size={11} /> 完了</>}
                   </button>
                 </div>
                 {ms.owner && <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 4 }}>担当: {ms.owner}</div>}
@@ -1352,7 +1358,7 @@ function KrPinchCard({ T, pinch }) {
     <div style={cardStyle({ T, accent: T.danger, padding: SPACING.lg })}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
         <div style={{ width: 4, height: 36, background: T.danger, borderRadius: 2, marginTop: 2, flexShrink: 0 }}>
-          <span style={{ fontSize: 16 }}>📉</span>
+          <span style={{ color: T.danger, display: 'inline-flex' }}><Icon name="chartDown" size={16} /></span>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ ...TYPO.headline, color: T.text }}>KR ピンチ</div>
@@ -1360,7 +1366,7 @@ function KrPinchCard({ T, pinch }) {
         </div>
       </div>
       {pinch.length === 0 ? (
-        <div style={{ padding: SPACING.md, ...TYPO.body, color: T.textMuted, textAlign: 'center' }}>ピンチの KR はありません ✨</div>
+        <div style={{ padding: SPACING.md, ...TYPO.body, color: T.textMuted, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs }}>ピンチの KR はありません <Icon name="sparkle" size={13} /></div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
           {pinch.map(kr => {
