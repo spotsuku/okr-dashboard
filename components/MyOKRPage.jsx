@@ -945,7 +945,44 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   if (loading) return <div style={{ padding:SPACING['3xl']+8, color:wT().info, fontSize:TYPO.headline.fontSize }}>読み込み中...</div>
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text }}>
+    <div style={{ display:'flex', flexDirection:'row', height:'100%', background:wT().bg, color:wT().text }}>
+
+      {/* メンバー一覧サイドバー (最左・全高。年間×個人と同じシェル。showMemberPicker のときだけ) */}
+      {!isMobile && showMemberPicker && (
+        <div style={{ width: isTablet ? 160 : 220, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'12px 10px', overflowY:'auto', background:wT().bgSidebar }}>
+          <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>メンバー</div>
+          {/* 部署フィルタ */}
+          <select value={deptFilter ?? ''} onChange={e => setDeptFilter(e.target.value ? Number(e.target.value) : null)}
+            style={{ width:'100%', marginBottom:SPACING.sm, padding:'5px 8px', borderRadius:RADIUS.sm, border:`1px solid ${wT().border}`, background:wT().bgCard, color:wT().text, fontSize:TYPO.footnote.fontSize, fontFamily:'inherit', cursor:'pointer' }}>
+            <option value="">全部署</option>
+            {(levels || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+          {filteredMembers.length === 0 && (
+            <div style={{ fontSize:TYPO.footnote.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'8px' }}>該当メンバーなし</div>
+          )}
+          {filteredMembers.map(m => {
+            const active = m.name === viewName
+            return (
+              <div key={m.id} onClick={()=>{ setSelectedMember(m.name); setActiveObjId(null) }}
+                style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', borderRadius:RADIUS.sm, cursor:'pointer', marginBottom:2,
+                  background: active?wT().navActiveBg:'transparent', border: active?`1px solid ${wT().accent}`:'1px solid transparent', transition:'all 0.15s' }}>
+                {m.avatar_url ? (
+                  <img src={m.avatar_url} alt={m.name} style={{ width:24, height:24, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
+                ) : (
+                  <div style={{ width:24, height:24, borderRadius:'50%', background:`${avatarColor(m.name)}25`, border:`1.5px solid ${avatarColor(m.name)}50`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:avatarColor(m.name), flexShrink:0 }}>{m.name.slice(0,2)}</div>
+                )}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:TYPO.footnote.fontSize, fontWeight: active?700:500, color: active?wT().navActiveText:wT().text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name}</div>
+                  {m.role && <div style={{ fontSize:9, color:wT().textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.role}</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* 右カラム: ヘッダ + 期間タブ + (Objective一覧 / KR ペイン) */}
+      <div style={{ display:'flex', flexDirection:'column', flex:1, minWidth:0, overflow:'hidden' }}>
 
       {/* ヘッダー (iOS 風グラスバー) */}
       <div style={{
@@ -1013,41 +1050,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* メンバー一覧サイドバー (選択した人の OKR を表示。年間+個人と同じUX)
-            showMemberPicker のときだけ表示 (マイページでは自分のみで不要) */}
-        {!isMobile && showMemberPicker && (
-          <div style={{ width: isTablet ? 150 : 190, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
-            <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>メンバー</div>
-            {/* 部署フィルタ */}
-            <select value={deptFilter ?? ''} onChange={e => setDeptFilter(e.target.value ? Number(e.target.value) : null)}
-              style={{ width:'100%', marginBottom:SPACING.sm, padding:'5px 8px', borderRadius:RADIUS.sm, border:`1px solid ${wT().border}`, background:wT().bgCard, color:wT().text, fontSize:TYPO.footnote.fontSize, fontFamily:'inherit', cursor:'pointer' }}>
-              <option value="">全部署</option>
-              {(levels || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            {filteredMembers.length === 0 && (
-              <div style={{ fontSize:TYPO.footnote.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'8px' }}>該当メンバーなし</div>
-            )}
-            {filteredMembers.map(m => {
-              const active = m.name === viewName
-              return (
-                <div key={m.id} onClick={()=>{ setSelectedMember(m.name); setActiveObjId(null) }}
-                  style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', borderRadius:RADIUS.sm, cursor:'pointer', marginBottom:2,
-                    background: active?wT().navActiveBg:'transparent', border: active?`1px solid ${wT().accent}`:'1px solid transparent', transition:'all 0.15s' }}>
-                  {m.avatar_url ? (
-                    <img src={m.avatar_url} alt={m.name} style={{ width:24, height:24, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} />
-                  ) : (
-                    <div style={{ width:24, height:24, borderRadius:'50%', background:`${avatarColor(m.name)}25`, border:`1.5px solid ${avatarColor(m.name)}50`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:avatarColor(m.name), flexShrink:0 }}>{m.name.slice(0,2)}</div>
-                  )}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:TYPO.footnote.fontSize, fontWeight: active?700:500, color: active?wT().navActiveText:wT().text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name}</div>
-                    {m.role && <div style={{ fontSize:9, color:wT().textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.role}</div>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
         {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
@@ -1266,6 +1268,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   )
