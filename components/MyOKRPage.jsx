@@ -662,6 +662,25 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   // showMemberPicker=false (マイページ等) では常に自分の OKR のみ。
   const [selectedMember, setSelectedMember] = useState(null)
   const viewName = (showMemberPicker && selectedMember) || myName
+  // 部署フィルタ (メンバー一覧を所属部署で絞り込む。null=全部署)
+  const [deptFilter, setDeptFilter] = useState(null)
+  const memberLevelIds = (m) => Array.isArray(m.level_ids) ? m.level_ids.map(Number) : (m.level_id ? [Number(m.level_id)] : [])
+  const deptDescendants = (rootId) => {
+    const set = new Set([Number(rootId)])
+    let added = true
+    while (added) {
+      added = false
+      for (const l of (levels || [])) {
+        if (l.parent_id != null && set.has(Number(l.parent_id)) && !set.has(Number(l.id))) { set.add(Number(l.id)); added = true }
+      }
+    }
+    return set
+  }
+  const filteredMembers = (members || []).filter(m => {
+    if (!deptFilter) return true
+    const set = deptDescendants(deptFilter)
+    return memberLevelIds(m).some(id => set.has(id))
+  })
   const viewMember = members.find(m => m.name === viewName) || myMember
 
   const [objectives, setObjectives] = useState([])
@@ -996,7 +1015,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         {!isMobile && showMemberPicker && (
           <div style={{ width: isTablet ? 150 : 190, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
             <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>メンバー</div>
-            {(members || []).map(m => {
+            {/* 部署フィルタ */}
+            <select value={deptFilter ?? ''} onChange={e => setDeptFilter(e.target.value ? Number(e.target.value) : null)}
+              style={{ width:'100%', marginBottom:SPACING.sm, padding:'5px 8px', borderRadius:RADIUS.sm, border:`1px solid ${wT().border}`, background:wT().bgCard, color:wT().text, fontSize:TYPO.footnote.fontSize, fontFamily:'inherit', cursor:'pointer' }}>
+              <option value="">全部署</option>
+              {(levels || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            {filteredMembers.length === 0 && (
+              <div style={{ fontSize:TYPO.footnote.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'8px' }}>該当メンバーなし</div>
+            )}
+            {filteredMembers.map(m => {
               const active = m.name === viewName
               return (
                 <div key={m.id} onClick={()=>{ setSelectedMember(m.name); setActiveObjId(null) }}
