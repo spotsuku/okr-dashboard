@@ -1,0 +1,204 @@
+/* ============================================================
+   Workspace Redesign — 4 light-based palettes
+   All share the same minimal/refined design language;
+   only color tokens change.
+   ============================================================ */
+
+:root,
+[data-theme="indigo"] {
+  --bg:            #fafafa;
+  --bg-soft:       #f5f5f6;
+  --card:          #ffffff;
+  --sunken:        #f4f4f5;
+  --border:        #ebebee;
+  --border-strong: #d8d8dd;
+  --text:          #18181b;
+  --sub:           #52525b;
+  --muted:         #a1a1aa;
+  --accent:        #5b5bd6;
+  --accent-hover:  #4a4abf;
+  --accent-soft:   #eef0ff;
+  --accent-text:   #4a4abf;
+  --success:       #16a34a;
+  --success-soft:  #ecfdf3;
+  --warn:          #d97706;
+  --warn-soft:     #fef6e0;
+  --danger:        #dc2626;
+  --danger-soft:   #fef2f2;
+  --info:          #0284c7;
+  --info-soft:     #eff6ff;
+  --sidebar-bg:    #1c1c1f;
+  --sidebar-text:  #b3b3b7;
+  --sidebar-active:#ffffff;
+}
+
+[data-theme="sand"] {
+  --bg:            #f8f6f1;
+  --bg-soft:       #f3efe6;
+  --card:          #ffffff;
+  --sunken:        #f1ede4;
+  --border:        #e7e1d3;
+  --border-strong: #d4cbb6;
+  --text:          #1c1917;
+  --sub:           #57534e;
+  --muted:         #a8a29e;
+  --accent:        #92400e;
+  --accent-hover:  #7c2d12;
+  --accent-soft:   #fbf4e7;
+  --accent-text:   #7c2d12;
+  --success:       #15803d;
+  --success-soft:  #ecfdf3;
+  --warn:          #b45309;
+  --warn-soft:     #fdf6e7;
+  --danger:        #b91c1c;
+  --danger-soft:   #fef2f2;
+  --info:          #0369a1;
+  --info-soft:     #eff6ff;
+  --sidebar-bg:    #1c1917;
+  --sidebar-text:  #b8b0a5;
+  --sidebar-active:#ffffff;
+}
+
+[data-theme="mist"] {
+  --bg:            #f5f7f6;
+  --bg-soft:       #eef2f0;
+  --card:          #ffffff;
+  --sunken:        #ecf0ee;
+  --border:        #dfe5e2;
+  --border-strong: #c5cfca;
+  --text:          #0c1a12;
+  --sub:           #4b5650;
+  --muted:         #8a948e;
+  --accent:        #047857;
+  --accent-hover:  #036046;
+  --accent-soft:   #ecfdf5;
+  --accent-text:   #047857;
+  --success:       #047857;
+  --success-soft:  #ecfdf5;
+  --warn:          #b45309;
+  --warn-soft:     #fef6e0;
+  --danger:        #b91c1c;
+  --danger-soft:   #fef2f2;
+  --info:          #0369a1;
+  --info-soft:     #eff6ff;
+  --sidebar-bg:    #131c17;
+  --sidebar-text:  #a8b3ad;
+  --sidebar-active:#ffffff;
+}
+
+[data-theme="glass"] {
+  --bg:            #f3f6fa;
+  --bg-soft:       rgba(255,255,255,.55);
+  --card:          rgba(255,255,255,.74);
+  --sunken:        rgba(255,255,255,.5);
+  --border:        rgba(15,23,42,.08);
+  --border-strong: rgba(15,23,42,.16);
+  --text:          #0f172a;
+  --sub:           #475569;
+  --muted:         #94a3b8;
+  --accent:        #0ea5e9;
+  --accent-hover:  #0284c7;
+  --accent-soft:   rgba(14,165,233,.14);
+  --accent-text:   #0369a1;
+  --success:       #059669;
+  --success-soft:  rgba(5,150,105,.14);
+  --warn:          #d97706;
+  --warn-soft:     rgba(217,119,6,.14);
+  --danger:        #e11d48;
+  --danger-soft:   rgba(225,29,72,.12);
+  --info:          #0284c7;
+  --info-soft:     rgba(2,132,199,.14);
+  --sidebar-bg:    rgba(15,23,42,.86);
+  --sidebar-text:  rgba(255,255,255,.7);
+  --sidebar-active:#ffffff;
+}
+
+/* Glass theme — soft sky/mint backdrop + frosted surfaces */
+.app-frame[data-theme="glass"] {
+  background:
+    radial-gradient(900px 600px at 8% 0%,  rgba(186,230,253,.55), transparent 60%),
+    radial-gradient(900px 700px at 100% 18%, rgba(187,247,208,.45), transparent 60%),
+    radial-gradient(700px 600px at 70% 100%, rgba(224,242,254,.6),  transparent 60%),
+    linear-gradient(180deg, #f6fafd 0%, #eef4f9 100%);
+}
+.app-frame[data-theme="glass"] aside,
+.app-frame[data-theme="glass"] header {
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.app-frame[data-theme="glass"] [style*="var(--card)"] {
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 1px 2px rgba(30,27,75,.04);
+}
+.app-frame[data-theme="glass"] main {
+  background: transparent !important;
+}
+
+[data-theme="ink"] {
+  --bg:            #fafafa;
+  --bg-soft:       #f4f4f4;
+  --card:          #ffffff;
+  --sunken:        #f4f4f4;
+  --border:        #e7e7e7;
+  --border-strong: #cfcfcf;
+  --text:          #0a0a0a;
+  --sub:           #3f3f3f;
+  --muted:         #a3a3a3;
+  --accent:        #c2410c;
+  --accent-hover:  #9a2f08;
+  --accent-soft:   #fff1ec;
+  --accent-text:   #9a2f08;
+  --success:       #15803d;
+  --success-soft:  #ecfdf3;
+  --warn:          #b45309;
+  --warn-soft:     #fef6e0;
+  --danger:        #b91c1c;
+  --danger-soft:   #fef2f2;
+  --info:          #1d4ed8;
+  --info-soft:     #eff6ff;
+  --sidebar-bg:    #0a0a0a;
+  --sidebar-text:  #a3a3a3;
+  --sidebar-active:#ffffff;
+}
+
+/* ============================================================
+   Base / Reset
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+.app-frame {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', system-ui, sans-serif;
+  font-feature-settings: "palt" 1;
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  overflow: hidden;
+}
+.app-frame * { box-sizing: border-box; }
+.app-frame button { font-family: inherit; cursor: pointer; }
+
+/* ============================================================
+   Typography utility
+   ============================================================ */
+.t-largeTitle { font-size: 28px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+.t-title1     { font-size: 22px; font-weight: 600; line-height: 1.25; letter-spacing: -0.005em; }
+.t-title2     { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.t-title3     { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.t-headline   { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.t-body       { font-size: 13px; font-weight: 400; line-height: 1.5; }
+.t-callout    { font-size: 12px; font-weight: 500; line-height: 1.45; }
+.t-subhead    { font-size: 12px; font-weight: 400; line-height: 1.45; }
+.t-footnote   { font-size: 11px; font-weight: 400; line-height: 1.4; }
+.t-caption    { font-size: 10.5px; font-weight: 500; line-height: 1.3; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+
+/* ============================================================
+   Scrollbar polish — keep it ghosted inside artboards
+   ============================================================ */
+.app-frame ::-webkit-scrollbar { width: 0; height: 0; }
+.app-frame { scrollbar-width: none; }
