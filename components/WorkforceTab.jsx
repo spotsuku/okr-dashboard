@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { mgmtSupabase, isMgmtConfigured } from '../lib/mgmtSupabase'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
+import { TYPO, SPACING, RADIUS } from '../lib/themeTokens'
+import Icon from './Icon'
 
 // ─── 工数管理タブ (経営ダッシュボード neo-mg と双方向リアルタイム同期) ───
 //
@@ -206,23 +208,23 @@ export default function WorkforceTab({ T }) {
   // SaaS化: workforce モジュール OFF テナントは早期 return (二重防御。ナビでも非表示)
   if (!workforceEnabled) return null
   if (loading) {
-    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>経営ダッシュボードから読み込み中...</div>
+    return <div style={{ padding: SPACING['3xl'] + SPACING.sm, textAlign: 'center', color: T.textMuted, ...TYPO.body }}>経営ダッシュボードから読み込み中...</div>
   }
 
   if (error && !snapshot) {
     return (
       <div style={{
-        padding: 20, background: T.dangerBg, border: `1px solid ${T.danger}40`,
-        borderRadius: 10, color: T.danger, fontSize: 13, lineHeight: 1.7,
+        padding: SPACING.xl, background: T.dangerBg, border: `1px solid ${T.danger}40`,
+        borderRadius: RADIUS.md, color: T.danger, ...TYPO.body, lineHeight: 1.7,
       }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>⚠️ 連携エラー</div>
+        <div style={{ fontWeight: 700, marginBottom: SPACING.xs + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}><Icon name="alert" size={15} /> 連携エラー</div>
         {error}
       </div>
     )
   }
 
   if (!snapshot) {
-    return <div style={{ padding: 20, color: T.textMuted, fontSize: 13 }}>データなし</div>
+    return <div style={{ padding: SPACING.xl, color: T.textMuted, ...TYPO.body }}>データなし</div>
   }
 
   const members = (snapshot.members || []).map(ensureMember)
@@ -233,29 +235,30 @@ export default function WorkforceTab({ T }) {
     <div>
       {/* ─── ヘッダー: ビュー切替 + 同期状態 ─── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap',
+        display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.lg, flexWrap: 'wrap',
       }}>
         <div style={{
           display: 'flex', background: T.sectionBg, border: `1px solid ${T.border}`,
-          borderRadius: 8, padding: 3,
+          borderRadius: RADIUS.sm, padding: 3,
         }}>
           {[
-            { id: 'visual',  label: '👥 担当可視化' },
-            { id: 'numeric', label: '📝 数値記入' },
+            { id: 'visual',  icon: 'user', label: '担当可視化' },
+            { id: 'numeric', icon: 'pencil', label: '数値記入' },
           ].map(t => {
             const a = view === t.id
             return (
               <button key={t.id} onClick={() => setView(t.id)} style={{
-                padding: '7px 16px', borderRadius: 6, border: 'none',
+                padding: '7px 16px', borderRadius: RADIUS.xs, border: 'none',
                 background: a ? T.accent : 'transparent',
                 color: a ? '#fff' : T.textSub,
-                fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-              }}>{t.label}</button>
+                ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs + 2,
+              }}><Icon name={t.icon} size={13} />{t.label}</button>
             )
           })}
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 11, color: T.textMuted, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
           <span style={{
             display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
             background: saving ? T.warn : T.success,
@@ -266,16 +269,17 @@ export default function WorkforceTab({ T }) {
 
       {error && (
         <div style={{
-          marginBottom: 12, padding: 10, background: T.dangerBg, border: `1px solid ${T.danger}40`,
-          borderRadius: 8, color: T.danger, fontSize: 11,
-        }}>⚠️ {error}</div>
+          marginBottom: SPACING.md, padding: SPACING.sm + 2, background: T.dangerBg, border: `1px solid ${T.danger}40`,
+          borderRadius: RADIUS.sm, color: T.danger, ...TYPO.footnote, fontWeight: 600,
+          display: 'flex', alignItems: 'center', gap: SPACING.xs + 2,
+        }}><Icon name="alert" size={13} /> {error}</div>
       )}
 
       {/* ─── 役割色凡例 ─── */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, fontSize: 11, color: T.textMuted, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: SPACING.md, alignItems: 'center', marginBottom: SPACING.md, ...TYPO.footnote, fontWeight: 600, color: T.textMuted, flexWrap: 'wrap' }}>
         <span>役割色:</span>
         {ROLES.map(r => (
-          <span key={r} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span key={r} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: ROLE_COLORS[r] }} />
             <span>{r}</span>
           </span>
@@ -315,12 +319,12 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
 
   return (
     <div style={{
-      border: `1px solid ${T.border}`, borderRadius: 10,
+      border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
       background: T.bgCard, overflow: 'auto', maxHeight: '70vh',
     }}>
       <table style={{
         borderCollapse: 'separate', borderSpacing: 0,
-        fontSize: 11, color: T.text, width: 'max-content',
+        fontSize: TYPO.footnote.fontSize, color: T.text, width: 'max-content',
       }}>
         <thead>
           {/* 事業名行 */}
@@ -329,7 +333,7 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
             {businesses.map(biz => (
               <th key={biz} colSpan={ROLES.length} style={{
                 ...thHead(T), background: T.sectionBg, fontWeight: 800,
-                borderLeft: `2px solid ${T.borderMid}`, padding: '8px 6px',
+                borderLeft: `2px solid ${T.borderMid}`, padding: `${SPACING.sm}px ${SPACING.xs + 2}px`,
               }}>{biz}</th>
             ))}
           </tr>
@@ -340,13 +344,14 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
               <th key={`${biz}-${role}`} style={{
                 ...thHead(T), top: 30, width: cellW, minWidth: cellW,
                 background: ROLE_COLORS[role], color: '#fff', fontWeight: 700,
+                // ROLE_COLORS は役割データパレットのため維持
                 borderLeft: ri === 0 ? `2px solid ${T.borderMid}` : `1px solid ${T.border}`,
               }}>{role}</th>
             )))}
           </tr>
           {/* 必要月工数 */}
           <tr>
-            <th style={{ ...thSticky(T, memberColW), top: 60, zIndex: 5, background: T.bgCard2, fontSize: 10, fontWeight: 700, color: T.textSub, textAlign: 'right', padding: '4px 8px' }}>必要月工数 →</th>
+            <th style={{ ...thSticky(T, memberColW), top: 60, zIndex: 5, background: T.bgCard2, fontSize: 10, fontWeight: 700, color: T.textSub, textAlign: 'right', padding: `${SPACING.xs}px ${SPACING.sm}px` }}>必要月工数 →</th>
             {businesses.map(biz => ROLES.map((role, ri) => {
               const v = requiredFTE?.[biz]?.[role] ?? 0
               return (
@@ -364,7 +369,7 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
           </tr>
           {/* 投入月工数 */}
           <tr>
-            <th style={{ ...thSticky(T, memberColW), top: 88, zIndex: 5, background: T.bgCard2, fontSize: 10, fontWeight: 700, color: T.textSub, textAlign: 'right', padding: '4px 8px' }}>投入月工数 →</th>
+            <th style={{ ...thSticky(T, memberColW), top: 88, zIndex: 5, background: T.bgCard2, fontSize: 10, fontWeight: 700, color: T.textSub, textAlign: 'right', padding: `${SPACING.xs}px ${SPACING.sm}px` }}>投入月工数 →</th>
             {businesses.map(biz => ROLES.map((role, ri) => {
               const v = totalFTE(biz, role)
               return (
@@ -378,7 +383,7 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
           </tr>
           {/* 充足度 */}
           <tr>
-            <th style={{ ...thSticky(T, memberColW), top: 116, zIndex: 5, background: T.bgCard2, fontSize: 10, fontWeight: 700, color: T.textSub, textAlign: 'right', padding: '4px 8px' }}>充足度 →</th>
+            <th style={{ ...thSticky(T, memberColW), top: 116, zIndex: 5, background: T.bgCard2, fontSize: 10, fontWeight: 700, color: T.textSub, textAlign: 'right', padding: `${SPACING.xs}px ${SPACING.sm}px` }}>充足度 →</th>
             {businesses.map(biz => ROLES.map((role, ri) => {
               const req = requiredFTE?.[biz]?.[role]
               const inv = totalFTE(biz, role)
@@ -400,8 +405,8 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
         <tbody>
           {members.map(m => (
             <tr key={m.name}>
-              <td style={{ ...tdSticky(T, memberColW), background: T.bgCard, fontWeight: 700, padding: '6px 10px', textAlign: 'left' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
+              <td style={{ ...tdSticky(T, memberColW), background: T.bgCard, fontWeight: 700, padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, justifyContent: 'space-between' }}>
                   <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
                   {(() => {
                     const tot = memberTotalPct(m)
@@ -414,7 +419,7 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
                       <span style={{
                         flexShrink: 0,
                         fontSize: 10, fontWeight: 800,
-                        padding: '2px 7px', borderRadius: 99,
+                        padding: '2px 7px', borderRadius: RADIUS.pill,
                         background: color + '18', color, border: `1px solid ${color}30`,
                       }}>合計 {tot}%</span>
                     )
@@ -456,8 +461,8 @@ function VisualView({ T, members, businesses, requiredFTE }) {
 
   return (
     <div style={{
-      display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden',
-      paddingBottom: 8, scrollSnapType: 'x proximity',
+      display: 'flex', gap: SPACING.md, overflowX: 'auto', overflowY: 'hidden',
+      paddingBottom: SPACING.sm, scrollSnapType: 'x proximity',
     }}>
       {businesses.map(biz => {
         const roleTotalsRaw = ROLES.map(role => ({
@@ -486,13 +491,13 @@ function VisualView({ T, members, businesses, requiredFTE }) {
         return (
           <div key={biz} style={{
             flex: '0 0 auto', width: COLUMN_W, scrollSnapAlign: 'start',
-            border: `1px solid ${T.border}`, borderRadius: 12,
-            background: T.bgCard, padding: 14, display: 'flex', flexDirection: 'column',
+            border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+            background: T.bgCard, padding: SPACING.md + 2, display: 'flex', flexDirection: 'column',
           }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, flexShrink: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{biz}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACING.sm, marginBottom: SPACING.sm + 2, flexShrink: 0 }}>
+              <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text }}>{biz}</div>
               <div style={{ flex: 1 }} />
-              <div style={{ fontSize: 12, fontWeight: 800, color: overallColor }}>
+              <div style={{ ...TYPO.subhead, fontWeight: 800, color: overallColor }}>
                 {overall == null ? '—' : `${Math.round(overall * 100)}%`}
               </div>
               <div style={{ fontSize: 10, color: T.textMuted }}>
@@ -501,15 +506,15 @@ function VisualView({ T, members, businesses, requiredFTE }) {
             </div>
 
             {memberRows.length === 0 ? (
-              <div style={{ fontSize: 11, color: T.textMuted, padding: '8px 0' }}>担当未設定</div>
+              <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, padding: `${SPACING.sm}px 0` }}>担当未設定</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
                 {memberRows.map(r => {
                   const size = iconSizeFor(r.sum)
                   return (
                     <div key={r.name} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 10px', borderRadius: 10,
+                      display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+                      padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.md,
                       background: T.sectionBg,
                     }}>
                       <div style={{
@@ -519,22 +524,22 @@ function VisualView({ T, members, businesses, requiredFTE }) {
                         fontSize: Math.max(11, Math.round(size * 0.34)), fontWeight: 800,
                         boxShadow: `0 2px 6px ${ROLE_COLORS[r.primary]}50`,
                       }}>{(r.name || '').charAt(0)}</div>
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
                           <span style={{
-                            fontSize: 13, fontWeight: 700, color: T.text,
+                            ...TYPO.body, fontWeight: 700, color: T.text,
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                           }}>{r.name}</span>
                           <span style={{
                             flexShrink: 0,
-                            fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                            fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: RADIUS.pill,
                             background: T.bgCard, color: T.textSub,
                           }}>合計 {r.sum}%</span>
                         </div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: SPACING.xs, flexWrap: 'wrap' }}>
                           {r.cells.map(c => (
                             <span key={c.role} style={{
-                              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
+                              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: RADIUS.xs - 1,
                               background: ROLE_COLORS[c.role], color: '#fff',
                             }}>{c.role} {c.pct}%</span>
                           ))}
@@ -557,15 +562,15 @@ function thSticky(T, w) {
   return {
     position: 'sticky', left: 0, top: 0, zIndex: 4,
     width: w, minWidth: w,
-    padding: '8px 10px', textAlign: 'center',
+    padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, textAlign: 'center',
     borderBottom: `1px solid ${T.border}`, borderRight: `2px solid ${T.borderMid}`,
-    fontSize: 11, color: T.text,
+    fontSize: TYPO.footnote.fontSize, color: T.text,
   }
 }
 function thHead(T) {
   return {
     position: 'sticky', top: 0, zIndex: 3,
-    padding: '4px 0', textAlign: 'center',
+    padding: `${SPACING.xs}px 0`, textAlign: 'center',
     borderBottom: `1px solid ${T.border}`,
     fontSize: 10, color: T.text,
   }
@@ -574,24 +579,24 @@ function tdSticky(T, w) {
   return {
     position: 'sticky', left: 0, zIndex: 2,
     width: w, minWidth: w,
-    padding: '6px 10px', borderRight: `2px solid ${T.borderMid}`,
+    padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, borderRight: `2px solid ${T.borderMid}`,
     borderBottom: `1px solid ${T.border}`,
-    fontSize: 12, color: T.text, textAlign: 'right',
+    fontSize: TYPO.subhead.fontSize, color: T.text, textAlign: 'right',
   }
 }
 function tdCell(T) {
   return {
     width: 56, minWidth: 56, height: 28,
-    padding: '0 4px', textAlign: 'center',
+    padding: `0 ${SPACING.xs}px`, textAlign: 'center',
     borderBottom: `1px solid ${T.border}`,
-    fontSize: 11, color: T.text,
+    fontSize: TYPO.footnote.fontSize, color: T.text,
   }
 }
 function inputCellSt(T, hasValue) {
   return {
     width: '100%', height: 28, border: 'none', outline: 'none',
     background: 'transparent', textAlign: 'center',
-    fontSize: 11, fontFamily: 'inherit',
+    fontSize: TYPO.footnote.fontSize, fontFamily: 'inherit',
     color: hasValue ? T.text : T.textMuted, fontWeight: hasValue ? 700 : 400,
   }
 }
