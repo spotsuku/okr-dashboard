@@ -2,6 +2,7 @@
 // screens/landing.jsx — AI WorkSpace 新規ユーザー向け LP
 // Chatwork の構成を参考に、AI WorkSpace 用に再設計
 import * as React from 'react'
+import Icon from './Icon'
 
 const NAV = [
   { label: '特徴・機能', href: '#features' },
@@ -432,8 +433,8 @@ function LPWhat() {
             進捗・振り返り・目標の状態がチーム全員に見える化されるため、
             会議や報告のための仕事が減り、本来の業務に集中できます。
           </p>
-          <a href="#features" className="lp-link" style={{ fontSize: 14 }}>
-            機能の詳細を見る →
+          <a href="#features" className="lp-link" style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            機能の詳細を見る <Icon name="arrowRight" size={14} />
           </a>
         </div>
         <div className="lp-card" style={{ padding: 8, overflow: 'hidden' }}>
@@ -617,8 +618,8 @@ function TaskMockup() {
         </span>
       </div>
       <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-        <span style={{ padding: '2px 8px', fontSize: 10, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 99 }}>📅 明日 11:00</span>
-        <span style={{ padding: '2px 8px', fontSize: 10, background: 'var(--accent-soft)', color: 'var(--accent-text)', borderRadius: 99 }}>🎯 目標2 売上</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', fontSize: 10, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 99 }}><Icon name="calendar" size={11} />明日 11:00</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', fontSize: 10, background: 'var(--accent-soft)', color: 'var(--accent-text)', borderRadius: 99 }}><Icon name="target" size={11} />目標2 売上</span>
       </div>
     </div>
   );
@@ -666,7 +667,7 @@ function ReflectionMockup() {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
         <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>2</span>
         <span style={{ fontSize: 11, color: 'var(--sub)' }}>日</span>
-        <span style={{ marginLeft: 'auto', padding: '1px 7px', fontSize: 9, fontWeight: 700, background: 'var(--warn-soft)', color: 'var(--warn)', borderRadius: 99 }}>⚡継続中</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 'auto', padding: '1px 7px', fontSize: 9, fontWeight: 700, background: 'var(--warn-soft)', color: 'var(--warn)', borderRadius: 99 }}><Icon name="bolt" size={10} />継続中</span>
       </div>
       <div style={{ fontSize: 10.5, color: 'var(--sub)', lineHeight: 1.55, marginBottom: 10 }}>
         今日も書いて <b>3日</b> にしましょう。あと <b style={{ color: 'var(--warn)' }}>14日</b> で皆勤バッジ。
@@ -1019,7 +1020,7 @@ function LPCases() {
             <div className="lp-h2-sub">CASE STUDIES</div>
             <h2 className="lp-h2" style={{ margin: 0 }}>導入事例</h2>
           </div>
-          <a href="#" className="lp-link" style={{ fontSize: 14 }}>すべての事例を見る →</a>
+          <a href="#" className="lp-link" style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 4 }}>すべての事例を見る <Icon name="arrowRight" size={14} /></a>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
           {cases.map((c, i) => (
