@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>朝会 — AI WorkSpace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-card:rgba(255,255,255,.78); --bg-card-2:rgba(255,255,255,.55);
+    --sunken:rgba(255,255,255,.5);
+    --border:rgba(15,23,42,.08); --border-mid:rgba(15,23,42,.12); --border-strong:rgba(15,23,42,.18);
+    --text:#0f172a; --text-sub:#475569; --text-muted:#94a3b8;
+    --accent:#0ea5e9; --accent-bg:rgba(14,165,233,.12); --accent-text:#0369a1;
+    --success:#059669; --success-bg:rgba(5,150,105,.12);
+    --warn:#d97706; --warn-bg:rgba(217,119,6,.12);
+    --danger:#e11d48; --danger-bg:rgba(225,29,72,.12);
+    --info:#0284c7; --info-bg:rgba(2,132,199,.12);
+    --sh-card:0 1px 0 rgba(255,255,255,.7) inset, 0 4px 18px rgba(15,23,42,.04);
+    --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:18px; --r-2xl:22px; --r-pill:99px;
+    --brand-cta:linear-gradient(120deg,#2563eb 0%,#22d3ee 100%);
+  }
+  html,body{margin:0;padding:0}
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    font-family:'Inter','Noto Sans JP',-apple-system,system-ui,sans-serif;
+    color:var(--text); font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(900px 600px at 0% 0%, rgba(226,232,240,.5), transparent 55%),
+      linear-gradient(180deg,#fbfcfe 0%,#f5f7fa 100%);
+    min-height:100vh; display:flex;
+  }
+  .org-rail{width:56px;background:#0f172a;padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0;min-height:100vh}
+  .org-rail .org{width:36px;height:36px;border-radius:10px;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+  .org-rail .org.active{background:linear-gradient(135deg,#dc2626,#ef4444)}
+  .org-rail .org.active::before{content:'';position:absolute;left:-12px;top:50%;transform:translateY(-50%);width:3px;height:20px;border-radius:99px;background:#fff}
+  .org-rail .org.muted{background:linear-gradient(135deg,#ec4899,#f472b6)}
+
+  .app{flex:1;display:flex;flex-direction:column;min-width:0}
+  .glass-bar{position:sticky;top:0;z-index:30;padding:10px 22px;background:rgba(255,255,255,.7);backdrop-filter:blur(18px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
+  .brand{display:flex;align-items:center;gap:8px;text-decoration:none;padding-right:12px;border-right:1px solid var(--border)}
+  .brand-mark{width:26px;height:26px;border-radius:7px;background:var(--brand-cta);display:flex;align-items:center;justify-content:center;color:#fff}
+  .brand-text{display:flex;flex-direction:column;line-height:1.15}
+  .brand-text .eyebrow{font-size:8.5px;color:var(--text-muted);letter-spacing:0.08em}
+  .brand-text .name{font-size:12px;font-weight:700;color:var(--text)}
+  nav.main{display:flex;align-items:center;gap:2px}
+  .nav-item{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer}
+  .nav-item:hover{background:rgba(15,23,42,.04)}
+  .nav-item.active{background:var(--accent-bg);color:var(--accent-text);font-weight:600}
+  .search{display:flex;align-items:center;gap:7px;height:30px;padding:0 11px;min-width:200px;background:rgba(255,255,255,.6);border:1px solid var(--border);border-radius:7px;color:var(--text-muted);font-size:12px}
+  .kbd{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;font-size:10px;font-weight:600;color:var(--text-muted);background:rgba(255,255,255,.7);border:1px solid var(--border);border-radius:4px;font-family:ui-monospace,monospace}
+  .year-toggle{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:rgba(255,255,255,.5)}
+  .year-toggle .y{padding:4px 10px;font-size:11px;color:var(--text-muted)}
+  .year-toggle .y.active{background:var(--brand-cta);color:#fff;font-weight:600}
+  .icon-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,.5);color:var(--text-sub);cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+  .content{flex:1;padding:24px 28px 80px;max-width:1280px;margin:0 auto;width:100%}
+  .h-section{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin:28px 0 12px;display:flex;align-items:center;gap:10px}
+  .h-section .ln{flex:1;height:1px;background:var(--border)}
+
+  .btn-primary{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;font-size:12.5px;font-weight:600;background:var(--brand-cta);color:#fff;border:1px solid #2563eb;border-radius:8px;cursor:pointer;font-family:inherit;text-decoration:none;box-shadow:0 2px 8px rgba(37,99,235,.28),inset 0 1px 0 rgba(255,255,255,.25)}
+  .btn-secondary{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;font-size:12px;font-weight:500;background:rgba(255,255,255,.7);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit}
+  .btn-ghost{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;font-size:12px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text-sub);cursor:pointer;font-family:inherit}
+
+  /* Page header */
+  .ph{display:flex;align-items:baseline;gap:14px;margin-bottom:18px}
+  .ph h1{font-size:22px;font-weight:700;letter-spacing:-0.015em;margin:0;display:flex;align-items:center;gap:8px}
+  .ph .date{font-size:12.5px;color:var(--text-sub);font-family:ui-monospace,monospace;padding:3px 10px;background:rgba(255,255,255,.6);border:1px solid var(--border);border-radius:99px}
+  .ph .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .live{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--success)}
+  .live .d{width:7px;height:7px;border-radius:99px;background:var(--success);box-shadow:0 0 0 3px rgba(5,150,105,.15)}
+
+  /* Card */
+  .card{background:var(--bg-card);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-card);margin-bottom:14px;overflow:hidden}
+  .card-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .card-head h3{font-size:13px;font-weight:700;margin:0;display:flex;align-items:center;gap:6px}
+  .card-head .right{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted)}
+
+  /* === STATE 1: Hero (replaces orange gradient) === */
+  .mtg-hero{
+    position:relative;overflow:hidden;
+    padding:24px 28px; margin-bottom:14px;
+    background:linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #22d3ee 100%);
+    border-radius:var(--r-2xl); color:#fff;
+    box-shadow:0 10px 30px rgba(37,99,235,.22);
+    display:flex; align-items:center; gap:24px;
+  }
+  .mtg-hero::before{content:'';position:absolute;top:-80px;right:-60px;width:280px;height:280px;background:radial-gradient(circle,rgba(255,255,255,.22),transparent 70%);pointer-events:none}
+  .mtg-hero::after{content:'';position:absolute;bottom:-100px;left:-50px;width:260px;height:260px;background:radial-gradient(circle,rgba(187,247,208,.22),transparent 70%);pointer-events:none}
+  .mtg-hero .icon{
+    position:relative;width:64px;height:64px;border-radius:18px;
+    background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3);
+    display:flex;align-items:center;justify-content:center; flex-shrink:0;
+    backdrop-filter:blur(12px);
+  }
+  .mtg-hero .text{position:relative; flex:1}
+  .mtg-hero .day{font-size:11.5px;opacity:.85;font-weight:600;letter-spacing:0.06em;margin-bottom:6px;display:inline-flex;align-items:center;gap:5px;padding:3px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:99px}
+  .mtg-hero h2{font-size:32px;font-weight:700;letter-spacing:-0.02em;margin:0 0 6px}
+  .mtg-hero .when{font-size:13px; opacity:.9; display:flex; align-items:center; gap:12px}
+  .mtg-hero .when .sep{width:4px;height:4px;border-radius:99px;background:rgba(255,255,255,.4)}
+
+  /* Notion CTA */
+  .notion-cta{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:14px;background:rgba(255,255,255,.85);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--border);border-radius:var(--r-md)}
+  .notion-cta .ic{width:36px;height:36px;border-radius:9px;background:var(--brand-cta);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(37,99,235,.28)}
+  .notion-cta .tx{flex:1}
+  .notion-cta .tx .tt{font-size:13px;font-weight:700;margin-bottom:2px}
+  .notion-cta .tx .dd{font-size:11px;color:var(--text-sub);line-height:1.55}
+
+  /* Agenda */
+  .agenda{display:flex;flex-direction:column;gap:0}
+  .agenda li{display:flex;align-items:baseline;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12.5px}
+  .agenda li:last-child{border-bottom:none}
+  .agenda li .num{width:22px;height:22px;border-radius:6px;background:rgba(15,23,42,.05);color:var(--text-sub);font-size:11px;font-weight:700;font-family:ui-monospace,monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .agenda li .lbl{font-weight:700;color:var(--text);min-width:120px}
+  .agenda li .desc{flex:1;color:var(--text-sub);line-height:1.55}
+
+  /* Members grid */
+  .members{display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;padding:14px 16px}
+  .mb{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.6);border:1px solid var(--border);border-radius:8px;font-size:12px}
+  .mb .n{font-size:10px;color:var(--text-muted);font-family:ui-monospace,monospace;min-width:18px}
+  .mb .av{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#94a3b8,#64748b);color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+  /* Facilitator card */
+  .fac{padding:14px 16px;display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.6);border:1px solid var(--border);border-radius:10px;margin:14px 16px}
+  .fac .av{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#1e3a8a);color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .fac .nm{font-size:14px;font-weight:700}
+  .fac .role{font-size:11px;color:var(--text-muted)}
+
+  /* === STATE 2: In-meeting === */
+  .reset-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .timer{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:14px;background:var(--bg-card);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:12px;font-size:12.5px}
+  .timer .ic{width:24px;height:24px;border-radius:99px;background:var(--accent-bg);color:var(--accent-text);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .timer .left b{font-weight:700;color:var(--text)}
+  .timer .meta{color:var(--text-muted);font-size:11px}
+  .timer .bar{flex:1;height:4px;background:var(--sunken);border-radius:99px;overflow:hidden}
+  .timer .bar .fill{height:100%;background:var(--brand-cta);width:3%}
+
+  .facili-row{display:flex;align-items:center;gap:10px;padding:10px 16px;margin-bottom:14px;background:var(--bg-card);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:12px;font-size:12.5px}
+  .facili-row .lbl{color:var(--text-muted);font-weight:500;display:inline-flex;align-items:center;gap:5px}
+  .facili-row .nm{font-weight:700;color:var(--text)}
+
+  .steps{display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:14px;background:var(--bg-card);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:12px}
+  .steps .step{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.6);color:var(--text-sub);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit}
+  .steps .step.done{background:var(--success-bg);color:var(--success);border-color:rgba(5,150,105,.2)}
+  .steps .step.active{background:var(--brand-cta);color:#fff;border-color:#2563eb;box-shadow:0 2px 8px rgba(37,99,235,.28)}
+  .steps .step .nu{width:20px;height:20px;border-radius:99px;background:rgba(255,255,255,.15);font-size:11px;display:inline-flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace}
+  .steps .step.done .nu, .steps .step .nu{background:rgba(15,23,42,.06);color:var(--text-muted)}
+  .steps .step.active .nu{background:rgba(255,255,255,.18);color:#fff}
+  .steps .step.done .nu{background:rgba(5,150,105,.15);color:var(--success)}
+
+  /* Members progress */
+  .mbprog{padding:12px 16px;background:var(--bg-card);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:12px;margin-bottom:14px}
+  .mbprog .hd{font-size:11.5px;color:var(--text-sub);font-weight:600;margin-bottom:10px}
+  .mbprog-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));gap:6px}
+  .mbprog-cell{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:rgba(255,255,255,.6);border:1px solid var(--border);border-radius:7px;font-size:11.5px}
+  .mbprog-cell .cb{width:11px;height:11px;border-radius:3px;border:1.5px solid var(--border-strong);background:#fff;flex-shrink:0}
+  .mbprog-cell.done{background:var(--success-bg);border-color:rgba(5,150,105,.2)}
+  .mbprog-cell.done .cb{background:var(--success);border-color:var(--success);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+  .mbprog-cell.done .nm{color:var(--success);font-weight:600}
+  .mbprog-cell.active{background:var(--accent-bg);border-color:rgba(14,165,233,.25)}
+  .mbprog-cell.active .nm{color:var(--accent-text);font-weight:600}
+  .mbprog-cell.active .cb{background:var(--accent);border-color:var(--accent);position:relative}
+  .mbprog-cell.active .cb::after{content:'';position:absolute;inset:-4px;border-radius:99px;background:rgba(14,165,233,.2);animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse {0%,100% {opacity:.6;transform:scale(1)} 50% {opacity:1;transform:scale(1.5)}}
+
+  /* Member report card */
+  .report-card{background:var(--bg-card);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-card);margin-bottom:14px;overflow:hidden}
+  .report-head{padding:18px 20px;display:flex;align-items:center;gap:14px;background:linear-gradient(120deg, rgba(14,165,233,.08), rgba(14,165,233,.02) 40%, transparent);border-bottom:1px solid var(--border)}
+  .report-head .av{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#3b82f6,#1e3a8a);color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(30,58,138,.28)}
+  .report-head .info .nm{font-size:18px;font-weight:700;line-height:1.2}
+  .report-head .info .role{font-size:11.5px;color:var(--text-muted);margin-top:2px}
+  .report-head .live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:11.5px;font-weight:600;color:#fff;background:var(--brand-cta);border-radius:99px;box-shadow:0 2px 6px rgba(37,99,235,.28)}
+  .report-head .live .d{width:6px;height:6px;border-radius:99px;background:#fff;animation:blink 1.4s infinite}
+  @keyframes blink {0%,100% {opacity:1} 50% {opacity:.3}}
+
+  .report-section{padding:14px 20px;border-bottom:1px solid var(--border)}
+  .report-section:last-child{border-bottom:none}
+  .report-section .label{font-size:11.5px;font-weight:700;color:var(--text-sub);display:flex;align-items:center;gap:6px;margin-bottom:8px}
+  .report-section .label .ic{color:var(--accent)}
+  .report-section .kpt-empty{padding:10px 12px;background:rgba(15,23,42,.02);border:1px dashed var(--border);border-radius:8px;font-size:12px;color:var(--text-muted);font-style:italic}
+
+  .task-meta{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .task-meta .ic{color:var(--text-sub)}
+  .task-meta .ti{font-weight:700;color:var(--text)}
+  .task-meta .sub{font-size:11px;color:var(--text-muted)}
+  .task-meta .overdue-pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;background:var(--danger-bg);color:var(--danger);border:1px solid rgba(225,29,72,.25);border-radius:99px;font-size:11px;font-weight:600}
+
+  .task-list{display:flex;flex-direction:column;gap:6px}
+  .task-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,255,255,.5);border:1px solid var(--border);border-radius:8px;font-size:12.5px}
+  .task-row.overdue{background:rgba(225,29,72,.04);border-color:rgba(225,29,72,.15)}
+  .task-row .cb{width:14px;height:14px;border-radius:99px;border:1.5px solid var(--border-strong);background:#fff;flex-shrink:0}
+  .task-row.overdue .cb{border-color:var(--danger)}
+  .task-row .ti{flex:1;color:var(--text)}
+  .task-row .du{font-size:10.5px;font-weight:600;padding:2px 8px;background:var(--danger-bg);color:var(--danger);border-radius:5px;font-family:ui-monospace,monospace;flex-shrink:0}
+
+  /* === STATE 3: 共有事項 === */
+  .alert-orange{display:flex;align-items:center;gap:10px;padding:12px 16px;margin-bottom:12px;background:var(--warn-bg);border:1px solid rgba(217,119,6,.25);border-radius:var(--r-md);backdrop-filter:blur(20px)}
+  .alert-orange .ic{width:28px;height:28px;border-radius:99px;background:var(--warn);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px rgba(217,119,6,.16);flex-shrink:0}
+  .alert-orange .ti{font-size:13px;font-weight:700}
+  .alert-orange .cnt{font-size:11px;font-weight:700;color:var(--warn);padding:1px 8px;background:#fff;border:1px solid var(--warn);border-radius:99px;margin-left:4px}
+  .alert-orange .right{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted)}
+
+  .share-item{padding:14px 16px;margin-bottom:10px;background:var(--bg-card);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:var(--r-md);position:relative}
+  .share-item::before{content:'';position:absolute;left:14px;top:14px;width:3px;height:14px;background:var(--warn);border-radius:99px;opacity:0}
+  .share-fromto{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);margin-bottom:8px}
+  .share-fromto .nm{color:var(--text);font-weight:600;display:inline-flex;align-items:center;gap:5px}
+  .share-fromto .nm .av{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,#f59e0b,#fb923c);color:#fff;font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+  .share-fromto .arr{color:var(--text-muted)}
+  .share-body{font-size:13px;color:var(--text);line-height:1.55;margin-bottom:10px}
+  .share-actions{display:flex;gap:6px}
+  .share-actions .mini{padding:5px 12px;font-size:11.5px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,.7);color:var(--text-sub);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+  .share-actions .mini.resolve{background:var(--success-bg);color:var(--success);border-color:rgba(5,150,105,.2)}
+
+  .step-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 0;margin-top:8px}
+
+  /* === STATE 4: Next action === */
+  .review-section{background:var(--bg-card);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px}
+  .review-section .hd{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;background:linear-gradient(120deg, rgba(225,29,72,.05), transparent 60%)}
+  .review-section .hd .ic{width:32px;height:32px;border-radius:8px;background:var(--danger-bg);color:var(--danger);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .review-section .hd .ti{font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .review-section .hd .ti .meta{font-size:11px;font-weight:500;color:var(--text-muted)}
+  .review-section .hd .dd{font-size:11px;color:var(--text-sub);margin-top:3px;line-height:1.55}
+  .review-section .hd .right{margin-left:auto}
+
+  .review-person{padding:12px 16px;border-bottom:1px solid var(--border)}
+  .review-person:last-child{border-bottom:none}
+  .review-person .ph{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-sub);font-weight:600;margin-bottom:8px}
+  .review-person .ph .ic{color:var(--text-muted)}
+  .review-person .ph .cnt{color:var(--text-muted);font-weight:400}
+
+  .review-task{display:grid;grid-template-columns:90px 70px 1fr 110px 80px;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:rgba(255,255,255,.5);border:1px solid var(--border);border-radius:7px}
+  .review-task .badge{padding:2px 8px;font-size:10.5px;font-weight:700;border-radius:5px;text-align:center;font-family:ui-monospace,monospace}
+  .review-task .badge.today{background:var(--warn-bg);color:var(--warn)}
+  .review-task .badge.day1{background:rgba(248,113,113,.18);color:#dc2626}
+  .review-task .badge.day3{background:rgba(239,68,68,.18);color:#b91c1c}
+  .review-task .badge.day9{background:rgba(220,38,38,.22);color:#991b1b}
+  .review-task .date{font-size:11px;color:var(--text-muted);font-family:ui-monospace,monospace}
+  .review-task .ti{font-size:12px;color:var(--text)}
+  .review-task select{padding:4px 26px 4px 8px;font-size:11px;background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:5px;font-family:inherit;color:var(--text-sub);cursor:pointer;-webkit-appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 8px center}
+  .review-task .done-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:5px 10px;font-size:11px;font-weight:600;background:var(--success);color:#fff;border:none;border-radius:5px;cursor:pointer;font-family:inherit;box-shadow:0 1px 3px rgba(5,150,105,.3)}
+
+  /* Strategy memo */
+  .strategy{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 22px;margin-bottom:20px;backdrop-filter:blur(20px) saturate(160%)}
+  .strategy h2{font-size:16px;font-weight:700;margin:0 0 10px;letter-spacing:-0.005em}
+  .strategy .points{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px}
+  .strategy .p{display:flex;gap:8px;padding:10px 12px;background:rgba(255,255,255,.5);border-radius:8px;font-size:11.5px;color:var(--text-sub);line-height:1.55}
+  .strategy .p .nm{font-weight:700;color:var(--text);margin-bottom:3px}
+
+  @media (max-width:1100px){.strategy .points{grid-template-columns:1fr}.members{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:760px){nav.main{display:none}.members{grid-template-columns:repeat(2,1fr)}.review-task{grid-template-columns:1fr;text-align:left}}
+</style>
+</head>
+<body>
+
+<aside class="org-rail">
+  <div class="org active">N</div>
+  <div class="org muted">テ</div>
+</aside>
+
+<div class="app">
+  <header class="glass-bar">
+    <a class="brand" href="#">
+      <span class="brand-mark">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></svg>
+      </span>
+      <div class="brand-text"><span class="eyebrow">AI WORKSPACE</span><span class="name">NEO福岡</span></div>
+    </a>
+    <nav class="main">
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>ホーム</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>ワークスペース</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>OKR</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>週次MTG</span>
+      <span class="nav-item active"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/></svg>朝会</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v16M3 21h18M10 8h4M10 12h4M10 16h4"/></svg>組織</span>
+    </nav>
+    <div style="flex:1"></div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <span>検索…</span><span style="flex:1"></span><span class="kbd">⌘K</span>
+    </div>
+    <div class="year-toggle"><span class="y">2025年度</span><span class="y active">2026年度</span></div>
+    <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg></button>
+    <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></button>
+  </header>
+
+  <main class="content">
+
+    <!-- Strategy memo -->
+    <div class="strategy">
+      <div style="font-size:10.5px;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">DESIGN STRATEGY · 朝会のトンマナ統一</div>
+      <h2>絵文字を全廃、ヒーローはブランドグラデへ</h2>
+      <div class="points">
+        <div class="p"><div><div class="nm">01 · 背景を静かな Glass に</div>3 色オーロラ→淡い青グレー 1 エッジ。会議に集中しやすい。</div></div>
+        <div class="p"><div><div class="nm">02 · オレンジヒーロー → ブランドグラデ</div>朝会 = 明るいオレンジの「学校感」をやめ、業務 OS らしい青へ。</div></div>
+        <div class="p"><div><div class="nm">03 · 絵文字 → アイコン</div>🌅 / 📝 / 📅 / 🟠 / ✅ など全廃。Icon.jsx の単色ラインへ。</div></div>
+        <div class="p"><div><div class="nm">04 · 期限切れタスクの赤は維持</div>業務上の警告シグナルは残す。ただし背景塗りは控えめに、ピル＋枠でまとめる。</div></div>
+        <div class="p"><div><div class="nm">05 · 発表中バッジはブランドグラデで強調</div>「いま誰が話しているか」が一瞬で分かる。CTA と同等の重要シグナル。</div></div>
+        <div class="p"><div><div class="nm">06 · 共有事項の橙左ボーダーは残す</div>未解決＝注意喚起の意味は残しつつ、ベタ塗りはやめる。</div></div>
+      </div>
+    </div>
+
+    <!-- ====== STATE 1: 準備画面 ====== -->
+    <div class="h-section"><span class="ln"></span>会議準備 — 開始前<span class="ln"></span></div>
+
+    <div class="ph">
+      <h1>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/><circle cx="12" cy="12" r="4"/></svg>
+        朝会
+      </h1>
+      <span class="date">5/23(土)</span>
+      <div class="right">
+        <span class="live"><span class="d"></span>リアルタイム同期中</span>
+      </div>
+    </div>
+
+    <!-- Hero (ブランドグラデ) -->
+    <div class="mtg-hero">
+      <div class="icon">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/><circle cx="12" cy="12" r="4"/></svg>
+      </div>
+      <div class="text">
+        <div class="day">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+          平日毎日
+        </div>
+        <h2>朝会</h2>
+        <div class="when">
+          <span>本日 5/23(土)</span>
+          <span class="sep"></span>
+          <span>所要 30 分</span>
+          <span class="sep"></span>
+          <span>17 名参加</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notion CTA -->
+    <div class="notion-cta">
+      <div class="ic">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+      </div>
+      <div class="tx">
+        <div class="tt">Notion で録音議事録をとってください</div>
+        <div class="dd">朝会の Notion ページを開いて、録音と議事録の作成を開始してください。会議の最後に、この議事録からネクストアクションを取り込めます。</div>
+      </div>
+      <a class="btn-primary" href="#">
+        Notion を開く
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+      </a>
+    </div>
+
+    <!-- 会議の流れ -->
+    <div class="card">
+      <div class="card-head">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+          会議の流れ
+        </h3>
+        <span class="right">合計 30 分</span>
+      </div>
+      <ol class="agenda" style="list-style:none;padding:0;margin:0">
+        <li><span class="num">1</span><span class="lbl">個別報告</span><span class="desc">メンバーが順に「昨日の振り返り(KPT)と今日のタスク」を共有</span></li>
+        <li><span class="num">2</span><span class="lbl">確認事項タイム</span><span class="desc">未解決の確認事項を返信・解決化</span></li>
+        <li><span class="num">3</span><span class="lbl">ネクストアクション</span><span class="desc">誰がいつまでに何をやるかを記録</span></li>
+        <li><span class="num">4</span><span class="lbl">会議終了</span><span class="desc">サマリー確認 → クローズ</span></li>
+      </ol>
+    </div>
+
+    <!-- 参加メンバー -->
+    <div class="card">
+      <div class="card-head">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/></svg>
+          参加メンバー
+        </h3>
+        <span class="right">17 人</span>
+      </div>
+      <div class="members">
+        <div class="mb"><span class="n">1.</span><span class="av" style="background:linear-gradient(135deg,#3b82f6,#1e3a8a)">三</span>三木智弘</div>
+        <div class="mb"><span class="n">2.</span><span class="av" style="background:linear-gradient(135deg,#10b981,#34d399)">三</span>三木浩江</div>
+        <div class="mb"><span class="n">3.</span><span class="av" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">森</span>森朝香</div>
+        <div class="mb"><span class="n">4.</span><span class="av" style="background:linear-gradient(135deg,#a855f7,#c084fc)">古</span>古野絢太</div>
+        <div class="mb"><span class="n">5.</span><span class="av" style="background:linear-gradient(135deg,#ec4899,#f472b6)">面</span>面川文香</div>
+        <div class="mb"><span class="n">6.</span><span class="av" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">國</span>國武麻友子</div>
+        <div class="mb"><span class="n">7.</span><span class="av" style="background:linear-gradient(135deg,#10b981,#34d399)">増</span>増田雄太朗</div>
+        <div class="mb"><span class="n">8.</span><span class="av" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">中</span>中島啓太</div>
+        <div class="mb"><span class="n">9.</span><span class="av" style="background:linear-gradient(135deg,#a855f7,#c084fc)">中</span>中道稔</div>
+        <div class="mb"><span class="n">10.</span><span class="av" style="background:linear-gradient(135deg,#ec4899,#f472b6)">藤</span>藤林尚斗</div>
+        <div class="mb"><span class="n">11.</span><span class="av" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">元</span>元美和</div>
+        <div class="mb"><span class="n">12.</span><span class="av" style="background:linear-gradient(135deg,#10b981,#34d399)">松</span>松口健司</div>
+        <div class="mb"><span class="n">13.</span><span class="av" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">加</span>加藤翼</div>
+        <div class="mb"><span class="n">14.</span><span class="av" style="background:linear-gradient(135deg,#a855f7,#c084fc)">櫻</span>櫻木彩乃</div>
+        <div class="mb"><span class="n">15.</span><span class="av" style="background:linear-gradient(135deg,#ec4899,#f472b6)">藤</span>藤本太一</div>
+        <div class="mb"><span class="n">16.</span><span class="av" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">菅</span>菅雅也</div>
+        <div class="mb"><span class="n">17.</span><span class="av" style="background:linear-gradient(135deg,#dc2626,#ef4444)">鬼</span>鬼木良輔</div>
+      </div>
+    </div>
+
+    <!-- ファシリテーター -->
+    <div class="card">
+      <div class="card-head">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v18m0-15 14 4-3 4 3 4-14 0"/></svg>
+          本日のファシリテーター
+        </h3>
+        <span class="right">輪番制 · 自動アサイン</span>
+      </div>
+      <div class="fac">
+        <div class="av">三</div>
+        <div style="flex:1">
+          <div class="nm">三木智弘</div>
+          <div class="role">代表取締役 · 通算 12 回目</div>
+        </div>
+        <button class="btn-secondary">変更</button>
+      </div>
+    </div>
+
+    <div class="step-nav">
+      <span style="font-size:11px;color:var(--text-muted)">準備が整ったら開始してください</span>
+      <button class="btn-primary">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        会議をはじめる
+      </button>
+    </div>
+
+    <!-- ====== STATE 2: 会議中 — Step 1 個別報告 ====== -->
+    <div class="h-section"><span class="ln"></span>会議中 — Step 1: 個別報告（発表者を順に切り替え）<span class="ln"></span></div>
+
+    <div class="reset-row">
+      <div></div>
+      <button class="btn-secondary">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 17M3 22v-5h5"/></svg>
+        リセット
+      </button>
+    </div>
+
+    <!-- Timer -->
+    <div class="timer">
+      <span class="ic">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </span>
+      <span class="left"><b>残り 29 分</b></span>
+      <span class="meta">経過 1 分 / 予定 30 分</span>
+      <span class="bar"><span class="fill"></span></span>
+    </div>
+
+    <!-- Facilitator strip -->
+    <div class="facili-row">
+      <span class="lbl">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+        ファシリ:
+      </span>
+      <span class="nm">三木智弘</span>
+    </div>
+
+    <!-- Steps -->
+    <div class="steps">
+      <button class="step active"><span class="nu">1</span>個別報告</button>
+      <button class="step"><span class="nu">2</span>共有事項タイム</button>
+      <button class="step"><span class="nu">3</span>確認事項タイム</button>
+      <button class="step"><span class="nu">4</span>ネクストアクション</button>
+    </div>
+
+    <!-- Members progress -->
+    <div class="mbprog">
+      <div class="hd">メンバー進行状況 (1 / 17)</div>
+      <div class="mbprog-grid">
+        <div class="mbprog-cell done">
+          <span class="cb"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+          <span class="nm">三木智弘</span>
+        </div>
+        <div class="mbprog-cell active"><span class="cb"></span><span class="nm">三木浩江</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">森朝香</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">古野絢太</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">面川文香</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">國武麻友子</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">増田雄太朗</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">中島啓太</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">中道稔</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">藤林尚斗</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">元美和</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">松口健司</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">加藤翼</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">櫻木彩乃</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">藤本太一</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">菅雅也</span></div>
+        <div class="mbprog-cell"><span class="cb"></span><span class="nm">鬼木良輔</span></div>
+      </div>
+    </div>
+
+    <!-- Currently presenting member -->
+    <div class="report-card">
+      <div class="report-head">
+        <div class="av">三</div>
+        <div class="info">
+          <div class="nm">三木浩江</div>
+          <div class="role">執行役員 副社長</div>
+        </div>
+        <span class="live">
+          <span class="d"></span>
+          発表中
+        </span>
+      </div>
+
+      <div class="report-section">
+        <div class="label">
+          <span class="ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h11l3 3v11a1 1 0 0 1-1 1H5z"/><path d="M9 11h6M9 15h4"/></svg></span>
+          前回の振り返り
+        </div>
+        <div class="kpt-empty">振り返りが未入力です</div>
+      </div>
+
+      <div class="report-section">
+        <div class="task-meta">
+          <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></span>
+          <span class="ti">今日のタスク</span>
+          <span class="sub">完了 0 / 全 19</span>
+          <span class="overdue-pill">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4v.01"/><circle cx="12" cy="12" r="9"/></svg>
+            期限切れ 19
+          </span>
+        </div>
+        <div class="task-list">
+          <div class="task-row overdue"><span class="cb"></span><span class="ti">6月5日キックオフイベントの集客を全社で推進(目標300人)</span><span class="du">5/15(金) 期限切れ</span></div>
+          <div class="task-row overdue"><span class="cb"></span><span class="ti">評議員招集通知を送ってもらう</span><span class="du">5/18(月) 期限切れ</span></div>
+          <div class="task-row overdue"><span class="cb"></span><span class="ti">ユース定例で 6/5 声かけられるリスト洗い出し声がけ</span><span class="du">5/18(月) 期限切れ</span></div>
+          <div class="task-row overdue"><span class="cb"></span><span class="ti">AI 研修のメール送る</span><span class="du">5/19(火) 期限切れ</span></div>
+          <div class="task-row overdue"><span class="cb"></span><span class="ti">広瀬会長アポ取り</span><span class="du">5/19(火) 期限切れ</span></div>
+          <div class="task-row overdue"><span class="cb"></span><span class="ti">コミュニティパートナー 5 つ締結</span><span class="du">5/20(水) 期限切れ</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== STATE 3: 共有事項 ====== -->
+    <div class="h-section"><span class="ln"></span>Step 2: 共有事項タイム（from / to で誰宛か明確に）<span class="ln"></span></div>
+
+    <div class="alert-orange">
+      <span class="ic">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a3 3 0 0 0 3 3h2l5 4V4L8 8H6a3 3 0 0 0-3 3z"/></svg>
+      </span>
+      <span class="ti">未解決の共有事項</span>
+      <span class="cnt">2 件</span>
+      <div class="right">
+        <span>宛先:</span>
+        <select style="padding:3px 22px 3px 8px;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;font-family:inherit;color:var(--text);-webkit-appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22 viewBox=%220 0 10 6%22><path d=%22M1 1l4 4 4-4%22 stroke=%22%2394a3b8%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22/></svg>');background-repeat:no-repeat;background-position:right 8px center"><option>全員</option></select>
+        <button class="btn-primary">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          共有事項を追加
+        </button>
+      </div>
+    </div>
+
+    <div class="share-item">
+      <div class="share-fromto">
+        from <span class="nm"><span class="av" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">森</span>森朝香</span> <span class="arr">→</span> to
+      </div>
+      <div class="share-body">コミュマネ あと 2 名で実施だよ〜〜〜〜！</div>
+      <div class="share-actions">
+        <button class="mini">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 1 1-3.4-6.5L21 4l-.8 4.3A8 8 0 0 1 21 12"/></svg>
+          返信
+        </button>
+        <button class="mini resolve">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+          確認済みにする
+        </button>
+      </div>
+    </div>
+
+    <div class="share-item">
+      <div class="share-fromto">
+        from <span class="nm"><span class="av" style="background:linear-gradient(135deg,#10b981,#34d399)">三</span>三木浩江</span> <span class="arr">→</span> to
+      </div>
+      <div class="share-body">長田さん BD</div>
+      <div class="share-actions">
+        <button class="mini">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 1 1-3.4-6.5L21 4l-.8 4.3A8 8 0 0 1 21 12"/></svg>
+          返信
+        </button>
+        <button class="mini resolve">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+          確認済みにする
+        </button>
+      </div>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn-secondary">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19l-7-7 7-7M4 12h16"/></svg>
+        ステップ 1 (個別報告) に戻る
+      </button>
+      <button class="btn-primary">
+        ステップ 3 (確認事項タイム) へ
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5l7 7-7 7M20 12H4"/></svg>
+      </button>
+    </div>
+
+    <!-- ====== STATE 4: ネクストアクション ====== -->
+    <div class="h-section"><span class="ln"></span>Step 4: ネクストアクション（停滞タスクをレビュー）<span class="ln"></span></div>
+
+    <div class="alert-orange">
+      <span class="ic">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+      </span>
+      <span class="ti">ネクストアクションを確定</span>
+      <div class="right" style="margin-left:14px;font-size:11.5px;color:var(--text-sub)">朝会で出た決定事項・依頼を <b style="color:var(--text)">誰がいつまでに何をやるか</b> 記録します。</div>
+    </div>
+
+    <div class="review-section">
+      <div class="hd">
+        <div class="ic">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 1 1-3.4-6.5L21 4l-.8 4.3A8 8 0 0 1 21 12"/></svg>
+        </div>
+        <div style="flex:1">
+          <div class="ti">
+            全社の停滞タスクレビュー
+            <span class="meta">期限切れ 109件 · 本日期限 1件 · 合計未完 110件</span>
+          </div>
+          <div class="dd">朝会の場で「終わってるよ」というタスクは <b style="color:var(--success)">✓ 完了</b> を押してその場で反映（Realtime 同期）</div>
+        </div>
+        <div class="right">
+          <button class="btn-ghost">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            折りたたむ
+          </button>
+        </div>
+      </div>
+
+      <div class="review-person">
+        <div class="ph">
+          <span class="ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></span>
+          (未アサイン) <span class="cnt">(1件)</span>
+        </div>
+        <div class="review-task">
+          <span class="badge today">今日</span>
+          <span class="date">05-23</span>
+          <span class="ti">矢野さんと打ち合わせ</span>
+          <select><option>未着手</option><option>進行中</option></select>
+          <button class="done-btn">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+            完了
+          </button>
+        </div>
+      </div>
+
+      <div class="review-person">
+        <div class="ph">
+          <span class="ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></span>
+          三木智弘 <span class="cnt">(10件)</span>
+        </div>
+        <div class="review-task">
+          <span class="badge day9">9日超過</span>
+          <span class="date">05-14</span>
+          <span class="ti">facebook 新規会員投稿 ヒューベスト</span>
+          <select><option>未着手</option></select>
+          <button class="done-btn">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+            完了
+          </button>
+        </div>
+        <div class="review-task">
+          <span class="badge day3">3日超過</span>
+          <span class="date">05-20</span>
+          <span class="ti">ワークスペースアプリの OKR ページのデザイン実装</span>
+          <select><option>進行中</option></select>
+          <button class="done-btn">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+            完了
+          </button>
+        </div>
+        <div class="review-task">
+          <span class="badge day1">2日超過</span>
+          <span class="date">05-21</span>
+          <span class="ti">基金営業資料完成</span>
+          <select><option>進行中</option></select>
+          <button class="done-btn">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+            完了
+          </button>
+        </div>
+        <div class="review-task">
+          <span class="badge day1">1日超過</span>
+          <span class="date">05-22</span>
+          <span class="ti">facebook 新規会員投稿 えんホールディングス</span>
+          <select><option>未着手</option></select>
+          <button class="done-btn">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+            完了
+          </button>
+        </div>
+        <div class="review-task">
+          <span class="badge day1">1日超過</span>
+          <span class="date">05-22</span>
+          <span class="ti">facebook 新規会員投稿 学思館</span>
+          <select><option>未着手</option></select>
+          <button class="done-btn">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+            完了
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

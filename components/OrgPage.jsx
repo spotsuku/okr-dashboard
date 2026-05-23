@@ -170,6 +170,9 @@ function getDeptColor(name) {
   const rule = DEPT_COLOR_RULES.find(r => name && name.includes(r.match))
   return rule ? rule.color : '#5A8A7A'
 }
+// 組織図の事業部アクセント（DB の level 色ではなく、デザイン参照のキュレートパレット）
+// 事業部 i → DEPT_ACCENTS[i % length]
+const DEPT_ACCENTS = ['#2563eb', '#d97706', '#7c3aed', '#0ea5e9', '#059669', '#e11d48']
 function getStatusBadge(status) {
   return STATUS_OPTS.find(s => s.value === status) || STATUS_OPTS[0]
 }
@@ -1128,8 +1131,8 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 
   return (
     <div>
-      {depts.map(dept => {
-        const color = getDeptColor(dept.name)
+      {depts.map((dept, deptIdx) => {
+        const color = DEPT_ACCENTS[deptIdx % DEPT_ACCENTS.length]
         return (
           <div key={dept.id} style={{
             marginBottom: 24,
@@ -1138,16 +1141,16 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
             boxShadow: SHADOWS.sm,
           }}>
             <div style={{
-              background: T().sectionBg,
+              background: `linear-gradient(120deg, ${color}15, transparent)`,
               borderBottom: `1px solid ${T().border}`,
               padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 12,
             }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                background: `linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`,
+                background: `linear-gradient(135deg, ${color}, ${color}88)`,
                 color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 18,
-                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${color}55`,
+                boxShadow: `0 2px 8px ${color}40`,
               }}><DataIcon value={dept.icon} size={18} /></div>
               <span style={{ fontSize: 18, fontWeight: 800, color: T().text, letterSpacing: '-0.01em' }}>{dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
@@ -1219,11 +1222,15 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                         {teamMembers.map(m => (
                           <div key={m.id} onClick={() => onMemberClick(m.name)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: `${avatarColor(m.name)}18`, border: `1px solid ${avatarColor(m.name)}40`, fontSize: 11, fontWeight: 600, color: avatarColor(m.name), cursor: 'pointer', transition: 'all 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = `${avatarColor(m.name)}30`}
-                            onMouseLeave={e => e.currentTarget.style.background = `${avatarColor(m.name)}18`}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px 3px 4px', borderRadius: 6, background: T().sectionBg, border: `1px solid ${T().border}`, fontSize: 11, fontWeight: 600, color: T().text, cursor: 'pointer', transition: 'all 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = T().bgHover}
+                            onMouseLeave={e => e.currentTarget.style.background = T().sectionBg}
                           >
-                            <Avatar name={m.name} size={18} avatar_url={m.avatar_url} />
+                            {m.avatar_url ? (
+                              <img src={m.avatar_url} alt={m.name} style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                            ) : (
+                              <span style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0, background: `linear-gradient(135deg, ${color}, ${color}88)`, color: '#fff', fontSize: 9, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{m.name ? m.name[0] : '?'}</span>
+                            )}
                             {m.name}
                           </div>
                         ))}
@@ -1253,8 +1260,12 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                                 </>
                               ) : mgr ? (
                                 <span onClick={() => onMemberClick(mgr.name)}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 8px 2px 4px', borderRadius: 99, background: `${avatarColor(mgr.name)}1f`, border: `1px solid ${avatarColor(mgr.name)}55`, fontSize: 11, fontWeight: 700, color: avatarColor(mgr.name), cursor: 'pointer' }}>
-                                  <Avatar name={mgr.name} size={16} avatar_url={mgr.avatar_url} />
+                                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 8px 2px 4px', borderRadius: 99, background: T().accentBg, fontSize: 11, fontWeight: 700, color: T().accentText, cursor: 'pointer' }}>
+                                  {mgr.avatar_url ? (
+                                    <img src={mgr.avatar_url} alt={mgr.name} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                  ) : (
+                                    <span style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, background: T().accent, color: '#fff', fontSize: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{mgr.name ? mgr.name[0] : '?'}</span>
+                                  )}
                                   {mgr.name}
                                 </span>
                               ) : (

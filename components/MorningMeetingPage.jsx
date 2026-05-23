@@ -5,14 +5,13 @@ import { MEETING_URLS } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import MeetingImport from './MeetingImport'
 import { ComposeModal } from './ConfirmationsTab'
-import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
-import { btnPrimary, btnSecondary, accentRingStyle } from '../lib/iosStyles'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { btnPrimary, btnSecondary, accentRingStyle, btnBrand } from '../lib/iosStyles'
 import Icon from './Icon'
-import { HeroCard } from './iosUI'
 import { isJpNonBusinessDay } from '../lib/jpHolidays'
 import { renderTextWithLinks } from '../lib/renderTextWithLinks'
 
-// 🌅 朝会タブ (ヘッダーから遷移)
+// 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
 //   ステップ2: 共有事項タイム
 //   ステップ3: 確認事項タイム
@@ -364,13 +363,38 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 40px' }}>
-      {/* ヒーローカード (iPad 風) */}
-      <HeroCard T={T}
-        eyebrow="平日毎日"
-        title="朝会"
-        subtitle={`本日 ${todayLabel}${isResume ? ' ・ リセット済み' : ''}`}
-        color="#FF9500"
-      />
+      {/* ヒーロー (ブランドブルー → シアン) */}
+      <div style={{
+        marginTop: SPACING.lg, marginBottom: SPACING['2xl'],
+        padding: `${SPACING['2xl']}px ${SPACING['2xl'] + 4}px`,
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #22d3ee 100%)',
+        borderRadius: RADIUS['2xl'], color: '#fff',
+        position: 'relative', overflow: 'hidden',
+        boxShadow: '0 10px 30px rgba(37,99,235,.22)',
+      }}>
+        <div aria-hidden style={{
+          position: 'absolute', top: -80, right: -60, width: 280, height: 280,
+          background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 60%)',
+          borderRadius: '50%', pointerEvents: 'none',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: SPACING.lg }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: RADIUS.lg, flexShrink: 0,
+            background: 'rgba(255,255,255,0.18)',
+            border: '1px solid rgba(255,255,255,0.28)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff',
+          }}><Icon name="sun" size={32} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              ...TYPO.caption, fontWeight: 800, letterSpacing: '0.18em',
+              opacity: 0.85, textTransform: 'uppercase', marginBottom: SPACING.xs,
+            }}>平日毎日</div>
+            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.15 }}>朝会</div>
+            <div style={{ ...TYPO.subhead, opacity: 0.92, marginTop: SPACING.xs }}>{`本日 ${todayLabel}${isResume ? ' ・ リセット済み' : ''}`}</div>
+          </div>
+        </div>
+      </div>
 
       {/* Notion 議事録案内 */}
       <div style={{
@@ -448,7 +472,7 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2 }}>
           <div style={{
-            ...accentRingStyle({ color: '#ff9f43', size: 32 }),
+            ...accentRingStyle({ color: T.accent, size: 32 }),
             borderRadius: '50%',
             ...TYPO.headline, fontWeight: 800,
           }}>{(facilitatorDraft || '?').charAt(0)}</div>
@@ -517,14 +541,13 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
       {/* 開始ボタン */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <button onClick={onStart} disabled={noMembers} style={{
+          ...(noMembers ? {} : btnBrand({ size: 'lg' })),
           padding: `${SPACING.md + 2}px ${SPACING['3xl'] + SPACING.sm}px`, borderRadius: RADIUS.md, border: 'none',
-          background: noMembers
-            ? T.borderMid
-            : 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          background: noMembers ? T.borderMid : BRAND_GRADIENT.cta,
           color: '#fff',
           fontSize: TYPO.title3.fontSize - 1, fontWeight: 800, fontFamily: 'inherit',
           cursor: noMembers ? 'not-allowed' : 'pointer',
-          boxShadow: noMembers ? 'none' : '0 4px 14px rgba(249,115,22,0.3)',
+          boxShadow: noMembers ? 'none' : '0 4px 14px rgba(37,99,235,.28)',
           display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
         }}>
           <Icon name="rocket" size={18} />
@@ -569,20 +592,24 @@ function StepHeader({ T, step, onJumpToStep }) {
     }}>
       {steps.map(s => {
         const active = step === s.n
+        const done = s.n < step
         return (
           <button key={s.n} onClick={() => onJumpToStep(s.n)} style={{
-            flex: 1, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1, border: 'none',
-            background: active ? T.accent : 'transparent',
-            color: active ? '#fff' : T.textSub,
+            flex: 1, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1,
+            border: active ? 'none' : done ? `1px solid ${T.success}30` : `1px solid ${T.border}`,
+            background: active ? BRAND_GRADIENT.cta : done ? T.successBg : 'rgba(255,255,255,0.6)',
+            color: active ? '#fff' : done ? T.success : T.textSub,
+            boxShadow: active ? '0 2px 8px rgba(37,99,235,.28)' : 'none',
             ...TYPO.body, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs + 2,
           }}>
             <span style={{
               width: 22, height: 22, borderRadius: '50%',
-              background: active ? 'rgba(255,255,255,0.25)' : T.border,
+              background: active ? 'rgba(255,255,255,0.25)' : done ? `${T.success}26` : T.border,
+              color: active ? '#fff' : done ? T.success : T.textSub,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               ...TYPO.footnote, fontWeight: 800,
-            }}>{s.n}</span>
+            }}>{done ? <Icon name="check" size={12} /> : s.n}</span>
             {s.label}
           </button>
         )
@@ -738,45 +765,45 @@ function SpeakerReport({ T, member }) {
 
   return (
     <div style={{
-      background: `linear-gradient(180deg, ${T.bgCard} 0%, #ff9f4308 100%)`,
-      border: `1px solid #ff9f4326`,
-      borderRadius: RADIUS.xl, padding: `${SPACING['2xl'] - 2}px ${SPACING['2xl']}px`, marginBottom: SPACING.lg - 2,
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(255,159,67,0.10), 0 16px 40px rgba(0,0,0,0.04)',
+      background: T.bgCard,
+      border: `1px solid ${T.border}`,
+      borderRadius: RADIUS.xl, padding: 0, marginBottom: SPACING.lg - 2,
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(37,99,235,0.06), 0 16px 40px rgba(0,0,0,0.04)',
       position: 'relative', overflow: 'hidden',
     }}>
-      {/* 上端に色グラデ帯 (左太線の代わり) */}
-      <div aria-hidden style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-        background: 'linear-gradient(90deg, #ff9f43 0%, #f9731680 100%)',
-      }} />
-      <div aria-hidden style={{
-        position: 'absolute', top: -50, right: -30, width: 200, height: 200,
-        background: 'radial-gradient(circle, rgba(255,159,67,0.10) 0%, transparent 60%)',
-        pointerEvents: 'none', borderRadius: '50%',
-      }} />
-      {/* 発表者ヘッダ */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.lg - 2, marginBottom: SPACING.lg + 2, position: 'relative', zIndex: 1 }}>
+      <style>{`@keyframes mmBlink{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
+      {/* 発表者ヘッダ (アクセントソフトグラデ) */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: SPACING.lg - 2,
+        padding: `${SPACING.lg + 2}px ${SPACING.lg + 4}px`,
+        background: 'linear-gradient(120deg, rgba(14,165,233,.08), rgba(14,165,233,.02) 40%, transparent)',
+        position: 'relative', zIndex: 1,
+      }}>
         <div style={{
-          width: 56, height: 56, borderRadius: RADIUS.lg, flexShrink: 0,
-          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          width: 52, height: 52, borderRadius: RADIUS.lg, flexShrink: 0,
+          background: BRAND_GRADIENT.cta,
           color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 24, fontWeight: 900,
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px rgba(255,159,67,0.45)',
+          fontSize: 22, fontWeight: 900,
+          boxShadow: '0 4px 12px rgba(30,58,138,.28)',
         }}>{member.name.charAt(0)}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ ...TYPO.title2, fontSize: 20, color: T.text, letterSpacing: '-0.01em' }}>{member.name}</div>
-          <div style={{ ...TYPO.subhead, color: T.textMuted, marginTop: 2 }}>{member.role || ''}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.01em' }}>{member.name}</div>
+          <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>{member.role || ''}</div>
         </div>
         <div style={{
-          padding: `${SPACING.xs + 1}px ${SPACING.md + 2}px`, borderRadius: RADIUS.pill,
-          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          padding: `${SPACING.xs}px ${SPACING.md}px`, borderRadius: RADIUS.pill,
+          background: BRAND_GRADIENT.cta,
           color: '#fff',
           ...TYPO.footnote, fontWeight: 800, letterSpacing: '0.04em',
-          boxShadow: '0 2px 6px rgba(255,159,67,0.45)',
+          boxShadow: '0 2px 6px rgba(37,99,235,.28)',
           display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
-        }}><Icon name="msg" size={12} /> 発表中</div>
+        }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff', animation: 'mmBlink 1.4s ease-in-out infinite', flexShrink: 0 }} />
+          発表中
+        </div>
       </div>
+      <div style={{ padding: `${SPACING.lg}px ${SPACING['2xl']}px ${SPACING['2xl'] - 2}px` }}>
 
       {loading ? (
         <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>読み込み中...</div>
@@ -842,19 +869,20 @@ function SpeakerReport({ T, member }) {
                     <div key={t.id} style={{
                       display: 'flex', alignItems: 'center', gap: SPACING.sm,
                       padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`,
-                      background: isDone ? T.successBg : (isOverdue ? T.dangerBg : T.sectionBg),
-                      border: isOverdue ? `1px solid ${T.danger}40` : 'none',
-                      borderRadius: RADIUS.xs, ...TYPO.subhead, fontWeight: 500,
+                      background: isDone ? T.successBg : (isOverdue ? 'rgba(225,29,72,.04)' : T.sectionBg),
+                      border: isOverdue ? '1px solid rgba(225,29,72,.15)' : 'none',
+                      borderRadius: RADIUS.sm, ...TYPO.subhead, fontWeight: 500,
                       color: isDone ? T.textMuted : T.text,
                       textDecoration: isDone ? 'line-through' : 'none',
                     }}>
-                      <span style={{ color: isDone ? T.success : T.textMuted, display: 'inline-flex' }}><Icon name={isDone ? 'check' : 'circle'} size={13} /></span>
+                      <span style={{ color: isDone ? T.success : (isOverdue ? T.danger : T.textMuted), display: 'inline-flex' }}><Icon name={isDone ? 'check' : 'circle'} size={13} /></span>
                       <span style={{ flex: 1 }}>{t.title || '(無題)'}</span>
                       {isOverdue && (
                         <span style={{
-                          flexShrink: 0, ...TYPO.caption, letterSpacing: 0,
-                          padding: `1px ${SPACING.xs + 2}px`, borderRadius: RADIUS.xs - 2,
-                          background: T.danger, color: '#fff',
+                          flexShrink: 0, ...TYPO.caption, letterSpacing: 0, fontWeight: 600,
+                          padding: `2px ${SPACING.sm}px`, borderRadius: RADIUS.xs - 1,
+                          background: T.dangerBg, color: T.danger,
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                         }}>{formatJSTMonthDay(t.due_date)} 期限切れ</span>
                       )}
                     </div>
@@ -865,6 +893,7 @@ function SpeakerReport({ T, member }) {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }
@@ -1091,9 +1120,9 @@ function MeetingItemsTime({
           <span style={{ color: T.warn, display: 'inline-flex' }}><Icon name={iconName} size={13} /></span> 未解決の{noun} {filtered.length}件
         </span>
         <button onClick={() => setComposing(true)} style={{
-          padding: `${SPACING.xs + 1}px ${SPACING.md}px`, borderRadius: RADIUS.xs, border: 'none',
-          background: T.accent, color: '#fff',
-          ...TYPO.footnote, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+          ...btnBrand({ size: 'sm' }),
+          padding: `${SPACING.xs + 1}px ${SPACING.md}px`, borderRadius: RADIUS.xs,
+          ...TYPO.footnote, fontWeight: 700,
           display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
         }}><Icon name="plus" size={12} /> {noun}を追加</button>
         <div style={{ flex: 1 }} />
@@ -1193,7 +1222,6 @@ function MeetingConfirmCard({ T, item, replies, myName, onResolve, onReplied }) 
   return (
     <div style={{
       background: T.bgCard, border: `1px solid ${T.border}`,
-      borderLeft: `3px solid #ff9f43`,
       borderRadius: RADIUS.sm, padding: SPACING.md,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs + 2, flexWrap: 'wrap' }}>
@@ -1421,7 +1449,7 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
         </div>
       </div>
 
-      {/* 🚨 全社の停滞タスクレビュー (期限切れ + 本日期限) */}
+      {/* 全社の停滞タスクレビュー (期限切れ + 本日期限) */}
       <CompanyStaleTasksReview T={T} />
 
       {/* テーブルヘッダ */}
@@ -1469,11 +1497,9 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
           display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
         }}><Icon name="plus" size={13} /> アクションを追加</button>
         <button onClick={() => setImportOpen(true)} style={{
-          padding: `${SPACING.sm}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1, border: 'none',
-          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
-          color: '#fff', cursor: 'pointer',
-          ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit',
-          boxShadow: '0 2px 8px rgba(249,115,22,0.25)',
+          ...btnBrand({ size: 'sm' }),
+          padding: `${SPACING.sm}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1,
+          ...TYPO.subhead, fontWeight: 700,
           display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
         }}><Icon name="note" size={13} /> Notionから取り込み</button>
       </div>
@@ -1675,7 +1701,7 @@ function CompanyStaleTasksReview({ T }) {
   return (
     <div style={{
       marginBottom: SPACING.lg - 2, background: T.bgCard,
-      border: `1px solid ${T.border}`, borderLeft: `4px solid ${overdueCount > 0 ? T.danger : T.warn}`,
+      border: `1px solid ${overdueCount > 0 ? T.danger + '30' : T.warn + '30'}`,
       borderRadius: RADIUS.md, overflow: 'hidden',
     }}>
       {/* ヘッダ */}
@@ -1735,17 +1761,25 @@ function CompanyStaleTasksReview({ T }) {
                       {assigneeTasks.map(task => {
                         const overdue = task.due_date && task.due_date < today
                         const days = task.due_date ? Math.round((new Date(today) - new Date(task.due_date)) / 86400000) : 0
+                        // 超過日数で 4 段階に色強度を上げる
+                        const badgeTier = !overdue
+                          ? { bg: T.warnBg, fg: T.warn }
+                          : days <= 2
+                            ? { bg: 'rgba(248,113,113,.18)', fg: '#dc2626' }
+                            : days <= 8
+                              ? { bg: 'rgba(239,68,68,.18)', fg: '#b91c1c' }
+                              : { bg: 'rgba(220,38,38,.22)', fg: '#991b1b' }
                         return (
                           <div key={task.id} style={{
                             display: 'flex', alignItems: 'center', gap: SPACING.sm,
                             padding: `${SPACING.xs + 2}px ${SPACING.sm}px`,
-                            background: overdue ? `${T.danger}08` : `${T.warn}08`,
-                            border: `1px solid ${overdue ? T.danger + '30' : T.warn + '30'}`,
-                            borderRadius: RADIUS.xs, ...TYPO.subhead, fontWeight: 500,
+                            background: overdue ? 'rgba(225,29,72,.04)' : `${T.warn}08`,
+                            border: `1px solid ${overdue ? 'rgba(225,29,72,.15)' : T.warn + '30'}`,
+                            borderRadius: RADIUS.sm, ...TYPO.subhead, fontWeight: 500,
                           }}>
                             <span style={{
                               padding: `2px ${SPACING.xs + 2}px`, borderRadius: RADIUS.xs - 2,
-                              background: overdue ? T.danger : T.warn, color: '#fff',
+                              background: badgeTier.bg, color: badgeTier.fg,
                               fontSize: 9, fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0,
                             }}>
                               {overdue ? `${days}日超過` : '今日'}
