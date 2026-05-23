@@ -78,7 +78,74 @@ display: flex / align-items: center / gap: 14 / margin-bottom: 24
 
 ---
 
-## 4. Destination cards [厳守]
+## 4. オンボーディング（初期ユーザー向け） [厳守]
+
+初回ログイン時に Welcome strip の直下に表示。**全 7 ステップが完了したら自動で `dismiss=true`**。手動で ✕ で閉じることも可。再表示はプロフィール設定の「ヘルプを見る」から。
+
+```
+コンテナ:
+  background: rgba(255,255,255,.78) + backdrop-blur 20
+  border: 1px solid T.border
+  border-radius: RADIUS.xl (18)
+  shadow: SHADOWS.card
+  margin-bottom: 22
+
+ヘッダ (padding 14 18):
+  background: linear-gradient(120deg, rgba(37,99,235,.08), rgba(34,211,238,.06))
+  border-bottom: 1px solid T.border
+
+  [Rocket icon タイル 32×32 brand-cta]
+  [タイトル + 進捗バー]
+    "AI WorkSpace を使いはじめる" (14 / 700)
+    "2 / 7 完了 · 所要 約 10 分" (11.5 / sub)
+    プログレスバー 5px (rgba(15,23,42,.06) → brand-cta 塗り)
+  [Primary CTA] "次は「Google 連携」へ →"  ← brand-cta
+  [✕ dismiss]
+
+7 ステップグリッド (gap 1px / bg T.border):
+  display: grid / grid-template-columns: repeat(7, 1fr)
+  各セル: padding 14 14 12 / 白背景 / クリック可
+    上行: 完了チェック ○/✓ (20×20 円) + "STEP N" (10.5 / 700 / 0.06em)
+    タイトル (12.5 / 600 / アイコン付き)
+    説明 (11 / sub / 1.55)
+
+  状態:
+    done:    cb bg success + ✓ アイコン / num color success
+    active:  cb border accent + accent-bg + 脈動リング / "STEP N · 今ここ"
+    pending: cb 1.5px dashed border 20% / 通常 muted
+  hover: 背景 rgba(37,99,235,.04)
+
+MyCOO ヒント (オンボード末尾, padding 12 14 / margin 14 16 0):
+  background: linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))
+  border: 1px solid rgba(37,99,235,.18)
+  border-radius: RADIUS.md
+
+  [26×26 deep-blue grad タイル + 白スパークル]
+  ┌ "MyCOO からのヒント" (11 / 700 / accent-text)
+  └ 本文 (12 / 1.6) "セットアップは今日中に終わらせると、明日の朝からスムーズに使いはじめられます。"
+```
+
+### 7 ステップの内容 [厳守]
+
+| # | アイコン | タイトル | 目的 |
+|---|---|---|---|
+| 1 | user | プロフィールを設定 | 名前・役職・アバターを設定し、チームから認識されやすくする |
+| 2 | sparkle | MyCOO に話しかける | 右下のオーブが AI コーチであることを早期に知ってもらう |
+| 3 | link | Google 連携 | カレンダー・Gmail と連携して AI が予定とタスクを自動整理 |
+| 4 | link | カスタムリンクを登録 | よく使うツール（Slack / Notion / freee 等）を登録、ホームを作業拠点化 |
+| 5 | bolt | 明日のタスクを追加 | 自然文で書くだけ。AI が日付と担当を解析 |
+| 6 | refresh | 振り返りを書く | Keep / Problem / Try を 1 行から。継続でバッジ |
+| 7 | target | 今期の目標を見る | チームの OKR / KR を確認、自分の作業との繋がりを意識 |
+
+順序の意図：
+- 1 → 2 で **MyCOO の存在を早期に体験**（行き詰まったら聞ける）
+- 3 → 4 で **外部接続とホームのカスタマイズ**（自分の作業環境を整える）
+- 5 → 6 で **書く習慣**（タスク・振り返り）を試す
+- 7 で **目標を意識**（最後に「何のためにやっているか」へ）
+
+---
+
+## 5. Destination cards [厳守]
 
 2 つの大行き先カード。**他に置かない** こと（OKR / 週次MTG / 朝会 などへのカードは作らない）。
 
@@ -126,7 +193,7 @@ display: flex / align-items: center / gap: 14 / margin-bottom: 24
 
 ---
 
-## 5. カスタムリンク [厳守]
+## 6. カスタムリンク [厳守]
 
 ```
 セクションヘッダ:
@@ -199,7 +266,7 @@ backdrop: rgba(15,23,42,.4) + backdrop-blur 4
 
 ---
 
-## 6. 情報グリッド（下部）
+## 7. 情報グリッド（下部）
 
 ```
 display: grid / 2 columns / gap: 14 / margin-top: 18
@@ -217,9 +284,10 @@ display: grid / 2 columns / gap: 14 / margin-top: 18
 
 ---
 
-## 7. DO / DON'T
+## 8. DO / DON'T
 
 **DO**
+- オンボーディングは 7 ステップ、順序厳守（1 プロフ / 2 MyCOO / 3 Google / 4 リンク / 5 タスク / 6 振り返り / 7 目標）
 - マイページと全社ダッシュボードの 2 カードに動線を集中
 - アイコンタイルの色 = 行き先の性質を表す（個人 = brand-cta / 全社 = success）
 - カスタムリンクは追加・編集・削除を「管理」ボタンで行う
@@ -234,22 +302,23 @@ display: grid / 2 columns / gap: 14 / margin-top: 18
 
 ---
 
-## 8. Acceptance Checklist
+## 9. Acceptance Checklist
 
 - [ ] Welcome strip にアバター + 挨拶 + 稼働中バッジ + 経過時間
+- [ ] オンボーディングカードが 7 ステップ、進捗バー、該当 STEP に脱出 CTA
+- [ ] オンボーディングの順序：プロフ → MyCOO → Google → リンク → タスク → 振り返り → 目標
+- [ ] active ステップに脈動リング、done に success チェック
 - [ ] 行き先カードが正確に 2 枚（マイページ / 全社ダッシュボード）
-- [ ] 各行き先カードに統計 3 つ + 「開く →」ピル
 - [ ] OKR / 週次MTG / 朝会への大型カードが **無い**
 - [ ] カスタムリンクが 4 列グリッド、最後に「+ リンクを追加」点線カード
 - [ ] 「リンクを追加」クリックでモーダル展開（名前 / URL / アイコン色）
-- [ ] 「管理」ボタンでリンクの編集・並び替え・削除モーダルへ
 - [ ] 下部に「最近の動き」「お知らせ」の 2 カード
 - [ ] 絵文字 0 件 / 左 4px ボーダー新規 0 件
 - [ ] ブランドグラデ占有面積が画面の 10〜15% 以内
 
 ---
 
-## 9. State Management
+## 10. State Management
 
 ```ts
 type HomeData = {
@@ -273,6 +342,12 @@ type HomeData = {
     color: 'accent' | 'success' | 'warn' | 'danger' | 'purple' | 'indigo';
     order: number;
   }>;
+  onboarding: {
+    dismissed: boolean;
+    completedSteps: Array<
+      'profile' | 'mycoo' | 'google' | 'links' | 'task' | 'reflection' | 'goal'
+    >;
+  };
   recentActivity: Array<{ userId: string; action: string; ts: Date }>;
   announcements: Array<{ kind: 'info' | 'warn'; body: string; ts: Date }>;
 };
@@ -283,7 +358,7 @@ type HomeData = {
 
 ---
 
-## 10. Files
+## 11. Files
 
 | Path | Purpose |
 |---|---|

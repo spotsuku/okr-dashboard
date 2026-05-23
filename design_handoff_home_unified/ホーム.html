@@ -56,7 +56,81 @@
 
   .content{flex:1;padding:32px 28px 80px;max-width:1180px;margin:0 auto;width:100%}
 
-  /* Welcome strip */
+  /* === Onboarding === */
+  .onboard{
+    margin-bottom: 22px;
+    background: rgba(255,255,255,.78); backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--border); border-radius: var(--r-xl);
+    box-shadow: var(--sh-card);
+    overflow: hidden;
+  }
+  .onboard-head{
+    padding: 14px 18px;
+    background: linear-gradient(120deg, rgba(37,99,235,.08), rgba(34,211,238,.06));
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .onboard-head .ic{
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--brand-cta); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(37,99,235,.28);
+    flex-shrink: 0;
+  }
+  .onboard-head .tx{flex:1}
+  .onboard-head .tt{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .onboard-head .nm{font-size:14px;font-weight:700}
+  .onboard-head .meta{font-size:11.5px;color:var(--text-sub)}
+  .onboard-head .bar{height:5px;background:rgba(15,23,42,.06);border-radius:99px;overflow:hidden;margin-top:6px}
+  .onboard-head .fill{height:100%;background:var(--brand-cta);transition:width .3s}
+  .onboard-head .next-btn{flex-shrink:0}
+  .onboard-head .dismiss{padding:6px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:14px}
+
+  .onboard-steps{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}
+  .onboard-step{
+    padding:14px 14px 12px;
+    background:#fff; border:none; text-align:left;
+    cursor:pointer; font-family:inherit;
+    display:flex; flex-direction:column; gap:6px;
+    position:relative; transition:background .12s;
+  }
+  .onboard-step:hover{background:rgba(37,99,235,.04)}
+  .onboard-step.active{background:rgba(37,99,235,.05)}
+  .onboard-step .top{display:flex;align-items:center;gap:6px}
+  .onboard-step .cb{
+    width:20px;height:20px;border-radius:99px;
+    border:1.5px dashed rgba(15,23,42,.2);
+    background:transparent;
+    display:flex;align-items:center;justify-content:center; flex-shrink:0;
+  }
+  .onboard-step.done .cb{background:var(--success);border:1.5px solid var(--success);color:#fff}
+  .onboard-step.active .cb{border:1.5px solid var(--accent);background:var(--accent-bg);color:var(--accent-text)}
+  .onboard-step.active .cb::after{content:'';position:absolute;width:30px;height:30px;border-radius:99px;background:rgba(14,165,233,.18);animation:pulse 1.8s ease-in-out infinite;pointer-events:none;margin-top:-5px;margin-left:-5px}
+  @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.4)}}
+  .onboard-step .num{font-size:10.5px;font-weight:700;color:var(--text-muted);letter-spacing:0.06em}
+  .onboard-step.done .num{color:var(--success)}
+  .onboard-step.active .num{color:var(--accent-text)}
+  .onboard-step .ti{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.4}
+  .onboard-step .dd{font-size:11px;color:var(--text-sub);line-height:1.55}
+  .onboard-step .ti-ic{margin-right:3px;color:var(--text-muted)}
+  .onboard-step.done .ti-ic, .onboard-step.active .ti-ic{color:inherit}
+
+  /* MyCOO tip on home */
+  .mycoo-tip{
+    display:flex; align-items:flex-start; gap:10px;
+    padding:12px 14px;
+    background:linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06));
+    border:1px solid rgba(37,99,235,.18); border-radius:var(--r-md);
+    margin:14px 16px 0;
+  }
+  .mycoo-tip .ic{
+    width:26px;height:26px;border-radius:7px;
+    background:linear-gradient(135deg,#3b82f6,#1e3a8a);
+    color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    box-shadow:0 2px 6px rgba(30,58,138,.24);
+  }
+  .mycoo-tip .tx .nm{font-size:11px;font-weight:700;color:var(--accent-text);letter-spacing:0.04em;margin-bottom:2px}
+  .mycoo-tip .tx .body{font-size:12px;color:var(--text);line-height:1.6}
   .welcome{
     display:flex;align-items:center;gap:14px;margin-bottom:24px;
   }
@@ -244,6 +318,116 @@
       </div>
       <div class="right">
         <span class="pill">経過 3h 48m</span>
+      </div>
+    </div>
+
+    <!-- Onboarding (初期ユーザーを迫らずに付き添う) -->
+    <div class="onboard">
+      <div class="onboard-head">
+        <div class="ic">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-3 1-6 4-9l5-5a8 8 0 0 1 5-2 8 8 0 0 1-2 5l-5 5c-3 3-6 4-9 4zm5-9a2 2 0 1 0 4 0 2 2 0 0 0-4 0"/></svg>
+        </div>
+        <div class="tx">
+          <div class="tt">
+            <span class="nm">AI WorkSpace を使いはじめる</span>
+            <span class="meta">2 / 7 完了 · 所要 約 10 分</span>
+          </div>
+          <div class="bar"><div class="fill" style="width:29%"></div></div>
+        </div>
+        <button class="btn-primary next-btn">
+          次は「Google 連携」へ
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </button>
+        <button class="dismiss" title="今は閉じる">✕</button>
+      </div>
+      <div class="onboard-steps">
+        <button class="onboard-step done">
+          <div class="top">
+            <span class="cb"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+            <span class="num">STEP 1</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+            プロフィールを設定
+          </div>
+          <div class="dd">名前・役職・アバターを設定して、チームのメンバーから認識されやすくしましょう。</div>
+        </button>
+        <button class="onboard-step done">
+          <div class="top">
+            <span class="cb"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+            <span class="num">STEP 2</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 2 L13.5 9 L20 11 L13.5 13 L12 20 L10.5 13 L4 11 L10.5 9 Z"/></svg>
+            MyCOO に話しかける
+          </div>
+          <div class="dd">右下の青いオーブが AI コーチ。「今日何をやるべき？」など、何でも相談できます。</div>
+        </button>
+        <button class="onboard-step active">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 3 · 今ここ</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1m1 7a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+            Google 連携
+          </div>
+          <div class="dd">カレンダー・Gmailと連携して、AI が今日の予定とタスクを自動で整理します。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 4</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1m1 7a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+            カスタムリンクを登録
+          </div>
+          <div class="dd">よく使うツール（Slack / Notion / freee など）を登録して、ホームをあなたの作業拠点にしましょう。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 5</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="m13 3-9 12h7l-1 6 9-12h-7z"/></svg>
+            明日のタスクを追加
+          </div>
+          <div class="dd">「明日 11時 提案資料を送る」のように自然文で書くだけ。AI が日付と担当を解析します。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 6</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M3 22v-5h5"/></svg>
+            振り返りを書く
+          </div>
+          <div class="dd">今日の Keep / Problem / Try を 1 行ずつだけで OK。連続記入でバッジが貰えます。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 7</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>
+            今期の目標を看る
+          </div>
+          <div class="dd">チームの目標 (OKR / KR) を確認して、自分のタスクとようなぐのを見てみましょう。</div>
+        </button>
+      </div>
+      <!-- MyCOO suggestion -->
+      <div class="mycoo-tip">
+        <div class="ic">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 L13.5 9 L20 11 L13.5 13 L12 20 L10.5 13 L4 11 L10.5 9 Z"/></svg>
+        </div>
+        <div class="tx">
+          <div class="nm">MyCOO からのヒント</div>
+          <div class="body">セットアップは今日中に終わらせると、明日の朝からスムーズに使いはじめられます。わからないことがあれば右下のオーブから警しかけてください。</div>
+        </div>
       </div>
     </div>
 
