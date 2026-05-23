@@ -138,14 +138,13 @@ function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor
       return next
     })
   }
-  const bgBase = isDone ? wT().successBg : `${labelColor}0e`
-  const borderBase = isDone ? wT().success : `${labelColor}30`
+  const bgBase = isDone ? wT().successBg : wT().bgCard
+  const borderBase = isDone ? `${wT().success}55` : wT().border
   return (
     <div style={{
       padding: expanded ? `${SPACING.sm + 2}px ${SPACING.lg - 2}px` : `7px ${SPACING.md}px`,
       background: bgBase,
       border: `1px solid ${borderBase}`,
-      borderLeft: `3px solid ${labelColor}`,
       borderRadius: RADIUS.sm,
       ...style,
     }}>
