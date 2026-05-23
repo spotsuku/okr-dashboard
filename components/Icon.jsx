@@ -80,6 +80,16 @@ const ICON_PATHS = {
   rain:       'M6.5 14a4 4 0 0 1 .8-7.9 5 5 0 0 1 9.5 1.3A3.5 3.5 0 0 1 16 14M8 18l-1 2m5-2-1 2m5-2-1 2',
   storm:      'M6.5 13a4 4 0 0 1 .8-7.9 5 5 0 0 1 9.5 1.3A3.5 3.5 0 0 1 16 13M11 14l-2 4h3l-1 4',
   partly:     'M8.5 8.5a3 3 0 1 1 4.2 4M6.5 18a3.5 3.5 0 0 1 .5-7 5 5 0 0 1 9.5 1.3A3 3 0 0 1 16 18z',
+
+  // 組織/会議アイコンのデータ用 (絵文字ピッカー置き換え)
+  briefcase:  'M3 8h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18',
+  users:      'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M2 20c0-3.5 3-6 7-6M16 13a3 3 0 1 0-2-5.2M22 20c0-3-2-5.2-5-5.8',
+  bulb:       'M9 18h6m-5 3h4M12 3a6 6 0 0 1 4 10.5c-.6.6-1 1.3-1 2.1V16H9v-.4c0-.8-.4-1.5-1-2.1A6 6 0 0 1 12 3',
+  handshake:  'M4 13V8l4-3 4 2 4-2 4 3v5M4 13l4 4a2 2 0 0 0 3 0l1-1 1 1a2 2 0 0 0 3 0l4-4M11 10l1 1 1-1',
+  folder:     'M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
+  leaf:       'M4 20c0-8 6-14 16-14 0 10-6 14-14 14M4 20c2-5 5-8 10-10',
+  coin:       'M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18M9.5 14a2.5 2 0 0 0 2.5 1.5c1.4 0 2.5-.8 2.5-1.9 0-2.4-5-1.4-5-3.7C9.5 8.8 10.6 8 12 8a2.5 2 0 0 1 2.5 1.5M12 6.5v1m0 9v1',
+  tag:        'M3 12V5a2 2 0 0 1 2-2h7l9 9-9 9-9-9zM7.5 7.5h.01',
 }
 
 export default function Icon({ name, size = 16, stroke = 1.6, className = '', style }) {
@@ -106,3 +116,48 @@ export default function Icon({ name, size = 16, stroke = 1.6, className = '', st
 
 // 利用可能なアイコン名一覧 (デバッグ用 + コード補完用)
 export const ICON_NAMES = Object.keys(ICON_PATHS)
+
+// ─────────────────────────────────────────────────────────────
+// DataIcon — DB に保存された「アイコン」値 (旧: 絵文字 / 新: アイコン名) を
+// 単色ラインアイコンで描画する。組織/部署/チーム/会議など、ユーザーが
+// 選んだアイコンの表示に使う。旧データ(絵文字)は LEGACY_ICON_MAP で名前へ
+// 解決し、すでにアイコン名なら素通し、不明値は fallback。
+//
+//   <DataIcon value={level.icon} size={14} fallback="folder" />
+// ─────────────────────────────────────────────────────────────
+export const LEGACY_ICON_MAP = {
+  '🏢': 'building', '🏛️': 'building', '🏛': 'building', '🏬': 'building',
+  '🚀': 'rocket',
+  '⚙️': 'settings', '⚙': 'settings',
+  '💼': 'briefcase',
+  '👥': 'users', '👤': 'user',
+  '📊': 'chart', '📈': 'chart', '📉': 'chartDown',
+  '🎯': 'target', '◎': 'target',
+  '💡': 'bulb',
+  '🌟': 'star', '⭐': 'star', '★': 'star',
+  '🔥': 'fire',
+  '🤝': 'handshake',
+  '📁': 'folder', '📂': 'folder',
+  '🌅': 'sun', '☀️': 'sun', '☀': 'sun', '🌤': 'partly', '🌤️': 'partly',
+  '🌱': 'leaf',
+  '💰': 'coin',
+  '👔': 'user',
+  '📋': 'note', '📝': 'note', '🗒️': 'note',
+  '🏷': 'tag', '🏷️': 'tag',
+  '📅': 'calendar', '🗓️': 'calendar', '🗓': 'calendar',
+  '⚡': 'bolt',
+  '🔔': 'bell', '📬': 'inbox', '✅': 'check', '✔️': 'check',
+  '🎤': 'msg', '📢': 'msg', '🎙': 'msg', '🎙️': 'msg', '💬': 'msg',
+  '🔗': 'link', '📮': 'mail', '✉️': 'mail',
+}
+
+export function iconName(value, fallback = 'folder') {
+  if (!value) return fallback
+  if (ICON_PATHS[value]) return value          // すでにアイコン名
+  if (LEGACY_ICON_MAP[value]) return LEGACY_ICON_MAP[value]  // 旧絵文字
+  return fallback
+}
+
+export function DataIcon({ value, size = 14, stroke = 1.6, fallback = 'folder', className = '', style }) {
+  return <Icon name={iconName(value, fallback)} size={size} stroke={stroke} className={className} style={style} />
+}
