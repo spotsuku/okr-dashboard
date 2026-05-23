@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { mgmtSupabase, isMgmtConfigured } from '../lib/mgmtSupabase'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
-import { TYPO, SPACING, RADIUS } from '../lib/themeTokens'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import Icon from './Icon'
 
 // ─── 工数管理タブ (経営ダッシュボード neo-mg と双方向リアルタイム同期) ───
@@ -238,8 +238,8 @@ export default function WorkforceTab({ T }) {
         display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.lg, flexWrap: 'wrap',
       }}>
         <div style={{
-          display: 'flex', background: T.sectionBg, border: `1px solid ${T.border}`,
-          borderRadius: RADIUS.sm, padding: 3,
+          display: 'inline-flex', background: T.sectionBg, border: `1px solid ${T.border}`,
+          borderRadius: RADIUS.md, padding: 3,
         }}>
           {[
             { id: 'visual',  icon: 'user', label: '担当可視化' },
@@ -249,10 +249,11 @@ export default function WorkforceTab({ T }) {
             return (
               <button key={t.id} onClick={() => setView(t.id)} style={{
                 padding: '7px 16px', borderRadius: RADIUS.xs, border: 'none',
-                background: a ? T.accent : 'transparent',
-                color: a ? '#fff' : T.textSub,
-                ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                background: a ? T.bgCard : 'transparent',
+                color: a ? T.text : T.textSub,
+                ...TYPO.subhead, fontWeight: a ? 700 : 600, fontFamily: 'inherit', cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: SPACING.xs + 2,
+                boxShadow: a ? SHADOWS.xs : 'none',
               }}><Icon name={t.icon} size={13} />{t.label}</button>
             )
           })}
@@ -275,16 +276,21 @@ export default function WorkforceTab({ T }) {
         }}><Icon name="alert" size={13} /> {error}</div>
       )}
 
-      {/* ─── 役割色凡例 ─── */}
-      <div style={{ display: 'flex', gap: SPACING.md, alignItems: 'center', marginBottom: SPACING.md, ...TYPO.footnote, fontWeight: 600, color: T.textMuted, flexWrap: 'wrap' }}>
-        <span>役割色:</span>
+      {/* ─── 役割色凡例 (常時表示) ─── */}
+      <div style={{
+        display: 'flex', gap: SPACING.md, alignItems: 'center', marginBottom: SPACING.md, flexWrap: 'wrap',
+        padding: `${SPACING.sm}px ${SPACING.md + 2}px`,
+        background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+      }}>
+        <span style={{ ...TYPO.caption, color: T.textMuted }}>役割色</span>
         {ROLES.map(r => (
-          <span key={r} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: ROLE_COLORS[r] }} />
+          <span key={r} style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, ...TYPO.footnote, color: T.textSub }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: ROLE_COLORS[r] }} />
             <span>{r}</span>
           </span>
         ))}
-        <span style={{ marginLeft: 'auto' }}>単位: 人月 (1.0=フルタイム1人月)</span>
+        <span style={{ marginLeft: 'auto', ...TYPO.footnote, color: T.textMuted }}>単位: 人月 (1.0=フルタイム1人月)</span>
       </div>
 
       {view === 'numeric' ? (
@@ -319,8 +325,8 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
 
   return (
     <div style={{
-      border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
-      background: T.bgCard, overflow: 'auto', maxHeight: '70vh',
+      border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+      background: T.bgCard, overflow: 'auto', maxHeight: '70vh', boxShadow: SHADOWS.sm,
     }}>
       <table style={{
         borderCollapse: 'separate', borderSpacing: 0,
@@ -432,7 +438,8 @@ function NumericView({ T, members, businesses, requiredFTE, updateCell, updateRe
                   <td key={`${m.name}-${biz}-${role}`} style={{
                     ...tdCell(T),
                     borderLeft: ri === 0 ? `2px solid ${T.borderMid}` : `1px solid ${T.border}`,
-                    background: v > 0 ? `${ROLE_COLORS[role]}18` : T.bgCard,
+                    // 工数の重みを塗り強度で表現 (Glass: 役割色を淡く / 高配分はやや濃く)
+                    background: v >= 30 ? `${ROLE_COLORS[role]}14` : v > 0 ? `${ROLE_COLORS[role]}0a` : T.bgCard,
                     padding: 0,
                   }}>
                     <input type="number" min={0} max={100} step={5} value={v}
@@ -492,7 +499,8 @@ function VisualView({ T, members, businesses, requiredFTE }) {
           <div key={biz} style={{
             flex: '0 0 auto', width: COLUMN_W, scrollSnapAlign: 'start',
             border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
-            background: T.bgCard, padding: SPACING.md + 2, display: 'flex', flexDirection: 'column',
+            background: T.bgCard, boxShadow: SHADOWS.sm,
+            padding: SPACING.md + 2, display: 'flex', flexDirection: 'column',
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACING.sm, marginBottom: SPACING.sm + 2, flexShrink: 0 }}>
               <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text }}>{biz}</div>
@@ -539,8 +547,8 @@ function VisualView({ T, members, businesses, requiredFTE }) {
                         <div style={{ display: 'flex', gap: SPACING.xs, flexWrap: 'wrap' }}>
                           {r.cells.map(c => (
                             <span key={c.role} style={{
-                              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: RADIUS.xs - 1,
-                              background: ROLE_COLORS[c.role], color: '#fff',
+                              ...TYPO.caption, fontWeight: 700, padding: '2px 7px', borderRadius: RADIUS.xs - 1,
+                              background: `${ROLE_COLORS[c.role]}20`, color: ROLE_COLORS[c.role],
                             }}>{c.role} {c.pct}%</span>
                           ))}
                         </div>

@@ -313,7 +313,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
           { label: '組織図と連携済み',   value: linkedCount,      color: T().accent },
           { label: '未紐付け',           value: unlinkedCount,    color: T().warn },
         ].map(s => (
-          <div key={s.label} style={{ background: T().bgCard, border: `1px solid ${s.color}25`, borderRadius: 12, padding: '14px 20px', flex: 1, minWidth: 140 }}>
+          <div key={s.label} style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: RADIUS.lg, padding: '14px 20px', flex: 1, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: T().textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
           </div>
@@ -349,13 +349,21 @@ function UserListTab({ members, currentUser, isAdmin }) {
           marginBottom: 14, padding: '12px 14px',
           background: T().warnBg, border: `1px solid ${T().warn}40`, borderRadius: 10,
           fontSize: 12, color: T().warn,
+          display: 'flex', alignItems: 'flex-start', gap: 10,
         }}>
-          <Icon name="alert" size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> {orphanedMembers.length}件のメンバーは <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> が設定されているが、AUTH ユーザーが存在しません。
-          <div style={{ marginTop: 6, color: T().textSub, fontWeight: 500 }}>
-            {orphanedMembers.map(m => `${m.name}（${m.email}）`).join(' / ')}
-          </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: T().textMuted }}>
-            これらは AUTH 一覧には現れません。本人にダッシュボードでログインしてもらうか、AUTH 側で手動作成して紐付けてください。
+          <span style={{
+            width: 22, height: 22, borderRadius: 99, flexShrink: 0,
+            background: T().warn, color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icon name="alert" size={12} /></span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, color: T().text }}>{orphanedMembers.length}件のメンバーは <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> が設定されているが、AUTH ユーザーが存在しません。</div>
+            <div style={{ marginTop: 6, color: T().textSub, fontWeight: 500 }}>
+              {orphanedMembers.map(m => `${m.name}（${m.email}）`).join(' / ')}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, color: T().textMuted }}>
+              これらは AUTH 一覧には現れません。本人にダッシュボードでログインしてもらうか、AUTH 側で手動作成して紐付けてください。
+            </div>
           </div>
         </div>
       )}
@@ -587,7 +595,7 @@ function SlackSyncPanel() {
         </div>
         <button onClick={sync} disabled={syncing} style={{
           padding: '8px 18px', borderRadius: 8, border: 'none',
-          background: '#4A154B', color: '#fff',
+          background: BRAND_GRADIENT.cta, color: '#fff',
           fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
           cursor: syncing ? 'wait' : 'pointer',
           opacity: syncing ? 0.6 : 1,
@@ -1123,13 +1131,13 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
         return (
           <div key={dept.id} style={{
             marginBottom: 24,
-            background: `linear-gradient(180deg, ${T().bgCard} 0%, ${color}06 100%)`,
-            border: `1px solid ${color}33`, borderRadius: 18, overflow: 'hidden',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
+            background: T().bgCard,
+            border: `1px solid ${T().border}`, borderRadius: RADIUS.lg, overflow: 'hidden',
+            boxShadow: SHADOWS.sm,
           }}>
             <div style={{
-              background: `linear-gradient(135deg, ${color}1f 0%, ${color}10 100%)`,
-              borderBottom: `1px solid ${color}33`,
+              background: T().sectionBg,
+              borderBottom: `1px solid ${T().border}`,
               padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 12,
             }}>
               <div style={{
@@ -1139,7 +1147,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                 fontSize: 18,
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px ${color}55`,
               }}><DataIcon value={dept.icon} size={18} /></div>
-              <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: '-0.01em' }}>{dept.name}</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: T().text, letterSpacing: '-0.01em' }}>{dept.name}</span>
               <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{dept.teams.length}チーム</span>
               {isAdmin && (
                 <button onClick={() => setWebhookEdit({ levelId: dept.id, url: dept.slack_webhook_url || '' })}
@@ -1177,7 +1185,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                   const isEditing = editingMeta === team.id
 
                   return (
-                    <div key={team.id} style={{ background: T().bgCard2, border: `1px solid ${color}55`, borderRadius: 10, padding: '14px 16px' }}>
+                    <div key={team.id} style={{ background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 12, padding: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: T().text, flex: 1, lineHeight: 1.4, display:'inline-flex', alignItems:'center', gap:5 }}><DataIcon value={team.icon} size={13} /> {team.name}</span>
                         {isEditing ? (
@@ -1220,7 +1228,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                         {teamMembers.length === 0 && <span style={{ fontSize: 10, color: T().textFaintest, fontStyle: 'italic' }}>メンバーなし</span>}
                       </div>
 
-                      {/* 📌 責任者 (週次サマリー記入担当) */}
+                      {/* 責任者 (週次サマリー記入担当) */}
                       <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${T().border}` }}>
                         {(() => {
                           const mgr = team.manager_id ? members.find(mm => Number(mm.id) === Number(team.manager_id)) : null
@@ -1248,7 +1256,9 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                                   {mgr.name}
                                 </span>
                               ) : (
-                                <span style={{ fontSize: 10, color: T().textFaintest, fontStyle: 'italic' }}>未設定</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: T().warn, background: T().warnBg, border: `1.5px dashed ${T().warn}`, borderRadius: 6, padding: '2px 8px' }}>
+                                  未設定 — クリックして指定
+                                </span>
                               )}
                               {isAdmin && !isEditingMgr && (
                                 <button onClick={() => setManagerEdit({ levelId: team.id })}
@@ -1833,7 +1843,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
                   <div style={{ fontSize: 10, color: T().textFaint, marginTop: 2 }}>{m.role || '—'}</div>
                 </div>
                 {totalVersions > 0 && (
-                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}`, fontWeight: 700, flexShrink: 0 }}>
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: fg + '1f', color: fg, border: `1px solid ${fg}40`, fontWeight: 700, flexShrink: 0 }}>
                     v{totalVersions}
                   </span>
                 )}
@@ -1842,12 +1852,12 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
               {teamNames.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
                   {teamNames.map(t => (
-                    <span key={t} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>{t}</span>
+                    <span key={t} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: fg + '15', color: fg, border: `1px solid ${fg}33` }}>{t}</span>
                   ))}
                 </div>
               )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                {lv?.emp && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700, background: empB.bg, color: empB.color }}>{lv.emp.split('→')[0]}</span>}
+                {lv?.emp && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700, background: T().sectionBg, color: T().textSub, border: `1px solid ${T().border}` }}>{lv.emp.split('→')[0]}</span>}
                 {lv?.working && <span style={{ fontSize: 10, color: T().textFaint }}>{lv.working}</span>}
               </div>
             </div>

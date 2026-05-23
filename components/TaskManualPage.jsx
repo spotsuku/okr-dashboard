@@ -543,7 +543,7 @@ function Sidebar({ levels, selected, onSelect, query, onQuery, T }) {
   })
 
   return (
-    <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.bgCard, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.bgCard, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '12px 10px 8px', flexShrink: 0 }}>
         <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: T.textFaint, pointerEvents: 'none', display: 'inline-flex' }}><Icon name="search" size={12} /></span>
@@ -716,10 +716,26 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
 
         {/* 未選択 */}
         {!selLevel && !loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: SPACING.md, color: T.textFaint }}>
-            <div style={{ display: 'flex' }}><Icon name="note" size={48} /></div>
-            <div style={{ fontSize: TYPO.body.fontSize + 2, color: T.textMuted }}>左のチームを選んでください</div>
-            <div style={{ fontSize: TYPO.subhead.fontSize }}>チームごとにフェーズ別の業務マニュアルを管理できます</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 480, flexDirection: 'column', gap: SPACING.md, color: T.textFaint, padding: SPACING.xl, textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: RADIUS.lg, background: T.accentBg, border: `1px solid ${T.accent}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.accent }}>
+              <Icon name="note" size={28} />
+            </div>
+            <div>
+              <div style={{ fontSize: TYPO.headline.fontSize, fontWeight: 700, color: T.text, marginBottom: SPACING.xs + 2 }}>左のチームを選んでください</div>
+              <div style={{ fontSize: TYPO.subhead.fontSize, color: T.textSub, lineHeight: 1.7, maxWidth: 360 }}>
+                チームごとに「フェーズ別の業務マニュアル」を管理できます。<br />
+                新メンバーが入ったときの「迷い」をぐっと減らします。
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: SPACING.xs + 2, marginTop: SPACING.xs, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 380 }}>
+              {['オンボーディング', '定例運営', '引き継ぎ', 'トラブル対応'].map((t, i) => (
+                <span key={i} style={{
+                  padding: '4px 12px', fontSize: TYPO.footnote.fontSize, fontWeight: 500, color: T.textSub,
+                  background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.pill,
+                }}>{t}</span>
+              ))}
+            </div>
+            <div style={{ fontSize: TYPO.caption.fontSize, color: T.textMuted, marginTop: SPACING.xs + 2 }}>テンプレ候補から始めることもできます</div>
           </div>
         )}
 
