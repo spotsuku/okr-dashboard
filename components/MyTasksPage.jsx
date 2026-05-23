@@ -913,8 +913,18 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                     {task.title || ka?.ka_title || '(無題)'}
                   </div>
                   {task.assignee && (
-                    <span style={{ ...TYPO.caption, letterSpacing: 0, color: T.textMuted, flexShrink: 0 }}>
-                      {task.assignee}
+                    <span style={{
+                      flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '2px 8px 2px 4px', background: T.sectionBg, borderRadius: 5,
+                      fontSize: 10.5, fontWeight: 500, color: T.textSub,
+                    }}>
+                      <span style={{
+                        width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+                        background: avatarColor(task.assignee), color: '#fff',
+                        fontSize: 8.5, fontWeight: 700,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      }}>{task.assignee.slice(0, 1)}</span>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 84 }}>{task.assignee}</span>
                     </span>
                   )}
                 </div>
