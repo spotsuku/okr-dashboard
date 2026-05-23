@@ -1665,18 +1665,18 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                                   ) : showArchived ? (
                                     <div style={{ display: 'flex', gap: 4 }}>
                                       <button onClick={() => restoreTask(t)} style={{ padding: '3px 10px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="業務一覧に戻す"><Icon name="refresh" size={10} /> 復元</button>
-                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除"><Icon name="cross" size={10} /></button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().dangerBg, border: 'none', color: T().danger, fontSize: 10, cursor: 'pointer' }} title="完全削除"><Icon name="cross" size={10} /></button>
                                     </div>
                                   ) : (
                                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                       {taskHistory.filter(h => h.task_id === t.id).length > 0 && (
-                                        <button onClick={() => setHistoryTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }} title="引き継ぎ履歴">
+                                        <button onClick={() => setHistoryTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().sectionBg, border: 'none', color: T().textSub, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }} title="引き継ぎ履歴">
                                           <Icon name="refresh" size={10} /> {taskHistory.filter(h => h.task_id === t.id).length}
                                         </button>
                                       )}
-                                      <button onClick={() => { setEditingId(t.id); setEditBuf({ owner: t.owner || '', task: t.task || '', support: t.support || '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, cursor: 'pointer' }} title="編集"><Icon name="pencil" size={10} /></button>
-                                      <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="アーカイブ"><Icon name="inbox" size={10} /></button>
-                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除"><Icon name="cross" size={10} /></button>
+                                      <button onClick={() => { setEditingId(t.id); setEditBuf({ owner: t.owner || '', task: t.task || '', support: t.support || '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: T().sectionBg, border: 'none', color: T().textSub, fontSize: 10, cursor: 'pointer' }} title="編集"><Icon name="pencil" size={10} /></button>
+                                      <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().sectionBg, border: 'none', color: T().textSub, fontSize: 10, cursor: 'pointer' }} title="アーカイブ"><Icon name="inbox" size={10} /></button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().dangerBg, border: 'none', color: T().danger, fontSize: 10, cursor: 'pointer' }} title="完全削除"><Icon name="cross" size={10} /></button>
                                     </div>
                                   )}
                                 </td>
