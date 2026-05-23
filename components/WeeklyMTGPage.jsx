@@ -12,6 +12,7 @@ import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 import Icon, { DataIcon } from './Icon'
+import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
@@ -509,10 +510,10 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
     }
   }
 
-  const cellS = { padding:`6px ${SPACING.sm}px`, borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:TYPO.subhead.fontSize }
+  const cellS = kaCellStyle(wT())
   // KA記入欄 (.cell): 軽い sunken 背景 + 1px 枠 + radius7。改行が気になりすぎないよう
   // fontSize 11、lineHeight 1.55、自動拡張。フォーカス時は状態色に枠が変わる。
-  const taS = { width:'100%', boxSizing:'border-box', background:wT().sunken, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:TYPO.footnote.fontSize, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, overflow:'hidden', minHeight:42, transition:'border-color 0.15s' }
+  const taS = kaTextareaStyle(wT())
   const isDone = status === 'done'
   const isDragging = dragIdx !== undefined && dragIdx === rowIdx
   const isDragOver = overIdx !== undefined && overIdx === rowIdx && dragIdx !== null && dragIdx !== rowIdx

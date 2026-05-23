@@ -5,6 +5,7 @@ import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { SegmentedControl } from './iosUI'
 import Icon, { DataIcon } from './Icon'
+import { kaCellStyle, kaTextareaStyle, kaHeaderCellStyle } from '../lib/okrKaStyles'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
@@ -533,9 +534,8 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
     }
   }
 
-  const cellS = { padding:'10px 12px', borderBottom:`1px solid ${wT().border}`, borderRight:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:TYPO.subhead.fontSize }
-  // .cell (textarea風): rgba(255,255,255,.7) bg / 1px border / radius7 / placeholder italic / min-height42
-  const taS = { width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,.7)', border:`1px solid ${wT().border}`, borderRadius:7, padding:'8px 10px', color:wT().textSub, fontSize:11.5, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, minHeight:42, transition:'border-color 0.15s' }
+  const cellS = kaCellStyle(wT())
+  const taS = kaTextareaStyle(wT())
 
   return (
     <tr>
@@ -621,7 +621,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
 
 // KAテーブルヘッダー (.kt 相当) — Good/More/Focus を色分け + 期間サブ表記 [§5]
 function KATableHeader({ wT, periodSub }) {
-  const thS = { padding:'8px 12px', fontSize:10.5, fontWeight:700, color:wT().textMuted, textAlign:'left', borderBottom:`1px solid ${wT().border}`, borderRight:`1px solid ${wT().border}`, letterSpacing:'0.04em' }
+  const thS = kaHeaderCellStyle(wT())
   const subS = { display:'block', fontSize:9, color:wT().textMuted, fontWeight:500, textTransform:'none', letterSpacing:0, marginTop:1 }
   return (
     <thead>
