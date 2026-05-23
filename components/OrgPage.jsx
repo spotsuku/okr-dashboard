@@ -3807,12 +3807,14 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
 
   useEffect(() => {
     const checkAdmin = async () => {
-      if (!user?.email) return
-      const { data } = await supabase.from('members').select('is_admin').eq('email', user.email).single()
+      if (!user?.email || !orgId) return
+      // members は per-org 行。現在の組織のメンバー行で is_admin を判定する。
+      const { data } = await supabase.from('members')
+        .select('is_admin').eq('email', user.email).eq('organization_id', orgId).maybeSingle()
       if (data?.is_admin) setIsAdmin(true)
     }
     checkAdmin()
-  }, [user])
+  }, [user, orgId])
 
   const handleMemberClick = name => { setJumpMemberName(name); setActiveTab('members') }
   const handleTeamMetaUpdate = (levelId, meta) => setTeamMeta(prev => ({ ...prev, [levelId]: { ...(prev[levelId] || {}), ...meta } }))
