@@ -2,8 +2,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
-import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
-import { btnBrand } from '../lib/iosStyles'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { btnBrand, btnSecondary } from '../lib/iosStyles'
 import { getMeeting, MEETING_URLS, SALES_DASHBOARD_URL } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import ConfirmationsTab from './ConfirmationsTab'
@@ -591,18 +591,25 @@ export default function WeeklyMTGFacilitation({
                 <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
                   <button onClick={() => session?.id && goToStep(s.n)}
                     style={{
-                      flex: 1, padding: '10px 14px', borderRadius: 8, border: 'none',
+                      flex: 1, padding: '10px 14px', borderRadius: RADIUS.sm,
+                      border: `1px solid ${isActive ? '#2563eb' : isDone ? T.successBg : T.border}`,
                       cursor: session?.id ? 'pointer' : 'default', fontFamily: 'inherit',
-                      background: isActive ? T.accent : isDone ? `${T.accent}20` : T.bgSection,
-                      color: isActive ? '#fff' : isDone ? T.accent : T.textMuted,
+                      background: isActive ? BRAND_GRADIENT.cta : isDone ? T.successBg : T.sectionBg,
+                      color: isActive ? '#fff' : isDone ? T.success : T.textSub,
+                      boxShadow: isActive ? '0 2px 8px rgba(37,99,235,.28)' : 'none',
                       fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     }}>
-                    <span style={{ display: 'inline-flex' }}><Icon name={s.icon} size={14} /></span>
+                    <span style={{
+                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      background: isActive ? 'rgba(255,255,255,.22)' : isDone ? T.success : T.border,
+                      color: isActive ? '#fff' : isDone ? '#fff' : T.textSub,
+                    }}><Icon name={s.icon} size={12} /></span>
                     <span>{s.n}. {s.label}</span>
                     {isDone && <span style={{ display: 'inline-flex' }}><Icon name="check" size={12} /></span>}
                   </button>
                   {i < stepDefs.length - 1 && (
-                    <div style={{ width: 12, height: 2, background: isDone ? T.accent : T.border, flexShrink: 0 }} />
+                    <div style={{ width: 12, height: 2, background: isDone ? T.success : T.border, flexShrink: 0 }} />
                   )}
                 </div>
               )
@@ -807,9 +814,10 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
     } catch {}
   }, [isTen, isOver, meetingTitle, tenMinAlertedRef])
 
-  const bg     = isOver ? `${T.danger}18` : isFive ? `${T.danger}10` : isTen ? `${T.warn}15` : T.bgCard
-  const border = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.border
-  const accent = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.accent
+  const bg     = isOver ? T.dangerBg : isFive ? T.dangerBg : isTen ? T.warnBg : T.bgCard
+  const border = isOver ? T.danger   : isFive ? T.danger   : isTen ? T.warn   : T.border
+  const accent = isOver ? T.danger   : isFive ? T.danger   : isTen ? T.warn   : T.accent
+  const isAlert = isOver || isFive || isTen
 
   const fmt = (mm) => {
     const m = Math.abs(mm)
@@ -818,10 +826,18 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
 
   return (
     <div style={{
-      padding: '8px 16px', background: bg, borderBottom: `2px solid ${border}`, flexShrink: 0,
+      padding: '8px 16px', background: bg, borderBottom: `1px solid ${border}`, flexShrink: 0,
     }}>
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ display: 'inline-flex', color: accent }}><Icon name={isOver ? 'alert' : isTen ? 'alert' : 'clock'} size={14} /></span>
+        {isAlert ? (
+          <span style={{
+            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            background: accent, color: '#fff',
+          }}><Icon name="alert" size={13} /></span>
+        ) : (
+          <span style={{ display: 'inline-flex', color: accent }}><Icon name="clock" size={14} /></span>
+        )}
         <span style={{ fontSize: 12, color: T.textMuted }}>
           {isOver ? (
             <span style={{ color: T.danger, fontWeight: 700 }}>
@@ -924,10 +940,10 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       {/* ヒーローカード (会議名) */}
       <div style={{
         marginTop: 20, marginBottom: 22, padding: '26px 26px 22px',
-        background: `linear-gradient(135deg, ${meetColor}f5 0%, ${meetColor}c0 60%, ${meetColor}80 100%)`,
-        borderRadius: 22, color: '#FFFFFF',
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #22d3ee 100%)',
+        borderRadius: RADIUS['2xl'], color: '#fff',
         position: 'relative', overflow: 'hidden',
-        boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${meetColor}33, 0 24px 56px ${meetColor}26`,
+        boxShadow: '0 10px 30px rgba(37,99,235,.22)',
       }}>
         <div aria-hidden style={{ position: 'absolute', top: -80, right: -60, width: 280, height: 280, background: 'radial-gradient(circle, rgba(255,255,255,0.30) 0%, transparent 60%)', borderRadius: '50%', pointerEvents: 'none' }} />
         <div aria-hidden style={{ position: 'absolute', bottom: -100, left: -40, width: 240, height: 240, background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 65%)', borderRadius: '50%', pointerEvents: 'none' }} />
@@ -959,22 +975,22 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       {/* Notion議事録 案内 */}
       <div style={{
         marginBottom: 18, padding: '16px 20px',
-        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)`,
-        border: `1px solid ${T.accent}26`, borderLeft: `4px solid ${T.accent}`, borderRadius: 14,
+        background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
         boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}c0 100%)`,
+            width: 32, height: 32, borderRadius: RADIUS.sm, flexShrink: 0,
+            background: BRAND_GRADIENT.cta,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: '#fff',
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px ${T.accent}55`,
+            boxShadow: '0 2px 8px rgba(37,99,235,.28)',
           }}><Icon name="note" size={16} /></div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.accent, letterSpacing: '-0.01em' }}>
+          <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
             Notionで録音議事録をとってください
           </div>
         </div>
-        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6, marginBottom: 10, paddingLeft: 42 }}>
+        <div style={{ ...TYPO.subhead, color: T.textSub, lineHeight: 1.6, marginBottom: 10, paddingLeft: 42 }}>
           会議のNotionページを開いて、録音と議事録の作成を開始してください。
           会議の最後に、この議事録からネクストアクションを取り込めます。
         </div>
@@ -984,11 +1000,8 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
             if (!url) { alert(`${meeting?.title} のNotion URLが設定されていません`); return }
             openNotionUrl(url)
           }} style={{
-            padding: '7px 14px', borderRadius: 9, border: 'none',
-            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}d0 100%)`,
-            color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            ...btnBrand({ size: 'sm' }), borderRadius: RADIUS.sm,
             display: 'inline-flex', alignItems: 'center', gap: 4,
-            boxShadow: `0 2px 6px ${T.accent}55`,
           }}><Icon name="pencil" size={12} /> Notionを開く <Icon name="external" size={12} /></button>
         </div>
       </div>
@@ -3139,13 +3152,13 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
       {/* 横断連携への誘導 */}
       <div style={{
         marginTop: 18, padding: '14px 18px',
-        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
-        border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
-        borderRadius: 14, fontSize: 12, color: T.textSub,
+        background: T.warnBg,
+        border: `1px solid ${T.warn}`,
+        borderRadius: RADIUS.lg, fontSize: 12, color: T.textSub,
         boxShadow: SHADOWS.xs,
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.warn}1f`, color: T.warn, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}><Icon name="bolt" size={14} /></div>
+          <div style={{ width: 28, height: 28, borderRadius: RADIUS.sm, background: T.warn, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}><Icon name="bolt" size={14} /></div>
           <div style={{ lineHeight: 1.6 }}>
             各チーム共有が一巡したら「横断連携の確認へ →」で Step 2 へ。<br />
             曖昧な業務の引き取り、チーム間の依頼・連携は <strong style={{ color: T.warn }}>「確認事項」</strong>として記録します。
@@ -3384,7 +3397,8 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 18,
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       padding: '24px 28px', marginBottom: 18, position: 'relative',
       boxShadow: SHADOWS.lg,
     }}>
@@ -3404,7 +3418,7 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
           </>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 10 }}>
-          {autoSave.saving && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
+          {autoSave.saving && <span style={{ color: T.accent, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="refresh" size={12} /> 保存中…</span>}
           {autoSave.saved && !autoSave.saving && <span style={{ color: T.success, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="check" size={12} /> 保存済</span>}
         </span>
       </div>
@@ -3773,7 +3787,7 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
         rows={minRows}
         style={{
           width: '100%', boxSizing: 'border-box',
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6,
+          background: 'rgba(255,255,255,.7)', border: `1px solid ${T.border}`, borderRadius: 7,
           padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.6,
           outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden',
           minHeight: minRows * 20 + 14,
@@ -3802,19 +3816,19 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
       {isShare ? (
         <div style={{
           maxWidth: 1280, width: '100%', margin: '14px auto 0', padding: '14px 18px',
-          background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
-          border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
-          borderRadius: 14, fontSize: 12, color: T.textSub,
+          background: T.bgCard,
+          border: `1px solid ${T.border}`,
+          borderRadius: RADIUS.lg, fontSize: 12, color: T.textSub,
           boxShadow: SHADOWS.md,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-              background: `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`,
+              width: 32, height: 32, borderRadius: RADIUS.sm, flexShrink: 0,
+              background: T.accentBg,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, color: '#fff',
+              fontSize: 16, color: T.accent,
             }}><Icon name="bell" size={16} /></div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: T.warn }}>共有事項タイム</div>
+            <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text }}>共有事項タイム</div>
           </div>
           <div style={{ paddingLeft: 42, lineHeight: 1.6 }}>
             会議参加者全員に共有したいトピックを順に発表します。新規追加は「＋ 新規作成」から。
@@ -3823,20 +3837,19 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
       ) : withDiscussion ? (
         <div style={{
           maxWidth: 1280, width: '100%', margin: '14px auto 0', padding: '16px 20px',
-          background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
-          border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
-          borderRadius: 14, fontSize: 12, color: T.textSub,
+          background: T.warnBg,
+          border: `1px solid ${T.warn}`,
+          borderRadius: RADIUS.lg, fontSize: 12, color: T.textSub,
           boxShadow: SHADOWS.md,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-              background: `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`,
+              width: 32, height: 32, borderRadius: RADIUS.sm, flexShrink: 0,
+              background: T.warn,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 16, color: '#fff',
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px ${T.warn}55`,
             }}><Icon name="org" size={16} /></div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: T.warn, letterSpacing: '-0.01em' }}>横断連携の確認</div>
+            <div style={{ ...TYPO.headline, fontWeight: 800, color: T.warn, letterSpacing: '-0.01em' }}>横断連携の確認</div>
           </div>
           <div style={{ paddingLeft: 42, lineHeight: 1.7 }}>
             各チームの共有を踏まえ、以下を「確認事項」として記録してください：<br />
@@ -3873,16 +3886,10 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
 
 // ─── 共通ボタンスタイル ────────────────────────────────────────────────────
 function primaryBtn(T) {
-  return {
-    padding: '10px 22px', borderRadius: RADIUS.sm, border: 'none', cursor: 'pointer',
-    background: T.accent, color: '#fff', fontSize: TYPO.body.fontSize, fontWeight: 700, fontFamily: 'inherit',
-  }
+  return { ...btnBrand({ size: 'lg' }), borderRadius: RADIUS.sm }
 }
 function secondaryBtn(T) {
-  return {
-    padding: '10px 18px', borderRadius: RADIUS.sm, border: `1px solid ${T.borderMid}`, cursor: 'pointer',
-    background: 'transparent', color: T.textSub, fontSize: TYPO.subhead.fontSize, fontWeight: 600, fontFamily: 'inherit',
-  }
+  return { ...btnSecondary({ T, size: 'lg' }), borderRadius: RADIUS.sm }
 }
 
 // ─── Step 3: ネクストアクション ─────────────────────────────────────────────
@@ -4221,39 +4228,39 @@ function NextActionRow({ T, item, members, scopeKAs = [], onDelete }) {
 
 // ─── Step 4: 終了画面 ────────────────────────────────────────────────────────
 function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
-  const meetColor = meeting?.color || T.success
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 24px', textAlign: 'center', position: 'relative' }}>
       <div aria-hidden style={{
         position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
         width: 700, height: 500,
-        background: `radial-gradient(ellipse, ${meetColor}1f 0%, transparent 60%)`,
+        background: `radial-gradient(ellipse, ${T.accent}1f 0%, transparent 60%)`,
         pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
       }} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: 'relative', zIndex: 1, padding: '36px 24px' }}>
         <div style={{
-          width: 96, height: 96, borderRadius: 28, margin: '0 auto 20px',
-          background: `linear-gradient(135deg, ${meetColor} 0%, ${meetColor}c0 100%)`,
+          width: 64, height: 64, borderRadius: RADIUS.lg, margin: '0 auto 20px',
+          background: BRAND_GRADIENT.cta,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 50, color: '#fff',
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.3), 0 8px 24px ${meetColor}55, 0 16px 40px ${meetColor}33`,
-        }}><Icon name="trophy" size={50} /></div>
-        <h2 style={{ fontSize: 28, fontWeight: 900, color: T.text, margin: 0, marginBottom: 8, letterSpacing: '-0.02em' }}>
-          お疲れ様でした！
+          color: '#fff',
+          boxShadow: '0 8px 22px rgba(37,99,235,.28)',
+        }}><Icon name="sparkle" size={32} /></div>
+        <h2 style={{ ...TYPO.title1, fontWeight: 700, color: T.text, margin: 0, marginBottom: 8, letterSpacing: '-0.02em' }}>
+          お疲れ様でした
         </h2>
-        <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 28, fontWeight: 500 }}>
+        <div style={{ ...TYPO.subhead, color: T.textMuted, marginBottom: 28, fontWeight: 500 }}>
           {meeting?.title} を完了しました
         </div>
 
         <div style={{
-          background: T.bgCard,
-          border: `1px solid ${T.border}`, borderRadius: 18,
-          padding: 24, marginBottom: 24, textAlign: 'left',
-          boxShadow: SHADOWS.lg,
+          maxWidth: 520, margin: '0 auto 24px',
+          background: 'rgba(255,255,255,.6)',
+          border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
+          padding: 24, textAlign: 'left',
+          boxShadow: SHADOWS.sm,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${meetColor}1f`, color: meetColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="chart" size={14} /></div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>サマリー</div>
+            <div style={{ width: 28, height: 28, borderRadius: RADIUS.sm, background: T.accentBg, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="chart" size={14} /></div>
+            <div style={{ ...TYPO.subhead, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>サマリー</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <SummaryItem T={T} label="ファシリ" value={session?.facilitator || '—'} />
@@ -4265,19 +4272,13 @@ function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={onReset} style={{
-            padding: '10px 22px', borderRadius: 10, border: 'none',
-            background: 'rgba(120,120,128,0.12)', color: T.textSub, cursor: 'pointer',
-            fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+            ...btnSecondary({ T, size: 'lg' }), borderRadius: RADIUS.md,
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}><Icon name="refresh" size={13} /> もう一度開始</button>
           {onSwitchToList && (
             <button onClick={onSwitchToList} style={{
-              padding: '10px 22px', borderRadius: 10, border: 'none',
-              background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}d0 100%)`,
-              color: '#fff', cursor: 'pointer',
-              fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
+              ...btnBrand({ size: 'lg' }), borderRadius: RADIUS.md,
               display: 'inline-flex', alignItems: 'center', gap: 4,
-              boxShadow: `0 2px 6px ${T.accent}55`,
             }}><Icon name="note" size={13} /> 一覧モードで詳細確認</button>
           )}
         </div>
