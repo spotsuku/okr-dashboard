@@ -8,7 +8,7 @@ import { getMeeting, MEETING_URLS, SALES_DASHBOARD_URL } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import ConfirmationsTab from './ConfirmationsTab'
 import MeetingImport from './MeetingImport'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 
 // ─── プログラムタグ フィルタ用 Context ──────────────────────────────────────
 // 機能別組織図ではなくプログラム横断で会議をする場合のためのフィルタ。
@@ -939,7 +939,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
             border: '1px solid rgba(255,255,255,0.30)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 30, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4)',
-          }}>{meeting.icon}</div>
+          }}><DataIcon value={meeting.icon} size={30} fallback="note" /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', opacity: 0.85, textTransform: 'uppercase', marginBottom: 4 }}>{meeting.schedule}</div>
             <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2 }}>{meeting.title}</div>
@@ -1065,7 +1065,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
                   }}>
                     <input type="checkbox" checked={!excluded}
                       onChange={() => toggleExcludedLevel(level.id)} />
-                    <span style={{ fontSize: 16 }}>{level.icon || '📁'}</span>
+                    <span style={{ display: 'inline-flex' }}><DataIcon value={level.icon} size={16} fallback="folder" /></span>
                     <span style={{
                       flex: 1, fontSize: 13, fontWeight: 700, color: T.text,
                       textDecoration: excluded ? 'line-through' : 'none',
@@ -2216,7 +2216,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
         {teams.map(t => (
           <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
             style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
-            {t.team.icon || '🤝'} {t.team.name}
+            <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 4 }}><DataIcon value={t.team.icon} size={14} fallback="handshake" /></span>{t.team.name}
             {t.hasSummary && <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="check" size={12} /></span>}
           </button>
         ))}
@@ -2363,7 +2363,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
                 {teams.map(t => (
                   <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
                     style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
-                    {t.team.icon || '🤝'} {t.team.name}
+                    <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 4 }}><DataIcon value={t.team.icon} size={14} fallback="handshake" /></span>{t.team.name}
                     {t.hasSummary && <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="check" size={12} /></span>}
                   </button>
                 ))}
@@ -3129,7 +3129,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
                   boxShadow: isActive ? `0 2px 6px ${T.accent}55` : 'none',
                   transition: 'all 0.15s ease',
                 }}>
-                {isDone && <Icon name="check" size={11} style={{ verticalAlign: 'middle', marginRight: 2 }} />}{t.team.icon || '🏢'} {t.team.name} <span style={{ opacity: 0.65 }}>({t.kaCount})</span>
+                {isDone && <Icon name="check" size={11} style={{ verticalAlign: 'middle', marginRight: 2 }} />}<span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 4 }}><DataIcon value={t.team.icon} size={12} fallback="building" /></span>{t.team.name} <span style={{ opacity: 0.65 }}>({t.kaCount})</span>
               </button>
             )
           })}

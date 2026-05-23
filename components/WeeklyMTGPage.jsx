@@ -11,7 +11,7 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 
 // 会議ごとのアイコン (SVG・currentColor を継承)
 const Ico = ({ size=22, children }) => (
@@ -1472,7 +1472,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       <div key={level.id}>
         <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
           style={{ display:'flex', alignItems:'center', gap:6, padding:`6px ${SPACING.sm}px`, paddingLeft:8+indent*14, borderRadius:RADIUS.xs + 1, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent' }}>
-          <span style={{ fontSize:13 }}>{level.icon}</span>
+          <span style={{display:'inline-flex'}}><DataIcon value={level.icon} size={13}/></span>
           <span style={{ ...TYPO.footnote, flex:1, fontWeight:isActive?700:500, color:isActive?color:wT().textSub }}>{level.name}</span>
         </div>
         {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
@@ -1511,7 +1511,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     onMouseEnter={e => { e.currentTarget.style.borderColor = (d.color || wT().accent); e.currentTarget.style.transform = 'translateY(-2px)' }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = wT().borderMid; e.currentTarget.style.transform = 'none' }}
                   >
-                    <span style={{ fontSize:22 }}>{d.icon || '📁'}</span>
+                    <DataIcon value={d.icon} size={22} fallback="folder"/>
                     <span style={{ ...TYPO.headline, fontWeight:700 }}>{d.name}</span>
                   </button>
                 ))}
@@ -1648,7 +1648,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         <div style={{
           width:28, height:28, borderRadius:RADIUS.sm, background:`${meetingColor}15`,
           display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,
-        }}>{currentMeeting?.icon || '📋'}</div>
+        }}><DataIcon value={currentMeeting?.icon} size={15} fallback="note"/></div>
         <div style={{ ...TYPO.headline, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
 
         {/* ファシリ / 一覧 モード切替トグル — forceMode 指定時 (OKR タブ「週次」/「会議」ナビ) は非表示 */}
@@ -1780,7 +1780,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
               <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:`${SPACING.sm + 2}px ${SPACING.md}px`, borderRadius:RADIUS.sm + 1, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
                   <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 6px', borderRadius:RADIUS.pill, background:`${color}18`, color }}>{getPeriodLabel(obj.period)}</span>
-                  {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted }}>{level.icon} {level.name}</span>}
+                  {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><DataIcon value={level.icon} size={12}/> {level.name}</span>}
                 </div>
                 <div style={{ ...TYPO.subhead, lineHeight:1.4, marginBottom:5, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
                 {obj.owner && <div style={{ marginBottom:5 }}><OwnerBadge name={obj.owner} members={members} size={16} /></div>}
@@ -1808,7 +1808,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       <Icon name="trophy" size={11} style={{ color:wT().success }} />
                       <span style={{ ...TYPO.caption, fontWeight:700, padding:'1px 6px', borderRadius:RADIUS.pill, background:wT().successBg, color:wT().success }}>{getPeriodLabel(obj.period)}</span>
-                      {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted }}>{level.icon} {level.name}</span>}
+                      {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><DataIcon value={level.icon} size={11}/> {level.name}</span>}
                     </div>
                     <div style={{ ...TYPO.footnote, fontWeight:600, lineHeight:1.4, color:wT().success }}>{obj.title}</div>
                   </div>
