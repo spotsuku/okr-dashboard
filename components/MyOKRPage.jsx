@@ -63,12 +63,12 @@ const KR_STAR_CFG = [
   { label:'110%〜119%',color:'#ff9f43' }, { label:'120%以上',   color:'#a855f7' },
 ]
 const WEATHER_CFG = [
-  { score:0, icon:'—',  label:'未選択',       color:'#606880' },
-  { score:1, icon:'⛈', label:'嵐',           color:'#8090b0' },
-  { score:2, icon:'🌧', label:'雨',           color:'#4d9fff' },
-  { score:3, icon:'☁️', label:'曇り',         color:'#a0a8be' },
-  { score:4, icon:'🌤', label:'晴れのち曇り',  color:'#ffd166' },
-  { score:5, icon:'☀️', label:'快晴',         color:'#ff9f43' },
+  { score:0, icon:null,     label:'未選択',       color:'#606880' },
+  { score:1, icon:'storm',  label:'嵐',           color:'#8090b0' },
+  { score:2, icon:'rain',   label:'雨',           color:'#4d9fff' },
+  { score:3, icon:'cloud',  label:'曇り',         color:'#a0a8be' },
+  { score:4, icon:'partly', label:'晴れのち曇り',  color:'#ffd166' },
+  { score:5, icon:'sun',    label:'快晴',         color:'#ff9f43' },
 ]
 const STATUS_CFG = {
   focus:  { label:'注力', color:'#007AFF', bg:'rgba(0,122,255,0.10)', border:'rgba(0,122,255,0.30)' },
@@ -222,8 +222,8 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
               </div>
             )}
           </div>
-          <span style={{ fontSize:TYPO.subhead.fontSize, letterSpacing:1, color:wT().warn, flexShrink:0 }}>{'★'.repeat(stars)}<span style={{ color:wT().borderMid }}>{'★'.repeat(5-stars)}</span></span>
-          {!open && weather > 0 && <span style={{ fontSize:16 }}>{WEATHER_CFG[weather]?.icon}</span>}
+          <span style={{ display:'inline-flex', gap:1, flexShrink:0 }}>{[1,2,3,4,5].map(n => <Icon key={n} name="star" size={13} style={{ color: n<=stars ? wT().warn : wT().borderMid }} />)}</span>
+          {!open && weather > 0 && <span style={{ color: WEATHER_CFG[weather]?.color, display:'inline-flex' }}><Icon name={WEATHER_CFG[weather]?.icon} size={16} /></span>}
           <span style={{ color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-flex', alignItems:'center' }}><Icon name="chevronD" size={14} /></span>
         </div>
         <div style={{ height:4, borderRadius:RADIUS.xs, background:wT().borderLight, overflow:'hidden' }}>
@@ -243,7 +243,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
             <div style={{ borderRight:`1px solid ${wT().border}`, paddingRight:SPACING.lg }}>
               <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:5 }}>KR達成評価（自動）</div>
               <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm }}>
-                <span style={{ fontSize:20, letterSpacing:2, color:wT().warn }}>{'★'.repeat(stars)}<span style={{ color:wT().borderMid }}>{'★'.repeat(5-stars)}</span></span>
+                <span style={{ display:'inline-flex', gap:2 }}>{[1,2,3,4,5].map(n => <Icon key={n} name="star" size={18} style={{ color: n<=stars ? wT().warn : wT().borderMid }} />)}</span>
                 <div>
                   <div style={{ ...TYPO.subhead, fontWeight:700, color:starCfg.color }}>{starCfg.label}</div>
                   <div style={{ ...TYPO.caption, fontWeight:500, color:wT().textMuted }}>達成率 {pct}%</div>
@@ -257,7 +257,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
                   const isActive = w.score === weather
                   return (
                     <div key={w.score} onClick={()=>setWeather(isActive?0:w.score)} style={{ display:'flex', alignItems:'center', gap:SPACING.xs, padding:'4px 10px', borderRadius:RADIUS.xs, cursor:'pointer', transition:'all 0.15s', background:isActive?`${w.color}15`:'transparent', border:`1px solid ${isActive?w.color+'60':wT().borderMid}` }}>
-                      <span style={{ fontSize:16 }}>{w.icon}</span>
+                      <span style={{ color:w.color, display:'inline-flex' }}><Icon name={w.icon} size={16} /></span>
                       <span style={{ ...TYPO.footnote, fontWeight:isActive?700:400, color:isActive?w.color:wT().textMuted }}>{w.label}</span>
                     </div>
                   )
