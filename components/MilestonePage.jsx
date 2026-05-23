@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, inputStyle, btnSecondary, btnDanger } from '../lib/iosStyles'
 import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
+import Icon from './Icon'
 
 // ─── テーマ ──────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理
@@ -61,7 +63,7 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
   const isDone = status === 'done'
   const isDelayed = status === 'delayed'
   const statusLabel = isDone ? '完了' : isDelayed ? '遅延' : '進行中'
-  const statusColor = isDone ? '#22c55e' : isDelayed ? '#dc2626' : '#3b82f6'
+  const statusColor = isDone ? T.success : isDelayed ? T.danger : T.accent
   const startLabel = MONTHS_SELECT.find(m => m.value === start_month)?.label || ''
   const endLabel = MONTHS_SELECT.find(m => m.value === end_month)?.label || ''
 
@@ -72,41 +74,41 @@ function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
       pointerEvents: 'none',
     }}>
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`,
-        borderRadius: 10, padding: '14px 16px', minWidth: 220, maxWidth: 320,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+        ...cardStyle({ T, padding: '14px 16px' }), border: `1px solid ${T.borderMid}`,
+        borderRadius: RADIUS.md, minWidth: 220, maxWidth: 320,
+        boxShadow: SHADOWS.lg,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 8, lineHeight: 1.4 }}>
-          {isDone ? '✓ ' : ''}{title}
+        <div style={{ ...TYPO.body, fontWeight: 600, color: T.text, marginBottom: SPACING.sm, lineHeight: 1.4 }}>
+          {isDone ? <Icon name="check" size={12} style={{ marginRight: 4 }} /> : null}{title}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, ...TYPO.footnote, fontWeight: 500 }}>
             <span style={{ color: T.textMuted, minWidth: 52 }}>期間</span>
             <span style={{ color: T.textSub }}>{startLabel}〜{endLabel}</span>
           </div>
           {due_date && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, ...TYPO.footnote, fontWeight: 500 }}>
               <span style={{ color: T.textMuted, minWidth: 52 }}>期日</span>
               <span style={{ color: T.textSub }}>{due_date}</span>
               {daysText && !isDone && (
-                <span style={{ fontSize: 10, fontWeight: 600, ...daysStyle }}>{daysText}</span>
+                <span style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', ...daysStyle }}>{daysText}</span>
               )}
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, ...TYPO.footnote, fontWeight: 500 }}>
             <span style={{ color: T.textMuted, minWidth: 52 }}>ステータス</span>
             <span style={{
-              fontSize: 10, fontWeight: 500, color: statusColor,
+              ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: statusColor,
               backgroundColor: hexWithAlpha(statusColor, 0.1),
-              padding: '1px 6px', borderRadius: 4,
+              padding: '1px 6px', borderRadius: RADIUS.xs - 2,
             }}>{statusLabel}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, ...TYPO.footnote, fontWeight: 500 }}>
             <span style={{ color: T.textMuted, minWidth: 52 }}>注力</span>
             <span style={{ color: T.textSub }}>{focus_level === 'focus' ? '最注力' : '進行中'}</span>
           </div>
           {owner && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, ...TYPO.footnote, fontWeight: 500 }}>
               <span style={{ color: T.textMuted, minWidth: 52 }}>責任者</span>
               <span style={{ color: T.textSub }}>{owner}</span>
             </div>
@@ -142,11 +144,11 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
   const barBg = isDone
     ? { backgroundColor: T.textFaintest, color: T.textMuted, opacity: 0.7 }
     : isFocus
-    ? { backgroundColor: orgColor, color: '#ffffff',
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
+    ? { backgroundColor: orgColor, color: '#fff',
+        outline: isDelayed ? `2px solid ${T.danger}` : 'none', outlineOffset: '1px' }
     : { backgroundColor: hexWithAlpha(orgColor, 0.12), color: orgColor,
         border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
-        outline: isDelayed ? '2px solid #dc2626' : 'none', outlineOffset: '1px' }
+        outline: isDelayed ? `2px solid ${T.danger}` : 'none', outlineOffset: '1px' }
 
   const handleMouseEnter = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -168,7 +170,7 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setHovered(false)}
         style={{
-          ...barBg, borderRadius: 4, padding: '4px 7px',
+          ...barBg, borderRadius: RADIUS.xs - 2, padding: '4px 7px',
           fontSize: isChild ? 9 : 10, fontWeight: 500, lineHeight: '1.3',
           display: 'flex', flexDirection: 'column', gap: 1,
           overflow: 'hidden', whiteSpace: 'nowrap',
@@ -178,7 +180,7 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-            {isDone ? '✓ ' : ''}{title}
+            {isDone ? <Icon name="check" size={9} style={{ marginRight: 2 }} /> : null}{title}
           </span>
           {daysText && !isDone && (
             <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
@@ -225,13 +227,13 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonth
             style={{
               flexShrink: 0, width: 16, height: 16, borderRadius: '50%',
               border: `1px solid ${T.borderMid}`, background: 'transparent',
-              color: T.textMuted, fontSize: 11, lineHeight: '14px',
+              color: T.textMuted,
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: 0, opacity: 0.5, transition: 'opacity 0.15s',
             }}
             onMouseEnter={e => e.currentTarget.style.opacity = 1}
             onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
-          >+</button>
+          ><Icon name="plus" size={10} /></button>
         )}
       </div>
       {milestones.map(ms => (
@@ -301,12 +303,10 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
     }
   }
 
-  const labelSt = { display: 'block', fontSize: 11, color: T.textSub, marginBottom: 4 }
+  const labelSt = { display: 'block', ...TYPO.footnote, fontWeight: 500, color: T.textSub, marginBottom: SPACING.xs }
   const inputSt = {
-    width: '100%', marginBottom: 12, fontSize: 13, padding: '6px 8px',
-    border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
-    background: T.bgCard, color: T.text, fontFamily: 'inherit',
-    boxSizing: 'border-box',
+    ...inputStyle({ T }), marginBottom: SPACING.md, fontSize: 13, padding: '6px 8px',
+    border: `0.5px solid ${T.borderMid}`, borderRadius: RADIUS.xs,
   }
 
   return (
@@ -315,10 +315,10 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `0.5px solid ${T.borderMid}`,
-        borderRadius: 12, padding: 24, width: 400, maxWidth: '90vw',
+        ...cardStyle({ T, padding: SPACING['2xl'] }), border: `0.5px solid ${T.borderMid}`,
+        borderRadius: RADIUS.lg, width: 400, maxWidth: '90vw',
       }}>
-        <p style={{ fontWeight: 500, marginBottom: 16, fontSize: 14, color: T.text }}>
+        <p style={{ ...TYPO.headline, fontWeight: 500, marginBottom: SPACING.lg, color: T.text }}>
           {isNew ? 'マイルストーンを追加' : 'マイルストーンを編集'}
         </p>
 
@@ -351,7 +351,7 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
           </div>
         </div>
 
-        <label style={{ ...labelSt, marginTop: 12 }}>注力レベル</label>
+        <label style={{ ...labelSt, marginTop: SPACING.md }}>注力レベル</label>
         <select value={form.focus_level} onChange={e => setForm(f => ({ ...f, focus_level: e.target.value }))} style={inputSt}>
           <option value="focus">focus（濃色・最注力）</option>
           <option value="normal">normal（薄色・進行中）</option>
@@ -372,22 +372,22 @@ function MilestoneEditModal({ milestone, onClose, onSaved, onDeleted, T, members
           ))}
         </select>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+        <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xl }}>
           {!isNew && (
             <button onClick={handleDelete} disabled={deleting} style={{
-              padding: '8px 12px', border: `1px solid ${confirmDelete ? '#dc2626' : T.borderMid}`, borderRadius: 6,
-              cursor: 'pointer', background: confirmDelete ? '#dc2626' : 'transparent',
-              fontSize: 12, color: confirmDelete ? '#fff' : '#dc2626', fontFamily: 'inherit',
+              padding: '8px 12px', border: `1px solid ${confirmDelete ? T.danger : T.borderMid}`, borderRadius: RADIUS.xs,
+              cursor: 'pointer', background: confirmDelete ? T.danger : 'transparent',
+              fontSize: 12, color: confirmDelete ? '#fff' : T.danger, fontFamily: 'inherit',
               transition: 'all 0.15s',
             }}>{deleting ? '削除中...' : confirmDelete ? '本当に削除' : '削除'}</button>
           )}
           <div style={{ flex: 1 }} />
           <button onClick={onClose} style={{
-            padding: '8px 16px', border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
+            padding: '8px 16px', border: `0.5px solid ${T.borderMid}`, borderRadius: RADIUS.xs,
             cursor: 'pointer', background: 'transparent', fontSize: 13, color: T.textSub, fontFamily: 'inherit',
           }}>キャンセル</button>
           <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
-            padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer',
+            padding: '8px 16px', border: 'none', borderRadius: RADIUS.xs, cursor: 'pointer',
             background: T.text, color: T.bgCard, fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
             opacity: !form.title.trim() ? 0.5 : 1,
           }}>{saving ? '保存中...' : isNew ? '追加' : '保存'}</button>
@@ -426,12 +426,10 @@ function AddOrgModal({ levels, fiscalYear, onClose, onSaved, T }) {
     }
   }
 
-  const labelSt = { display: 'block', fontSize: 11, color: T.textSub, marginBottom: 4 }
+  const labelSt = { display: 'block', ...TYPO.footnote, fontWeight: 500, color: T.textSub, marginBottom: SPACING.xs }
   const inputSt = {
-    width: '100%', marginBottom: 12, fontSize: 13, padding: '6px 8px',
-    border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
-    background: T.bgCard, color: T.text, fontFamily: 'inherit',
-    boxSizing: 'border-box',
+    ...inputStyle({ T }), marginBottom: SPACING.md, fontSize: 13, padding: '6px 8px',
+    border: `0.5px solid ${T.borderMid}`, borderRadius: RADIUS.xs,
   }
 
   return (
@@ -440,10 +438,10 @@ function AddOrgModal({ levels, fiscalYear, onClose, onSaved, T }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `0.5px solid ${T.borderMid}`,
-        borderRadius: 12, padding: 24, width: 380, maxWidth: '90vw',
+        ...cardStyle({ T, padding: SPACING['2xl'] }), border: `0.5px solid ${T.borderMid}`,
+        borderRadius: RADIUS.lg, width: 380, maxWidth: '90vw',
       }}>
-        <p style={{ fontWeight: 500, marginBottom: 16, fontSize: 14, color: T.text }}>事業部・部署を追加</p>
+        <p style={{ ...TYPO.headline, fontWeight: 500, marginBottom: SPACING.lg, color: T.text }}>事業部・部署を追加</p>
 
         <label style={labelSt}>親組織（空で最上位に追加）</label>
         <select value={parentId} onChange={e => setParentId(e.target.value)} style={inputSt}>
@@ -456,13 +454,13 @@ function AddOrgModal({ levels, fiscalYear, onClose, onSaved, T }) {
         <label style={labelSt}>名前</label>
         <input value={name} onChange={e => setName(e.target.value)} style={inputSt} placeholder="例：新規事業部" autoFocus />
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xl, justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{
-            padding: '8px 16px', border: `0.5px solid ${T.borderMid}`, borderRadius: 6,
+            padding: '8px 16px', border: `0.5px solid ${T.borderMid}`, borderRadius: RADIUS.xs,
             cursor: 'pointer', background: 'transparent', fontSize: 13, color: T.textSub, fontFamily: 'inherit',
           }}>キャンセル</button>
           <button onClick={handleSave} disabled={saving || !name.trim()} style={{
-            padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer',
+            padding: '8px 16px', border: 'none', borderRadius: RADIUS.xs, cursor: 'pointer',
             background: T.text, color: T.bgCard, fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
             opacity: !name.trim() ? 0.5 : 1,
           }}>{saving ? '追加中...' : '追加'}</button>
@@ -571,18 +569,18 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
   const currentColIndex = MONTH_ORDER.indexOf(currentMonth)
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: 24, position: 'relative' }}>
+    <div style={{ flex: 1, overflowY: 'auto', padding: SPACING['2xl'], position: 'relative' }}>
       <BgGlow T={T} />
       <div style={{ position: 'relative', zIndex: 1 }}>
       <LargeTitle T={T}
         title="年間マイルストーン"
         subtitle={`${fiscalYear}年度（4月〜翌3月）`}
         right={isAdmin ? (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: SPACING.sm }}>
             <button onClick={() => setShowAllOrgs(v => !v)} style={{
-              padding: '7px 14px', border: `1px solid ${T.borderMid}`, borderRadius: 9,
-              cursor: 'pointer', background: showAllOrgs ? T.accentBg : 'transparent',
-              fontSize: 12, fontWeight: 600, color: showAllOrgs ? T.accent : T.textSub, fontFamily: 'inherit',
+              ...btnSecondary({ T, size: 'sm' }), padding: '7px 14px', border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.sm + 1,
+              background: showAllOrgs ? T.accentBg : 'transparent',
+              fontSize: 12, fontWeight: 600, color: showAllOrgs ? T.accent : T.textSub,
             }}>{showAllOrgs ? '全組織表示中' : '全組織を表示'}</button>
             {/* 「+ 事業部を追加」ボタンは削除しました。組織の追加・削除は「組織」ページから行ってください。 */}
           </div>
@@ -590,7 +588,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
       />
 
       {/* ビュー切替タブ (SegmentedControl) */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: SPACING.lg }}>
         <SegmentedControl T={T} value={viewMode} onChange={setViewMode}
           items={[
             { key: 'annual', label: '年間' },
@@ -609,19 +607,19 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
           { key: 'q4',     label: 'Q4（1〜3月）' },
         ].map(v => (
           <button key={v.key} onClick={() => setViewMode(v.key)} style={{
-            padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
-            background: viewMode === v.key ? '#4d9fff22' : 'transparent',
-            color: viewMode === v.key ? '#4d9fff' : T.textMuted,
+            padding: '5px 14px', borderRadius: RADIUS.sm - 1, border: 'none', cursor: 'pointer',
+            background: viewMode === v.key ? T.accentBg : 'transparent',
+            color: viewMode === v.key ? T.accent : T.textMuted,
             fontSize: 12, fontWeight: viewMode === v.key ? 700 : 500,
             fontFamily: 'inherit', whiteSpace: 'nowrap', transition: 'all 0.15s',
-            borderBottom: viewMode === v.key ? '2px solid #4d9fff' : '2px solid transparent',
+            borderBottom: viewMode === v.key ? `2px solid ${T.accent}` : '2px solid transparent',
           }}>{v.label}</button>
         ))}
       </div>
 
       {/* ローディング / エラー */}
       {loading && <div style={{ color: T.textMuted, fontSize: 13 }}>読み込み中...</div>}
-      {error && <div style={{ color: '#dc2626', fontSize: 13 }}>エラー: {error}</div>}
+      {error && <div style={{ color: T.danger, fontSize: 13 }}>エラー: {error}</div>}
 
       {/* タイムライン本体 */}
       {!loading && !error && (() => {
@@ -649,9 +647,8 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
         }
         return (
         <div style={{
-          background: T.bgCard, border: `0.5px solid ${T.borderLight}`,
-          borderRadius: 12, padding: 16, overflow: 'hidden', width: '100%',
-          boxSizing: 'border-box',
+          ...cardStyle({ T, padding: SPACING.lg }), border: `0.5px solid ${T.borderLight}`,
+          borderRadius: RADIUS.lg, width: '100%',
         }}>
           <div style={{ width: '100%', minWidth: 0 }}>
             {/* Q ヘッダー行（年間表示のみ） */}
@@ -661,13 +658,13 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
               {QUARTERS.map((q, i) => (
                 <div key={q.label} style={{
                   gridColumn: `span ${q.span}`, textAlign: 'center',
-                  fontSize: 11, fontWeight: 500, color: T.textSub,
+                  ...TYPO.footnote, fontWeight: 500, color: T.textSub,
                   padding: '4px 2px 2px', borderBottom: `0.5px solid ${T.borderLight}`,
                   borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
                   overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                 }}>
                   {q.label}
-                  <span style={{ fontWeight: 400, color: T.textMuted, marginLeft: 4 }}>{q.months}</span>
+                  <span style={{ fontWeight: 400, color: T.textMuted, marginLeft: SPACING.xs }}>{q.months}</span>
                 </div>
               ))}
             </div>
@@ -688,7 +685,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
                     padding: '3px 2px 6px',
                     borderBottom: `0.5px solid ${T.borderLight}`,
                     borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
-                    backgroundColor: isCurrent ? 'rgba(220, 50, 50, 0.04)' : 'transparent',
+                    backgroundColor: isCurrent ? T.dangerBg : 'transparent',
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {label}
@@ -697,7 +694,7 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
                         position: 'absolute', bottom: 0, left: '50%',
                         transform: 'translateX(-50%)',
                         width: 4, height: 4, borderRadius: '50%',
-                        backgroundColor: '#dc2626', opacity: 0.6,
+                        backgroundColor: T.danger, opacity: 0.6,
                       }} />
                     )}
                   </div>
@@ -716,16 +713,15 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
             ))}
 
             {filteredTree.length === 0 && (
-              <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>
+              <div style={{ padding: SPACING['2xl'], textAlign: 'center', color: T.textMuted, fontSize: 13 }}>
                 マイルストーンがありません
                 {isAdmin && (
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: SPACING.sm }}>
                     <button
                       onClick={() => setShowAllOrgs(true)}
                       style={{
-                        padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: 6,
-                        cursor: 'pointer', background: 'transparent',
-                        fontSize: 12, color: T.textSub, fontFamily: 'inherit',
+                        ...btnSecondary({ T, size: 'sm' }), padding: '5px 12px', border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.xs,
+                        fontSize: 12, color: T.textSub,
                       }}
                     >全組織を表示してマイルストーンを追加</button>
                   </div>
@@ -736,24 +732,24 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
 
           {/* 凡例 */}
           <div style={{
-            display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16,
-            paddingTop: 12, borderTop: `0.5px solid ${T.borderLight}`,
-            fontSize: 11, color: T.textMuted, alignItems: 'center',
+            display: 'flex', gap: SPACING.lg, flexWrap: 'wrap', marginTop: SPACING.lg,
+            paddingTop: SPACING.md, borderTop: `0.5px solid ${T.borderLight}`,
+            ...TYPO.footnote, fontWeight: 400, color: T.textMuted, alignItems: 'center',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 20, height: 8, borderRadius: 3, backgroundColor: '#1A5C3A' }} />
+              <div style={{ width: 20, height: 8, borderRadius: RADIUS.xs - 3, backgroundColor: '#1A5C3A' }} />
               <span>濃色 = 最注力</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 20, height: 8, borderRadius: 3, backgroundColor: 'rgba(26,92,58,0.15)', border: '0.5px solid rgba(26,92,58,0.3)' }} />
+              <div style={{ width: 20, height: 8, borderRadius: RADIUS.xs - 3, backgroundColor: 'rgba(26,92,58,0.15)', border: '0.5px solid rgba(26,92,58,0.3)' }} />
               <span>薄色 = 進行中</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: '#ea580c', fontWeight: 600 }}>残14日</span>
+              <span style={{ color: T.warn, fontWeight: 600 }}>残14日</span>
               <span>= 期日が近い</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: '#dc2626', fontWeight: 600 }}>3日超過</span>
+              <span style={{ color: T.danger, fontWeight: 600 }}>3日超過</span>
               <span>= 期日超過</span>
             </div>
             {isAdmin && (

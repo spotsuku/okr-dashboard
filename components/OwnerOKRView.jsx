@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import KASection from './KASection'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { pillStyle, btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
 
 // KASection に渡すテーマオブジェクト (OwnerOKRView の THEMES から抽出)
@@ -62,19 +63,19 @@ function ProgressBar({ t, value, max = 100, showLabel = false, width }) {
   const pct = Math.min(Math.max(value || 0, 0), 150)
   const color = progressColor(t, pct)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, width }}>
       <div style={{
-        flex: 1, height: 4, background: t.sectionBg, borderRadius: 99, overflow: 'hidden',
+        flex: 1, height: 4, background: t.sectionBg, borderRadius: RADIUS.pill, overflow: 'hidden',
       }}>
         <div style={{
           height: '100%', width: `${Math.min(pct, 100)}%`,
-          background: color, borderRadius: 99,
+          background: color, borderRadius: RADIUS.pill,
           transition: 'width 300ms ease-out',
         }} />
       </div>
       {showLabel && (
         <span style={{
-          fontSize: 11, fontWeight: 600, color: t.textSub,
+          ...TYPO.footnote, color: t.textSub,
           minWidth: 32, textAlign: 'right',
         }}>{pct}%</span>
       )}
@@ -93,10 +94,10 @@ function StatusTile({ t, status }) {
   }[status] || { bg: t.sectionBg, fg: t.textMuted, mark: '—' }
   return (
     <span style={{
-      width: 22, height: 22, borderRadius: 6,
+      width: 22, height: 22, borderRadius: RADIUS.xs,
       background: cfg.bg, color: cfg.fg,
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 12, fontWeight: 600, flexShrink: 0,
+      ...TYPO.subhead, flexShrink: 0,
     }}>{cfg.mark}</span>
   )
 }
@@ -105,18 +106,18 @@ function StatusTile({ t, status }) {
 function KARowMini({ t, ka }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
+      display: 'flex', alignItems: 'center', gap: SPACING.md,
       padding: '10px 18px',
       borderBottom: `1px solid ${t.border}`,
     }}>
       <StatusTile t={t} status={ka.status} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 13, color: t.text,
+          ...TYPO.body, color: t.text,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{ka.ka_title || '(無題)'}</div>
         {(ka.good || ka.focus_output) && (
-          <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2,
+          <div style={{ ...TYPO.footnote, color: t.textMuted, marginTop: 2,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             <span style={{ color: t.success, fontWeight: 600 }}>K</span> {(ka.good || ka.focus_output || '').slice(0, 60)}
@@ -125,14 +126,14 @@ function KARowMini({ t, ka }) {
       </div>
       {ka.owner && (
         <span style={{
-          fontSize: 11, color: t.textSub,
+          ...TYPO.footnote, color: t.textSub,
           minWidth: 80, textAlign: 'right',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{ka.owner}</span>
       )}
       {ka.week_start && (
         <span style={{
-          fontSize: 11, color: t.textMuted,
+          ...TYPO.footnote, color: t.textMuted,
           fontFamily: 'ui-monospace, SF Mono, monospace',
           minWidth: 38, textAlign: 'right',
         }}>
@@ -230,12 +231,12 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   if (!ownerName) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint }}>
       <Icon name="user" size={36} stroke={1.4} />
-      <div style={{ fontSize: 15, color: T().text, marginTop: 12 }}>メンバーを選択してください</div>
-      <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>左のリストからメンバーを選ぶと、その人が担当する OKR が表示されます</div>
+      <div style={{ ...TYPO.headline, fontWeight: 500, color: T().text, marginTop: SPACING.md }}>メンバーを選択してください</div>
+      <div style={{ ...TYPO.body, marginTop: 6, color: T().textMuted }}>左のリストからメンバーを選ぶと、その人が担当する OKR が表示されます</div>
     </div>
   )
 
-  if (loading) return <div style={{ padding: 40, color: T().textMuted, fontSize: 13 }}>読み込み中...</div>
+  if (loading) return <div style={{ padding: 40, color: T().textMuted, ...TYPO.body }}>読み込み中...</div>
 
   // 期間グループ化
   const grouped = {}
@@ -252,8 +253,8 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   if (!availablePeriods.length) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, maxWidth: 600, margin: '40px auto' }}>
       <Icon name="target" size={36} stroke={1.4} />
-      <div style={{ fontSize: 15, color: T().text, marginTop: 12 }}>{ownerName} さんの OKR がありません</div>
-      <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>{fiscalYear} 年度の OKR が設定されていません</div>
+      <div style={{ ...TYPO.headline, fontWeight: 500, color: T().text, marginTop: SPACING.md }}>{ownerName} さんの OKR がありません</div>
+      <div style={{ ...TYPO.body, marginTop: 6, color: T().textMuted }}>{fiscalYear} 年度の OKR が設定されていません</div>
     </div>
   )
 
@@ -263,22 +264,21 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   return (
     <div style={{ padding: '24px 28px 80px', maxWidth: 1100, margin: '0 auto', background: t.bg, minHeight: '100%' }}>
       {/* ヘッダー: メンバー名 + 年度 */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
-          <div style={{ fontSize: 22, fontWeight: 600, color: t.text, letterSpacing: '-0.005em' }}>
+      <div style={{ marginBottom: SPACING.xl }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACING.md, marginBottom: SPACING.xs }}>
+          <div style={{ ...TYPO.title1, fontWeight: 600, color: t.text, letterSpacing: '-0.005em' }}>
             {ownerName} さんの OKR
           </div>
           <span style={{
-            fontSize: 11, fontWeight: 600, color: t.accent,
-            padding: '2px 8px', borderRadius: 99,
-            background: `${t.accent}1a`, border: `1px solid ${t.accent}40`,
+            ...pillStyle({ color: t.accent, size: 'md' }),
+            border: `1px solid ${t.accent}40`,
           }}>{fiscalYear}年度</span>
         </div>
-        <div style={{ fontSize: 12, color: t.textMuted }}>担当する OKR の一覧と進捗状況</div>
+        <div style={{ ...TYPO.subhead, fontWeight: 500, color: t.textMuted }}>担当する OKR の一覧と進捗状況</div>
       </div>
 
       {/* Period strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, marginBottom: 18, flexWrap: 'wrap' }}>
         <div style={{
           display: 'inline-flex',
           background: t.bgCard, border: `1px solid ${t.border}`,
@@ -289,28 +289,27 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
             const isActive = effectivePeriod === p
             return (
               <button key={p} onClick={() => setActivePeriod(p)} style={{
-                padding: '6px 14px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
+                padding: '6px 14px', ...TYPO.subhead, fontWeight: isActive ? 600 : 500, fontFamily: 'inherit', cursor: 'pointer',
                 border: 'none',
                 borderRight: i < allPeriods.length - 1 ? `1px solid ${t.border}` : 'none',
                 background: isActive ? t.sectionBg : t.bgCard,
                 color: isActive ? t.text : (count ? t.textSub : t.textFaint),
-                fontWeight: isActive ? 600 : 500,
                 opacity: count ? 1 : 0.5,
               }}>
-                {PERIOD_LABELS[p]}{count > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: t.textMuted }}>({count})</span>}
+                {PERIOD_LABELS[p]}{count > 0 && <span style={{ marginLeft: SPACING.xs, ...TYPO.caption, fontWeight: 600, color: t.textMuted }}>({count})</span>}
               </button>
             )
           })}
         </div>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: t.textMuted }}>
+        <span style={{ ...TYPO.footnote, color: t.textMuted }}>
           {fiscalYear}年度 · {periodLabel}
         </span>
       </div>
 
       {/* Objective Cards */}
       {currentObjs.length === 0 && (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: t.textFaint, fontSize: 13 }}>
+        <div style={{ padding: '40px 20px', textAlign: 'center', color: t.textFaint, ...TYPO.body }}>
           この期間の OKR はありません
         </div>
       )}
@@ -320,21 +319,21 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
         const objKAs = kaReports.filter(r => Number(r.objective_id) === Number(obj.id))
         const totalKaCount = objKAs.length
         return (
-          <div key={obj.id} style={{ marginBottom: 24 }}>
+          <div key={obj.id} style={{ marginBottom: SPACING['2xl'] }}>
             {/* Objective Card (sticky) */}
             <div style={{
               position: 'sticky', top: 0, zIndex: 5,
               padding: '8px 0 0',
               background: `linear-gradient(180deg, ${t.bg} 0%, ${t.bg} 85%, transparent 100%)`,
-              marginBottom: 4,
+              marginBottom: SPACING.xs,
             }}>
               <div style={{
-                padding: 20,
-                background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 12,
+                padding: SPACING.xl,
+                background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: RADIUS.lg,
                 display: 'flex', alignItems: 'flex-start', gap: 14,
                 backdropFilter: 'blur(16px) saturate(160%)',
                 WebkitBackdropFilter: 'blur(16px) saturate(160%)',
-                boxShadow: '0 4px 14px rgba(15,23,42,.06)',
+                boxShadow: SHADOWS.sm,
               }}>
               <div style={{
                 width: 32, height: 32, borderRadius: 9,
@@ -345,34 +344,32 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: 10.5, fontWeight: 600, color: t.textMuted,
-                  letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4,
+                  ...TYPO.caption, fontWeight: 600, color: t.textMuted,
+                  textTransform: 'uppercase', marginBottom: SPACING.xs,
                 }}>
                   Objective{obj.owner ? ` · ${obj.owner}` : ''}
                 </div>
                 <div style={{
-                  fontSize: 22, fontWeight: 600, color: t.text,
-                  letterSpacing: '-0.005em', lineHeight: 1.25, marginBottom: 12,
+                  ...TYPO.title1, fontWeight: 600, color: t.text,
+                  letterSpacing: '-0.005em', lineHeight: 1.25, marginBottom: SPACING.md,
                 }}>{obj.title}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.lg, flexWrap: 'wrap' }}>
                   <div style={{ maxWidth: 320, flex: '1 1 200px' }}>
                     <ProgressBar t={t} value={prog} showLabel />
                   </div>
                   <span style={{
-                    fontSize: 11, fontWeight: 600, color: t.accent,
-                    padding: '2px 8px', borderRadius: 99,
-                    background: `${t.accent}1a`, border: `1px solid ${t.accent}40`,
+                    ...pillStyle({ color: t.accent, size: 'md' }),
+                    border: `1px solid ${t.accent}40`,
                   }}>KR {obj.key_results.length}件</span>
                   <span style={{
-                    fontSize: 11, fontWeight: 500, color: t.textSub,
-                    padding: '2px 8px', borderRadius: 99,
+                    ...TYPO.footnote, fontWeight: 500, color: t.textSub,
+                    padding: '2px 8px', borderRadius: RADIUS.pill,
                     background: t.sectionBg, border: `1px solid ${t.border}`,
                   }}>KA {totalKaCount}件</span>
                   {onEdit && (
                     <button onClick={() => onEdit(obj)} style={{
-                      marginLeft: 'auto',
-                      background: 'transparent', border: `1px solid ${t.border}`, color: t.textSub,
-                      borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                      ...btnSecondary({ T: t, size: 'sm' }),
+                      marginLeft: 'auto', color: t.textSub,
                     }}>編集</button>
                   )}
                 </div>
@@ -383,12 +380,12 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
             {/* Key Results → Key Actions セパレータ */}
             <div style={{
               padding: '14px 4px 10px',
-              display: 'flex', alignItems: 'center', gap: 8,
+              display: 'flex', alignItems: 'center', gap: SPACING.sm,
             }}>
               <span style={{ width: 18, height: 1, background: t.border }} />
               <span style={{
-                fontSize: 10.5, fontWeight: 600, color: t.textMuted,
-                letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                ...TYPO.caption, fontWeight: 600, color: t.textMuted,
+                textTransform: 'uppercase', whiteSpace: 'nowrap',
               }}>Key Results → Key Actions</span>
               <span style={{ flex: 1, height: 1, background: t.border }} />
             </div>
@@ -403,8 +400,8 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
               const krKAs = objKAs.filter(ka => Number(ka.kr_id) === Number(kr.id))
               return (
                 <div key={kr.id} style={{
-                  marginBottom: 12, padding: 0,
-                  background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 12,
+                  marginBottom: SPACING.md, padding: 0,
+                  background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: RADIUS.lg,
                   overflow: 'hidden',
                 }}>
                   {/* KR ヘッダ */}
@@ -414,17 +411,17 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                     borderBottom: `1px solid ${t.border}`,
                   }}>
                     <span style={{
-                      fontSize: 10, fontWeight: 700, color: t.accent,
-                      padding: '2px 8px', borderRadius: 5,
+                      ...TYPO.caption, color: t.accent,
+                      padding: '2px 8px', borderRadius: RADIUS.xs,
                       background: `${t.accent}1a`, border: `1px solid ${t.accent}40`,
-                      letterSpacing: '0.04em', flexShrink: 0,
+                      flexShrink: 0,
                     }}>KR</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
-                        fontSize: 15, fontWeight: 600, color: t.text, marginBottom: 4,
+                        ...TYPO.headline, fontWeight: 600, color: t.text, marginBottom: SPACING.xs,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>{kr.title}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: t.textSub }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, ...TYPO.footnote, color: t.textSub }}>
                         <span style={{ fontFamily: 'ui-monospace, SF Mono, monospace' }}>
                           {kr.current ?? 0}
                           <span style={{ color: t.textMuted }}> / {kr.target ?? 0} {kr.unit || ''}</span>
@@ -432,7 +429,7 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                         {kr.owner && (
                           <>
                             <span style={{ width: 1, height: 12, background: t.border }} />
-                            <span style={{ fontSize: 11.5, color: t.textSub }}>{kr.owner}</span>
+                            <span style={{ ...TYPO.footnote, color: t.textSub }}>{kr.owner}</span>
                           </>
                         )}
                       </div>
@@ -454,13 +451,13 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
               if (!unlinked.length) return null
               return (
                 <div style={{
-                  marginBottom: 12, padding: 0,
-                  background: t.bgCard, border: `1px dashed ${t.border}`, borderRadius: 12,
+                  marginBottom: SPACING.md, padding: 0,
+                  background: t.bgCard, border: `1px dashed ${t.border}`, borderRadius: RADIUS.lg,
                   overflow: 'hidden',
                 }}>
                   <div style={{
-                    fontSize: 10.5, fontWeight: 600, color: t.textMuted,
-                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                    ...TYPO.caption, fontWeight: 600, color: t.textMuted,
+                    textTransform: 'uppercase',
                     padding: '12px 18px', borderBottom: `1px solid ${t.border}`,
                   }}>その他の KA ({unlinked.length}件)</div>
                   {unlinked.map(ka => <KARowMini key={ka.id} t={t} ka={ka} />)}

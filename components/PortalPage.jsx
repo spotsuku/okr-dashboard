@@ -1,7 +1,8 @@
 'use client'
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { COMMON_TOKENS, IOS_SHADOW } from '../lib/themeTokens'
+import { COMMON_TOKENS, IOS_SHADOW, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { LargeTitle, SearchBar, DashboardTile } from './iosUI'
+import Icon from './Icon'
 import { isDemoMode } from '../lib/demoMocks'
 import { useCurrentOrg } from '../lib/orgContext'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
@@ -162,24 +163,24 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 20px 32px', position: 'relative' }}>
 
         {/* Glass: 静かな挨拶ライン (= 大バナー廃止、罫線・余白で階層を作る) */}
-        <div style={{ marginTop: 28, marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: 28, marginBottom: SPACING.sm, display: 'flex', alignItems: 'baseline', gap: SPACING.md, flexWrap: 'wrap' }}>
           <h1 style={{
-            fontSize: 28, fontWeight: 600, letterSpacing: '-0.01em',
+            fontSize: TYPO.largeTitle.fontSize, fontWeight: 600, letterSpacing: '-0.01em',
             color: T.text, lineHeight: 1.2, margin: 0,
           }}>{greet}{user?.email ? '' : ''}</h1>
           {user?.email && (
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '2px 8px', borderRadius: 99,
+              padding: '2px 8px', borderRadius: RADIUS.pill,
               background: T.successSoft, color: T.success,
-              fontSize: 11, fontWeight: 500,
+              fontSize: TYPO.footnote.fontSize, fontWeight: 500,
             }}>
-              <span style={{ width: 6, height: 6, borderRadius: 99, background: 'currentColor' }} />
+              <span style={{ width: 6, height: 6, borderRadius: RADIUS.pill, background: 'currentColor' }} />
               {user.email.split('@')[0]} さん
             </span>
           )}
         </div>
-        <div style={{ fontSize: 12, color: T.textSub, marginBottom: 24, fontWeight: 400 }}>
+        <div style={{ fontSize: TYPO.subhead.fontSize, color: T.textSub, marginBottom: SPACING['2xl'], fontWeight: 400 }}>
           {(() => {
             const today = new Date()
             const wd = ['日', '月', '火', '水', '木', '金', '土'][today.getDay()]
@@ -189,7 +190,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
         </div>
 
         {/* ─── 検索バー ─── */}
-        <div style={{ marginBottom: 22 }}>
+        <div style={{ marginBottom: SPACING.xl }}>
           <SearchBar T={T} value={search} onChange={setSearch}
             placeholder="ダッシュボードを検索..."
             onCancel={() => setSearch('')} />
@@ -207,24 +208,24 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
                 padding: '0 4px 12px',
               }}>
                 <h2 style={{
-                  fontSize: 18, fontWeight: 800, color: T.text, margin: 0,
+                  fontSize: TYPO.title2.fontSize, fontWeight: TYPO.title2.fontWeight, color: T.text, margin: 0,
                   letterSpacing: '-0.01em',
                 }}>{g.label}</h2>
-                <span style={{ fontSize: 12, color: T.textMuted }}>{g.sub}</span>
+                <span style={{ fontSize: TYPO.subhead.fontSize, color: T.textMuted }}>{g.sub}</span>
                 {g.key === 'custom' && (
                   <button onClick={openAddDialog} style={{
                     marginLeft: 'auto',
-                    padding: '6px 14px', borderRadius: 8,
+                    padding: '6px 14px', borderRadius: RADIUS.sm,
                     background: T.accent, color: '#fff', border: 'none',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}>＋ URLを追加</button>
+                    fontSize: TYPO.subhead.fontSize, fontWeight: 700, cursor: 'pointer',
+                    fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5,
+                  }}><Icon name="plus" size={13} /> URLを追加</button>
                 )}
               </div>
               {items.length === 0 && g.key === 'custom' ? (
                 <div style={{
                   padding: '20px 16px', textAlign: 'center', color: T.textMuted,
-                  fontSize: 12, background: T.bgCard, borderRadius: 14,
+                  fontSize: TYPO.subhead.fontSize, background: T.bgCard, borderRadius: RADIUS.lg,
                   border: `1px dashed ${T.border}`, lineHeight: 1.7,
                 }}>
                   好きなURLをここに登録できます。<br />
@@ -254,22 +255,22 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
                             onClick={(e) => { e.stopPropagation(); openEditDialog(customLinks.find(l => l.id === db.id)) }}
                             title="編集"
                             style={{
-                              width: 26, height: 26, borderRadius: 6,
+                              width: 26, height: 26, borderRadius: RADIUS.xs,
                               background: T.bgCard, color: T.textSub,
                               border: `1px solid ${T.border}`, cursor: 'pointer',
-                              fontSize: 12, fontFamily: 'inherit',
+                              fontSize: TYPO.subhead.fontSize, fontFamily: 'inherit',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>✎</button>
+                            }}><Icon name="pencil" size={13} /></button>
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteLink(db.id) }}
                             title="削除"
                             style={{
-                              width: 26, height: 26, borderRadius: 6,
+                              width: 26, height: 26, borderRadius: RADIUS.xs,
                               background: T.bgCard, color: T.danger,
                               border: `1px solid ${T.danger}40`, cursor: 'pointer',
-                              fontSize: 12, fontFamily: 'inherit',
+                              fontSize: TYPO.subhead.fontSize, fontFamily: 'inherit',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>×</button>
+                            }}><Icon name="cross" size={14} /></button>
                         </div>
                       )}
                     </div>
@@ -283,10 +284,10 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
         {filtered.length === 0 && search && (
           <div style={{
             padding: '40px 20px', textAlign: 'center', color: T.textMuted,
-            fontSize: 13, background: T.bgCard, borderRadius: 14,
+            fontSize: TYPO.body.fontSize, background: T.bgCard, borderRadius: RADIUS.lg,
             boxShadow: IOS_SHADOW,
           }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>🔍</div>
+            <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={40} /></div>
             「{search}」に一致する項目がありません
           </div>
         )}
@@ -305,45 +306,45 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: T.bgCard, borderRadius: 16,
-              padding: 24, maxWidth: 460, width: '100%',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              background: T.bgCard, borderRadius: RADIUS.xl,
+              padding: SPACING['2xl'], maxWidth: 460, width: '100%',
+              boxShadow: SHADOWS.xl,
               display: 'flex', flexDirection: 'column', gap: 14,
             }}
           >
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>
+            <div style={{ fontSize: TYPO.title2.fontSize, fontWeight: TYPO.title2.fontWeight, color: T.text }}>
               {editingId ? 'リンクを編集' : '好きなURLを登録'}
             </div>
-            <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>
+            <div style={{ fontSize: TYPO.subhead.fontSize, color: T.textMuted, lineHeight: 1.6 }}>
               業務でよく使うサイトをホームに表示できます。
               タイトルとURLを入力してください。
             </div>
 
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.textSub }}>タイトル</span>
+              <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T.textSub }}>タイトル</span>
               <input
                 type="text" value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 placeholder="例: 社内Wiki"
                 style={{
-                  padding: '10px 12px', borderRadius: 8,
+                  padding: '10px 12px', borderRadius: RADIUS.sm,
                   border: `1px solid ${T.border}`, background: T.sectionBg,
-                  color: T.text, fontSize: 13, fontFamily: 'inherit',
+                  color: T.text, fontSize: TYPO.body.fontSize, fontFamily: 'inherit',
                   outline: 'none',
                 }}
               />
             </label>
 
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.textSub }}>URL</span>
+              <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T.textSub }}>URL</span>
               <input
                 type="url" value={formUrl}
                 onChange={(e) => setFormUrl(e.target.value)}
                 placeholder="例: https://example.com"
                 style={{
-                  padding: '10px 12px', borderRadius: 8,
+                  padding: '10px 12px', borderRadius: RADIUS.sm,
                   border: `1px solid ${T.border}`, background: T.sectionBg,
-                  color: T.text, fontSize: 13, fontFamily: 'inherit',
+                  color: T.text, fontSize: TYPO.body.fontSize, fontFamily: 'inherit',
                   outline: 'none',
                 }}
               />
@@ -351,23 +352,24 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark' }) {
 
             {formError && (
               <div style={{
-                padding: '8px 12px', borderRadius: 6,
+                padding: '8px 12px', borderRadius: RADIUS.xs,
                 background: `${T.danger}1a`, color: T.danger,
-                fontSize: 12, fontWeight: 600,
-              }}>⚠️ {formError}</div>
+                fontSize: TYPO.subhead.fontSize, fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}><Icon name="alert" size={14} /> {formError}</div>
             )}
 
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => setShowAdd(false)} style={{
-                flex: 1, padding: '10px 16px', borderRadius: 8,
+                flex: 1, padding: '10px 16px', borderRadius: RADIUS.sm,
                 background: 'transparent', color: T.textSub,
                 border: `1px solid ${T.border}`, cursor: 'pointer',
-                fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                fontSize: TYPO.body.fontSize, fontWeight: 700, fontFamily: 'inherit',
               }}>キャンセル</button>
               <button onClick={submitForm} style={{
-                flex: 1, padding: '10px 16px', borderRadius: 8,
+                flex: 1, padding: '10px 16px', borderRadius: RADIUS.sm,
                 background: T.accent, color: '#fff', border: 'none',
-                cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', fontSize: TYPO.body.fontSize, fontWeight: 700,
                 fontFamily: 'inherit',
               }}>{editingId ? '保存' : '追加'}</button>
             </div>

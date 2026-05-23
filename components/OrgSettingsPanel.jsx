@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import LicenseSection from './LicenseSection'
 import OrgMeetingsSection from './OrgMeetingsSection'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 
 // ─────────────────────────────────────────────────────────────
 // 組織設定パネル (モーダル)
@@ -83,26 +85,26 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 9999, padding: 20,
+      zIndex: 9999, padding: SPACING.xl,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 14,
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.lg,
         width: '100%', maxWidth: 720, maxHeight: '90vh',
         display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        boxShadow: SHADOWS.xl,
       }}>
-        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 18 }}>🏢</span>
+        <div style={{ padding: `${SPACING.md + 2}px ${SPACING.lg + 2}px`, borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <Icon name="building" size={18} style={{ color: T.text }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>組織設定</div>
-            <div style={{ fontSize: 11, color: T.textMuted }}>
+            <div style={{ ...TYPO.callout, fontSize: 15, color: T.text }}>組織設定</div>
+            <div style={{ ...TYPO.footnote, color: T.textMuted }}>
               {currentOrg?.name || '...'} ({currentOrg?.slug}) ・ あなた: {myRole || '不明'}
             </div>
           </div>
-          <button onClick={onClose} style={{ background:'transparent', border:'none', color:T.textSub, fontSize:22, cursor:'pointer', padding:'0 8px' }}>×</button>
+          <button onClick={onClose} style={{ background:'transparent', border:'none', color:T.textSub, cursor:'pointer', padding:`0 ${SPACING.sm}px`, display:'flex', alignItems:'center' }}><Icon name="cross" size={20} /></button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: SPACING.lg }}>
           {/* ライセンス機能は一時停止中 (サービス無料公開のため)
           {currentOrg?.id && (
             <LicenseSection
@@ -114,17 +116,18 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
           )}
           */}
           {!canManage && (
-            <div style={{ padding: 10, marginBottom: 10, background: T.bgSection, borderRadius: 8, fontSize: 11, color: T.textMuted }}>
+            <div style={{ padding: SPACING.sm + 2, marginBottom: SPACING.sm + 2, background: T.bgSection, borderRadius: RADIUS.sm, ...TYPO.footnote, color: T.textMuted }}>
               閲覧権限のみ。owner / admin に依頼してください。
             </div>
           )}
           {canManage && (
             <button onClick={() => setComposing(true)} style={{
-              width: '100%', padding: '10px 14px', borderRadius: 8,
+              width: '100%', padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm,
               background: 'transparent', border: `1px dashed ${T.accent}`,
-              color: T.accent, fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12,
-            }}>+ メンバーを招待</button>
+              color: T.accent, ...TYPO.body, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit', marginBottom: SPACING.md,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+            }}><Icon name="plus" size={14} /> メンバーを招待</button>
           )}
           {composing && (
             <InviteForm T={T} myEmail={myEmail} orgId={currentOrg?.id}
@@ -143,31 +146,31 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
           )}
 
           {loading ? (
-            <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
+            <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>読み込み中...</div>
           ) : members.length === 0 ? (
-            <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>メンバーなし</div>
+            <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>メンバーなし</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
               {members.map(m => (
                 <div key={m.member_id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 12px', background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+                  display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+                  padding: `${SPACING.sm}px ${SPACING.md}px`, background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.name || '(名前なし)'}</div>
-                    <div style={{ fontSize: 10, color: T.textMuted }}>{m.email} ・ {m.member_role || ''}</div>
+                    <div style={{ ...TYPO.body, fontWeight: 700, color: T.text }}>{m.name || '(名前なし)'}</div>
+                    <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted }}>{m.email} ・ {m.member_role || ''}</div>
                   </div>
                   {canManage && m.email !== myEmail ? (
                     <select value={m.role} onChange={e => updateRole(m.member_id, e.target.value)} style={{
-                      padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.border}`,
-                      background: T.bgCard, color: T.text, fontSize: 11, fontFamily: 'inherit', outline: 'none',
+                      padding: `${SPACING.xs}px ${SPACING.sm}px`, borderRadius: RADIUS.xs, border: `1px solid ${T.border}`,
+                      background: T.bgCard, color: T.text, ...TYPO.footnote, fontFamily: 'inherit', outline: 'none',
                     }}>
                       <option value="owner">owner</option>
                       <option value="admin">admin</option>
                       <option value="member">member</option>
                     </select>
                   ) : (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                    <span style={{ ...TYPO.caption, fontWeight: 700, letterSpacing: 'normal', padding: `2px ${SPACING.sm}px`, borderRadius: RADIUS.pill,
                       background: m.role === 'owner' ? T.warnBg : m.role === 'admin' ? T.accentBg : T.bgSection,
                       color: m.role === 'owner' ? T.warn : m.role === 'admin' ? T.accent : T.textSub }}>
                       {m.role}
@@ -175,9 +178,9 @@ export default function OrgSettingsPanel({ T, myEmail, onClose }) {
                   )}
                   {canManage && m.email !== myEmail && (
                     <button onClick={() => removeMember(m.member_id, m.name)} style={{
-                      padding: '4px 8px', borderRadius: 6, background: 'transparent',
+                      padding: `${SPACING.xs}px ${SPACING.sm}px`, borderRadius: RADIUS.xs, background: 'transparent',
                       border: `1px solid ${T.danger}40`, color: T.danger,
-                      fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                      ...TYPO.caption, fontWeight: 700, letterSpacing: 'normal', cursor: 'pointer', fontFamily: 'inherit',
                     }}>削除</button>
                   )}
                 </div>
@@ -263,38 +266,40 @@ function NotionConfigSection({ T, orgId, requesterEmail }) {
   }
 
   const inputSt = {
-    width: '100%', boxSizing: 'border-box', padding: '6px 9px', fontSize: 11,
+    width: '100%', boxSizing: 'border-box', padding: `${SPACING.xs + 2}px ${SPACING.sm + 1}px`, fontSize: 11,
     fontFamily: 'monospace', background: T.bg, color: T.text,
-    border: `1px solid ${T.border}`, borderRadius: 6, outline: 'none',
+    border: `1px solid ${T.border}`, borderRadius: RADIUS.xs, outline: 'none',
   }
 
   return (
-    <div style={{ marginBottom: 14, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
+    <div style={{ marginBottom: SPACING.lg - 2, border: `1px solid ${T.border}`, borderRadius: RADIUS.md, overflow: 'hidden' }}>
       <button onClick={() => setOpen(o => !o)} style={{
-        width: '100%', padding: '10px 14px', textAlign: 'left',
+        width: '100%', padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, textAlign: 'left',
         background: T.sectionBg, border: 'none', color: T.text,
-        fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-        display: 'flex', alignItems: 'center', gap: 8,
+        ...TYPO.body, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+        display: 'flex', alignItems: 'center', gap: SPACING.sm,
       }}>
-        <span style={{ fontSize: 16 }}>📝</span>
+        <Icon name="note" size={16} style={{ color: T.text }} />
         <span style={{ flex: 1 }}>Notion 連携設定</span>
-        <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 400 }}>
-          {apiKeyConfigured ? '✅ API キー設定済み' : '⚠ 未設定 (env var fallback)'}
+        <span style={{ ...TYPO.caption, letterSpacing: 'normal', color: T.textMuted, fontWeight: 400, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+          {apiKeyConfigured
+            ? <><Icon name="check" size={12} style={{ color: T.success }} /> API キー設定済み</>
+            : <><Icon name="alert" size={12} style={{ color: T.warn }} /> 未設定 (env var fallback)</>}
         </span>
-        <span style={{ fontSize: 11, color: T.textMuted }}>{open ? '▾' : '▸'}</span>
+        <Icon name={open ? 'chevronD' : 'chevronR'} size={14} style={{ color: T.textMuted }} />
       </button>
       {open && (
-        <div style={{ padding: 14, background: T.bgCard, borderTop: `1px solid ${T.border}` }}>
-          {loading && <div style={{ fontSize: 11, color: T.textMuted }}>読み込み中...</div>}
+        <div style={{ padding: SPACING.lg - 2, background: T.bgCard, borderTop: `1px solid ${T.border}` }}>
+          {loading && <div style={{ ...TYPO.footnote, color: T.textMuted }}>読み込み中...</div>}
           {!loading && (
             <>
-              <div style={{ fontSize: 10, color: T.textMuted, lineHeight: 1.6, marginBottom: 10 }}>
+              <div style={{ ...TYPO.caption, letterSpacing: 'normal', fontWeight: 600, color: T.textMuted, lineHeight: 1.6, marginBottom: SPACING.sm + 2 }}>
                 組織別に Notion ワークスペースに接続します。設定しない場合は環境変数 (NOTION_API_KEY 等) が使われます。
               </div>
 
               {/* API キー */}
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 4 }}>
+              <div style={{ marginBottom: SPACING.lg - 2 }}>
+                <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.textSub, marginBottom: SPACING.xs }}>
                   Notion Internal Integration Secret
                 </div>
                 <input
@@ -307,8 +312,8 @@ function NotionConfigSection({ T, orgId, requesterEmail }) {
                 />
                 {apiKeyConfigured && (
                   <label style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    marginTop: 6, fontSize: 10, color: T.textMuted, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: SPACING.xs + 2,
+                    marginTop: SPACING.xs + 2, ...TYPO.caption, letterSpacing: 'normal', fontWeight: 600, color: T.textMuted, cursor: 'pointer',
                   }}>
                     <input type="checkbox" checked={clearKey} onChange={e => setClearKey(e.target.checked)} />
                     現在の API キーをクリア (env var fallback に戻す)
@@ -317,13 +322,13 @@ function NotionConfigSection({ T, orgId, requesterEmail }) {
               </div>
 
               {/* DB ID 一覧 */}
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>
+              <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.textSub, marginBottom: SPACING.xs + 2 }}>
                 会議別 Notion データベース ID
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
                 {NOTION_MEETING_FIELDS.map(f => (
-                  <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 8, alignItems: 'center' }}>
-                    <div style={{ fontSize: 10, color: T.textMuted, lineHeight: 1.4 }}>{f.title}</div>
+                  <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: SPACING.sm, alignItems: 'center' }}>
+                    <div style={{ ...TYPO.caption, letterSpacing: 'normal', fontWeight: 600, color: T.textMuted, lineHeight: 1.4 }}>{f.title}</div>
                     <input
                       type="text"
                       value={draftDbIds[f.key] || ''}
@@ -336,26 +341,26 @@ function NotionConfigSection({ T, orgId, requesterEmail }) {
               </div>
 
               {error && (
-                <div style={{ marginTop: 10, padding: 8, fontSize: 11, color: T.danger,
-                  background: `${T.danger}1a`, borderRadius: 6 }}>⚠️ {error}</div>
+                <div style={{ marginTop: SPACING.sm + 2, padding: SPACING.sm, ...TYPO.footnote, color: T.danger,
+                  background: T.dangerBg, borderRadius: RADIUS.xs, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={13} /> {error}</div>
               )}
               {savedAt && !error && (
-                <div style={{ marginTop: 10, padding: 8, fontSize: 11, color: T.success,
-                  background: `${T.success || '#00d68f'}1a`, borderRadius: 6 }}>
-                  ✅ 保存しました ({savedAt.toLocaleTimeString()})
+                <div style={{ marginTop: SPACING.sm + 2, padding: SPACING.sm, ...TYPO.footnote, color: T.success,
+                  background: T.successBg, borderRadius: RADIUS.xs, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                  <Icon name="check" size={13} /> 保存しました ({savedAt.toLocaleTimeString()})
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm, marginTop: SPACING.md }}>
                 <button onClick={load} disabled={loading || saving} style={{
-                  padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.border}`,
+                  padding: `${SPACING.xs + 2}px ${SPACING.md}px`, borderRadius: RADIUS.xs, border: `1px solid ${T.border}`,
                   background: 'transparent', color: T.textSub,
-                  fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  ...TYPO.footnote, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                 }}>リセット</button>
                 <button onClick={save} disabled={saving || loading} style={{
-                  padding: '6px 14px', borderRadius: 6, border: 'none',
+                  padding: `${SPACING.xs + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.xs, border: 'none',
                   background: T.accent, color: '#fff',
-                  fontSize: 11, fontWeight: 800, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  ...TYPO.footnote, fontWeight: 800, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit',
                 }}>{saving ? '保存中…' : '保存'}</button>
               </div>
             </>
@@ -383,12 +388,12 @@ function InviteForm({ T, myEmail, orgId, onCancel, onSaved }) {
     if (!r.ok) { alert('招待失敗: ' + (j.error || r.status)); return }
     onSaved()
   }
-  const inputSt = { width: '100%', boxSizing: 'border-box', padding: '7px 10px', fontSize: 12, fontFamily: 'inherit',
-    background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 6, outline: 'none' }
+  const inputSt = { width: '100%', boxSizing: 'border-box', padding: `${SPACING.xs + 3}px ${SPACING.sm + 2}px`, ...TYPO.subhead, fontFamily: 'inherit',
+    background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: RADIUS.xs, outline: 'none' }
   return (
-    <div style={{ padding: 14, marginBottom: 12, background: T.sectionBg, border: `1px solid ${T.accent}40`, borderRadius: 10 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 10 }}>新規メンバー招待</div>
-      <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr 120px' }}>
+    <div style={{ padding: SPACING.lg - 2, marginBottom: SPACING.md, background: T.sectionBg, border: `1px solid ${T.accent}40`, borderRadius: RADIUS.md }}>
+      <div style={{ ...TYPO.subhead, fontWeight: 800, color: T.text, marginBottom: SPACING.sm + 2 }}>新規メンバー招待</div>
+      <div style={{ display: 'grid', gap: SPACING.sm, gridTemplateColumns: '1fr 1fr 120px' }}>
         <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" style={inputSt} />
         <input value={name}  onChange={e => setName(e.target.value)}  placeholder="氏名 (任意)"      style={inputSt} />
         <select value={role} onChange={e => setRole(e.target.value)}  style={inputSt}>
@@ -397,18 +402,18 @@ function InviteForm({ T, myEmail, orgId, onCancel, onSaved }) {
           <option value="owner">owner</option>
         </select>
       </div>
-      <div style={{ marginTop: 10, fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>
+      <div style={{ marginTop: SPACING.sm + 2, ...TYPO.caption, letterSpacing: 'normal', fontWeight: 600, color: T.textMuted, lineHeight: 1.5 }}>
         ※ 招待されたメールアドレスは Supabase Auth でサインアップ後にこの組織に自動所属します。
       </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+      <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'flex-end', marginTop: SPACING.sm + 2 }}>
         <button onClick={onCancel} disabled={saving} style={{
-          padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.border}`,
-          background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          padding: `${SPACING.xs + 2}px ${SPACING.md}px`, borderRadius: RADIUS.xs, border: `1px solid ${T.border}`,
+          background: 'transparent', color: T.textSub, ...TYPO.footnote, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
         }}>キャンセル</button>
         <button onClick={submit} disabled={saving || !email.trim()} style={{
-          padding: '6px 14px', borderRadius: 6, border: 'none',
+          padding: `${SPACING.xs + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.xs, border: 'none',
           background: email.trim() ? T.accent : T.border, color: '#fff',
-          fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+          ...TYPO.footnote, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
         }}>{saving ? '送信中…' : '招待'}</button>
       </div>
     </div>

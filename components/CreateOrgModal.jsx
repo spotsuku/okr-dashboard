@@ -9,6 +9,7 @@
 //   onCreated: (org) => void          // org = { id, slug, name }
 //   userEmail: string                  // 現在ログイン中の email (owner として登録)
 import { useState, useEffect } from 'react'
+import Icon from './Icon'
 
 const SLUG_HINT_RE = /^[a-z0-9-]*$/
 
@@ -116,7 +117,8 @@ export default function CreateOrgModal({ open, onClose, onCreated, userEmail }) 
             <div style={{
               marginTop: 12, padding: 10, fontSize: 12, color: '#ff453a',
               background: 'rgba(255,69,58,0.12)', borderRadius: 8,
-            }}>⚠️ {error}</div>
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}><Icon name="alert" size={13} /> {error}</div>
           )}
         </div>
 

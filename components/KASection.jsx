@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
 import { useAutoSave } from '../lib/useAutoSave'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS } from '../lib/themeTokens'
+import { inputStyle } from '../lib/iosStyles'
 
 // ─── 共通 KA セクション ─────────────────────────────────────────
 // 展開・追加・削除・担当変更・タイトル編集ができる weekly_reports ベースの KA 表示パネル。
@@ -17,14 +20,14 @@ import { useAutoSave } from '../lib/useAutoSave'
 //   theme       : テーマオブジェクト (accent, text, bgCard などのカラー定義)
 //                 未指定時は明色テーマのデフォルトを適用
 
-// iOS システムカラーに統一
-const STATUS_CFG = {
-  focus:  { label: '🎯 注力', color: '#6B96C7', bg: 'rgba(107,150,199,0.12)', border: 'rgba(107,150,199,0.30)' },
-  good:   { label: '✅ Good', color: '#3a3a3c', bg: 'rgba(0,0,0,0.05)',         border: 'rgba(0,0,0,0.10)' },
-  more:   { label: '🔺 More', color: '#E89B9B', bg: 'rgba(232,155,155,0.12)', border: 'rgba(232,155,155,0.30)' },
-  normal: { label: '未分類',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
-  done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.06)', border: 'rgba(142,142,147,0.14)' },
-}
+// iOS システムカラーに統一 (色はテーマトークンから派生)
+const statusCfg = (T) => ({
+  focus:  { label: '注力', icon: 'target', color: T.accent,   bg: T.accentBg,  border: T.border },
+  good:   { label: 'Good', icon: 'check',  color: T.success,  bg: T.successBg, border: T.border },
+  more:   { label: 'More', icon: 'alert',  color: T.danger,   bg: T.dangerBg,  border: T.border },
+  normal: { label: '未分類', icon: null,   color: T.textMuted, bg: T.sectionBg, border: T.border },
+  done:   { label: '完了', icon: 'check',  color: T.textMuted, bg: T.sectionBg, border: T.border },
+})
 const STATUS_ORDER = ['normal','focus','good','more','done']
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
@@ -142,21 +145,21 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
   }
 
   return (
-    <div style={{ marginTop: 6, marginBottom: 8 }}>
-      <div onClick={() => setOpen(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? 8 : 0 }}>
-        <span style={{ fontSize: 10, color: T.accent, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
-        <span style={{ fontSize: 11, color: T.accent }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
-        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: T.badgeBg, color: '#fff' }}>
+    <div style={{ marginTop: SPACING.xs + 2, marginBottom: SPACING.sm }}>
+      <div onClick={() => setOpen(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', marginBottom: open ? SPACING.sm : 0 }}>
+        <span style={{ color: T.accent, transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-flex' }}><Icon name="chevronD" size={12} /></span>
+        <span style={{ ...TYPO.footnote, color: T.accent }}>{open ? 'KA を閉じる' : 'KA を表示'}</span>
+        <span style={{ ...TYPO.caption, fontWeight: 700, padding: '1px 6px', borderRadius: RADIUS.pill, background: T.badgeBg, color: '#fff' }}>
           {uniqueKAs.length}件
         </span>
       </div>
 
       {open && (
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {loading && <div style={{ fontSize: 11, color: T.textMuted, padding: '4px 0' }}>読み込み中...</div>}
+          {loading && <div style={{ ...TYPO.footnote, color: T.textMuted, padding: '4px 0' }}>読み込み中...</div>}
 
           {uniqueKAs.length > 0 && (
-            <table style={{ width: '100%', minWidth: 420, borderCollapse: 'collapse', marginBottom: 6, background: T.bgCard2, borderRadius: 7, overflow: 'hidden', border: `1px solid ${T.border}` }}>
+            <table style={{ width: '100%', minWidth: 420, borderCollapse: 'collapse', marginBottom: SPACING.xs + 2, background: T.bgCard2, borderRadius: RADIUS.xs, overflow: 'hidden', border: `1px solid ${T.border}` }}>
               <colgroup>
                 <col style={{ width: 110 }} />
                 <col />
@@ -179,11 +182,11 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
             </table>
           )}
           {uniqueKAs.length === 0 && !loading && (
-            <div style={{ fontSize: 11, color: T.textFaintest, fontStyle: 'italic', padding: '2px 0', marginBottom: 6 }}>KAがありません</div>
+            <div style={{ ...TYPO.footnote, color: T.textFaintest, fontStyle: 'italic', padding: '2px 0', marginBottom: SPACING.xs + 2 }}>KAがありません</div>
           )}
 
           {adding ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
               <textarea
                 autoFocus value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
@@ -193,21 +196,21 @@ export default function KASection({ krId, objectiveId, levelId, theme }) {
                 }}
                 placeholder="KA タイトル（確定後にEnterで追加 / Shift+Enterで改行）"
                 rows={2}
-                style={{ flex: 1, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T.text, outline: 'none', fontFamily: 'inherit', resize: 'vertical', minHeight: 56, lineHeight: 1.6 }}
+                style={{ ...inputStyle({ T }), flex: 1, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.xs, padding: '6px 10px', fontSize: TYPO.subhead.fontSize, resize: 'vertical', minHeight: 56, lineHeight: 1.6 }}
               />
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: SPACING.xs + 2, alignItems: 'center' }}>
                 <select value={newOwner} onChange={e => setNewOwner(e.target.value)}
-                  style={{ fontSize: 11, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '5px 8px', color: T.text, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
+                  style={{ ...TYPO.footnote, fontWeight: 500, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.xs, padding: '5px 8px', color: T.text, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
                   <option value="">-- 担当 (任意) --</option>
                   {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
-                <button onClick={addKA} disabled={!newTitle.trim()} style={{ background: newTitle.trim() ? (T.accentSolid || T.accent) : T.badgeBg, border: 'none', color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 11, cursor: newTitle.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>追加</button>
-                <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
+                <button onClick={addKA} disabled={!newTitle.trim()} style={{ background: newTitle.trim() ? (T.accentSolid || T.accent) : T.badgeBg, border: 'none', color: '#fff', borderRadius: RADIUS.xs, padding: '5px 12px', ...TYPO.footnote, fontWeight: 700, cursor: newTitle.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>追加</button>
+                <button onClick={() => setAdding(false)} style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', display: 'inline-flex', lineHeight: 1 }}><Icon name="cross" size={16} /></button>
               </div>
             </div>
           ) : (
-            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: T.accent, background: 'transparent', border: `1px dashed ${T.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
-              ＋ KAを追加
+            <button onClick={() => setAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, ...TYPO.footnote, fontWeight: 500, color: T.accent, background: 'transparent', border: `1px dashed ${T.border}`, borderRadius: RADIUS.xs, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <Icon name="plus" size={13} /> KAを追加
             </button>
           )}
         </div>
@@ -299,9 +302,10 @@ function KARow({ ka, members, T, onDelete }) {
     autoSave.saveNow('status', next)
   }
 
-  const cfg = STATUS_CFG[status] || STATUS_CFG.normal
+  const CFG = statusCfg(T)
+  const cfg = CFG[status] || CFG.normal
   const ownerMember = members.find(m => m.name === ownerDraft)
-  const cellS = { padding: '5px 8px', borderBottom: `1px solid ${T.border}`, verticalAlign: 'middle', fontSize: 12 }
+  const cellS = { padding: '5px 8px', borderBottom: `1px solid ${T.border}`, verticalAlign: 'middle', fontSize: TYPO.subhead.fontSize }
 
   return (
     <tr>
@@ -312,7 +316,7 @@ function KARow({ ka, members, T, onDelete }) {
             onChange={e => handleOwnerChange(e.target.value)}
             onFocus={() => autoSave.setFocusedField('owner')}
             onBlur={() => autoSave.setFocusedField(null)}
-            style={{ flex: 1, background: 'transparent', border: 'none', color: ownerDraft ? avatarColor(ownerDraft) : T.textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', outline: 'none', fontWeight: 600, minWidth: 0 }}>
+            style={{ flex: 1, background: 'transparent', border: 'none', color: ownerDraft ? avatarColor(ownerDraft) : T.textMuted, fontSize: TYPO.footnote.fontSize, cursor: 'pointer', fontFamily: 'inherit', outline: 'none', fontWeight: 600, minWidth: 0 }}>
             <option value="">--</option>
             {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
@@ -325,12 +329,12 @@ function KARow({ ka, members, T, onDelete }) {
             onBlur={handleTitleBlur}
             onKeyDown={handleTitleKeyDown}
             rows={1}
-            style={{ width: '100%', boxSizing: 'border-box', background: T.bgCard, border: `1px solid ${T.accent}80`, borderRadius: 4, padding: '3px 6px', color: T.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5, minHeight: 24 }}
+            style={{ width: '100%', boxSizing: 'border-box', background: T.bgCard, border: `1px solid ${T.accent}80`, borderRadius: RADIUS.xs - 2, padding: '3px 6px', color: T.text, fontSize: TYPO.subhead.fontSize, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5, minHeight: 24 }}
           />
         ) : (
           <div onClick={() => { setEditingTitle(true); autoSave.setFocusedField('ka_title') }}
             title="クリックで編集"
-            style={{ fontSize: 12, color: T.textSub, cursor: 'text', lineHeight: 1.4, minHeight: 20, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            style={{ fontSize: TYPO.subhead.fontSize, color: T.textSub, cursor: 'text', lineHeight: 1.4, minHeight: 20, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {kaTitle || '(無題)'}
           </div>
         )}
@@ -338,24 +342,24 @@ function KARow({ ka, members, T, onDelete }) {
       <td style={{ ...cellS, width: 80, textAlign: 'center' }}>
         <span onClick={cycleStatus}
           title="クリックでステータス切替"
-          style={{ fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 99, cursor: 'pointer', background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, whiteSpace: 'nowrap', display: 'inline-block' }}>
-          {cfg.label}
+          style={{ ...TYPO.caption, fontWeight: 700, letterSpacing: 0, padding: '3px 7px', borderRadius: RADIUS.pill, cursor: 'pointer', background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          {cfg.icon && <Icon name={cfg.icon} size={11} />}{cfg.label}
         </span>
       </td>
       <td style={{ ...cellS, width: 28, textAlign: 'center', padding: '5px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'center' }}>
-          {autoSave.saving && <span style={{ fontSize: 9, color: T.accent }}>⟳</span>}
-          {autoSave.saved && <span style={{ fontSize: 9, color: '#00d68f' }}>✓</span>}
+          {autoSave.saving && <span style={{ color: T.accent, display: 'inline-flex' }}><Icon name="refresh" size={11} /></span>}
+          {autoSave.saved && <span style={{ color: T.success, display: 'inline-flex' }}><Icon name="check" size={11} /></span>}
           <button onClick={onDelete}
             title="削除"
-            style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>✕</button>
+            style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', padding: '0 2px', lineHeight: 1, display: 'inline-flex' }}><Icon name="trash" size={12} /></button>
         </div>
       </td>
     </tr>
   )
 }
 
-const thS = (T) => ({ padding: '5px 8px', fontSize: 9, color: T.textMuted, fontWeight: 700, borderBottom: `1px solid ${T.border}`, textAlign: 'left', whiteSpace: 'nowrap' })
+const thS = (T) => ({ padding: '5px 8px', ...TYPO.caption, letterSpacing: 0, color: T.textMuted, fontWeight: 700, borderBottom: `1px solid ${T.border}`, textAlign: 'left', whiteSpace: 'nowrap' })
 
 const DEFAULT_THEME = {
   accent:       '#6B96C7',
