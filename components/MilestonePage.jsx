@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
-import { cardStyle, inputStyle, btnSecondary, btnDanger } from '../lib/iosStyles'
+import { cardStyle, inputStyle, btnSecondary, btnDanger, pillStyle, accentRingStyle } from '../lib/iosStyles'
 import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
 import Icon from './Icon'
 
@@ -33,7 +33,7 @@ const MONTHS_SELECT = [
 const GRID_COLS = '120px repeat(12, minmax(0, 1fr))'
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────────
-function getDaysLeftInfo(dueDate) {
+function getDaysLeftInfo(dueDate, T = LIGHT_T) {
   if (!dueDate) return { text: null, style: {} }
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -41,10 +41,10 @@ function getDaysLeftInfo(dueDate) {
   due.setHours(0, 0, 0, 0)
   const diff = Math.ceil((due - today) / (1000 * 60 * 60 * 24))
 
-  if (diff < 0) return { text: `${Math.abs(diff)}日超過`, style: { color: '#dc2626', fontWeight: '600' } }
-  if (diff === 0) return { text: '今日', style: { color: '#dc2626', fontWeight: '600' } }
-  if (diff <= 14) return { text: `残${diff}日`, style: { color: '#ea580c', fontWeight: '600' } }
-  if (diff <= 30) return { text: `残${diff}日`, style: { color: '#7080a0', fontWeight: '500' } }
+  if (diff < 0) return { text: `${Math.abs(diff)}日超過`, style: { color: T.danger, fontWeight: '600' } }
+  if (diff === 0) return { text: '今日', style: { color: T.danger, fontWeight: '600' } }
+  if (diff <= 14) return { text: `残${diff}日`, style: { color: T.warn, fontWeight: '600' } }
+  if (diff <= 30) return { text: `残${diff}日`, style: { color: T.textMuted, fontWeight: '500' } }
   return { text: null, style: {} }
 }
 
@@ -59,7 +59,7 @@ function hexWithAlpha(hex, alpha) {
 // ─── MilestoneHoverTooltip ───────────────────────────────────────────────────
 function MilestoneHoverTooltip({ milestone, orgColor, T, position }) {
   const { title, due_date, focus_level, status, owner, start_month, end_month } = milestone
-  const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
+  const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date, T)
   const isDone = status === 'done'
   const isDelayed = status === 'delayed'
   const statusLabel = isDone ? '完了' : isDelayed ? '遅延' : '進行中'
@@ -135,20 +135,24 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
   const startCol = (clampedStartIdx - firstVisibleIdx) + 2
   const endCol   = (clampedEndIdx - firstVisibleIdx) + 3
 
-  const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date)
+  const { text: daysText, style: daysStyle } = getDaysLeftInfo(due_date, T)
 
   const isDone    = status === 'done'
   const isDelayed = status === 'delayed'
   const isFocus   = focus_level === 'focus' && !isDone
 
-  const barBg = isDone
-    ? { backgroundColor: T.textFaintest, color: T.textMuted, opacity: 0.7 }
+  // 仕様 §5: over(期限超過)=danger / muted(順調=完了)=success / normal(進行中)=accent。
+  // focus(最注力)は accent を濃色(solid)で強調。
+  const barBg = isDelayed
+    ? { backgroundColor: T.dangerBg, color: T.danger, fontWeight: 600,
+        border: `1px solid ${hexWithAlpha(T.danger, 0.2)}` }
+    : isDone
+    ? { backgroundColor: T.successBg, color: T.success,
+        border: `1px solid ${hexWithAlpha(T.success, 0.18)}`, opacity: 0.85 }
     : isFocus
-    ? { backgroundColor: orgColor, color: '#fff',
-        outline: isDelayed ? `2px solid ${T.danger}` : 'none', outlineOffset: '1px' }
-    : { backgroundColor: hexWithAlpha(orgColor, 0.12), color: orgColor,
-        border: `0.5px solid ${hexWithAlpha(orgColor, 0.35)}`,
-        outline: isDelayed ? `2px solid ${T.danger}` : 'none', outlineOffset: '1px' }
+    ? { backgroundColor: T.accent, color: '#fff', fontWeight: 600 }
+    : { backgroundColor: T.accentBg, color: T.accentText,
+        border: `1px solid ${hexWithAlpha(T.accent, 0.2)}` }
 
   const handleMouseEnter = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -170,24 +174,24 @@ function MilestoneBar({ milestone, orgColor, isChild, onEdit, isAdmin, T, visibl
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setHovered(false)}
         style={{
-          ...barBg, borderRadius: RADIUS.xs - 2, padding: '4px 7px',
-          fontSize: isChild ? 9 : 10, fontWeight: 500, lineHeight: '1.3',
+          ...barBg, borderRadius: RADIUS.xs, padding: isChild ? '4px 8px' : '5px 10px',
+          lineHeight: '1.3',
           display: 'flex', flexDirection: 'column', gap: 1,
           overflow: 'hidden', whiteSpace: 'nowrap',
           cursor: isAdmin ? 'pointer' : 'default', transition: 'opacity 0.15s',
           position: 'relative',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
+          <span style={{ flex: 1, fontSize: 10, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
             {isDone ? <Icon name="check" size={9} style={{ marginRight: 2 }} /> : null}{title}
           </span>
           {daysText && !isDone && (
-            <span style={{ flexShrink: 0, fontSize: 9, ...daysStyle }}>{daysText}</span>
+            <span style={{ flexShrink: 0, fontSize: 9, marginLeft: 5, ...daysStyle }}>{daysText}</span>
           )}
         </div>
         {owner && (
-          <div style={{ fontSize: 8, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 9, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {owner}
           </div>
         )}
@@ -206,18 +210,18 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonth
     <div style={{
       display: 'grid',
       gridTemplateColumns: visibleGridCols,
-      gap: 0, borderBottom: `0.5px solid ${T.borderLight}`,
+      gap: 0, borderBottom: `1px solid ${T.border}`,
       minHeight: isChild ? 48 : 56, alignItems: 'center', position: 'relative',
     }}>
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: isChild ? '4px 6px 4px 16px' : '4px 8px 4px 0',
-        fontSize: isChild ? 10 : 11, fontWeight: 500, color: T.textSub,
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: isChild ? '10px 6px 10px 16px' : '10px 6px 10px 0',
+        fontSize: isChild ? 11 : 12, fontWeight: 600, color: T.textSub,
         overflow: 'hidden', minWidth: 0,
       }}>
         <span style={{
-          width: isChild ? 5 : 7, height: isChild ? 5 : 7,
-          borderRadius: '50%', backgroundColor: color || '#888', flexShrink: 0,
+          width: isChild ? 6 : 7, height: isChild ? 6 : 7,
+          borderRadius: RADIUS.pill, backgroundColor: color || T.textMuted, flexShrink: 0,
         }} />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{name}</span>
         {isAdmin && (
@@ -225,15 +229,15 @@ function OrgRow({ org, isChild, onEdit, onAddMilestone, isAdmin, T, visibleMonth
             onClick={() => onAddMilestone(org.id)}
             title="マイルストーンを追加"
             style={{
-              flexShrink: 0, width: 16, height: 16, borderRadius: '50%',
-              border: `1px solid ${T.borderMid}`, background: 'transparent',
-              color: T.textMuted,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: 0, opacity: 0.5, transition: 'opacity 0.15s',
+              flexShrink: 0, padding: '1px 6px', borderRadius: RADIUS.pill,
+              border: `1px dashed ${T.border}`, background: 'transparent',
+              color: T.textMuted, fontSize: 10, fontFamily: 'inherit',
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3,
+              opacity: 0.6, transition: 'opacity 0.15s',
             }}
             onMouseEnter={e => e.currentTarget.style.opacity = 1}
-            onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
-          ><Icon name="plus" size={10} /></button>
+            onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
+          ><Icon name="plus" size={9} />追加</button>
         )}
       </div>
       {milestones.map(ms => (
@@ -570,20 +574,28 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
     <div style={{ flex: 1, overflowY: 'auto', padding: SPACING['2xl'], position: 'relative' }}>
       <BgGlow T={T} />
       <div style={{ position: 'relative', zIndex: 1 }}>
-      <LargeTitle T={T}
-        title="年間マイルストーン"
-        subtitle={`${fiscalYear}年度（4月〜翌3月）`}
-        right={isAdmin ? (
-          <div style={{ display: 'flex', gap: SPACING.sm }}>
-            <button onClick={() => setShowAllOrgs(v => !v)} style={{
-              ...btnSecondary({ T, size: 'sm' }), padding: '7px 14px', border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.sm + 1,
-              background: showAllOrgs ? T.accentBg : 'transparent',
-              fontSize: 12, fontWeight: 600, color: showAllOrgs ? T.accent : T.textSub,
-            }}>{showAllOrgs ? '全組織表示中' : '全組織を表示'}</button>
-            {/* 「+ 事業部を追加」ボタンは削除しました。組織の追加・削除は「組織」ページから行ってください。 */}
-          </div>
-        ) : null}
-      />
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: SPACING.md }}>
+        <div style={{ ...accentRingStyle({ color: T.accent, size: 40 }), marginBottom: SPACING.md }}>
+          <Icon name="flag" size={18} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <LargeTitle T={T}
+            title="年間マイルストーン"
+            subtitle={`${fiscalYear}年度（4月〜翌3月）`}
+            right={isAdmin ? (
+              <div style={{ display: 'flex', gap: SPACING.sm }}>
+                <button onClick={() => setShowAllOrgs(v => !v)} style={{
+                  ...pillStyle({ color: T.accent, size: 'lg' }),
+                  background: T.accentBg, color: T.accentText,
+                  padding: '5px 11px', fontSize: 11.5, fontWeight: 700,
+                  border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                }}>{showAllOrgs ? '全組織表示中' : '全組織を表示'}</button>
+                {/* 「+ 事業部を追加」ボタンは削除しました。組織の追加・削除は「組織」ページから行ってください。 */}
+              </div>
+            ) : null}
+          />
+        </div>
+      </div>
 
       {/* ビュー切替タブ (SegmentedControl) */}
       <div style={{ marginBottom: SPACING.lg }}>
@@ -645,60 +657,72 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
         }
         return (
         <div style={{
-          ...cardStyle({ T, padding: SPACING.lg }), border: `0.5px solid ${T.borderLight}`,
+          ...cardStyle({ T, padding: '18px 20px' }), border: `1px solid ${T.border}`,
           borderRadius: RADIUS.lg, width: '100%',
         }}>
-          <div style={{ width: '100%', minWidth: 0 }}>
-            {/* Q ヘッダー行（年間表示のみ） */}
+          {/* 横スクロール対応: min-width 880px を保証してQ1-Q4を横並び維持 */}
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ minWidth: 880 }}>
+            {/* Q ヘッダー行（年間表示のみ）: Qラベル11px/700 + 月サブ9px/muted */}
             {viewMode === 'annual' && (
             <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
-              <div />
-              {QUARTERS.map((q, i) => (
+              <div style={{
+                padding: '6px 8px', textAlign: 'left',
+                fontSize: 10.5, fontWeight: 700, color: T.textMuted, letterSpacing: '0.04em',
+                borderBottom: `1px solid ${T.border}`,
+              }}>組織</div>
+              {QUARTERS.map((q, i) => {
+                const curQ = Math.floor(currentColIndex / 3)
+                const isNowQ = i === curQ
+                return (
                 <div key={q.label} style={{
                   gridColumn: `span ${q.span}`, textAlign: 'center',
-                  ...TYPO.footnote, fontWeight: 500, color: T.textSub,
-                  padding: '4px 2px 2px', borderBottom: `0.5px solid ${T.borderLight}`,
-                  borderLeft: i > 0 ? `0.5px solid ${T.borderLight}` : 'none',
-                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                  padding: '6px 8px', borderBottom: `1px solid ${T.border}`,
+                  backgroundColor: isNowQ ? hexWithAlpha(T.accent, 0.06) : 'transparent',
+                  overflow: 'hidden',
                 }}>
-                  {q.label}
-                  <span style={{ fontWeight: 400, color: T.textMuted, marginLeft: SPACING.xs }}>{q.months}</span>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.text, letterSpacing: 0, marginBottom: 2 }}>
+                    {q.label} {q.months}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', fontSize: 9, color: T.textMuted, marginTop: 1 }}>
+                    {MONTH_LABELS.slice(i * 3, i * 3 + 3).map(m => {
+                      const isCurMonth = MONTH_LABELS.indexOf(m) === currentColIndex
+                      return (
+                        <span key={m} style={isCurMonth ? { color: T.accentText, fontWeight: 700 } : undefined}>{m}</span>
+                      )
+                    })}
+                  </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
             )}
 
-            {/* 月ヘッダー行 */}
+            {/* 月ヘッダー行（四半期表示時のみ） */}
+            {viewMode !== 'annual' && (
             <div style={{ display: 'grid', gridTemplateColumns: visibleGridCols, gap: 0 }}>
-              <div style={{ borderBottom: `0.5px solid ${T.borderLight}` }} />
+              <div style={{ borderBottom: `1px solid ${T.border}` }} />
               {visibleMonthLabels.map((label, i) => {
                 const fullIdx = MONTH_LABELS.indexOf(label)
                 const isCurrent = fullIdx === currentColIndex
                 const isQStart = fullIdx % 3 === 0
                 return (
                   <div key={label} style={{
-                    textAlign: 'center', fontSize: 10,
-                    color: isCurrent ? T.text : T.textMuted,
-                    fontWeight: isCurrent ? 600 : 400,
-                    padding: '3px 2px 6px',
-                    borderBottom: `0.5px solid ${T.borderLight}`,
-                    borderLeft: isQStart ? `0.5px solid ${T.borderLight}` : 'none',
-                    backgroundColor: isCurrent ? T.dangerBg : 'transparent',
+                    textAlign: 'center', fontSize: 9,
+                    color: isCurrent ? T.accentText : T.textMuted,
+                    fontWeight: isCurrent ? 700 : 400,
+                    padding: '6px 8px',
+                    borderBottom: `1px solid ${T.border}`,
+                    borderLeft: isQStart ? `1px solid ${T.borderLight}` : 'none',
+                    backgroundColor: isCurrent ? T.accentBg : 'transparent',
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {label}
-                    {isCurrent && (
-                      <div style={{
-                        position: 'absolute', bottom: 0, left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 4, height: 4, borderRadius: '50%',
-                        backgroundColor: T.danger, opacity: 0.6,
-                      }} />
-                    )}
                   </div>
                 )
               })}
             </div>
+            )}
 
             {/* 事業部行 */}
             {filteredTree.map(org => (
@@ -727,28 +751,29 @@ export default function MilestonePage({ levels, themeKey, fiscalYear, user, onLe
               </div>
             )}
           </div>
+          </div>
 
-          {/* 凡例 */}
+          {/* 凡例（下部 border-top dashed） */}
           <div style={{
-            display: 'flex', gap: SPACING.lg, flexWrap: 'wrap', marginTop: SPACING.lg,
-            paddingTop: SPACING.md, borderTop: `0.5px solid ${T.borderLight}`,
-            ...TYPO.footnote, fontWeight: 400, color: T.textMuted, alignItems: 'center',
+            display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 14,
+            paddingTop: 14, borderTop: `1px dashed ${T.border}`,
+            fontSize: 10.5, fontWeight: 400, color: T.textMuted, alignItems: 'center',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 20, height: 8, borderRadius: RADIUS.xs - 3, backgroundColor: '#1A5C3A' }} />
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 14, height: 8, borderRadius: 3, backgroundColor: T.accent }} />
               <span>濃色 = 最注力</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 20, height: 8, borderRadius: RADIUS.xs - 3, backgroundColor: 'rgba(26,92,58,0.15)', border: '0.5px solid rgba(26,92,58,0.3)' }} />
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 14, height: 8, borderRadius: 3, backgroundColor: T.accentBg, border: `1px solid ${hexWithAlpha(T.accent, 0.2)}` }} />
               <span>薄色 = 進行中</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: T.warn, fontWeight: 600 }}>残14日</span>
-              <span>= 期日が近い</span>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: T.success }}>
+              <div style={{ width: 14, height: 8, borderRadius: 3, backgroundColor: T.successBg }} />
+              <span>残14日 = 期日が近い</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: T.danger, fontWeight: 600 }}>3日超過</span>
-              <span>= 期日超過</span>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: T.danger }}>
+              <div style={{ width: 14, height: 8, borderRadius: 3, backgroundColor: T.dangerBg }} />
+              <span>3日超過 = 期日超過</span>
             </div>
             {isAdmin && (
               <span style={{ marginLeft: 'auto' }}>バーをクリックして編集 ・ 組織名の＋で追加</span>
