@@ -40,13 +40,7 @@ const PERIOD_LABELS = { annual:'通期', q1:'Q1', q2:'Q2', q3:'Q3', q4:'Q4' }
 // 年度プレフィックスを除去してraw期間キーを取得 (2025_q4 → q4)
 function rawPeriod(period) { return period?.includes('_') ? period.split('_').pop() : period }
 function periodLabel(period) { return PERIOD_LABELS[rawPeriod(period)] || period }
-const LAYER_COLORS  = { 0:'#ff6b6b', 1:'#4d9fff', 2:'#00d68f', 3:'#ffd166' }
 
-function getDepth(levelId, levels) {
-  let d = 0, cur = levels.find(l => Number(l.id) === Number(levelId))
-  while (cur && cur.parent_id) { d++; cur = levels.find(l => Number(l.id) === Number(cur.parent_id)) }
-  return d
-}
 function calcPct(current, target, lowerIsBetter) {
   if (!target) return 0
   const r = lowerIsBetter ? target / Math.max(current, 0.001) : current / target
@@ -128,7 +122,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const pct      = calcPct(parseFloat(currentVal)||0, kr.target, kr.lower_is_better)
   const stars    = calcKRStars(parseFloat(currentVal)||0, kr.target, kr.lower_is_better)
   const starCfg  = KR_STAR_CFG[stars]
-  const pctColor = pct >= 100 ? wT().success : pct >= 60 ? wT().info : wT().danger
+  const pctColor = pct >= 100 ? wT().accent : pct >= 60 ? wT().success : pct >= 30 ? wT().warn : wT().danger
 
   useEffect(() => {
     // 週が変わったら入力をリセットして新しい週のレビューを読み込む
@@ -906,17 +900,15 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   // 自分のObjectiveがある組織のみハイライト
   const myLevelIds = new Set(objectives.map(o => Number(o.level_id)))
   function renderSb(level, indent=0) {
-    const d = getDepth(level.id, levels)
-    const color = LAYER_COLORS[d] || '#a0a8be'
     const isActive = Number(activeLevelId)===Number(level.id)
     const hasMyObj = myLevelIds.has(Number(level.id))
     return (
       <div key={level.id}>
         <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
-          style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', paddingLeft:8+indent*14, borderRadius:RADIUS.xs, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent', opacity:hasMyObj?1:0.5 }}>
+          style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', paddingLeft:(isActive?5:8)+indent*14, borderRadius:RADIUS.xs, cursor:'pointer', marginBottom:2, borderLeft:`3px solid ${isActive?wT().accent:'transparent'}`, background:isActive?wT().accentBg:'transparent', opacity:hasMyObj?1:0.5 }}>
           <span style={{display:'inline-flex'}}><DataIcon value={level.icon} size={13}/></span>
-          <span style={{ fontSize:TYPO.footnote.fontSize, flex:1, fontWeight:isActive?700:hasMyObj?600:400, color:isActive?color:hasMyObj?wT().textSub:wT().textFaint }}>{level.name}</span>
-          {hasMyObj && <span style={{ width:6, height:6, borderRadius:'50%', background:color, flexShrink:0 }} />}
+          <span style={{ fontSize:TYPO.footnote.fontSize, flex:1, fontWeight:isActive?700:hasMyObj?600:400, color:isActive?wT().accentText:hasMyObj?wT().textSub:wT().textFaint }}>{level.name}</span>
+          {hasMyObj && <span style={{ width:6, height:6, borderRadius:'50%', background:isActive?wT().accent:wT().success, flexShrink:0 }} />}
         </div>
         {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
       </div>
@@ -998,7 +990,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         {!isMobile && (
           <div style={{ width: isTablet ? 120 : 155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
             <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>部署</div>
-            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', borderRadius:RADIUS.xs, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?`${wT().info}4d`:'transparent'}`, background:!activeLevelId?`${wT().info}1f`:'transparent', color:!activeLevelId?wT().info:wT().textSub }}>
+            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 8px', paddingLeft:!activeLevelId?5:8, borderRadius:RADIUS.xs, cursor:'pointer', marginBottom:2, borderLeft:`3px solid ${!activeLevelId?wT().accent:'transparent'}`, background:!activeLevelId?wT().accentBg:'transparent', color:!activeLevelId?wT().accentText:wT().textSub }}>
               <Icon name="building" size={12} /><span style={{ fontSize:TYPO.footnote.fontSize, flex:1, fontWeight:!activeLevelId?700:500 }}>全部署</span>
             </div>
             {roots.map(r=>renderSb(r,0))}
@@ -1007,37 +999,33 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
         {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
-          <div style={{ ...TYPO.caption, color:wT().info, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
+          <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
             <div style={{ fontSize:TYPO.subhead.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
           )}
           {visibleObjs.map(obj => {
             const isActive = Number(activeObjId) === Number(obj.id)
-            const d = getDepth(obj.level_id, levels)
-            const color = LAYER_COLORS[d] || '#a0a8be'
             const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
             const objKRsCount = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id)).length
             const objKAsCount = kaReports.filter(r=>Number(r.objective_id)===Number(obj.id)).length
             const myKRs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const avgPct = myKRs.length > 0 ? Math.round(myKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/myKRs.length) : 0
-            const pctColor = avgPct>=100?wT().success:avgPct>=60?wT().info:wT().danger
+            const pctColor = avgPct>=100?wT().accent:avgPct>=60?wT().success:avgPct>=30?wT().warn:wT().danger
             return (
               <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{
-                padding:'12px 14px', borderRadius:RADIUS.md, marginBottom:SPACING.sm, cursor:'pointer',
-                border:`1px solid ${isActive?color+'4d':color+'1a'}`,
+                padding:isActive?'12px 14px 12px 11px':'12px 14px', borderRadius:RADIUS.md, marginBottom:SPACING.sm, cursor:'pointer',
+                border:`1px solid ${wT().border}`,
+                borderLeft: isActive ? `3px solid ${wT().accent}` : `1px solid ${wT().border}`,
                 background: isActive
-                  ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${color}0d 100%)`
+                  ? `linear-gradient(120deg, ${wT().accentBg} 0%, transparent 100%)`
                   : wT().bgCard,
-                boxShadow: isActive
-                  ? SHADOWS.hover(color)
-                  : SHADOWS.sm,
+                boxShadow: isActive ? SHADOWS.sm : SHADOWS.xs,
                 transition:'all 0.2s ease',
               }}>
                 <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.sm }}>
                   <span style={{
-                    ...TYPO.caption, fontWeight:800, padding:'3px 8px', borderRadius:RADIUS.xs,
-                    background:`linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`, color:'#fff',
-                    boxShadow: `0 1px 2px ${color}55`,
+                    ...TYPO.caption, fontWeight:700, padding:'2px 8px', borderRadius:RADIUS.xs,
+                    background:wT().accentBg, color:wT().accentText,
                   }}>{periodLabel(obj.period)}</span>
                   {level && <span style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted }}><DataIcon value={level.icon} size={11}/> {level.name}</span>}
                 </div>
@@ -1072,29 +1060,19 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           ) : (
             <>
               {(() => {
-                const d = getDepth(selectedObj.level_id, levels)
-                const color = LAYER_COLORS[d] || '#a0a8be'
                 return (
                   <div style={{
                     position:'relative', overflow:'hidden',
-                    padding:'18px 22px',
-                    background:`linear-gradient(135deg, ${color}f0 0%, ${color}b0 100%)`,
-                    color:'#fff',
-                    borderRadius:RADIUS.xl, marginBottom:SPACING.lg,
-                    boxShadow: SHADOWS.hero(color),
+                    padding:'14px 18px',
+                    background:`linear-gradient(120deg, ${wT().successBg}, rgba(34,211,238,.05))`,
+                    border:`1px solid ${wT().border}`,
+                    borderRadius:RADIUS.lg, marginBottom:SPACING.lg,
                   }}>
-                    <div aria-hidden style={{
-                      position:'absolute', top:-50, right:-30, width:180, height:180,
-                      background:'radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 60%)',
-                      borderRadius:'50%', pointerEvents:'none',
-                    }} />
-                    <div style={{ position:'relative', zIndex:1 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.sm }}>
-                        <span style={{ ...TYPO.caption, fontWeight:800, padding:'3px 10px', borderRadius:RADIUS.pill, background:'rgba(255,255,255,0.25)', color:'#fff', backdropFilter:'blur(10px)' }}>{periodLabel(selectedObj.period)}</span>
-                        <span style={{ fontSize:TYPO.caption.fontSize, opacity:0.85, letterSpacing:'0.18em', textTransform:'uppercase', fontWeight:700 }}>Objective</span>
-                      </div>
-                      <div style={{ fontSize:TYPO.title2.fontSize, fontWeight:800, color:'#fff', lineHeight:1.4, letterSpacing:'-0.01em' }}>{selectedObj.title}</div>
+                    <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.xs }}>
+                      <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 8px', borderRadius:RADIUS.pill, background:wT().successBg, color:wT().success }}>{periodLabel(selectedObj.period)}</span>
+                      <span style={{ ...TYPO.caption, color:wT().success, letterSpacing:'0.06em', textTransform:'uppercase', fontWeight:700 }}>Objective</span>
                     </div>
+                    <div style={{ ...TYPO.title3, fontWeight:700, color:wT().text, lineHeight:1.4 }}>{selectedObj.title}</div>
                   </div>
                 )
               })()}
@@ -1117,15 +1095,15 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     ).join('\n')
                     const msg = `${myName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
                     onAIFeedback(msg)
-                  }} style={{ display:'flex', alignItems:'center', gap:SPACING.sm, width:'100%', padding:'10px 14px', borderRadius:RADIUS.md, border:`1px solid ${wT().accent}59`, background:wT().accentBg, cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}
-                    onMouseEnter={e=>e.currentTarget.style.background=`${wT().accent}26`}
-                    onMouseLeave={e=>e.currentTarget.style.background=wT().accentBg}>
-                    <div style={{ width:30, height:30, borderRadius:'50%', background:`linear-gradient(135deg, ${wT().info}, ${wT().accent})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0 }}><Icon name="ai" size={16} /></div>
+                  }} style={{ display:'flex', alignItems:'center', gap:SPACING.sm+2, width:'100%', padding:'12px 14px', borderRadius:RADIUS.md, border:'1px solid rgba(37,99,235,.18)', background:'linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))', cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}
+                    onMouseEnter={e=>e.currentTarget.style.background='linear-gradient(135deg, rgba(37,99,235,.11), rgba(34,211,238,.11))'}
+                    onMouseLeave={e=>e.currentTarget.style.background='linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))'}>
+                    <div style={{ width:28, height:28, borderRadius:RADIUS.sm, background:'linear-gradient(135deg, #3b82f6, #1e3a8a)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', flexShrink:0, boxShadow:'0 2px 6px rgba(30,58,138,.24)' }}><Icon name="sparkle" size={16} /></div>
                     <div style={{ textAlign:'left' }}>
-                      <div style={{ fontSize:TYPO.subhead.fontSize, fontWeight:700, color:wT().accent }}>AIコーチにフィードバックをもらう</div>
-                      <div style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted }}>現在のKR・KA状況をもとにアドバイスをもらえます</div>
+                      <div style={{ ...TYPO.subhead, fontWeight:700, color:wT().accentText }}>AIコーチにフィードバックをもらう</div>
+                      <div style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textSub, marginTop:1 }}>現在のKR・KA状況をもとにアドバイスをもらえます</div>
                     </div>
-                    <span style={{ marginLeft:'auto', color:wT().accent, display:'inline-flex', alignItems:'center' }}><Icon name="arrowRight" size={12} /></span>
+                    <span style={{ marginLeft:'auto', color:wT().accentText, display:'inline-flex', alignItems:'center' }}><Icon name="arrowRight" size={12} /></span>
                   </button>
                 </div>
               )}
@@ -1161,9 +1139,10 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                             </>
                           )}
                           <div onClick={() => handleKAAdd(kr)} style={{
-                            display:'flex', alignItems:'center', gap:SPACING.sm, padding:'6px 10px', cursor:'pointer',
-                            color:wT().textMuted, fontSize:TYPO.footnote.fontSize, marginTop: krKAs.length > 0 ? SPACING.xs : 0,
-                            borderTop: krKAs.length > 0 ? `1px solid ${wT().border}` : 'none',
+                            display:'inline-flex', alignItems:'center', gap:SPACING.xs, padding:'4px 8px', cursor:'pointer',
+                            color:wT().accentText, fontSize:TYPO.footnote.fontSize, fontWeight:600,
+                            border:`1px dashed ${wT().borderMid}`, borderRadius:RADIUS.xs,
+                            marginTop: krKAs.length > 0 ? SPACING.sm : SPACING.xs,
                           }}>
                             <Icon name="plus" size={13} /> このKRにKAを追加
                           </div>
