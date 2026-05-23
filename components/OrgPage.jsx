@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS } from '../lib/themeTokens'
+import Icon from './Icon'
 import { LargeTitle, BgGlow } from './iosUI'
 import TaskManualPage from './TaskManualPage'
 import WorkforceTab from './WorkforceTab'
@@ -270,7 +271,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
 
   if (error) return (
     <div style={{ padding: '20px', background: T().warnBg, border: `1px solid ${T().warn}`, borderRadius: 12, color: T().warn, fontSize: 13, marginBottom: 20 }}>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>⚠️ エラー: {error}</div>
+      <div style={{ fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="alert" size={14} /> エラー: {error}</div>
       <div style={{ color: T().textMuted, fontSize: 12, lineHeight: 1.6 }}>
         Supabase Admin APIへのアクセスに失敗しました。<br/>
         Vercelの環境変数に <code style={{ background: T().border, padding: '1px 6px', borderRadius: 4 }}>SUPABASE_SERVICE_ROLE_KEY</code> が設定されているか確認してください。<br/>
@@ -323,7 +324,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
       <div style={{ marginBottom: 14, position: 'relative' }}>
         <input
           type="text" value={filter} onChange={e => setFilter(e.target.value)}
-          placeholder="🔍 名前・メール・ロールで検索 (例: 元 / mickey / マネージャー)"
+          placeholder="名前・メール・ロールで検索 (例: 元 / mickey / マネージャー)"
           style={{
             width: '100%', boxSizing: 'border-box',
             padding: '10px 14px 10px 14px', borderRadius: 10,
@@ -349,7 +350,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
           background: T().warnBg, border: `1px solid ${T().warn}40`, borderRadius: 10,
           fontSize: 12, color: T().warn,
         }}>
-          ⚠ {orphanedMembers.length}件のメンバーは <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> が設定されているが、AUTH ユーザーが存在しません。
+          <Icon name="alert" size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> {orphanedMembers.length}件のメンバーは <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> が設定されているが、AUTH ユーザーが存在しません。
           <div style={{ marginTop: 6, color: T().textSub, fontWeight: 500 }}>
             {orphanedMembers.map(m => `${m.name}（${m.email}）`).join(' / ')}
           </div>
@@ -392,23 +393,23 @@ function UserListTab({ members, currentUser, isAdmin }) {
                     <span style={{ fontSize: 13, fontWeight: 600, color: T().textMuted, fontStyle: 'italic' }}>（未紐付け）</span>
                   )}
                   {member?.is_admin && (
-                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700, border: `1px solid ${T().warn}` }}>👑 管理者</span>
+                    <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700, border: `1px solid ${T().warn}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="star" size={11} /> 管理者</span>
                   )}
                   {member?.role && (
                     <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 99, background: `${color}15`, color, fontWeight: 600, border: `1px solid ${color}30` }}>{member.role}</span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: T().accent, marginBottom: 3 }}>✉ {u.email}</div>
+                <div style={{ fontSize: 12, color: T().accent, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="mail" size={12} /> {u.email}</div>
                 <div style={{ display: 'flex', gap: 12, fontSize: 11, color: T().textFaint, flexWrap: 'wrap' }}>
-                  {member?.role && <span>🏷 {member.role}</span>}
-                  <span>🕐 最終ログイン: {formatDate(u.last_sign_in_at)}</span>
-                  <span>📅 登録日: {formatDate(u.created_at)}</span>
+                  {member?.role && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="pin" size={11} /> {member.role}</span>}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="clock" size={11} /> 最終ログイン: {formatDate(u.last_sign_in_at)}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="calendar" size={11} /> 登録日: {formatDate(u.created_at)}</span>
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexDirection: 'column', alignItems: 'flex-end' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: hasLinked ? T().badgeBg : T().warnBg, color: hasLinked ? T().accent : T().warn, border: `1px solid ${hasLinked ? T().badgeBorder : T().warn}` }}>
-                  {hasLinked ? '✓ 組織図連携済み' : '未紐付け'}
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: hasLinked ? T().badgeBg : T().warnBg, color: hasLinked ? T().accent : T().warn, border: `1px solid ${hasLinked ? T().badgeBorder : T().warn}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {hasLinked ? <><Icon name="check" size={11} /> 組織図連携済み</> : '未紐付け'}
                 </div>
                 <div style={{ display: 'flex', gap: 5 }}>
                   {isAdmin && (
@@ -426,7 +427,7 @@ function UserListTab({ members, currentUser, isAdmin }) {
                   {isAdmin && !isMe && member && (
                     <button onClick={() => handleToggleAdmin(u, member)} disabled={processing}
                       style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${member.is_admin ? T().warn : T().warn}`, background: member.is_admin ? T().warnBg : T().warnBg, color: T().warn, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                      {member.is_admin ? '👑 管理者解除' : '👑 管理者にする'}
+                      <Icon name="star" size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {member.is_admin ? '管理者解除' : '管理者にする'}
                     </button>
                   )}
                   {isAdmin && !isMe && (
@@ -453,14 +454,14 @@ function UserListTab({ members, currentUser, isAdmin }) {
               padding: '10px 12px', borderRadius: 8, marginBottom: 12,
               background: T().accentBg, fontSize: 11, color: T().textSub, lineHeight: 1.6,
             }}>
-              💡 ここで選んだメンバーの <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> を
+              <Icon name="bolt" size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> ここで選んだメンバーの <code style={{ background: 'rgba(0,0,0,0.06)', padding: '0 4px', borderRadius: 3 }}>members.email</code> を
               <strong style={{ color: T().accent }}> {linkModal.authUser.email}</strong> に書き換えます (JD・ロール・名前等は保持)。<br />
               「⚠ AUTH 切替」=他の AUTH と連携中だがこの AUTH に切り替えたい場合に使う (旧側は未紐付けに戻る)。
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
               <div onClick={() => handleLink(linkModal.authUser, null)}
-                style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 12, fontWeight: 600 }}>
-                🔗 紐付けを解除する
+                style={{ padding: '10px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="link" size={13} /> 紐付けを解除する
               </div>
               {members.map(m => {
                 const alreadyLinked = m.email === linkModal.authUser.email
@@ -505,8 +506,8 @@ function UserListTab({ members, currentUser, isAdmin }) {
                       </div>
                     </div>
                     {alreadyLinked && <span style={{ fontSize: 10, color: T().accent, fontWeight: 700, flexShrink: 0 }}>現在</span>}
-                    {linkedToOther && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0 }}>⚠ AUTH 切替</span>}
-                    {hasStaleEmail && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0 }}>⚠ メール上書き</span>}
+                    {linkedToOther && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="alert" size={10} /> AUTH 切替</span>}
+                    {hasStaleEmail && <span style={{ fontSize: 10, color: T().warn, fontWeight: 700, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="alert" size={10} /> メール上書き</span>}
                   </div>
                 )
               })}
@@ -576,7 +577,7 @@ function SlackSyncPanel() {
       background: T().bgCard, border: `1px solid ${T().border}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 18 }}>💬</span>
+        <span style={{ fontSize: 18, color: T().accent, display: 'inline-flex' }}><Icon name="msg" size={18} /></span>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T().text }}>Slack User ID 同期</div>
           <div style={{ fontSize: 11, color: T().textMuted }}>
@@ -590,15 +591,15 @@ function SlackSyncPanel() {
           fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
           cursor: syncing ? 'wait' : 'pointer',
           opacity: syncing ? 0.6 : 1,
-        }}>{syncing ? '同期中...' : '🔄 Slack User ID 同期'}</button>
+        }}>{syncing ? '同期中...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="refresh" size={12} /> Slack User ID 同期</span>}</button>
       </div>
       {result && (
         <div style={{
           marginTop: 10, padding: 10, borderRadius: 8,
-          background: 'rgba(0,214,143,0.1)', border: '1px solid rgba(0,214,143,0.3)',
+          background: T().successBg, border: `1px solid ${T().success}`,
           fontSize: 12, color: T().text,
         }}>
-          ✅ 同期完了: <b>{result.updated}</b> 名を更新しました
+          <Icon name="check" size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> 同期完了: <b>{result.updated}</b> 名を更新しました
           (Slack 側ユーザー: {result.total} / メンバー総数: {result.membersTotal})
           {result.unmatched?.length > 0 && (
             <div style={{ marginTop: 4, fontSize: 11, color: T().textMuted }}>
@@ -610,9 +611,9 @@ function SlackSyncPanel() {
       {error && (
         <div style={{
           marginTop: 10, padding: 10, borderRadius: 8,
-          background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)',
+          background: T().dangerBg, border: `1px solid ${T().danger}`,
           fontSize: 12, color: T().danger,
-        }}>⚠️ エラー: {error}</div>
+        }}><Icon name="alert" size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> エラー: {error}</div>
       )}
     </div>
   )
@@ -723,13 +724,13 @@ function ConfirmationsWebhookPanel({ currentUser }) {
       background: T().bgCard, border: `1px solid ${T().border}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 18 }}>📨</span>
+        <span style={{ fontSize: 18, color: T().accent, display: 'inline-flex' }}><Icon name="inbox" size={18} /></span>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T().text }}>
             共有・確認事項の通知チャンネル
           </div>
           <div style={{ fontSize: 11, color: T().textMuted, lineHeight: 1.5 }}>
-            ダッシュボードから投稿された 📢共有 / 📬確認 事項を、ここに登録した Slack Incoming Webhook で投稿します。
+            ダッシュボードから投稿された 共有 / 確認 事項を、ここに登録した Slack Incoming Webhook で投稿します。
             <br />未設定の場合は部署 webhook → グローバル設定の順にフォールバックします。
           </div>
         </div>
@@ -755,7 +756,7 @@ function ConfirmationsWebhookPanel({ currentUser }) {
             background: (dirty && isUrlValid && !saving) ? T().accent : T().border,
             color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
             cursor: (dirty && isUrlValid && !saving) ? 'pointer' : 'not-allowed',
-          }}>{saving ? '保存中…' : '💾 保存'}</button>
+          }}>{saving ? '保存中…' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="check" size={12} /> 保存</span>}</button>
         <button onClick={sendTest} disabled={!url || !isUrlValid || testing}
           style={{
             padding: '8px 14px', borderRadius: 8,
@@ -764,18 +765,18 @@ function ConfirmationsWebhookPanel({ currentUser }) {
             fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
             cursor: (!url || !isUrlValid || testing) ? 'not-allowed' : 'pointer',
             opacity: (!url || !isUrlValid) ? 0.5 : 1,
-          }}>{testing ? '送信中…' : '🧪 テスト送信'}</button>
+          }}>{testing ? '送信中…' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="bolt" size={12} /> テスト送信</span>}</button>
       </div>
       {url && !isUrlValid && (
         <div style={{ marginTop: 8, fontSize: 11, color: T().danger }}>
-          ⚠️ Slack Incoming Webhook URL の形式が違います (https://hooks.slack.com/services/... で始まる必要があります)
+          <Icon name="alert" size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> Slack Incoming Webhook URL の形式が違います (https://hooks.slack.com/services/... で始まる必要があります)
         </div>
       )}
       {message && (
         <div style={{
           marginTop: 10, padding: 8, borderRadius: 6,
-          background: message.startsWith('✅') ? 'rgba(0,214,143,0.10)' : 'rgba(255,107,107,0.10)',
-          border: `1px solid ${message.startsWith('✅') ? 'rgba(0,214,143,0.30)' : 'rgba(255,107,107,0.30)'}`,
+          background: message.startsWith('✅') ? T().successBg : T().dangerBg,
+          border: `1px solid ${message.startsWith('✅') ? T().success : T().danger}`,
           fontSize: 11, color: message.startsWith('✅') ? T().text : T().danger,
         }}>{message}</div>
       )}
@@ -864,7 +865,7 @@ function SupportSelect({ value, onChange, memberNames, borderColor }) {
                 onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = isSel ? `${avatarColor(name)}15` : 'transparent' }}
               >
                 <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${isSel ? avatarColor(name) : T().borderMid}`, background: isSel ? avatarColor(name) : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {isSel && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
+                  {isSel && <Icon name="check" size={10} style={{ color: '#fff' }} />}
                 </div>
                 <Avatar name={name} size={16} />
                 <span style={{ fontSize: 12, color: isSel ? avatarColor(name) : T().text, fontWeight: isSel ? 700 : 400 }}>{name}</span>
@@ -881,7 +882,7 @@ function SaveBtn({ saving, saved, onClick, label = '保存' }) {
   return (
     <button onClick={onClick} disabled={saving}
       style={{ padding: '6px 18px', borderRadius: 7, border: 'none', background: T().accentSolid, color: '#fff', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.3s' }}>
-      {saved ? '✓ 保存済み' : saving ? '保存中...' : label}
+      {saved ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> 保存済み</span> : saving ? '保存中...' : label}
     </button>
   )
 }
@@ -1108,7 +1109,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
   if (depts.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🏗</div>
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}><Icon name="building" size={36} /></div>
         <div style={{ fontSize: 15 }}>この年度の組織データがありません</div>
         <div style={{ fontSize: 13, marginTop: 6 }}>OKRページの「組織を管理」から追加してください</div>
       </div>
@@ -1146,7 +1147,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                     background: dept.slack_webhook_url ? T().badgeBg : T().bgHover,
                     border: `1px solid ${dept.slack_webhook_url ? T().badgeBorder : T().border}`,
                     color: dept.slack_webhook_url ? T().accent : T().textMuted }}>
-                  {dept.slack_webhook_url ? '📨 Slack設定済み' : '📨 Slack設定'}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="inbox" size={11} /> {dept.slack_webhook_url ? 'Slack設定済み' : 'Slack設定'}</span>
                 </button>
               )}
             </div>
@@ -1196,9 +1197,9 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                             style={{ width: '100%', boxSizing: 'border-box', background: T().inputBg, border: `1px solid ${T().borderEdit}`, borderRadius: 5, padding: '5px 8px', color: T().inputText, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
                           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                             <button onClick={() => saveTeamMeta(team.id)} disabled={saving}
-                              style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓ 保存</button>
+                              style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="check" size={10} /> 保存</button>
                             <button onClick={() => setEditingMeta(null)}
-                              style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
+                              style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}><Icon name="cross" size={10} /></button>
                           </div>
                         </div>
                       ) : (
@@ -1226,7 +1227,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                           const isEditingMgr = managerEdit?.levelId === team.id
                           return (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 10, color: T().textFaint, fontWeight: 700 }}>📌 責任者</span>
+                              <span style={{ fontSize: 10, color: T().textFaint, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="pin" size={10} /> 責任者</span>
                               {isEditingMgr ? (
                                 <>
                                   <select defaultValue={team.manager_id || ''}
@@ -1261,7 +1262,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
                       {isAdmin && !isEditing && (
                         <button onClick={() => { setMetaBuf({ status: meta.status || 'active', desc_text: meta.desc_text || '' }); setEditingMeta(team.id) }}
                           style={{ marginTop: 8, fontSize: 10, color: T().accent, background: 'transparent', border: `1px dashed ${T().badgeBorder}`, borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                          ✎ チーム情報を編集
+                          <Icon name="pencil" size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> チーム情報を編集
                         </button>
                       )}
                     </div>
@@ -1506,10 +1507,10 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
 
   if (orgTableError) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#c0392b', background: '#fdf0ef', border: '1px dashed #e74c3c', borderRadius: 14 }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: T().danger, background: T().dangerBg, border: `1px dashed ${T().danger}`, borderRadius: 14 }}>
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}><Icon name="alert" size={36} /></div>
         <div style={{ fontSize: 15, fontWeight: 700 }}>org_tasks テーブルの読み込みに失敗しました</div>
-        <div style={{ fontSize: 13, marginTop: 8, color: '#7f3b3b', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, marginTop: 8, color: T().danger, lineHeight: 1.6 }}>
           Supabase SQL Editor で <code>supabase_setup.sql</code> を実行してテーブルを作成してください。<br />
           既存テーブルにカラムが不足している場合は ALTER TABLE 文のみ実行してください。
         </div>
@@ -1519,7 +1520,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   if (tasks.length === 0 && (!levelHierarchy || Object.keys(levelHierarchy).length === 0)) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}><Icon name="note" size={36} /></div>
         <div style={{ fontSize: 15 }}>業務データがありません</div>
         <div style={{ fontSize: 13, marginTop: 6 }}>組織図タブでチームを追加するか、org_tasks テーブルにデータを追加してください</div>
       </div>
@@ -1539,7 +1540,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
           <option value="">担当者：すべて</option>
           {allOwners.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 業務・チームで検索..."
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="業務・チームで検索..."
           style={{ ...sel, width: 200 }}
           onFocus={e => e.target.style.borderColor = T().accent}
           onBlur={e => e.target.style.borderColor = T().border}
@@ -1547,16 +1548,16 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
         <span style={{ fontSize: 11, color: T().textFaint, marginLeft: 'auto' }}>{filtered.length}件</span>
         <button onClick={() => setShowArchived(p => !p)}
           style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${showArchived ? T().warn : T().border}`, background: showArchived ? T().warnBg : 'transparent', color: showArchived ? T().warn : T().textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
-          {showArchived ? '📦 アーカイブ表示中' : `📦 アーカイブ (${archivedTasks.length})`}
+          <Icon name="inbox" size={11} /> {showArchived ? 'アーカイブ表示中' : `アーカイブ (${archivedTasks.length})`}
         </button>
         {isAdmin && !showArchived && (
-          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>
-            👑 管理者モード　⠿ドラッグで並び替え可
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="star" size={10} /> 管理者モード　ドラッグで並び替え可
           </span>
         )}
         {showArchived && (
-          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700 }}>
-            📦 アーカイブ済みのみ表示
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: T().warnBg, color: T().warn, border: `1px solid ${T().warn}`, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="inbox" size={10} /> アーカイブ済みのみ表示
           </span>
         )}
         {(filterDept || filterOwner || query) && <button onClick={() => { setFilterDept(''); setFilterOwner(''); setQuery('') }} style={{ ...sel, color: T().accent, border: `1px solid ${T().badgeBorder}` }}>クリア</button>}
@@ -1608,7 +1609,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                               {/* ドラッグハンドル */}
                               {isAdmin && (
                                 <td style={{ padding: '0 4px 0 8px', color: T().textFaintest, fontSize: 14, userSelect: 'none', cursor: 'grab' }}>
-                                  ⠿
+                                  <Icon name="more" size={14} />
                                 </td>
                               )}
                               <td style={{ padding: '8px 12px' }}>
@@ -1646,24 +1647,24 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                                 <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                                   {isEditing ? (
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => saveEdit(t)} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✓</button>
-                                      <button onClick={() => setEditingId(null)} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
+                                      <button onClick={() => saveEdit(t)} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}><Icon name="check" size={10} /></button>
+                                      <button onClick={() => setEditingId(null)} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}><Icon name="cross" size={10} /></button>
                                     </div>
                                   ) : showArchived ? (
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => restoreTask(t)} style={{ padding: '3px 10px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, fontWeight: 700, cursor: 'pointer' }} title="業務一覧に戻す">↩ 復元</button>
-                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
+                                      <button onClick={() => restoreTask(t)} style={{ padding: '3px 10px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }} title="業務一覧に戻す"><Icon name="refresh" size={10} /> 復元</button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除"><Icon name="cross" size={10} /></button>
                                     </div>
                                   ) : (
                                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                       {taskHistory.filter(h => h.task_id === t.id).length > 0 && (
                                         <button onClick={() => setHistoryTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }} title="引き継ぎ履歴">
-                                          🔄 {taskHistory.filter(h => h.task_id === t.id).length}
+                                          <Icon name="refresh" size={10} /> {taskHistory.filter(h => h.task_id === t.id).length}
                                         </button>
                                       )}
-                                      <button onClick={() => { setEditingId(t.id); setEditBuf({ owner: t.owner || '', task: t.task || '', support: t.support || '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, cursor: 'pointer' }} title="編集">✎</button>
-                                      <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="アーカイブ">📦</button>
-                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除">✕</button>
+                                      <button onClick={() => { setEditingId(t.id); setEditBuf({ owner: t.owner || '', task: t.task || '', support: t.support || '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, fontSize: 10, cursor: 'pointer' }} title="編集"><Icon name="pencil" size={10} /></button>
+                                      <button onClick={() => archiveTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="アーカイブ"><Icon name="inbox" size={10} /></button>
+                                      <button onClick={() => deleteTask(t)} style={{ padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, fontSize: 10, cursor: 'pointer' }} title="完全削除"><Icon name="cross" size={10} /></button>
                                     </div>
                                   )}
                                 </td>
@@ -1693,7 +1694,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                             <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button onClick={() => addTask(dept, team)} disabled={saving} style={{ padding: '3px 10px', borderRadius: 5, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 10, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? '追加中...' : '追加'}</button>
-                                <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}>✕</button>
+                                <button onClick={() => { setAddingTeam(null); setNewBuf({ task: '', owner: '', support: '' }) }} style={{ padding: '3px 8px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().borderMid}`, color: T().textMuted, fontSize: 10, cursor: 'pointer' }}><Icon name="cross" size={10} /></button>
                               </div>
                             </td>
                           </tr>
@@ -1703,7 +1704,7 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
                     {isAdmin && !isAddingHere && !showArchived && (
                       <div onClick={() => { setAddingTeam({ dept, team }); setNewBuf({ task: '', owner: '', support: '' }) }}
                         style={{ padding: '8px 12px', fontSize: 11, color: T().accent, cursor: 'pointer', background: T().bgHover, borderTop: `1px dashed ${T().badgeBorder}`, display: 'flex', alignItems: 'center', gap: 5 }}>
-                        ＋ 業務を追加
+                        <Icon name="plus" size={11} /> 業務を追加
                       </div>
                     )}
                   </div>
@@ -1791,7 +1792,7 @@ function MemberJDTab({ members, setMembers, levels, tasks, taskHistory, jdRows, 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <button onClick={() => setShowAddModal(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, background: T().accentSolid, border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            ＋ メンバーを追加
+            <Icon name="plus" size={13} /> メンバーを追加
           </button>
         </div>
       )}
@@ -1883,12 +1884,12 @@ function TaskHistoryModal({ task, history, onClose }) {
             <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 4 }}>引き継ぎ履歴</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: T().text, lineHeight: 1.4 }}>{task.task}</div>
           </div>
-          <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 15, flexShrink: 0, marginLeft: 12 }}>✕</button>
+          <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 15, flexShrink: 0, marginLeft: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={15} /></button>
         </div>
 
         {records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0', color: T().textFaintest, fontSize: 13 }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}><Icon name="note" size={28} /></div>
             引き継ぎ履歴はまだありません
           </div>
         ) : (
@@ -1910,7 +1911,7 @@ function TaskHistoryModal({ task, history, onClose }) {
                       ) : (
                         <span style={{ fontSize: 12, color: T().textFaintest, fontStyle: 'italic' }}>（未設定）</span>
                       )}
-                      <span style={{ color: T().accent, fontSize: 14, fontWeight: 700 }}>→</span>
+                      <span style={{ color: T().accent, display: 'inline-flex' }}><Icon name="arrowRight" size={14} /></span>
                       {r.to_owner ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 5, background: `${avatarColor(r.to_owner)}15`, color: avatarColor(r.to_owner), fontSize: 12, fontWeight: 600 }}>
                           <Avatar name={r.to_owner} size={16} />{r.to_owner}
@@ -1988,8 +1989,8 @@ function AddMemberModal({ levels, onClose, onAdded }) {
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ background: T().bgCard, border: `1px solid ${T().borderMid}`, borderRadius: 16, padding: 26, width: '100%', maxWidth: 500, maxHeight: '88vh', overflowY: 'auto', color: T().text }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T().text }}>＋ メンバーを追加</h3>
-          <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T().text, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="plus" size={16} /> メンバーを追加</h3>
+          <button onClick={onClose} style={{ background: T().bgInput, border: 'none', color: T().textMuted, width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={16} /></button>
         </div>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: T().textMuted, marginBottom: 8 }}>プロフィール画像</div>
@@ -1998,11 +1999,11 @@ function AddMemberModal({ levels, onClose, onAdded }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button onClick={() => fileRef.current?.click()} disabled={uploading}
                 style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, color: T().accent, fontSize: 11, fontWeight: 600, cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                {uploading ? '⏳ アップロード中...' : '📷 画像をアップロード'}
+                {uploading ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="clock" size={11} /> アップロード中...</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="plus" size={11} /> 画像をアップロード</span>}
               </button>
               {avatarUrl && <button onClick={() => setAvatarUrl('')}
-                style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-                🗑 画像を削除
+                style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Icon name="trash" size={11} /> 画像を削除
               </button>}
               <div style={{ fontSize: 10, color: T().textFaint }}>JPG / PNG / WebP・2MB以下</div>
             </div>
@@ -2038,7 +2039,7 @@ function AddMemberModal({ levels, onClose, onAdded }) {
                       return (
                         <div key={team.id} onClick={() => toggleId(team.id)}
                           style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? T().badgeBg : T().bgInput, border: `1px solid ${isSel ? T().badgeBorder : T().border}`, color: isSel ? T().accent : T().textMuted, transition: 'all 0.15s' }}>
-                          {isSel ? '✓ ' : ''}{team.icon} {team.name}
+                          {isSel ? <Icon name="check" size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> : null} {team.icon} {team.name}
                         </div>
                       )
                     })}
@@ -2389,42 +2390,42 @@ ${versions.length > 1 ? `
         >← メンバー一覧に戻る</button>
 
         {isAdmin && !editing && versions.length === 0 && (
-          <button onClick={startCreateJD} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
-            ＋ JDを作成する
+          <button onClick={startCreateJD} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="plus" size={12} /> JDを作成する
           </button>
         )}
         {!editing && versions.length > 0 && (
-          <button onClick={exportPDF} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
-            📄 PDF出力
+          <button onClick={exportPDF} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="note" size={12} /> PDF出力
           </button>
         )}
         {isAdmin && !editing && versions.length > 0 && (
           <>
-            <button onClick={startEdit} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
-              👑 このバージョンを編集
+            <button onClick={startEdit} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Icon name="pencil" size={12} /> このバージョンを編集
             </button>
-            <button onClick={startAddVersion} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit' }}>
-              ＋ 新バージョンを追加
+            <button onClick={startAddVersion} style={{ padding: '7px 16px', border: `1px solid ${T().badgeBorder}`, background: T().badgeBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().accent, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Icon name="plus" size={12} /> 新バージョンを追加
             </button>
             {dbRows.length > 0 && (
-              <button onClick={deleteSelectedJD} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
-                🗑 このバージョンを削除
+              <button onClick={deleteSelectedJD} style={{ padding: '7px 16px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Icon name="trash" size={12} /> このバージョンを削除
               </button>
             )}
           </>
         )}
         {isAdmin && editing && (
           <>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: addingNewVersion ? T().badgeBg : T().warnBg, color: addingNewVersion ? T().accent : T().warn, border: `1px solid ${addingNewVersion ? T().badgeBorder : T().warn}` }}>
-              {addingNewVersion ? '＋ 新バージョン作成中' : `V${effectiveVerIdx + 1} 編集中`}
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: addingNewVersion ? T().badgeBg : T().warnBg, color: addingNewVersion ? T().accent : T().warn, border: `1px solid ${addingNewVersion ? T().badgeBorder : T().warn}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {addingNewVersion ? <><Icon name="plus" size={11} /> 新バージョン作成中</> : `V${effectiveVerIdx + 1} 編集中`}
             </span>
             <SaveBtn saving={saving} saved={saved} onClick={saveEdit} label="保存する" />
             <button onClick={() => { setEditing(false); setAddingNewVersion(false) }} style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${T().borderMid}`, background: 'transparent', color: T().textMuted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
           </>
         )}
         {isAdmin && memberRow && (
-          <button onClick={deleteMember} style={{ marginLeft: 'auto', padding: '7px 14px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit' }}>
-            🗑 メンバー削除
+          <button onClick={deleteMember} style={{ marginLeft: 'auto', padding: '7px 14px', border: `1px solid ${T().warn}`, background: T().warnBg, borderRadius: 7, fontSize: 12, cursor: 'pointer', color: T().warn, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="trash" size={12} /> メンバー削除
           </button>
         )}
       </div>
@@ -2448,7 +2449,7 @@ ${versions.length > 1 ? `
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveProfile} disabled={savingProfile || !profileBuf.name.trim()}
                   style={{ padding: '5px 16px', borderRadius: 6, background: 'rgba(255,255,255,0.9)', border: 'none', color: fg, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {savingProfile ? '保存中...' : '✓ 保存'}
+                  {savingProfile ? '保存中...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> 保存</span>}
                 </button>
                 <button onClick={() => setEditingProfile(false)}
                   style={{ padding: '5px 12px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -2462,17 +2463,17 @@ ${versions.length > 1 ? `
                 <div>
                   <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: 2 }}>{memberRow?.name || '（名前なし）'}</div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>{memberRow?.role || '—'}</div>
-                  {memberRow?.email && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>✉ {memberRow.email}</div>}
+                  {memberRow?.email && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="mail" size={11} /> {memberRow.email}</div>}
                 </div>
                 {isAdmin && !editingProfile && (
                   <>
                     <button onClick={startEditProfile}
-                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                      ✎ 編集
+                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="pencil" size={11} /> 編集
                     </button>
                     <button onClick={() => avatarFileRef.current?.click()} disabled={uploadingAvatar}
-                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                      {uploadingAvatar ? '⏳...' : '📷'}
+                      style={{ marginTop: 4, padding: '4px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                      {uploadingAvatar ? <Icon name="clock" size={11} /> : <Icon name="plus" size={11} />}
                     </button>
                     <input ref={avatarFileRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
                   </>
@@ -2522,8 +2523,8 @@ ${versions.length > 1 ? `
       {isAdmin && memberRow && (
         <div style={{ ...box, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: editingTeams ? 12 : 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: T().textMuted, letterSpacing: '2px', textTransform: 'uppercase' }}>▶ 所属チーム（兼務設定）</div>
-            {!editingTeams && <button onClick={() => setEditingTeams(true)} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>👑 変更</button>}
+            <div style={{ fontSize: 10, fontWeight: 700, color: T().textMuted, letterSpacing: '2px', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chevronR" size={10} /> 所属チーム（兼務設定）</div>
+            {!editingTeams && <button onClick={() => setEditingTeams(true)} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T().warn}`, background: T().warnBg, color: T().warn, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="pencil" size={11} /> 変更</button>}
           </div>
           {editingTeams ? (
             <div>
@@ -2541,7 +2542,7 @@ ${versions.length > 1 ? `
                           return (
                             <div key={team.id} onClick={() => toggleId(team.id)}
                               style={{ padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: isSel ? 700 : 400, background: isSel ? T().badgeBg : T().bgInput, border: `1px solid ${isSel ? T().badgeBorder : T().border}`, color: isSel ? T().accent : T().textMuted, transition: 'all 0.15s' }}>
-                              {isSel ? '✓ ' : ''}{team.icon} {team.name}
+                              {isSel ? <Icon name="check" size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> : null} {team.icon} {team.name}
                             </div>
                           )
                         })}
@@ -2583,8 +2584,8 @@ ${versions.length > 1 ? `
             )
           })}
           {isAdmin && addingNewVersion && (
-            <div style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, color: T().accent, background: T().badgeBg, border: `1px solid ${T().accent}`, borderRadius: '6px 6px 0 0', whiteSpace: 'nowrap' }}>
-              ✎ 新バージョン作成中
+            <div style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, color: T().accent, background: T().badgeBg, border: `1px solid ${T().accent}`, borderRadius: '6px 6px 0 0', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Icon name="pencil" size={11} /> 新バージョン作成中
             </div>
           )}
         </div>
@@ -2592,7 +2593,7 @@ ${versions.length > 1 ? `
 
       {versions.length === 0 && !editing && (
         <div style={{ ...box, marginBottom: 16, textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>📝</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}><Icon name="note" size={32} /></div>
           <div style={{ fontSize: 14, color: T().textMuted, marginBottom: 6 }}>JDデータがまだ登録されていません</div>
           {isAdmin && (
             <div style={{ fontSize: 12, color: T().textFaintest }}>上の「＋ JDを作成する」ボタンから登録できます</div>
@@ -2781,7 +2782,7 @@ ${versions.length > 1 ? `
                                       {(taskHistory || []).filter(h => h.task_id === t.id).length > 0 && (
                                         <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: T().badgeBg, color: T().accent, border: `1px solid ${T().badgeBorder}`, whiteSpace: 'nowrap', cursor: 'default' }}
                                           title={(taskHistory || []).filter(h => h.task_id === t.id).map(h => `${h.from_owner || '未設定'} → ${h.to_owner || '未設定'}`).join(' / ')}>
-                                          🔄 {(taskHistory || []).filter(h => h.task_id === t.id).length}回引き継ぎ
+                                          <Icon name="refresh" size={9} style={{ display: 'inline', verticalAlign: 'middle' }} /> {(taskHistory || []).filter(h => h.task_id === t.id).length}回引き継ぎ
                                         </span>
                                       )}
                                     </div>
@@ -2836,7 +2837,7 @@ ${versions.length > 1 ? `
           {/* 役職推移タイムライン（リッチ可視化） */}
           <div style={box}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase' }}>▶ 役職推移タイムライン</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: T().textFaint, letterSpacing: '2px', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chevronR" size={10} /> 役職推移タイムライン</div>
               <span style={{ fontSize: 10, color: T().textFaintest }}>{versions.length}バージョン</span>
             </div>
 
@@ -2913,7 +2914,7 @@ ${versions.length > 1 ? `
                           </div>
                           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                             <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empB.bg, color: empB.color, fontWeight: 700 }}>
-                              {empChanged && '↑ '}{v.emp || '—'}
+                              {empChanged && <Icon name="arrowUp" size={9} style={{ display: 'inline', verticalAlign: 'middle' }} />}{empChanged ? ' ' : ''}{v.emp || '—'}
                             </span>
                             {v.working && <span style={{ fontSize: 10, color: T().textFaint }}>{v.working}</span>}
                             {taskCount > 0 && <span style={{ fontSize: 10, color: T().textFaintest, marginLeft: 4 }}>業務 {taskCount}件</span>}
@@ -2923,7 +2924,7 @@ ${versions.length > 1 ? `
                         {isAdmin && dbRows.length > 0 && (
                           <button onClick={e => { e.stopPropagation(); deleteVersion(i) }}
                             style={{ padding: '3px 7px', borderRadius: 5, background: 'transparent', border: `1px solid ${T().border}`, color: T().textFaintest, fontSize: 10, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
-                            ✕
+                            <Icon name="cross" size={10} />
                           </button>
                         )}
                       </div>
@@ -2931,7 +2932,7 @@ ${versions.length > 1 ? `
                       {/* JD_DEFAULTからDBへのシード促進メッセージ */}
                       {dbRows.length === 0 && isAdmin && i === versions.length - 1 && (
                         <div style={{ marginTop: 8, padding: '6px 10px', background: T().badgeBg, borderRadius: 6, fontSize: 10, color: T().accent, border: `1px dashed ${T().badgeBorder}` }}>
-                          💡 このデータはデフォルト値です。「このバージョンを編集」から保存するとDBに記録されます
+                          <Icon name="bolt" size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> このデータはデフォルト値です。「このバージョンを編集」から保存するとDBに記録されます
                         </div>
                       )}
                     </div>
@@ -3152,7 +3153,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
       {/* ── SIDEBAR ── */}
       <div style={S.sidebar}>
         <div style={{ padding: '12px 10px 6px' }}>
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 チームを検索..."
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="チームを検索..."
             style={{ width: '100%', boxSizing: 'border-box', background: T().bgInput, border: `1px solid ${T().border}`, borderRadius: 6, padding: '6px 10px', color: T().text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
         </div>
         {depts.map(dept => {
@@ -3182,7 +3183,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
       <div style={S.main}>
         {!selectedId ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12, color: T().textFaint }}>
-            <div style={{ fontSize: 48 }}>📋</div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}><Icon name="note" size={48} /></div>
             <div style={{ fontSize: 15, fontWeight: 600 }}>チームを選択してください</div>
           </div>
         ) : (
@@ -3192,9 +3193,9 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
               <div style={S.saveBar}>
                 <span style={{ fontSize: 12, color: T().textMuted, flex: 1 }}>編集モード</span>
                 {dirty && <span style={{ fontSize: 11, color: T().warn }}>● 未保存の変更があります</span>}
-                <button onClick={addPhase} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, cursor: 'pointer', fontFamily: 'inherit' }}>＋ フェーズ追加</button>
+                <button onClick={addPhase} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: T().badgeBg, border: `1px solid ${T().badgeBorder}`, color: T().accent, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="plus" size={11} /> フェーズ追加</button>
                 <button onClick={saveAll} disabled={saving || !dirty} style={{ fontSize: 12, padding: '6px 18px', borderRadius: 7, background: dirty ? T().accentSolid : T().bgInput, border: 'none', color: dirty ? '#fff' : T().textFaint, cursor: dirty ? 'pointer' : 'default', fontWeight: 700, fontFamily: 'inherit' }}>
-                  {saving ? '保存中...' : savedFlash ? '✓ 保存済み' : '保存'}
+                  {saving ? '保存中...' : savedFlash ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> 保存済み</span> : '保存'}
                 </button>
                 <button onClick={() => { setEditMode(false); loadManual(selectedId) }} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: 'transparent', border: `1px solid ${T().border}`, color: T().textMuted, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
               </div>
@@ -3215,7 +3216,7 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
               </div>
 
               {loadingDB && <div style={{ color: T().accent, fontSize: 13, marginBottom: 20 }}>読み込み中...</div>}
-              {dbError && <div style={{ color: T().warn, fontSize: 12, marginBottom: 16, padding: '10px 14px', background: `${T().warn}15`, borderRadius: 8 }}>⚠ {dbError}</div>}
+              {dbError && <div style={{ color: T().warn, fontSize: 12, marginBottom: 16, padding: '10px 14px', background: `${T().warn}15`, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="alert" size={12} /> {dbError}</div>}
 
               {/* 概念フロー */}
               {conceptSteps.length > 0 && (
@@ -3238,9 +3239,9 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
               {/* フェーズ・ステップ */}
               {phases.length === 0 && !loadingDB && (
                 <div style={{ padding: '40px 20px', textAlign: 'center', color: T().textFaint, border: `1px dashed ${T().border}`, borderRadius: 12, marginBottom: 24 }}>
-                  <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
+                  <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center' }}><Icon name="note" size={36} /></div>
                   <div style={{ fontSize: 14 }}>業務フローがまだ登録されていません</div>
-                  {isAdmin && <button onClick={() => { setEditMode(true); addPhase() }} style={{ marginTop: 12, fontSize: 12, padding: '6px 18px', borderRadius: 7, background: T().accentSolid, border: 'none', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>＋ フェーズを追加する</button>}
+                  {isAdmin && <button onClick={() => { setEditMode(true); addPhase() }} style={{ marginTop: 12, fontSize: 12, padding: '6px 18px', borderRadius: 7, background: T().accentSolid, border: 'none', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="plus" size={12} /> フェーズを追加する</button>}
                 </div>
               )}
 
@@ -3277,8 +3278,8 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
                                 : <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: T().text }}>{s.title}</span>
                               }
                               {editMode
-                                ? <button onClick={e => { e.stopPropagation(); deleteStep(ph.id, s.id) }} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
-                                : <span style={{ color: T().textFaint, fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+                                ? <button onClick={e => { e.stopPropagation(); deleteStep(ph.id, s.id) }} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 5, background: T().warnBg, border: `1px solid ${T().warn}`, color: T().warn, cursor: 'pointer', fontFamily: 'inherit' }}><Icon name="cross" size={10} /></button>
+                                : <span style={{ color: T().textFaint, display: 'inline-flex' }}><Icon name={expanded ? 'chevronU' : 'chevronD'} size={12} /></span>
                               }
                             </div>
                             {(expanded || editMode) && (
@@ -3287,16 +3288,16 @@ function ManualTab({ tasks, manuals, setManuals, members, levels, isAdmin, curre
                                   <>
                                     <div><div style={S.fieldLbl}>担当者</div><input value={s.owner||''} onChange={e => updateStep(ph.id, s.id, 'owner', e.target.value)} style={S.inp()} /></div>
                                     <div><div style={S.fieldLbl}>使用ツール・場所</div><input value={s.tool||''} onChange={e => updateStep(ph.id, s.id, 'tool', e.target.value)} style={S.inp()} /></div>
-                                    <div style={{ gridColumn: '1/-1' }}><div style={S.fieldLbl}>✅ 完了条件</div><textarea value={s.condition||''} onChange={e => updateStep(ph.id, s.id, 'condition', e.target.value)} rows={2} style={{ ...S.inp(), resize: 'vertical' }} /></div>
-                                    <div style={{ gridColumn: '1/-1' }}><div style={S.fieldLbl}>⚠️ 注意点</div><textarea value={s.caution||''} onChange={e => updateStep(ph.id, s.id, 'caution', e.target.value)} rows={2} style={{ ...S.inp(), resize: 'vertical' }} /></div>
+                                    <div style={{ gridColumn: '1/-1' }}><div style={S.fieldLbl}><Icon name="check" size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> 完了条件</div><textarea value={s.condition||''} onChange={e => updateStep(ph.id, s.id, 'condition', e.target.value)} rows={2} style={{ ...S.inp(), resize: 'vertical' }} /></div>
+                                    <div style={{ gridColumn: '1/-1' }}><div style={S.fieldLbl}><Icon name="alert" size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> 注意点</div><textarea value={s.caution||''} onChange={e => updateStep(ph.id, s.id, 'caution', e.target.value)} rows={2} style={{ ...S.inp(), resize: 'vertical' }} /></div>
                                   </>
                                 ) : (
                                   <>
                                     {s.owner && <div><div style={S.fieldLbl}>担当者</div><div style={{ ...S.fieldVal, background: T().bgInput, borderRadius: 6, padding: '6px 10px' }}>{s.owner}</div></div>}
                                     {s.tool && <div><div style={S.fieldLbl}>使用ツール・場所</div><div style={{ ...S.fieldVal, background: T().bgInput, borderRadius: 6, padding: '6px 10px' }}>{s.tool}</div></div>}
-                                    {urls.length > 0 && <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, flexWrap: 'wrap' }}>{urls.map((u, ui) => <a key={ui} href={u.href} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T().accent, textDecoration: 'none', padding: '3px 10px', borderRadius: 5, background: `${T().accent}12`, border: `1px solid ${T().accent}30` }}>🔗 {u.label || u.href}</a>)}</div>}
-                                    {s.condition && <div style={S.condBox}><div style={{ fontSize: 10, fontWeight: 700, color: T().accent, marginBottom: 4 }}>✅ 完了条件</div><div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.65 }}>{s.condition}</div></div>}
-                                    {s.caution && <div style={S.cautBox}><div style={{ fontSize: 10, fontWeight: 700, color: T().warn, marginBottom: 4 }}>⚠️ 注意点</div><div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.65 }}>{s.caution}</div></div>}
+                                    {urls.length > 0 && <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, flexWrap: 'wrap' }}>{urls.map((u, ui) => <a key={ui} href={u.href} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: T().accent, textDecoration: 'none', padding: '3px 10px', borderRadius: 5, background: `${T().accent}12`, border: `1px solid ${T().accent}30`, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="link" size={11} /> {u.label || u.href}</a>)}</div>}
+                                    {s.condition && <div style={S.condBox}><div style={{ fontSize: 10, fontWeight: 700, color: T().accent, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={11} /> 完了条件</div><div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.65 }}>{s.condition}</div></div>}
+                                    {s.caution && <div style={S.cautBox}><div style={{ fontSize: 10, fontWeight: 700, color: T().warn, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="alert" size={11} /> 注意点</div><div style={{ fontSize: 12, color: T().textSub, lineHeight: 1.65 }}>{s.caution}</div></div>}
                                   </>
                                 )}
                               </div>
@@ -3436,8 +3437,8 @@ function ProgramManageModal({ onClose, T }) {
         maxHeight: '85vh', overflow: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,0.2)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: T.text }}>🏷 プログラム管理</h3>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 18, cursor: 'pointer', padding: 4 }}>✕</button>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: T.text, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="pin" size={16} /> プログラム管理</h3>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 18, cursor: 'pointer', padding: 4, display: 'inline-flex', alignItems: 'center' }}><Icon name="cross" size={18} /></button>
         </div>
         <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
           OKR / KR の編集画面から選択できるプログラムタグを定義します。<br/>
@@ -3561,7 +3562,7 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
                   onBlur={e => setEditName(e.target.value)}
                   style={{ flex:1, background:T().sectionBg, border:`1px solid ${T().border}`, borderRadius:6, padding:'5px 8px', color:T().text, fontSize:12, outline:'none', fontFamily:'inherit', minWidth:80 }} />
                 <button onClick={e => { const input = e.target.closest('div').querySelector('input'); saveEdit(level, input?.value) }} style={{ background:T().accent, border:'none', color:'#fff', borderRadius:5, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>保存</button>
-                <button onClick={cancelEdit} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:5, padding:'4px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>✕</button>
+                <button onClick={cancelEdit} style={{ background:'transparent', border:`1px solid ${T().border}`, color:T().textMuted, borderRadius:5, padding:'4px 8px', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}><Icon name="cross" size={11} /></button>
               </div>
               <div style={{ display:'flex', gap:3, flexWrap:'wrap' }}>
                 {ICONS.map(ic => (
@@ -3594,14 +3595,14 @@ function OrgManageModal({ levels, onClose, onAdd, onDelete, onRename, fiscalYear
       <div style={{ background:T().bgCard, border:`1px solid ${T().border}`, borderRadius:16, padding:26, width:'100%', maxWidth:480, maxHeight:'85vh', overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🏗️ 組織を管理</h3>
+            <h3 style={{ margin:0, fontSize:16, fontWeight:700, display:'inline-flex', alignItems:'center', gap:6 }}><Icon name="building" size={16} /> 組織を管理</h3>
             <span style={{ fontSize:12, fontWeight:700, padding:'3px 10px', borderRadius:99, background: T().accentBg, color: T().accent, border:`1px solid ${T().accent}30`}}>{fiscalYear}年度</span>
           </div>
-          <button onClick={onClose} style={{ background:T().border, border:'none', color:T().textMuted, width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+          <button onClick={onClose} style={{ background:T().border, border:'none', color:T().textMuted, width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name="cross" size={16} /></button>
         </div>
         {onCopyFromYear && (
           <div style={{ marginBottom:16, padding:'10px 12px', background:`${T().accent}08`, border:`1px solid ${T().accent}30`, borderRadius:10 }}>
-            <div style={{ fontSize:11, color:T().textMuted, fontWeight:700, marginBottom:8 }}>📋 他年度の組織構成をコピー</div>
+            <div style={{ fontSize:11, color:T().textMuted, fontWeight:700, marginBottom:8, display:'flex', alignItems:'center', gap:5 }}><Icon name="note" size={11} /> 他年度の組織構成をコピー</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {['2025','2026'].filter(y=>y!==fiscalYear).map(y=>(
                 <button key={y} onClick={()=>onCopyFromYear(y)} style={{ padding:'6px 14px', borderRadius:8, border:`1px solid ${T().accent}40`, background:`${T().accent}10`, color:T().textMuted, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
@@ -3737,12 +3738,12 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   const handleTeamMetaUpdate = (levelId, meta) => setTeamMeta(prev => ({ ...prev, [levelId]: { ...(prev[levelId] || {}), ...meta } }))
 
   const tabs = [
-    { id: 'chart',    icon: '🏗', label: '組織図' },
-    { id: 'workforce',icon: '📊', label: '工数管理' },
-    { id: 'tasks',    icon: '📋', label: '業務一覧' },
-    { id: 'taskflow', icon: '🔄', label: '業務マニュアル' },
-    { id: 'members',  icon: '👤', label: 'メンバーJD' },
-    { id: 'users',    icon: '👥', label: 'ユーザー管理' },
+    { id: 'chart',    icon: 'building', label: '組織図' },
+    { id: 'workforce',icon: 'chart', label: '工数管理' },
+    { id: 'tasks',    icon: 'note', label: '業務一覧' },
+    { id: 'taskflow', icon: 'refresh', label: '業務マニュアル' },
+    { id: 'members',  icon: 'user', label: 'メンバーJD' },
+    { id: 'users',    icon: 'org', label: 'ユーザー管理' },
   ]
 
 
@@ -3753,21 +3754,21 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
       <BgGlow T={T()} />
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 28px 28px', position: 'relative', zIndex: 1 }}>
         <LargeTitle T={T()}
-          title="🏢 組織"
+          title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Icon name="building" size={26} /> 組織</span>}
           subtitle={`${fiscalYear}年度 ・ ${currentOrg?.name || ''}の組織図・業務一覧・業務マニュアル・メンバー別JD`}
           right={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: T().accentBg, color: T().accent }}>{fiscalYear}年度</span>
-              {isAdmin && <span style={{ fontSize: 11, padding: '4px 12px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700 }}>👑 管理者</span>}
-              <button onClick={() => setShowProgramManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🏷 プログラム管理</button>
-              <button onClick={() => setShowOrgManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: 'none', background: T().accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 2px 6px ${T().accent}40` }}>🏗️ 組織を管理</button>
+              {isAdmin && <span style={{ fontSize: 11, padding: '4px 12px', borderRadius: 99, background: T().warnBg, color: T().warn, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="star" size={12} /> 管理者</span>}
+              <button onClick={() => setShowProgramManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="pin" size={13} /> プログラム管理</button>
+              <button onClick={() => setShowOrgManage(true)} style={{ padding: '7px 14px', borderRadius: 9, border: 'none', background: T().accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 2px 6px ${T().accent}40`, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="building" size={13} /> 組織を管理</button>
             </div>
           }
         />
         <div style={{ marginBottom: 16, fontSize: 11, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
             display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-            background: syncStatus === 'synced' ? '#34C759' : '#FF9500',
+            background: syncStatus === 'synced' ? T().success : T().warn,
           }} />
           {syncStatus === 'synced' ? 'リアルタイム同期中' : syncStatus === 'error' ? '同期エラー' : '接続中...'}
         </div>
@@ -3778,8 +3779,8 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
             return (
               <button key={t.id}
                 onClick={() => { setActiveTab(t.id); if (t.id !== 'members') setJumpMemberName(null) }}
-                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 600, color: isA ? T().accent : T().textSub, borderBottom: `3px solid ${isA ? T().accent : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? T().navActiveBg : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit' }}>
-                {t.icon} {t.label}
+                style={{ padding: '10px 24px', fontSize: 13, fontWeight: isA ? 700 : 600, color: isA ? T().accent : T().textSub, borderBottom: `3px solid ${isA ? T().accent : 'transparent'}`, marginBottom: -2, cursor: 'pointer', border: 'none', background: isA ? T().navActiveBg : 'transparent', borderRadius: '8px 8px 0 0', transition: 'all 0.15s', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Icon name={t.icon} size={15} /> {t.label}
               </button>
             )
           })}
