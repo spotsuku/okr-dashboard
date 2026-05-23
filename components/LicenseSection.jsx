@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useLicense, describeLicenseReason } from '../lib/license/licenseContext'
 import { cardStyle, btnPrimary, btnSecondary, inputStyle, pillStyle, accentRingStyle } from '../lib/iosStyles'
 import { TYPO, SPACING, RADIUS } from '../lib/themeTokens'
+import Icon from './Icon'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 組織設定モーダル内に差し込むライセンスセクション (SaaS化 Phase 5)
@@ -26,20 +27,20 @@ function StatusPill({ T, status }) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '4px 12px', borderRadius: 99,
-        background: `${T.success}1a`, border: `1px solid ${T.success}66`,
-        color: T.success, fontSize: 12, fontWeight: 700,
-      }}>✓ 免除中</span>
+        padding: `${SPACING.xs}px ${SPACING.md}px`, borderRadius: RADIUS.pill,
+        background: T.successBg, border: `1px solid ${T.success}66`,
+        color: T.success, ...TYPO.subhead, fontWeight: 700,
+      }}><Icon name="check" size={12} /> 免除中</span>
     )
   }
   if (status.active) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '4px 12px', borderRadius: 99,
-        background: `${T.success}1a`, border: `1px solid ${T.success}66`,
-        color: T.success, fontSize: 12, fontWeight: 700,
-      }}>✓ 認証済み</span>
+        padding: `${SPACING.xs}px ${SPACING.md}px`, borderRadius: RADIUS.pill,
+        background: T.successBg, border: `1px solid ${T.success}66`,
+        color: T.success, ...TYPO.subhead, fontWeight: 700,
+      }}><Icon name="check" size={12} /> 認証済み</span>
     )
   }
   if (status.reason === 'not_set') {
@@ -131,7 +132,7 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.md }}>
         <div style={accentRingStyle({ color: accent, size: 32 })}>
-          <span style={{ fontSize: 14 }}>🔑</span>
+          <Icon name="star" size={14} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...TYPO.headline, color: T.text }}>myAI ライセンス</div>
@@ -158,24 +159,24 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
           {savedToast === 'success' && (
             <div style={{
               padding: '10px 14px', marginBottom: SPACING.md,
-              background: `${T.success}1a`, border: `1px solid ${T.success}66`,
+              background: T.successBg, border: `1px solid ${T.success}66`,
               borderRadius: RADIUS.md, color: T.success,
-              fontSize: 13, fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 8,
+              ...TYPO.body, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: SPACING.sm,
             }}>
-              <span style={{ fontSize: 16 }}>✓</span>
+              <Icon name="check" size={16} />
               ライセンスを認証しました!
             </div>
           )}
           {savedToast === 'warning' && (
             <div style={{
               padding: '10px 14px', marginBottom: SPACING.md,
-              background: `${T.danger}15`, border: `1px solid ${T.danger}66`,
+              background: T.dangerBg, border: `1px solid ${T.danger}66`,
               borderRadius: RADIUS.md, color: T.danger,
-              fontSize: 13, fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 8,
+              ...TYPO.body, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: SPACING.sm,
             }}>
-              <span>⚠</span>
+              <Icon name="alert" size={14} />
               キーは保存されましたが myAI 側で無効でした
             </div>
           )}
@@ -193,9 +194,9 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
                   width: 24, height: 24, borderRadius: '50%',
                   background: T.success, color: '#fff',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 700, flexShrink: 0,
-                }}>✓</span>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T.success }}>
+                  flexShrink: 0,
+                }}><Icon name="check" size={14} /></span>
+                <div style={{ ...TYPO.headline, color: T.success }}>
                   有料プラン契約中
                 </div>
               </div>
@@ -216,14 +217,14 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
               <span style={{ ...TYPO.caption, color: T.textMuted, letterSpacing: 0, minWidth: 70 }}>キー</span>
-              <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11, color: T.textSub }}>
+              <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: TYPO.footnote.fontSize, color: T.textSub }}>
                 ••••••••••••••••
               </span>
             </div>
             {status.product_id && (
               <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
                 <span style={{ ...TYPO.caption, color: T.textMuted, letterSpacing: 0, minWidth: 70 }}>プロダクト</span>
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11, color: T.textSub }}>
+                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: TYPO.footnote.fontSize, color: T.textSub }}>
                   {status.product_id.slice(0, 8)}…
                 </span>
               </div>
@@ -231,7 +232,7 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
             {status.expires_at && (
               <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
                 <span style={{ ...TYPO.caption, color: T.textMuted, letterSpacing: 0, minWidth: 70 }}>有効期限</span>
-                <span style={{ fontSize: 12, color: T.textSub }}>
+                <span style={{ fontSize: TYPO.subhead.fontSize, color: T.textSub }}>
                   {new Date(status.expires_at).toLocaleDateString('ja-JP')}
                 </span>
               </div>
@@ -239,7 +240,7 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
             {status.last_verified_at && (
               <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
                 <span style={{ ...TYPO.caption, color: T.textMuted, letterSpacing: 0, minWidth: 70 }}>最終検証</span>
-                <span style={{ fontSize: 11, color: T.textMuted }}>
+                <span style={{ fontSize: TYPO.footnote.fontSize, color: T.textMuted }}>
                   {new Date(status.last_verified_at).toLocaleString('ja-JP')}
                 </span>
               </div>
@@ -247,8 +248,8 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
           </div>
 
           {status.reason && (
-            <div style={{ ...TYPO.footnote, color: T.danger, marginBottom: SPACING.sm }}>
-              ⚠ {describeLicenseReason(status.reason)}
+            <div style={{ ...TYPO.footnote, color: T.danger, marginBottom: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+              <Icon name="alert" size={12} /> {describeLicenseReason(status.reason)}
             </div>
           )}
 
@@ -278,11 +279,11 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
                 onChange={e => setKeyInput(e.target.value)}
                 placeholder="例: myai_xxxxxxxxxxxxxxxxxx"
                 disabled={busy}
-                style={{ ...inputStyle({ T }), fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12 }}
+                style={{ ...inputStyle({ T }), fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: TYPO.subhead.fontSize }}
               />
               {errorMsg && (
-                <div style={{ ...TYPO.footnote, color: T.danger, marginTop: SPACING.sm }}>
-                  ⚠ {errorMsg}
+                <div style={{ ...TYPO.footnote, color: T.danger, marginTop: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                  <Icon name="alert" size={12} /> {errorMsg}
                 </div>
               )}
               <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.md, flexWrap: 'wrap' }}>
@@ -299,8 +300,9 @@ export default function LicenseSection({ T, orgId, myEmail, canManage }) {
                   textDecoration: 'none',
                   display: 'inline-flex',
                   alignItems: 'center',
+                  gap: SPACING.xs,
                 }}>
-                  myAI で購入 ↗
+                  myAI で購入 <Icon name="external" size={12} />
                 </a>
               </div>
             </>
