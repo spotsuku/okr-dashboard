@@ -3,6 +3,9 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 import { useCurrentOrg } from '../lib/orgContext'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { btnSecondary, btnBrand, inputStyle, glassBarStyle, accentRingStyle } from '../lib/iosStyles'
 
 function useIsMobile(bp = 768) {
   const [m, setM] = useState(() => typeof window === 'undefined' ? false : window.innerWidth < bp)
@@ -154,68 +157,60 @@ export default function COOTab({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
       {/* ヘッダー (iOS グラスバー) */}
       <div style={{
-        padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
-        display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
-        background: 'rgba(255,255,255,0.65)',
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        ...glassBarStyle({ T }),
+        padding: `${SPACING.md}px ${SPACING.lg + 2}px`,
+        display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, flexShrink: 0,
         flexWrap: 'wrap',
       }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-          background: 'linear-gradient(135deg, #34C759 0%, #30D158c0 100%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, boxShadow: '0 2px 6px rgba(52,199,89,0.4)',
-        }}>🐸</div>
+        <div style={accentRingStyle({ color: T.success, size: 36 })}>
+          <Icon name="ai" size={20} />
+        </div>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>ぺろっぺ</div>
-          <div style={{ fontSize: 11, color: T.textMuted }}>三木CEOの右腕 AIコーチ</div>
+          <div style={{ ...TYPO.title3, fontSize: 15, color: T.text }}>ぺろっぺ</div>
+          <div style={{ ...TYPO.footnote, color: T.textMuted }}>三木CEOの右腕 AIコーチ</div>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 9 }}>
+        <div style={{ display: 'inline-flex', gap: 2, background: T.sectionBg, padding: 3, borderRadius: RADIUS.sm }}>
           {[
-            { key: 'coach', label: '🎯 コーチ', desc: 'GROWで深掘り' },
-            { key: 'speed', label: '⚡ スピード', desc: '即答' },
+            { key: 'coach', icon: 'target', label: 'コーチ', desc: 'GROWで深掘り' },
+            { key: 'speed', icon: 'bolt', label: 'スピード', desc: '即答' },
           ].map(m => (
             <button key={m.key} onClick={() => setMode(m.key)}
               title={m.desc}
               style={{
-                padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                padding: '6px 12px', borderRadius: RADIUS.xs, border: 'none', cursor: 'pointer',
                 background: mode === m.key ? T.bgCard : 'transparent',
                 color: mode === m.key ? T.text : T.textSub,
-                boxShadow: mode === m.key ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
-                fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                boxShadow: mode === m.key ? SHADOWS.sm : 'none',
+                ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit',
                 transition: 'all 0.15s ease',
-              }}>{m.label}</button>
+              }}><Icon name={m.icon} size={13} />{m.label}</button>
           ))}
         </div>
         {isAdmin && (
           <button onClick={onOpenSettings} title="ぺろっぺ設定 (admin)" style={{
-            padding: '5px 10px', borderRadius: 6,
-            background: 'transparent', border: `1px solid ${T.border}`,
-            color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>⚙️ 設定</button>
+            ...btnSecondary({ T, size: 'sm' }),
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="settings" size={13} />設定</button>
         )}
         <button onClick={clearHistory} disabled={busy || history.length === 0} style={{
-          padding: '5px 10px', borderRadius: 6,
-          background: 'transparent', border: `1px solid ${T.border}`,
-          color: T.textSub, fontSize: 11, fontWeight: 700,
+          ...btnSecondary({ T, size: 'sm' }),
           cursor: (busy || history.length === 0) ? 'not-allowed' : 'pointer',
           opacity: (busy || history.length === 0) ? 0.5 : 1,
-          fontFamily: 'inherit',
         }}>クリア</button>
       </div>
 
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 14, maxWidth: 880, margin: '0 auto', width: '100%' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: SPACING.lg - 2, maxWidth: 880, margin: '0 auto', width: '100%' }}>
         {history.length === 0 && (
           <div style={{
-            padding: 20, background: T.sectionBg, borderRadius: 10,
-            fontSize: 13, color: T.textMuted, lineHeight: 1.8,
+            padding: SPACING.xl, background: T.sectionBg, borderRadius: RADIUS.md,
+            ...TYPO.body, color: T.textMuted, lineHeight: 1.8,
           }}>
-            <div style={{ fontSize: 22, marginBottom: 10 }}>🐸 こんにちは、{owner}さん</div>
+            <div style={{ ...TYPO.title1, fontSize: 22, color: T.text, marginBottom: SPACING.sm + 2, display: 'flex', alignItems: 'center', gap: SPACING.sm }}><Icon name="ai" size={22} /> こんにちは、{owner}さん</div>
             仕事のこと、なんでも壁打ちしてください。<br />
             今日のあなたの OKR・タスク・直近の振り返りを見ながら、コーチングします。
-            <div style={{ marginTop: 14, fontSize: 12 }}>
+            <div style={{ marginTop: SPACING.lg - 2, ...TYPO.subhead, fontWeight: 500 }}>
               <strong>例:</strong>
               <ul style={{ paddingLeft: 18, margin: '6px 0' }}>
                 <li>「やずや案件が進まない、どうしたらいい?」</li>
@@ -228,48 +223,49 @@ export default function COOTab({
         )}
         {history.map((h, i) => (
           <div key={i} style={{
-            marginBottom: 12, padding: '10px 14px', borderRadius: 10,
+            marginBottom: SPACING.md, padding: `${SPACING.sm + 2}px ${SPACING.lg - 2}px`, borderRadius: RADIUS.md,
             background: h.role === 'user' ? T.accentBg : T.sectionBg,
             border: `1px solid ${h.role === 'user' ? T.accent + '40' : T.border}`,
-            fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.7,
+            ...TYPO.body, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.7,
           }}>
-            <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 6, fontWeight: 700 }}>
-              {h.role === 'user' ? `🙂 ${owner}さん` : '🐸 ぺろっぺ'}
+            <div style={{ ...TYPO.caption, color: T.textMuted, marginBottom: SPACING.xs + 2, fontWeight: 700, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+              {h.role === 'user'
+                ? (<><Icon name="user" size={11} />{owner}さん</>)
+                : (<><Icon name="ai" size={11} />ぺろっぺ</>)}
             </div>
             {h.content}
             {h.actions && h.actions.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 10, color: T.textMuted, fontStyle: 'italic' }}>
+              <div style={{ marginTop: SPACING.xs + 2, ...TYPO.caption, fontWeight: 500, letterSpacing: 0, color: T.textMuted, fontStyle: 'italic' }}>
                 参照: {h.actions.map(a => a.tool).join(' → ')}
               </div>
             )}
           </div>
         ))}
         {busy && (
-          <div style={{ padding: 10, fontSize: 12, color: T.textMuted }}>
-            🐸 考え中…
+          <div style={{ padding: SPACING.sm + 2, ...TYPO.subhead, fontWeight: 500, color: T.textMuted, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            <Icon name="ai" size={14} /> 考え中…
           </div>
         )}
         {err && (
           <div style={{
-            padding: 12, fontSize: 12, color: T.danger,
+            padding: SPACING.md, ...TYPO.subhead, fontWeight: 500, color: T.danger,
             background: T.dangerBg, border: `1px solid ${T.danger}40`,
-            borderRadius: 8, lineHeight: 1.6,
+            borderRadius: RADIUS.sm, lineHeight: 1.6,
           }}>
-            <div style={{ marginBottom: 8 }}>⚠️ {err}</div>
+            <div style={{ marginBottom: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={13} /> {err}</div>
             {lastUserMsg && (
               <button onClick={() => send(lastUserMsg)} disabled={busy} style={{
-                padding: '5px 14px', borderRadius: 6,
-                background: T.accent, color: '#fff', border: 'none',
-                fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-              }}>🔄 再試行</button>
+                ...btnSecondary({ T, size: 'sm' }),
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}><Icon name="refresh" size={13} /> 再試行</button>
             )}
           </div>
         )}
       </div>
 
       <div style={{
-        padding: 12, borderTop: `1px solid ${T.border}`,
-        display: 'flex', gap: 8, flexShrink: 0, background: T.bgCard,
+        padding: SPACING.md, borderTop: `1px solid ${T.border}`,
+        display: 'flex', gap: SPACING.sm, flexShrink: 0, background: T.bgCard,
         maxWidth: 880, margin: '0 auto', width: '100%', boxSizing: 'border-box',
       }}>
         <textarea
@@ -282,16 +278,16 @@ export default function COOTab({
           rows={2}
           disabled={busy}
           style={{
-            flex: 1, background: T.bg, color: T.text,
-            border: `1px solid ${T.border}`, borderRadius: 7,
-            padding: '9px 12px', fontSize: 13, fontFamily: 'inherit',
-            resize: 'vertical', outline: 'none',
+            ...inputStyle({ T }),
+            flex: 1, width: 'auto', background: T.bg,
+            ...TYPO.body,
+            resize: 'vertical',
           }}
         />
         <button onClick={() => send()} disabled={busy || !input.trim()} style={{
-          padding: '0 18px', borderRadius: 7,
-          background: busy ? T.border : T.accent, color: '#fff',
-          border: 'none', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+          ...btnBrand({ size: 'md' }),
+          padding: '0 18px',
+          ...(busy ? { background: T.border, boxShadow: 'none' } : {}),
           cursor: busy ? 'not-allowed' : 'pointer', minWidth: 80,
         }}>送信</button>
       </div>

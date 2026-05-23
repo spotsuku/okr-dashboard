@@ -1,6 +1,9 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useCurrentOrg } from '../lib/orgContext'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { inputStyle, btnPrimary, btnSecondary } from '../lib/iosStyles'
 
 // ─── Date utilities (JST) ─────────────────────────────────────────────────
 function jstMonday(d = new Date()) {
@@ -159,8 +162,8 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           statusByName={statusByName}
         />
         {error && (
-          <div style={{ padding: 8, fontSize: 11, color: T.danger, background: T.dangerBg }}>
-            ⚠️ {error}
+          <div style={{ padding: SPACING.sm, ...TYPO.footnote, color: T.danger, background: T.dangerBg, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            <Icon name="alert" size={13} /> {error}
           </div>
         )}
         <WeekGrid
@@ -246,31 +249,31 @@ function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, onClo
     }
   }
 
-  const field = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', borderRadius: 8, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 16, outline: 'none', fontFamily: 'inherit' }
-  const lbl = { fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 4 }
+  const field = { ...inputStyle({ T }), padding: '9px 11px', borderRadius: RADIUS.sm, border: `1px solid ${T.borderMid}`, fontSize: 16 }
+  const lbl = { ...TYPO.footnote, fontWeight: 700, color: T.textMuted, marginBottom: SPACING.xs }
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: SPACING.lg }}>
       <div onClick={e => e.stopPropagation()} style={{
         width: 'min(420px, 100%)', maxHeight: '85vh', overflowY: 'auto',
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
-        boxShadow: '0 24px 60px rgba(15,23,42,0.28)', padding: 18,
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.xl,
+        boxShadow: SHADOWS.xl, padding: SPACING.lg + 2,
         fontFamily: 'inherit', color: T.text,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>📅 予定を作成</div>
-          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.md + 2 }}>
+          <div style={{ ...TYPO.title3, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="calendar" size={16} /> 予定を作成</div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: T.textMuted, cursor: 'pointer', display: 'flex' }}><Icon name="cross" size={18} /></button>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: SPACING.md }}>
           <div style={lbl}>タイトル</div>
           <input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="予定のタイトル" style={field} />
         </div>
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: SPACING.md }}>
           <div style={lbl}>日付</div>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} style={field} />
         </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: SPACING.sm + 2, marginBottom: SPACING.md }}>
           <div style={{ flex: 1 }}>
             <div style={lbl}>開始</div>
             <input type="time" value={startT} onChange={e => setStartT(e.target.value)} step={1800} style={field} />
@@ -282,38 +285,39 @@ function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, onClo
         </div>
 
         {candidates.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: SPACING.md }}>
             <div style={lbl}>参加者（任意）</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs + 2 }}>
               {candidates.map(m => {
                 const on = attendees.includes(m.name)
                 return (
                   <button key={m.id} onClick={() => setAttendees(a => on ? a.filter(x => x !== m.name) : [...a, m.name])}
                     style={{
-                      padding: '5px 10px', borderRadius: 99, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                      display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                      padding: '5px 10px', borderRadius: RADIUS.pill, ...TYPO.subhead, cursor: 'pointer', fontFamily: 'inherit',
                       border: `1px solid ${on ? T.accent : T.borderMid}`,
-                      background: on ? `${T.accent}1a` : 'transparent',
+                      background: on ? T.accentBg : 'transparent',
                       color: on ? T.accent : T.textSub, fontWeight: on ? 700 : 500,
-                    }}>{on ? '✓ ' : ''}{m.name}</button>
+                    }}>{on ? <Icon name="check" size={12} /> : null}{m.name}</button>
                 )
               })}
             </div>
           </div>
         )}
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 13, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.lg, ...TYPO.body, cursor: 'pointer' }}>
           <input type="checkbox" checked={addMeet} onChange={e => setAddMeet(e.target.checked)} />
           Google Meet を追加
         </label>
 
-        {err && <div style={{ fontSize: 12, color: T.danger, marginBottom: 10 }}>⚠️ {err}</div>}
+        {err && <div style={{ ...TYPO.subhead, color: T.danger, marginBottom: SPACING.sm + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={13} /> {err}</div>}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '9px 16px', borderRadius: 8, border: `1px solid ${T.borderMid}`, background: 'transparent', color: T.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+        <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ ...btnSecondary({ T }), padding: '9px 16px' }}>キャンセル</button>
           <button onClick={submit} disabled={!title.trim() || saving} style={{
-            padding: '9px 18px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 700,
-            background: title.trim() ? T.accent : T.borderMid, color: '#fff',
-            cursor: title.trim() && !saving ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+            ...btnPrimary({ T }), padding: '9px 18px',
+            ...(title.trim() ? {} : { background: T.borderMid, boxShadow: 'none' }),
+            cursor: title.trim() && !saving ? 'pointer' : 'not-allowed',
           }}>{saving ? '作成中…' : 'Googleカレンダーに作成'}</button>
         </div>
       </div>
@@ -326,44 +330,44 @@ function CalendarHeader({ T, weekStart, mobileDay, isDay, view, onToggleView, on
   const end = addDays(weekStart, 6)
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
-      background: 'rgba(255,255,255,0.65)',
+      display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+      padding: `${SPACING.md}px ${SPACING.lg + 2}px`, borderBottom: `1px solid ${T.border}`,
+      background: T.sectionBg,
       backdropFilter: 'blur(20px) saturate(180%)',
       WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       flexShrink: 0, flexWrap: 'wrap',
     }}>
-      <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 9 }}>
+      <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: RADIUS.sm + 1 }}>
         <button onClick={onPrev} style={btnSm(T)}>← {isDay ? '前日' : '前週'}</button>
         <button onClick={onToday} style={btnSm(T, true)}>{isDay ? '今日' : '今週'}</button>
         <button onClick={onNext} style={btnSm(T)}>{isDay ? '翌日' : '翌週'} →</button>
       </div>
       {/* 日/週 切替トグル */}
-      <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: 9 }}>
+      <div style={{ display: 'inline-flex', gap: 2, background: 'rgba(120,120,128,0.10)', padding: 3, borderRadius: RADIUS.sm + 1 }}>
         <button onClick={() => onToggleView('day')} style={btnSm(T, view === 'day')}>日</button>
         <button onClick={() => onToggleView('week')} style={btnSm(T, view === 'week')}>週</button>
       </div>
-      <div style={{ marginLeft: 6, fontSize: 14, fontWeight: 800, color: T.text, flex: isDay ? 1 : 'none', letterSpacing: '-0.01em' }}>
+      <div style={{ marginLeft: SPACING.xs + 2, ...TYPO.headline, fontWeight: 800, color: T.text, flex: isDay ? 1 : 'none', letterSpacing: '-0.01em' }}>
         {isDay ? jstLabel(mobileDay) : `${jstLabel(weekStart)} 〜 ${jstLabel(end)}`}
       </div>
       {!isDay && <div style={{ flex: 1 }} />}
       <button onClick={onReload} disabled={loading} style={{
-        padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
+        padding: '7px 12px', borderRadius: RADIUS.sm + 1, border: 'none', cursor: 'pointer',
         background: 'rgba(120,120,128,0.12)', color: T.textSub,
-        fontSize: 13, fontFamily: 'inherit',
-      }}>{loading ? '…' : '🔄'}</button>
+        display: 'flex', alignItems: 'center', fontFamily: 'inherit',
+      }}>{loading ? '…' : <Icon name="refresh" size={15} />}</button>
     </div>
   )
 }
 
 function btnSm(T, active = false) {
   return {
-    padding: '6px 12px', borderRadius: 7,
+    padding: '6px 12px', borderRadius: RADIUS.xs + 1,
     background: active ? T.bgCard : 'transparent',
     color: active ? T.text : T.textSub,
     border: 'none',
-    boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)' : 'none',
-    fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+    boxShadow: active ? SHADOWS.sm : 'none',
+    ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
     transition: 'all 0.15s ease', whiteSpace: 'nowrap',
   }
 }
@@ -410,21 +414,21 @@ function MemberSelect({ T, members, selected, setSelected, myName, colorOf, stat
   return (
     <div ref={wrapRef} style={{
       position: 'relative',
-      padding: '8px 16px', borderBottom: `1px solid ${T.border}`,
+      padding: `${SPACING.sm}px ${SPACING.lg}px`, borderBottom: `1px solid ${T.border}`,
       background: T.bgCard, flexShrink: 0,
-      display: 'flex', alignItems: 'center', gap: 8,
+      display: 'flex', alignItems: 'center', gap: SPACING.sm,
     }}>
-      <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>メンバー:</span>
+      <span style={{ ...TYPO.footnote, color: T.textMuted, flexShrink: 0 }}>メンバー:</span>
 
       {/* トリガーボタン */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '5px 10px', borderRadius: 8,
-          background: open ? `${T.accent}14` : 'transparent',
+          display: 'flex', alignItems: 'center', gap: SPACING.sm,
+          padding: '5px 10px', borderRadius: RADIUS.sm,
+          background: open ? T.accentBg : 'transparent',
           border: `1px solid ${open ? T.accent : T.border}`,
-          color: T.text, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          color: T.text, ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit',
           cursor: 'pointer', maxWidth: '100%',
         }}
       >
@@ -444,44 +448,43 @@ function MemberSelect({ T, members, selected, setSelected, myName, colorOf, stat
             : selected.length === 1 ? selectedSorted[0]?.name || '1人'
             : `${selected.length}人を表示中`}
         </span>
-        <span style={{ color: T.textMuted, fontSize: 10 }}>{open ? '▲' : '▼'}</span>
+        <span style={{ color: T.textMuted, display: 'flex' }}><Icon name={open ? 'chevronU' : 'chevronD'} size={12} /></span>
       </button>
 
       {/* ドロップダウンパネル */}
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', left: 16, marginTop: 4, zIndex: 30,
+          position: 'absolute', top: '100%', left: SPACING.lg, marginTop: SPACING.xs, zIndex: 30,
           width: 'min(300px, calc(100vw - 32px))',
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-          boxShadow: '0 12px 32px rgba(15,23,42,0.22)',
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
+          boxShadow: SHADOWS.lg,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
           {/* 検索 (人数が多いときのみ) */}
           {sorted.length > 6 && (
-            <div style={{ padding: 8, borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ padding: SPACING.sm, borderBottom: `1px solid ${T.border}` }}>
               <input
                 autoFocus value={query} onChange={e => setQuery(e.target.value)}
                 placeholder="名前で絞り込み"
                 style={{
-                  width: '100%', boxSizing: 'border-box', padding: '6px 9px',
-                  borderRadius: 7, border: `1px solid ${T.border}`,
-                  background: T.bg, color: T.text, fontSize: 12, outline: 'none', fontFamily: 'inherit',
+                  ...inputStyle({ T }), padding: '6px 9px',
+                  borderRadius: RADIUS.xs + 1, background: T.bg, ...TYPO.subhead,
                 }}
               />
             </div>
           )}
 
           {/* 一括操作 */}
-          <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ display: 'flex', gap: SPACING.xs + 2, padding: '8px 10px', borderBottom: `1px solid ${T.border}` }}>
             <button onClick={selectAll} style={miniBtn(T)}>全員</button>
             {myName && <button onClick={onlyMe} style={miniBtn(T)}>自分のみ</button>}
             <button onClick={clearAll} style={miniBtn(T)}>クリア</button>
           </div>
 
           {/* メンバー一覧 */}
-          <div style={{ maxHeight: 280, overflowY: 'auto', padding: 6 }}>
+          <div style={{ maxHeight: 280, overflowY: 'auto', padding: SPACING.xs + 2 }}>
             {filtered.length === 0 && (
-              <div style={{ padding: 12, fontSize: 12, color: T.textMuted, textAlign: 'center' }}>
+              <div style={{ padding: SPACING.md, ...TYPO.subhead, color: T.textMuted, textAlign: 'center' }}>
                 該当なし
               </div>
             )}
@@ -496,10 +499,10 @@ function MemberSelect({ T, members, selected, setSelected, myName, colorOf, stat
                   onClick={() => toggle(m.name)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-                    padding: '7px 9px', borderRadius: 8, border: 'none',
+                    padding: '7px 9px', borderRadius: RADIUS.sm, border: 'none',
                     background: on ? `${c}14` : 'transparent',
                     color: on ? T.text : T.textSub,
-                    fontSize: 12, fontWeight: on ? 700 : 500, fontFamily: 'inherit',
+                    ...TYPO.subhead, fontWeight: on ? 700 : 500, fontFamily: 'inherit',
                     cursor: 'pointer', textAlign: 'left',
                   }}
                 >
@@ -512,8 +515,8 @@ function MemberSelect({ T, members, selected, setSelected, myName, colorOf, stat
                     {m.name}
                     {m.name === myName && <span style={{ color: T.textMuted, fontWeight: 500 }}> (自分)</span>}
                   </span>
-                  {isUnconnected && <span style={{ color: T.warn, fontSize: 11 }} title="未連携">⚠</span>}
-                  {on && <span style={{ color: c, fontSize: 12 }}>✓</span>}
+                  {isUnconnected && <span style={{ color: T.warn, display: 'flex' }} title="未連携"><Icon name="alert" size={12} /></span>}
+                  {on && <span style={{ color: c, display: 'flex' }}><Icon name="check" size={13} /></span>}
                 </button>
               )
             })}
@@ -526,9 +529,9 @@ function MemberSelect({ T, members, selected, setSelected, myName, colorOf, stat
 
 function miniBtn(T) {
   return {
-    flex: 1, padding: '5px 8px', borderRadius: 7,
+    flex: 1, padding: '5px 8px', borderRadius: RADIUS.xs + 1,
     background: 'transparent', border: `1px solid ${T.border}`,
-    color: T.textSub, fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+    color: T.textSub, ...TYPO.footnote, fontWeight: 700, fontFamily: 'inherit',
     cursor: 'pointer', whiteSpace: 'nowrap',
   }
 }
@@ -563,7 +566,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
               return (
                 <div key={h} style={{
                   position: 'absolute', top: i * 60 / SLOT_MIN * SLOT_PX - 6,
-                  right: 6, fontSize: 10, color: T.textMuted, fontFamily: 'monospace',
+                  right: SPACING.xs + 2, fontSize: 10, color: T.textMuted, fontFamily: 'monospace',
                 }}>{String(h).padStart(2, '0')}:00</div>
               )
             })}
@@ -631,7 +634,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
                 borderBottom: `1px solid ${T.border}`,
                 background: isToday ? T.accentBg : T.bgCard,
                 color: isToday ? T.accent : T.text,
-                fontSize: 12, fontWeight: 700,
+                ...TYPO.subhead, fontWeight: 700,
                 display: 'flex', flexDirection: 'column', justifyContent: 'center',
                 position: 'sticky', top: 0, zIndex: 1,
               }}>
@@ -684,9 +687,9 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
                     <div key={`free-${i}`} style={{
                       position: 'absolute', left: 2, right: 2,
                       top, height: h,
-                      background: 'rgba(0,214,143,0.18)',
-                      borderLeft: `2px solid #00d68f`,
-                      borderRadius: 4, pointerEvents: 'none',
+                      background: T.successBg,
+                      borderLeft: `2px solid ${T.success}`,
+                      borderRadius: RADIUS.xs - 2, pointerEvents: 'none',
                     }} title={`全員空き: ${formatMin(s.startMin)}–${formatMin(s.endMin)}`} />
                   )
                 })}
@@ -735,7 +738,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
                 {nowTopPx != null && (
                   <div style={{
                     position: 'absolute', left: 0, right: 0, top: nowTopPx,
-                    height: 2, background: '#ff6b6b', zIndex: 3, pointerEvents: 'none',
+                    height: 2, background: T.danger, zIndex: 3, pointerEvents: 'none',
                   }} />
                 )}
               </div>
@@ -764,7 +767,7 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }
         top, height: h,
         background: hover ? `${ev.color}88` : `${ev.color}55`,
         borderLeft: `3px solid ${ev.color}`,
-        borderRadius: 5, padding: minimal ? '2px 3px' : '3px 5px',
+        borderRadius: RADIUS.xs - 1, padding: minimal ? '2px 3px' : '3px 5px',
         fontSize: 10, color: T.text,
         overflow: 'hidden', cursor: 'pointer',
         boxShadow: hover ? `0 4px 12px ${ev.color}55, 0 0 0 1px ${ev.color}80` : 'none',
@@ -791,25 +794,25 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }
       {hover && (
         <div style={{
           position: 'absolute', top: '100%', left: 0,
-          marginTop: 4, padding: '10px 12px',
+          marginTop: SPACING.xs, padding: `${SPACING.sm + 2}px ${SPACING.md}px`,
           background: 'rgba(28,28,30,0.95)',
           backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-          color: '#fff', borderRadius: 10,
-          fontSize: 11, lineHeight: 1.5, whiteSpace: 'nowrap',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.30), 0 12px 32px rgba(0,0,0,0.20)',
+          color: '#fff', borderRadius: RADIUS.md,
+          ...TYPO.footnote, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'nowrap',
+          boxShadow: SHADOWS.lg,
           zIndex: 100, minWidth: 200, maxWidth: 320,
           pointerEvents: 'none',
         }}>
-          <div style={{ fontWeight: 800, marginBottom: 4, fontSize: 12,
+          <div style={{ fontWeight: 800, marginBottom: SPACING.xs, fontSize: 12,
             whiteSpace: 'normal', wordBreak: 'break-word' }}>{ev.title || '(無題)'}</div>
-          <div style={{ opacity: 0.85, marginBottom: 2 }}>
-            👤 <strong>{ev.memberName}</strong>
+          <div style={{ opacity: 0.85, marginBottom: 2, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
+            <Icon name="user" size={12} /> <strong>{ev.memberName}</strong>
           </div>
-          <div style={{ opacity: 0.85 }}>
-            🕐 {formatMin(ev.startMin)}–{formatMin(ev.endMin)}
+          <div style={{ opacity: 0.85, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
+            <Icon name="clock" size={12} /> {formatMin(ev.startMin)}–{formatMin(ev.endMin)}
           </div>
           {ev.hangoutLink && (
-            <div style={{ marginTop: 6, fontSize: 10, opacity: 0.7 }}>📹 Meet あり</div>
+            <div style={{ marginTop: SPACING.xs + 2, fontSize: 10, opacity: 0.7, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}><Icon name="msg" size={11} /> Meet あり</div>
           )}
         </div>
       )}
@@ -879,13 +882,13 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
   if (unconnected.length === 0) return null
   return (
     <div style={{
-      padding: '10px 16px', borderTop: `1px solid ${T.border}`,
-      background: T.sectionBg, fontSize: 11, color: T.textMuted,
+      padding: `${SPACING.sm + 2}px ${SPACING.lg}px`, borderTop: `1px solid ${T.border}`,
+      background: T.sectionBg, ...TYPO.footnote, color: T.textMuted,
     }}>
-      <div style={{ marginBottom: 4, fontWeight: 700, color: T.warn }}>
-        ⚠️ 以下のメンバーは Google 未連携のためカレンダーが取得できません:
+      <div style={{ marginBottom: SPACING.xs, fontWeight: 700, color: T.warn, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+        <Icon name="alert" size={13} /> 以下のメンバーは Google 未連携のためカレンダーが取得できません:
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.sm }}>
         {unconnected.map(r => {
           const subject = encodeURIComponent('OKR Dashboard カレンダー連携のお願い')
           const link = typeof window !== 'undefined'
@@ -898,11 +901,12 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
             <a key={r.name}
                href={`mailto:?subject=${subject}&body=${body}`}
                style={{
-                 padding: '3px 10px', borderRadius: 6,
+                 display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                 padding: '3px 10px', borderRadius: RADIUS.xs,
                  background: T.warnBg, color: T.warn,
                  textDecoration: 'none', fontWeight: 700,
                }}>
-              ✉️ {r.name} に連携依頼を送る
+              <Icon name="mail" size={12} /> {r.name} に連携依頼を送る
             </a>
           )
         })}
