@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { buildQuarterMap } from '../lib/objectiveMatching'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import KASection from './KASection'
 import { useLayerLabels } from '../lib/levelLabels'
 import Icon from './Icon'
@@ -439,16 +439,16 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
     ? annualObjs.filter(o => Number(o.level_id) === Number(activeLevelId))
     : annualObjs
 
-  if (loading) return <div style={{ padding: 40, color: T().addBtnBg, fontSize: 14 }}>読み込み中...</div>
-  if (!levels?.length) return <div style={{ padding: 40, color: T().addBtnBg, fontSize: 14 }}>読み込み中...</div>
+  if (loading) return <div style={{ padding: SPACING['3xl'] + SPACING.sm, color: T().addBtnBg, fontSize: TYPO.headline.fontSize }}>読み込み中...</div>
+  if (!levels?.length) return <div style={{ padding: SPACING['3xl'] + SPACING.sm, color: T().addBtnBg, fontSize: TYPO.headline.fontSize }}>読み込み中...</div>
 
   if (!filteredObjs.length) return (
-    <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, border: `1px dashed ${T().borderDash}`, borderRadius: 14, maxWidth: 600, margin: '40px auto' }}>
-      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+    <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, border: `1px dashed ${T().borderDash}`, borderRadius: RADIUS.lg, maxWidth: 600, margin: '40px auto' }}>
+      <div style={{ marginBottom: SPACING.md, display: 'flex', justifyContent: 'center' }}>
         <Icon name="calendar" size={36} stroke={1.4} />
       </div>
-      <div style={{ fontSize: 15, marginBottom: 6, color: T().text }}>{activeLevelId ? 'この組織の' : ''}{fiscalYear}年度の通期OKRがありません</div>
-      <div style={{ fontSize: 13 }}>まず「通期」の目標を追加してください</div>
+      <div style={{ fontSize: 15, marginBottom: SPACING.xs + 2, color: T().text }}>{activeLevelId ? 'この組織の' : ''}{fiscalYear}年度の通期OKRがありません</div>
+      <div style={{ fontSize: TYPO.body.fontSize }}>まず「通期」の目標を追加してください</div>
     </div>
   )
 
@@ -461,10 +461,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
           <Icon name="target" size={16} stroke={1.8} style={{ color: T().textSub }} />
           年間ブレイクダウン
         </h1>
-        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textSub }}>
+        <span style={{ fontSize: TYPO.footnote.fontSize, fontWeight: 700, padding: '2px 8px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub }}>
           {fiscalYear}年度
         </span>
-        <span style={{ fontSize: 11, color: T().textMuted, marginLeft: 'auto' }}>通期 OKR をクリックして四半期へ展開</span>
+        <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textMuted, marginLeft: 'auto' }}>通期 OKR をクリックして四半期へ展開</span>
       </div>
 
       {filteredObjs.map(ann => {
@@ -483,11 +483,11 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
             marginBottom: 18,
             background: T().bgCard,
             border: `1px solid ${T().border}`,
-            borderRadius: 18, overflow: 'hidden',
+            borderRadius: RADIUS.xl, overflow: 'hidden',
             position: 'relative',
             boxShadow: isOpen
-              ? '0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)'
-              : '0 1px 2px rgba(0,0,0,0.03)',
+              ? `${SHADOWS.xs}, ${SHADOWS.md}`
+              : SHADOWS.xs,
             transition: 'all 0.25s ease',
           }}>
 
@@ -504,9 +504,9 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               <div style={{ flex: 1, minWidth: 0 }}>
                 {/* 1行目: ステータスバッジ + Q% バッジ群 (まとめて1行) */}
                 <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textSub, fontWeight: 700 }}>{levelIcon} {levelName}</span>
-                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700 }}>通期</span>
-                  {r && (() => { const rc = tColor(r); return <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: `${rc}1a`, color: rc, fontWeight: 800 }}>{r.label}</span> })()}
+                  <span style={{ fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub, fontWeight: 700 }}>{levelIcon} {levelName}</span>
+                  <span style={{ fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textMuted, fontWeight: 700 }}>通期</span>
+                  {r && (() => { const rc = tColor(r); return <span style={{ fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, background: `${rc}1a`, color: rc, fontWeight: 800 }}>{r.label}</span> })()}
                   {/* 区切り */}
                   <span style={{ width: 1, height: 14, background: T().border, margin: '0 2px' }} />
                   {Q_KEYS.map(qKey => {
@@ -516,8 +516,8 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                     const qc = qr ? tColor(qr) : T().textFaintest
                     return (
                       <span key={qKey} style={{
-                        fontSize: 11, padding: '3px 10px', borderRadius: 99, fontWeight: 700,
-                        background: qr ? `${qc}12` : 'rgba(0,0,0,0.04)',
+                        fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, fontWeight: 700,
+                        background: qr ? `${qc}12` : T().sectionBg,
                         color: qc,
                       }}>
                         {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '−'}
@@ -526,24 +526,24 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                   })}
                 </div>
                 {/* 2行目: タイトル */}
-                <div style={{ fontSize: 16, fontWeight: 800, color: T().text, lineHeight: 1.45, letterSpacing: '-0.01em' }}>{ann.title}</div>
+                <div style={{ ...TYPO.title3, fontWeight: 800, color: T().text, lineHeight: 1.45 }}>{ann.title}</div>
               </div>
               {/* 右側: 達成率 + 担当 + アクション (縦に圧縮) */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                 <div style={{ fontSize: 28, fontWeight: 900, color: tColor(r), letterSpacing: '-0.02em', lineHeight: 1 }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
                 {ann.owner && (
-                  <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: TYPO.caption.fontSize, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={16} />
                     <span style={{ fontWeight: 600 }}>{ann.owner}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
-                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
                   {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }}
                     title="この OKR をアーカイブします (アーカイブ画面から復元・完全削除可能)"
-                    style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textSub, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    style={{ background: T().sectionBg, border: 'none', color: T().textSub, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ</button>}
-                  <div style={{ fontSize: 16, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</div>
+                  <div style={{ fontSize: TYPO.title3.fontSize, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-flex' }}><Icon name="chevronD" size={16} stroke={1.8} /></div>
                 </div>
               </div>
             </div>
@@ -579,15 +579,15 @@ function OwnerSelect({ value, onChange, members, T, disabled }) {
       display: 'flex', alignItems: 'center', gap: 6,
       padding: '3px 6px',
       border: `1px solid ${T.border}`,
-      borderRadius: 6,
+      borderRadius: RADIUS.xs,
       background: T.bgCard,
       opacity: disabled ? 0.5 : 1,
     }}>
       {m ? <Avatar name={m.name} avatarUrl={m.avatar_url} size={16} />
-         : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)', flexShrink: 0 }} />}
+         : <div style={{ width: 16, height: 16, borderRadius: '50%', background: T.sectionBg, flexShrink: 0 }} />}
       <select value={value || ''} onChange={e => onChange(e.target.value)} disabled={disabled}
         style={{
-          flex: 1, minWidth: 0, fontSize: 11, padding: '2px 0',
+          flex: 1, minWidth: 0, fontSize: TYPO.footnote.fontSize, padding: '2px 0',
           border: 'none', background: 'transparent', color: T.text,
           fontFamily: 'inherit', outline: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
           appearance: 'none', WebkitAppearance: 'none',
@@ -595,7 +595,7 @@ function OwnerSelect({ value, onChange, members, T, disabled }) {
         <option value="">担当者なし</option>
         {(members || []).map(x => <option key={x.id} value={x.name}>{x.name}</option>)}
       </select>
-      <span style={{ fontSize: 9, color: T.textFaint, flexShrink: 0 }}>▾</span>
+      <span style={{ color: T.textFaint, flexShrink: 0, display: 'inline-flex' }}><Icon name="chevronD" size={9} stroke={1.8} /></span>
     </div>
   )
 }
@@ -619,19 +619,19 @@ function ProgramTagsInput({ value, onChange, T, disabled, allTags = [] }) {
       display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4,
       padding: '3px 6px',
       border: `1px solid ${T.border}`,
-      borderRadius: 6,
+      borderRadius: RADIUS.xs,
       background: T.bgCard,
       opacity: disabled ? 0.5 : 1,
     }}>
-      <span style={{ fontSize: 11, color: T.textFaint, flexShrink: 0 }}>🏷</span>
+      <span style={{ color: T.textFaint, flexShrink: 0, display: 'inline-flex' }}><Icon name="pin" size={11} stroke={1.8} /></span>
       {tags.map(t => {
         const isOrphan = orphanTags.includes(t)
         return (
           <span key={t} title={isOrphan ? 'このタグはマスタから削除されています。組織ページで再定義してください。' : ''}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', background: isOrphan ? 'rgba(232,155,155,0.15)' : 'rgba(107,150,199,0.15)', color: isOrphan ? '#E89B9B' : '#6B96C7', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>
-            {isOrphan ? '⚠ ' : ''}{t}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px', background: isOrphan ? T.dangerBg : T.accentBg, color: isOrphan ? T.danger : T.accent, borderRadius: RADIUS.pill, fontSize: TYPO.caption.fontSize, fontWeight: 700 }}>
+            {isOrphan ? <Icon name="alert" size={10} stroke={1.8} /> : null}{t}
             <button type="button" onClick={() => removeTag(t)} disabled={disabled}
-              style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1 }}>✕</button>
+              style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, lineHeight: 1, display: 'inline-flex' }}><Icon name="cross" size={10} stroke={1.8} /></button>
           </span>
         )
       })}
@@ -640,13 +640,13 @@ function ProgramTagsInput({ value, onChange, T, disabled, allTags = [] }) {
           value=""
           onChange={e => { if (e.target.value) addTag(e.target.value) }}
           disabled={disabled}
-          style={{ fontSize: 11, padding: '2px 4px', border: 'none', background: 'transparent', color: T.textSub, fontFamily: 'inherit', outline: 'none', cursor: disabled ? 'not-allowed' : 'pointer', appearance: 'auto' }}>
+          style={{ fontSize: TYPO.footnote.fontSize, padding: '2px 4px', border: 'none', background: 'transparent', color: T.textSub, fontFamily: 'inherit', outline: 'none', cursor: disabled ? 'not-allowed' : 'pointer', appearance: 'auto' }}>
           <option value="">＋ プログラムを追加</option>
           {candidates.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       ) : (
         tags.length === 0 && (
-          <span style={{ fontSize: 10, color: T.textFaint }} title="組織ページの「🏷 プログラム管理」でタグを定義してください">
+          <span style={{ fontSize: TYPO.caption.fontSize, color: T.textFaint }} title="組織ページの「プログラム管理」でタグを定義してください">
             タグなし (組織ページで定義)
           </span>
         )
@@ -1240,23 +1240,23 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
             {canEditOKR && hasUnmapped && annualKRs.length > 0 && (
               <button onClick={() => setShowAutoLink(true)} disabled={busy}
-                style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                🔗 自動紐付け候補
+                style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: RADIUS.xs, padding: '4px 10px', fontSize: TYPO.footnote.fontSize, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="link" size={11} stroke={1.8} /> 自動紐付け候補
               </button>
             )}
             {/* 集計バッジ群 (空白を活用) */}
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textSub }}>
+            <span style={{ fontSize: TYPO.caption.fontSize, fontWeight: 700, padding: '3px 8px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub }}>
               通期 KR {annualKRs.length}
             </span>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted }}>
+            <span style={{ fontSize: TYPO.caption.fontSize, fontWeight: 700, padding: '3px 8px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textMuted }}>
               紐付け済 Q期 KR {mappedTotal}
             </span>
             {unmappedTotal > 0 && (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: `${T().danger}14`, color: T().danger }}>
+              <span style={{ fontSize: TYPO.caption.fontSize, fontWeight: 700, padding: '3px 8px', borderRadius: RADIUS.pill, background: `${T().danger}14`, color: T().danger }}>
                 未紐付け {unmappedTotal}
               </span>
             )}
-            <span style={{ fontSize: 10, color: T().textFaint, marginLeft: 'auto' }}>
+            <span style={{ fontSize: TYPO.caption.fontSize, color: T().textFaint, marginLeft: 'auto' }}>
               ⋮⋮ をドラッグして紐付け / 空セルをクリックで KR 追加
             </span>
           </div>
@@ -1285,7 +1285,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
       <div style={{
         overflow: 'auto',
         maxHeight: 'calc(100vh - 280px)',
-        borderRadius: 10, border: `1px solid ${T().border}`,
+        borderRadius: RADIUS.md, border: `1px solid ${T().border}`,
       }}>
       <div style={{
         display: 'grid',
@@ -1297,8 +1297,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
         <div style={{
           position: 'sticky', left: 0, top: 0, zIndex: 5,
           background: stickyBg,
-          padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
-          fontSize: 11, color: T().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700,
+          padding: SPACING.md - 2, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
+          fontSize: TYPO.footnote.fontSize, color: T().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700,
         }}>
           {annualKRs.length > 0 ? '通期 KR' : '— (通期 KR 未定義)'}
         </div>
@@ -1320,24 +1320,24 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
               display: 'flex', flexDirection: 'column', gap: 2,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: T().text }}>{Q_LABELS[qKey]}</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: qr ? tColor(qr) : T().textFaint }}>{qProg != null ? `${qProg}%` : (qObjs.length ? '計画中' : '未設定')}</span>
+                <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 800, color: T().text }}>{Q_LABELS[qKey]}</span>
+                <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 800, color: qr ? tColor(qr) : T().textFaint }}>{qProg != null ? `${qProg}%` : (qObjs.length ? '計画中' : '未設定')}</span>
               </div>
               {qObjs.length > 0 ? qObjs.map(qObj => (
                 <div key={qObj.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: T().text, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
+                  <span style={{ flex: 1, fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T().text, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={qObj.title}>{qObj.title}</span>
                   <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                    {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                    {onEdit && <button onClick={() => onEdit(qObj)} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: RADIUS.xs - 2, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
                     {onDelete && <button onClick={() => onDelete(qObj.id)}
                       title="この Q 期 OKR をアーカイブ"
-                      style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: T().textMuted, borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center' }}>
+                      style={{ background: T().sectionBg, border: 'none', color: T().textMuted, borderRadius: RADIUS.xs - 2, padding: '1px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center' }}>
                       <Icon name="workspace" size={9} stroke={1.8} />
                     </button>}
                   </div>
                 </div>
               )) : (
                 canEditOKR && (
-                  <button onClick={() => handleAddQ(ann.id, qKey, ann.level_id)} style={{ background: 'transparent', border: `1px dashed ${T().borderDash}`, color: T().textFaint, borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <button onClick={() => handleAddQ(ann.id, qKey, ann.level_id)} style={{ background: 'transparent', border: `1px dashed ${T().borderDash}`, color: T().textFaint, borderRadius: RADIUS.xs, padding: '4px 8px', fontSize: TYPO.caption.fontSize, cursor: 'pointer', fontFamily: 'inherit' }}>
                     ＋ {Q_LABELS[qKey]} OKR を作成
                   </button>
                 )
@@ -1364,7 +1364,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
               {/* 左列: 通期 KR (sticky) — クリックで編集 / ドラッグで並び替え */}
               <div style={{
                 position: 'sticky', left: 0, zIndex: 2, background: stickyBg,
-                padding: 10, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
+                padding: SPACING.md - 2, borderBottom: `1px solid ${T().border}`, borderRight: `1px solid ${T().border}`,
                 display: 'flex', flexDirection: 'column', gap: 4,
                 cursor: isEditingAnn ? 'default' : 'pointer',
                 opacity: draggedAnnKrId === annKr.id ? 0.4 : 1,
@@ -1381,26 +1381,26 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                 onDragLeave={() => onAnnRowDragLeave(annKr.id)}
                 onDrop={e => onAnnRowDrop(e, annKr.id)}>
                 {isEditingAnn ? (
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 4, border: `1px solid ${T().addBtnBg}`, borderRadius: 6 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 4, border: `1px solid ${T().addBtnBg}`, borderRadius: RADIUS.xs }}>
                     <input autoFocus value={editForm.title}
                       onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
                       placeholder="通期 KR タイトル" disabled={editSaving}
-                      style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                      style={{ fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                     <div style={{ display: 'flex', gap: 4 }}>
                       <input value={editForm.current}
                         onChange={e => setEditForm(p => ({ ...p, current: e.target.value }))}
                         placeholder="現在" type="number" disabled={editSaving || annKr.aggregation_type !== 'manual'}
                         title={annKr.aggregation_type !== 'manual' ? '集計タイプが手動以外なので子から自動計算されます' : ''}
-                        style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none', opacity: annKr.aggregation_type !== 'manual' ? 0.5 : 1 }} />
-                      <span style={{ alignSelf: 'center', fontSize: 11, color: T().textMuted }}>/</span>
+                        style={{ flex: 1, minWidth: 0, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none', opacity: annKr.aggregation_type !== 'manual' ? 0.5 : 1 }} />
+                      <span style={{ alignSelf: 'center', fontSize: TYPO.footnote.fontSize, color: T().textMuted }}>/</span>
                       <input value={editForm.target}
                         onChange={e => setEditForm(p => ({ ...p, target: e.target.value }))}
                         placeholder="目標" type="number" disabled={editSaving}
-                        style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                        style={{ flex: 1, minWidth: 0, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                       <input value={editForm.unit}
                         onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
                         placeholder="単位" disabled={editSaving}
-                        style={{ width: 44, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                        style={{ width: 44, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                     </div>
                     <OwnerSelect value={editForm.owner} onChange={v => setEditForm(p => ({ ...p, owner: v }))}
                       members={members} T={T()} disabled={editSaving} />
@@ -1408,24 +1408,24 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       T={T()} disabled={editSaving} allTags={allProgramTags} suggestId={`kr-tag-ann-${editingKrId}`} />
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button onClick={() => deleteKr(annKr)} disabled={editSaving}
-                        style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid rgba(232,155,155,0.30)`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        style={{ fontSize: TYPO.caption.fontSize, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().danger}4d`, background: 'transparent', color: T().danger, cursor: 'pointer', fontFamily: 'inherit' }}>
                         削除
                       </button>
                       {(Number(annKr.target) > 0 && (annKr.lower_is_better ? Number(annKr.current) <= Number(annKr.target) : Number(annKr.current) >= Number(annKr.target))) && (
                         <button onClick={() => archiveKr(annKr)} disabled={editSaving}
                           title="完了した KR をアーカイブ (各画面のカードから非表示・アーカイブ画面から復元可能)"
-                          style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          📦 アーカイブ
+                          style={{ fontSize: TYPO.caption.fontSize, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ
                         </button>
                       )}
                       <div style={{ flex: 1 }} />
                       <button onClick={cancelEditKr} disabled={editSaving}
-                        style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        style={{ fontSize: TYPO.caption.fontSize, padding: '4px 8px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
                         キャンセル
                       </button>
                       <button onClick={commitEditKr} disabled={editSaving}
-                        style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: editSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                        {editSaving ? '保存中…' : '✓ 保存'}
+                        style={{ fontSize: TYPO.caption.fontSize, fontWeight: 700, padding: '4px 8px', borderRadius: RADIUS.xs - 2, border: 'none', background: T().addBtnBg, color: '#fff', cursor: editSaving ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        {editSaving ? '保存中…' : <><Icon name="check" size={10} stroke={2} /> 保存</>}
                       </button>
                     </div>
                   </div>
@@ -1439,18 +1439,18 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     onDragEnd={onAnnRowDragEnd}
                     onClick={e => e.stopPropagation()}
                     title="ドラッグで並び替え"
-                    style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab', userSelect: 'none', padding: '0 2px' }}>⋮⋮</span>
-                  {(() => { const krc = tColor(kr_r); return <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: `${krc}14`, color: krc, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span> })()}
-                  {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
-                  <span style={{ fontSize: 13, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
+                    style={{ fontSize: TYPO.footnote.fontSize, color: T().textFaint, flexShrink: 0, cursor: 'grab', userSelect: 'none', padding: '0 2px' }}>⋮⋮</span>
+                  {(() => { const krc = tColor(kr_r); return <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: RADIUS.pill, background: `${krc}14`, color: krc, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span> })()}
+                  {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
+                  <span style={{ fontSize: TYPO.body.fontSize, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: tColor(kr_r), borderRadius: 99 }} />
+                  <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: tColor(kr_r), borderRadius: RADIUS.pill }} />
                   </div>
-                  <span style={{ fontSize: 11, color: tColor(kr_r), fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
+                  <span style={{ fontSize: TYPO.footnote.fontSize, color: tColor(kr_r), fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
                 </div>
-                <div style={{ fontSize: 10, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ fontSize: TYPO.caption.fontSize, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
                   {annKr.owner && <Avatar name={annKr.owner} avatarUrl={members.find(m=>m.name===annKr.owner)?.avatar_url} size={14} />}
                   <span style={{ flex: 1 }}>{aggregatedCurrent.toLocaleString()} / {target.toLocaleString()} {annKr.unit || ''}</span>
                 </div>
@@ -1471,7 +1471,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     onDragLeave={() => onCellDragLeave(cellKey)}
                     onDrop={e => onCellDrop(e, annKr.id, qKey)}
                     style={{
-                      padding: 8, borderBottom: `1px solid ${T().border}`,
+                      padding: SPACING.sm, borderBottom: `1px solid ${T().border}`,
                       borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
                       display: 'flex', flexDirection: 'column', gap: 5,
                       background: isDragOver ? `${T().addBtnBg}1a` : 'transparent',
@@ -1482,14 +1482,14 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     {cells.length === 0 ? (
                       addingCell && Number(addingCell.annKrId) === Number(annKr.id) && addingCell.qKey === qKey ? (
                         // 空セル → 追加フォーム (インライン)
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}` }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: RADIUS.xs, padding: 6, border: `1px solid ${T().addBtnBg}` }}>
                           <input
                             autoFocus
                             value={addForm.title}
                             onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))}
                             placeholder="KR タイトル"
                             disabled={addSaving}
-                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            style={{ fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <input
                               value={addForm.target}
@@ -1497,13 +1497,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               placeholder="目標値"
                               type="number"
                               disabled={addSaving}
-                              style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              style={{ flex: 1, minWidth: 0, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             <input
                               value={addForm.unit}
                               onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))}
                               placeholder="単位"
                               disabled={addSaving}
-                              style={{ width: 50, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              style={{ width: 50, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                           </div>
                           <OwnerSelect value={addForm.owner} onChange={v => setAddForm(p => ({ ...p, owner: v }))}
                             members={members} T={T()} disabled={addSaving} />
@@ -1511,12 +1511,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             T={T()} disabled={addSaving} allTags={allProgramTags} suggestId="kr-tag-add-empty" />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button onClick={cancelAddInCell} disabled={addSaving}
-                              style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
-                              ✕ キャンセル
+                              style={{ flex: 1, fontSize: TYPO.caption.fontSize, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                              <Icon name="cross" size={10} stroke={1.8} /> キャンセル
                             </button>
                             <button onClick={commitAddInCell} disabled={addSaving}
-                              style={{ flex: 1, fontSize: 10, fontWeight: 700, padding: '4px 6px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: addSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                              {addSaving ? '保存中…' : '✓ 追加'}
+                              style={{ flex: 1, fontSize: TYPO.caption.fontSize, fontWeight: 700, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: 'none', background: T().addBtnBg, color: '#fff', cursor: addSaving ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                              {addSaving ? '保存中…' : <><Icon name="check" size={10} stroke={2} /> 追加</>}
                             </button>
                           </div>
                         </div>
@@ -1527,11 +1527,11 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           onClick={() => startAddInCell(annKr, qKey)}
                           title={`${Q_LABELS[qKey]} の KR を追加 (この通期 KR に紐付け)`}
                           style={{
-                            fontSize: 11, fontWeight: 700,
+                            fontSize: TYPO.footnote.fontSize, fontWeight: 700,
                             color: T().addBtnBg,
                             textAlign: 'center', padding: '14px 6px',
                             border: `1px dashed ${T().addBtnBg}`,
-                            borderRadius: 6,
+                            borderRadius: RADIUS.xs,
                             background: isDragOver ? `${T().addBtnBg}26` : `${T().addBtnBg}0d`,
                             cursor: 'pointer',
                             fontFamily: 'inherit', width: '100%',
@@ -1543,7 +1543,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         >
                           {isDragOver ? '↓ ここに紐付け' : (
                             <>
-                              <span style={{ fontSize: 13 }}>＋</span>
+                              <span style={{ fontSize: TYPO.body.fontSize }}>＋</span>
                               <span>{Q_LABELS[qKey]} KR を追加</span>
                             </>
                           )}
@@ -1559,25 +1559,25 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       const isEditing = Number(editingKrId) === Number(qkr.id)
                       if (isEditing) {
                         return (
-                          <div key={qkr.id} style={{ background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div key={qkr.id} style={{ background: cellBg, borderRadius: RADIUS.xs, padding: 6, border: `1px solid ${T().addBtnBg}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
                             <input autoFocus value={editForm.title}
                               onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
                               placeholder="KR タイトル" disabled={editSaving}
-                              style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              style={{ fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             <div style={{ display: 'flex', gap: 4 }}>
                               <input value={editForm.current}
                                 onChange={e => setEditForm(p => ({ ...p, current: e.target.value }))}
                                 placeholder="現在" type="number" disabled={editSaving}
-                                style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
-                              <span style={{ alignSelf: 'center', fontSize: 11, color: T().textMuted }}>/</span>
+                                style={{ flex: 1, minWidth: 0, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              <span style={{ alignSelf: 'center', fontSize: TYPO.footnote.fontSize, color: T().textMuted }}>/</span>
                               <input value={editForm.target}
                                 onChange={e => setEditForm(p => ({ ...p, target: e.target.value }))}
                                 placeholder="目標" type="number" disabled={editSaving}
-                                style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                                style={{ flex: 1, minWidth: 0, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                               <input value={editForm.unit}
                                 onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
                                 placeholder="単位" disabled={editSaving}
-                                style={{ width: 44, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                                style={{ width: 44, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             </div>
                             <OwnerSelect value={editForm.owner} onChange={v => setEditForm(p => ({ ...p, owner: v }))}
                               members={members} T={T()} disabled={editSaving} />
@@ -1585,24 +1585,24 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                               T={T()} disabled={editSaving} allTags={allProgramTags} suggestId={`kr-tag-q-${editingKrId}`} />
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button onClick={() => deleteKr(qkr)} disabled={editSaving}
-                                style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().btnDelBorder || 'rgba(232,155,155,0.30)'}`, background: 'transparent', color: '#E89B9B', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                style={{ fontSize: TYPO.caption.fontSize, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().btnDelBorder || `${T().danger}4d`}`, background: 'transparent', color: T().danger, cursor: 'pointer', fontFamily: 'inherit' }}>
                                 削除
                               </button>
                               {(Number(qkr.target) > 0 && (qkr.lower_is_better ? Number(qkr.current) <= Number(qkr.target) : Number(qkr.current) >= Number(qkr.target))) && (
                                 <button onClick={() => archiveKr(qkr)} disabled={editSaving}
                                   title="完了した KR をアーカイブ (各画面のカードから非表示・アーカイブ画面から復元可能)"
-                                  style={{ fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
-                                  📦 アーカイブ
+                                  style={{ fontSize: TYPO.caption.fontSize, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                  <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ
                                 </button>
                               )}
                               <div style={{ flex: 1 }} />
                               <button onClick={cancelEditKr} disabled={editSaving}
-                                style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                style={{ fontSize: TYPO.caption.fontSize, padding: '4px 8px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
                                 キャンセル
                               </button>
                               <button onClick={commitEditKr} disabled={editSaving}
-                                style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: editSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                                {editSaving ? '保存中…' : '✓ 保存'}
+                                style={{ fontSize: TYPO.caption.fontSize, fontWeight: 700, padding: '4px 8px', borderRadius: RADIUS.xs - 2, border: 'none', background: T().addBtnBg, color: '#fff', cursor: editSaving ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                {editSaving ? '保存中…' : <><Icon name="check" size={10} stroke={2} /> 保存</>}
                               </button>
                             </div>
                           </div>
@@ -1620,30 +1620,30 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           onClick={() => startEditKr(qkr)}
                           style={{
                             background: cellBg,
-                            borderRadius: 10,
+                            borderRadius: RADIUS.md,
                             padding: '8px 10px',
                             cursor: 'pointer',
                             border: `1px solid ${qkrc}20`,
                             boxShadow: isDragOverThisQKr
                               ? (dragOverQKrPos === 'before'
-                                  ? `inset 0 3px 0 0 ${T().addBtnBg}, 0 1px 2px rgba(0,0,0,0.04)`
-                                  : `inset 0 -3px 0 0 ${T().addBtnBg}, 0 1px 2px rgba(0,0,0,0.04)`)
-                              : `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkrc}14`,
+                                  ? `inset 0 3px 0 0 ${T().addBtnBg}, ${SHADOWS.xs}`
+                                  : `inset 0 -3px 0 0 ${T().addBtnBg}, ${SHADOWS.xs}`)
+                              : `${SHADOWS.xs}, 0 4px 12px ${qkrc}14`,
                           }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
-                            <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
+                            <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
                               onMouseDown={e => e.stopPropagation()}>⋮⋮</span>
-                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkrc}22`, color: qkrc, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
+                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: RADIUS.pill, background: `${qkrc}22`, color: qkrc, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                            <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: 99 }} />
+                            <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: RADIUS.pill }} />
                             </div>
-                            <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                            <span style={{ fontSize: TYPO.caption.fontSize, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                           </div>
                           {qkr.owner && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 10, color: T().textMuted }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: TYPO.caption.fontSize, color: T().textMuted }}>
                               <Avatar name={qkr.owner} avatarUrl={members.find(m => m.name === qkr.owner)?.avatar_url} size={14} />
                               <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{qkr.owner}</span>
                             </div>
@@ -1651,7 +1651,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           {Array.isArray(qkr.program_tags) && qkr.program_tags.length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
                               {qkr.program_tags.map(t => (
-                                <span key={t} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: 'rgba(107,150,199,0.15)', color: '#6B96C7', fontWeight: 700 }}>🏷 {t}</span>
+                                <span key={t} style={{ fontSize: 9, padding: '1px 6px', borderRadius: RADIUS.pill, background: T().accentBg, color: T().accent, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="pin" size={9} stroke={1.8} /> {t}</span>
                               ))}
                             </div>
                           )}
@@ -1665,20 +1665,20 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     {canEditOKR && cells.length > 0 && (
                       addingCell && Number(addingCell.annKrId) === Number(annKr.id) && addingCell.qKey === qKey ? (
                         // 追加フォーム (既存 KR の下にインライン展開)
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: 6, padding: 6, border: `1px solid ${T().addBtnBg}`, marginTop: 4 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: cellBg, borderRadius: RADIUS.xs, padding: 6, border: `1px solid ${T().addBtnBg}`, marginTop: 4 }}>
                           <input autoFocus value={addForm.title}
                             onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))}
                             placeholder="KR タイトル" disabled={addSaving}
-                            style={{ fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                            style={{ fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <input value={addForm.target}
                               onChange={e => setAddForm(p => ({ ...p, target: e.target.value }))}
                               placeholder="目標値" type="number" disabled={addSaving}
-                              style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              style={{ flex: 1, minWidth: 0, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                             <input value={addForm.unit}
                               onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))}
                               placeholder="単位" disabled={addSaving}
-                              style={{ width: 50, fontSize: 11, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: 4, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
+                              style={{ width: 50, fontSize: TYPO.footnote.fontSize, padding: '4px 6px', border: `1px solid ${T().border}`, borderRadius: RADIUS.xs - 2, fontFamily: 'inherit', color: T().text, background: T().bgCard, outline: 'none' }} />
                           </div>
                           <OwnerSelect value={addForm.owner} onChange={v => setAddForm(p => ({ ...p, owner: v }))}
                             members={members} T={T()} disabled={addSaving} />
@@ -1686,12 +1686,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             T={T()} disabled={addSaving} allTags={allProgramTags} suggestId="kr-tag-add-more" />
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button onClick={cancelAddInCell} disabled={addSaving}
-                              style={{ flex: 1, fontSize: 10, padding: '4px 6px', borderRadius: 4, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit' }}>
-                              ✕ キャンセル
+                              style={{ flex: 1, fontSize: TYPO.caption.fontSize, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                              <Icon name="cross" size={10} stroke={1.8} /> キャンセル
                             </button>
                             <button onClick={commitAddInCell} disabled={addSaving}
-                              style={{ flex: 1, fontSize: 10, fontWeight: 700, padding: '4px 6px', borderRadius: 4, border: 'none', background: T().addBtnBg, color: '#fff', cursor: addSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                              {addSaving ? '保存中…' : '✓ 追加'}
+                              style={{ flex: 1, fontSize: TYPO.caption.fontSize, fontWeight: 700, padding: '4px 6px', borderRadius: RADIUS.xs - 2, border: 'none', background: T().addBtnBg, color: '#fff', cursor: addSaving ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                              {addSaving ? '保存中…' : <><Icon name="check" size={10} stroke={2} /> 追加</>}
                             </button>
                           </div>
                         </div>
@@ -1701,11 +1701,11 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           onClick={() => startAddInCell(annKr, qKey)}
                           title={`${Q_LABELS[qKey]} にもう1つ KR を追加`}
                           style={{
-                            fontSize: 10, fontWeight: 700,
+                            fontSize: TYPO.caption.fontSize, fontWeight: 700,
                             color: T().addBtnBg,
                             textAlign: 'center', padding: '6px',
                             border: `1px dashed ${T().addBtnBg}80`,
-                            borderRadius: 6,
+                            borderRadius: RADIUS.xs,
                             background: 'transparent', cursor: 'pointer',
                             fontFamily: 'inherit', width: '100%',
                             marginTop: 4,
@@ -1715,7 +1715,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           onMouseEnter={e => { e.currentTarget.style.background = `${T().addBtnBg}10` }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                         >
-                          <span style={{ fontSize: 12 }}>＋</span>
+                          <span style={{ fontSize: TYPO.subhead.fontSize }}>＋</span>
                           <span>もう1つ追加</span>
                         </button>
                       )
@@ -1732,8 +1732,8 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
           <Fragment>
             <div style={{
               position: 'sticky', left: 0, zIndex: 2, background: stickyBg,
-              padding: 10, borderRight: `1px solid ${T().border}`,
-              fontSize: 10, color: T().textMuted, fontWeight: 700, fontStyle: 'italic',
+              padding: SPACING.md - 2, borderRight: `1px solid ${T().border}`,
+              fontSize: TYPO.caption.fontSize, color: T().textMuted, fontWeight: 700, fontStyle: 'italic',
             }}>
               {noAnnualMode ? (
                 <Fragment>
@@ -1744,7 +1744,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                 </Fragment>
               ) : (
                 <Fragment>
-                  ⚠️ 未紐付け Q 期 KR
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="alert" size={10} stroke={1.8} /> 未紐付け Q 期 KR</span>
                   <div style={{ fontSize: 9, fontWeight: 500, marginTop: 2, color: T().textFaint }}>
                     編集して通期 KR に紐付けてください
                   </div>
@@ -1761,7 +1761,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   onDragLeave={() => onCellDragLeave(cellKey)}
                   onDrop={e => onCellDrop(e, null)}
                   style={{
-                    padding: 8,
+                    padding: SPACING.sm,
                     borderRight: qKey !== 'q4' ? `1px solid ${T().border}` : 'none',
                     display: 'flex', flexDirection: 'column', gap: 5,
                     background: isDragOver ? `${T().textFaint}1a` : 'transparent',
@@ -1770,7 +1770,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                     transition: 'background 0.1s',
                 }}>
                   {cells.length === 0 ? (
-                    <div style={{ fontSize: 10, color: T().textFaintest, textAlign: 'center', padding: '8px 4px', fontStyle: 'italic' }}>{isDragOver ? '↓ 紐付けを外す' : '—'}</div>
+                    <div style={{ fontSize: TYPO.caption.fontSize, color: T().textFaintest, textAlign: 'center', padding: '8px 4px', fontStyle: 'italic' }}>{isDragOver ? '↓ 紐付けを外す' : '—'}</div>
                   ) : cells.map(qkr => {
                     const qkp = qkr.target > 0
                       ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
@@ -1786,25 +1786,25 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         title="ドラッグして通期 KR の行に紐付け"
                         style={{
                           background: cellBg,
-                          borderRadius: 10,
+                          borderRadius: RADIUS.md,
                           padding: '8px 10px',
                           cursor: 'grab',
                           border: `1px solid ${qkrc}20`,
-                          boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${qkrc}14`,
+                          boxShadow: `${SHADOWS.xs}, 0 4px 12px ${qkrc}14`,
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
-                          <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
-                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: `${qkrc}22`, color: qkrc, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
+                          <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: RADIUS.pill, background: `${qkrc}22`, color: qkrc, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
+                          <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: 99 }} />
+                          <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: RADIUS.pill }} />
                           </div>
-                          <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                          <span style={{ fontSize: TYPO.caption.fontSize, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
                         {qkr.owner && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 10, color: T().textMuted }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: TYPO.caption.fontSize, color: T().textMuted }}>
                             <Avatar name={qkr.owner} avatarUrl={members.find(m => m.name === qkr.owner)?.avatar_url} size={14} />
                             <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{qkr.owner}</span>
                           </div>
@@ -1820,15 +1820,15 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         title="ドラッグして通期 KR の行に紐付け"
                         style={{
                           background: cellBg,
-                          borderRadius: 10,
+                          borderRadius: RADIUS.md,
                           padding: '7px 9px',
                           border: `1px dashed ${T().textFaint}40`,
                           cursor: 'grab',
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <span style={{ fontSize: 11, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
-                          <span style={{ fontSize: 10, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                          <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
+                          <span style={{ fontSize: TYPO.footnote.fontSize, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={qkr.title}>{qkr.title}</span>
+                          <span style={{ fontSize: TYPO.caption.fontSize, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
                       </div>
                     )
@@ -1897,9 +1897,9 @@ function AutoLinkDialog({ T, annualKRs, unmapped, onCancel, onApply }) {
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
   }
   const dialogStyle = {
-    background: T().bgCard, borderRadius: 14, maxWidth: 800, width: '100%',
+    background: T().bgCard, borderRadius: RADIUS.lg, maxWidth: 800, width: '100%',
     maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
+    boxShadow: SHADOWS.xl,
   }
 
   return (
@@ -1907,15 +1907,15 @@ function AutoLinkDialog({ T, annualKRs, unmapped, onCancel, onApply }) {
       <div style={dialogStyle} onClick={e => e.stopPropagation()}>
         {/* ヘッダ */}
         <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T().border}` }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: T().text, marginBottom: 4 }}>🔗 通期 KR への自動紐付け候補</div>
-          <div style={{ fontSize: 11, color: T().textMuted }}>
+          <div style={{ ...TYPO.title3, fontWeight: 800, color: T().text, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="link" size={16} stroke={1.8} /> 通期 KR への自動紐付け候補</div>
+          <div style={{ fontSize: TYPO.footnote.fontSize, color: T().textMuted }}>
             タイトルの類似度から候補を提案。選択を確認・修正して「適用」してください。
           </div>
         </div>
         {/* リスト */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
           {flatUnmapped.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: T().textMuted, fontSize: 13 }}>未紐付けの Q 期 KR はありません</div>
+            <div style={{ padding: 30, textAlign: 'center', color: T().textMuted, fontSize: TYPO.body.fontSize }}>未紐付けの Q 期 KR はありません</div>
           ) : flatUnmapped.map(qkr => {
             const scored = annualKRs.map(annKr => ({
               annKr, score: titleSimilarity(qkr.title, annKr.title),
@@ -1924,20 +1924,20 @@ function AutoLinkDialog({ T, annualKRs, unmapped, onCancel, onApply }) {
             const topScore = scored[0]?.score || 0
             return (
               <div key={qkr.id} style={{
-                marginBottom: 10, padding: '10px 12px',
+                marginBottom: SPACING.md - 2, padding: '10px 12px',
                 background: choice ? `${T().addBtnBg}0a` : T().bgKr,
                 border: `1px solid ${choice ? T().addBtnBg + '40' : T().border}`,
-                borderRadius: 8,
+                borderRadius: RADIUS.sm,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: `${Q_COLORS[qkr._qKey]}18`, color: Q_COLORS[qkr._qKey], fontWeight: 700 }}>{Q_LABELS[qkr._qKey]}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T().text, flex: 1 }}>{qkr.title}</span>
-                  <span style={{ fontSize: 10, color: T().textMuted }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
+                  <span style={{ fontSize: TYPO.caption.fontSize, padding: '1px 6px', borderRadius: RADIUS.pill, background: `${Q_COLORS[qkr._qKey]}18`, color: Q_COLORS[qkr._qKey], fontWeight: 700 }}>{Q_LABELS[qkr._qKey]}</span>
+                  <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T().text, flex: 1 }}>{qkr.title}</span>
+                  <span style={{ fontSize: TYPO.caption.fontSize, color: T().textMuted }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, color: T().textMuted, flexShrink: 0 }}>↗ 紐付け先 通期 KR:</span>
+                  <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textMuted, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="arrowUp" size={11} stroke={1.8} /> 紐付け先 通期 KR:</span>
                   <select value={choice} onChange={e => setChoices(p => ({ ...p, [qkr.id]: e.target.value }))}
-                    style={{ flex: 1, background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, color: T().text, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                    style={{ flex: 1, background: T().bgCard, border: `1px solid ${T().border}`, borderRadius: RADIUS.xs, padding: '5px 8px', fontSize: TYPO.subhead.fontSize, color: T().text, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                     <option value="">(紐付けない)</option>
                     {scored.map(({ annKr, score }) => (
                       <option key={annKr.id} value={annKr.id}>
@@ -1946,7 +1946,7 @@ function AutoLinkDialog({ T, annualKRs, unmapped, onCancel, onApply }) {
                     ))}
                   </select>
                   {topScore < 0.3 && !choice && (
-                    <span style={{ fontSize: 10, color: T().textFaint, fontStyle: 'italic' }}>類似 KR なし</span>
+                    <span style={{ fontSize: TYPO.caption.fontSize, color: T().textFaint, fontStyle: 'italic' }}>類似 KR なし</span>
                   )}
                 </div>
               </div>
@@ -1955,14 +1955,14 @@ function AutoLinkDialog({ T, annualKRs, unmapped, onCancel, onApply }) {
         </div>
         {/* フッタ */}
         <div style={{ padding: '12px 20px', borderTop: `1px solid ${T().border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: T().textMuted }}>{selectedCount} / {flatUnmapped.length} 件選択中</span>
+          <span style={{ fontSize: TYPO.subhead.fontSize, color: T().textMuted }}>{selectedCount} / {flatUnmapped.length} 件選択中</span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={onCancel} disabled={busy}
-              style={{ background: 'transparent', border: `1px solid ${T().border}`, color: T().textSub, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              style={{ background: 'transparent', border: `1px solid ${T().border}`, color: T().textSub, borderRadius: RADIUS.xs, padding: '6px 14px', fontSize: TYPO.subhead.fontSize, fontWeight: 600, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
               キャンセル
             </button>
             <button onClick={handleApply} disabled={busy || selectedCount === 0}
-              style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: busy || selectedCount === 0 ? 'wait' : 'pointer', opacity: selectedCount === 0 ? 0.5 : 1, fontFamily: 'inherit' }}>
+              style={{ background: T().addBtnBg, border: 'none', color: '#fff', borderRadius: RADIUS.xs, padding: '6px 14px', fontSize: TYPO.subhead.fontSize, fontWeight: 700, cursor: busy || selectedCount === 0 ? 'wait' : 'pointer', opacity: selectedCount === 0 ? 0.5 : 1, fontFamily: 'inherit' }}>
               {busy ? '⟳ 適用中…' : `選択した ${selectedCount} 件を一括紐付け`}
             </button>
           </div>
