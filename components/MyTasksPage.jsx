@@ -434,13 +434,9 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
 
   useEffect(() => { if (editingId && editRef.current) editRef.current.focus() }, [editingId])
 
-  // 期限超過カード: 行全体を真っ赤に塗らず、淡赤グラデ + 赤枠で表現
-  const rowBg = isDone
-    ? `linear-gradient(180deg, ${T.successBg} 0%, ${T.bgCard} 100%)`
-    : isOverdue
-      ? `linear-gradient(180deg, ${T.dangerSoft} 0%, ${T.bgCard} 100%)`
-      : T.bgCard
-  const rowBorder = isDone ? T.successBg : isOverdue ? T.dangerSoft : T.border
+  // 期限超過/完了カード: グラデ禁止。白カード + 色枠のみで状態を表現する。
+  const rowBg = T.bgCard
+  const rowBorder = isDone ? T.successBg : isOverdue ? T.dangerBg : T.border
 
   return (
     <div style={{
@@ -608,7 +604,8 @@ function ListView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDel
             flex: 1, minWidth: 120,
             ...cardStyle({ T, padding: '14px 16px' }),
             border: `1px solid ${tile.tint ? `${tile.tint}33` : T.border}`,
-            background: tile.tint ? `linear-gradient(180deg, ${tile.tint}0d 0%, ${T.bgCard} 100%)` : T.bgCard,
+            borderTop: `2px solid ${tile.tint ? `${tile.tint}66` : T.border}`,
+            background: T.bgCard,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: T.textSub }}>{tile.label}</span>
