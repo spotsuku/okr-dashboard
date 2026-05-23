@@ -3,6 +3,7 @@
 // アイコン + meta行(事業部/期間/達成状況/担当チップ) + h2 + footer(進捗バー+%+KR/KA件数)。
 import Icon from '../Icon'
 import AssigneeChip from './AssigneeChip'
+import ProgressBar from './ProgressBar'
 import { pctColor, pctColorBg, pctStatusLabel } from '../../lib/okrColors'
 import { SHADOWS } from '../../lib/themeTokens'
 
@@ -32,9 +33,7 @@ export default function ObjectiveHeader({
         </div>
         <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, lineHeight: 1.45, letterSpacing: '-0.005em', color: T.text }}>{title}</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10 }}>
-          <div style={{ flex: '0 0 140px', height: 4, background: T.sunken, borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.min(pct || 0, 100)}%`, background: col }} />
-          </div>
+          <ProgressBar T={T} pct={pct} fixedWidth={140} />
           <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace', color: col }}>{pct != null ? `${pct}%` : '−'}</span>
           {krCount != null && <span style={{ padding: '2px 10px', fontSize: 11, fontWeight: 600, borderRadius: 99, background: T.accentBg, color: T.accentText }}>KR {krCount}件</span>}
           {kaCount != null && <span style={{ padding: '2px 10px', fontSize: 11, fontWeight: 600, borderRadius: 99, background: T.borderLight || T.sectionBg, color: T.textSub }}>KA {kaCount}件</span>}

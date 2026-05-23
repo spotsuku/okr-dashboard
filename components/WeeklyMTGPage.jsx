@@ -15,6 +15,8 @@ import Icon, { DataIcon } from './Icon'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
+import OkrCard from './okr/OkrCard'
+import ProgressBar from './okr/ProgressBar'
 
 // 会議ごとのアイコン (SVG・currentColor を継承)
 const Ico = ({ size=22, children }) => (
@@ -138,16 +140,8 @@ function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor
       return next
     })
   }
-  const bgBase = isDone ? wT().successBg : wT().bgCard
-  const borderBase = isDone ? `${wT().success}55` : wT().border
   return (
-    <div style={{
-      padding: expanded ? `${SPACING.sm + 2}px ${SPACING.lg - 2}px` : `7px ${SPACING.md}px`,
-      background: bgBase,
-      border: `1px solid ${borderBase}`,
-      borderRadius: RADIUS.sm,
-      ...style,
-    }}>
+    <OkrCard T={wT()} padding={expanded ? `${SPACING.sm + 2}px ${SPACING.lg - 2}px` : `7px ${SPACING.md}px`} style={style}>
       <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm }}>
         <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 7px', borderRadius:RADIUS.pill, background:`${labelColor}22`, color:labelColor, flexShrink:0 }}>{label}</span>
         {!expanded && (
@@ -183,7 +177,7 @@ function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor
           {title}
         </div>
       )}
-    </div>
+    </OkrCard>
   )
 }
 
@@ -809,9 +803,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           {!reviewOpen && weather > 0 && <span style={{ display:'inline-flex', color:WEATHER_CFG[weather]?.color }}><Icon name={WEATHER_CFG[weather]?.icon} size={18} /></span>}
           <span style={{ color:wT().textFaint, transform:reviewOpen?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', flexShrink:0, display:'inline-flex' }}><Icon name="chevronD" size={13} /></span>
         </div>
-        <div style={{ height:4, borderRadius:2, background:wT().borderLight, overflow:'hidden' }}>
-          <div style={{ height:'100%', width:`${Math.min(pct,100)}%`, background:pctColor, borderRadius:2 }}/>
-        </div>
+        <ProgressBar T={wT()} pct={pct} height={4} track={wT().borderLight} />
         {!reviewOpen && hasReview && (
           <div style={{ display:'flex', gap:SPACING.md, marginTop:6, flexWrap:'wrap' }}>
             {good && <div style={{ ...TYPO.footnote, fontWeight:500, color:wT().textSub, display:'flex', alignItems:'center', gap:4 }}><Icon name="check" size={11} style={{ color:wT().success }} />{good.slice(0,50)}{good.length>50?'…':''}</div>}
@@ -1796,7 +1788,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             const krs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const kaCount = weekReports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
             return (
-              <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:`${SPACING.sm + 2}px ${SPACING.md}px`, borderRadius:RADIUS.sm + 1, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
+              <OkrCard key={obj.id} T={wT()} active={isActive} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} padding={`${SPACING.sm + 2}px ${SPACING.md}px`} style={{ marginBottom:7 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
                   <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 6px', borderRadius:RADIUS.pill, background:`${color}18`, color }}>{getPeriodLabel(obj.period)}</span>
                   {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><DataIcon value={level.icon} size={12}/> {level.name}</span>}
@@ -1807,7 +1799,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   <span>KR {krs.length}件</span>
                   <span style={{ color:kaCount>0?wT().accent:wT().textFaint }}>KA {kaCount}件</span>
                 </div>
-              </div>
+              </OkrCard>
             )
           })}
 
@@ -1823,14 +1815,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 const color = LAYER_COLORS[d] || '#a0a8be'
                 const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
                 return (
-                  <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:`9px ${SPACING.md}px`, borderRadius:RADIUS.sm + 1, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?wT().success:wT().success+'26'}`, background:isActive?wT().successBg:wT().success+'0a', transition:'all 0.12s', opacity:0.8 }}>
+                  <OkrCard key={obj.id} T={wT()} active={isActive} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} padding={`9px ${SPACING.md}px`} style={{ marginTop:5, opacity:0.8 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       <Icon name="trophy" size={11} style={{ color:wT().success }} />
                       <span style={{ ...TYPO.caption, fontWeight:700, padding:'1px 6px', borderRadius:RADIUS.pill, background:wT().successBg, color:wT().success }}>{getPeriodLabel(obj.period)}</span>
                       {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><DataIcon value={level.icon} size={11}/> {level.name}</span>}
                     </div>
                     <div style={{ ...TYPO.footnote, fontWeight:600, lineHeight:1.4, color:wT().success }}>{obj.title}</div>
-                  </div>
+                  </OkrCard>
                 )
               })}
             </div>
@@ -1890,12 +1882,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 <div style={{ textAlign:'center', padding:SPACING['2xl'] + 6, color:wT().textFaint, ...TYPO.subhead, fontWeight:500 }}>この期間のOKRはまだ設定されていません</div>
               )}
               {!rightObj && rightPeriod !== 'annual' && selectedObjKRs.length > 0 && (
-                <div style={{ padding:`${SPACING.sm + 2}px ${SPACING.lg - 2}px`, background: wT().bgCard, border: `1px solid ${wT().border}`, borderRadius:RADIUS.sm, marginBottom:SPACING.lg - 2 }}>
+                <OkrCard T={wT()} padding={`${SPACING.sm + 2}px ${SPACING.lg - 2}px`} style={{ marginBottom:SPACING.lg - 2 }}>
                   <div style={{ ...TYPO.subhead, fontWeight:700, color:wT().textSub, marginBottom:4 }}>
                     {rightPeriod.toUpperCase()} ― 通期OKRのKR
                   </div>
                   <div style={{ ...TYPO.body, fontWeight:600, color:wT().text, lineHeight:1.4 }}>{selectedObj?.title}</div>
-                </div>
+                </OkrCard>
               )}
 
               {rightObj && selectedObjKRs.length===0 && <div style={{ textAlign:'center', padding:SPACING['2xl'] + 6, color:wT().textFaint, ...TYPO.subhead, fontWeight:500 }}>KRが登録されていません。OKRページからKRを追加してください。</div>}

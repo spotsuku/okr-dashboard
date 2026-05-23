@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import KASection from './KASection'
-import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, GLASS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS } from '../lib/themeTokens'
 import { btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
@@ -10,6 +10,8 @@ import ObjectiveHeader from './okr/ObjectiveHeader'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
 import AICoachCard from './okr/AICoachCard'
+import OkrCard from './okr/OkrCard'
+import ProgressBar from './okr/ProgressBar'
 
 // KASection に渡すテーマオブジェクト (OwnerOKRView の THEMES から抽出)
 function makeKATheme(t) {
@@ -60,25 +62,6 @@ function rawPeriod(period) { return period?.includes('_') ? period.split('_').po
 
 const PERIOD_ORDER = { annual: 0, q1: 1, q2: 2, q3: 3, q4: 4 }
 const PERIOD_LABELS = { annual: '通期', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
-
-// ─── ProgressBar (値で色が変わる 4 段階) ───────────────────────────────
-function ProgressBar({ t, value, max = 100, height = 4, fixedWidth }) {
-  const pct = Math.min(Math.max(value || 0, 0), 150)
-  const color = progressColor(t, pct)
-  return (
-    <div style={{
-      flex: fixedWidth ? `0 0 ${fixedWidth}px` : 1,
-      width: fixedWidth, height, background: t.sunken,
-      borderRadius: RADIUS.pill, overflow: 'hidden',
-    }}>
-      <div style={{
-        height: '100%', width: `${Math.max(Math.min(pct, 100), 1)}%`,
-        background: color,
-        transition: 'width 300ms ease-out',
-      }} />
-    </div>
-  )
-}
 
 // ─── Status タイル (KA の状態を 22×22 タイルで表現) ───────────────────
 function StatusTile({ t, status }) {
@@ -342,13 +325,7 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
                 : 0
               const krKAs = objKAs.filter(ka => Number(ka.kr_id) === Number(kr.id))
               return (
-                <div key={kr.id} style={{
-                  marginBottom: 10, padding: 0,
-                  background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: RADIUS.md,
-                  backdropFilter: GLASS.blur,
-                  WebkitBackdropFilter: GLASS.blur,
-                  overflow: 'hidden',
-                }}>
+                <OkrCard key={kr.id} T={t} padding={0} style={{ marginBottom: 10, overflow: 'hidden' }}>
                   {/* KR カード ヘッダ (.krc) */}
                   <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.border}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -374,12 +351,12 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
                       }}>{kp}%</span>
                     </div>
                     <div style={{ marginTop: 8, display: 'flex' }}>
-                      <ProgressBar t={t} value={kp} height={3} />
+                      <ProgressBar T={t} pct={kp} height={3} />
                     </div>
                   </div>
                   {/* KA セクション (KASection を埋め込み) */}
                   <KASection krId={kr.id} objectiveId={obj.id} levelId={obj.level_id} theme={makeKATheme(t)} />
-                </div>
+                </OkrCard>
               )
             })}
 
@@ -389,18 +366,14 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
               const unlinked = objKAs.filter(ka => !ka.kr_id || !krIds.has(Number(ka.kr_id)))
               if (!unlinked.length) return null
               return (
-                <div style={{
-                  marginBottom: SPACING.md, padding: 0,
-                  background: t.bgCard, border: `1px dashed ${t.border}`, borderRadius: RADIUS.lg,
-                  overflow: 'hidden',
-                }}>
+                <OkrCard T={t} padding={0} style={{ marginBottom: SPACING.md, overflow: 'hidden' }}>
                   <div style={{
                     ...TYPO.caption, fontWeight: 600, color: t.textMuted,
                     textTransform: 'uppercase',
                     padding: '12px 18px', borderBottom: `1px solid ${t.border}`,
                   }}>その他の KA ({unlinked.length}件)</div>
                   {unlinked.map(ka => <KARowMini key={ka.id} t={t} ka={ka} />)}
-                </div>
+                </OkrCard>
               )
             })()}
 
