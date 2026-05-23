@@ -2029,7 +2029,7 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
     }}>
       {/* ヘッダ */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 20 }}>🤝</span>
+        <span style={{ display: 'inline-flex', color: T.accent }}><Icon name="msg" size={20} /></span>
         <div style={{ flex: 1, minWidth: 160 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>月次 1on1</div>
           <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
@@ -2117,7 +2117,7 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
           </div>
 
           <div style={{ marginTop: 10, fontSize: 11, color: T.textMuted, textAlign: 'center' }}>
-            KR進捗 / KR・KA 記入率 / ログイン日数は ↓ のバッジコレクションで確認できます
+            KR進捗 / KR・KA 記入率 / ログイン日数は <Icon name="chevronD" size={11} style={{ verticalAlign: 'middle' }} /> のバッジコレクションで確認できます
           </div>
 
           {/* 自分が上司として担当している部下リスト (= 上司視点の inbox) */}
@@ -2194,8 +2194,9 @@ function SupervisorInbox({ T, myName, month }) {
                 background: selfWritten ? `${T.success}1a` : T.sectionBg,
                 color: selfWritten ? T.success : T.textMuted,
                 border: `1px solid ${selfWritten ? `${T.success}40` : T.border}`,
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               }}>
-                {selfWritten ? '✓ セルフ記入済' : 'セルフ未記入'}
+                {selfWritten ? <><Icon name="check" size={11} /> セルフ記入済</> : 'セルフ未記入'}
               </span>
               <span style={{
                 fontSize: 10, fontWeight: 600,
@@ -2203,8 +2204,9 @@ function SupervisorInbox({ T, myName, month }) {
                 background: bossWritten ? `${T.accent}1a` : T.warnBg || `${T.warn}1a`,
                 color: bossWritten ? T.accent : T.warn,
                 border: `1px solid ${bossWritten ? `${T.accent}40` : `${T.warn}40`}`,
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               }}>
-                {bossWritten ? '✓ あなたが記入済' : '✎ あなたが要記入'}
+                {bossWritten ? <><Icon name="check" size={11} /> あなたが記入済</> : <><Icon name="pencil" size={11} /> あなたが要記入</>}
               </span>
               <Icon name="arrowRight" size={11} stroke={2} style={{ color: T.textMuted }} />
             </a>
@@ -2573,7 +2575,8 @@ function BadgeCard({ T, badge }) {
           border: '1px solid rgba(180,83,9,.25)', borderRadius: 99,
           fontSize: 10, fontWeight: 700, color: '#92400e',
           letterSpacing: '0.04em',
-        }}>✓ 獲得</span>
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="check" size={11} /> 獲得</span>
       )}
       {state === 'near' && remaining && (
         <span style={{
@@ -2770,7 +2773,8 @@ function BadgeCollection({ T, viewingName, isViewingSelf, onGoToRetrospect }) {
             background: 'transparent', color: T.textSub,
             borderRadius: 6, fontSize: 11, fontWeight: 500,
             cursor: 'pointer', fontFamily: 'inherit',
-          }}>振り返りページで詳細を見る →</button>
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+          }}>振り返りページで詳細を見る <Icon name="arrowRight" size={11} /></button>
       )}
     </div>
   )
@@ -2859,13 +2863,13 @@ function TeamSummaryNotification({ T, viewingMember, myName, isAdmin, levels = [
         )}
         <Icon name="arrowRight" size={12} stroke={2} style={{ color: T.accent }} />
       </div>
-      <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
         {loading ? '読み込み中...'
           : myUnsubmitted > 0
             ? `あなたの担当 ${myUnsubmitted} チーム未提出`
             : allUnsubmitted > 0
               ? `${allUnsubmitted} チーム未提出`
-              : '✓ 全チーム提出済み'}
+              : <><Icon name="check" size={13} /> 全チーム提出済み</>}
       </div>
     </div>
   )
@@ -3057,11 +3061,11 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
   return (
     <div style={{
       background: 'linear-gradient(135deg, #ecfdf5 0%, #34d399 100%)',
-      borderRadius: 14, padding: '14px 16px', color: '#064e3b',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(52,211,153,0.18)',
+      borderRadius: RADIUS.lg, padding: '14px 16px', color: '#064e3b',
+      boxShadow: SHADOWS.hover(T.success),
     }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 10, flexWrap:'wrap' }}>
-        <span style={{ fontSize: 16 }}>📊</span>
+        <span style={{ display: 'inline-flex' }}><Icon name="chart" size={16} /></span>
         <div style={{ fontSize: 13, fontWeight: 800, letterSpacing:'-0.01em' }}>今週のチームサマリー</div>
         {level && (
           <span style={{
@@ -3078,7 +3082,8 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
             fontSize: 9, fontWeight: 700,
             padding:'2px 7px', borderRadius: 99,
             background:'rgba(255,255,255,0.4)', color:'#065f46',
-          }}>📌 {managerName}</span>
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="pin" size={10} /> {managerName}</span>
         )}
         <div style={{ flex:1 }} />
         {canEdit && (
@@ -3091,12 +3096,12 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
               cursor: aiBusy ? 'wait' : 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 4,
             }}>
-            {aiBusy ? '⟳ 生成中…' : '🤖 AIで生成'}
+            {aiBusy ? <><Icon name="refresh" size={10} /> 生成中…</> : <><Icon name="ai" size={10} /> AIで生成</>}
           </button>
         )}
         <span style={{ fontSize: 10 }}>
-          {saving && <span style={{ color:'#065f46' }}>⟳ 保存中…</span>}
-          {saved && !saving && <span style={{ color:'#065f46', fontWeight:800 }}>✓ 保存済</span>}
+          {saving && <span style={{ color:'#065f46', display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="refresh" size={10} /> 保存中…</span>}
+          {saved && !saving && <span style={{ color:'#065f46', fontWeight:800, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="check" size={10} /> 保存済</span>}
         </span>
       </div>
       {aiError && (
@@ -3104,7 +3109,8 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
           marginBottom: 8, padding: '6px 10px', borderRadius: 6,
           background: 'rgba(255,255,255,0.6)', color: '#7f1d1d',
           fontSize: 10, fontWeight: 700,
-        }}>⚠️ {aiError}</div>
+          display: 'flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="alert" size={11} /> {aiError}</div>
       )}
       {/* 複数チーム責任者の場合のタブ (件数によって表示形態を切替) */}
       {tabs && tabs.length > 1 && (
@@ -3112,13 +3118,13 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
           activeLevelId={activeLevelId} onSelect={onSelectLevel} />
       )}
       {canEdit && isAdmin && managerName && Number(level?.manager_id) !== undefined && (
-        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700 }}>
-          👑 管理者として編集中 (このチームの責任者: {managerName})
+        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="star" size={11} /> 管理者として編集中 (このチームの責任者: {managerName})
         </div>
       )}
       {canEdit && isAdmin && !managerName && (
-        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700 }}>
-          👑 管理者として編集中 (責任者未設定 — 組織ページで設定推奨)
+        <div style={{ fontSize: 10, color:'#064e3b', marginBottom: 8, padding:'4px 8px', background:'rgba(255,255,255,0.45)', borderRadius:6, fontWeight:700, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="star" size={11} /> 管理者として編集中 (責任者未設定 — 組織ページで設定推奨)
         </div>
       )}
       {!canEdit && (
@@ -3130,19 +3136,19 @@ function TeamSummaryEditor({ T, levelId, weekStart, canEdit, myName, isAdmin = f
         <div style={{ fontSize:11, color:'#065f46', padding:'8px 0' }}>読み込み中…</div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap: 8 }}>
-          <FieldBlock T={T} label="✅ Good — チーム全体の良かったこと" disabled={!canEdit} value={good}
+          <FieldBlock T={T} iconName="check" label="Good — チーム全体の良かったこと" disabled={!canEdit} value={good}
             onFocus={() => { focusedRef.current = 'good' }}
             onBlur={() => { focusedRef.current = null }}
             onChange={v => { setGood(v); scheduleSave(v, more, focus) }}
             placeholder="例: 評議会クロージング3社決定 / 新メンバー受け入れがスムーズだった"
             inputBase={inputBase} />
-          <FieldBlock T={T} label="🔺 More — チーム全体の課題・改善点" disabled={!canEdit} value={more}
+          <FieldBlock T={T} iconName="chartDown" label="More — チーム全体の課題・改善点" disabled={!canEdit} value={more}
             onFocus={() => { focusedRef.current = 'more' }}
             onBlur={() => { focusedRef.current = null }}
             onChange={v => { setMore(v); scheduleSave(good, v, focus) }}
             placeholder="例: 商談化率が伸び悩み / オンボーディングの遅延"
             inputBase={inputBase} />
-          <FieldBlock T={T} label="🎯 Focus — 来週のチーム注力" disabled={!canEdit} value={focus}
+          <FieldBlock T={T} iconName="target" label="Focus — 来週のチーム注力" disabled={!canEdit} value={focus}
             onFocus={() => { focusedRef.current = 'focus' }}
             onBlur={() => { focusedRef.current = null }}
             onChange={v => { setFocus(v); scheduleSave(good, more, v) }}
@@ -3267,10 +3273,10 @@ function TeamTabSelector({ tabs, allLevels = [], activeLevelId, onSelect }) {
   )
 }
 
-function FieldBlock({ T, label, value, onChange, onFocus, onBlur, placeholder, disabled, inputBase }) {
+function FieldBlock({ T, label, iconName, value, onChange, onFocus, onBlur, placeholder, disabled, inputBase }) {
   return (
     <div>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#065f46', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#065f46', marginBottom: 4, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>{iconName && <Icon name={iconName} size={11} />} {label}</div>
       <textarea value={value} placeholder={placeholder} rows={2}
         disabled={disabled} onFocus={onFocus} onBlur={onBlur}
         onChange={e => onChange(e.target.value)}
@@ -3412,10 +3418,10 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: T.bgCard, borderRadius: 18,
+          background: T.bgCard, borderRadius: RADIUS.xl,
           padding: 24, width: '100%', maxWidth: 540, maxHeight: '90vh',
           overflowY: 'auto',
-          boxShadow: '0 24px 60px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.08)',
+          boxShadow: SHADOWS.xl,
           animation: 'kptModalSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
         }}
       >
@@ -3429,7 +3435,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 18, color: '#fff',
               boxShadow: force ? `0 2px 6px ${T.warn}55` : `0 2px 6px ${T.info}55`,
-            }}>{force ? '⚠️' : '🌙'}</div>
+            }}>{force ? <Icon name="alert" size={18} /> : <Icon name="clock" size={18} />}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
                 {force ? '昨日の振り返りを入力してください' : '今日の振り返り'}
@@ -3452,7 +3458,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
 
         {force && (
           <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>🕐 昨日の終業時刻 (JST)</label>
+            <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="clock" size={12} /> 昨日の終業時刻 (JST)</label>
             <input
               type="time"
               value={endTimeHHMM}
@@ -3467,17 +3473,17 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
         )}
 
         <div style={{ marginBottom: 12 }}>
-          <label style={labelStyle}>🟢 Keep（良かったこと・続けたいこと）</label>
+          <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: T.success, flexShrink: 0 }} /> Keep（良かったこと・続けたいこと）</label>
           <div style={hintStyle}>成果・学び・上手くいったこと</div>
           <textarea value={keep} onChange={e => setKeep(e.target.value)} style={fieldStyle} placeholder="例: やずや提案の構成が整理できた" />
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={labelStyle}>🟡 Problem（課題・うまくいかなかったこと）</label>
+          <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: T.warn, flexShrink: 0 }} /> Problem（課題・うまくいかなかったこと）</label>
           <div style={hintStyle}>詰まった点・改善したいこと</div>
           <textarea value={problem} onChange={e => setProblem(e.target.value)} style={fieldStyle} placeholder="例: 午前中の集中が途切れやすかった" />
         </div>
         <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle}>🔵 Try（明日以降に試したいこと）</label>
+          <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: T.info, flexShrink: 0 }} /> Try（明日以降に試したいこと）</label>
           <div style={hintStyle}>次のアクション</div>
           <textarea value={tryNote} onChange={e => setTryNote(e.target.value)} style={fieldStyle} placeholder="例: 朝イチ90分はSlack off で提案書に集中する" />
         </div>
@@ -3503,8 +3509,9 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
               padding: '8px 18px', fontSize: 13, fontWeight: 700,
               cursor: busy || !canSave ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
               opacity: busy ? 0.6 : 1,
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}
-          >{force ? '💾 保存して昨日を終業' : '💾 保存して終業'}</button>
+          >{force ? <><Icon name="check" size={13} /> 保存して昨日を終業</> : <><Icon name="check" size={13} /> 保存して終業</>}</button>
         </div>
       </div>
     </div>
@@ -3597,7 +3604,7 @@ function CompanySummaryTab({ T, members }) {
         <div style={{
           display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16, flexWrap: 'wrap',
         }}>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: 0 }}>📊 全社サマリー</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: SPACING.sm }}><Icon name="chart" size={20} /> 全社サマリー</h2>
           <div style={{ fontSize: 12, color: T.textMuted }}>{todayLabel} 時点</div>
           <div style={{ flex: 1 }} />
           <button onClick={load} disabled={loading} style={{
@@ -3605,7 +3612,8 @@ function CompanySummaryTab({ T, members }) {
             background: 'transparent', border: `1px solid ${T.border}`,
             color: T.textSub, fontSize: 11, fontWeight: 700,
             cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
-          }}>{loading ? '更新中…' : '🔄 再取得'}</button>
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}>{loading ? '更新中…' : <><Icon name="refresh" size={12} /> 再取得</>}</button>
         </div>
 
         {/* 全体統計バー */}
@@ -3624,17 +3632,17 @@ function CompanySummaryTab({ T, members }) {
               }}>
                 <div style={{
                   height: '100%', width: `${overallPct}%`,
-                  background: overallPct >= 80 ? '#00d68f' : overallPct >= 50 ? '#4d9fff' : '#ffd166',
+                  background: overallPct >= 80 ? T.success : overallPct >= 50 ? T.info : T.warn,
                   transition: 'width 0.3s ease',
                 }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 14 }}>
-              <Stat T={T} label="達成率" value={`${overallPct}%`} color={overallPct >= 80 ? '#00d68f' : overallPct >= 50 ? '#4d9fff' : '#ffd166'} />
+              <Stat T={T} label="達成率" value={`${overallPct}%`} color={overallPct >= 80 ? T.success : overallPct >= 50 ? T.info : T.warn} />
               <Stat T={T} label="完了" value={totalDone} color={T.success} />
               <Stat T={T} label="残り" value={totalTasks - totalDone} color={T.warn} />
               <Stat T={T} label="合計" value={totalTasks} color={T.textSub} />
-              <Stat T={T} label="遅延" value={totalOverdue} color={totalOverdue > 0 ? '#ff6b6b' : T.textMuted} />
+              <Stat T={T} label="遅延" value={totalOverdue} color={totalOverdue > 0 ? T.danger : T.textMuted} />
             </div>
           </div>
         </div>
@@ -3645,15 +3653,15 @@ function CompanySummaryTab({ T, members }) {
             読み込み中...
           </div>
         ) : error ? (
-          <div style={{ padding: 14, color: T.danger, fontSize: 12, background: T.dangerBg, borderRadius: 8 }}>
-            ⚠️ {error}
+          <div style={{ padding: 14, color: T.danger, fontSize: 12, background: T.dangerBg, borderRadius: 8, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            <Icon name="alert" size={12} /> {error}
           </div>
         ) : byMember.length === 0 ? (
           <div style={{
             padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12,
             background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 12,
           }}>
-            <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
+            <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center', color: T.textMuted }}><Icon name="note" size={28} /></div>
             本日のタスク・遅延タスクは登録されていません<br />
             <span style={{ fontSize: 10 }}>各メンバーが始業時にタスクを登録すると、ここに集約されます</span>
           </div>
@@ -3664,9 +3672,9 @@ function CompanySummaryTab({ T, members }) {
               const pct = ts.length > 0 ? Math.round((done / ts.length) * 100) : 0
               const hasToday = ts.length > 0
               const color = !hasToday ? T.textMuted
-                : pct >= 80 ? '#00d68f' : pct >= 50 ? '#4d9fff' : pct > 0 ? '#ffd166' : '#ff6b6b'
+                : pct >= 80 ? T.success : pct >= 50 ? T.info : pct > 0 ? T.warn : T.danger
               // 遅延があるメンバーは左ボーダーを赤に優先
-              const borderColor = overdue.length > 0 ? '#ff6b6b' : color
+              const borderColor = overdue.length > 0 ? T.danger : color
               return (
                 <div key={member.name} style={{
                   background: T.bgCard, border: `1px solid ${T.border}`,
@@ -3682,9 +3690,10 @@ function CompanySummaryTab({ T, members }) {
                         {overdue.length > 0 && (
                           <span style={{
                             padding: '1px 6px', borderRadius: 99,
-                            background: '#ff6b6b22', color: '#ff6b6b',
+                            background: `${T.danger}22`, color: T.danger,
                             fontSize: 9, fontWeight: 800,
-                          }}>⚠️ 遅延 {overdue.length}</span>
+                            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                          }}><Icon name="alert" size={9} /> 遅延 {overdue.length}</span>
                         )}
                       </div>
                       <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
@@ -3718,10 +3727,10 @@ function CompanySummaryTab({ T, members }) {
                   {overdue.length > 0 && (
                     <div style={{ marginBottom: ts.length > 0 ? 10 : 0 }}>
                       <div style={{
-                        fontSize: 10, fontWeight: 700, color: '#ff6b6b',
+                        fontSize: 10, fontWeight: 700, color: T.danger,
                         marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4,
                       }}>
-                        <span>⚠️ 遅延タスク</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={10} /> 遅延タスク</span>
                         <span style={{ color: T.textMuted, fontWeight: 600 }}>({overdue.length}件)</span>
                       </div>
                       <div style={{ margin: '0 -12px' }}>
@@ -3785,7 +3794,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
           <span style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: 24, height: 24, borderRadius: RADIUS.sm,
-            background: accent ? `${accent}1f` : 'rgba(0,0,0,0.05)',
+            background: accent ? `${accent}1f` : T.sectionBg,
             color: accent || T.textSub,
             fontSize: isEmoji ? 14 : undefined, lineHeight: 1,
           }}>{icon}</span>
@@ -3931,7 +3940,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
           textAlign: 'center', maxWidth: 360,
           padding: 28, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
         }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>🔒</div>
+          <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center', color: T.textMuted }}><Icon name="alert" size={36} /></div>
           <div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginBottom: 8 }}>
             このメンバーの振り返りは閲覧できません
           </div>
@@ -3972,7 +3981,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
         <button onClick={load} title="再読み込み" style={{
           background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
           borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-        }}>↻</button>
+        }}><Icon name="refresh" size={11} /></button>
         {isMobile && (
           <div style={{ fontSize: 10, color: T.textMuted, width: '100%' }}>
             {totalDays}日 · 合計 {totalHrs}時間{totalMins}分
@@ -3986,9 +3995,9 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
         borderBottom: `1px solid ${T.border}`, flexShrink: 0,
       }}>
         {[
-          { key: 'retrospect', label: '💭 振り返り' },
-          { key: 'oneonone',   label: '🤝 1on1' },
-          { key: 'badges',     label: '🏅 バッジコレクション' },
+          { key: 'retrospect', icon: 'msg', label: '振り返り' },
+          { key: 'oneonone',   icon: 'user', label: '1on1' },
+          { key: 'badges',     icon: 'medal', label: 'バッジコレクション' },
         ].map(t => {
           const active = subTab === t.key
           return (
@@ -3997,7 +4006,8 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
               background: active ? T.navActiveBg : 'transparent',
               color: active ? T.navActiveText : T.textSub,
               fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap',
-            }}>{t.label}</button>
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name={t.icon} size={12} /> {t.label}</button>
           )
         })}
       </div>
@@ -4026,10 +4036,10 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
             {/* 日別ログ */}
             {data.days.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 40, color: T.textMuted, fontSize: 12 }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>💭</div>
+                <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center' }}><Icon name="msg" size={32} /></div>
                 <div>この期間のKPT記録はまだありません</div>
                 <div style={{ marginTop: 6, fontSize: 10 }}>
-                  ダッシュボードの「🌙 終業する」でKPTを記入すると、ここに蓄積されます
+                  ダッシュボードの「<Icon name="clock" size={10} style={{ verticalAlign: 'middle' }} /> 終業する」でKPTを記入すると、ここに蓄積されます
                 </div>
               </div>
             ) : (
@@ -4137,7 +4147,7 @@ function StreakBanner({ T, viewingName }) {
             ? '今日から始めましょう。1 行でも書けば連続記入スタートです。'
             : remainingForBadge > 0
               ? <>今日も書いて <b>{data.current + 1}日</b> にしましょう。あと <b style={{ color: T.warn }}>{remainingForBadge}日</b> で「振り返り皆勤」バッジに手が届きます。</>
-              : '✨ 振り返り皆勤バッジを達成しています！'}
+              : <><Icon name="sparkle" size={12} style={{ verticalAlign: 'middle' }} /> 振り返り皆勤バッジを達成しています！</>}
         </div>
       </div>
 
@@ -4310,7 +4320,7 @@ function ThreeQuestions({ T, viewingName, canEdit, myName }) {
           書いた内容は今日の KPT として保存され、明日まとめて整理できます
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {saved && <span style={{ fontSize: 11, color: T.success, fontWeight: 600 }}>✓ 保存しました</span>}
+          {saved && <span style={{ fontSize: 11, color: T.success, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="check" size={11} /> 保存しました</span>}
           <span style={{ fontSize: 10, color: T.textMuted }}>
             <kbd style={{ padding: '1px 5px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 4, fontSize: 10, fontFamily: 'ui-monospace, SF Mono, monospace' }}>⌘</kbd>
             +
@@ -4490,7 +4500,8 @@ function RetrospectDay({ T, day }) {
             fontSize: 10, fontWeight: 600, color: T.success,
             padding: '2px 8px', borderRadius: 99,
             background: `${T.success}1a`, border: `1px solid ${T.success}40`,
-          }}>● 記入済</span>
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: T.success, flexShrink: 0 }} /> 記入済</span>
         )}
         {!hasKpt && isWeekend && (
           <span style={{ fontSize: 10, color: T.textMuted, fontStyle: 'italic' }}>
@@ -4585,7 +4596,7 @@ function ThemeEditor({ T, icon, title, value, loading, canEdit, placeholder, onS
         <button onClick={startEdit} title="編集" style={{
           background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
           borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-        }}>✏️</button>
+        }}><Icon name="pencil" size={11} /></button>
       )
     }>
       {loading ? <Loading T={T} /> : editing ? (
@@ -4612,14 +4623,15 @@ function ThemeEditor({ T, icon, title, value, loading, canEdit, placeholder, onS
               borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700,
               cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit',
               opacity: saving ? 0.6 : 1,
-            }}>💾 保存</button>
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="check" size={11} /> 保存</button>
           </div>
         </div>
       ) : value ? (
         <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{value}</div>
       ) : (
         <div style={{ fontSize: 11, color: T.textMuted, fontStyle: 'italic' }}>
-          {canEdit ? '未設定 (✏️ で編集)' : '未設定'}
+          {canEdit ? <>未設定 (<Icon name="pencil" size={10} style={{ verticalAlign: 'middle' }} /> で編集)</> : '未設定'}
         </div>
       )}
     </Section>
@@ -4714,7 +4726,7 @@ function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
   const today = toJSTDateStr(new Date())
   const todayWd = new Date(today + 'T00:00:00Z').getUTCDay()
   const totalCount = Object.values(byWeekday).reduce((s, arr) => s + arr.length, 0)
-  if (totalCount === 0) return <div style={{ fontSize: 11, color: T.textMuted, padding: 6 }}>✨ 今週の期限タスクはありません</div>
+  if (totalCount === 0) return <div style={{ fontSize: 11, color: T.textMuted, padding: 6, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sparkle" size={12} /> 今週の期限タスクはありません</div>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {days.map(d => {
@@ -4939,21 +4951,23 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
             marginLeft: 6, padding: '3px 10px', borderRadius: 6,
             background: T.accent, color: '#fff', border: 'none',
             fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>🔌 連携タブへ</button>
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="link" size={11} /> 連携タブへ</button>
         </div>
       ) : error ? (
-        <div style={{ padding: 10, fontSize: 11, color: T.danger, lineHeight: 1.6 }}>
-          ⚠️ {error}
+        <div style={{ padding: 10, fontSize: 11, color: T.danger, lineHeight: 1.6, display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap' }}>
+          <Icon name="alert" size={11} /> {error}
           {needsReauth && (
             <button onClick={() => onGoToTab?.('integrations')} style={{
               marginLeft: 6, padding: '3px 10px', borderRadius: 6,
               background: T.warn, color: '#fff', border: 'none',
               fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            }}>🔄 再連携</button>
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="refresh" size={11} /> 再連携</button>
           )}
         </div>
       ) : visible.length === 0 ? (
-        <div style={{ padding: 10, fontSize: 11, color: T.textMuted }}>✨ 直近の予定はありません</div>
+        <div style={{ padding: 10, fontSize: 11, color: T.textMuted, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sparkle" size={12} /> 直近の予定はありません</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {visible.map(ev => (
@@ -4981,7 +4995,8 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
           <a href="https://calendar.google.com/" target="_blank" rel="noreferrer" style={{
             fontSize: 11, color: T.accent, textAlign: 'center',
             padding: '4px 0', textDecoration: 'none',
-          }}>📅 Google カレンダーを開く ↗</a>
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+          }}><Icon name="calendar" size={11} /> Google カレンダーを開く <Icon name="external" size={11} /></a>
         </div>
       )}
     </Section>
@@ -5034,7 +5049,8 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
             background: 'transparent', color: T.accent,
             border: `1px solid ${T.accent}40`,
             fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>📧 メールタブで全部見る →</button>
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="mail" size={11} /> メールタブで全部見る <Icon name="arrowRight" size={11} /></button>
         ) : null
       }
     >
@@ -5047,21 +5063,23 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
             marginLeft: 6, padding: '3px 10px', borderRadius: 6,
             background: T.accent, color: '#fff', border: 'none',
             fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>🔌 連携タブへ</button>
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="link" size={11} /> 連携タブへ</button>
         </div>
       ) : error ? (
-        <div style={{ padding: 10, fontSize: 11, color: T.danger, lineHeight: 1.6 }}>
-          ⚠️ {error}
+        <div style={{ padding: 10, fontSize: 11, color: T.danger, lineHeight: 1.6, display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap' }}>
+          <Icon name="alert" size={11} /> {error}
           {needsReauth && (
             <button onClick={() => onGoToTab?.('integrations')} style={{
               marginLeft: 6, padding: '3px 10px', borderRadius: 6,
               background: T.warn, color: '#fff', border: 'none',
               fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            }}>🔄 再連携</button>
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="refresh" size={11} /> 再連携</button>
           )}
         </div>
       ) : items.length === 0 ? (
-        <div style={{ padding: 10, fontSize: 11, color: T.textMuted }}>✨ 要対応メールはありません</div>
+        <div style={{ padding: 10, fontSize: 11, color: T.textMuted, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sparkle" size={12} /> 要対応メールはありません</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {items.map(m => (
@@ -5085,13 +5103,15 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
                   border: `1px solid ${T.success}40`,
                   fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                   whiteSpace: 'nowrap',
-                }}>✓ 既読</button>
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+                }}><Icon name="check" size={11} /> 既読</button>
                 <button onClick={() => onOpenAIReply?.(m)} style={{
                   padding: '4px 10px', borderRadius: 6,
                   background: T.accent, color: '#fff', border: 'none',
                   fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                   whiteSpace: 'nowrap',
-                }}>✨ AI返信</button>
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+                }}><Icon name="sparkle" size={11} /> AI返信</button>
               </div>
             </div>
           ))}
@@ -5193,7 +5213,7 @@ function CompanyMailTab({ T, members }) {
   const needsReplyTotal = Object.values(needsReplyByMember).reduce((s, n) => s + n, 0)
 
   if (loading && Object.keys(byMember).length === 0) {
-    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>📧 全社のメールを集約中... ({progress.done}/{progress.total})</div>
+    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs }}><Icon name="mail" size={13} /> 全社のメールを集約中... ({progress.done}/{progress.total})</div>
   }
 
   const sectionStyle = {
@@ -5209,7 +5229,7 @@ function CompanyMailTab({ T, members }) {
       marginBottom: 6,
       width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden',
     }}>
-      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, background: `${accent}18`, color: accent, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>📧 {it._ownerName}</span>
+      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 99, background: `${accent}18`, color: accent, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="mail" size={10} /> {it._ownerName}</span>
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.subject || '(件名なし)'}</div>
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -5223,15 +5243,15 @@ function CompanyMailTab({ T, members }) {
     <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
       <div style={{ padding: '14px 18px', maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
       {loading && (
-        <div style={{ marginBottom: 10, padding: '6px 12px', background: `${T.accent}10`, borderRadius: 8, fontSize: 12, color: T.textSub }}>
-          📧 取得中 {progress.done}/{progress.total} メンバー (順次更新)
+        <div style={{ marginBottom: 10, padding: '6px 12px', background: `${T.accent}10`, borderRadius: 8, fontSize: 12, color: T.textSub, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="mail" size={12} /> 取得中 {progress.done}/{progress.total} メンバー (順次更新)
         </div>
       )}
 
       {/* 要返信件数 */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ fontSize: 18 }}>✉️</span>
+          <span style={{ display: 'inline-flex', color: T.accent }}><Icon name="mail" size={18} /></span>
           <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>要返信件数</span>
           <span style={{ marginLeft: 'auto', fontSize: 24, fontWeight: 800, color: needsReplyTotal > 0 ? T.warn : T.textMuted }}>{needsReplyTotal} 件</span>
         </div>
@@ -5251,13 +5271,13 @@ function CompanyMailTab({ T, members }) {
       {/* 重要アラート (クレーム等) */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ fontSize: 18 }}>🚨</span>
+          <span style={{ display: 'inline-flex', color: T.danger }}><Icon name="alert" size={18} /></span>
           <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>重要アラート</span>
           <span style={{ fontSize: 11, color: T.textMuted }}>クレーム / 苦情 / 至急対応</span>
           <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: claims.length > 0 ? T.danger : T.textMuted }}>{claims.length}</span>
         </div>
         {claims.length === 0 ? (
-          <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>該当メールはありません ✨</div>
+          <div style={{ fontSize: 12, color: T.textMuted, padding: 8, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>該当メールはありません <Icon name="sparkle" size={12} /></div>
         ) : (
           <div>{claims.slice(0, 10).map(it => itemRow(it, T.danger))}</div>
         )}
@@ -5266,7 +5286,7 @@ function CompanyMailTab({ T, members }) {
       {/* 称賛メール */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ fontSize: 18 }}>🎉</span>
+          <span style={{ display: 'inline-flex', color: T.success }}><Icon name="sparkle" size={18} /></span>
           <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>称賛メール</span>
           <span style={{ fontSize: 11, color: T.textMuted }}>感謝 / お礼 / 高評価</span>
           <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: praises.length > 0 ? T.success : T.textMuted }}>{praises.length}</span>
@@ -5340,19 +5360,19 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
   const inviteItems = allItems.filter(m => m.category === 'invite' && !isDone(m))
 
   const CATS = [
-    { key: 'to_me',        label: '📮 返信必要',      color: '#ff6b6b', items: toMeItems },
-    { key: 'cc_me',        label: '📋 確認必要',      color: '#ffd166', items: ccMeItems },
-    { key: 'invite',       label: '📅 カレンダー招待',  color: '#4d9fff', items: inviteItems },
-    { key: 'done',         label: '✅ 返信・既読済み',  color: '#00d68f', items: doneItems },
-    { key: 'notification', label: '📢 通知・キャンペーン', color: '#8aa0b8', items: notifyItems },
+    { key: 'to_me',        icon: 'mail', label: '返信必要',      color: T.danger, items: toMeItems },
+    { key: 'cc_me',        icon: 'note', label: '確認必要',      color: T.warn, items: ccMeItems },
+    { key: 'invite',       icon: 'calendar', label: 'カレンダー招待',  color: T.info, items: inviteItems },
+    { key: 'done',         icon: 'check', label: '返信・既読済み',  color: T.success, items: doneItems },
+    { key: 'notification', icon: 'bell', label: '通知・キャンペーン', color: T.textMuted, items: notifyItems },
   ]
   const current = CATS.find(c => c.key === activeCat) || CATS[0]
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: 20 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: 0, marginBottom: 12 }}>
-          📧 メール
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: 0, marginBottom: 12, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <Icon name="mail" size={16} /> メール
         </h2>
 
         {isUnconnected ? (
@@ -5366,21 +5386,24 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
                 padding: '8px 16px', borderRadius: 8,
                 background: T.accent, color: '#fff', border: 'none',
                 fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              }}>🔌 連携タブへ</button>
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}><Icon name="link" size={12} /> 連携タブへ</button>
             </div>
           </div>
         ) : error ? (
           <div style={{
             padding: 14, background: T.dangerBg, border: `1px solid ${T.danger}40`,
             borderRadius: 8, fontSize: 12, color: T.danger,
+            display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap',
           }}>
-            ⚠️ {error}
+            <Icon name="alert" size={12} /> {error}
             {needsReauth && (
               <button onClick={() => onGoToTab?.('integrations')} style={{
                 marginLeft: 8, padding: '4px 12px', borderRadius: 6,
                 background: T.warn, color: '#fff', border: 'none',
                 fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              }}>🔄 再連携</button>
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}><Icon name="refresh" size={11} /> 再連携</button>
             )}
           </div>
         ) : loading ? (
@@ -5413,7 +5436,7 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                   }}
                 >
-                  <span>{c.label}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name={c.icon} size={12} /> {c.label}</span>
                   <span style={{
                     padding: '1px 7px', borderRadius: 99,
                     background: activeCat === c.key ? `${c.color}22` : T.bgSection,
@@ -5426,7 +5449,7 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
 
             {/* メール一覧 */}
             {current.items.length === 0 ? (
-              <EmptyState T={T} icon="✨"
+              <EmptyState T={T} icon={<Icon name="sparkle" size={44} />}
                 title="メールはありません"
                 description={`「${current.label}」のメールはまだ来ていません。`} />
             ) : (
@@ -5499,8 +5522,8 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
       background: `linear-gradient(180deg, ${T.bgCard} 0%, ${color}05 100%)`,
       border: `1px solid ${color}1a`,
       borderLeft: `4px solid ${color}`,
-      borderRadius: 12, padding: '14px 16px',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 10px rgba(0,0,0,0.03)',
+      borderRadius: RADIUS.lg, padding: '14px 16px',
+      boxShadow: SHADOWS.sm,
       opacity: dimmed ? 0.55 : 1,
       transition: 'all 0.2s ease',
     }}>
@@ -5509,17 +5532,17 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
         <div style={{ marginBottom: 6 }}>
           {mail.replied && (
             <span style={{
-              display: 'inline-block', padding: '2px 8px', borderRadius: 10,
-              background: '#00d68f22', color: '#00d68f',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, padding: '2px 8px', borderRadius: 10,
+              background: `${T.success}22`, color: T.success,
               fontSize: 10, fontWeight: 700, marginRight: 6,
-            }}>↩ 返信済み{repliedAtStr ? ` (${repliedAtStr})` : ''}</span>
+            }}><Icon name="refresh" size={10} /> 返信済み{repliedAtStr ? ` (${repliedAtStr})` : ''}</span>
           )}
           {readMarked && !mail.replied && (
             <span style={{
-              display: 'inline-block', padding: '2px 8px', borderRadius: 10,
-              background: '#8aa0b822', color: '#8aa0b8',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, padding: '2px 8px', borderRadius: 10,
+              background: T.sectionBg, color: T.textMuted,
               fontSize: 10, fontWeight: 700,
-            }}>✓ 確認済み</span>
+            }}><Icon name="check" size={10} /> 確認済み</span>
           )}
         </div>
       )}
@@ -5548,7 +5571,7 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
           ) : loadingBody ? (
             <div style={{ fontSize: 11, color: T.textMuted, padding: '6px 0' }}>読み込み中...</div>
           ) : bodyError ? (
-            <div style={{ fontSize: 11, color: T.danger, padding: '6px 0' }}>⚠️ {bodyError}</div>
+            <div style={{ fontSize: 11, color: T.danger, padding: '6px 0', display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={11} /> {bodyError}</div>
           ) : (
             <pre style={{
               fontSize: 11, color: T.textSub, lineHeight: 1.6, margin: 0,
@@ -5560,7 +5583,8 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
           <button onClick={handleExpand} style={{
             marginTop: 4, background: 'transparent', border: 'none', color: T.accent,
             fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-          }}>{expanded ? '▲ 閉じる' : '▼ もっと見る'}</button>
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}>{expanded ? <><Icon name="chevronU" size={11} /> 閉じる</> : <><Icon name="chevronD" size={11} /> もっと見る</>}</button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
@@ -5570,7 +5594,8 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
               background: T.accent, color: '#fff', border: 'none',
               fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
               whiteSpace: 'nowrap',
-            }}>✨ AI返信</button>
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="sparkle" size={11} /> AI返信</button>
           )}
 
           {/* 既読トグル: 返信済みは自動判定なので手動操作不可 */}
@@ -5582,7 +5607,8 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
                 border: `1px solid ${T.border}`,
                 fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                 whiteSpace: 'nowrap',
-              }}>↻ 未読に戻す</button>
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}><Icon name="refresh" size={10} /> 未読に戻す</button>
             ) : (
               <button onClick={() => onMarkRead?.(mail.id)} style={{
                 padding: '4px 10px', borderRadius: 6,
@@ -5590,7 +5616,8 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
                 border: `1px solid ${T.success}40`,
                 fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                 whiteSpace: 'nowrap',
-              }}>✓ 既読にする</button>
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}><Icon name="check" size={10} /> 既読にする</button>
             )
           )}
 
@@ -5602,8 +5629,9 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
               background: 'transparent', color: T.textMuted,
               border: `1px solid ${T.border}`,
               fontSize: 10, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}
-          >Gmail で開く ↗</a>
+          >Gmail で開く <Icon name="external" size={10} /></a>
         </div>
       </div>
     </div>
@@ -5738,7 +5766,7 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: T.bgCard, borderRadius: 12,
+          background: T.bgCard, borderRadius: RADIUS.lg,
           width: '100%', maxWidth: 640, maxHeight: '90vh',
           display: 'flex', flexDirection: 'column',
           border: `1px solid ${T.border}`, overflow: 'hidden',
@@ -5749,7 +5777,7 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
           padding: '14px 16px', borderBottom: `1px solid ${T.border}`,
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <div style={{ fontSize: 18 }}>✨</div>
+          <div style={{ display: 'flex', color: T.accent }}><Icon name="sparkle" size={18} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>AI返信草稿</div>
             <div style={{ fontSize: 11, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -5759,20 +5787,22 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
           <button onClick={onClose} style={{
             background: 'transparent', border: 'none', color: T.textMuted,
             fontSize: 20, cursor: 'pointer', padding: 4, fontFamily: 'inherit',
-          }}>×</button>
+            display: 'inline-flex', alignItems: 'center',
+          }}><Icon name="cross" size={18} /></button>
         </div>
 
         {/* 本文 */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
           {loading ? (
-            <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
-              ✨ AIが返信草稿を作成中...
+            <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs }}>
+              <Icon name="sparkle" size={12} /> AIが返信草稿を作成中...
             </div>
           ) : error ? (
             <div style={{
               padding: 12, background: T.dangerBg, border: `1px solid ${T.danger}40`,
               borderRadius: 8, fontSize: 12, color: T.danger,
-            }}>⚠️ {error}</div>
+              display: 'flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="alert" size={12} /> {error}</div>
           ) : (
             <textarea
               value={draft}
@@ -5807,8 +5837,9 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
               fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
               cursor: loading || !draft ? 'not-allowed' : 'pointer',
               opacity: loading || !draft ? 0.5 : 1,
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}
-          >📋 コピー</button>
+          ><Icon name="note" size={12} /> コピー</button>
           <button
             onClick={createDraft}
             disabled={loading || submitting || !draft}
@@ -5818,8 +5849,9 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
               fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
               cursor: loading || submitting || !draft ? 'not-allowed' : 'pointer',
               opacity: loading || submitting || !draft ? 0.5 : 1,
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}
-          >{submitting ? '作成中...' : '📝 下書きを作成して Gmail で開く'}</button>
+          >{submitting ? '作成中...' : <><Icon name="note" size={12} /> 下書きを作成して Gmail で開く</>}</button>
         </div>
       </div>
     </div>
