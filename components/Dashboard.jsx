@@ -983,6 +983,7 @@ export default function Dashboard({ user, onSignOut }) {
   const themeKey = 'light' // ダークモードは廃止 (light 固定)
   const [syncStatus, setSyncStatus]             = useState('connecting')
   const [selectedOwner, setSelectedOwner]       = useState(null)
+  const [okrDeptFilter, setOkrDeptFilter]       = useState(null) // OKR個人ビューのメンバー部署フィルタ (null=全部署)
   const [taskViewMode, setTaskViewMode]         = useState('my') // 'my' | 'all'
   const T = THEMES[themeKey]
   _T = T
@@ -1827,7 +1828,23 @@ export default function Dashboard({ user, onSignOut }) {
         )}
         <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
           <div style={{ fontSize: 10, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>メンバー</div>
-          {members.map(m => {
+          {/* 部署フィルタ */}
+          <select value={okrDeptFilter ?? ''} onChange={e => setOkrDeptFilter(e.target.value ? Number(e.target.value) : null)}
+            style={{ width: '100%', marginBottom: 10, padding: '6px 8px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgCard, color: getT().text, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer' }}>
+            <option value="">全部署</option>
+            {(levels || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+          {(() => {
+            const memberLevelIds = (m) => Array.isArray(m.level_ids) ? m.level_ids.map(Number) : (m.level_id ? [Number(m.level_id)] : [])
+            const descendants = (rootId) => {
+              const set = new Set([Number(rootId)]); let added = true
+              while (added) { added = false; for (const l of (levels || [])) { if (l.parent_id != null && set.has(Number(l.parent_id)) && !set.has(Number(l.id))) { set.add(Number(l.id)); added = true } } }
+              return set
+            }
+            const fm = okrDeptFilter ? members.filter(m => { const s = descendants(okrDeptFilter); return memberLevelIds(m).some(id => s.has(id)) }) : members
+            if (fm.length === 0) return <div style={{ fontSize: 11, color: getT().textFaint, fontStyle: 'italic', padding: '8px' }}>該当メンバーなし</div>
+            return fm
+          })().map(m => {
             const active = selectedOwner === m.name
             const c = ['#5A8A7A','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
             const color = c[Math.abs([...m.name].reduce((h, ch) => ch.charCodeAt(0) + ((h << 5) - h), 0)) % c.length]
