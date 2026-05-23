@@ -1866,6 +1866,7 @@ export default function Dashboard({ user, onSignOut }) {
           <MyOKRPageNew
             user={user} levels={levels} members={members}
             themeKey={themeKey} fiscalYear={fiscalYear}
+            showMemberPicker
             onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }}
           />
         </div>

@@ -646,7 +646,7 @@ function KATableHeader({ wT }) {
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
+export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback, showMemberPicker = false }) {
   const { isMobile, isTablet } = useResponsive()
   // テーマは lib/themeTokens.js で一元管理
   const W_THEMES = {
@@ -659,8 +659,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const myName   = myMember?.name || user?.email || ''
   // 週次+個人ビュー: 左のメンバー一覧で選んだ人の OKR を表示する (null=自分)。
   // 年間+個人と同じ「メンバーを選ぶ → その人の OKR」UX に揃える。
+  // showMemberPicker=false (マイページ等) では常に自分の OKR のみ。
   const [selectedMember, setSelectedMember] = useState(null)
-  const viewName = selectedMember || myName
+  const viewName = (showMemberPicker && selectedMember) || myName
   const viewMember = members.find(m => m.name === viewName) || myMember
 
   const [objectives, setObjectives] = useState([])
@@ -990,8 +991,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* メンバー一覧サイドバー (選択した人の OKR を表示。年間+個人と同じUX) */}
-        {!isMobile && (
+        {/* メンバー一覧サイドバー (選択した人の OKR を表示。年間+個人と同じUX)
+            showMemberPicker のときだけ表示 (マイページでは自分のみで不要) */}
+        {!isMobile && showMemberPicker && (
           <div style={{ width: isTablet ? 150 : 190, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
             <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>メンバー</div>
             {(members || []).map(m => {
