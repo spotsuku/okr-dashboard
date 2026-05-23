@@ -7,6 +7,8 @@ import KASection from './KASection'
 import { useLayerLabels } from '../lib/levelLabels'
 import Icon, { DataIcon } from './Icon'
 import ObjectiveHeader from './okr/ObjectiveHeader'
+import OkrCard from './okr/OkrCard'
+import ProgressBar from './okr/ProgressBar'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
@@ -485,15 +487,14 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
         const qData = quarterMap[ann.id] || { q1: [], q2: [], q3: [], q4: [] }
 
         return (
-          <div key={ann.id} style={{
+          <OkrCard key={ann.id} T={T()} padding={0} style={{
             marginBottom: 18,
-            background: T().bgCard,
-            border: `1px solid ${T().border}`,
             borderRadius: RADIUS.xl, overflow: 'hidden',
             position: 'relative',
             boxShadow: isOpen
               ? `${SHADOWS.xs}, ${SHADOWS.md}`
               : SHADOWS.xs,
+            backdropFilter: 'none', WebkitBackdropFilter: 'none',
             transition: 'all 0.25s ease',
           }}>
 
@@ -564,7 +565,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                 />
               </div>
             )}
-          </div>
+          </OkrCard>
         )
       })}
       </div>
@@ -1446,9 +1447,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   <span style={{ fontSize: TYPO.body.fontSize, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ flex: 1, height: 3, background: T().sunken, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: pctColor(kp), borderRadius: RADIUS.pill }} />
-                  </div>
+                  <ProgressBar T={T()} pct={kp} height={3} />
                   <span style={{ fontSize: TYPO.footnote.fontSize, fontFamily: 'ui-monospace, monospace', color: pctColor(kp), fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
                 </div>
                 <div style={{ fontSize: TYPO.caption.fontSize, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1620,16 +1619,16 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           title="クリックで編集 / ドラッグで上下に並び替え (他の行へドロップで紐付け変更)"
                           onClick={() => startEditKr(qkr)}
                           style={{
-                            background: cellBg,
+                            background: T().bgCard,
                             borderRadius: RADIUS.md,
                             padding: '8px 10px',
                             cursor: 'pointer',
-                            border: `1px solid ${qkrc}20`,
+                            border: `1px solid ${T().border}`,
                             boxShadow: isDragOverThisQKr
                               ? (dragOverQKrPos === 'before'
                                   ? `inset 0 3px 0 0 ${T().addBtnBg}, ${SHADOWS.xs}`
                                   : `inset 0 -3px 0 0 ${T().addBtnBg}, ${SHADOWS.xs}`)
-                              : `${SHADOWS.xs}, 0 4px 12px ${qkrc}14`,
+                              : SHADOWS.xs,
                           }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
                             <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}
@@ -1638,9 +1637,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                             <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: RADIUS.pill }} />
-                            </div>
+                            <ProgressBar T={T()} pct={qkp} height={4} />
                             <span style={{ fontSize: TYPO.caption.fontSize, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                           </div>
                           {qkr.owner && (
@@ -1786,12 +1783,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         onDragStart={e => onKRDragStart(e, qkr.id)}
                         title="ドラッグして通期 KR の行に紐付け"
                         style={{
-                          background: cellBg,
+                          background: T().bgCard,
                           borderRadius: RADIUS.md,
                           padding: '8px 10px',
                           cursor: 'grab',
-                          border: `1px solid ${qkrc}20`,
-                          boxShadow: `${SHADOWS.xs}, 0 4px 12px ${qkrc}14`,
+                          border: `1px solid ${T().border}`,
+                          boxShadow: SHADOWS.xs,
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
                           <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
@@ -1799,9 +1796,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${Math.min(qkp, 100)}%`, background: qkrc, borderRadius: RADIUS.pill }} />
-                          </div>
+                          <ProgressBar T={T()} pct={qkp} height={4} />
                           <span style={{ fontSize: TYPO.caption.fontSize, color: qkrc, fontWeight: 800, whiteSpace: 'nowrap' }}>{qkr.current?.toLocaleString()}/{qkr.target?.toLocaleString()}{qkr.unit}</span>
                         </div>
                         {qkr.owner && (

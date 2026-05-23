@@ -12,6 +12,8 @@ import ObjectiveHeader from './okr/ObjectiveHeader'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
 import AICoachCard from './okr/AICoachCard'
+import OkrCard from './okr/OkrCard'
+import ProgressBar from './okr/ProgressBar'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -176,16 +178,12 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'7px 9px', color:wT().text, fontSize:TYPO.subhead.fontSize, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
 
   return (
-    <div style={{
-      border:`1px solid ${wT().border}`,
-      borderRadius:RADIUS.lg, marginBottom:SPACING.sm, overflow:'hidden',
-      position: 'relative',
-      boxShadow: open ? SHADOWS.md : SHADOWS.sm,
-      transition:'all 0.2s ease',
+    <OkrCard T={wT()} padding="0" style={{
+      marginBottom:SPACING.sm, overflow:'hidden', position:'relative',
+      boxShadow: open ? SHADOWS.md : undefined,
     }}>
       <div onClick={() => setOpen(p=>!p)} style={{
         padding:'14px 16px',
-        background: wT().bgCard,
         cursor:'pointer', userSelect:'none',
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:5 }}>
@@ -216,9 +214,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
           {!open && weather > 0 && <span style={{ color: WEATHER_CFG[weather]?.color, display:'inline-flex' }}><Icon name={WEATHER_CFG[weather]?.icon} size={16} /></span>}
           <span style={{ color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-flex', alignItems:'center' }}><Icon name="chevronD" size={14} /></span>
         </div>
-        <div style={{ height:4, borderRadius:RADIUS.xs, background:wT().borderLight, overflow:'hidden' }}>
-          <div style={{ height:'100%', width:`${Math.min(pct,100)}%`, background:pctColor, borderRadius:RADIUS.xs, transition:'width 0.4s' }} />
-        </div>
+        <ProgressBar T={wT()} pct={pct} height={4} />
         {!open && (good||more) && (
           <div style={{ display:'flex', gap:SPACING.md, marginTop:5, flexWrap:'wrap' }}>
             {good && <div style={{ ...TYPO.footnote, fontWeight:500, color:wT().textSub, display:'flex', gap:3, alignItems:'center' }}><span style={{ color:wT().success, display:'inline-flex' }}><Icon name="check" size={11} /></span><span>{good.slice(0,50)}{good.length>50?'…':''}</span></div>}
@@ -327,7 +323,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
           </div>
         </div>
       )}
-    </div>
+    </OkrCard>
   )
 }
 
@@ -1066,13 +1062,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
             const avgPct = myKRs.length > 0 ? Math.round(myKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/myKRs.length) : 0
             const pctColor = okrPctColor(wT(), avgPct)
             return (
-              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{
-                padding:'12px 14px', borderRadius:RADIUS.md, marginBottom:SPACING.sm, cursor:'pointer',
-                border:`1px solid ${isActive ? wT().accent : wT().border}`,
-                background: isActive ? wT().accentBg : wT().bgCard,
-                boxShadow: isActive ? SHADOWS.sm : SHADOWS.xs,
-                transition:'all 0.2s ease',
-              }}>
+              <OkrCard key={obj.id} T={wT()} active={isActive} onClick={()=>setActiveObjId(isActive?null:obj.id)} padding="12px 14px" style={{ marginBottom:SPACING.sm }}>
                 <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.sm }}>
                   <span style={{
                     ...TYPO.caption, fontWeight:700, padding:'2px 8px', borderRadius:RADIUS.xs,
@@ -1081,19 +1071,13 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                   {level && <span style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted }}><DataIcon value={level.icon} size={11}/> {level.name}</span>}
                 </div>
                 <div style={{ fontSize:TYPO.body.fontSize, fontWeight:700, lineHeight:1.4, marginBottom:SPACING.sm, color:wT().text, letterSpacing:'-0.01em' }}>{obj.title}</div>
-                <div style={{ height:5, borderRadius:RADIUS.pill, background:wT().borderLight, overflow:'hidden', marginBottom:7 }}>
-                  <div style={{
-                    height:'100%', width:`${Math.min(avgPct,100)}%`,
-                    background: pctColor,
-                    borderRadius:RADIUS.pill, transition:'width 0.4s',
-                  }} />
-                </div>
+                <ProgressBar T={wT()} pct={avgPct} height={5} style={{ marginBottom:7 }} />
                 <div style={{ display:'flex', gap:SPACING.sm, fontSize:TYPO.caption.fontSize, color:wT().textMuted, alignItems:'center' }}>
                   <span style={{ color:pctColor, fontWeight:800, fontSize:TYPO.subhead.fontSize }}>{avgPct}%</span>
                   <span style={{ padding:'1px 7px', borderRadius:RADIUS.pill, background:wT().borderLight, fontWeight:700 }}>KR {objKRsCount}</span>
                   <span style={{ padding:'1px 7px', borderRadius:RADIUS.pill, background: objKAsCount>0?wT().accentBg:wT().borderLight, color:objKAsCount>0?wT().accent:wT().textFaint, fontWeight:700 }}>KA {objKAsCount}</span>
                 </div>
-              </div>
+              </OkrCard>
             )
           })}
         </div>
@@ -1170,11 +1154,11 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                             })
                           })
                         }} />
-                        <div style={{ marginLeft:SPACING.md, borderLeft:`2px solid ${wT().border}`, paddingLeft:SPACING.sm+2, marginTop:SPACING.xs }}>
+                        <div style={{ marginLeft:SPACING.md, paddingLeft:SPACING.sm+2, marginTop:SPACING.xs }}>
                           {krKAs.length > 0 && (
                             <>
                               <div style={{ fontSize:TYPO.caption.fontSize, color:wT().textMuted, fontWeight:600, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> KA（{krKAs.length}件）</div>
-                              <div style={{ background:wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:RADIUS.md, overflow:'hidden', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', marginBottom:SPACING.sm }}>
+                              <OkrCard T={wT()} padding="0" style={{ overflow:'hidden', marginBottom:SPACING.sm }}>
                                 <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
                                   <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
                                   <tbody>
@@ -1183,7 +1167,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                                     ))}
                                   </tbody>
                                 </table>
-                              </div>
+                              </OkrCard>
                             </>
                           )}
                           <div onClick={() => handleKAAdd(kr)} style={{
@@ -1211,7 +1195,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 return (
                   <div>
                     <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
-                    <div style={{ background:wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:RADIUS.md, overflow:'hidden', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)' }}>
+                    <OkrCard T={wT()} padding="0" style={{ overflow:'hidden' }}>
                       <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
                         <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
                         <tbody>
@@ -1220,7 +1204,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </OkrCard>
                   </div>
                 )
               })()}
