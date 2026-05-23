@@ -674,7 +674,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                   transition: 'all 0.15s ease',
                 }}
               >
-                <span style={{ fontSize: 14, lineHeight: 1 }}>{t.icon}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center' }}><Icon name={t.icon} size={14} /></span>
                 <span>{t.label}</span>
                 {showBadge && (
                   <span style={{
