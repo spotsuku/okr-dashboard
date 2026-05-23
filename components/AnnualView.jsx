@@ -5,7 +5,7 @@ import { buildQuarterMap } from '../lib/objectiveMatching'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import KASection from './KASection'
 import { useLayerLabels } from '../lib/levelLabels'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 
 // KASection に渡すテーマオブジェクト (AnnualView の THEMES を元に必要 key だけ抽出)
 function makeKATheme(t) {
@@ -82,6 +82,16 @@ const getRating = p => p == null ? null : (RATINGS.find(r => Math.min(p, 150) >=
 const tColor = (r) => {
   if (!r) return T().textFaint
   return r.label === '未達' ? T().danger : T().text
+}
+// % 4段階色マッピング (デザイン統一仕様 .objh / .krc 共通):
+//   0-29 danger / 30-59 warn / 60-99 success / 100+ accent
+// 値色 (進捗バー fill / 大%数値) に使う。色はテーマトークンから派生 (hex 直書きなし)
+const pctColor = (p) => {
+  if (p == null) return T().textFaint
+  if (p >= 100) return T().accent
+  if (p >= 60)  return T().success
+  if (p >= 30)  return T().warn
+  return T().danger
 }
 
 function calcObjProgress(krs) {
@@ -491,9 +501,10 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
             transition: 'all 0.25s ease',
           }}>
 
-            {/* 通期ヘッダー: 縦幅圧縮版 (バッジ行に Q% を統合 / 担当を右上に移動) */}
+            {/* OBJECTIVE ヘッダ (.objh / 全ビュー共通仕様):
+                32×32 accent アイコン + meta(pills + 担当チップ) + h2 + footer(progress + 大% + KR pill) */}
             <div onClick={() => toggleExpand(ann.id)} style={{
-              padding: '12px 18px', cursor: 'pointer',
+              padding: '18px 22px', cursor: 'pointer',
               display: 'flex', alignItems: 'flex-start', gap: 14,
               position: isOpen ? 'sticky' : 'relative',
               top: isOpen ? 0 : 'auto',
@@ -501,23 +512,60 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
               background: T().bgCard,
               borderBottom: isOpen ? `1px solid ${T().border}` : 'none',
             }}>
+              {/* アイコンタイル 32×32 (accent-bg) */}
+              <div style={{
+                width: 32, height: 32, borderRadius: RADIUS.sm + 1,
+                background: T().accentBg, color: T().accentText,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                {levelIcon ? <DataIcon value={levelIcon} size={18} stroke={1.7} fallback="target" /> : <Icon name="target" size={18} stroke={1.7} />}
+              </div>
+
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* 1行目: ステータスバッジ + Q% バッジ群 (まとめて1行) */}
+                {/* meta 行: 事業部 pill + 通期 pill + 達成状況 pill + 担当チップ (.ot.ow) */}
                 <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub, fontWeight: 700 }}>{levelIcon} {levelName}</span>
-                  <span style={{ fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textMuted, fontWeight: 700 }}>通期</span>
-                  {r && (() => { const rc = tColor(r); return <span style={{ fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, background: `${rc}1a`, color: rc, fontWeight: 800 }}>{r.label}</span> })()}
-                  {/* 区切り */}
+                  <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub, fontWeight: 700 }}>{levelName}</span>
+                  <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textSub, fontWeight: 700 }}>通期</span>
+                  {r && (() => {
+                    const overdue = r.label === '未達'
+                    const bg = overdue ? T().dangerBg : T().warnBg
+                    const col = overdue ? T().danger : T().warn
+                    return <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, background: bg, color: col, fontWeight: 700 }}>{r.label}</span>
+                  })()}
+                  {ann.owner && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '3px 9px 3px 4px',
+                      background: T().sectionBg, border: `1px solid ${T().border}`,
+                      borderRadius: RADIUS.pill, fontSize: 11, color: T().textSub,
+                    }}>
+                      <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={18} />
+                      <span>{ann.owner}</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* h2 タイトル (17 / 700 / -.005em) */}
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: T().text, margin: 0, lineHeight: 1.45, letterSpacing: '-0.005em' }}>{ann.title}</h2>
+
+                {/* footer: progress 140×4 + 大%(monospace,値色) + KR件数 pill(accent) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: '0 0 140px', height: 4, background: T().sunken, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${ann.key_results.length ? Math.min(prog, 100) : 0}%`, background: pctColor(ann.key_results.length ? prog : null), borderRadius: RADIUS.pill }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace', color: pctColor(ann.key_results.length ? prog : null) }}>{ann.key_results.length ? `${prog}%` : '−'}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: RADIUS.pill, background: T().accentBg, color: T().accentText }}>KR {ann.key_results.length}件</span>
+
+                  {/* Q% ブレイクダウン (年間×組織 固有 / 値色の neutral pill) */}
                   <span style={{ width: 1, height: 14, background: T().border, margin: '0 2px' }} />
                   {Q_KEYS.map(qKey => {
                     const qObjs = qData[qKey]
                     const qProg = qObjs.length ? Math.round(qObjs.reduce((s, o) => s + calcObjProgress(o.key_results), 0) / qObjs.length) : null
-                    const qr = qProg != null ? getRating(qProg) : null
-                    const qc = qr ? tColor(qr) : T().textFaintest
+                    const qc = qProg != null ? pctColor(qProg) : T().textFaintest
                     return (
                       <span key={qKey} style={{
-                        fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, fontWeight: 700,
-                        background: qr ? `${qc}12` : T().sectionBg,
+                        fontSize: 10.5, padding: '2px 8px', borderRadius: RADIUS.pill, fontWeight: 700,
+                        background: T().sectionBg,
                         color: qc,
                       }}>
                         {Q_LABELS[qKey]} {qProg != null ? `${qProg}%` : '−'}
@@ -525,26 +573,16 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
                     )
                   })}
                 </div>
-                {/* 2行目: タイトル */}
-                <div style={{ ...TYPO.title3, fontWeight: 800, color: T().text, lineHeight: 1.45 }}>{ann.title}</div>
               </div>
-              {/* 右側: 達成率 + 担当 + アクション (縦に圧縮) */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: tColor(r), letterSpacing: '-0.02em', lineHeight: 1 }}>{ann.key_results.length ? `${prog}%` : '−'}</div>
-                {ann.owner && (
-                  <div style={{ fontSize: TYPO.caption.fontSize, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Avatar name={ann.owner} avatarUrl={members.find(m=>m.name===ann.owner)?.avatar_url} size={16} />
-                    <span style={{ fontWeight: 600 }}>{ann.owner}</span>
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
-                  {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
-                  {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }}
-                    title="この OKR をアーカイブします (アーカイブ画面から復元・完全削除可能)"
-                    style={{ background: T().sectionBg, border: 'none', color: T().textSub, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ</button>}
-                  <div style={{ fontSize: TYPO.title3.fontSize, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-flex' }}><Icon name="chevronD" size={16} stroke={1.8} /></div>
-                </div>
+
+              {/* 右側: アクション (編集 / アーカイブ / 開閉) */}
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(ann) }} style={{ background: T().btnEditBg, border: 'none', color: T().btnEditColor, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>編集</button>}
+                {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(ann.id) }}
+                  title="この OKR をアーカイブします (アーカイブ画面から復元・完全削除可能)"
+                  style={{ background: T().sectionBg, border: 'none', color: T().textSub, borderRadius: RADIUS.xs, padding: '3px 8px', fontSize: TYPO.caption.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="workspace" size={10} stroke={1.8} /> アーカイブ</button>}
+                <div style={{ fontSize: TYPO.title3.fontSize, color: isOpen ? T().text : T().textFaint, transition: 'transform 0.25s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-flex' }}><Icon name="chevronD" size={16} stroke={1.8} /></div>
               </div>
             </div>
 
@@ -1445,10 +1483,10 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   <span style={{ fontSize: TYPO.body.fontSize, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ flex: 1, height: 4, background: T().progressBg, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: tColor(kr_r), borderRadius: RADIUS.pill }} />
+                  <div style={{ flex: 1, height: 3, background: T().sunken, borderRadius: RADIUS.pill, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(kp, 100)}%`, background: pctColor(kp), borderRadius: RADIUS.pill }} />
                   </div>
-                  <span style={{ fontSize: TYPO.footnote.fontSize, color: tColor(kr_r), fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
+                  <span style={{ fontSize: TYPO.footnote.fontSize, fontFamily: 'ui-monospace, monospace', color: pctColor(kp), fontWeight: 700, whiteSpace: 'nowrap' }}>{kp}%</span>
                 </div>
                 <div style={{ fontSize: TYPO.caption.fontSize, color: T().textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
                   {annKr.owner && <Avatar name={annKr.owner} avatarUrl={members.find(m=>m.name===annKr.owner)?.avatar_url} size={14} />}
@@ -1555,7 +1593,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                         ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
                         : 0
                       const qkr_r = getRating(qkp)
-                      const qkrc = tColor(qkr_r)
+                      const qkrc = pctColor(qkp)
                       const isEditing = Number(editingKrId) === Number(qkr.id)
                       if (isEditing) {
                         return (
@@ -1776,7 +1814,7 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                       ? Math.round((qkr.lower_is_better ? Math.max(0, ((qkr.target * 2 - qkr.current) / qkr.target) * 100) : (qkr.current / qkr.target) * 100))
                       : 0
                     const qkr_r = getRating(qkp)
-                    const qkrc = tColor(qkr_r)
+                    const qkrc = pctColor(qkp)
                     // 旧データ (通期 KR が無い) ときは KASection 含めてフル表示。
                     // 既に通期 KR がある (新運用) の場合はコンパクトに「未紐付け」表示。
                     return noAnnualMode ? (
