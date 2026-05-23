@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS, SPACING, RADIUS, TYPO, SHADOWS } from '../lib/themeTokens'
+import { COMMON_TOKENS, SPACING, RADIUS, TYPO, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { cardStyle, pillStyle, btnPrimary, btnSecondary } from '../lib/iosStyles'
 import { useCurrentOrg } from '../lib/orgContext'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
@@ -1605,7 +1605,7 @@ export default function Dashboard({ user, onSignOut }) {
           {/* 年度切り替え */}
           <div data-tour="year" style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
             {['2025', '2026'].map(yr => (
-              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accent : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
+              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? BRAND_GRADIENT.cta : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
             ))}
           </div>
 
