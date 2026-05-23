@@ -1,8 +1,60 @@
 'use client'
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { supabase } from '../lib/supabase'
+import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, GLASS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { cardStyle, btnGhost, btnBrand, btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
+
+// ─── 日付ユーティリティ (CompanyDashboardSummary と同じ JST 基準) ───
+function getMondayJSTStr(d = new Date()) {
+  const j = new Date(d.getTime() + 9 * 3600 * 1000)
+  const day = j.getUTCDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const m = new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate() + diff))
+  return m.toISOString().slice(0, 10)
+}
+function todayJSTStr() {
+  const j = new Date(Date.now() + 9 * 3600 * 1000)
+  return j.toISOString().slice(0, 10)
+}
+// due_date 等の日付列を 'YYYY-MM-DD' 文字列に正規化
+function dateStr(v) {
+  if (!v) return ''
+  return String(v).slice(0, 10)
+}
+// KR が逆指標 (低いほど良い) か判定
+function isInvertedKR(title) {
+  if (!title) return false
+  return /以下|以内|削減|短縮|抑え|減らす|低減/.test(String(title))
+}
+// KR の達成率を 0〜150% で計算 (CompanyDashboardSummary と同じ計算)
+function calcKRPct(kr) {
+  const target = Number(kr.target) || 0
+  const current = Number(kr.current) || 0
+  if (!target) return 0
+  if (isInvertedKR(kr.title)) {
+    if (current <= 0) return 150
+    return Math.max(0, Math.min(150, (target / current) * 100))
+  }
+  return Math.min(150, (current / target) * 100)
+}
+// timestamp → 相対時間 ("3分前" / "2時間前" / "3日前" / "M/D")
+function relativeTime(ts) {
+  if (!ts) return ''
+  const t = new Date(ts).getTime()
+  if (Number.isNaN(t)) return ''
+  const diff = Date.now() - t
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'たった今'
+  if (min < 60) return `${min}分前`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}時間前`
+  const day = Math.floor(hr / 24)
+  if (day < 7) return `${day}日前`
+  const d = new Date(t)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
 
 // ─── テーマは lib/themeTokens.js で一元管理 ─────────────────────
 const THEMES = {
@@ -55,6 +107,22 @@ function displayUrl(url) {
 export default function PortalPage({ user, onNavigate, themeKey = 'dark', members = [], T: passedT }) {
   const T = passedT || THEMES[themeKey] || THEMES.dark
 
+  // 組織コンテキスト (org-scope クエリ用) と自分のメンバー名
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id
+  const myName = members.find(m => m.email === user?.email)?.name || ''
+
+  // 実データ state (Supabase から org-scope で取得)
+  const [stats, setStats] = useState({
+    todayTasks: null,   // 今日のタスク (未完了)
+    overdue: null,      // 期限切れ (未完了)
+    krPct: null,        // KR達成率 %
+    taskDonePct: null,  // タスク完了率 %
+    openConfirms: null, // 未対応確認事項
+  })
+  const [recentItems, setRecentItems] = useState([])  // 最近の動き
+  const [notices, setNotices] = useState([])          // お知らせ
+
   // カスタムリンク state
   const [customLinks, setCustomLinks] = useState([])
   const [showAdd, setShowAdd] = useState(false)
@@ -74,6 +142,154 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     setCustomLinks(next)
     saveCustomLinks(user?.email, next)
   }, [user?.email])
+
+  // ─── 実データ読み込み (全て org-scope: .eq('organization_id', orgId)) ───
+  useEffect(() => {
+    if (!orgId) return
+    let alive = true
+    const today = todayJSTStr()
+    const monday = getMondayJSTStr()
+    ;(async () => {
+      // 各クエリは個別に成否判定 (1つ失敗しても他は処理する)
+      const queries = [
+        // 1. マイページ: 自分の今日期限タスク (未完了)
+        ['todayTasks', supabase.from('ka_tasks')
+          .select('id, due_date, done, status')
+          .eq('organization_id', orgId).eq('assignee', myName)
+          .eq('due_date', today).eq('done', false).range(0, 999)],
+        // 1. マイページ: 自分の期限切れタスク (未完了)
+        ['overdue', supabase.from('ka_tasks')
+          .select('id, due_date, done, status')
+          .eq('organization_id', orgId).eq('assignee', myName)
+          .lt('due_date', today).eq('done', false).range(0, 999)],
+        // 2. 全社: KR (達成率の平均)
+        ['krs', supabase.from('key_results')
+          .select('id, title, owner, current, target')
+          .eq('organization_id', orgId).range(0, 999)],
+        // 2. 全社: 全社タスク (完了率) — 期限切れ未完了 + 今日期限ぶんを母数に
+        ['orgOverdue', supabase.from('ka_tasks')
+          .select('id, done, status')
+          .eq('organization_id', orgId).lt('due_date', today).eq('done', false).range(0, 999)],
+        ['orgToday', supabase.from('ka_tasks')
+          .select('id, done, status')
+          .eq('organization_id', orgId).eq('due_date', today).range(0, 999)],
+        // 2. 全社: 未対応 (status='open') 確認事項
+        ['openConfirms', supabase.from('member_confirmations')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId).eq('status', 'open')],
+        // 3. 最近の動き: 直近 KR レビュー
+        ['recentKrRevs', supabase.from('kr_weekly_reviews')
+          .select('kr_id, good, more, focus, created_at, updated_at')
+          .eq('organization_id', orgId)
+          .order('updated_at', { ascending: false }).limit(8)],
+        // 3. 最近の動き: 直近 KPT ログ
+        ['recentKpt', supabase.from('coaching_logs')
+          .select('owner, content, created_at')
+          .eq('organization_id', orgId).eq('log_type', 'kpt')
+          .order('created_at', { ascending: false }).limit(8)],
+        // 3. 最近の動き: 直近で解決された確認事項
+        ['recentResolved', supabase.from('member_confirmations')
+          .select('to_name, from_name, content, resolved_at, created_at, status')
+          .eq('organization_id', orgId).eq('status', 'resolved')
+          .order('resolved_at', { ascending: false }).limit(8)],
+        // 4. お知らせ: 自分宛の未対応確認事項
+        ['myConfirms', supabase.from('member_confirmations')
+          .select('id, from_name, content, created_at')
+          .eq('organization_id', orgId).eq('to_name', myName).eq('status', 'open')
+          .order('created_at', { ascending: false }).limit(5)],
+        // 4. お知らせ: 今週レビュー判定用の今週分 KRレビュー
+        ['weekRevs', supabase.from('kr_weekly_reviews')
+          .select('kr_id, good, more, focus')
+          .eq('organization_id', orgId).eq('week_start', monday).range(0, 999)],
+      ]
+      const settled = await Promise.allSettled(queries.map(([, p]) => p))
+      if (!alive) return
+
+      const r = {}
+      settled.forEach((s, i) => {
+        const key = queries[i][0]
+        if (s.status !== 'fulfilled' || s.value?.error) {
+          const msg = s.status !== 'fulfilled' ? (s.reason?.message || String(s.reason)) : (s.value.error.message || '')
+          console.warn(`[PortalPage] ${key} クエリ失敗: ${msg}`)
+          r[key] = { data: [], count: 0 }
+          return
+        }
+        r[key] = s.value
+      })
+
+      // ── マイページ stats ──
+      const todayTaskCount = (r.todayTasks?.data || []).filter(t => t.status !== 'done').length
+      const overdueCount = (r.overdue?.data || []).filter(t => t.status !== 'done').length
+
+      // ── 全社 stats ──
+      const krList = (r.krs?.data || []).filter(kr => Number(kr.target) > 0)
+      const krPct = krList.length
+        ? Math.round(krList.reduce((sum, kr) => sum + Math.min(100, calcKRPct(kr)), 0) / krList.length)
+        : null
+      const orgTasks = [...(r.orgOverdue?.data || []), ...(r.orgToday?.data || [])]
+      const orgTotal = orgTasks.length
+      const orgDone = orgTasks.filter(t => t.done || t.status === 'done').length
+      const taskDonePct = orgTotal ? Math.round((orgDone / orgTotal) * 100) : null
+      const openConfirms = r.openConfirms?.count || 0
+
+      setStats({
+        todayTasks: todayTaskCount,
+        overdue: overdueCount,
+        krPct,
+        taskDonePct,
+        openConfirms,
+      })
+
+      // ── 最近の動き (KRレビュー / KPT / 解決された確認事項を時系列で統合) ──
+      const krOwnerMap = {}
+      ;(r.krs?.data || []).forEach(kr => { krOwnerMap[kr.id] = kr.owner })
+      const recent = []
+      ;(r.recentKrRevs?.data || []).forEach(rv => {
+        if (!((rv.good || '').trim() || (rv.more || '').trim() || (rv.focus || '').trim())) return
+        const name = krOwnerMap[rv.kr_id]
+        if (!name) return
+        recent.push({ name, action: 'KR の週次レビューを記入しました', ts: rv.updated_at || rv.created_at })
+      })
+      ;(r.recentKpt?.data || []).forEach(row => {
+        if (!row.owner) return
+        let c
+        try { c = typeof row.content === 'string' ? JSON.parse(row.content) : row.content } catch { c = {} }
+        if (!((c?.keep || '').trim() || (c?.problem || '').trim() || (c?.try || '').trim())) return
+        recent.push({ name: row.owner, action: '振り返り (KPT) を記入しました', ts: row.created_at })
+      })
+      ;(r.recentResolved?.data || []).forEach(row => {
+        if (!row.to_name) return
+        recent.push({ name: row.to_name, action: '確認事項を解決しました', ts: row.resolved_at || row.created_at })
+      })
+      recent.sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
+      setRecentItems(recent.slice(0, 5))
+
+      // ── お知らせ (自分宛の未対応確認事項 + 今週レビュー未記入の自分の KR) ──
+      const reviewedKrIds = new Set()
+      ;(r.weekRevs?.data || []).forEach(rv => {
+        if ((rv.good || '').trim() || (rv.more || '').trim() || (rv.focus || '').trim()) reviewedKrIds.add(rv.kr_id)
+      })
+      const notice = []
+      ;(r.myConfirms?.data || []).forEach(row => {
+        notice.push({
+          kind: 'warn',
+          body: `${row.from_name || '誰か'} さんから確認依頼があります`,
+          date: dateStr(row.created_at),
+        })
+      })
+      const myUnreviewedKRs = (r.krs?.data || []).filter(kr =>
+        kr.owner === myName && Number(kr.target) > 0 && !reviewedKrIds.has(kr.id))
+      if (myUnreviewedKRs.length > 0) {
+        notice.push({
+          kind: 'info',
+          body: `今週レビュー未記入の KR が ${myUnreviewedKRs.length} 件あります`,
+          date: today,
+        })
+      }
+      setNotices(notice.slice(0, 5))
+    })()
+    return () => { alive = false }
+  }, [orgId, myName])
 
   function openAddDialog() {
     setEditingId(null); setFormTitle(''); setFormUrl(''); setFormColor('accent'); setFormError(''); setShowAdd(true)
@@ -119,16 +335,18 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     return `${d.getMonth() + 1}/${d.getDate()}(${wd})`
   })()
 
-  // 統計値はこのページのpropsからは取得できないため "—" でグレースフルに表示する (捏造しない)
+  // 統計値は Supabase の実データで表示。未取得 (null) は "—" を出す (捏造しない)。
+  // 未読メールは DB に手頃な集計元が無いため常に "—" (Gmail 等の外部 API は呼ばない)。
+  const fmt = (v, suffix = '') => (v === null || v === undefined ? '—' : `${v}${suffix}`)
   const myStats = [
-    { lbl: '今日のタスク', val: '—', color: T.warn },
-    { lbl: '期限切れ',     val: '—', color: T.danger },
+    { lbl: '今日のタスク', val: fmt(stats.todayTasks), color: T.warn },
+    { lbl: '期限切れ',     val: fmt(stats.overdue),    color: T.danger },
     { lbl: '未読メール',   val: '—', color: T.accentText },
   ]
   const companyStats = [
-    { lbl: 'KR達成率',       val: '—', color: T.success },
-    { lbl: 'タスク完了率',   val: '—', color: T.accentText },
-    { lbl: '未対応確認事項', val: '—', color: T.warn },
+    { lbl: 'KR達成率',       val: fmt(stats.krPct, '%'),      color: T.success },
+    { lbl: 'タスク完了率',   val: fmt(stats.taskDonePct, '%'), color: T.accentText },
+    { lbl: '未対応確認事項', val: fmt(stats.openConfirms),    color: T.warn },
   ]
 
   // ─── 共通スタイル断片 ──────────────────────────────
@@ -192,7 +410,8 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
   }
 
   // ─── インフォカード (最近の動き / お知らせ) ────────────
-  function InfoCard({ icon, iconColor, title, emptyText }) {
+  // items が空なら emptyText を表示。それ以外は children (実データ行) を描画。
+  function InfoCard({ icon, iconColor, title, emptyText, isEmpty, children }) {
     return (
       <div style={{ ...cardStyle({ T, padding: 0 }), borderRadius: RADIUS.lg }}>
         <div style={{ padding: '11px 14px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -200,9 +419,56 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
             <Icon name={icon} size={13} style={{ color: iconColor }} /> {title}
           </h4>
         </div>
-        <div style={{ padding: '22px 14px', textAlign: 'center', color: T.textMuted, fontSize: 12, lineHeight: 1.7 }}>
-          {emptyText}
+        {isEmpty ? (
+          <div style={{ padding: '22px 14px', textAlign: 'center', color: T.textMuted, fontSize: 12, lineHeight: 1.7 }}>
+            {emptyText}
+          </div>
+        ) : (
+          <div style={{ padding: '4px 0' }}>{children}</div>
+        )}
+      </div>
+    )
+  }
+
+  // 最近の動き 1行: "{name} が {action}" + 相対時間
+  function ActivityRow({ item, last }) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 9,
+        padding: '9px 14px',
+        borderBottom: last ? 'none' : `1px solid ${T.border}`,
+      }}>
+        <span style={{ color: T.accent, flexShrink: 0, marginTop: 1, display: 'inline-flex' }}>
+          <Icon name="check" size={13} stroke={1.8} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.5, color: T.text }}>
+          <span style={{ fontWeight: 700 }}>{item.name}</span> が {item.action}
         </div>
+        <span style={{ fontSize: 10.5, color: T.textMuted, flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {relativeTime(item.ts)}
+        </span>
+      </div>
+    )
+  }
+
+  // お知らせ 1行: info/warn アイコン + 本文 + 日付
+  function NoticeRow({ item, last }) {
+    const color = item.kind === 'warn' ? T.warn : T.accent
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 9,
+        padding: '9px 14px',
+        borderBottom: last ? 'none' : `1px solid ${T.border}`,
+      }}>
+        <span style={{ color, flexShrink: 0, marginTop: 1, display: 'inline-flex' }}>
+          <Icon name={item.kind === 'warn' ? 'alert' : 'bell'} size={13} stroke={1.8} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.5, color: T.text }}>
+          {item.body}
+        </div>
+        <span style={{ fontSize: 10.5, color: T.textMuted, flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {item.date ? `${Number(item.date.slice(5, 7))}/${Number(item.date.slice(8, 10))}` : ''}
+        </span>
       </div>
     )
   }
@@ -245,15 +511,15 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
             title="マイページ"
             desc="今日のタスク・自分の目標・振り返り。業務を一括で見渡せる、毎日の起点になる画面。"
             stats={myStats}
-            onClick={() => onNavigate('mycoach')}
+            onClick={() => { try { window.__okrOpenMyDashboard = true } catch {} ; onNavigate('mycoach') }}
           />
           <DestCard
             kind="company"
             icon="chart"
-            title="全社ダッシュボード"
+            title="全社サマリー"
             desc="事業部の進捗・KR の達成状況・タスク完了率を一目で。経営層・マネージャー向けのサマリー画面。"
             stats={companyStats}
-            onClick={() => onNavigate('summary')}
+            onClick={() => onNavigate('mycoach')}
           />
         </div>
 
@@ -313,8 +579,18 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
 
         {/* ─── 情報グリッド ─── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 18 }}>
-          <InfoCard icon="clock" iconColor={T.accent} title="最近の動き" emptyText="最近の動きはありません" />
-          <InfoCard icon="bell" iconColor={T.warn} title="お知らせ" emptyText="新しいお知らせはありません" />
+          <InfoCard icon="clock" iconColor={T.accent} title="最近の動き"
+            emptyText="最近の動きはありません" isEmpty={recentItems.length === 0}>
+            {recentItems.map((item, i) => (
+              <ActivityRow key={i} item={item} last={i === recentItems.length - 1} />
+            ))}
+          </InfoCard>
+          <InfoCard icon="bell" iconColor={T.warn} title="お知らせ"
+            emptyText="新しいお知らせはありません" isEmpty={notices.length === 0}>
+            {notices.map((item, i) => (
+              <NoticeRow key={i} item={item} last={i === notices.length - 1} />
+            ))}
+          </InfoCard>
         </div>
       </div>
 
