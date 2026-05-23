@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
-import { cardStyle, sectionHeaderStyle } from '../lib/iosStyles'
+import { cardStyle, sectionHeaderStyle, btnBrand } from '../lib/iosStyles'
 import Icon from './Icon'
 import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
@@ -1439,11 +1439,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {isViewingSelf && st === 'on' && (
             <button onClick={() => setKptOpen(true)} disabled={busy} style={{
-              background: `linear-gradient(135deg, ${T.info} 0%, ${T.info}d0 100%)`,
-              color: '#fff', border: 'none', borderRadius: 10,
-              padding: '9px 18px', fontSize: 13, fontWeight: 800,
-              cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-              boxShadow: `0 2px 6px ${T.info}55, 0 1px 2px rgba(0,0,0,0.08)`,
+              ...btnBrand({ size: 'md' }),
+              borderRadius: 10, padding: '9px 18px', fontSize: 13,
+              cursor: busy ? 'wait' : 'pointer',
               opacity: busy ? 0.6 : 1,
               letterSpacing: '0.01em',
               display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
@@ -1560,10 +1558,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
                       {krCount > 0 && (
                         <button onClick={() => onOpenFocusFill && onOpenFocusFill('kr')}
                           style={{
-                            flex: 1, padding: '6px 10px', border: 'none',
-                            background: T.info, color: '#fff',
-                            borderRadius: 6, fontSize: 11, fontWeight: 700,
-                            cursor: 'pointer', fontFamily: 'inherit',
+                            ...btnBrand({ size: 'sm' }),
+                            flex: 1, padding: '6px 10px', borderRadius: 6, fontSize: 11,
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                           }}><Icon name="target" size={12} /> KR記入 ({krCount}) <Icon name="arrowRight" size={12} /></button>
                       )}
@@ -5106,9 +5102,8 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
                 }}><Icon name="check" size={11} /> 既読</button>
                 <button onClick={() => onOpenAIReply?.(m)} style={{
-                  padding: '4px 10px', borderRadius: 6,
-                  background: T.accent, color: '#fff', border: 'none',
-                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  ...btnBrand({ size: 'sm' }),
+                  padding: '4px 10px', borderRadius: 6, fontSize: 10,
                   whiteSpace: 'nowrap',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
                 }}><Icon name="sparkle" size={11} /> AI返信</button>
@@ -5590,9 +5585,8 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
           {canReply && !mail.replied && (
             <button onClick={() => onOpenAIReply?.(mail)} style={{
-              padding: '5px 12px', borderRadius: 6,
-              background: T.accent, color: '#fff', border: 'none',
-              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              ...btnBrand({ size: 'sm' }),
+              padding: '5px 12px', borderRadius: 6, fontSize: 11,
               whiteSpace: 'nowrap',
               display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}><Icon name="sparkle" size={11} /> AI返信</button>
