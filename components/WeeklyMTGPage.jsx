@@ -54,14 +54,34 @@ const PURPLE    = '#a855f7'
 const PURPLE_BG = 'rgba(168,85,247,0.14)'
 
 // ★ doneを追加した5種ステータス
+// 色は themeTokens のステータス色に揃える (light/dark で自動切替するよう描画側で wT() 参照)。
+// ここでは fallback 用に固定値を残しつつ、描画時に statusCfg(wT) で上書きする。
 const STATUS_CFG = {
   focus:  { label: '注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
-  good:   { label: '✅ Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
-  more:   { label: '🔺 More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
+  good:   { label: 'Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
+  more:   { label: 'More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
   normal: { label: '未分類',  color: '#606880', bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)' },
-  done:   { label: '✓ 完了',  color: '#a0a8be', bg: 'rgba(160,168,190,0.08)', border: 'rgba(160,168,190,0.2)' },
+  done:   { label: '完了',  color: '#a0a8be', bg: 'rgba(160,168,190,0.08)', border: 'rgba(160,168,190,0.2)' },
+}
+// ステータス pill を themeTokens の状態色に解決 (枠 + pill のみ、淡グラデ背景は使わない)
+function statusCfg(key, T) {
+  switch (key) {
+    case 'good':   return { label: 'Good',  color: T.success, bg: T.successBg, border: `${T.success}4d` }
+    case 'more':   return { label: 'More',  color: T.danger,  bg: T.dangerBg,  border: `${T.danger}4d` }
+    case 'focus':  return { label: '注力',  color: T.accent,  bg: T.accentBg,  border: `${T.accent}4d` }
+    case 'done':   return { label: '完了',  color: T.textMuted, bg: T.borderLight, border: T.border }
+    default:       return { label: '未分類', color: T.textMuted, bg: T.sunken, border: T.border }
+  }
 }
 const STATUS_ORDER = ['normal','focus','good','more','done']
+
+// 達成率 % → 4 段階の状態色 (0-29 danger / 30-59 warn / 60-99 success / 100+ accent)
+function pctColorOf(pct, T) {
+  if (pct >= 100) return T.accent
+  if (pct >= 60)  return T.success
+  if (pct >= 30)  return T.warn
+  return T.danger
+}
 
 function getPeriodLabel(periodKey) {
   if (!periodKey) return ''
@@ -394,7 +414,7 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   const lastEnterRef   = useRef(0)
 
   const autoSave = useAutoSave('weekly_reports', report.id, { enabled: canEdit })
-  const cfg = STATUS_CFG[status] || STATUS_CFG.normal
+  const cfg = statusCfg(status, wT())
   const ownerMember = members.find(m => m.name === (ownerDraft||report.owner))
 
   // タスクカウント取得（ka_keyで同じKAの全タスクをカウント）
@@ -504,8 +524,9 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
   }
 
   const cellS = { padding:`6px ${SPACING.sm}px`, borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:TYPO.subhead.fontSize }
-  // KA記入欄: 改行が気になりすぎないよう fontSize 11、lineHeight 1.55、自動拡張
-  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:RADIUS.xs - 1, padding:'5px 7px', color:wT().text, fontSize:TYPO.footnote.fontSize, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, overflow:'hidden', transition:'border-color 0.15s' }
+  // KA記入欄 (.cell): 軽い sunken 背景 + 1px 枠 + radius7。改行が気になりすぎないよう
+  // fontSize 11、lineHeight 1.55、自動拡張。フォーカス時は状態色に枠が変わる。
+  const taS = { width:'100%', boxSizing:'border-box', background:wT().sunken, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:TYPO.footnote.fontSize, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, overflow:'hidden', minHeight:42, transition:'border-color 0.15s' }
   const isDone = status === 'done'
   const isDragging = dragIdx !== undefined && dragIdx === rowIdx
   const isDragOver = overIdx !== undefined && overIdx === rowIdx && dragIdx !== null && dragIdx !== rowIdx
@@ -561,19 +582,19 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
           ref={el => { if (el) autoGrowTextarea(el, 3) }}
           onChange={e=>{ handleFieldChange('good', e.target.value, setGood); autoGrowTextarea(e.target, 3) }}
           onFocus={e=>{ autoSave.setFocusedField('good'); e.target.style.borderColor=wT().success; autoGrowTextarea(e.target, 5) }}
-          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('good',good); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('good',good); e.target.style.borderColor=wT().border; autoGrowTextarea(e.target, 3) }}
           placeholder={canEdit?"良かったこと・続けたいこと":""}
-          style={{ ...taS, color:good?wT().text:wT().textFaint }} />
+          style={{ ...taS, fontStyle:good?'normal':'italic', color:good?wT().text:wT().textMuted }} />
       </td>
       {/* More */}
       <td style={cellS}>
         <textarea value={more} readOnly={!canEdit}
           ref={el => { if (el) autoGrowTextarea(el, 3) }}
           onChange={e=>{ handleFieldChange('more', e.target.value, setMore); autoGrowTextarea(e.target, 3) }}
-          onFocus={e=>{ autoSave.setFocusedField('more'); e.target.style.borderColor=wT().danger; autoGrowTextarea(e.target, 5) }}
-          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('more',more); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          onFocus={e=>{ autoSave.setFocusedField('more'); e.target.style.borderColor=wT().warn; autoGrowTextarea(e.target, 5) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('more',more); e.target.style.borderColor=wT().border; autoGrowTextarea(e.target, 3) }}
           placeholder={canEdit?"課題・改善点":""}
-          style={{ ...taS, color:more?wT().text:wT().textFaint }} />
+          style={{ ...taS, fontStyle:more?'normal':'italic', color:more?wT().text:wT().textMuted }} />
       </td>
       {/* Focus */}
       <td style={cellS}>
@@ -581,9 +602,9 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
           ref={el => { if (el) autoGrowTextarea(el, 3) }}
           onChange={e=>{ handleFieldChange('focus_output', e.target.value, setFocusOutput); autoGrowTextarea(e.target, 3) }}
           onFocus={e=>{ autoSave.setFocusedField('focus_output'); e.target.style.borderColor=wT().accent; autoGrowTextarea(e.target, 5) }}
-          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('focus_output',focusOutput); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
+          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('focus_output',focusOutput); e.target.style.borderColor=wT().border; autoGrowTextarea(e.target, 3) }}
           placeholder={canEdit?"重点アクション":""}
-          style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
+          style={{ ...taS, fontStyle:focusOutput?'normal':'italic', color:focusOutput?wT().text:wT().textMuted }} />
       </td>
       {/* Tasks + Delete */}
       <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
@@ -655,7 +676,7 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
   }
 
   const pct = kr.target ? Math.min(Math.round((kr.current/kr.target)*100), 150) : 0
-  const pctColor = pct >= 100 ? wT().success : pct >= 60 ? wT().accent : wT().danger
+  const pctColor = pctColorOf(pct, wT())
   const stars = calcStars(kr.current, kr.target, kr.lower_is_better)
   const starCfg = KR_STAR_CFG[stars] || KR_STAR_CFG[0]
 
@@ -776,11 +797,11 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
     <div style={{ marginBottom:SPACING.lg, border: dropHighlight ? `2px dashed ${wT().accent}` : '2px solid transparent', borderRadius:RADIUS.lg - 2, transition:'border-color 0.15s' }}
       onDragOver={handleKRDragOver} onDragLeave={handleKRDragLeave} onDrop={handleKRDrop}>
       {/* KRヘッダー */}
-      <div onClick={() => setReviewOpen(p=>!p)} style={{ padding:`${SPACING.sm + 2}px ${SPACING.lg - 2}px`, background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none', borderRadius:`${RADIUS.md}px ${RADIUS.md}px 0 0`, border:`1px solid ${wT().border}`, borderBottom: reviewOpen ? `1px solid ${wT().border}` : 'none' }}>
+      <div onClick={() => setReviewOpen(p=>!p)} style={{ padding:`${SPACING.sm + 2}px ${SPACING.lg - 2}px`, background:wT().bgCard, cursor:'pointer', userSelect:'none', borderRadius:`${RADIUS.md}px ${RADIUS.md}px 0 0`, border:`1px solid ${wT().border}`, borderBottom: reviewOpen ? `1px solid ${wT().border}` : 'none' }}>
         <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:6 }}>
-          <div style={{ ...TYPO.footnote, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:RADIUS.xs - 2, flexShrink:0 }}>{pct}%</div>
+          <div style={{ ...TYPO.footnote, fontWeight:700, fontFamily:'ui-monospace, monospace', color:pctColor, background:`${pctColor}1f`, padding:'2px 7px', borderRadius:RADIUS.xs - 2, flexShrink:0 }}>{pct}%</div>
           <span style={{ ...TYPO.subhead, color:wT().text, lineHeight:1.4, flex:1 }}>
-            <span style={{ ...TYPO.caption, fontWeight:700, color:wT().accent, background:wT().accentBg, padding:'1px 5px', borderRadius:RADIUS.xs - 3, marginRight:6, verticalAlign:'middle' }}>KR</span>
+            <span style={{ ...TYPO.caption, fontWeight:700, color:wT().accentText, background:wT().accentBg, padding:'1px 6px', borderRadius:RADIUS.xs - 1, marginRight:6, verticalAlign:'middle' }}>KR</span>
             {kr.title}
           </span>
           <span style={{ ...TYPO.footnote, fontWeight:500, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
@@ -941,14 +962,14 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
               <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>担当</th>
               <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>KAタイトル</th>
               <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>状態</th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().success, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="check" size={10} /> good</span><div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
+              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().success, fontWeight:700, letterSpacing:'0.04em', borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="check" size={10} /> Good</span><div style={{ fontSize:9, fontWeight:500, letterSpacing:0, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
               </th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().danger, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="alert" size={10} /> more</span><div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
+              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().warn, fontWeight:700, letterSpacing:'0.04em', borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="alert" size={10} /> More</span><div style={{ fontSize:9, fontWeight:500, letterSpacing:0, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
               </th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().accent, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="target" size={10} /> focus</span><div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(activeWeek) : ''}</div>
+              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().accentText, fontWeight:700, letterSpacing:'0.04em', borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="target" size={10} /> Focus</span><div style={{ fontSize:9, fontWeight:500, letterSpacing:0, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(activeWeek) : ''}</div>
               </th>
               <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>Tasks</th>
               <th style={{ padding:'6px 2px', borderBottom:`1px solid ${wT().border}` }}></th>
@@ -1468,15 +1489,13 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   const roots = levels.filter(l => !l.parent_id)
   function renderSb(level, indent=0) {
-    const d = getDepth(level.id, levels)
-    const color = LAYER_COLORS[d] || '#a0a8be'
     const isActive = Number(activeLevelId)===Number(level.id)
     return (
       <div key={level.id}>
         <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
-          style={{ display:'flex', alignItems:'center', gap:6, padding:`6px ${SPACING.sm}px`, paddingLeft:8+indent*14, borderRadius:RADIUS.xs + 1, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent' }}>
-          <span style={{display:'inline-flex'}}><DataIcon value={level.icon} size={13}/></span>
-          <span style={{ ...TYPO.footnote, flex:1, fontWeight:isActive?700:500, color:isActive?color:wT().textSub }}>{level.name}</span>
+          style={{ display:'flex', alignItems:'center', gap:6, padding:`6px ${SPACING.sm}px`, paddingLeft:8+indent*14, borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?`${wT().accent}40`:'transparent'}`, background:isActive?wT().accentBg:'transparent' }}>
+          <span style={{ display:'inline-flex', color:isActive?wT().accentText:wT().textMuted }}><DataIcon value={level.icon} size={13}/></span>
+          <span style={{ ...TYPO.footnote, flex:1, fontWeight:isActive?700:500, color:isActive?wT().accentText:wT().textSub }}>{level.name}</span>
         </div>
         {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
       </div>
@@ -1706,10 +1725,13 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         )}
         {/* KAステータス凡例 */}
         <div style={{ display:'flex', gap:5, alignItems:'center', marginLeft:'auto', flexWrap:'wrap' }}>
-          {Object.entries(STATUS_CFG).filter(([k])=>k!=='done').map(([k,v]) => (
-            <span key={k} style={{ ...TYPO.caption, fontWeight:600, padding:'2px 8px', borderRadius:RADIUS.pill, background:v.bg, color:v.color, border:`1px solid ${v.border}` }}>{v.label}</span>
-          ))}
-          <span style={{ ...TYPO.caption, fontWeight:600, padding:'2px 8px', borderRadius:RADIUS.pill, background:STATUS_CFG.done.bg, color:STATUS_CFG.done.color, border:`1px solid ${STATUS_CFG.done.border}` }}>{STATUS_CFG.done.label}</span>
+          {STATUS_ORDER.filter(k=>k!=='done').map(k => {
+            const v = statusCfg(k, wT())
+            return <span key={k} style={{ ...TYPO.caption, fontWeight:600, padding:'2px 8px', borderRadius:RADIUS.pill, background:v.bg, color:v.color, border:`1px solid ${v.border}` }}>{v.label}</span>
+          })}
+          {(() => { const v = statusCfg('done', wT()); return (
+            <span style={{ ...TYPO.caption, fontWeight:600, padding:'2px 8px', borderRadius:RADIUS.pill, background:v.bg, color:v.color, border:`1px solid ${v.border}` }}>{v.label}</span>
+          ) })()}
         </div>
       </div>
       )}
@@ -1737,24 +1759,24 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           const meetingDay = formatMeetingDayLabel(w, currentMeeting?.schedule)
           return (
             <button key={w} onClick={() => setActiveWeek(w)} style={{
-              padding:`${SPACING.xs}px ${SPACING.md}px`, borderRadius:RADIUS.xs + 1, cursor:'pointer', fontFamily:'inherit', flexShrink:0,
-              background: isActive ? wT().accentBg : 'transparent',
-              border: `1px solid ${isActive ? wT().accent : wT().borderMid}`,
-              color: isActive ? wT().accent : wT().textMuted,
-              display:'flex', flexDirection:'column', alignItems:'center', gap:1,
+              padding:`7px 11px`, borderRadius:7, cursor:'pointer', fontFamily:'inherit', flexShrink:0,
+              background: isActive ? wT().accentBg : wT().sunken,
+              border: `1px solid ${isActive ? `${wT().accent}4d` : wT().border}`,
+              color: isActive ? wT().accentText : wT().textSub,
+              display:'flex', flexDirection:'column', alignItems:'center', gap:1, lineHeight:1.3,
             }}
               title={`${formatWeekLabel(w)}の週 (${currentMeeting?.title || 'MTG'}: ${currentMeeting?.schedule || ''})`}
             >
-              <span style={{ ...TYPO.subhead, fontWeight:700 }}>{meetingDay}</span>
-              <span style={{ fontSize:9, fontWeight:500, opacity:0.75 }}>
+              <span style={{ fontSize:12, fontWeight:700, color: isActive ? wT().accentText : wT().text }}>{meetingDay}</span>
+              <span style={{ fontSize:10, fontWeight:500, color:wT().textMuted }}>
                 {formatWeekLabel(w)}{isThisWeek ? ' · 今週' : ''}
               </span>
             </button>
           )
         })}
         <button onClick={createNextWeek} style={{
-          padding:`${SPACING.xs}px 10px`, borderRadius:RADIUS.xs + 1, cursor:'pointer', fontFamily:'inherit', ...TYPO.subhead, fontWeight:700, flexShrink:0,
-          background:wT().successBg, border:`1px solid ${wT().success}4d`, color:wT().success, display:'inline-flex', alignItems:'center', gap:4,
+          marginLeft:'auto', padding:`7px 11px`, borderRadius:7, cursor:'pointer', fontFamily:'inherit', ...TYPO.footnote, fontWeight:700, flexShrink:0,
+          background:'transparent', border:`1px solid ${wT().border}`, color:wT().textSub, display:'inline-flex', alignItems:'center', gap:4,
         }}><Icon name="plus" size={12} /> 翌週を作成</button>
       </div>
 
@@ -1848,11 +1870,22 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 style={{ marginBottom: SPACING.sm + 2 }}
               />
 
-              {/* 期間切替タブ (コンパクト) */}
-              <div style={{ display:'flex', gap:3, marginBottom:SPACING.sm + 2 }}>
-                {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => (
-                  <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:`3px ${SPACING.md}px`, borderRadius:RADIUS.xs, cursor:'pointer', fontFamily:'inherit', ...TYPO.footnote, fontWeight:600, background:rightPeriod===key?wT().accentBg:'transparent', border:`1px solid ${rightPeriod===key?wT().accent:wT().borderMid}`, color:rightPeriod===key?wT().accent:wT().textMuted }}>{lbl}</button>
-                ))}
+              {/* 期間切替タブ (.qtab: 下線スタイル) */}
+              <div style={{ display:'flex', alignItems:'baseline', gap:0, borderBottom:`1px solid ${wT().border}`, marginBottom:SPACING.sm + 2 }}>
+                {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => {
+                  const on = rightPeriod===key
+                  return (
+                    <button key={key} onClick={()=>setRightPeriod(key)} style={{
+                      padding:`8px 14px`, cursor:'pointer', fontFamily:'inherit', fontSize:12.5,
+                      fontWeight:on?700:500, background:'none', border:0,
+                      borderBottom:`2px solid ${on?wT().accent:'transparent'}`,
+                      color:on?wT().accentText:wT().textSub,
+                    }}>{lbl}</button>
+                  )
+                })}
+                <span style={{ marginLeft:'auto', ...TYPO.caption, fontWeight:600, letterSpacing:0, color:wT().textMuted, padding:'0 4px' }}>
+                  {fiscalYear}年度 · {getPeriodLabel(rightPeriod === 'annual' ? 'annual' : rightPeriod)}
+                </span>
               </div>
 
               {/* 選択期間のObjective表示 (コンパクト) */}

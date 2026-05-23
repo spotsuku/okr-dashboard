@@ -541,25 +541,26 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
     }
   }
 
-  const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:TYPO.subhead.fontSize }
-  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:'1px solid transparent', borderRadius:RADIUS.xs, padding:'4px 6px', color:wT().text, fontSize:TYPO.footnote.fontSize, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.5, minHeight:36, transition:'border-color 0.15s' }
+  const cellS = { padding:'10px 12px', borderBottom:`1px solid ${wT().border}`, borderRight:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:TYPO.subhead.fontSize }
+  // .cell (textarea風): rgba(255,255,255,.7) bg / 1px border / radius7 / placeholder italic / min-height42
+  const taS = { width:'100%', boxSizing:'border-box', background:'rgba(255,255,255,.7)', border:`1px solid ${wT().border}`, borderRadius:7, padding:'8px 10px', color:wT().textSub, fontSize:11.5, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, minHeight:42, transition:'border-color 0.15s' }
 
   return (
     <tr>
-      {/* 担当 */}
-      <td style={{ ...cellS, width:90 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={20} wT={wT} />
+      {/* 担当 — 18×18 グラデアバター + 名前 */}
+      <td style={{ ...cellS, width:140 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={18} wT={wT} />
           <select value={ownerDraft} onChange={e=>handleOwnerChange(e.target.value)}
             onFocus={()=>autoSave.setFocusedField('owner')} onBlur={()=>autoSave.setFocusedField(null)}
-            style={{ flex:1, background:'transparent', border:'none', color:ownerDraft?avatarColor(ownerDraft):wT().textMuted, fontSize:TYPO.footnote.fontSize, cursor:'pointer', fontFamily:'inherit', outline:'none', fontWeight:600, minWidth:0, maxWidth:60 }}>
+            style={{ flex:1, background:'transparent', border:'none', color:ownerDraft?avatarColor(ownerDraft):wT().textMuted, fontSize:11.5, cursor:'pointer', fontFamily:'inherit', outline:'none', fontWeight:600, minWidth:0 }}>
             <option value="">--</option>
             {members?.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
         </div>
       </td>
       {/* KAタイトル */}
-      <td style={{ ...cellS, minWidth:120 }}>
+      <td style={{ ...cellS, minWidth:120, fontSize:12 }}>
         {editingTitle ? (
           <textarea autoFocus value={kaTitle} onChange={e=>setKaTitle(e.target.value)}
             onBlur={handleTitleBlur}
@@ -574,41 +575,41 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
         )}
       </td>
       {/* ステータス */}
-      <td style={{ ...cellS, width:70, textAlign:'center' }}>
+      <td style={{ ...cellS, width:90, textAlign:'center' }}>
         <span onClick={cycleStatus}
           style={{ ...TYPO.caption, padding:'3px 7px', borderRadius:RADIUS.pill, cursor:'pointer', background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}`, whiteSpace:'nowrap', display:'inline-block' }}>
           {cfg.label}
         </span>
       </td>
-      {/* Good */}
+      {/* Good (success) */}
       <td style={cellS}>
         <textarea value={good}
           onChange={e=>handleFieldChange('good', e.target.value, setGood)}
           onFocus={e=>{autoSave.setFocusedField('good');e.target.style.borderColor=`${wT().success}66`;e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('good',good);e.target.style.borderColor='transparent';e.target.rows=2}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('good',good);e.target.style.borderColor=wT().border;e.target.rows=2}}
           rows={2} placeholder="Good"
-          style={{ ...taS, color:good?wT().text:wT().textFaint }} />
+          style={{ ...taS, color:good?wT().text:wT().textMuted, fontStyle:good?'normal':'italic' }} />
       </td>
-      {/* More */}
+      {/* More (warn) */}
       <td style={cellS}>
         <textarea value={more}
           onChange={e=>handleFieldChange('more', e.target.value, setMore)}
-          onFocus={e=>{autoSave.setFocusedField('more');e.target.style.borderColor=`${wT().danger}66`;e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('more',more);e.target.style.borderColor='transparent';e.target.rows=2}}
+          onFocus={e=>{autoSave.setFocusedField('more');e.target.style.borderColor=`${wT().warn}66`;e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('more',more);e.target.style.borderColor=wT().border;e.target.rows=2}}
           rows={2} placeholder="More"
-          style={{ ...taS, color:more?wT().text:wT().textFaint }} />
+          style={{ ...taS, color:more?wT().text:wT().textMuted, fontStyle:more?'normal':'italic' }} />
       </td>
-      {/* Focus */}
+      {/* Focus (accent) */}
       <td style={cellS}>
         <textarea value={focusOutput}
           onChange={e=>handleFieldChange('focus_output', e.target.value, setFocusOutput)}
-          onFocus={e=>{autoSave.setFocusedField('focus_output');e.target.style.borderColor=`${wT().info}66`;e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('focus_output',focusOutput);e.target.style.borderColor='transparent';e.target.rows=2}}
+          onFocus={e=>{autoSave.setFocusedField('focus_output');e.target.style.borderColor=`${wT().accent}66`;e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('focus_output',focusOutput);e.target.style.borderColor=wT().border;e.target.rows=2}}
           rows={2} placeholder="Focus"
-          style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
+          style={{ ...taS, color:focusOutput?wT().text:wT().textMuted, fontStyle:focusOutput?'normal':'italic' }} />
       </td>
       {/* Tasks + Delete */}
-      <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
+      <td style={{ ...cellS, width:70, textAlign:'center', position:'relative', borderRight:'none' }}>
         <div style={{ display:'flex', alignItems:'center', gap:SPACING.xs, justifyContent:'center' }}>
           <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:TYPO.footnote.fontSize, color:wT().accent, cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:RADIUS.xs, background:showTasks?wT().accentBg:'transparent' }}>
             {`${taskCount.done}/${taskCount.total}`}
@@ -618,7 +619,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
         {showTasks && <TaskPopover report={report} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
-      <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
+      <td style={{ ...cellS, width:20, padding:'10px 2px', borderRight:'none' }}>
         {autoSave.saving && <span style={{ color:wT().info, display:'inline-flex' }}><Icon name="refresh" size={11} /></span>}
         {autoSave.saved && <span style={{ color:wT().success, display:'inline-flex' }}><Icon name="check" size={11} /></span>}
       </td>
@@ -626,20 +627,21 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
   )
 }
 
-// KAテーブルヘッダー
-function KATableHeader({ wT }) {
-  const thS = { padding:'4px 8px', fontSize:TYPO.caption.fontSize, fontWeight:600, color:wT().textMuted, textAlign:'left', borderBottom:`1px solid ${wT().border}` }
+// KAテーブルヘッダー (.kt 相当) — Good/More/Focus を色分け + 期間サブ表記 [§5]
+function KATableHeader({ wT, periodSub }) {
+  const thS = { padding:'8px 12px', fontSize:10.5, fontWeight:700, color:wT().textMuted, textAlign:'left', borderBottom:`1px solid ${wT().border}`, borderRight:`1px solid ${wT().border}`, letterSpacing:'0.04em' }
+  const subS = { display:'block', fontSize:9, color:wT().textMuted, fontWeight:500, textTransform:'none', letterSpacing:0, marginTop:1 }
   return (
     <thead>
       <tr>
-        <th style={{ ...thS, width:90 }}>担当</th>
-        <th style={{ ...thS, minWidth:120 }}>KA</th>
-        <th style={{ ...thS, width:70, textAlign:'center' }}>状態</th>
-        <th style={thS}>Good</th>
-        <th style={thS}>More</th>
-        <th style={thS}>Focus</th>
-        <th style={{ ...thS, width:70, textAlign:'center' }}>タスク</th>
-        <th style={{ ...thS, width:20 }}></th>
+        <th style={{ ...thS, width:140 }}>担当</th>
+        <th style={{ ...thS, minWidth:120 }}>KA タイトル</th>
+        <th style={{ ...thS, width:90, textAlign:'center' }}>状態</th>
+        <th style={thS}><span style={{ color:wT().success }}>Good</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
+        <th style={thS}><span style={{ color:wT().warn }}>More</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
+        <th style={thS}><span style={{ color:wT().accentText }}>Focus</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
+        <th style={{ ...thS, width:70, textAlign:'center', borderRight:'none' }}>タスク</th>
+        <th style={{ ...thS, width:20, borderRight:'none' }}></th>
       </tr>
     </thead>
   )
@@ -1108,19 +1110,53 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
           ) : (
             <>
               {(() => {
+                // OBJECTIVE ヘッダ (.objh) — 全ビュー共通構造 [§2厳守]
+                const objAvgPct = objKRs.length > 0
+                  ? Math.round(objKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/objKRs.length)
+                  : 0
+                const objColor = objAvgPct>=100?wT().accent:objAvgPct>=60?wT().success:objAvgPct>=30?wT().warn:wT().danger
+                const objColorBg = objAvgPct>=100?wT().accentBg:objAvgPct>=60?wT().successBg:objAvgPct>=30?wT().warnBg:wT().dangerBg
+                const objLevel = levels.find(l=>Number(l.id)===Number(selectedObj.level_id))
+                const ownerAv = avatarColor(viewName)
+                const objKACount = objKAs.length
                 return (
                   <div style={{
-                    position:'relative', overflow:'hidden',
-                    padding:'14px 18px',
-                    background:`linear-gradient(120deg, ${wT().successBg}, rgba(34,211,238,.05))`,
+                    padding:'18px 22px',
+                    background:wT().bgCard,
+                    backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
                     border:`1px solid ${wT().border}`,
                     borderRadius:RADIUS.lg, marginBottom:SPACING.lg,
+                    boxShadow:SHADOWS.sm,
+                    display:'flex', gap:SPACING.lg,
                   }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.xs }}>
-                      <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 8px', borderRadius:RADIUS.pill, background:wT().successBg, color:wT().success }}>{periodLabel(selectedObj.period)}</span>
-                      <span style={{ ...TYPO.caption, color:wT().success, letterSpacing:'0.06em', textTransform:'uppercase', fontWeight:700 }}>Objective</span>
+                    {/* 32×32 accent-bg アイコン */}
+                    <div style={{ width:32, height:32, borderRadius:9, background:wT().accentBg, color:wT().accentText, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <Icon name="target" size={18} />
                     </div>
-                    <div style={{ ...TYPO.title3, fontWeight:700, color:wT().text, lineHeight:1.4 }}>{selectedObj.title}</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      {/* meta 行 */}
+                      <div style={{ display:'flex', alignItems:'center', gap:SPACING.xs+2, marginBottom:SPACING.xs+2, flexWrap:'wrap' }}>
+                        {objLevel && <span style={{ padding:'2px 8px', fontSize:10.5, fontWeight:700, borderRadius:RADIUS.pill, background:wT().borderLight, color:wT().textSub }}>{objLevel.name}</span>}
+                        <span style={{ padding:'2px 8px', fontSize:10.5, fontWeight:700, borderRadius:RADIUS.pill, background:wT().borderLight, color:wT().textSub }}>{periodLabel(selectedObj.period)}</span>
+                        <span style={{ padding:'2px 8px', fontSize:10.5, fontWeight:700, borderRadius:RADIUS.pill, background:objColorBg, color:objColor }}>{objAvgPct>=100?'達成':objAvgPct>=60?'順調':objAvgPct>=30?'要注意':'未達'}</span>
+                        {/* 担当チップ (.ot.ow) */}
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px 3px 4px', background:'rgba(255,255,255,.7)', border:`1px solid ${wT().border}`, borderRadius:RADIUS.pill, fontSize:11, color:wT().textSub }}>
+                          <span style={{ width:18, height:18, borderRadius:RADIUS.pill, background:`linear-gradient(135deg, ${ownerAv}, ${ownerAv}99)`, color:'#fff', fontSize:9, fontWeight:700, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>{viewName.slice(0,1)}</span>
+                          {viewName}
+                        </span>
+                      </div>
+                      {/* h2 タイトル */}
+                      <h2 style={{ fontSize:17, fontWeight:700, margin:0, lineHeight:1.45, letterSpacing:'-0.005em', color:wT().text }}>{selectedObj.title}</h2>
+                      {/* footer 行 */}
+                      <div style={{ display:'flex', alignItems:'center', gap:SPACING.lg, marginTop:SPACING.md-2 }}>
+                        <div style={{ flex:'0 0 140px', height:4, background:wT().sunken, borderRadius:RADIUS.pill, overflow:'hidden' }}>
+                          <div style={{ height:'100%', width:`${Math.min(objAvgPct,100)}%`, background:objColor }} />
+                        </div>
+                        <span style={{ fontSize:13, fontWeight:700, fontFamily:'ui-monospace, monospace', color:objColor }}>{objAvgPct}%</span>
+                        <span style={{ padding:'2px 10px', fontSize:11, fontWeight:600, borderRadius:RADIUS.pill, background:wT().accentBg, color:wT().accentText }}>KR {objKRs.length}件</span>
+                        <span style={{ padding:'2px 10px', fontSize:11, fontWeight:600, borderRadius:RADIUS.pill, background:wT().borderLight, color:wT().textSub }}>KA {objKACount}件</span>
+                      </div>
+                    </div>
                   </div>
                 )
               })()}
@@ -1176,14 +1212,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                           {krKAs.length > 0 && (
                             <>
                               <div style={{ fontSize:TYPO.caption.fontSize, color:wT().textMuted, fontWeight:600, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> KA（{krKAs.length}件）</div>
-                              <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
-                                <KATableHeader wT={wT} />
-                                <tbody>
-                                  {krKAs.map(r => (
-                                    <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
-                                  ))}
-                                </tbody>
-                              </table>
+                              <div style={{ background:wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:RADIUS.md, overflow:'hidden', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', marginBottom:SPACING.sm }}>
+                                <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
+                                  <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
+                                  <tbody>
+                                    {krKAs.map(r => (
+                                      <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
                             </>
                           )}
                           <div onClick={() => handleKAAdd(kr)} style={{
@@ -1211,14 +1249,16 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 return (
                   <div>
                     <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
-                    <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
-                      <KATableHeader wT={wT} />
-                      <tbody>
-                        {unlinkedKAs.map(r => (
-                          <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
-                        ))}
-                      </tbody>
-                    </table>
+                    <div style={{ background:wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:RADIUS.md, overflow:'hidden', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)' }}>
+                      <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
+                        <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
+                        <tbody>
+                          {unlinkedKAs.map(r => (
+                            <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )
               })()}
