@@ -5,7 +5,7 @@ import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { SegmentedControl } from './iosUI'
 import Icon, { DataIcon } from './Icon'
-import { kaCellStyle, kaTextareaStyle, kaHeaderCellStyle } from '../lib/okrKaStyles'
+import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
@@ -13,6 +13,7 @@ import ObjectiveHeader from './okr/ObjectiveHeader'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
 import AICoachCard from './okr/AICoachCard'
+import KATableHeader from './okr/KATableHeader'
 import OkrCard from './okr/OkrCard'
 import ProgressBar from './okr/ProgressBar'
 
@@ -621,25 +622,6 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
 }
 
 // KAテーブルヘッダー (.kt 相当) — Good/More/Focus を色分け + 期間サブ表記 [§5]
-function KATableHeader({ wT, periodSub }) {
-  const thS = kaHeaderCellStyle(wT())
-  const subS = { display:'block', fontSize:9, color:wT().textMuted, fontWeight:500, textTransform:'none', letterSpacing:0, marginTop:1 }
-  return (
-    <thead>
-      <tr>
-        <th style={{ ...thS, width:52 }}>担当</th>
-        <th style={{ ...thS, minWidth:120 }}>KA タイトル</th>
-        <th style={{ ...thS, width:64, textAlign:'center' }}>状態</th>
-        <th style={thS}><span style={{ color:wT().success }}>Good</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
-        <th style={thS}><span style={{ color:wT().warn }}>More</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
-        <th style={thS}><span style={{ color:wT().accentText }}>Focus</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
-        <th style={{ ...thS, width:56, textAlign:'center', borderRight:'none' }}>タスク</th>
-        <th style={{ ...thS, width:20, borderRight:'none' }}></th>
-      </tr>
-    </thead>
-  )
-}
-
 // ─── メインページ ──────────────────────────────────────────────────────────────
 export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback, showMemberPicker = false }) {
   const { isMobile, isTablet } = useResponsive()
@@ -1131,7 +1113,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                               <div style={{ fontSize:TYPO.caption.fontSize, color:wT().textMuted, fontWeight:600, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> KA（{krKAs.length}件）</div>
                               <OkrCard T={wT()} padding="0" style={{ overflow:'hidden', marginBottom:SPACING.sm }}>
                                 <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
-                                  <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
+                                  <KATableHeader T={wT()} subGood={formatWeekLabel(selectedWeek)} subMore={formatWeekLabel(selectedWeek)} subFocus={formatWeekLabel(selectedWeek)} />
                                   <tbody>
                                     {krKAs.map(r => (
                                       <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
@@ -1168,7 +1150,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                     <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
                     <OkrCard T={wT()} padding="0" style={{ overflow:'hidden' }}>
                       <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
-                        <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
+                        <KATableHeader T={wT()} subGood={formatWeekLabel(selectedWeek)} subMore={formatWeekLabel(selectedWeek)} subFocus={formatWeekLabel(selectedWeek)} />
                         <tbody>
                           {unlinkedKAs.map(r => (
                             <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
