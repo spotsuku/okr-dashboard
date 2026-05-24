@@ -13,6 +13,7 @@ import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
 import Icon, { DataIcon } from './Icon'
 import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
+import KATableHeader from './okr/KATableHeader'
 import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
@@ -942,25 +943,10 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             <col style={{ width:56 }} />
             <col style={{ width:20 }} />
           </colgroup>
-          <thead>
-            <tr style={{ background:wT().bgCard }}>
-              <th style={{ padding:'6px 4px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}></th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>担当</th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>KAタイトル</th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>状態</th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().success, fontWeight:700, letterSpacing:'0.04em', borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="check" size={10} /> Good</span><div style={{ fontSize:9, fontWeight:500, letterSpacing:0, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
-              </th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().warn, fontWeight:700, letterSpacing:'0.04em', borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="alert" size={10} /> More</span><div style={{ fontSize:9, fontWeight:500, letterSpacing:0, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
-              </th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().accentText, fontWeight:700, letterSpacing:'0.04em', borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="target" size={10} /> Focus</span><div style={{ fontSize:9, fontWeight:500, letterSpacing:0, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(activeWeek) : ''}</div>
-              </th>
-              <th style={{ padding:`6px ${SPACING.sm}px`, fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>Tasks</th>
-              <th style={{ padding:'6px 2px', borderBottom:`1px solid ${wT().border}` }}></th>
-            </tr>
-          </thead>
+          <KATableHeader T={wT()} dragCol
+            subGood={activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}
+            subMore={activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}
+            subFocus={activeWeek ? formatWeekLabel(activeWeek) : ''} />
           <tbody>
             {activeReports.map((r, idx) => (
               <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
