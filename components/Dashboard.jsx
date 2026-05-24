@@ -9,6 +9,7 @@ import { useLayerLabels } from '../lib/levelLabels'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
+import MemberSidebar from './okr/MemberSidebar'
 import WeeklyMTGPage from './WeeklyMTGPage'
 import MyOKRPageNew from './MyOKRPage'
 import BulkRegisterPage from './BulkRegisterPage'
@@ -1826,43 +1827,11 @@ export default function Dashboard({ user, onSignOut }) {
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
-        <div style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
-          <div style={{ fontSize: 10, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>メンバー</div>
-          {/* 部署フィルタ */}
-          <select value={okrDeptFilter ?? ''} onChange={e => setOkrDeptFilter(e.target.value ? Number(e.target.value) : null)}
-            style={{ width: '100%', marginBottom: 10, padding: '6px 8px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgCard, color: getT().text, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer' }}>
-            <option value="">全部署</option>
-            {(levels || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-          {(() => {
-            const memberLevelIds = (m) => Array.isArray(m.level_ids) ? m.level_ids.map(Number) : (m.level_id ? [Number(m.level_id)] : [])
-            const descendants = (rootId) => {
-              const set = new Set([Number(rootId)]); let added = true
-              while (added) { added = false; for (const l of (levels || [])) { if (l.parent_id != null && set.has(Number(l.parent_id)) && !set.has(Number(l.id))) { set.add(Number(l.id)); added = true } } }
-              return set
-            }
-            const fm = okrDeptFilter ? members.filter(m => { const s = descendants(okrDeptFilter); return memberLevelIds(m).some(id => s.has(id)) }) : members
-            if (fm.length === 0) return <div style={{ fontSize: 11, color: getT().textFaint, fontStyle: 'italic', padding: '8px' }}>該当メンバーなし</div>
-            return fm
-          })().map(m => {
-            const active = selectedOwner === m.name
-            const c = ['#5A8A7A','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
-            const color = c[Math.abs([...m.name].reduce((h, ch) => ch.charCodeAt(0) + ((h << 5) - h), 0)) % c.length]
-            return (
-              <div key={m.id} onClick={() => { setSelectedOwner(m.name); setShowSidebar(false) }}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 2, background: active ? T.navActiveBg : 'transparent', border: active ? `1px solid ${T.navActiveBorder}` : '1px solid transparent', transition: 'all 0.15s' }}>
-                {m.avatar_url ? (
-                  <img src={m.avatar_url} alt={m.name} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                ) : (
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}20`, border: `1.5px solid ${color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: active ? 700 : 500, color: active ? T.navActiveText : getT().text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
-                  {m.role && <div style={{ fontSize: 9, color: getT().textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.role}</div>}
-                </div>
-              </div>
-            )
-          })}
+        <div style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
+          <MemberSidebar T={getT()} members={members} levels={levels}
+            selectedName={selectedOwner}
+            onSelect={(n) => { setSelectedOwner(n); setShowSidebar(false) }}
+            deptFilter={okrDeptFilter} onDeptFilterChange={setOkrDeptFilter} />
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <OwnerOKRView
