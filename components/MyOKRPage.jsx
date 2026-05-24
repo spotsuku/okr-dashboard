@@ -1129,7 +1129,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                             <>
                               <div style={{ fontSize:TYPO.caption.fontSize, color:wT().textMuted, fontWeight:600, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> KA（{krKAs.length}件）</div>
                               <OkrCard T={wT()} padding="0" style={{ overflow:'hidden', marginBottom:SPACING.sm }}>
-                                <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
+                                <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
                                   <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
                                   <tbody>
                                     {krKAs.map(r => (
@@ -1166,7 +1166,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                   <div>
                     <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
                     <OkrCard T={wT()} padding="0" style={{ overflow:'hidden' }}>
-                      <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
+                      <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
                         <KATableHeader wT={wT} periodSub={formatWeekLabel(selectedWeek)} />
                         <tbody>
                           {unlinkedKAs.map(r => (
