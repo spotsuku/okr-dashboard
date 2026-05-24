@@ -542,12 +542,12 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
     <tr>
       {/* 担当 — 18×18 グラデアバター + 名前 */}
       <td style={{ ...cellS, width:52 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:2 }} title={ownerDraft||report.owner||''}>
+        <div style={{ position:'relative', width:20, height:20 }} title={ownerDraft||report.owner||''}>
           <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={20} wT={wT} />
           <select value={ownerDraft} onChange={e=>handleOwnerChange(e.target.value)}
             onFocus={()=>autoSave.setFocusedField('owner')} onBlur={()=>autoSave.setFocusedField(null)}
             aria-label="担当" title={ownerDraft||report.owner||'担当'}
-            style={{ width:14, background:'transparent', border:'none', color:wT().textMuted, fontSize:11.5, cursor:'pointer', fontFamily:'inherit', outline:'none', padding:0, flexShrink:0 }}>
+            style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, cursor:'pointer', border:'none', appearance:'none', WebkitAppearance:'none', padding:0, margin:0 }}>
             <option value="">--</option>
             {members?.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
