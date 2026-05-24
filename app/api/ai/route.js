@@ -1,5 +1,6 @@
 import { callClaude, AICallError } from '../../../lib/aiCall'
 import { createClient } from '@supabase/supabase-js'
+import { guardAi } from '../../../lib/apiGuard'
 
 function admin() {
   return createClient(
@@ -11,6 +12,10 @@ function admin() {
 
 export async function POST(request) {
   try {
+    // 認証必須 + レート制限 (無料公開でのコスト乱用防止)
+    const guard = await guardAi(request, { limit: 30, windowSec: 60 })
+    if (guard.error) return guard.error
+
     const { messages, context, owner } = await request.json()
 
     if (!messages || !Array.isArray(messages)) {
