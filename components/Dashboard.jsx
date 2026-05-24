@@ -28,6 +28,7 @@ import Icon, { DataIcon } from './Icon'
 import OnboardingTour from './OnboardingTour'
 import MyCOOOrb from './MyCOOOrb'
 import QuickTaskPalette from './QuickTaskPalette'
+import OrgTreeSidebar from './okr/OrgTreeSidebar'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -1414,37 +1415,12 @@ export default function Dashboard({ user, onSignOut }) {
     { key: 'annual', label: '通期' },
   ]
 
-  const roots = levels.filter(l => !l.parent_id)
-  const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
   const activeLevel = levels.find(l => Number(l.id) === Number(activeLevelId))
 
   const subtreeObjs = Object.values(nodeObjectives).flat()
   const allProgs = subtreeObjs.map(o => calcObjProgress(o.key_results))
   const globalAvg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : 0
   const globalR = getRating(globalAvg)
-
-  function LevelItem({ level, depth = 0 }) {
-    const active = activeLevelId === level.id
-    const children = getChildren(level.id)
-    const absD = getAbsoluteDepth(level.id, levels)
-    const col = getLayerColor(absD)
-    return (
-      <>
-        <div onClick={() => { setActiveLevelId(level.id); setShowSidebar(false) }} style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: `7px 10px 7px ${10 + depth * 14}px`,
-          borderRadius: 7, marginBottom: 2, cursor: 'pointer',
-          background: active ? `${col}18` : 'transparent',
-          border: active ? `1px solid ${col}35` : '1px solid transparent',
-          transition: 'all 0.15s',
-        }}>
-          <span style={{ display:'inline-flex' }}><DataIcon value={level.icon} size={17}/></span>
-          <span style={{ flex: 1, fontSize: 14, fontWeight: active ? 600 : 400, color: active ? '#e8eaf0' : T.textSub }}>{level.name}</span>
-        </div>
-        {children.map(c => <LevelItem key={c.id} level={c} depth={depth + 1} />)}
-      </>
-    )
-  }
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.accent, fontSize: 14 }}>
@@ -1459,7 +1435,7 @@ export default function Dashboard({ user, onSignOut }) {
           <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
           {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16, display: 'inline-flex' }}><Icon name="cross" size={16} /></button>}
         </div>
-        {roots.map(l => <LevelItem key={l.id} level={l} />)}
+        <OrgTreeSidebar T={getT()} levels={levels} activeLevelId={activeLevelId} onSelectLevel={setActiveLevelId} />
         <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
           <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
           {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
