@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { buildQuarterMap } from '../lib/objectiveMatching'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
@@ -113,11 +114,6 @@ function getAbsoluteDepth(levelId, levels) {
 
 // ─── Avatar helpers ─────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#E89B9B','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 function Avatar({ name, avatarUrl, size = 20 }) {
   if (avatarUrl) {
     return <img src={avatarUrl} alt={name} style={{ width:size, height:size, borderRadius:'50%', objectFit:'cover', flexShrink:0, border:`1.5px solid ${avatarColor(name)}60` }} />

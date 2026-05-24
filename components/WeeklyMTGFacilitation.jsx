@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
@@ -123,12 +124,6 @@ function resolveScopeLevelIds(wkly, levels) {
 
 // ─── アバター ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 function Avatar({ name, avatarUrl, size = 22 }) {
   if (!name) return null
   const color = avatarColor(name)

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, GLASS, BRAND_GRADIENT } from '../lib/themeTokens'
@@ -58,12 +59,6 @@ function relativeTime(ts) {
 
 // メンバー名から決定的に色を割り当て (アバター用)
 const AVATAR_HUES = ['#f59e0b', '#3b82f6', '#10b981', '#a855f7', '#ec4899', '#06b6d4', '#ef6b6b', '#84cc16', '#f97316', '#8b5cf6']
-function avatarColor(name) {
-  if (!name) return '#94a3b8'
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_HUES[Math.abs(h) % AVATAR_HUES.length]
-}
 
 // ─── テーマは lib/themeTokens.js で一元管理 ─────────────────────
 const THEMES = {
