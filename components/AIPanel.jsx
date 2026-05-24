@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { authedFetch } from '../lib/authedFetch'
 import { useCurrentOrg } from '../lib/orgContext'
 import Icon from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
@@ -52,7 +53,7 @@ export default function AIPanel({ onClose, okrContext, initialMessage }) {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/ai', {
+      const res = await authedFetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
