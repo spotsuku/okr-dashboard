@@ -19,6 +19,7 @@ import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okr
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
 import OkrCard from './okr/OkrCard'
+import OrgTreeSidebar from './okr/OrgTreeSidebar'
 import ProgressBar from './okr/ProgressBar'
 import { KRBlock, Avatar, OwnerBadge, formatWeekLabel, getPrevMondayStr, statusCfg, autoGrowTextarea, calcStars, KARow, TaskPopover, WeatherPicker } from './okr/KRBlock'
 
@@ -657,21 +658,6 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const doneObjs   = visibleObjs.filter(o => isObjDone(o))
   const [showDoneObjs, setShowDoneObjs] = useState(false)
 
-  const roots = levels.filter(l => !l.parent_id)
-  function renderSb(level, indent=0) {
-    const isActive = Number(activeLevelId)===Number(level.id)
-    return (
-      <div key={level.id}>
-        <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
-          style={{ display:'flex', alignItems:'center', gap:6, padding:`6px ${SPACING.sm}px`, paddingLeft:8+indent*14, borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?`${wT().accent}40`:'transparent'}`, background:isActive?wT().accentBg:'transparent' }}>
-          <span style={{ display:'inline-flex', color:isActive?wT().accentText:wT().textMuted }}><DataIcon value={level.icon} size={13}/></span>
-          <span style={{ ...TYPO.footnote, flex:1, fontWeight:isActive?700:500, color:isActive?wT().accentText:wT().textSub }}>{level.name}</span>
-        </div>
-        {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
-      </div>
-    )
-  }
-
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
   // ─── 会議選択画面（会議が未選択、または事業部選択待ち） ───────────
@@ -953,11 +939,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* 部署サイドバー (組織階層) — 幅 240px に統一 */}
         <div style={{ width: isMobile ? 0 : isTablet ? 120 : 240, flexShrink:0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, padding: isMobile ? 0 : `${SPACING.sm + 2}px ${SPACING.sm}px`, overflowY:'auto', background:wT().bgSidebar, display: isMobile ? 'none' : 'block' }}>
-          <div style={{ ...TYPO.caption, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', marginBottom:SPACING.sm, paddingLeft:SPACING.sm }}>部署</div>
-          <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:`6px ${SPACING.sm}px`, borderRadius:RADIUS.xs + 1, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?wT().accent:'transparent'}`, background:!activeLevelId?wT().accentBg:'transparent' }}>
-            <Icon name="building" size={13} style={{ color:!activeLevelId?wT().accent:wT().textSub }} /><span style={{ ...TYPO.footnote, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?wT().accent:wT().textSub }}>全部署</span>
-          </div>
-          {roots.map(r=>renderSb(r,0))}
+          <OrgTreeSidebar T={wT()} levels={levels} activeLevelId={activeLevelId} onSelectLevel={(id)=>{ setActiveLevelId(id); setActiveObjId(null) }} />
         </div>
 
         {/* Objective一覧 */}
