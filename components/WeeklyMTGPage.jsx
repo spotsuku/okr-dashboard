@@ -794,10 +794,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
             {kr.title}
           </span>
           <span style={{ ...TYPO.footnote, fontWeight:500, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
-          {kr.owner && <OwnerBadge name={kr.owner} members={members} size={18} T={wT()} />}
-          <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
-            <select value={kr.owner||''} onChange={e => onKROwnerChange(kr.id, e.target.value)}
-              style={{ background:wT().bgCard2, border:`1px solid ${wT().borderMid}`, borderRadius:RADIUS.xs - 1, padding:'3px 8px', color:kr.owner?avatarColor(kr.owner):wT().textMuted, ...TYPO.footnote, fontWeight:500, cursor:'pointer', fontFamily:'inherit', outline:'none', minWidth:80 }}>
+          {/* KR担当: アイコンのみ (クリックで変更)。名前の二重表示を避ける */}
+          <div onClick={e => e.stopPropagation()} style={{ position:'relative', width:22, height:22, flexShrink:0 }} title={kr.owner||'KR担当'}>
+            {kr.owner
+              ? <Avatar name={kr.owner} avatarUrl={members.find(m=>m.name===kr.owner)?.avatar_url} size={22} />
+              : <div style={{ width:22, height:22, borderRadius:'50%', border:`1.5px dashed ${wT().borderMid}`, color:wT().textFaint, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>+</div>}
+            <select value={kr.owner||''} onChange={e => onKROwnerChange(kr.id, e.target.value)} aria-label="KR担当"
+              style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, cursor:'pointer', border:'none', appearance:'none', WebkitAppearance:'none', padding:0, margin:0 }}>
               <option value="">KR担当</option>
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
