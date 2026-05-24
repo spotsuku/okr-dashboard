@@ -19,6 +19,7 @@ import KATableHeader from './okr/KATableHeader'
 import MemberSidebar from './okr/MemberSidebar'
 import OkrCard from './okr/OkrCard'
 import ProgressBar from './okr/ProgressBar'
+import { KRBlock } from './okr/KRBlock'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -107,8 +108,9 @@ function Avatar({ name, avatarUrl, size = 22, wT }) {
   )
 }
 
-// ─── KRカード ─────────────────────────────────────────────────────────────────
-function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
+// ─── KRカード (旧: MyOKRPage 専用)。週次×個人も共有 KRBlock に統一したため削除済み ───
+// （KR 描画は components/okr/KRBlock.jsx の KRBlock を使用）
+function _KRCard_REMOVED({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const [currentVal,  setCurrentVal]  = useState(String(kr.current ?? ''))
   const [editingVal,  setEditingVal]  = useState(false)
   const [krEditing,   setKrEditing]   = useState(false)
@@ -647,6 +649,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] } - kept for potential future use
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
+  // KRBlock の並び替え / KA 移動 後にデータを再取得するためのトリガ
+  const [reloadTick, setReloadTick] = useState(0)
+  const reload = useCallback(() => setReloadTick(t => t + 1), [])
   const [activeObjId,setActiveObjId]= useState(() => {
     if (typeof window === 'undefined') return null
     const saved = localStorage.getItem('myOKR_activeObjId')
@@ -681,6 +686,8 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   // 「今週」or「翌週」の選択（前週の金曜日に翌週の Good/More を書きたいケース対応）
   const [weekMode, setWeekMode] = useState('this') // 'this' | 'next'
   const selectedWeek = weekMode === 'next' ? nextWeek : currentWeek
+  // KRBlock に渡す週一覧 (今週 + 翌週)。WeeklyMTG の weeksList と同形 (YYYY-MM-DD ソート済み配列)
+  const weeksList = [...new Set([currentWeek, nextWeek])].filter(Boolean).sort()
 
   useEffect(() => {
     if (!viewName) return
@@ -792,7 +799,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       setLoading(false)
     }
     load()
-  }, [viewName, fiscalYear, currentWeek, selectedWeek])
+  }, [viewName, fiscalYear, currentWeek, selectedWeek, reloadTick])
 
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
@@ -804,34 +811,66 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
 
-  // KA を追加: 選択週 (今週 or 翌週) の weekly_reports に新規行を insert
-  //   owner は閲覧中メンバー (自分のマイOKR なら自分)
-  const handleKAAdd = async (kr) => {
-    if (!kr || !activeObjId) return
-    const obj = selectedObj
-    const levelId = obj?.level_id
-    const payload = {
-      week_start: selectedWeek,
-      level_id: levelId,
-      objective_id: activeObjId,
-      kr_id: kr.id,
-      kr_title: kr.title,
-      ka_title: '新しいKA',
-      owner: viewName || '',
-      status: 'normal',
+  // KRBlock の内部 addKA が insert 済みの行を渡してくる (週次MTG と同じ契約)。
+  //   KRBlock の insert は owner を付与しないため、マイOKR では owner=viewName を
+  //   補完してから state に反映する (owner スコープのデータ取得・重複排除・sibling
+  //   同期が owner を前提にしているため)。
+  const handleKAAdd = async (newRow) => {
+    if (!newRow || !newRow.id) { reload(); return }
+    let row = newRow
+    if (!row.owner && viewName) {
+      const { data, error } = await supabase.from('weekly_reports')
+        .update({ owner: viewName }).eq('id', row.id).select().single()
+      if (!error && data) row = data
+      else row = { ...row, owner: viewName }
     }
-    // sort_order 付きで試し、カラムが無ければフォールバック
-    const currentKAs = kaReports.filter(r => Number(r.kr_id) === Number(kr.id))
-    const maxOrder = currentKAs.reduce((m, r) => Math.max(m, r.sort_order || 0), 0)
-    let res = await supabase.from('weekly_reports')
-      .insert({ ...payload, sort_order: maxOrder + 1 }).select().single()
-    if (res.error) {
-      if (/sort_order/i.test(res.error.message || '')) {
-        res = await supabase.from('weekly_reports').insert(payload).select().single()
-      }
-      if (res.error) { alert('KA追加失敗: ' + res.error.message); return }
+    setKaReports(p => p.some(r => r.id === row.id) ? p : [...p, row])
+  }
+  // KR担当者の変更 (KRBlock の onKROwnerChange) — DB 更新 + ローカル state 反映
+  const handleKROwnerChange = async (krId, newOwner) => {
+    const { error } = await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
+    if (error) { console.error('KR owner update failed:', error); alert('KR担当者の保存に失敗しました。'); return }
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, owner: newOwner } : kr))
+  }
+  // KR の current/target/title/unit 等の更新 (KRBlock の onKRUpdate)。成否を返す。
+  const handleKRUpdate = async (krId, fields) => {
+    const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
+    if (error) { console.error('KR update failed:', error); return false }
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    return true
+  }
+  // 会議中の共同編集と同様、閲覧中が自分のときのみ編集可。
+  //   KRBlock は canEditKA(kaOwner, objOwner, krOwner) のシグネチャで呼ぶ。
+  const isViewingSelf = !showMemberPicker || !selectedMember || selectedMember === myName
+  const canEditKA = useCallback(() => isViewingSelf, [isViewingSelf])
+  // KRBlock の onMoveKA: 別KRへ KA を移動 (全週分まとめて) → 再取得
+  const handleMoveKA = async (reportId, targetKrId) => {
+    const { data: src } = await supabase.from('weekly_reports')
+      .select('id, kr_id, ka_title, owner, objective_id')
+      .eq('id', reportId).maybeSingle()
+    if (!src) { reload(); return }
+    if (Number(src.kr_id) === Number(targetKrId)) { reload(); return }
+    const oldKaKey = computeKAKey(src)
+    const newKaKey = computeKAKey({ ...src, kr_id: targetKrId })
+    const { data: targetKr } = await supabase.from('key_results')
+      .select('id, title').eq('id', targetKrId).maybeSingle()
+    const { data: siblings } = await supabase.from('weekly_reports')
+      .select('id, owner')
+      .eq('kr_id', src.kr_id)
+      .eq('ka_title', src.ka_title || '')
+      .eq('objective_id', src.objective_id)
+    const srcOwner = (src.owner || '').trim()
+    const ids = (siblings || [])
+      .filter(r => (r.owner || '').trim() === srcOwner)
+      .map(r => r.id)
+    const updateIds = ids.length > 0 ? ids : [reportId]
+    await supabase.from('weekly_reports')
+      .update({ kr_id: targetKrId, kr_title: targetKr?.title || '' })
+      .in('id', updateIds)
+    if (oldKaKey && newKaKey && oldKaKey !== newKaKey) {
+      await supabase.from('ka_tasks').update({ ka_key: newKaKey }).eq('ka_key', oldKaKey)
     }
-    if (res.data) setKaReports(p => [...p, res.data])
+    reload()
   }
   // KA 削除: 同じ ka_key を持つ他週の行もまとめて削除
   //   (マイOKR は重複排除で 1 KA = 1 行表示しているが、DB には複数週分あるので一括削除)
@@ -1048,47 +1087,32 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
               {objKRs.length > 0 && (
                 <div style={{ marginBottom:SPACING.lg }}>
                   <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> Key Results（{objKRs.length}件）</div>
-                  {objKRs.map(kr => {
-                    const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
-                    return (
-                      <div key={kr.id} style={{ marginBottom:SPACING.lg }}>
-                        <KRCard kr={kr} myName={myName} members={members} wT={wT} currentWeek={selectedWeek} onKRUpdated={() => {
-                          // KR更新後にデータをリロード
-                          supabase.from('key_results').select('*').eq('objective_id', activeObjId).then(({ data }) => {
-                            if (data) setKeyResults(prev => {
-                              const otherKRs = prev.filter(k => Number(k.objective_id) !== Number(activeObjId))
-                              return [...otherKRs, ...data]
-                            })
-                          })
-                        }} />
-                        <div style={{ marginLeft:SPACING.md, paddingLeft:SPACING.sm+2, marginTop:SPACING.xs }}>
-                          {krKAs.length > 0 && (
-                            <>
-                              <div style={{ fontSize:TYPO.caption.fontSize, color:wT().textMuted, fontWeight:600, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> KA（{krKAs.length}件）</div>
-                              <OkrCard T={wT()} padding="0" style={{ overflow:'hidden', marginBottom:SPACING.sm }}>
-                                <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
-                                  <KATableHeader T={wT()} subGood={formatWeekLabel(selectedWeek)} subMore={formatWeekLabel(selectedWeek)} subFocus={formatWeekLabel(selectedWeek)} />
-                                  <tbody>
-                                    {krKAs.map(r => (
-                                      <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </OkrCard>
-                            </>
-                          )}
-                          <div onClick={() => handleKAAdd(kr)} style={{
-                            display:'inline-flex', alignItems:'center', gap:SPACING.xs, padding:'4px 8px', cursor:'pointer',
-                            color:wT().accentText, fontSize:TYPO.footnote.fontSize, fontWeight:600,
-                            border:`1px dashed ${wT().borderMid}`, borderRadius:RADIUS.xs,
-                            marginTop: krKAs.length > 0 ? SPACING.sm : SPACING.xs,
-                          }}>
-                            <Icon name="plus" size={13} /> このKRにKAを追加
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {objKRs.map(kr => (
+                    <KRBlock
+                      key={kr.id}
+                      kr={kr}
+                      reports={objKAs}
+                      onAddKA={handleKAAdd}
+                      onSaveKA={handleKASave}
+                      onDeleteKA={handleKADelete}
+                      members={members}
+                      wT={wT}
+                      levelId={selectedObj?.level_id}
+                      objId={selectedObj?.id}
+                      objOwner={selectedObj?.owner}
+                      canEditKA={canEditKA}
+                      onKROwnerChange={handleKROwnerChange}
+                      onKRUpdate={handleKRUpdate}
+                      activeWeek={selectedWeek}
+                      reviewVersion={selectedWeek}
+                      onReorder={reload}
+                      objectiveTitle={selectedObj?.title}
+                      completedBy={myName}
+                      weeksList={weeksList}
+                      onMoveKA={handleMoveKA}
+                      viewMode="both"
+                    />
+                  ))}
                 </div>
               )}
               {objKRs.length === 0 && (
