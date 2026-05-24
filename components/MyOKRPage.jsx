@@ -540,12 +540,13 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
   return (
     <tr>
       {/* 担当 — 18×18 グラデアバター + 名前 */}
-      <td style={{ ...cellS, width:140 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={18} wT={wT} />
+      <td style={{ ...cellS, width:52 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:2 }} title={ownerDraft||report.owner||''}>
+          <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={20} wT={wT} />
           <select value={ownerDraft} onChange={e=>handleOwnerChange(e.target.value)}
             onFocus={()=>autoSave.setFocusedField('owner')} onBlur={()=>autoSave.setFocusedField(null)}
-            style={{ flex:1, background:'transparent', border:'none', color:ownerDraft?avatarColor(ownerDraft):wT().textMuted, fontSize:11.5, cursor:'pointer', fontFamily:'inherit', outline:'none', fontWeight:600, minWidth:0 }}>
+            aria-label="担当" title={ownerDraft||report.owner||'担当'}
+            style={{ width:14, background:'transparent', border:'none', color:wT().textMuted, fontSize:11.5, cursor:'pointer', fontFamily:'inherit', outline:'none', padding:0, flexShrink:0 }}>
             <option value="">--</option>
             {members?.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
@@ -626,13 +627,13 @@ function KATableHeader({ wT, periodSub }) {
   return (
     <thead>
       <tr>
-        <th style={{ ...thS, width:140 }}>担当</th>
+        <th style={{ ...thS, width:52 }}>担当</th>
         <th style={{ ...thS, minWidth:120 }}>KA タイトル</th>
-        <th style={{ ...thS, width:90, textAlign:'center' }}>状態</th>
+        <th style={{ ...thS, width:64, textAlign:'center' }}>状態</th>
         <th style={thS}><span style={{ color:wT().success }}>Good</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
         <th style={thS}><span style={{ color:wT().warn }}>More</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
         <th style={thS}><span style={{ color:wT().accentText }}>Focus</span>{periodSub && <span style={subS}>{periodSub}</span>}</th>
-        <th style={{ ...thS, width:70, textAlign:'center', borderRight:'none' }}>タスク</th>
+        <th style={{ ...thS, width:56, textAlign:'center', borderRight:'none' }}>タスク</th>
         <th style={{ ...thS, width:20, borderRight:'none' }}></th>
       </tr>
     </thead>

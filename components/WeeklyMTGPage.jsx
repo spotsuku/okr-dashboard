@@ -525,20 +525,21 @@ function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps
       <td style={{ ...cellS, width:28, textAlign:'center', cursor:'grab' }}>
         <span {...(dragHandleProps||{})} style={{ color:wT().textFaint, fontSize:13, userSelect:'none' }} title="ドラッグで並べ替え"><Icon name="more" size={14} /></span>
       </td>
-      {/* 担当 */}
-      <td style={{ ...cellS, width:90 }}>
+      {/* 担当 (アイコンのみ・選択は小キャレット) */}
+      <td style={{ ...cellS, width:52 }}>
         {canEdit ? (
-          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-            <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={20} />
+          <div style={{ display:'flex', alignItems:'center', gap:2 }} title={ownerDraft||report.owner||''}>
+            <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={22} />
             <select value={ownerDraft} onChange={e=>handleOwnerChange(e.target.value)}
               onFocus={()=>autoSave.setFocusedField('owner')} onBlur={()=>autoSave.setFocusedField(null)}
-              style={{ flex:1, background:'transparent', border:'none', color:ownerDraft?avatarColor(ownerDraft):wT().textMuted, ...TYPO.footnote, cursor:'pointer', fontFamily:'inherit', outline:'none', fontWeight:600, minWidth:0, maxWidth:60 }}>
+              aria-label="担当" title={ownerDraft||report.owner||'担当'}
+              style={{ width:14, background:'transparent', border:'none', color:wT().textMuted, ...TYPO.footnote, cursor:'pointer', fontFamily:'inherit', outline:'none', padding:0, flexShrink:0 }}>
               <option value="">--</option>
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
           </div>
         ) : (
-          <OwnerBadge name={ownerDraft||report.owner} members={members} size={18} T={wT()} />
+          <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={22} title={ownerDraft||report.owner||''} />
         )}
       </td>
       {/* KAタイトル */}
@@ -932,13 +933,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
         <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
           <colgroup>
             <col style={{ width:28 }} />
-            <col style={{ width:90 }} />
+            <col style={{ width:52 }} />
             <col style={{ width:'18%' }} />
-            <col style={{ width:70 }} />
+            <col style={{ width:64 }} />
             <col />
             <col />
             <col />
-            <col style={{ width:70 }} />
+            <col style={{ width:56 }} />
             <col style={{ width:20 }} />
           </colgroup>
           <thead>
@@ -986,13 +987,13 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
             <colgroup>
               <col style={{ width:28 }} />
-              <col style={{ width:90 }} />
+              <col style={{ width:52 }} />
               <col style={{ width:'18%' }} />
-              <col style={{ width:70 }} />
+              <col style={{ width:64 }} />
               <col />
               <col />
               <col />
-              <col style={{ width:70 }} />
+              <col style={{ width:56 }} />
               <col style={{ width:20 }} />
             </colgroup>
             <tbody>
