@@ -694,18 +694,15 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       //   絞って取得し、過去週の取り残しは表示しない
       const weeksToLoad = Array.from(new Set([currentWeek, nextWeek])).filter(Boolean)
 
-      // ① 自分がOwner/KR担当/KA担当のデータを並行取得
-      const [{ data: myObjs }, { data: myKRs }, { data: myKAs }, { data: myAssignedTasks }] = await Promise.all([
-        supabase.from('objectives').select('id,title,level_id,period,owner,archived_at').eq('owner', viewName).order('period').range(0, 49999).then(r => ({ ...r, data: (r.data || []).filter(o => !o.archived_at) })),
-        supabase.from('key_results').select('*').eq('owner', viewName).range(0, 49999),
-        supabase.from('weekly_reports').select('*').eq('owner', viewName).neq('status', 'done').in('week_start', weeksToLoad).range(0, 49999),
-        supabase.from('ka_tasks').select('*').eq('assignee', viewName).eq('done', false).range(0, 49999),
+      // ① 自分がOwner/KR担当/KA担当のデータを並行取得 (共有データ層 lib/okrData)
+      const [myObjs, myKRs, myKAs, myAssignedTasks] = await Promise.all([
+        fetchObjectivesByOwner(viewName),
+        fetchKeyResultsByOwner(viewName),
+        fetchWeeklyReportsByOwner(viewName, { weeks: weeksToLoad }),
+        fetchKaTasksByAssignee(viewName),
       ])
       // ★ 年度フィルタを適用
-      const filterByFY = (objs) => (objs || []).filter(o => {
-        if (fiscalYear === '2026') return !o.period.includes('_')
-        return o.period.startsWith(`${fiscalYear}_`)
-      })
+      const filterByFY = (objs) => filterObjectivesByFY(objs, fiscalYear)
       const ownedObjs = filterByFY(myObjs)
 
       // ①-b 他人のKAで自分がタスク担当のものも取得 (今週と翌週のみ)
