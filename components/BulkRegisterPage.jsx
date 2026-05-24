@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, TRANSITION } from '../lib/themeTokens'
@@ -59,11 +60,6 @@ const STATUS_OPTIONS = [
 ]
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 
 // ─── 共通UI ───────────────────────────────────────────────────────────────────
 function DeptSelect({ value, onChange, levels, wT }) {

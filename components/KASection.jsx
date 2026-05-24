@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
 import { useAutoSave } from '../lib/useAutoSave'
@@ -31,11 +32,6 @@ const statusCfg = (T) => ({
 const STATUS_ORDER = ['normal','focus','good','more','done']
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 function Avatar({ name, avatarUrl, size = 20 }) {
   if (!name) return <div style={{ width:size, height:size, borderRadius:'50%', background:'transparent', flexShrink:0 }} />
   const c = avatarColor(name)

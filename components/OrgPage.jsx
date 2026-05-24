@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { COMMON_TOKENS, GLASS, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
@@ -179,11 +180,6 @@ function getStatusBadge(status) {
 function getEmpBadge(emp) {
   const key = Object.keys(EMP_BADGE).find(k => emp && emp.includes(k)) || '業務委託'
   return EMP_BADGE[key]
-}
-function avatarColor(name) {
-  if (!name) return T().textMuted
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
 const ROLES = ['管理者', 'ディレクター', 'マネージャー', 'メンバー', 'その他']
