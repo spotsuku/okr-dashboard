@@ -77,6 +77,7 @@ const STATUS_CFG = {
   good:   { label:'Good', color:'#34C759', bg:'rgba(52,199,89,0.10)', border:'rgba(52,199,89,0.30)' },
   more:   { label:'More', color:'#FF3B30', bg:'rgba(255,59,48,0.10)', border:'rgba(255,59,48,0.30)' },
   normal: { label:'未分類',  color:'#8E8E93', bg:'rgba(142,142,147,0.10)', border:'rgba(142,142,147,0.20)' },
+  done:   { label:'完了', color:'#34C759', bg:'rgba(52,199,89,0.12)', border:'rgba(52,199,89,0.35)' },
 }
 
 // ─── Avatar（画像 or イニシャル） ─────────────────────────────────────────────
@@ -433,7 +434,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
   const autoSave = useAutoSave('weekly_reports', report.id, { enabled: true })
   const cfg = STATUS_CFG[status] || STATUS_CFG.normal
   const ownerMember = members?.find(m => m.name === (ownerDraft||report.owner))
-  const STATUS_ORDER = ['normal','focus','good','more']
+  const STATUS_ORDER = ['normal','focus','good','more','done']
 
   const myKAKey = computeKAKey(report)
   useEffect(() => {
