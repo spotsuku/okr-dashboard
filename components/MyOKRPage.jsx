@@ -14,7 +14,6 @@ import { fetchObjectivesByOwner, fetchKeyResultsByOwner, fetchWeeklyReportsByOwn
 import ObjectiveHeader from './okr/ObjectiveHeader'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
-import AICoachCard from './okr/AICoachCard'
 import KATableHeader from './okr/KATableHeader'
 import MemberSidebar from './okr/MemberSidebar'
 import OkrCard from './okr/OkrCard'
@@ -624,7 +623,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
 
 // KAテーブルヘッダー (.kt 相当) — Good/More/Focus を色分け + 期間サブ表記 [§5]
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback, showMemberPicker = false }) {
+export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', showMemberPicker = false }) {
   const { isMobile, isTablet } = useResponsive()
   // テーマは lib/themeTokens.js で一元管理
   const W_THEMES = {
@@ -1062,28 +1061,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                   />
                 )
               })()}
-
-              {onAIFeedback && (
-                <div style={{ marginBottom:14 }}>
-                  <AICoachCard T={wT()} onClick={() => {
-                    const krSummary = objKRs.map(kr => {
-                      const rev = reviews[kr.id]
-                      const pct = calcPct(kr.current, kr.target, kr.lower_is_better)
-                      return `KR「${kr.title}」: 達成率${pct}% (${kr.current}${kr.unit}/${kr.target}${kr.unit})` +
-                        (rev?.good  ? `\n  Good: ${rev.good}`  : '') +
-                        (rev?.more  ? `\n  More: ${rev.more}`  : '') +
-                        (rev?.focus ? `\n  注力: ${rev.focus}` : '')
-                    }).join('\n')
-                    const kaSummary = objKAs.map(r =>
-                      `KA「${r.ka_title}」[${r.status}]` +
-                      (r.good ? ` Good:${r.good}` : '') +
-                      (r.more ? ` More:${r.more}` : '')
-                    ).join('\n')
-                    const msg = `${viewName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
-                    onAIFeedback(msg)
-                  }} />
-                </div>
-              )}
 
               {objKRs.length > 0 && (
                 <div style={{ marginBottom:SPACING.lg }}>

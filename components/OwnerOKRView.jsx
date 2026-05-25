@@ -9,7 +9,6 @@ import { pctColor as okrPctColor } from '../lib/okrColors'
 import ObjectiveHeader from './okr/ObjectiveHeader'
 import AssigneeChip from './okr/AssigneeChip'
 import QTabs from './okr/QTabs'
-import AICoachCard from './okr/AICoachCard'
 import OkrCard from './okr/OkrCard'
 import ProgressBar from './okr/ProgressBar'
 
@@ -373,9 +372,6 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
                 </OkrCard>
               )
             })()}
-
-            {/* AI コーチカード (共有部品 AICoachCard) — KR カード列の末尾 */}
-            <AICoachCard T={t} />
           </div>
         )
       })}
