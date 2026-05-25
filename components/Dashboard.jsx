@@ -1,13 +1,15 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS, SPACING, RADIUS, TYPO } from '../lib/themeTokens'
+import { COMMON_TOKENS, SPACING, RADIUS, TYPO, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary } from '../lib/iosStyles'
 import { useCurrentOrg } from '../lib/orgContext'
 import { useFeatureFlag, MODULE_KEYS } from '../lib/featureFlags'
 import { useLayerLabels } from '../lib/levelLabels'
 import AIPanel from './AIPanel'
 import CsvPage from './CsvPage'
 import AnnualView from './AnnualView'
+import MemberSidebar from './okr/MemberSidebar'
 import WeeklyMTGPage from './WeeklyMTGPage'
 import MyOKRPageNew from './MyOKRPage'
 import BulkRegisterPage from './BulkRegisterPage'
@@ -22,10 +24,11 @@ import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
 import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
 import OnboardingTour from './OnboardingTour'
 import MyCOOOrb from './MyCOOOrb'
 import QuickTaskPalette from './QuickTaskPalette'
+import OrgTreeSidebar from './okr/OrgTreeSidebar'
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 // テーマは lib/themeTokens.js で一元管理。固有フィールドだけここで上書き
@@ -141,7 +144,7 @@ function Avatar({ name, color, size = 28 }) {
 function Stars({ score, size = 13 }) {
   return (
     <div style={{ display: 'flex', gap: 1 }}>
-      {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: size, opacity: i <= score ? 1 : 0.18 }}>★</span>)}
+      {[1,2,3,4,5].map(i => <span key={i} style={{ display: 'inline-flex', opacity: i <= score ? 1 : 0.18 }}><Icon name="star" size={size} /></span>)}
     </div>
   )
 }
@@ -192,7 +195,7 @@ function Modal({ title, onClose, children }) {
             background: getT().border, border: 'none', color: getT().textSub,
             width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>✕</button>
+          }}><Icon name="cross" size={14} /></button>
         </div>
         {children}
       </div>
@@ -363,13 +366,13 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           color: '#fff',
           fontSize: 13, fontWeight: 700,
         }}>
-          📅 {fiscalYear}年度
+          <Icon name="calendar" size={14} /> {fiscalYear}年度
         </div>
       </div>
       <FSelect label="所属組織" value={levelId} onChange={setLevelId}
         options={levels.map(l => {
           const depth = (() => { let d=0,cur=l; while(cur&&cur.parent_id){d++;cur=levels.find(x=>x.id===cur.parent_id)} return d })()
-          return { value: String(l.id), label: `${'　'.repeat(depth)}${l.icon} ${l.name}` }
+          return { value: String(l.id), label: `${'　'.repeat(depth)}${l.name}` }
         })} />
       <FSelect label="期間" value={period} onChange={v => { setPeriod(v); if (v === 'annual') setParentId(null) }} options={periodOpts} />
       {['q1','q2','q3','q4'].includes(period) && (
@@ -402,17 +405,17 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       </div>
       {/* プログラムタグ: マスタ (program_definitions) から選択。新規追加は組織ページで管理。 */}
       <div style={{ marginBottom: 13 }}>
-        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>
-          🏷 プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
+        <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5, display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <Icon name="flag" size={12} /> プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
           {programTags.map(t => {
             const isOrphan = !allTags.includes(t)
             return (
               <span key={t} title={isOrphan ? 'マスタから削除されたタグです。組織ページで再定義してください。' : ''}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isOrphan ? 'rgba(232,155,155,0.15)' : 'rgba(107,150,199,0.15)', color: isOrphan ? '#E89B9B' : '#6B96C7', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
-                {isOrphan ? '⚠ ' : ''}{t}
-                <button type="button" onClick={() => removeTag(t)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isOrphan ? `${getT().danger}26` : `${getT().accent}26`, color: isOrphan ? getT().danger : getT().accent, borderRadius: RADIUS.pill, fontSize: 11, fontWeight: 700 }}>
+                {isOrphan ? <Icon name="alert" size={11} /> : null}{t}
+                <button type="button" onClick={() => removeTag(t)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, display: 'inline-flex' }}><Icon name="cross" size={10} /></button>
               </span>
             )
           })}
@@ -434,7 +437,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       {parentObj && (
         <div style={{ marginBottom: 16, padding: '14px 16px', background: getT().navActiveBg, border: `1px solid ${getT().navActiveBorder}40`, borderRadius: 10 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            📌 通期OKR（参照）
+            <Icon name="pin" size={12} /> 通期OKR（参照）
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: getT().text, marginBottom: 10, lineHeight: 1.4 }}>{parentObj.title}</div>
           {parentObj.key_results.map((kr, i) => {
@@ -487,7 +490,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
             {/* Q期 KR: 親 (通期) KR を選択。マトリクス表示で同じ行に並ぶ。 */}
             {isQuarterly && parentObj?.key_results?.length > 0 && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>↗ 紐付け先 通期KR</span>
+                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="arrowRight" size={11} /> 紐付け先 通期KR</span>
                 <select value={kr.parent_kr_id || ''} onChange={e => updateKR(key, 'parent_kr_id', e.target.value ? Number(e.target.value) : null)}
                   style={{ flex: 1, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8, padding: '5px 8px', color: kr.parent_kr_id ? getT().text : getT().textFaint, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                   <option value="">(未紐付け)</option>
@@ -500,7 +503,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
             {/* 通期 KR: 集計方法を選択 (Q期 KR の current から自動算出) */}
             {isAnnualPeriod && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0 }}>📊 集計方法</span>
+                <span style={{ fontSize: 11, color: getT().textMuted, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chart" size={11} /> 集計方法</span>
                 <select value={kr.aggregation_type || 'manual'} onChange={e => updateKR(key, 'aggregation_type', e.target.value)}
                   style={{ flex: 1, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8, padding: '5px 8px', color: getT().text, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                   <option value="manual">手動 (子から集計しない)</option>
@@ -557,15 +560,15 @@ function ObjCard({ obj, levelColor, onEdit, onDelete }) {
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: getT().textMuted,
               width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 11,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>✎</button>
+            }}><Icon name="pencil" size={12} /></button>
             <button onClick={e => { e.stopPropagation(); onDelete(obj.id) }}
               title="アーカイブ (アーカイブ画面から復元・完全削除可能)"
               style={{
                 background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: getT().textMuted,
                 width: 24, height: 24, borderRadius: 5, cursor: 'pointer', fontSize: 12,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>📦</button>
-            <span style={{ color: getT().textFaint, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+              }}><Icon name="inbox" size={13} /></button>
+            <span style={{ color: getT().textFaint, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-flex' }}><Icon name="chevronD" size={13} /></span>
           </div>
         </div>
 
@@ -645,7 +648,7 @@ function LevelColumn({ levelId, levels, nodeObjectives, onEdit, onDelete, isLast
           borderRadius: 8, background: `${layerColor}12`, border: `1px solid ${layerColor}30`,
           borderLeft: `3px solid ${layerColor}`, marginBottom: 10,
         }}>
-          <span style={{ fontSize: 17 }}>{level.icon}</span>
+          <span style={{ display:'inline-flex' }}><DataIcon value={level.icon} size={17}/></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: getT().text }}>{level.name}</div>
             <div style={{ fontSize: 10, color: layerColor, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>{layerLabel}</div>
@@ -801,72 +804,58 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, 
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0, letterSpacing: '-0.01em' }}>📦 アーカイブ</h1>
-        <span style={{ fontSize: 12, color: T.textMuted }}>{loading ? '読み込み中…' : `OKR ${items.length} 件 / KR ${krItems.length} 件`}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.lg }}>
+        <h1 style={{ ...TYPO.title2, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <Icon name="inbox" size={20} />アーカイブ
+        </h1>
+        <span style={{ ...TYPO.subhead, color: T.textMuted }}>{loading ? '読み込み中…' : `OKR ${items.length} 件 / KR ${krItems.length} 件`}</span>
         <span style={{ flex: 1 }} />
         <button onClick={load} title="再読み込み"
-          style={{ background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          ⟳ 更新
+          style={{ ...btnSecondary({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="refresh" size={13} />更新
         </button>
       </div>
       {!loading && items.length === 0 && krItems.length === 0 && (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: T.textFaint, border: `1px dashed ${T.border}`, borderRadius: 12, background: T.bgCard }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
-          <div style={{ fontSize: 13, color: T.textSub }}>アーカイブされた OKR / KR はありません</div>
+        <div style={{ padding: `${SPACING['2xl'] + SPACING.lg}px ${SPACING.xl}px`, textAlign: 'center', color: T.textFaint, border: `1px dashed ${T.border}`, borderRadius: RADIUS.lg, background: T.bgCard }}>
+          <div style={{ color: T.textFaint, marginBottom: SPACING.sm, display: 'flex', justifyContent: 'center' }}><Icon name="inbox" size={28} /></div>
+          <div style={{ ...TYPO.body, color: T.textSub }}>アーカイブされた OKR / KR はありません</div>
         </div>
       )}
       {items.length > 0 && (
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, margin: '4px 0 8px', letterSpacing: '0.04em' }}>OKR</div>
+        <div style={{ ...TYPO.footnote, color: T.textSub, margin: `${SPACING.xs}px 0 ${SPACING.sm}px`, letterSpacing: '0.04em' }}>OKR</div>
       )}
       {items.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
           {items.map(o => {
             const m = memberOf(o.owner)
+            const busy = busyId === o.id || purgingId === o.id
             return (
-              <div key={o.id} style={{
-                background: T.bgCard,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: '12px 16px',
-                display: 'flex', alignItems: 'center', gap: 12,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-              }}>
+              <div key={o.id} style={{ ...cardStyle({ T, padding: '12px 16px' }), display: 'flex', alignItems: 'center', gap: SPACING.md }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub }}>{levelOf(o.level_id)}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: T.textSub }}>{periodLabel(o.period)}</span>
-                    <span style={{ fontSize: 10, color: T.textMuted }}>アーカイブ日時: {fmtDate(o.archived_at)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, flexWrap: 'wrap', marginBottom: SPACING.xs }}>
+                    <span style={pillStyle({ color: T.textMuted, size: 'sm' })}>{levelOf(o.level_id)}</span>
+                    <span style={pillStyle({ color: T.textMuted, size: 'sm' })}>{periodLabel(o.period)}</span>
+                    <span style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, letterSpacing: 0 }}>アーカイブ日時: {fmtDate(o.archived_at)}</span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={o.title}>{o.title}</div>
+                  <div style={{ ...TYPO.headline, color: T.text, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={o.title}>{o.title}</div>
                   {o.owner && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, fontSize: 11, color: T.textMuted }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: SPACING.xs, ...TYPO.footnote, color: T.textMuted }}>
                       {m?.avatar_url
                         ? <img src={m.avatar_url} alt={o.owner} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
-                        : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)' }} />}
+                        : <div style={{ width: 16, height: 16, borderRadius: '50%', background: T.border }} />}
                       <span>{o.owner}</span>
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button onClick={() => handleRestore(o.id)} disabled={busyId === o.id || purgingId === o.id}
-                    style={{
-                      background: T.accentSolid, border: 'none', color: '#fff',
-                      borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                      cursor: busyId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {busyId === o.id ? '復元中…' : '↩ 復元'}
+                <div style={{ display: 'flex', gap: SPACING.xs + 2, flexShrink: 0 }}>
+                  <button onClick={() => handleRestore(o.id)} disabled={busy}
+                    style={{ ...btnPrimary({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: busyId === o.id ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="refresh" size={12} />{busyId === o.id ? '復元中…' : '復元'}
                   </button>
-                  <button onClick={() => handlePurge(o)} disabled={busyId === o.id || purgingId === o.id}
+                  <button onClick={() => handlePurge(o)} disabled={busy}
                     title="完全削除 (DB から物理削除・復元不可)"
-                    style={{
-                      background: 'transparent', border: `1px solid ${T.danger}`, color: T.danger,
-                      borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
-                      cursor: purgingId === o.id ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {purgingId === o.id ? '削除中…' : '🗑 完全削除'}
+                    style={{ ...btnSecondary({ T, size: 'sm' }), border: `1px solid ${T.danger}`, color: T.danger, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: purgingId === o.id ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="trash" size={12} />{purgingId === o.id ? '削除中…' : '完全削除'}
                   </button>
                 </div>
               </div>
@@ -875,60 +864,44 @@ function ArchivedOKRPanel({ T, levels, members, fiscalYear, onRestore, onPurge, 
         </div>
       )}
       {krItems.length > 0 && (
-        <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, margin: '20px 0 8px', letterSpacing: '0.04em' }}>KR</div>
+        <div style={{ ...TYPO.footnote, color: T.textSub, margin: `${SPACING.xl}px 0 ${SPACING.sm}px`, letterSpacing: '0.04em' }}>KR</div>
       )}
       {krItems.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
           {krItems.map(kr => {
             const m = memberOf(kr.owner)
             const busyKey = `kr-${kr.id}`
+            const busy = busyId === busyKey || purgingId === busyKey
             return (
-              <div key={kr.id} style={{
-                background: T.bgCard,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: '12px 16px',
-                display: 'flex', alignItems: 'center', gap: 12,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-              }}>
+              <div key={kr.id} style={{ ...cardStyle({ T, padding: '12px 16px' }), display: 'flex', alignItems: 'center', gap: SPACING.md }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${T.accent}15`, color: T.accent }}>KR</span>
-                    {kr.objectiveTitle && <span style={{ fontSize: 10, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }} title={kr.objectiveTitle}>{kr.objectiveTitle}</span>}
-                    <span style={{ fontSize: 10, color: T.textMuted }}>アーカイブ日時: {fmtDate(kr.archived_at)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, flexWrap: 'wrap', marginBottom: SPACING.xs }}>
+                    <span style={pillStyle({ color: T.accent, size: 'sm' })}>KR</span>
+                    {kr.objectiveTitle && <span style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, letterSpacing: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }} title={kr.objectiveTitle}>{kr.objectiveTitle}</span>}
+                    <span style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, letterSpacing: 0 }}>アーカイブ日時: {fmtDate(kr.archived_at)}</span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={kr.title}>{kr.title}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, fontSize: 11, color: T.textMuted }}>
+                  <div style={{ ...TYPO.headline, color: T.text, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={kr.title}>{kr.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginTop: SPACING.xs, ...TYPO.footnote, color: T.textMuted }}>
                     <span>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
                     {kr.owner && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         {m?.avatar_url
                           ? <img src={m.avatar_url} alt={kr.owner} style={{ width: 16, height: 16, borderRadius: '50%', objectFit: 'cover' }} />
-                          : <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.06)' }} />}
+                          : <div style={{ width: 16, height: 16, borderRadius: '50%', background: T.border }} />}
                         <span>{kr.owner}</span>
                       </span>
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button onClick={() => handleRestoreKR(kr.id)} disabled={busyId === busyKey || purgingId === busyKey}
-                    style={{
-                      background: T.accentSolid, border: 'none', color: '#fff',
-                      borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                      cursor: busyId === busyKey ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {busyId === busyKey ? '復元中…' : '↩ 復元'}
+                <div style={{ display: 'flex', gap: SPACING.xs + 2, flexShrink: 0 }}>
+                  <button onClick={() => handleRestoreKR(kr.id)} disabled={busy}
+                    style={{ ...btnPrimary({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: busyId === busyKey ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="refresh" size={12} />{busyId === busyKey ? '復元中…' : '復元'}
                   </button>
-                  <button onClick={() => handlePurgeKR(kr)} disabled={busyId === busyKey || purgingId === busyKey}
+                  <button onClick={() => handlePurgeKR(kr)} disabled={busy}
                     title="完全削除 (DB から物理削除・復元不可)"
-                    style={{
-                      background: 'transparent', border: `1px solid ${T.danger}`, color: T.danger,
-                      borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700,
-                      cursor: purgingId === busyKey ? 'wait' : 'pointer', fontFamily: 'inherit',
-                      whiteSpace: 'nowrap',
-                    }}>
-                    {purgingId === busyKey ? '削除中…' : '🗑 完全削除'}
+                    style={{ ...btnSecondary({ T, size: 'sm' }), border: `1px solid ${T.danger}`, color: T.danger, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: purgingId === busyKey ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                    <Icon name="trash" size={12} />{purgingId === busyKey ? '削除中…' : '完全削除'}
                   </button>
                 </div>
               </div>
@@ -1012,6 +985,7 @@ export default function Dashboard({ user, onSignOut }) {
   const themeKey = 'light' // ダークモードは廃止 (light 固定)
   const [syncStatus, setSyncStatus]             = useState('connecting')
   const [selectedOwner, setSelectedOwner]       = useState(null)
+  const [okrDeptFilter, setOkrDeptFilter]       = useState(null) // OKR個人ビューのメンバー部署フィルタ (null=全部署)
   const [taskViewMode, setTaskViewMode]         = useState('my') // 'my' | 'all'
   const T = THEMES[themeKey]
   _T = T
@@ -1441,37 +1415,12 @@ export default function Dashboard({ user, onSignOut }) {
     { key: 'annual', label: '通期' },
   ]
 
-  const roots = levels.filter(l => !l.parent_id)
-  const getChildren = id => levels.filter(l => Number(l.parent_id) === Number(id))
   const activeLevel = levels.find(l => Number(l.id) === Number(activeLevelId))
 
   const subtreeObjs = Object.values(nodeObjectives).flat()
   const allProgs = subtreeObjs.map(o => calcObjProgress(o.key_results))
   const globalAvg = allProgs.length ? Math.round(allProgs.reduce((s, p) => s + p, 0) / allProgs.length) : 0
   const globalR = getRating(globalAvg)
-
-  function LevelItem({ level, depth = 0 }) {
-    const active = activeLevelId === level.id
-    const children = getChildren(level.id)
-    const absD = getAbsoluteDepth(level.id, levels)
-    const col = getLayerColor(absD)
-    return (
-      <>
-        <div onClick={() => { setActiveLevelId(level.id); setShowSidebar(false) }} style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: `7px 10px 7px ${10 + depth * 14}px`,
-          borderRadius: 7, marginBottom: 2, cursor: 'pointer',
-          background: active ? `${col}18` : 'transparent',
-          border: active ? `1px solid ${col}35` : '1px solid transparent',
-          transition: 'all 0.15s',
-        }}>
-          <span style={{ fontSize: 17 }}>{level.icon}</span>
-          <span style={{ flex: 1, fontSize: 14, fontWeight: active ? 600 : 400, color: active ? '#e8eaf0' : T.textSub }}>{level.name}</span>
-        </div>
-        {children.map(c => <LevelItem key={c.id} level={c} depth={depth + 1} />)}
-      </>
-    )
-  }
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.accent, fontSize: 14 }}>
@@ -1484,9 +1433,9 @@ export default function Dashboard({ user, onSignOut }) {
       <>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingLeft: 8 }}>
           <span style={{ fontSize: 12, color: getT().textFaint, letterSpacing: '0.15em', textTransform: 'uppercase' }}>組織階層</span>
-          {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
+          {isMobile && <button onClick={() => setShowSidebar(false)} style={{ background: 'none', border: 'none', color: getT().textMuted, cursor: 'pointer', fontSize: 16, display: 'inline-flex' }}><Icon name="cross" size={16} /></button>}
         </div>
-        {roots.map(l => <LevelItem key={l.id} level={l} />)}
+        <OrgTreeSidebar T={getT()} levels={levels} activeLevelId={activeLevelId} onSelectLevel={setActiveLevelId} />
         <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
           <div style={{ fontSize: 10, color: getT().textFaint, textTransform: 'uppercase', marginBottom: 8 }}>評価基準</div>
           {[...RATINGS].reverse().filter(r => r.score > 0).map(r => (
@@ -1511,7 +1460,7 @@ export default function Dashboard({ user, onSignOut }) {
             </button>
           )}
           {hasGoogle && (
-            <div style={{ fontSize: 11, color: T.accent, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>✅ Google連携済み</div>
+            <div style={{ fontSize: 11, color: T.accent, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
           )}
           <button onClick={onSignOut} style={{
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -1634,7 +1583,7 @@ export default function Dashboard({ user, onSignOut }) {
           {/* 年度切り替え */}
           <div data-tour="year" style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
             {['2025', '2026'].map(yr => (
-              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? T.accent : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
+              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? BRAND_GRADIENT.cta : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
             ))}
           </div>
 
@@ -1657,18 +1606,19 @@ export default function Dashboard({ user, onSignOut }) {
                 {/* 同期状態 */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '7px 12px', fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}`, marginBottom: 4 }}>
                   <span title={syncStatus === 'synced' ? '同期済み' : syncStatus === 'error' ? '同期エラー' : '同期中'} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, fontWeight: 700, cursor: 'default', background: syncStatus === 'synced' ? T.syncBadgeBg : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.1)', color: syncStatus === 'synced' ? T.syncBadgeText : syncStatus === 'error' ? T.warn : T.warn, border: `1px solid ${syncStatus === 'synced' ? T.syncBadgeBorder : syncStatus === 'error' ? T.warnBg : 'rgba(180,83,9,0.25)'}` }}>
-                    {syncStatus === 'synced' ? '🟢 同期済' : syncStatus === 'error' ? '🔴 エラー' : '🟡 同期中'}
+                    <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginRight: 5, verticalAlign: 'middle', background: syncStatus === 'synced' ? T.success : syncStatus === 'error' ? T.danger : T.warn }} />
+                    {syncStatus === 'synced' ? '同期済' : syncStatus === 'error' ? 'エラー' : '同期中'}
                   </span>
                 </div>
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
                 {hasGoogle
-                  ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent }}>✅ Google連携済み</div>
+                  ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
                   : <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
                 }
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/lp" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.text, fontSize: 12, textDecoration: 'none' }}>サービス紹介を見る</a>
-                <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>🔍 ツアーをもう一度見る</button>
+                <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="search" size={12} /> ツアーをもう一度見る</button>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>プライバシーポリシー</a>
                 <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>利用規約</a>
@@ -1794,11 +1744,11 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} forceMode="facilitation" /></div>}
       {activePage === 'morning' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><MorningMeetingPage user={user} members={members} themeKey={themeKey} /></div>}
-      {activePage === 'csv' && <div style={{ flex: 1, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'csv' && <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}
       {activePage === 'mycoach' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyPageShell user={user} members={members} levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
-      {activePage === 'summary' && okrFullEnabled && <div style={{ flex: 1, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
+      {activePage === 'summary' && okrFullEnabled && <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}><CompanySummaryPage levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} /></div>}
       {activePage === 'milestone' && milestonesEnabled && (
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
           <MilestonePage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} members={members} onLevelsChanged={async () => {
@@ -1828,10 +1778,10 @@ export default function Dashboard({ user, onSignOut }) {
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
-        <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
+        <div style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
           <SidebarContent />
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
           <AnnualView
             levels={levels}
             members={members}
@@ -1853,32 +1803,17 @@ export default function Dashboard({ user, onSignOut }) {
         {isMobile && showSidebar && (
           <div onClick={() => setShowSidebar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 299 }} />
         )}
-        <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, padding: '16px 10px', background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
-          <div style={{ fontSize: 10, color: getT().textMuted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>メンバー</div>
-          {members.map(m => {
-            const active = selectedOwner === m.name
-            const c = ['#5A8A7A','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
-            const color = c[Math.abs([...m.name].reduce((h, ch) => ch.charCodeAt(0) + ((h << 5) - h), 0)) % c.length]
-            return (
-              <div key={m.id} onClick={() => { setSelectedOwner(m.name); setShowSidebar(false) }}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 2, background: active ? T.navActiveBg : 'transparent', border: active ? `1px solid ${T.navActiveBorder}` : '1px solid transparent', transition: 'all 0.15s' }}>
-                {m.avatar_url ? (
-                  <img src={m.avatar_url} alt={m.name} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                ) : (
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}20`, border: `1.5px solid ${color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color, flexShrink: 0 }}>{m.name.slice(0, 2)}</div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: active ? 700 : 500, color: active ? T.navActiveText : getT().text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
-                  {m.role && <div style={{ fontSize: 9, color: getT().textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.role}</div>}
-                </div>
-              </div>
-            )
-          })}
+        <div style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.bgSidebar, overflowY: 'auto', ...(isMobile ? { position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 300, transform: showSidebar ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: 'none' } : {}) }}>
+          <MemberSidebar T={getT()} members={members} levels={levels}
+            selectedName={selectedOwner}
+            onSelect={(n) => { setSelectedOwner(n); setShowSidebar(false) }}
+            deptFilter={okrDeptFilter} onDeptFilterChange={setOkrDeptFilter} />
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
           <OwnerOKRView
             ownerName={selectedOwner}
             levels={levels}
+            members={members}
             fiscalYear={fiscalYear}
             themeKey={themeKey}
             onEdit={canEditOKR ? (obj => setModal({ type: 'edit', obj })) : null}
@@ -1894,6 +1829,7 @@ export default function Dashboard({ user, onSignOut }) {
           <MyOKRPageNew
             user={user} levels={levels} members={members}
             themeKey={themeKey} fiscalYear={fiscalYear}
+            showMemberPicker
             onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }}
           />
         </div>
@@ -1938,7 +1874,7 @@ export default function Dashboard({ user, onSignOut }) {
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: T.text, minWidth: 300 }}>
           <span style={{ flex: 1 }}>「{undoDelete.obj.title?.slice(0, 20)}{undoDelete.obj.title?.length > 20 ? '…' : ''}」を{undoDelete.hardDelete ? '削除' : 'アーカイブ'}しました</span>
           <button onClick={handleUndoDelete} style={{ background: T.accentSolid, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>元に戻す</button>
-          <button onClick={() => { clearTimeout(undoDelete.timer); setUndoDelete(null) }} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: '0 4px' }}>✕</button>
+          <button onClick={() => { clearTimeout(undoDelete.timer); setUndoDelete(null) }} style={{ background: 'transparent', border: 'none', color: T.textMuted, fontSize: 16, cursor: 'pointer', padding: '0 4px', display: 'inline-flex' }}><Icon name="cross" size={15} /></button>
         </div>
       )}
     </div>
@@ -2055,7 +1991,7 @@ function WeeklyOrgPanel({ T, levels, themeKey, fiscalYear, user, initialPeriod }
                 fontWeight: active ? 600 : 500,
                 fontSize: 12.5, marginBottom: 2,
               }}>
-                <span style={{ fontSize: 13 }}>{d.icon || '📁'}</span>
+                <DataIcon value={d.icon} size={13} fallback="folder"/>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {d.name}
                 </span>

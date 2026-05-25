@@ -1,6 +1,7 @@
 "use client"
 import * as React from 'react'
 import { useState, useEffect } from 'react'
+import Icon from './Icon'
 // screens/tour.jsx — 3分で分かるツアー
 // 8ステップのスライドショー形式。各ステップで主要機能を簡潔に紹介
 
@@ -178,7 +179,8 @@ function TourPage() {
         <a href="/lp" style={{
           fontSize: 12, color: 'var(--sub)', textDecoration: 'none',
           padding: '6px 10px', borderRadius: 7,
-        }}>閉じる ✕</a>
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}>閉じる <Icon name="cross" size={12} /></a>
       </header>
 
       {/* Progress dots */}
@@ -310,7 +312,7 @@ function CtaSlide({ step, onPrev }) {
             borderRadius: 99, fontSize: 11.5, fontWeight: 600,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: 99, background: '#fde68a' }} />
-            ツアー完了 🎉
+            ツアー完了 <Icon name="sparkle" size={13} />
           </div>
           <h2 style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.25, margin: '0 0 12px 0' }}>
             {step.title}
@@ -442,9 +444,9 @@ function TaskTourMock() {
         </span>
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        <span style={{ padding: '3px 10px', fontSize: 11, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 99 }}>📅 明日 11:00</span>
-        <span style={{ padding: '3px 10px', fontSize: 11, background: 'var(--accent-soft)', color: 'var(--accent-text)', borderRadius: 99 }}>🎯 目標2 売上</span>
-        <span style={{ padding: '3px 10px', fontSize: 11, background: 'var(--success-soft)', color: 'var(--success)', borderRadius: 99 }}>👤 自分</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', fontSize: 11, background: 'var(--info-soft)', color: 'var(--info)', borderRadius: 99 }}><Icon name="calendar" size={11} /> 明日 11:00</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', fontSize: 11, background: 'var(--accent-soft)', color: 'var(--accent-text)', borderRadius: 99 }}><Icon name="target" size={11} /> 目標2 売上</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', fontSize: 11, background: 'var(--success-soft)', color: 'var(--success)', borderRadius: 99 }}><Icon name="user" size={11} /> 自分</span>
       </div>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 6, paddingTop: 10, borderTop: '1px dashed #ebebee' }}>今日やること</div>
       {['新規提案資料を最終レビューして送付', 'Q2 マーケティング会議 アジェンダ作成', '製品デモのシナリオをチームと確認'].map((t, i) => (
@@ -508,7 +510,7 @@ function ReflectionTourMock() {
     <div style={{ padding: 14, background: '#fff', borderRadius: 10, border: '1px solid #ebebee' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em' }}>連続記入</span>
-        <span style={{ marginLeft: 'auto', padding: '2px 9px', fontSize: 10, fontWeight: 700, background: 'var(--warn-soft)', color: 'var(--warn)', borderRadius: 99 }}>⚡ 継続中</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 'auto', padding: '2px 9px', fontSize: 10, fontWeight: 700, background: 'var(--warn-soft)', color: 'var(--warn)', borderRadius: 99 }}><Icon name="bolt" size={10} /> 継続中</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
         <span style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', color: '#18181b' }}>2</span>

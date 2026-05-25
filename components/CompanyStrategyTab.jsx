@@ -3,22 +3,33 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS } from '../lib/themeTokens'
 import {
-  cardStyle, pillStyle, btnPrimary, accentRingStyle,
+  cardStyle, pillStyle, btnPrimary, btnSecondary, accentRingStyle,
   largeTitle, pageSubtitle, progressBarStyle, progressFillStyle,
   kpiNumber, inputStyle,
 } from '../lib/iosStyles'
+import Icon from './Icon'
 
 const THEMES = { dark: COMMON_TOKENS.dark, light: COMMON_TOKENS.light }
 
+// 施策の分類メタ。ハンドオフ §2: 深化=success / 探索=warn。色はテーマトークンの key を参照する。
 const MODE_META = {
-  exploit: { label: '深化', icon: '🔧', color: '#007AFF', desc: '既存パターンを伸ばす' },
-  explore: { label: '探索', icon: '🧭', color: '#AF52DE', desc: '新しい打ち手を試す' },
+  exploit: { label: '深化', icon: 'tools', colorKey: 'success', desc: '既存パターンを伸ばす' },
+  explore: { label: '探索', icon: 'target', colorKey: 'warn', desc: '新しい打ち手を試す' },
 }
+// ステータスメタ。色はテーマトークン key を参照 (テーマ追従)。
 const STATUS_META = {
-  testing: { label: '検証中', icon: '⏳', color: '#FF9500' },
-  success: { label: '成功',   icon: '✓',  color: '#34C759' },
-  failure: { label: '失敗',   icon: '✗',  color: '#FF3B30' },
-  paused:  { label: '停止',   icon: '⏸',  color: '#8E8E93' },
+  testing: { label: '検証中', icon: 'clock',  colorKey: 'warn' },
+  success: { label: '成功',   icon: 'check',  colorKey: 'success' },
+  failure: { label: '失敗',   icon: 'cross',  colorKey: 'danger' },
+  paused:  { label: '停止',   icon: 'circle', colorKey: 'textMuted' },
+}
+
+// KR % の 4 段階色 (ハンドオフ §2): ~30% danger / 30-60% warn / 60-100% success / 100+ accent
+function krPctColor(T, pct) {
+  if (pct >= 100) return T.accent
+  if (pct >= 60) return T.success
+  if (pct >= 30) return T.warn
+  return T.danger
 }
 
 function calcKRPct(kr) {
@@ -155,10 +166,10 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: `${SPACING.lg}px ${SPACING.xl}px ${SPACING['2xl']}px`, background: T.bg }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-        {/* ヘッダ (コンパクト) */}
+        {/* ページヘッダ */}
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.md, flexWrap: 'wrap' }}>
-          <div style={accentRingStyle({ color: '#AF52DE', size: 32 })}>
-            <span style={{ fontSize: 16 }}>🧭</span>
+          <div style={accentRingStyle({ color: T.accent, size: 32 })}>
+            <Icon name="target" size={16} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ ...TYPO.title2, color: T.text, margin: 0 }}>経営戦略</h1>
@@ -168,66 +179,84 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
           </div>
         </div>
 
-        {/* 期間フィルタ */}
-        <div style={{ display: 'flex', gap: SPACING.xs + 2, marginBottom: SPACING.md, flexWrap: 'wrap' }}>
-          {[['annual', '通期'], ['q1', 'Q1'], ['q2', 'Q2'], ['q3', 'Q3'], ['q4', 'Q4'], ['all', '全期']].map(([k, l]) => (
-            <button key={k} onClick={() => { setFilter(k); setSelectedKrId(null) }}
-              style={{
-                padding: '4px 12px', borderRadius: RADIUS.pill,
-                border: `1px solid ${filter === k ? T.accent : T.border}`,
-                background: filter === k ? `${T.accent}15` : 'transparent',
-                color: filter === k ? T.accent : T.textSub,
-                fontSize: TYPO.footnote.fontSize, fontWeight: 700, fontFamily: 'inherit',
-                cursor: 'pointer',
-              }}>{l}</button>
-          ))}
+        {/* 期間セグメント (segment: padding 3px / radius 9, active のみ塗り + 影) */}
+        <div style={{
+          display: 'inline-flex', gap: 2, marginBottom: SPACING.md, flexWrap: 'wrap',
+          padding: 3, borderRadius: 9, background: T.sunken, border: `1px solid ${T.border}`,
+        }}>
+          {[['annual', '通期'], ['q1', 'Q1'], ['q2', 'Q2'], ['q3', 'Q3'], ['q4', 'Q4'], ['all', '全期']].map(([k, l]) => {
+            const on = filter === k
+            return (
+              <button key={k} onClick={() => { setFilter(k); setSelectedKrId(null) }}
+                style={{
+                  padding: '4px 12px', borderRadius: 7,
+                  border: 'none',
+                  background: on ? T.bgCard : 'transparent',
+                  color: on ? T.text : T.textSub,
+                  boxShadow: on ? SHADOWS.xs : 'none',
+                  fontSize: TYPO.footnote.fontSize, fontWeight: on ? 700 : 600, fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}>{l}</button>
+            )
+          })}
         </div>
 
-        {/* 2カラム: 左=KR一覧 (狭め), 右=施策詳細 (広く) — 施策が主役 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) 1fr', gap: SPACING.md, alignItems: 'start' }}>
-          {/* 左: KR一覧 */}
-          <div style={cardStyle({ T, padding: SPACING.sm + 2 })}>
-            <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 700, padding: `${SPACING.xs}px ${SPACING.xs + 2}px ${SPACING.xs + 2}px` }}>
+        {/* 2カラム: 左=KR一覧 (320px), 右=詳細 (1fr) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: SPACING.md, alignItems: 'start' }}>
+          {/* 左: KR一覧 (Glass カード, 行は border-bottom 区切り) */}
+          <div style={{ ...cardStyle({ T, padding: 0 }) }}>
+            <div style={{
+              padding: '10px 14px', borderBottom: `1px solid ${T.border}`,
+              ...TYPO.footnote, color: T.textMuted, fontWeight: 700,
+              letterSpacing: '0.05em', textTransform: 'uppercase',
+            }}>
               KR 一覧 ({filteredKrs.length})
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               {filteredKrs.length === 0 && (
                 <div style={{ padding: SPACING.md, fontSize: TYPO.body.fontSize, color: T.textMuted, textAlign: 'center' }}>
                   KR がありません
                 </div>
               )}
-              {filteredKrs.map(kr => {
+              {filteredKrs.map((kr, i) => {
                 const pct = calcKRPct(kr)
+                const pctColor = krPctColor(T, pct)
                 const inits = initiativesByKr[kr.id] || []
                 const cTesting = inits.filter(i => i.status === 'testing').length
                 const cSuccess = inits.filter(i => i.status === 'success').length
                 const cFailure = inits.filter(i => i.status === 'failure').length
+                const cTotal = cTesting + cSuccess + cFailure
                 const isSelected = Number(selectedKrId) === Number(kr.id)
+                const isLast = i === filteredKrs.length - 1
                 return (
                   <button key={kr.id} onClick={() => setSelectedKrId(kr.id)}
                     style={{
-                      textAlign: 'left', padding: SPACING.sm + 2, borderRadius: RADIUS.md,
-                      border: `1px solid ${isSelected ? T.accent : T.borderLight}`,
-                      background: isSelected ? `${T.accent}10` : T.sectionBg,
+                      textAlign: 'left', width: '100%',
+                      // active: 淡 accent 背景 + border-left 3px accent + padding-left 11px
+                      padding: isSelected ? '12px 14px 12px 11px' : '12px 14px',
+                      borderLeft: isSelected ? `3px solid ${T.accent}` : 'none',
+                      borderTop: 'none', borderRight: 'none',
+                      borderBottom: isLast ? 'none' : `1px solid ${T.border}`,
+                      background: isSelected ? `${T.accent}10` : 'transparent',
                       cursor: 'pointer', fontFamily: 'inherit',
-                      display: 'flex', flexDirection: 'column', gap: 4,
+                      display: 'flex', flexDirection: 'column', gap: 6,
                     }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={pillStyle({ color: T.textSub, size: 'sm' })}>{PERIOD_LABELS[kr._period] || kr._period}</span>
-                      <span style={{ ...TYPO.subhead, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={kr.title}>{kr.title}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ ...pillStyle({ color: T.accent, size: 'sm' }), background: T.accentBg, color: T.accentText, fontWeight: 600, padding: '2px 7px' }}>{PERIOD_LABELS[kr._period] || kr._period}</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={kr.title}>{kr.title}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace', color: pctColor }}>{Math.round(pct)}%</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ flex: 1, ...progressBarStyle({ T, height: 4 }) }}>
-                        <div style={progressFillStyle({ color: pct < 50 ? T.danger : pct < 80 ? T.warn : T.success, value: pct })} />
-                      </div>
-                      <span style={{ ...TYPO.caption, color: pct < 50 ? T.danger : pct < 80 ? T.warn : T.success, fontWeight: 800, fontSize: 11 }}>{Math.round(pct)}%</span>
+                    <div style={{ ...progressBarStyle({ T, height: 3 }), background: T.sunken }}>
+                      <div style={progressFillStyle({ color: pctColor, value: pct })} />
                     </div>
-                    <div style={{ display: 'flex', gap: 4, ...TYPO.caption, color: T.textMuted, fontWeight: 600 }}>
-                      {cTesting > 0 && <span style={{ color: STATUS_META.testing.color }}>⏳{cTesting}</span>}
-                      {cSuccess > 0 && <span style={{ color: STATUS_META.success.color }}>✓{cSuccess}</span>}
-                      {cFailure > 0 && <span style={{ color: STATUS_META.failure.color }}>✗{cFailure}</span>}
-                      {(cTesting + cSuccess + cFailure) === 0 && <span>施策未登録</span>}
-                      <span style={{ marginLeft: 'auto' }}>{kr.owner || '−'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10.5, color: T.textMuted, fontWeight: 600 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {cTesting > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: T.warn }}><Icon name={STATUS_META.testing.icon} size={11} />{cTesting}</span>}
+                        {cSuccess > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: T.success }}><Icon name={STATUS_META.success.icon} size={11} />{cSuccess}</span>}
+                        {cFailure > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: T.danger }}><Icon name={STATUS_META.failure.icon} size={11} />{cFailure}</span>}
+                        {cTotal === 0 && <span>施策 未登録</span>}
+                      </span>
+                      <span>{kr.owner || '—'}</span>
                     </div>
                   </button>
                 )
@@ -260,36 +289,48 @@ export default function CompanyStrategyTab({ T: parentT, themeKey = 'dark', leve
 // ─── 選択された KR の詳細 (戦略テキスト + 施策一覧) ─────────────
 function KrStrategyDetail({ T, kr, strategy, initiatives, myName, isAdmin, onChanged }) {
   const pct = calcKRPct(kr)
-  const pctColor = pct < 50 ? T.danger : pct < 80 ? T.warn : T.success
+  const pctColor = krPctColor(T, pct)
   const exploitInits = initiatives.filter(i => i.mode === 'exploit')
   const exploreInits = initiatives.filter(i => i.mode === 'explore')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-      {/* KR ヘッダ */}
-      <div style={cardStyle({ T, accent: pctColor, padding: SPACING.lg })}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.md }}>
+      {/* KR ヘッダ: アイコンタイル 40×40 + 本文 + 右寄せ大数字 32px */}
+      <div style={cardStyle({ T, padding: SPACING.lg })}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.lg }}>
+          {/* アイコンタイル 40×40 (accent-bg / accent-text) */}
+          <div style={{
+            width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+            background: T.accentBg, color: T.accentText,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="target" size={20} />
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-              <span style={pillStyle({ color: T.textSub, size: 'sm' })}>{PERIOD_LABELS[kr._period] || kr._period}</span>
-              {kr.owner && <span style={pillStyle({ color: T.accent, size: 'sm' })}>担当: {kr.owner}</span>}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+              <span style={{ ...pillStyle({ color: T.accent, size: 'sm' }), background: T.accentBg, color: T.accentText }}>{PERIOD_LABELS[kr._period] || kr._period} KR</span>
+              {kr.owner && <span style={pillStyle({ color: T.textSub, size: 'sm' })}>担当: {kr.owner}</span>}
             </div>
-            <div style={{ ...TYPO.title3, color: T.text, marginBottom: 8 }}>{kr.title}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.005em', color: T.text, marginBottom: 6 }}>{kr.title}</div>
             {kr._objTitle && (
-              <div style={{ ...TYPO.footnote, color: T.textMuted, marginBottom: 8 }}>
+              <div style={{ fontSize: 11.5, color: T.textSub, lineHeight: 1.55, marginBottom: 8 }}>
                 所属 OBJ: {kr._objTitle}
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2 }}>
-              <div style={{ flex: 1, ...progressBarStyle({ T, height: 8 }) }}>
-                <div style={progressFillStyle({ color: pctColor, value: pct })} />
-              </div>
-              <span style={{ ...TYPO.subhead, color: T.textSub, whiteSpace: 'nowrap' }}>
-                {Number(kr.current || 0).toLocaleString()} / {Number(kr.target || 0).toLocaleString()} {kr.unit}
-              </span>
+          </div>
+          {/* 右寄せ統計: 大数字 32px monospace + 現在値/目標値 */}
+          <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'ui-monospace, monospace', letterSpacing: '-0.02em', lineHeight: 1, color: pctColor }}>
+              {Math.round(pct)}<span style={{ fontSize: 18 }}>%</span>
+            </div>
+            <div style={{ fontSize: 11.5, color: T.textMuted, fontFamily: 'ui-monospace, monospace', marginTop: 6 }}>
+              {Number(kr.current || 0).toLocaleString()} / {Number(kr.target || 0).toLocaleString()} {kr.unit}
             </div>
           </div>
-          <div style={{ ...kpiNumber({ color: pctColor, size: 36 }), flexShrink: 0 }}>{Math.round(pct)}%</div>
+        </div>
+        {/* 進捗バー 5px フルワイド */}
+        <div style={{ ...progressBarStyle({ T, height: 5 }), background: T.sunken, marginTop: 14 }}>
+          <div style={progressFillStyle({ color: pctColor, value: pct })} />
         </div>
       </div>
 
@@ -379,92 +420,116 @@ function StrategyMessageEditor({ T, kr, messages, myName, onChanged }) {
   }
 
   return (
-    <div style={cardStyle({ T, accent: '#AF52DE', padding: SPACING.lg })}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
-        <div style={accentRingStyle({ color: '#AF52DE', size: 28 })}><span style={{ fontSize: 14 }}>📝</span></div>
-        <div style={{ ...TYPO.callout, color: T.text, flex: 1 }}>経営からのメッセージ</div>
+    <div style={{ ...cardStyle({ T, padding: 0 }) }}>
+      {/* カードヘッダ: 24×24 accent アイコンタイル + タイトル + 今日(M/D) NEW ピル */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+        padding: '12px 16px', borderBottom: `1px solid ${T.border}`,
+      }}>
+        <div style={{
+          width: 24, height: 24, borderRadius: RADIUS.xs, flexShrink: 0,
+          background: T.accentBg, color: T.accentText,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}><Icon name="note" size={14} /></div>
+        <h3 style={{ ...TYPO.callout, color: T.text, margin: 0, flex: 1 }}>経営からのメッセージ</h3>
+        <span style={{
+          ...pillStyle({ color: T.accent, size: 'sm' }),
+          fontWeight: 700, letterSpacing: '0.04em',
+        }}>今日 ({formatMessageDate(today)}) NEW</span>
+      </div>
+
+      <div style={{ padding: SPACING.lg }}>
+        {/* 日付タブ (今日が先頭、横スクロール可) */}
+        {tabs.length > 0 && (
+          <div style={{
+            display: 'flex', gap: 4, marginBottom: SPACING.sm,
+            overflowX: 'auto', paddingBottom: 4,
+          }}>
+            {tabs.map(t => {
+              const tabIsToday = t.message_date === today
+              const isActive = t.message_date === activeDate
+              return (
+                <button key={t.message_date} onClick={() => setActiveDate(t.message_date)}
+                  style={{
+                    padding: '4px 10px', borderRadius: RADIUS.pill,
+                    border: `1px solid ${isActive ? T.accent : T.border}`,
+                    background: isActive ? T.accentBg : 'transparent',
+                    color: isActive ? T.accentText : T.textSub,
+                    fontSize: TYPO.footnote.fontSize, fontWeight: 700, fontFamily: 'inherit',
+                    cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  }}
+                  title={t.updated_by ? `更新: ${t.updated_by}` : ''}
+                >
+                  {tabIsToday ? `今日 (${formatMessageDate(t.message_date)})` : formatMessageDate(t.message_date)}
+                  {t._new && <span style={{ marginLeft: 4, opacity: 0.5 }}>(新規)</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {editing ? (
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            rows={6}
+            placeholder="例: 今期は法人向けA商品を主軸に新規100社開拓。既存顧客のアップセル(B商品)で残り3000万を確保..."
+            style={{
+              ...inputStyle({ T }), width: '100%', resize: 'vertical',
+              fontSize: TYPO.body.fontSize, lineHeight: 1.65, minHeight: 120,
+            }}
+          />
+        ) : (
+          active.message && active.message.trim() ? (
+            <>
+              <div style={{ ...TYPO.body, color: T.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{active.message}</div>
+              {active.updated_by && (
+                <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 8, textAlign: 'right' }}>
+                  — {active.updated_by} ({formatMessageDate(active.message_date)})
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ padding: '24px 18px', ...TYPO.subhead, color: T.textMuted, textAlign: 'center', fontWeight: 500 }}>
+              {isToday
+                ? 'まだメッセージが登録されていません。「編集」から経営の意図を記入してください。'
+                : 'この日のメッセージはありません。'}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* フッタ: 右寄せ secondary 編集ボタン (薄背景) */}
+      <div style={{
+        display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm - 2,
+        padding: '10px 16px', borderTop: `1px solid ${T.border}`,
+        background: T.sectionBg,
+      }}>
         {!editing && isToday && (
-          <button onClick={() => setEditing(true)} style={{ ...btnPrimary({ T, size: 'sm', color: '#AF52DE' }), padding: '4px 10px', fontSize: 11 }}>
-            ✎ 編集
+          <button onClick={() => setEditing(true)}
+            style={{ ...btnSecondary({ T, size: 'sm' }), padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="pencil" size={11} /> 編集
           </button>
         )}
         {!editing && !isToday && (
-          <button onClick={() => { setActiveDate(today); setEditing(true) }} style={{ padding: '4px 10px', borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            ✎ 今日の版で編集
+          <button onClick={() => { setActiveDate(today); setEditing(true) }}
+            style={{ ...btnSecondary({ T, size: 'sm' }), padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="pencil" size={11} /> 今日の版で編集
           </button>
         )}
         {editing && (
           <>
             <button onClick={() => { setEditing(false); setText(active.message || '') }} disabled={saving}
-              style={{ padding: '4px 10px', borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ ...btnSecondary({ T, size: 'sm' }), padding: '4px 10px' }}>
               キャンセル
             </button>
             <button onClick={save} disabled={saving}
-              style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), padding: '4px 10px', fontSize: 11 }}>
-              {saving ? '保存中…' : `✓ ${formatMessageDate(today)} で保存`}
+              style={{ ...btnPrimary({ T, size: 'sm' }), padding: '4px 10px', fontSize: TYPO.footnote.fontSize, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {saving ? '保存中…' : <><Icon name="check" size={11} /> {formatMessageDate(today)} で保存</>}
             </button>
           </>
         )}
       </div>
-
-      {/* 日付タブ (今日が先頭、横スクロール可) */}
-      {tabs.length > 0 && (
-        <div style={{
-          display: 'flex', gap: 4, marginBottom: SPACING.sm,
-          overflowX: 'auto', paddingBottom: 4,
-        }}>
-          {tabs.map(t => {
-            const tabIsToday = t.message_date === today
-            const isActive = t.message_date === activeDate
-            return (
-              <button key={t.message_date} onClick={() => setActiveDate(t.message_date)}
-                style={{
-                  padding: '4px 10px', borderRadius: RADIUS.pill,
-                  border: `1px solid ${isActive ? '#AF52DE' : T.border}`,
-                  background: isActive ? 'rgba(175,82,222,0.12)' : 'transparent',
-                  color: isActive ? '#AF52DE' : T.textSub,
-                  fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-                title={t.updated_by ? `更新: ${t.updated_by}` : ''}
-              >
-                {tabIsToday ? `今日 (${formatMessageDate(t.message_date)})` : formatMessageDate(t.message_date)}
-                {t._new && <span style={{ marginLeft: 4, opacity: 0.5 }}>(新規)</span>}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {editing ? (
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          rows={6}
-          placeholder="例: 今期は法人向けA商品を主軸に新規100社開拓。既存顧客のアップセル(B商品)で残り3000万を確保..."
-          style={{
-            ...inputStyle({ T }), width: '100%', resize: 'vertical',
-            fontSize: TYPO.body.fontSize, lineHeight: 1.65, minHeight: 120,
-          }}
-        />
-      ) : (
-        active.message && active.message.trim() ? (
-          <>
-            <div style={{ ...TYPO.body, color: T.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{active.message}</div>
-            {active.updated_by && (
-              <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 8, textAlign: 'right' }}>
-                — {active.updated_by} ({formatMessageDate(active.message_date)})
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={{ padding: SPACING.md, ...TYPO.body, color: T.textMuted, textAlign: 'center', fontStyle: 'italic' }}>
-            {isToday
-              ? 'まだメッセージが登録されていません。「✎ 編集」から経営の意図を記入してください。'
-              : 'この日のメッセージはありません。'}
-          </div>
-        )
-      )}
     </div>
   )
 }
@@ -474,11 +539,19 @@ function InitiativesSection({ T, kr, initiatives, exploitInits, exploreInits, my
   const [adding, setAdding] = useState(null) // { mode } | null
 
   return (
-    <div style={cardStyle({ T, padding: SPACING.lg })}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm + 2 }}>
-        <div style={accentRingStyle({ color: T.accent, size: 28 })}><span style={{ fontSize: 14 }}>🎯</span></div>
-        <div style={{ ...TYPO.callout, color: T.text, flex: 1 }}>施策一覧</div>
-        <span style={{ ...TYPO.caption, color: T.textMuted }}>合計 {initiatives.length} 件</span>
+    <div style={{ ...cardStyle({ T, padding: 0 }) }}>
+      {/* カードヘッダ: 24×24 accent アイコンタイル + タイトル + 件数 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+        padding: '12px 16px', borderBottom: `1px solid ${T.border}`,
+      }}>
+        <div style={{
+          width: 24, height: 24, borderRadius: RADIUS.xs, flexShrink: 0,
+          background: T.accentBg, color: T.accentText,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}><Icon name="target" size={14} /></div>
+        <h3 style={{ ...TYPO.callout, color: T.text, margin: 0, flex: 1 }}>施策一覧</h3>
+        <span style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600 }}>合計 {initiatives.length} 件</span>
       </div>
 
       {/* 深化 */}
@@ -503,30 +576,37 @@ function InitiativesSection({ T, kr, initiatives, exploitInits, exploreInits, my
 
 function ModeBlock({ T, mode, inits, kr, onAdd, myName, isAdmin, onChanged }) {
   const meta = MODE_META[mode]
+  // colorKey をテーマトークンへ解決 (深化=success / 探索=warn)
+  const c = T[meta.colorKey] || T.accent
+  const cBg = T[meta.colorKey + 'Bg'] || T.accentBg
   return (
-    <div style={{
-      marginBottom: SPACING.md,
-      border: `1px solid ${meta.color}30`, borderRadius: RADIUS.md,
-      background: `${meta.color}06`, overflow: 'hidden',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: SPACING.sm,
-        padding: `${SPACING.sm}px ${SPACING.md}px`,
-        borderBottom: `1px solid ${meta.color}20`,
-      }}>
-        <span style={{ fontSize: 14 }}>{meta.icon}</span>
-        <span style={{ ...TYPO.subhead, color: meta.color, fontWeight: 800 }}>{meta.label}</span>
-        <span style={{ ...TYPO.caption, color: T.textMuted }}>{meta.desc}</span>
-        <span style={{ ...TYPO.caption, color: T.textMuted, marginLeft: 'auto' }}>{inits.length} 件</span>
+    <div style={{ padding: '12px 16px', borderTop: `1px solid ${T.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+        {/* 24×24 アイコンタイル: 深化 success-bg/success, 探索 warn-bg/warn */}
+        <div style={{
+          width: 24, height: 24, borderRadius: 7, flexShrink: 0,
+          background: cBg, color: c,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}><Icon name={meta.icon} size={13} /></div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{meta.label}</div>
+          <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 500 }}>{meta.desc}</div>
+        </div>
+        <span style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 600, marginLeft: 'auto' }}>{inits.length} 件</span>
+        {/* [+ 追加] は accent-bg / accent-text */}
         <button onClick={onAdd} style={{
-          padding: '3px 10px', borderRadius: RADIUS.sm, border: `1px solid ${meta.color}`,
-          background: 'transparent', color: meta.color, fontSize: 11, fontWeight: 800,
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}>＋ 追加</button>
+          padding: '4px 10px', borderRadius: RADIUS.xs, border: `1px solid ${T.accent}40`,
+          background: T.accentBg, color: T.accentText, fontSize: TYPO.footnote.fontSize, fontWeight: 600,
+          cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}><Icon name="plus" size={11} /> 追加</button>
       </div>
-      <div style={{ padding: SPACING.sm, display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
         {inits.length === 0 ? (
-          <div style={{ padding: SPACING.sm + 2, ...TYPO.caption, color: T.textMuted, textAlign: 'center', fontStyle: 'italic' }}>
+          <div style={{
+            padding: SPACING.md + 2, ...TYPO.footnote, color: T.textMuted, fontWeight: 500,
+            textAlign: 'center', background: T.sectionBg,
+            borderRadius: RADIUS.sm, border: `1px dashed ${T.borderMid}`,
+          }}>
             まだ施策がありません
           </div>
         ) : inits.map(it => (
@@ -541,6 +621,8 @@ function ModeBlock({ T, mode, inits, kr, onAdd, myName, isAdmin, onChanged }) {
 // ─── 施策カード ────────────────────────────────────────────
 function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
   const meta = STATUS_META[initiative.status] || STATUS_META.testing
+  // colorKey をテーマトークンへ解決
+  const metaColor = T[meta.colorKey] || T.textMuted
   const [editing, setEditing] = useState(false)
 
   const removeInit = async () => {
@@ -560,17 +642,14 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.borderLight}`,
-      borderLeft: `3px solid ${meta.color}`,
+      background: T.bgCard, border: `1px solid ${T.border}`,
       borderRadius: RADIUS.sm + 2, padding: `${SPACING.sm}px ${SPACING.md}px`,
       display: 'flex', flexDirection: 'column', gap: 4,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, flexWrap: 'wrap' }}>
         <span style={{
-          padding: '2px 8px', borderRadius: RADIUS.pill,
-          background: `${meta.color}1f`, color: meta.color,
-          fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap',
-        }}>{meta.icon} {meta.label}</span>
+          ...pillStyle({ color: metaColor, size: 'sm' }),
+        }}><Icon name={meta.icon} size={10} /> {meta.label}</span>
         <span style={{ ...TYPO.subhead, color: T.text, flex: 1, minWidth: 0 }}>{initiative.title}</span>
         {initiative.target_value != null && (
           <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -580,12 +659,12 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
         )}
         <button onClick={() => setEditing(true)} style={{
           padding: '2px 6px', borderRadius: RADIUS.xs, border: `1px solid ${T.border}`,
-          background: 'transparent', color: T.textSub, fontSize: 10, fontWeight: 700,
+          background: 'transparent', color: T.textSub, fontSize: TYPO.caption.fontSize, fontWeight: 700,
           cursor: 'pointer', fontFamily: 'inherit',
         }}>編集</button>
         <button onClick={removeInit} style={{
           padding: '2px 6px', borderRadius: RADIUS.xs, border: `1px solid ${T.danger}40`,
-          background: 'transparent', color: T.danger, fontSize: 10, fontWeight: 700,
+          background: 'transparent', color: T.danger, fontSize: TYPO.caption.fontSize, fontWeight: 700,
           cursor: 'pointer', fontFamily: 'inherit',
         }}>削除</button>
       </div>
@@ -600,7 +679,7 @@ function InitiativeCard({ T, initiative, kr, myName, isAdmin, onChanged }) {
           background: `${T.danger}10`, border: `1px solid ${T.danger}30`,
           ...TYPO.footnote, color: T.danger, lineHeight: 1.55,
         }}>
-          <strong style={{ fontWeight: 800 }}>✗ 失敗の理由: </strong>{initiative.failure_reason}
+          <strong style={{ fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'middle' }}><Icon name="cross" size={11} /> 失敗の理由: </strong>{initiative.failure_reason}
         </div>
       )}
       <div style={{ ...TYPO.caption, color: T.textMuted, display: 'flex', gap: 8, fontWeight: 600, flexWrap: 'wrap' }}>
@@ -631,7 +710,7 @@ function InitiativeFormModal({ T, kr, mode, myName, onCancel, onSaved }) {
     <div onClick={onCancel} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000, padding: 20,
+      zIndex: 1000, padding: SPACING.xl,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: T.bgCard, borderRadius: RADIUS.lg,
@@ -697,7 +776,7 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
     if (onSaved) onSaved()
   }
 
-  const inputBase = { ...inputStyle({ T }), padding: '6px 10px', fontSize: 12 }
+  const inputBase = { ...inputStyle({ T }), padding: '6px 10px', fontSize: TYPO.subhead.fontSize }
   const Label = ({ children }) => <div style={{ ...TYPO.caption, color: T.textSub, fontWeight: 700, marginBottom: 3 }}>{children}</div>
 
   return (
@@ -726,18 +805,18 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
           <Label>分類</Label>
           <select value={mode} onChange={e => setMode(e.target.value)} disabled={saving}
             style={{ ...inputBase, width: '100%' }}>
-            <option value="exploit">🔧 深化 (既存パターンを伸ばす)</option>
-            <option value="explore">🧭 探索 (新しい打ち手)</option>
+            <option value="exploit">深化 (既存パターンを伸ばす)</option>
+            <option value="explore">探索 (新しい打ち手)</option>
           </select>
         </div>
         <div>
           <Label>ステータス</Label>
           <select value={status} onChange={e => setStatus(e.target.value)} disabled={saving}
             style={{ ...inputBase, width: '100%' }}>
-            <option value="testing">⏳ 検証中</option>
-            <option value="success">✓ 成功</option>
-            <option value="failure">✗ 失敗</option>
-            <option value="paused">⏸ 停止</option>
+            <option value="testing">検証中</option>
+            <option value="success">成功</option>
+            <option value="failure">失敗</option>
+            <option value="paused">停止</option>
           </select>
         </div>
       </div>
@@ -792,14 +871,12 @@ function InitiativeForm({ T, kr, initial = {}, myName, onCancel, onSaved, isModa
 
       <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xs }}>
         <button onClick={onCancel} disabled={saving}
-          style={{ flex: 1, padding: '8px 14px', borderRadius: RADIUS.md,
-            border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub,
-            fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          style={{ flex: 1, ...btnSecondary({ T, size: 'md' }), textAlign: 'center' }}>
           キャンセル
         </button>
         <button onClick={save} disabled={saving}
-          style={{ flex: 1, ...btnPrimary({ T, size: 'md' }), opacity: saving ? 0.7 : 1 }}>
-          {saving ? '保存中…' : (initial.id ? '✓ 更新' : '✓ 追加')}
+          style={{ flex: 1, ...btnPrimary({ T, size: 'md' }), opacity: saving ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+          {saving ? '保存中…' : <><Icon name="check" size={13} /> {initial.id ? '更新' : '追加'}</>}
         </button>
       </div>
     </div>

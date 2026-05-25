@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>週次MTG — AI WorkSpace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-card:rgba(255,255,255,.78); --bg-card-2:rgba(255,255,255,.55);
+    --sunken:rgba(255,255,255,.5);
+    --border:rgba(15,23,42,.08); --border-mid:rgba(15,23,42,.12); --border-strong:rgba(15,23,42,.18);
+    --text:#0f172a; --text-sub:#475569; --text-muted:#94a3b8;
+    --accent:#0ea5e9; --accent-bg:rgba(14,165,233,.12); --accent-text:#0369a1;
+    --nav-active-bg:rgba(14,165,233,.14); --nav-active-tx:#0369a1;
+    --success:#059669; --success-bg:rgba(5,150,105,.12);
+    --warn:#d97706; --warn-bg:rgba(217,119,6,.12);
+    --danger:#e11d48; --danger-bg:rgba(225,29,72,.12);
+    --info:#0284c7; --info-bg:rgba(2,132,199,.12);
+    --sh-xs:0 1px 2px rgba(15,23,42,.04);
+    --sh-card:0 1px 0 rgba(255,255,255,.7) inset, 0 4px 18px rgba(15,23,42,.04);
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:18px; --r-2xl:22px; --r-pill:99px;
+    --s-xs:4px; --s-sm:8px; --s-md:12px; --s-lg:16px; --s-xl:20px; --s-2xl:24px;
+    --brand-cta:linear-gradient(120deg,#2563eb 0%,#22d3ee 100%);
+  }
+  html,body{margin:0;padding:0}
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    font-family:'Inter','Noto Sans JP',-apple-system,system-ui,sans-serif;
+    color:var(--text); font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(900px 600px at 0% 0%, rgba(226,232,240,.5), transparent 55%),
+      linear-gradient(180deg,#fbfcfe 0%,#f5f7fa 100%);
+    min-height:100vh; display:flex;
+  }
+  .org-rail{
+    width:56px; background:#0f172a; padding:12px 0;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    flex-shrink:0; min-height:100vh;
+  }
+  .org-rail .org{
+    width:36px; height:36px; border-radius:10px;
+    color:#fff; font-weight:700; font-size:14px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative;
+  }
+  .org-rail .org.active{background:linear-gradient(135deg,#dc2626,#ef4444)}
+  .org-rail .org.active::before{
+    content:''; position:absolute; left:-12px; top:50%; transform:translateY(-50%);
+    width:3px; height:20px; border-radius:99px; background:#fff;
+  }
+  .org-rail .org.muted{background:linear-gradient(135deg,#ec4899,#f472b6)}
+
+  .app{flex:1; display:flex; flex-direction:column; min-width:0}
+  .glass-bar{
+    position:sticky; top:0; z-index:30;
+    padding:10px 22px;
+    background: rgba(255,255,255,.7); backdrop-filter: blur(18px) saturate(160%);
+    border-bottom: 1px solid var(--border);
+    display:flex; align-items:center; gap:14px;
+  }
+  .brand{display:flex; align-items:center; gap:8px; text-decoration:none; padding-right:12px; border-right:1px solid var(--border)}
+  .brand-mark{
+    width:26px; height:26px; border-radius:7px; background: var(--brand-cta);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+  }
+  .brand-text{display:flex; flex-direction:column; line-height:1.15}
+  .brand-text .eyebrow{font-size:8.5px; color:var(--text-muted); letter-spacing:0.08em}
+  .brand-text .name{font-size:12px; font-weight:700; color:var(--text)}
+  nav.main{display:flex; align-items:center; gap:2px}
+  .nav-item{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:5px 11px; border-radius:7px;
+    font-size:12px; font-weight:500; color:var(--text-sub); cursor:pointer;
+  }
+  .nav-item:hover{background:rgba(15,23,42,.04)}
+  .nav-item.active{background:var(--nav-active-bg); color:var(--nav-active-tx); font-weight:600}
+  .search{
+    display:flex; align-items:center; gap:7px;
+    height:30px; padding:0 11px; min-width:200px;
+    background: rgba(255,255,255,.6); border:1px solid var(--border);
+    border-radius:7px; color:var(--text-muted); font-size:12px;
+  }
+  .kbd{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:18px; height:18px; padding:0 5px;
+    font-size:10px; font-weight:600; color:var(--text-muted);
+    background:rgba(255,255,255,.7); border:1px solid var(--border);
+    border-radius:4px; font-family:ui-monospace,monospace;
+  }
+  .year-toggle{display:inline-flex; border:1px solid var(--border); border-radius:7px; overflow:hidden; background:rgba(255,255,255,.5)}
+  .year-toggle .y{padding:4px 10px; font-size:11px; color:var(--text-muted)}
+  .year-toggle .y.active{background:var(--brand-cta); color:#fff; font-weight:600}
+  .icon-btn{
+    width:30px; height:30px; border-radius:7px;
+    border:1px solid var(--border); background:rgba(255,255,255,.5);
+    color:var(--text-sub); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .content{flex:1; padding:24px 28px 80px; max-width:1400px; margin:0 auto; width:100%}
+
+  /* Page header */
+  .ph{display:flex; align-items:baseline; gap:14px; margin-bottom:18px}
+  .ph .eyebrow{font-size:11px; font-weight:700; color:var(--accent-text); letter-spacing:0.08em; text-transform:uppercase}
+  .ph h1{font-size:22px; font-weight:700; letter-spacing:-0.015em; margin:0}
+  .ph .desc{font-size:12.5px; color:var(--text-sub); margin-left:auto}
+
+  /* === STATE 1: Meeting picker grid === */
+  .picker-grid{display:grid; grid-template-columns: repeat(4, 1fr); gap:14px}
+  .picker{
+    background: var(--bg-card); backdrop-filter: blur(20px) saturate(160%);
+    border:1px solid var(--border); border-radius: var(--r-lg);
+    box-shadow: var(--sh-card);
+    padding:16px;
+    display:flex; flex-direction:column; gap:10px;
+    position:relative;
+    cursor:pointer; transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  .picker:hover{transform:translateY(-2px); box-shadow:0 8px 22px rgba(15,23,42,.08); border-color:var(--border-mid)}
+  .picker .top{display:flex; align-items:flex-start; gap:10px}
+  .picker .icon{
+    width:38px; height:38px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    color:#fff;
+  }
+  .picker .scope{
+    position:absolute; top:14px; right:14px;
+    padding:2px 8px; font-size:10.5px; font-weight:600; border-radius:99px;
+  }
+  .picker .scope.both{background:var(--accent-bg); color:var(--accent-text)}
+  .picker .scope.team{background:var(--success-bg); color:var(--success)}
+  .picker .scope.dept{background:rgba(168,85,247,.12); color:#7c3aed}
+  .picker h3{font-size:14px; font-weight:700; margin:0; line-height:1.35; padding-right:48px}
+  .picker .meta{display:flex; gap:5px; align-items:center}
+  .picker .pill{
+    padding:2px 8px; font-size:10px; font-weight:500;
+    background:rgba(15,23,42,.05); color:var(--text-sub); border-radius:5px;
+  }
+  .picker .pill.warn{background:var(--warn-bg); color:var(--warn)}
+  .picker .start{
+    margin-top:6px; padding-top:10px; border-top:1px solid var(--border);
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:12px; font-weight:600; color:var(--accent-text);
+  }
+  .picker .start.warn{color:var(--warn)}
+
+  /* === STATE 2: Meeting context bar === */
+  .ctx-bar{
+    display:flex; align-items:center; gap:12px;
+    padding:12px 16px; margin-bottom:14px;
+    background: var(--bg-card); backdrop-filter: blur(20px) saturate(160%);
+    border:1px solid var(--border); border-radius: var(--r-lg);
+    flex-wrap:wrap;
+  }
+  .ctx-btn{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:5px 11px; font-size:11.5px; font-weight:500;
+    background:rgba(255,255,255,.7); border:1px solid var(--border); border-radius:7px;
+    color:var(--text); cursor:pointer; font-family:inherit;
+  }
+  .ctx-mtg{display:inline-flex; align-items:center; gap:8px}
+  .ctx-icon{
+    width:24px; height:24px; border-radius:6px;
+    background:linear-gradient(135deg,#3b82f6,#1e3a8a);
+    color:#fff; display:flex; align-items:center; justify-content:center;
+  }
+  .ctx-name{font-size:14px; font-weight:700}
+  .ctx-tag{
+    padding:3px 9px; font-size:11px; font-weight:600;
+    background:var(--accent-bg); color:var(--accent-text); border-radius:99px;
+  }
+  .ctx-desc{font-size:11.5px; color:var(--text-muted)}
+  .ctx-year{
+    padding:3px 9px; font-size:11px; font-weight:600;
+    background:var(--accent-bg); color:var(--accent-text); border-radius:99px;
+  }
+  .ctx-user{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:3px 11px 3px 4px;
+    background:rgba(255,255,255,.7); border:1px solid var(--border); border-radius:99px;
+    font-size:11.5px;
+  }
+  .ctx-user .av{width:20px; height:20px; border-radius:99px; background:linear-gradient(135deg,#10b981,#34d399); color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  .ctx-user .role{font-weight:600}
+  .ctx-user .hint{color:var(--text-muted); font-size:10.5px}
+  .ctx-status-group{display:inline-flex; align-items:center; gap:5px; margin-left:auto}
+  .ctx-status{padding:4px 9px; font-size:11px; font-weight:600; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:4px}
+  .ctx-status.focus{background:var(--accent-bg); color:var(--accent-text)}
+  .ctx-status.good{background:var(--success-bg); color:var(--success)}
+  .ctx-status.more{background:var(--warn-bg); color:var(--warn)}
+  .ctx-status.none{background:rgba(15,23,42,.05); color:var(--text-muted)}
+  .ctx-status.done{background:rgba(15,23,42,.06); color:var(--text-sub)}
+
+  /* Meeting hero — Glass deep blue */
+  .mtg-hero{
+    position:relative; overflow:hidden;
+    padding:24px 28px; margin-bottom:14px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #22d3ee 100%);
+    border-radius: var(--r-2xl); color:#fff;
+    box-shadow: 0 10px 30px rgba(37,99,235,.22);
+    display:flex; align-items:center; gap:20px;
+  }
+  .mtg-hero::before{content:''; position:absolute; top:-80px; right:-60px; width:240px; height:240px; background: radial-gradient(circle, rgba(255,255,255,.22), transparent 70%); pointer-events:none}
+  .mtg-hero::after{content:''; position:absolute; bottom:-80px; left:-40px; width:220px; height:220px; background: radial-gradient(circle, rgba(187,247,208,.22), transparent 70%); pointer-events:none}
+  .mtg-hero .icon{
+    position:relative;
+    width:54px; height:54px; border-radius:14px;
+    background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3);
+    display:flex; align-items:center; justify-content:center;
+    backdrop-filter: blur(12px); flex-shrink:0;
+  }
+  .mtg-hero .text{position:relative; flex:1}
+  .mtg-hero .day{font-size:11.5px; opacity:.85; font-weight:600; letter-spacing:0.04em; margin-bottom:4px; display:inline-flex; align-items:center; gap:5px}
+  .mtg-hero h2{font-size:24px; font-weight:700; letter-spacing:-0.015em; margin:0 0 8px}
+  .mtg-hero .when{font-size:12.5px; opacity:.9; display:inline-flex; align-items:center; gap:6px; padding:3px 11px 3px 9px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25); border-radius:99px}
+
+  /* Mode pills */
+  .mode-row{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap}
+  .mode{
+    padding:5px 11px; font-size:11.5px; font-weight:600; border-radius:99px;
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .mode.accent{background:var(--accent-bg); color:var(--accent-text); border:1px solid rgba(14,165,233,.2)}
+  .mode.warn{background:var(--warn-bg); color:var(--warn); border:1px solid rgba(217,119,6,.2)}
+  .mode.neutral{background:rgba(15,23,42,.05); color:var(--text-sub); border:1px solid var(--border)}
+
+  /* Notion CTA */
+  .notion-cta{
+    display:flex; align-items:center; gap:12px;
+    padding:14px 16px; margin-bottom:14px;
+    background: rgba(255,255,255,.85); backdrop-filter: blur(20px) saturate(160%);
+    border:1px solid var(--border); border-left: 4px solid var(--accent);
+    border-radius: var(--r-md);
+  }
+  .notion-cta .ic{
+    width:36px; height:36px; border-radius:9px;
+    background: var(--brand-cta); color:#fff;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    box-shadow: 0 2px 8px rgba(37,99,235,.28);
+  }
+  .notion-cta .tx{flex:1}
+  .notion-cta .tx .tt{font-size:13px; font-weight:700; margin-bottom:2px}
+  .notion-cta .tx .dd{font-size:11px; color:var(--text-sub); line-height:1.55}
+  .btn-primary{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:7px 14px; font-size:12px; font-weight:600;
+    background: var(--brand-cta); color:#fff; border:1px solid #2563eb;
+    border-radius:8px; cursor:pointer; font-family:inherit; text-decoration:none;
+    box-shadow:0 2px 8px rgba(37,99,235,.28), inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  .btn-secondary{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:6px 12px; font-size:12px; font-weight:500;
+    background:rgba(255,255,255,.7); border:1px solid var(--border); border-radius:7px;
+    color:var(--text); cursor:pointer; font-family:inherit;
+  }
+
+  /* Card */
+  .card{
+    background: var(--bg-card); backdrop-filter: blur(20px) saturate(160%);
+    border:1px solid var(--border); border-radius: var(--r-lg);
+    box-shadow: var(--sh-card); margin-bottom:14px; overflow:hidden;
+  }
+  .card-head{padding:12px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px}
+  .card-head h3{font-size:13px; font-weight:700; margin:0; display:flex; align-items:center; gap:6px}
+  .card-head .right{margin-left:auto; display:flex; align-items:center; gap:6px}
+
+  /* Agenda */
+  .agenda{display:flex; flex-direction:column; gap:0}
+  .agenda li{
+    display:flex; align-items:baseline; gap:10px;
+    padding:10px 16px;
+    border-bottom:1px solid var(--border);
+    font-size:12.5px;
+  }
+  .agenda li:last-child{border-bottom:none}
+  .agenda li .num{
+    width:22px; height:22px; border-radius:6px;
+    background:rgba(15,23,42,.05); color:var(--text-sub);
+    font-size:11px; font-weight:700; font-family:ui-monospace, monospace;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .agenda li .lbl{font-weight:700; color:var(--text); min-width:70px}
+  .agenda li .desc{flex:1; color:var(--text-sub); line-height:1.55}
+
+  /* KA team selection */
+  .ka-team{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 16px;
+    background:rgba(255,255,255,.55); border:1px solid var(--border);
+    border-radius:10px; margin:6px 16px;
+    cursor:pointer;
+  }
+  .ka-team.selected{background:linear-gradient(120deg, rgba(37,99,235,.06), rgba(34,211,238,.04)); border-color:rgba(37,99,235,.2)}
+  .ka-team .cb{width:16px; height:16px; border-radius:4px; border:1.5px solid var(--border-strong); flex-shrink:0; background:#fff; display:inline-flex; align-items:center; justify-content:center}
+  .ka-team.selected .cb{background:var(--accent); border-color:var(--accent); color:#fff}
+  .ka-team .ic{
+    width:24px; height:24px; border-radius:6px;
+    background:var(--warn-bg); color:var(--warn);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .ka-team .nn{font-size:13px; font-weight:700; flex:1}
+  .ka-team .cnt{padding:2px 9px; font-size:11px; font-weight:600; background:var(--accent-bg); color:var(--accent-text); border-radius:99px}
+  .ka-team.muted .nn{color:var(--text-muted)}
+  .ka-team.muted .cnt{background:rgba(15,23,42,.05); color:var(--text-muted)}
+  .ka-team .ex{font-size:11px; color:var(--text-muted)}
+
+  /* === STATE 3: In-meeting step nav === */
+  .timer-alert{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 16px; margin-bottom:12px;
+    background: var(--danger-bg); border:1px solid var(--danger); border-left:4px solid var(--danger);
+    border-radius:10px;
+    font-size:12.5px;
+  }
+  .timer-alert .ic{
+    width:22px; height:22px; border-radius:99px; background:var(--danger); color:#fff;
+    display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .timer-alert .ti{font-weight:700; color:var(--danger)}
+  .timer-alert .meta{color:var(--text-sub); font-size:11px}
+  .timer-alert .bar{flex:1; height:3px; background:rgba(225,29,72,.15); border-radius:99px; overflow:hidden}
+  .timer-alert .bar .fill{height:100%; background:var(--danger); width:100%}
+
+  .steps{
+    display:flex; align-items:center; gap:8px;
+    padding:10px 12px; margin-bottom:12px;
+    background: var(--bg-card); border:1px solid var(--border); border-radius:12px;
+    backdrop-filter: blur(16px);
+  }
+  .steps .step{
+    flex:1;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    padding:8px 12px; font-size:12px; font-weight:600;
+    background:rgba(255,255,255,.6); color:var(--text-sub);
+    border:1px solid var(--border); border-radius:8px;
+    cursor:pointer; font-family:inherit;
+  }
+  .steps .step.done{background:var(--success-bg); color:var(--success); border-color:rgba(5,150,105,.2)}
+  .steps .step.active{background:var(--brand-cta); color:#fff; border-color:#2563eb; box-shadow:0 2px 8px rgba(37,99,235,.28)}
+  .steps .sep{color:var(--text-muted); font-size:11px}
+  .steps-meta{font-size:11px; color:var(--text-muted); margin:0 16px 14px; text-align:right}
+  .steps-meta b{color:var(--text)}
+
+  /* Progress */
+  .progress-bar{
+    padding:14px 16px; margin-bottom:14px;
+    background: var(--bg-card); border:1px solid var(--border); border-radius:12px;
+    display:flex; align-items:center; gap:14px;
+    backdrop-filter: blur(16px);
+  }
+  .progress-bar .lbl{font-size:11px; color:var(--text-sub)}
+  .progress-bar .val{font-size:22px; font-weight:700; font-family:ui-monospace, monospace; line-height:1}
+  .progress-bar .unit{font-size:11px; color:var(--text-muted)}
+  .progress-bar .bar{flex:1; height:6px; background:var(--sunken); border-radius:99px; overflow:hidden}
+  .progress-bar .bar .fill{height:100%; background:var(--brand-cta); width:2%}
+  .progress-bar .pill{padding:3px 10px; font-size:11px; font-weight:600; border-radius:99px}
+  .progress-bar .pill.success{background:var(--success-bg); color:var(--success)}
+  .progress-bar .pill.warn{background:var(--warn-bg); color:var(--warn)}
+
+  /* KA review card */
+  .ka-review{
+    background: var(--bg-card); border:1px solid var(--border); border-radius: var(--r-lg);
+    backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: var(--sh-card); overflow:hidden;
+    margin-bottom:14px;
+  }
+  .ka-review-head{
+    padding:12px 16px;
+    background: linear-gradient(120deg, rgba(2,132,199,.06), transparent);
+    border-bottom: 1px solid var(--border);
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .ka-breadcrumb{font-size:11px; color:var(--text-sub); display:inline-flex; align-items:center; gap:5px}
+  .ka-breadcrumb .b{font-weight:600; color:var(--text)}
+  .ka-breadcrumb .sep{color:var(--text-muted)}
+  .ka-title-row{padding:10px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border)}
+  .ka-title{font-size:14px; font-weight:600; flex:1}
+  .ka-status-pill{padding:2px 9px; font-size:10.5px; font-weight:600; border-radius:99px}
+  .ka-status-pill.none{background:rgba(15,23,42,.05); color:var(--text-muted)}
+  .ka-status-pill.good{background:var(--success-bg); color:var(--success)}
+  .ka-owner-row{padding:8px 16px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border)}
+  .ka-owner-row .av{width:18px; height:18px; border-radius:5px; background:linear-gradient(135deg,#10b981,#34d399); color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  .ka-owner-row .nm{font-size:11.5px; color:var(--text-sub)}
+
+  .gmf{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0}
+  .gmf-cell{padding:12px 16px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:6px}
+  .gmf-cell:last-child{border-right:none}
+  .gmf-cell .hd{display:flex; align-items:center; gap:6px}
+  .gmf-cell .hd .lb{font-size:11.5px; font-weight:700}
+  .gmf-cell .hd .pp{font-size:10px; color:var(--text-muted)}
+  .gmf-cell.good .hd .lb{color:var(--success)}
+  .gmf-cell.more .hd .lb{color:var(--warn)}
+  .gmf-cell.focus .hd .lb{color:var(--accent-text)}
+  .gmf-cell .ta{
+    min-height:72px; padding:8px 10px;
+    background: rgba(255,255,255,.7); border:1px solid var(--border);
+    border-radius:7px; font-size:11.5px; line-height:1.55; color:var(--text);
+    font-family:inherit; resize:vertical;
+  }
+  .gmf-cell .ta::placeholder{color:var(--text-muted); font-style:italic}
+
+  /* Section banner — replaces orange megaphone */
+  .section-banner{
+    display:flex; align-items:flex-start; gap:12px;
+    padding:14px 16px; margin-bottom:14px;
+    background: rgba(255,255,255,.85); border:1px solid var(--border);
+    border-left:4px solid var(--accent); border-radius: var(--r-md);
+    backdrop-filter: blur(20px) saturate(160%);
+  }
+  .section-banner.warn{border-left-color: var(--warn); background: rgba(255,251,235,.85)}
+  .section-banner .ic{
+    width:36px; height:36px; border-radius:9px;
+    background:var(--accent-bg); color:var(--accent-text);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .section-banner.warn .ic{background:var(--warn-bg); color:var(--warn)}
+  .section-banner .tx h4{font-size:13.5px; font-weight:700; margin:0 0 3px}
+  .section-banner .tx .dd{font-size:11.5px; color:var(--text-sub); line-height:1.6}
+
+  /* Empty state */
+  .empty-state{
+    padding:48px 16px;
+    text-align:center;
+    background: rgba(255,255,255,.55); border:1px dashed var(--border-mid);
+    border-radius: var(--r-md);
+    margin-bottom:14px;
+  }
+  .empty-state .ic{
+    width:48px; height:48px; border-radius:14px;
+    background:rgba(15,23,42,.04); color:var(--text-muted);
+    display:flex; align-items:center; justify-content:center;
+    margin:0 auto 10px;
+  }
+  .empty-state .tt{font-size:13px; color:var(--text-sub); margin-bottom:3px}
+  .empty-state .sm{font-size:11px; color:var(--text-muted)}
+
+  /* Confirm header */
+  .confirm-head{
+    display:flex; align-items:center; gap:10px;
+    padding:12px 16px 8px;
+  }
+  .confirm-head .tt{font-size:13px; font-weight:700; flex:1; display:flex; align-items:center; gap:8px}
+  .confirm-head .cnt{font-size:11px; color:var(--text-muted)}
+  .confirm-head label{font-size:11px; color:var(--text-sub); display:inline-flex; align-items:center; gap:5px; margin-right:8px}
+
+  /* Next action table */
+  .na-table{
+    background: var(--bg-card); border:1px solid var(--border); border-radius: var(--r-lg);
+    backdrop-filter: blur(20px) saturate(160%);
+    overflow:hidden; margin-bottom:14px;
+  }
+  .na-th{
+    display:grid; grid-template-columns: 140px 110px 1fr 200px;
+    padding:8px 16px; font-size:10.5px; font-weight:700;
+    color:var(--text-muted); letter-spacing:0.05em; text-transform:uppercase;
+    border-bottom:1px solid var(--border); background:rgba(15,23,42,.02);
+  }
+  .na-empty{padding:24px 16px; text-align:center; color:var(--text-muted); font-size:12px}
+  .na-foot{padding:10px 16px; display:flex; gap:8px; border-top:1px solid var(--border)}
+
+  /* Bottom nav */
+  .step-nav{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 0; margin-top:8px;
+  }
+
+  /* Done state */
+  .done-card{
+    background: var(--bg-card); border:1px solid var(--border); border-radius: var(--r-lg);
+    backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: var(--sh-card);
+    padding:36px 24px; text-align:center;
+  }
+  .done-card .icon{
+    width:64px; height:64px; border-radius:16px;
+    background: var(--brand-cta); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    margin:0 auto 12px;
+    box-shadow:0 8px 22px rgba(37,99,235,.28);
+  }
+  .done-card h2{font-size:22px; font-weight:700; letter-spacing:-0.01em; margin:0 0 6px}
+  .done-card .sub{font-size:12px; color:var(--text-sub); margin:0 0 22px}
+  .done-summary{
+    max-width:520px; margin:0 auto;
+    background:rgba(255,255,255,.6); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px;
+  }
+  .done-summary .hd{display:flex; align-items:center; gap:8px; margin-bottom:10px}
+  .done-summary .hd .ic{
+    width:24px; height:24px; border-radius:6px; background:var(--accent-bg); color:var(--accent-text);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .done-summary .hd .nm{font-size:12px; font-weight:700}
+  .done-summary-grid{display:grid; grid-template-columns: 1fr 1fr; gap:10px; text-align:left}
+  .done-summary-grid .k{font-size:10.5px; color:var(--text-muted); margin-bottom:2px}
+  .done-summary-grid .v{font-size:13px; font-weight:600}
+  .done-actions{margin-top:18px; display:flex; gap:8px; justify-content:center}
+
+  /* Strategy section */
+  .strategy{
+    background: var(--bg-card); border:1px solid var(--border); border-radius: var(--r-lg);
+    padding:20px 22px; margin-bottom:20px;
+    backdrop-filter: blur(20px) saturate(160%);
+  }
+  .strategy h2{font-size:16px; font-weight:700; margin:0 0 10px; letter-spacing:-0.005em}
+  .strategy .points{display:grid; grid-template-columns: repeat(3, 1fr); gap:12px}
+  .strategy .p{display:flex; gap:8px; padding:10px 12px; background:rgba(255,255,255,.5); border-radius:8px; font-size:11.5px; color:var(--text-sub); line-height:1.55}
+  .strategy .p .nm{font-weight:700; color:var(--text); margin-bottom:3px}
+
+  /* Section heading inside scrolling content */
+  .h-section{
+    font-size:11px; font-weight:700; color:var(--text-muted);
+    letter-spacing:0.08em; text-transform:uppercase;
+    margin:24px 0 10px; display:flex; align-items:center; gap:10px;
+  }
+  .h-section .ln{flex:1; height:1px; background:var(--border)}
+
+  @media (max-width:1100px){
+    .picker-grid{grid-template-columns: repeat(3,1fr)}
+    .strategy .points{grid-template-columns: 1fr}
+  }
+  @media (max-width:760px){
+    .picker-grid{grid-template-columns: 1fr 1fr}
+    nav.main{display:none}
+    .gmf{grid-template-columns: 1fr}
+  }
+</style>
+</head>
+<body>
+
+<aside class="org-rail">
+  <div class="org active">N</div>
+  <div class="org muted">テ</div>
+</aside>
+
+<div class="app">
+  <!-- Header -->
+  <header class="glass-bar">
+    <a class="brand" href="#">
+      <span class="brand-mark">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></svg>
+      </span>
+      <div class="brand-text"><span class="eyebrow">AI WORKSPACE</span><span class="name">NEO福岡</span></div>
+    </a>
+    <nav class="main">
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>ホーム</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>ワークスペース</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>OKR</span>
+      <span class="nav-item active"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>週次MTG</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>朝会</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v16M3 21h18M10 8h4M10 12h4M10 16h4"/></svg>組織</span>
+    </nav>
+    <div style="flex:1"></div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <span>検索…</span>
+      <span style="flex:1"></span>
+      <span class="kbd">⌘K</span>
+    </div>
+    <div class="year-toggle"><span class="y">2025年度</span><span class="y active">2026年度</span></div>
+    <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg></button>
+    <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></button>
+  </header>
+
+  <main class="content">
+
+    <!-- Strategy memo -->
+    <div class="strategy">
+      <div style="font-size:10.5px; font-weight:700; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px">DESIGN STRATEGY · 週次MTG のトンマナ統一</div>
+      <h2>絵文字を廃止し、CTA だけブランドグラデで強調</h2>
+      <div class="points">
+        <div class="p"><div><div class="nm">01 · 背景を静かな Glass に</div>3 色オーロラ→淡い青グレー 1 エッジ。ビジネスツールとして落ち着く。</div></div>
+        <div class="p"><div><div class="nm">02 · 絵文字 → アイコン</div>🚀 / 📋 / 📢 / 📬 / ✅ など全廃。Icon.jsx の単色ライン SVG に置換。</div></div>
+        <div class="p"><div><div class="nm">03 · 会議カードを Glass に</div>カラフルパステルアイコンタイル → ブランドグラデの統一アイコン。</div></div>
+        <div class="p"><div><div class="nm">04 · ステップナビは brand-cta active のみ</div>水色ベタは廃止。完了は success、進行中は brand-cta。</div></div>
+        <div class="p"><div><div class="nm">05 · 確認事項バナーは accent ストロークで</div>派手なオレンジ全幅ベタ → 左 4px accent + 白カード。</div></div>
+        <div class="p"><div><div class="nm">06 · 終了画面は静かな祝福</div>大絵文字 🎉 → ブランドグラデのスパークルタイル + 控えめなカード。</div></div>
+      </div>
+    </div>
+
+    <!-- ====== STATE 1: Meeting picker ====== -->
+    <div class="ph">
+      <span class="eyebrow">WEEKLY MTG</span>
+      <h1>今週の会議を選択</h1>
+      <span class="desc">会議ごとに対象の部署・チーム・観点が自動で絞り込まれます</span>
+    </div>
+    <div class="picker-grid">
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#3b82f6,#1e3a8a)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 19 4-4M19 19V5M5 19V9M19 14l-7-7-7 7"/></svg>
+          </div>
+        </div>
+        <h3>週次キックオフ（パートナー事業部）</h3>
+        <div class="meta"><span class="pill warn">月曜</span><span class="pill">全社</span></div>
+        <div class="start">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#0ea5e9,#22d3ee)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0 4 2 6 0M2 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0 4 2 6 0M2 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0 4 2 6 0"/></svg>
+          </div>
+        </div>
+        <h3>週次キックオフ（ユース事業部）</h3>
+        <div class="meta"><span class="pill warn">月曜</span><span class="pill">全社</span></div>
+        <div class="start warn">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#10b981,#34d399)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5M14 20c0-2 2-3.5 4-3.5s3 1 3 3"/></svg>
+          </div>
+        </div>
+        <h3>週次キックオフ（コミュニティ事業部）</h3>
+        <div class="meta"><span class="pill warn">月曜</span><span class="pill">全社</span></div>
+        <div class="start warn">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-9"/><path d="M14 7h6v6"/></svg>
+          </div>
+        </div>
+        <h3>営業定例</h3>
+        <div class="meta"><span class="pill warn">火曜</span><span class="pill">全社</span></div>
+        <div class="start warn">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope team">チームサマリー</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#06b6d4,#22d3ee)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+          </div>
+        </div>
+        <h3>マネージャー定例</h3>
+        <div class="meta"><span class="pill warn">水曜</span><span class="pill">事業部選択</span></div>
+        <div class="start">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#f59e0b,#fb923c)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h7l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM14 4v4h4M9 13h6M9 17h4"/></svg>
+          </div>
+        </div>
+        <h3>経営企画会議</h3>
+        <div class="meta"><span class="pill warn">木曜</span><span class="pill">全社</span></div>
+        <div class="start warn">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#0ea5e9,#0369a1)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg>
+          </div>
+        </div>
+        <h3>役員会議</h3>
+        <div class="meta"><span class="pill warn">木曜</span><span class="pill">全社</span></div>
+        <div class="start">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#a855f7,#c084fc)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>
+          </div>
+        </div>
+        <h3>ディレクター確認会議</h3>
+        <div class="meta"><span class="pill warn">金曜</span><span class="pill">全社</span></div>
+        <div class="start">会議を開始 →</div>
+      </div>
+      <div class="picker">
+        <span class="scope both">両方</span>
+        <div class="top">
+          <div class="icon" style="background:linear-gradient(135deg,#64748b,#94a3b8)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12 12 20.5l-9-9V3h8.5z"/><circle cx="7" cy="7" r="1.2"/></svg>
+          </div>
+        </div>
+        <h3>プログラム別定例</h3>
+        <div class="meta"><span class="pill">任意</span><span class="pill">全社</span></div>
+        <div class="start">会議を開始 →</div>
+      </div>
+    </div>
+
+    <!-- ====== STATE 2: Meeting prep ====== -->
+    <div class="h-section"><span class="ln"></span>会議を開いた直後 — 準備画面<span class="ln"></span></div>
+
+    <!-- Context bar -->
+    <div class="ctx-bar">
+      <button class="ctx-btn">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        会議を変更
+      </button>
+      <div class="ctx-mtg">
+        <div class="ctx-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 19 4-4M19 19V5M5 19V9M19 14l-7-7-7 7"/></svg></div>
+        <span class="ctx-name">週次キックオフ（パートナー事業部）</span>
+      </div>
+      <span class="ctx-tag">KA重点</span>
+      <span class="ctx-desc">KA進捗中心・KR詳細は折り畳み</span>
+      <span class="ctx-year">2026年度</span>
+      <div class="ctx-user">
+        <span class="av">三</span>
+        <span class="role">三木智弘</span>
+        <span class="hint">(会議中は全員KA編集可)</span>
+      </div>
+      <div class="ctx-status-group">
+        <span class="ctx-status focus">注力</span>
+        <span class="ctx-status good">Good</span>
+        <span class="ctx-status more">More</span>
+        <span class="ctx-status none">未分類</span>
+        <span class="ctx-status done">完了</span>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="mtg-hero">
+      <div class="icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 19 4-4M19 19V5M5 19V9M19 14l-7-7-7 7"/></svg>
+      </div>
+      <div class="text">
+        <div class="day">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/></svg>
+          月曜
+        </div>
+        <h2>週次キックオフ（パートナー事業部）</h2>
+        <div class="when">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+          対象週: 5/18 〜 24
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode pills -->
+    <div class="mode-row">
+      <span class="mode accent">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        ファシリモード
+      </span>
+      <span class="mode warn">KA 重点</span>
+      <span class="mode neutral">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5M14 20c0-2 2-3.5 4-3.5s3 1 3 3"/></svg>
+        パートナー事業部 配下のチーム
+      </span>
+    </div>
+
+    <!-- Notion CTA -->
+    <div class="notion-cta">
+      <div class="ic">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+      </div>
+      <div class="tx">
+        <div class="tt">Notion で録音議事録をとってください</div>
+        <div class="dd">会議の Notion ページを開いて、録音と議事録の作成を開始してください。会議の最後に、この議事録からネクストアクションを取り込めます。</div>
+      </div>
+      <a class="btn-primary" href="#">
+        Notion を開く
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+      </a>
+    </div>
+
+    <!-- Agenda -->
+    <div class="card">
+      <div class="card-head">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+          会議の流れ
+        </h3>
+      </div>
+      <ol class="agenda" style="list-style:none; padding:0; margin:0">
+        <li><span class="num">1</span><span class="lbl">KA順送り</span><span class="desc">担当が KA ごとに 先週 good / 先週 more / 今週 focus を共有</span></li>
+        <li><span class="num">2</span><span class="lbl">確認事項</span><span class="desc">会議全体での確認事項を整理</span></li>
+        <li><span class="num">3</span><span class="lbl">会議終了</span><span class="desc">サマリー確認 → クローズ</span></li>
+      </ol>
+    </div>
+
+    <!-- KA team scope -->
+    <div class="card">
+      <div class="card-head">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>
+          今回確認する KA
+        </h3>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto">チェックを外したチーム/部署は今回の確認対象から除外（既定: 全て確認）</span>
+      </div>
+      <div style="padding:8px 0 12px">
+        <div class="ka-team selected">
+          <span class="cb"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+          <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h3m12 0h3M12 3v3m0 12v3"/></svg></span>
+          <span class="nn">セールス</span>
+          <span class="cnt">10 件</span>
+        </div>
+        <div class="ka-team selected">
+          <span class="cb"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+          <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 1 1-3.4-6.5L21 4l-.8 4.3A8 8 0 0 1 21 12"/></svg></span>
+          <span class="nn">CS</span>
+          <span class="cnt">27 件</span>
+        </div>
+        <div class="ka-team muted">
+          <span class="cb"></span>
+          <span class="ic" style="background:rgba(15,23,42,.04); color:var(--text-muted)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-9"/></svg></span>
+          <span class="nn">企画</span>
+          <span class="cnt">5 件</span>
+          <span class="ex">今回は対象外</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== STATE 3: In-meeting (Step 1 — KA順送り) ====== -->
+    <div class="h-section"><span class="ln"></span>会議中 — Step 1: KA順送り（時間超過アラート付き）<span class="ln"></span></div>
+
+    <!-- Timer alert (red) -->
+    <div class="timer-alert">
+      <span class="ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+      <span class="ti">終了予定時刻を 2分 過ぎています</span>
+      <span class="meta">経過 32 分 / 予定 30 分</span>
+      <span class="bar"><span class="fill"></span></span>
+    </div>
+
+    <!-- Steps nav -->
+    <div class="steps">
+      <button class="step active">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h11l3 3v11a1 1 0 0 1-1 1H5z"/></svg>
+        1. KA順送り
+      </button>
+      <span class="sep">—</span>
+      <button class="step">2. 共有事項</button>
+      <span class="sep">—</span>
+      <button class="step">3. 確認事項</button>
+      <span class="sep">—</span>
+      <button class="step">4. ネクストアクション</button>
+      <span class="sep">—</span>
+      <button class="step">5. 終了</button>
+    </div>
+    <div class="steps-meta">ファシリ: <b>三木智弘</b> · 開始 12:07</div>
+
+    <!-- Progress -->
+    <div class="progress-bar">
+      <span class="lbl">進捗</span>
+      <span><span class="val">1</span><span class="unit"> / 45</span></span>
+      <div class="bar"><div class="fill"></div></div>
+      <span class="pill success">完了 0</span>
+      <span class="pill warn">残 44</span>
+    </div>
+
+    <!-- KA review block -->
+    <div class="ka-review">
+      <div class="ka-review-head">
+        <div class="ka-breadcrumb">
+          <span class="b">通期</span>
+          <span class="sep">·</span>
+          <span style="font-size:10.5px; color:var(--text-muted)">週次更新は任意</span>
+          <span style="margin-left:auto; font-size:10.5px; color:var(--text-muted)">その週に更新が不要なら「スキップ」して下さい</span>
+        </div>
+      </div>
+      <div style="padding:8px 16px; font-size:11px; color:var(--text-sub); display:flex; align-items:center; gap:5px; border-bottom:1px solid var(--border)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h3m12 0h3M12 3v3m0 12v3"/></svg>
+        <b style="color:var(--text)">セールス</b>
+        <span style="color:var(--text-muted)">›</span>
+        どうすれば挑戦する人が活躍できる土壌をオール九州で作り、各社の幹部が組織変革のノウハウを学び、実践できるか
+        <span style="color:var(--text-muted)">›</span>
+        KR: 参加者継続率90%以上
+      </div>
+      <div class="ka-title-row">
+        <span class="ka-status-pill none">未分類</span>
+        <span class="ka-title">評議会に参加した企業のエンゲージメント向上</span>
+      </div>
+      <div class="ka-owner-row">
+        <span class="ka-status-pill good">完了</span>
+        <span class="ka-owner-row" style="border:none; padding:0; gap:5px">
+          <span class="av">元</span>
+          <span class="nm">元美和</span>
+        </span>
+      </div>
+      <div class="gmf">
+        <div class="gmf-cell good">
+          <div class="hd"><span class="lb">Good</span><span class="pp">先週 5/11〜17 の振り返り</span></div>
+          <textarea class="ta" placeholder="良かったこと・続けたいこと"></textarea>
+        </div>
+        <div class="gmf-cell more">
+          <div class="hd"><span class="lb">More</span><span class="pp">先週 5/11〜17 の課題</span></div>
+          <textarea class="ta" placeholder="課題・改善点"></textarea>
+        </div>
+        <div class="gmf-cell focus">
+          <div class="hd"><span class="lb">Focus</span><span class="pp">今週 5/18〜24 の注力</span></div>
+          <textarea class="ta" placeholder="今週の重点アクション"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== STATE 4: 共有事項 ====== -->
+    <div class="h-section"><span class="ln"></span>Step 2 — 共有事項<span class="ln"></span></div>
+
+    <div class="section-banner">
+      <div class="ic">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a3 3 0 0 0 3 3h2l5 4V4L8 8H6a3 3 0 0 0-3 3z"/><path d="M18 8a6 6 0 0 1 0 8"/></svg>
+      </div>
+      <div class="tx">
+        <h4>共有事項タイム</h4>
+        <div class="dd">会議参加者全員に共有したいトピックを順に発表します。新規追加は「＋新規作成」から。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="confirm-head">
+        <div class="tt">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a3 3 0 0 0 3 3h2l5 4V4L8 8H6a3 3 0 0 0-3 3z"/></svg>
+          共有事項
+        </div>
+        <span style="font-size:10.5px; color:var(--text-muted)">全社の共有・確認事項</span>
+        <span style="flex:1"></span>
+        <label><input type="checkbox" style="vertical-align:middle"> 確認済みも表示</label>
+        <button class="btn-primary">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          新規作成
+        </button>
+      </div>
+      <div style="padding:0 16px 8px; font-size:11px; color:var(--text-muted)">件数: <b style="color:var(--text)">0</b></div>
+      <div class="empty-state" style="margin:6px 16px 14px">
+        <div class="ic">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a3 3 0 0 0 3 3h2l5 4V4L8 8H6a3 3 0 0 0-3 3z"/></svg>
+        </div>
+        <div class="tt">共有事項はありません</div>
+        <div class="sm">右上の「新規作成」から追加できます</div>
+      </div>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn-secondary">← 前のステップに戻る</button>
+      <button class="btn-primary">
+        確認事項へ
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+      </button>
+    </div>
+
+    <!-- ====== STATE 5: ネクストアクション (warn banner) ====== -->
+    <div class="h-section"><span class="ln"></span>Step 4 — ネクストアクション（決定事項の固定）<span class="ln"></span></div>
+
+    <div class="section-banner warn">
+      <div class="ic">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+      </div>
+      <div class="tx">
+        <h4>ネクストアクションを確定</h4>
+        <div class="dd">誰がいつまでに何をやるかを記録します。決まらない会議は意味がありません。<br>会議で出た決定事項・宿題・依頼を全て書き出してから終了してください。</div>
+      </div>
+    </div>
+
+    <div class="na-table">
+      <div class="na-th"><span>担当</span><span>期日</span><span>内容</span><span>KA紐付け（任意）</span></div>
+      <div class="na-empty">まだネクストアクションが登録されていません。下のボタンから追加してください。</div>
+      <div class="na-foot">
+        <button class="btn-secondary">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          アクションを追加
+        </button>
+        <button class="btn-primary">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+          Notion から取り込み
+        </button>
+      </div>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn-secondary">← Step 2 に戻る</button>
+      <div style="display:flex; align-items:center; gap:10px">
+        <span style="font-size:11px;color:var(--text-muted)">記録: <b style="color:var(--text)">0</b> 件</span>
+        <button class="btn-primary">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          会議を終了
+        </button>
+      </div>
+    </div>
+
+    <!-- ====== STATE 6: Done ====== -->
+    <div class="h-section"><span class="ln"></span>Step 5 — 会議終了<span class="ln"></span></div>
+
+    <div class="done-card">
+      <div class="icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 L13.5 9 L20 11 L13.5 13 L12 20 L10.5 13 L4 11 L10.5 9 Z"/>
+        </svg>
+      </div>
+      <h2>お疲れ様でした</h2>
+      <div class="sub">週次キックオフ（パートナー事業部）を完了しました</div>
+
+      <div class="done-summary">
+        <div class="hd">
+          <div class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V11m4 10V8m4 13V13m4 8V5m4 16V10"/></svg></div>
+          <div class="nm">サマリー</div>
+        </div>
+        <div class="done-summary-grid">
+          <div><div class="k">ファシリ</div><div class="v">三木智弘</div></div>
+          <div><div class="k">開始</div><div class="v" style="font-family:ui-monospace, monospace">12:07</div></div>
+          <div><div class="k">終了</div><div class="v" style="font-family:ui-monospace, monospace">12:39</div></div>
+          <div><div class="k">所要</div><div class="v" style="font-family:ui-monospace, monospace">32 分</div></div>
+        </div>
+      </div>
+
+      <div class="done-actions">
+        <button class="btn-secondary">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5"/></svg>
+          もう一度開始
+        </button>
+        <button class="btn-primary">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+          一覧モードで詳細確認
+        </button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

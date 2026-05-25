@@ -1,6 +1,7 @@
 'use client'
 import { useLicense, describeLicenseReason } from '../lib/license/licenseContext'
 import { SPACING, TYPO, RADIUS } from '../lib/themeTokens'
+import Icon from './Icon'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LicenseBanner (SaaS化 Phase 5 + Trial Phase 1)
@@ -36,8 +37,8 @@ export default function LicenseBanner({ T, onRegisterKey }) {
         flexWrap: 'wrap', flexShrink: 0,
       }}>
         <span style={{
-          fontSize: 11, fontWeight: 700,
-          padding: '2px 8px', borderRadius: RADIUS.pill,
+          ...TYPO.footnote, fontWeight: 700,
+          padding: `2px ${SPACING.sm}px`, borderRadius: RADIUS.pill,
           background: tone, color: '#fff',
           letterSpacing: '0.04em',
         }}>無料体験中</span>
@@ -51,18 +52,19 @@ export default function LicenseBanner({ T, onRegisterKey }) {
         </div>
         {onRegisterKey && (
           <button onClick={onRegisterKey} style={{
-            padding: '6px 14px', borderRadius: RADIUS.pill,
+            padding: `6px 14px`, borderRadius: RADIUS.pill,
             background: 'transparent', border: `1px solid ${tone}`,
             color: tone, cursor: 'pointer', fontFamily: 'inherit',
             ...TYPO.footnote, fontWeight: 700, whiteSpace: 'nowrap',
           }}>ライセンスキーを登録</button>
         )}
         <a href={MYAI_MARKET_URL} target="_blank" rel="noopener noreferrer" style={{
-          padding: '6px 14px', borderRadius: RADIUS.pill,
-          background: tone, color: '#FFFFFF',
+          padding: `6px 14px`, borderRadius: RADIUS.pill,
+          background: tone, color: '#fff',
           ...TYPO.footnote, textDecoration: 'none',
           fontWeight: 800, whiteSpace: 'nowrap',
-        }}>myAI で購入 ↗</a>
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}>myAI で購入 <Icon name="external" size={12} /></a>
       </div>
     )
   }
@@ -84,7 +86,7 @@ export default function LicenseBanner({ T, onRegisterKey }) {
         display: 'flex', alignItems: 'center', gap: SPACING.md,
         flexWrap: 'wrap', flexShrink: 0,
       }}>
-        <span style={{ fontSize: 16 }} aria-hidden>⚠</span>
+        <span style={{ color: T.danger, display: 'inline-flex' }} aria-hidden><Icon name="alert" size={16} /></span>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ ...TYPO.callout, color: T.text }}>
             {isTrialExpired ? '無料体験が終了しました'
@@ -97,18 +99,19 @@ export default function LicenseBanner({ T, onRegisterKey }) {
         </div>
         {onRegisterKey && (
           <button onClick={onRegisterKey} style={{
-            padding: '6px 14px', borderRadius: RADIUS.pill,
+            padding: `6px 14px`, borderRadius: RADIUS.pill,
             background: 'transparent', border: `1px solid ${T.danger}`,
             color: T.danger, cursor: 'pointer', fontFamily: 'inherit',
             ...TYPO.footnote, fontWeight: 700, whiteSpace: 'nowrap',
           }}>キーを登録</button>
         )}
         <a href={MYAI_MARKET_URL} target="_blank" rel="noopener noreferrer" style={{
-          padding: '6px 14px', borderRadius: RADIUS.pill,
-          background: T.danger, color: '#FFFFFF',
+          padding: `6px 14px`, borderRadius: RADIUS.pill,
+          background: T.danger, color: '#fff',
           ...TYPO.footnote, textDecoration: 'none',
           fontWeight: 800, whiteSpace: 'nowrap',
-        }}>{cta} ↗</a>
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}>{cta} <Icon name="external" size={12} /></a>
       </div>
     )
   }

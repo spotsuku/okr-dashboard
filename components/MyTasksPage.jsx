@@ -1,17 +1,15 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger, inputStyle, sectionHeaderStyle, largeTitle, btnBrand, accentRingStyle } from '../lib/iosStyles'
+import Icon from './Icon'
 import { SheetModal } from './iosUI'
 import { computeKAKey } from '../lib/kaKey'
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 
 // JST基準のYYYY-MM-DDを返す
 function toDateStr(d) {
@@ -41,9 +39,9 @@ function formatDate(ds) {
 // ステータス定義
 // iOS システムカラー
 const STATUS_CONFIG = {
-  not_started: { label: '未着手', color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.25)', icon: '○' },
-  in_progress: { label: '進行中', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',   border: 'rgba(0,122,255,0.30)',   icon: '◐' },
-  done:        { label: '完了',   color: '#34C759', bg: 'rgba(52,199,89,0.10)',   border: 'rgba(52,199,89,0.30)',   icon: '●' },
+  not_started: { label: '未着手', color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.25)', icon: 'circle' },
+  in_progress: { label: '進行中', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',   border: 'rgba(0,122,255,0.30)',   icon: 'half' },
+  done:        { label: '完了',   color: '#34C759', bg: 'rgba(52,199,89,0.10)',   border: 'rgba(52,199,89,0.30)',   icon: 'check' },
 }
 const STATUS_ORDER = ['not_started', 'in_progress', 'done']
 
@@ -79,28 +77,29 @@ function StatusBadge({ status, onChange, T }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button onClick={() => setOpen(p => !p)} style={{
-        padding: '2px 8px', borderRadius: 4, border: `1px solid ${cfg.border}`,
-        background: cfg.bg, color: cfg.color, fontSize: 10, fontWeight: 700,
+        padding: '2px 8px', borderRadius: RADIUS.xs, border: `1px solid ${cfg.border}`,
+        background: cfg.bg, color: cfg.color, ...TYPO.caption,
         cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
       }}>
-        {cfg.icon} {cfg.label}
+        <Icon name={cfg.icon} size={11} /> {cfg.label}
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', right: 0, zIndex: 100, marginTop: 4,
-          background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 8,
-          padding: 4, minWidth: 120, boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          position: 'absolute', top: '100%', right: 0, zIndex: 100, marginTop: SPACING.xs,
+          background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.sm,
+          padding: SPACING.xs, minWidth: 120, boxShadow: SHADOWS.md,
         }}>
           {STATUS_ORDER.map(s => {
             const c = STATUS_CONFIG[s]
             return (
               <button key={s} onClick={() => { onChange(s); setOpen(false) }} style={{
-                display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
-                borderRadius: 5, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 4, width: '100%', textAlign: 'left', padding: '6px 10px',
+                borderRadius: RADIUS.xs, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                 background: s === status ? c.bg : 'transparent',
-                color: s === status ? c.color : T.text, fontSize: 11, fontWeight: 600,
+                color: s === status ? c.color : T.text, ...TYPO.footnote,
               }}>
-                {c.icon} {c.label}
+                <Icon name={c.icon} size={12} /> {c.label}
               </button>
             )
           })}
@@ -114,11 +113,11 @@ function StatusBadge({ status, onChange, T }) {
 function ConfirmDialog({ message, onConfirm, onCancel, T }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '24px 28px', minWidth: 320, maxWidth: 420, boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 18, lineHeight: 1.6 }}>{message}</div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} style={{ padding: '7px 18px', borderRadius: 7, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-          <button onClick={onConfirm} style={{ padding: '7px 18px', borderRadius: 7, border: 'none', background: '#00d68f', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>完了にする</button>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg, padding: '24px 28px', minWidth: 320, maxWidth: 420, boxShadow: SHADOWS.xl }}>
+        <div style={{ ...TYPO.headline, fontWeight: 600, color: T.text, marginBottom: 18, lineHeight: 1.6 }}>{message}</div>
+        <div style={{ display: 'flex', gap: SPACING.sm + 2, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ ...btnSecondary({ T }), color: T.textMuted }}>キャンセル</button>
+          <button onClick={onConfirm} style={btnPrimary({ T, color: T.success })}>完了にする</button>
         </div>
       </div>
     </div>
@@ -276,33 +275,32 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
     }
   }
 
-  const inputSt = { width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
+  const inputSt = { ...inputStyle({ T }), padding: '9px 12px', fontSize: TYPO.body.fontSize, background: T.bg, borderRadius: RADIUS.sm }
   const presetBtnSt = (active) => ({
-    padding: '5px 10px', borderRadius: 7,
+    padding: '5px 10px', borderRadius: RADIUS.xs + 1,
     border: `1px solid ${active ? T.accent : T.border}`,
-    background: active ? `${T.accent}18` : T.bg,
+    background: active ? T.accentBg : T.bg,
     color: active ? T.accent : T.textSub,
-    fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+    ...TYPO.footnote, fontWeight: 700, fontFamily: 'inherit',
     cursor: 'pointer', whiteSpace: 'nowrap',
   })
 
   return (
     <SheetModal T={T} open onClose={onClose} title="タスクを追加" maxWidth={560}
       footer={<>
-        <span style={{ flex: 1, fontSize: 10, color: T.textFaint }}>
+        <span style={{ flex: 1, ...TYPO.caption, fontWeight: 600, color: T.textFaint }}>
           Enter = 作成 / ⌘ + Enter = 作成して続ける
         </span>
-        <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 9, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+        <button onClick={onClose} style={{ ...btnSecondary({ T }), color: T.textMuted }}>キャンセル</button>
         <button onClick={() => save(true)} disabled={!canSave || saving} title="保存してフォームをクリア、次のタスクを連続入力"
-          style={{ padding: '8px 16px', borderRadius: 9,
-            border: `1px solid ${T.border}`,
+          style={{ ...btnSecondary({ T }),
+            display: 'inline-flex', alignItems: 'center', gap: 4,
             background: canSave && !saving ? T.bgCard : 'transparent',
             color: canSave && !saving ? T.text : T.textFaint,
-            fontSize: 13, fontWeight: 700,
-            cursor: canSave && !saving ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-          + 作成して続ける
+            cursor: canSave && !saving ? 'pointer' : 'default' }}>
+          <Icon name="plus" size={13} /> 作成して続ける
         </button>
-        <button onClick={() => save(false)} disabled={!canSave || saving} style={{ padding: '8px 20px', borderRadius: 9, border: 'none', background: canSave && !saving ? T.accent : T.border, color: canSave && !saving ? '#fff' : T.textFaint, fontSize: 13, fontWeight: 700, cursor: canSave ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+        <button onClick={() => save(false)} disabled={!canSave || saving} style={{ ...btnPrimary({ T, size: 'lg' }), opacity: canSave && !saving ? 1 : 0.5, cursor: canSave ? 'pointer' : 'default' }}>
           {saving ? '保存中...' : '作成する'}
         </button>
       </>}
@@ -310,13 +308,13 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
       <>
         {/* タイトル */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>タイトル <span style={{ color: '#ff6b6b' }}>*</span></div>
+          <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginBottom: 5 }}>タイトル <span style={{ color: T.danger }}>*</span></div>
           <input ref={titleInputRef} value={title} onChange={e => setTitle(e.target.value)} onKeyDown={handleTitleKeyDown} placeholder="タスク内容を入力 (Enter で作成)" style={inputSt} autoFocus />
         </div>
 
         {/* 担当者 */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>担当者</div>
+          <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginBottom: 5 }}>担当者</div>
           <select value={assignee} onChange={e => setAssignee(e.target.value)} style={{ ...inputSt, cursor: 'pointer' }}>
             <option value="">-- 未設定 --</option>
             {(members || []).map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
@@ -325,7 +323,7 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
 
         {/* 期日 */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>期日</div>
+          <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginBottom: 5 }}>期日</div>
           {/* プリセット (ワンクリックで設定) */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
             {datePresets.map(p => (
@@ -334,7 +332,7 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
               </button>
             ))}
             {dueDate && (
-              <button onClick={() => setDueDate('')} title="期日をクリア" style={presetBtnSt(false)}>× クリア</button>
+              <button onClick={() => setDueDate('')} title="期日をクリア" style={{ ...presetBtnSt(false), display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="cross" size={11} /> クリア</button>
             )}
           </div>
           <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inputSt} />
@@ -342,39 +340,39 @@ export function TaskCreateModal({ onClose, onCreated, members, myName, T, defaul
 
         {/* KA紐付け */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>KA紐付け <span style={{ color: '#ff6b6b' }}>*</span></div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer', padding: '8px 12px', borderRadius: 8, background: noKaLink ? 'rgba(255,209,102,0.10)' : 'transparent', border: `1px solid ${noKaLink ? 'rgba(255,209,102,0.4)' : T.border}` }}>
+          <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginBottom: 5 }}>KA紐付け <span style={{ color: T.danger }}>*</span></div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm, cursor: 'pointer', padding: '8px 12px', borderRadius: RADIUS.sm, background: noKaLink ? T.warnBg : 'transparent', border: `1px solid ${noKaLink ? T.warn : T.border}` }}>
             <input type="checkbox" checked={noKaLink} onChange={e => { setNoKaLink(e.target.checked); if (e.target.checked) setReportId('') }} />
-            <span style={{ fontSize: 12, color: noKaLink ? '#ffd166' : T.textSub, fontWeight: 600 }}>⚠ KA紐付けなし（OKRに直結しないタスク）</span>
+            <span style={{ ...TYPO.subhead, display: 'inline-flex', alignItems: 'center', gap: 4, color: noKaLink ? T.warn : T.textSub }}><Icon name="alert" size={12} /> KA紐付けなし（OKRに直結しないタスク）</span>
           </label>
           {!noKaLink && (
             loadingKAs ? (
-              <div style={{ fontSize: 12, color: T.textMuted, padding: 8 }}>KA一覧を読み込み中...</div>
+              <div style={{ ...TYPO.subhead, color: T.textMuted, padding: SPACING.sm }}>KA一覧を読み込み中...</div>
             ) : (
               <>
                 {/* 部署・チーム絞り込み */}
-                <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                  <select value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setSelectedTeam(''); setReportId('') }} style={{ ...inputSt, fontSize: 12, flex: 1 }}>
+                <div style={{ display: 'flex', gap: SPACING.xs + 2, marginBottom: SPACING.xs + 2 }}>
+                  <select value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setSelectedTeam(''); setReportId('') }} style={{ ...inputSt, fontSize: TYPO.subhead.fontSize, flex: 1 }}>
                     <option value="">全部署</option>
                     {departmentLevels.map(l => (
-                      <option key={l.id} value={l.id}>{l.icon || '📁'} {l.name}</option>
+                      <option key={l.id} value={l.id}>{l.name}</option>
                     ))}
                   </select>
                   {childLevels.length > 0 && (
-                    <select value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); setReportId('') }} style={{ ...inputSt, fontSize: 12, flex: 1 }}>
+                    <select value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); setReportId('') }} style={{ ...inputSt, fontSize: TYPO.subhead.fontSize, flex: 1 }}>
                       <option value="">全チーム</option>
                       {childLevels.map(l => (
-                        <option key={l.id} value={l.id}>{l.icon || '📁'} {l.name}</option>
+                        <option key={l.id} value={l.id}>{l.name}</option>
                       ))}
                     </select>
                   )}
                 </div>
-                <input value={kaSearch} onChange={e => setKaSearch(e.target.value)} placeholder="🔍 KAを検索（タイトル・担当者・OKR名）" style={{ ...inputSt, marginBottom: 6, fontSize: 12 }} />
-                {(kaSearch || selectedDept) && <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>{filteredKAs.length}件のKAが見つかりました</div>}
-                <select value={reportId} onChange={e => setReportId(e.target.value)} style={{ ...inputSt, cursor: 'pointer', borderColor: !reportId ? 'rgba(255,107,107,0.4)' : T.border }} size={Math.min(filteredKAs.length + 2, 10)}>
+                <input value={kaSearch} onChange={e => setKaSearch(e.target.value)} placeholder="KAを検索（タイトル・担当者・OKR名）" style={{ ...inputSt, marginBottom: SPACING.xs + 2, fontSize: TYPO.subhead.fontSize }} />
+                {(kaSearch || selectedDept) && <div style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, marginBottom: SPACING.xs }}>{filteredKAs.length}件のKAが見つかりました</div>}
+                <select value={reportId} onChange={e => setReportId(e.target.value)} style={{ ...inputSt, cursor: 'pointer', borderColor: !reportId ? T.danger : T.border }} size={Math.min(filteredKAs.length + 2, 10)}>
                   <option value="">-- KAを選択してください --</option>
                   {myKAs.length > 0 && (
-                    <optgroup label={`⭐ 自分のKA (${myKAs.length}件)`}>
+                    <optgroup label={`自分のKA (${myKAs.length}件)`}>
                       {myKAs.map(ka => {
                         const obj = objMap[ka.objective_id]
                         return <option key={ka.id} value={ka.id}>{ka.ka_title || '(無題)'}{obj ? ` [${obj.title.slice(0,20)}]` : ''}</option>
@@ -432,17 +430,22 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
 
   useEffect(() => { if (editingId && editRef.current) editRef.current.focus() }, [editingId])
 
+  // 期限超過/完了カード: グラデ禁止。白カード + 色枠のみで状態を表現する。
+  const rowBg = T.bgCard
+  const rowBorder = isDone ? T.successBg : isOverdue ? T.dangerBg : T.border
+
   return (
     <div style={{
-      display: 'flex', alignItems: compact ? 'center' : 'flex-start', gap: 10,
-      padding: compact ? '10px 12px' : '12px 14px',
-      background: isDone ? T.doneBg : isOverdue ? T.overdueBg : T.bgCard,
-      border: `1px solid ${isDone ? T.doneBorder : isOverdue ? T.overdueBorder : T.border}`,
-      borderRadius: 12, marginBottom: 8, opacity: isDone ? 0.6 : 1,
-      boxShadow: isDone ? 'none' : '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)',
+      display: 'flex', alignItems: compact ? 'flex-start' : 'flex-start',
+      flexDirection: compact ? 'column' : 'row', gap: compact ? SPACING.xs + 3 : SPACING.sm + 2,
+      padding: compact ? '10px 11px' : '14px 16px',
+      background: rowBg,
+      border: `1px solid ${rowBorder}`,
+      borderRadius: RADIUS.md, marginBottom: compact ? 0 : SPACING.sm, opacity: isDone && !compact ? 0.85 : 1,
+      boxShadow: isDone ? SHADOWS.none : SHADOWS.xs,
       transition: 'all 0.2s ease',
     }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: compact ? 'none' : 1, width: compact ? '100%' : 'auto', minWidth: 0 }}>
         {isEditing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <input ref={editRef} value={editTitle} onChange={e => setEditTitle(e.target.value)}
@@ -452,45 +455,45 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
                 if (e.key === 'Enter') saveEdit()
                 if (e.key === 'Escape') cancelEdit()
               }}
-              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.accent}`, background: T.bg, color: T.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: RADIUS.xs, border: `1px solid ${T.accent}`, background: T.bg, color: T.text, ...TYPO.body, fontWeight: 600, fontFamily: 'inherit', outline: 'none' }}
             />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 11, color: T.textMuted }}>期日:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+              <span style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted }}>期日:</span>
               <input type="date" value={editDue} onChange={e => setEditDue(e.target.value)}
-                style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
+                style={{ padding: '4px 8px', borderRadius: RADIUS.xs, border: `1px solid ${T.border}`, background: T.bg, color: T.text, ...TYPO.subhead, fontFamily: 'inherit', outline: 'none' }}
               />
-              <button onClick={saveEdit} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#00d68f', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>保存</button>
-              <button onClick={cancelEdit} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>取消</button>
+              <button onClick={saveEdit} style={{ ...btnPrimary({ T, size: 'sm', color: T.success }), padding: '4px 12px' }}>保存</button>
+              <button onClick={cancelEdit} style={{ ...btnSecondary({ T, size: 'sm' }), padding: '4px 12px', color: T.textMuted }}>取消</button>
             </div>
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span onClick={() => !isDone && startEdit()} style={{ fontSize: 13, fontWeight: 600, color: isDone ? T.textMuted : T.text, textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.4, cursor: isDone ? 'default' : 'pointer' }} title={isDone ? '' : 'クリックして編集'}>
+            <div style={{ display: 'flex', alignItems: compact ? 'flex-start' : 'center', flexDirection: compact ? 'column' : 'row', gap: compact ? 3 : SPACING.xs + 2 }}>
+              <span onClick={() => !isDone && startEdit()} style={{ fontSize: 13.5, fontWeight: 600, color: isDone ? T.textMuted : T.text, textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.45, cursor: isDone ? 'default' : 'pointer' }} title={isDone ? '' : 'クリックして編集'}>
                 {task.title || '(未入力)'}
               </span>
               {task.assignee && (
-                <span style={{ fontSize: 10, color: avatarColor(task.assignee), fontWeight: 600 }}>
+                <span style={{ fontSize: compact ? 10.5 : 12, letterSpacing: 0, color: T.accentText, fontWeight: 500 }}>
                   @{task.assignee}
                 </span>
               )}
             </div>
             {!compact && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
+              <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', marginTop: 3 }}>
                 {ka ? (
                   <>
-                    <span style={{ fontSize: 10, color: T.textMuted, background: T.sectionBg, padding: '1px 6px', borderRadius: 4, border: `1px solid ${T.border}` }}>
+                    <span style={{ ...TYPO.caption, letterSpacing: 0, color: T.textMuted, background: T.sectionBg, padding: '1px 6px', borderRadius: RADIUS.xs, border: `1px solid ${T.border}` }}>
                       KA: {ka.ka_title || '(無題)'}
                     </span>
                     {obj && (
-                      <span style={{ fontSize: 10, color: T.textFaint }}>
+                      <span style={{ ...TYPO.caption, letterSpacing: 0, color: T.textFaint }}>
                         OKR: {obj.title}
                       </span>
                     )}
                   </>
                 ) : (
-                  <span style={{ fontSize: 10, color: '#ffd166', fontWeight: 600, background: 'rgba(255,209,102,0.10)', padding: '1px 6px', borderRadius: 4, border: '1px solid rgba(255,209,102,0.25)' }}>
-                    ⚠ KA紐付けなし
+                  <span style={{ ...TYPO.caption, letterSpacing: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: T.warn, fontWeight: 600, background: T.warnBg, padding: '1px 6px', borderRadius: RADIUS.xs, border: `1px solid ${T.warn}` }}>
+                    <Icon name="alert" size={10} /> KA紐付けなし
                   </span>
                 )}
               </div>
@@ -499,22 +502,43 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
         )}
       </div>
       {!isEditing && (
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ flexShrink: 0, width: compact ? '100%' : 'auto', display: 'flex', alignItems: 'center', gap: compact ? SPACING.xs + 2 : SPACING.xs + 2 }}>
           <StatusBadge status={status} onChange={(s) => onStatusChange(task.id, s)} T={T} />
-          {!isDone && (
-            <span onClick={startEdit} style={{ fontSize: 11, color: T.textFaint, cursor: 'pointer', padding: '2px 4px' }} title="編集">✏️</span>
+          {!compact && !isDone && (
+            <button onClick={startEdit} title="編集" style={{
+              width: 26, height: 26, borderRadius: RADIUS.xs, background: 'transparent',
+              border: `1px solid ${T.border}`, color: T.textMuted, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+            }}><Icon name="pencil" size={12} /></button>
           )}
-          <span onClick={() => { if (window.confirm(`「${task.title}」を削除しますか？`)) onDeleteTask(task.id) }} style={{ fontSize: 11, color: '#ff6b6b', cursor: 'pointer', padding: '2px 4px', opacity: 0.6 }} title="削除">🗑</span>
+          {!compact && (
+            <button onClick={() => { if (window.confirm(`「${task.title}」を削除しますか？`)) onDeleteTask(task.id) }} title="削除" style={{
+              width: 26, height: 26, borderRadius: RADIUS.xs, background: 'transparent',
+              border: `1px solid ${T.border}`, color: T.textMuted, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+            }}><Icon name="trash" size={12} /></button>
+          )}
           {task.due_date ? (
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-              color: isOverdue ? '#ff6b6b' : task.due_date <= thisSunday ? '#ffd166' : T.textMuted,
-              background: isOverdue ? 'rgba(255,107,107,0.12)' : 'transparent',
-            }}>
-              {isOverdue && '⚠ '}{formatDate(task.due_date)}
-            </span>
+            isOverdue ? (
+              <span style={{
+                ...pillStyle({ color: T.danger, size: 'md' }),
+                marginLeft: compact ? 'auto' : 0,
+                fontWeight: 700, fontFamily: 'ui-monospace, monospace',
+              }}>
+                <Icon name="alert" size={11} /> {formatDate(task.due_date)}
+              </span>
+            ) : (
+              <span style={{
+                fontSize: compact ? 9.5 : TYPO.footnote.fontSize, fontWeight: 600,
+                marginLeft: compact ? 'auto' : 0,
+                fontFamily: 'ui-monospace, monospace',
+                color: isDone ? T.success : task.due_date <= thisSunday ? T.warn : T.textMuted,
+              }}>
+                {formatDate(task.due_date)}
+              </span>
+            )
           ) : (
-            <span style={{ fontSize: 11, color: T.textFaint }}>期限なし</span>
+            <span style={{ fontSize: compact ? 9.5 : TYPO.footnote.fontSize, fontWeight: 600, marginLeft: compact ? 'auto' : 0, color: T.textFaint }}>期限なし</span>
           )}
         </div>
       )}
@@ -547,11 +571,15 @@ function ListView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDel
   const renderSection = (title, icon, items, color) => {
     if (items.length === 0) return null
     return (
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 14 }}>{icon}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: color || T.text }}>{title}</span>
-          <span style={{ fontSize: 11, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: 99, border: `1px solid ${T.border}` }}>{items.length}件</span>
+      <div style={{ marginBottom: SPACING.xl }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}>
+          <span style={{ display: 'inline-flex', color: color || T.text }}><Icon name={icon} size={14} /></span>
+          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.04em', color: color || T.text }}>{title}</span>
+          {color ? (
+            <span style={{ ...pillStyle({ color, size: 'sm' }), fontWeight: 700, padding: '2px 9px', fontSize: 10.5 }}>{items.length}件</span>
+          ) : (
+            <span style={{ ...TYPO.footnote, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: RADIUS.pill, border: `1px solid ${T.border}` }}>{items.length}件</span>
+          )}
         </div>
         {items.map(t => <TaskCard key={t.id} task={t} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={onStatusChange} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} myName={myName} />)}
       </div>
@@ -560,46 +588,48 @@ function ListView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDel
 
   return (
     <>
-      {/* サマリーバー */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        {STATUS_ORDER.map(s => {
-          const cfg = STATUS_CONFIG[s]
-          const count = s === 'done' ? done.length : tasks.filter(t => getTaskStatus(t) === s).length
-          return (
-            <div key={s} style={{ padding: '8px 16px', borderRadius: 8, background: cfg.bg, border: `1px solid ${cfg.border}`, fontSize: 12 }}>
-              <span style={{ fontWeight: 700, fontSize: 18, color: cfg.color }}>{count}</span>
-              <span style={{ color: cfg.color, marginLeft: 6, opacity: 0.8 }}>{cfg.label}</span>
-            </div>
-          )
-        })}
-        {overdue.length > 0 && (
-          <div style={{ padding: '8px 16px', borderRadius: 8, background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', fontSize: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 18, color: '#ff6b6b' }}>{overdue.length}</span>
-            <span style={{ color: '#ff6b6b', marginLeft: 6 }}>期限超過</span>
+      {/* 統計タイル (未着手 / 進行中 / 完了 / 期限超過) */}
+      <div style={{ display: 'flex', gap: SPACING.sm + 2, marginBottom: SPACING.xl, flexWrap: 'wrap' }}>
+        {[
+          { key: 'not_started', label: '未着手', count: tasks.filter(t => getTaskStatus(t) === 'not_started').length, color: T.textSub,    tint: null },
+          { key: 'in_progress', label: '進行中', count: tasks.filter(t => getTaskStatus(t) === 'in_progress').length, color: T.accentText, tint: T.accent },
+          { key: 'done',        label: '完了',   count: done.length,                                                  color: T.success,    tint: T.success },
+          { key: 'overdue',     label: '期限超過', count: overdue.length,                                              color: T.danger,     tint: T.danger },
+        ].map(tile => (
+          <div key={tile.key} style={{
+            flex: 1, minWidth: 120,
+            ...cardStyle({ T, padding: '14px 16px' }),
+            border: `1px solid ${tile.tint ? `${tile.tint}33` : T.border}`,
+            borderTop: `2px solid ${tile.tint ? `${tile.tint}66` : T.border}`,
+            background: T.bgCard,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: T.textSub }}>{tile.label}</span>
+            <span style={{ fontSize: 22, fontWeight: 700, fontFamily: 'ui-monospace, monospace', letterSpacing: '-0.01em', color: tile.color }}>{tile.count}</span>
           </div>
-        )}
+        ))}
       </div>
 
       {totalIncomplete === 0 && done.length === 0 && (
         <div style={{ padding: '60px 20px', textAlign: 'center', color: T.textFaint }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
-          <div style={{ fontSize: 15, color: T.text }}>タスクがありません</div>
-          <div style={{ fontSize: 13, marginTop: 6 }}>割り当てられたタスクがここに表示されます</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: SPACING.md, color: T.success }}><Icon name="check" size={36} /></div>
+          <div style={{ ...TYPO.headline, color: T.text }}>タスクがありません</div>
+          <div style={{ ...TYPO.body, marginTop: 6 }}>割り当てられたタスクがここに表示されます</div>
         </div>
       )}
 
-      {renderSection('期限超過', '🔴', overdue, '#ff6b6b')}
-      {renderSection('今週', '📅', thisWeek, '#ffd166')}
-      {renderSection('来週以降', '📋', upcoming)}
-      {renderSection('期限なし', '📌', noDue)}
+      {renderSection('期限超過', 'alert', overdue, T.danger)}
+      {renderSection('今週', 'calendar', thisWeek, T.warn)}
+      {renderSection('来週以降', 'note', upcoming)}
+      {renderSection('期限なし', 'pin', noDue)}
 
       {done.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <div onClick={() => setShowDone(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer', userSelect: 'none' }}>
-            <span style={{ fontSize: 14 }}>✅</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#00d68f' }}>完了済み（直近1週間）</span>
-            <span style={{ fontSize: 11, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: 99, border: `1px solid ${T.border}` }}>{done.length}件</span>
-            <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 4 }}>{showDone ? '▼' : '▶'}</span>
+        <div style={{ marginTop: SPACING.sm }}>
+          <div onClick={() => setShowDone(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm, cursor: 'pointer', userSelect: 'none' }}>
+            <span style={{ display: 'inline-flex', color: T.success }}><Icon name="check" size={14} /></span>
+            <span style={{ ...TYPO.callout, color: T.success }}>完了済み（直近1週間）</span>
+            <span style={{ ...TYPO.footnote, color: T.textFaint, fontWeight: 600, background: T.sectionBg, padding: '1px 8px', borderRadius: RADIUS.pill, border: `1px solid ${T.border}` }}>{done.length}件</span>
+            <span style={{ display: 'inline-flex', color: T.textFaint, marginLeft: SPACING.xs }}><Icon name={showDone ? 'chevronD' : 'chevronR'} size={12} /></span>
           </div>
           {showDone && done.map(t => <TaskCard key={t.id} task={t} kaMap={kaMap} objMap={objMap} T={T} onStatusChange={onStatusChange} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask} myName={myName} />)}
         </div>
@@ -632,10 +662,14 @@ function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
     }
   }
 
+  // カラムのアクセント色 (handoff: 未着手=muted / 進行中=accent / 完了=success)
+  const COL_COLOR = { not_started: T.textMuted, in_progress: T.accent, done: T.success }
+
   return (
-    <div style={{ display: 'flex', gap: 16, minHeight: 400, overflowX: 'auto', paddingBottom: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.md, minHeight: 400 }}>
       {STATUS_ORDER.map(s => {
         const cfg = STATUS_CONFIG[s]
+        const colColor = COL_COLOR[s] || T.textMuted
         const colTasks = tasks.filter(t => getTaskStatus(t) === s)
         const isOver = dragOverCol === s
         return (
@@ -644,39 +678,31 @@ function BoardView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, s)}
             style={{
-              flex: 1, minWidth: 240, maxWidth: 400, display: 'flex', flexDirection: 'column',
-              background: isOver
-                ? `linear-gradient(180deg, ${cfg.bg} 0%, ${cfg.color}10 100%)`
-                : `linear-gradient(180deg, ${T.bgCard} 0%, ${cfg.color}06 100%)`,
-              border: `1px solid ${isOver ? cfg.color + '60' : cfg.color + '1a'}`,
-              borderRadius: 16, padding: 14,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+              ...cardStyle({ T, padding: 0 }),
+              display: 'flex', flexDirection: 'column', minWidth: 0,
+              border: `1px solid ${isOver ? `${colColor}66` : T.border}`,
               transition: 'all 0.2s ease',
             }}
           >
-            {/* カラムヘッダー (iOS 風) */}
+            {/* カラムヘッダー (カラーアイコンタイル + 件数) */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 10,
-              borderBottom: `1px solid ${cfg.color}26`,
+              display: 'flex', alignItems: 'center', gap: SPACING.sm,
+              padding: '11px 14px', borderBottom: `1px solid ${T.border}`,
             }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: 8,
-                background: `linear-gradient(135deg, ${cfg.color} 0%, ${cfg.color}c0 100%)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, color: '#fff', fontWeight: 800,
-                boxShadow: `0 2px 4px ${cfg.color}55`,
-              }}>{cfg.icon}</div>
-              <span style={{ fontSize: 14, fontWeight: 800, color: cfg.color, letterSpacing: '-0.01em' }}>{cfg.label}</span>
+              <span style={accentRingStyle({ color: colColor, size: 18 })}><Icon name={cfg.icon} size={11} /></span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{cfg.label}</span>
               <span style={{
-                marginLeft: 'auto',
-                fontSize: 11, fontWeight: 800, color: cfg.color,
-                background: `${cfg.color}1f`, padding: '2px 10px', borderRadius: 99,
+                marginLeft: 'auto', fontSize: 11, fontWeight: 600,
+                color: T.textMuted, fontFamily: 'ui-monospace, monospace',
               }}>{colTasks.length}</span>
             </div>
             {/* カード */}
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: SPACING.sm + 2, minHeight: 120, display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
               {colTasks.length === 0 && (
-                <div style={{ padding: '20px 8px', textAlign: 'center', color: T.textFaint, fontSize: 12 }}>
+                <div style={{
+                  padding: '20px 8px', textAlign: 'center', color: T.textMuted, fontSize: 11,
+                  border: `1px dashed ${T.borderMid}`, borderRadius: RADIUS.sm,
+                }}>
                   ここにドラッグ
                 </div>
               )}
@@ -793,10 +819,10 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
   if (tasks.length === 0) {
     return (
       <div style={{
-        textAlign: 'center', padding: 60, color: T.textMuted, fontSize: 13,
-        background: T.bgCard, borderRadius: 10, border: `1px solid ${T.border}`,
+        textAlign: 'center', padding: 60, color: T.textMuted, fontSize: TYPO.body.fontSize,
+        background: T.bgCard, borderRadius: RADIUS.md, border: `1px solid ${T.border}`,
       }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: SPACING.md, color: T.textMuted }}><Icon name="chart" size={36} /></div>
         <div>タスクがありません</div>
       </div>
     )
@@ -805,17 +831,17 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
   const PANEL_HEIGHT = 520 // ガント本体の固定高さ
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2 }}>
       {/* 操作バー */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 11, color: T.textMuted }}>表示密度</div>
-        <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 7, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' }}>
+        <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted }}>表示密度</div>
+        <div style={{ display: 'flex', background: T.sectionBg, borderRadius: RADIUS.xs + 1, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
           {[
             { key: 'day',  label: '日単位' },
             { key: 'week', label: '週単位(圧縮)' },
           ].map(z => (
             <button key={z.key} onClick={() => setZoom(z.key)} style={{
-              padding: '4px 10px', border: 'none', cursor: 'pointer', fontSize: 11,
+              padding: '4px 10px', border: 'none', cursor: 'pointer', fontSize: TYPO.footnote.fontSize,
               background: zoom === z.key ? T.accent : 'transparent',
               color: zoom === z.key ? '#fff' : T.textMuted,
               fontWeight: 600, fontFamily: 'inherit',
@@ -829,20 +855,21 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             }
           }}
           style={{
-            padding: '4px 10px', border: `1px solid ${T.border}`, cursor: 'pointer',
-            background: T.sectionBg, color: T.textSub, fontSize: 11, fontWeight: 600,
-            borderRadius: 7, fontFamily: 'inherit',
+            padding: '6px 12px', border: `1px solid ${T.accent}40`, cursor: 'pointer',
+            background: T.accentBg, color: T.accentText, ...TYPO.footnote, fontWeight: 600,
+            borderRadius: RADIUS.xs + 1, fontFamily: 'inherit',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
           }}
-        >📍 今日へ</button>
+        ><Icon name="pin" size={11} /> 今日へ</button>
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 10, color: T.textMuted }}>
-          凡例: <span style={{ color: '#7a8599' }}>■未着手</span> <span style={{ color: '#4d9fff', marginLeft: 6 }}>■進行中</span> <span style={{ color: '#00d68f', marginLeft: 6 }}>■完了</span> <span style={{ color: '#ff6b6b', marginLeft: 6 }}>│今日</span>
+        <div style={{ ...TYPO.caption, letterSpacing: 0, color: T.textMuted }}>
+          凡例: <span style={{ color: T.accent }}>■進行中</span> <span style={{ color: T.warn, marginLeft: 6 }}>■近日締切</span> <span style={{ color: T.success, marginLeft: 6 }}>■完了</span> <span style={{ color: T.danger, marginLeft: 6 }}>■期限超過</span> <span style={{ color: T.accent, marginLeft: 6 }}>│今日</span>
         </div>
       </div>
 
       {/* ガント本体：左右2パネル構成 */}
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
         overflow: 'hidden', display: 'flex', height: PANEL_HEIGHT,
       }}>
         {/* ─── 左パネル：タスク名（縦スクロール連動） ─── */}
@@ -852,7 +879,7 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
             height: HEADER_H, flexShrink: 0,
             display: 'flex', alignItems: 'center', padding: '0 12px',
             background: T.sectionBg, borderBottom: `1px solid ${T.border}`,
-            fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.5,
+            ...TYPO.footnote, fontWeight: 700, color: T.textMuted, letterSpacing: 0.5,
           }}>
             タスク ({sorted.length})
           </div>
@@ -873,17 +900,27 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                   background: idx % 2 === 0 ? T.bgCard : T.sectionBg,
                   opacity: st === 'done' ? 0.6 : 1,
                 }}>
-                  <span style={{ color: cfg.color, fontSize: 12, flexShrink: 0 }}>{cfg.icon}</span>
+                  <span style={{ display: 'inline-flex', color: cfg.color, flexShrink: 0 }}><Icon name={cfg.icon} size={12} /></span>
                   <div style={{
-                    flex: 1, minWidth: 0, fontSize: 12, color: T.text,
+                    flex: 1, minWidth: 0, fontSize: TYPO.subhead.fontSize, color: T.text,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     textDecoration: st === 'done' ? 'line-through' : 'none',
                   }} title={task.title || ka?.ka_title || ''}>
                     {task.title || ka?.ka_title || '(無題)'}
                   </div>
                   {task.assignee && (
-                    <span style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>
-                      {task.assignee}
+                    <span style={{
+                      flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '2px 8px 2px 4px', background: T.sectionBg, borderRadius: 5,
+                      fontSize: 10.5, fontWeight: 500, color: T.textSub,
+                    }}>
+                      <span style={{
+                        width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+                        background: avatarColor(task.assignee), color: '#fff',
+                        fontSize: 8.5, fontWeight: 700,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      }}>{task.assignee.slice(0, 1)}</span>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 84 }}>{task.assignee}</span>
                     </span>
                   )}
                 </div>
@@ -909,14 +946,18 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                 const ymd = toYMD(d)
                 const isToday = ymd === toYMD(today)
                 const wd = d.getUTCDay()
-                const isWeekend = wd === 0 || wd === 6
+                const isSat = wd === 6
+                const isSun = wd === 0
+                const isWeekend = isSat || isSun
                 const isMonthStart = d.getUTCDate() === 1
+                // 曜日色: 土=info / 日=danger / 今日=accent-text
+                const dateColor = isToday ? T.accentText : isSat ? T.info : isSun ? T.danger : T.textMuted
                 return (
                   <div key={ymd} style={{
                     width: dayWidth, flexShrink: 0, textAlign: 'center',
                     borderRight: isMonthStart ? `1px solid ${T.borderMid}` : `1px solid ${T.border}`,
-                    background: isToday ? 'rgba(255,107,107,0.08)' : isWeekend ? T.sectionBg : 'transparent',
-                    color: isToday ? '#ff6b6b' : isWeekend ? T.textFaint : T.textMuted,
+                    background: isToday ? T.accentBg : isWeekend ? T.sectionBg : 'transparent',
+                    color: dateColor,
                     fontSize: 9, fontWeight: isToday ? 700 : 500,
                     display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
                     padding: '4px 0',
@@ -928,8 +969,8 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                     )}
                     {zoom === 'day' && (
                       <>
-                        <div>{d.getUTCDate()}</div>
-                        <div style={{ fontSize: 8 }}>{weekdayJa[wd]}</div>
+                        <div style={{ fontWeight: 700, color: dateColor }}>{d.getUTCDate()}</div>
+                        <div style={{ fontSize: 8 }}>{isToday ? '今日' : weekdayJa[wd]}</div>
                       </>
                     )}
                     {zoom === 'week' && wd === 1 && (
@@ -940,12 +981,19 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
               })}
             </div>
 
+            {/* 今日カラムのハイライト (accent-bg) */}
+            <div style={{
+              position: 'absolute',
+              left: todayLeft, top: HEADER_H, bottom: 0, width: dayWidth,
+              background: T.accentBg, opacity: 0.6,
+              pointerEvents: 'none', zIndex: 1,
+            }} />
             {/* 今日の縦線 */}
             <div style={{
               position: 'absolute',
               left: todayLeft + dayWidth / 2 - 1,
               top: 0, bottom: 0, width: 2,
-              background: '#ff6b6b', opacity: 0.55,
+              background: T.accent, opacity: 0.6,
               pointerEvents: 'none', zIndex: 2,
             }} />
 
@@ -958,6 +1006,11 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
               const left = startOffset * dayWidth
               const width = duration * dayWidth - 4
               const isOverdue = end < today && st !== 'done'
+              // バーは4色のみ: 完了=success / 期限超過=danger / 近日締切(7日以内)=warn / それ以外=accent
+              const soonThreshold = addDays(today, 7)
+              const barColor = st === 'done' ? T.success
+                : isOverdue ? T.danger
+                : (end <= soonThreshold ? T.warn : T.accent)
               return (
                 <div key={task.id} style={{
                   height: ROW_H, borderBottom: `1px solid ${T.border}`,
@@ -983,19 +1036,20 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
                       left: left + 2, top: 6,
                       width: Math.max(width, 8),
                       height: ROW_H - 12,
-                      background: isOverdue ? '#ff6b6b' : cfg.color,
+                      background: barColor,
                       borderRadius: 5,
-                      opacity: st === 'done' ? 0.5 : noDue ? 0.4 : 0.85,
-                      border: isOverdue ? '2px solid #ff6b6b' : noDue ? `1px dashed ${cfg.color}` : `1px solid ${cfg.color}`,
+                      opacity: st === 'done' ? 0.85 : noDue ? 0.5 : 1,
+                      border: noDue ? `1px dashed ${barColor}` : 'none',
+                      boxShadow: SHADOWS.xs,
                       display: 'flex', alignItems: 'center',
-                      padding: '0 6px',
-                      fontSize: 10, fontWeight: 700, color: '#fff',
+                      padding: '0 8px',
+                      fontSize: 10.5, fontWeight: 600, color: '#fff',
                       overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                       zIndex: 2,
                     }}
                   >
-                    {width > 40 && <span>{task.title || ''}</span>}
-                    {isOverdue && <span style={{ marginLeft: 'auto' }}>🚨</span>}
+                    {width > 40 && <span style={{ textDecoration: st === 'done' ? 'line-through' : 'none' }}>{task.title || ''}</span>}
+                    {isOverdue && <span style={{ marginLeft: 'auto', display: 'inline-flex' }}><Icon name="alert" size={10} /></span>}
                   </div>
                 </div>
               )
@@ -1007,27 +1061,27 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
       {/* 期限未設定タスク一覧（バーに出せないので下部リスト） */}
       {tasksNoDue.length > 0 && (
         <div style={{
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
           padding: '10px 14px',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>
-            📝 期限未設定 ({tasksNoDue.length}件) — ガントに表示できないタスク
+          <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.textMuted, marginBottom: SPACING.xs + 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="note" size={11} /> 期限未設定 ({tasksNoDue.length}件) — ガントに表示できないタスク
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs + 2 }}>
             {tasksNoDue.map(t => {
               const st = getTaskStatus(t)
               const cfg = STATUS_CONFIG[st]
               return (
                 <div key={t.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '4px 10px', borderRadius: 6,
+                  display: 'flex', alignItems: 'center', gap: SPACING.xs + 2,
+                  padding: '4px 10px', borderRadius: RADIUS.xs,
                   background: T.sectionBg, border: `1px solid ${T.border}`,
-                  fontSize: 11, color: T.text,
+                  ...TYPO.footnote, fontWeight: 600, color: T.text,
                   opacity: st === 'done' ? 0.5 : 1,
                 }}>
-                  <span style={{ color: cfg.color }}>{cfg.icon}</span>
+                  <span style={{ display: 'inline-flex', color: cfg.color }}><Icon name={cfg.icon} size={11} /></span>
                   <span>{t.title || '(無題)'}</span>
-                  {t.assignee && <span style={{ color: T.textMuted, fontSize: 10 }}>· {t.assignee}</span>}
+                  {t.assignee && <span style={{ color: T.textMuted, ...TYPO.caption, letterSpacing: 0 }}>· {t.assignee}</span>}
                 </div>
               )
             })}
@@ -1039,11 +1093,13 @@ function GanttView({ tasks, kaMap, objMap, T, onStatusChange, onUpdateTask, onDe
 }
 
 // ─── メイン ─────────────────────────────────────────
-export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange, fiscalYear = '2026' }) {
+export default function MyTasksPage({ user, members, themeKey = 'dark', initialViewMode = 'my', onViewModeChange, fiscalYear = '2026', lockViewMode = null, hideMemberSidebar = false }) {
   const T = THEMES[themeKey] || THEMES.dark
   const { isMobile } = useResponsive()
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
-  const [viewMode, setViewMode] = useState(initialViewMode)
+  // lockViewMode が指定された場合は 'my' / 'all' に固定し、マイ/全社トグルを隠す
+  // (マイページ側=マイ固定 / 全社サマリー側=全社固定 で重複導線をなくす)
+  const [viewMode, setViewMode] = useState(lockViewMode || initialViewMode)
   const [displayMode, setDisplayMode] = useState('list') // 'list' | 'board' | 'gantt'
   // モバイルは常に list ビューに強制
   useEffect(() => { if (isMobile && displayMode !== 'list') setDisplayMode('list') }, [isMobile, displayMode])
@@ -1073,8 +1129,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
 
   const oneWeekAgo = toDateStr(new Date(Date.now() - 7 * 86400000))
 
-  // ヘッダードロップダウンから viewMode が変わったら同期
-  useEffect(() => { setViewMode(initialViewMode) }, [initialViewMode])
+  // ヘッダードロップダウンから viewMode が変わったら同期 (lockViewMode 優先)
+  useEffect(() => { setViewMode(lockViewMode || initialViewMode) }, [initialViewMode, lockViewMode])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1174,25 +1230,25 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
     if (onViewModeChange) onViewModeChange(mode)
   }
 
-  if (loading) return <div style={{ padding: 40, color: T.accent, fontSize: 14 }}>読み込み中...</div>
+  if (loading) return <div style={{ padding: SPACING['3xl'] + 8, color: T.accent, ...TYPO.headline }}>読み込み中...</div>
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: T.bg, color: T.text, fontFamily: 'system-ui,sans-serif' }}>
-      {/* 全社モード時のサイドバー (モバイル非表示 - マイタスクに限定) */}
-      {viewMode === 'all' && !isMobile && (
+      {/* 全社モード時のサイドバー (モバイル非表示。hideMemberSidebar 指定時も非表示) */}
+      {viewMode === 'all' && !isMobile && !hideMemberSidebar && (
         <div style={{
           width: 200, flexShrink: 0, overflowY: 'auto', background: T.sidebarBg,
           borderRight: `1px solid ${T.border}`, padding: '12px 0',
         }}>
-          <div style={{ padding: '4px 12px 10px', fontSize: 10, fontWeight: 700, color: T.textFaint, letterSpacing: 1 }}>メンバー</div>
+          <div style={{ padding: '4px 12px 10px', ...TYPO.caption, color: T.textFaint, letterSpacing: 1 }}>メンバー</div>
           <div onClick={() => setSelectedMember(null)} style={{
-            padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            padding: '8px 14px', cursor: 'pointer', ...TYPO.subhead,
             background: !selectedMember ? T.sidebarActive : 'transparent',
             color: !selectedMember ? T.accent : T.textSub,
             borderLeft: !selectedMember ? `3px solid ${T.accent}` : '3px solid transparent',
           }}>
             全員
-            <span style={{ fontSize: 10, color: T.textFaint, marginLeft: 6 }}>{allTasks.filter(t => getTaskStatus(t) !== 'done').length}</span>
+            <span style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.textFaint, marginLeft: 6 }}>{allTasks.filter(t => getTaskStatus(t) !== 'done').length}</span>
           </div>
           {membersWithTasks.map(m => {
             const isActive = selectedMember === m.name
@@ -1210,11 +1266,11 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                     {m.name.slice(0, 2)}
                   </div>
                 )}
-                <span style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, color: isActive ? T.accent : T.textSub, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: isActive ? 700 : 500, color: isActive ? T.accent : T.textSub, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {m.name}
                 </span>
                 {count > 0 && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: T.textFaint, background: T.sectionBg, padding: '1px 6px', borderRadius: 99, border: `1px solid ${T.border}` }}>{count}</span>
+                  <span style={{ ...TYPO.caption, letterSpacing: 0, color: T.textFaint, background: T.sectionBg, padding: '1px 6px', borderRadius: RADIUS.pill, border: `1px solid ${T.border}` }}>{count}</span>
                 )}
               </div>
             )
@@ -1226,8 +1282,8 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: displayMode === 'list' ? 800 : displayMode === 'board' ? 1200 : '100%', margin: '0 auto', padding: isMobile ? '12px' : '24px 24px' }}>
           {/* ヘッダー */}
-          <div style={{ marginBottom: isMobile ? 14 : 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+          <div style={{ marginBottom: isMobile ? 14 : SPACING['2xl'] }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.md, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
               {targetMember?.avatar_url ? (
                 <img src={targetMember.avatar_url} alt={targetName} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${avatarColor(targetName)}60` }} />
               ) : targetName ? (
@@ -1236,46 +1292,43 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                 </div>
               ) : null}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 700 }}>
+                <div style={{ ...(isMobile ? TYPO.title2 : TYPO.title1) }}>
                   {viewMode === 'my' ? 'マイタスク' : selectedMember ? `${selectedMember} のタスク` : '全社タスク'}
                 </div>
                 {!isMobile && (
-                  <div style={{ fontSize: 12, color: T.textMuted }}>
+                  <div style={{ ...TYPO.subhead, color: T.textMuted }}>
                     {viewMode === 'my' ? `${myName} さんに割り当てられたタスク` : selectedMember ? `${selectedMember} さんに割り当てられたタスク` : '全メンバーのタスク一覧'}
                   </div>
                 )}
               </div>
               {/* タスク追加 */}
               <button onClick={() => setShowCreateModal(true)} style={{
-                padding: isMobile ? '10px 16px' : '8px 16px', borderRadius: 9, border: 'none',
-                background: T.accent, color: '#fff',
-                boxShadow: `0 2px 6px ${T.accent}40`,
-                fontSize: isMobile ? 14 : 12, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                ...btnBrand({ size: isMobile ? 'lg' : 'md' }),
+                whiteSpace: 'nowrap',
                 display: 'flex', alignItems: 'center', gap: 4,
                 minHeight: isMobile ? 44 : 'auto',
-              }} title="⌘ + N でも追加できます">＋ タスク追加</button>
-              {/* マイ/全社 切替 (モバイルはマイタスクに固定、切替不可) */}
-              {!isMobile && (
-                <div style={{ display: 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+              }} title="⌘ + N でも追加できます"><Icon name="plus" size={isMobile ? 16 : 14} /> タスク追加</button>
+              {/* マイ/全社 切替 (モバイルはマイタスクに固定。lockViewMode 指定時は非表示) */}
+              {!isMobile && !lockViewMode && (
+                <div style={{ display: 'flex', background: T.sectionBg, borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                   <button onClick={() => handleViewModeChange('my')} style={{
-                    padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                    padding: '6px 14px', border: 'none', cursor: 'pointer', ...TYPO.subhead, fontFamily: 'inherit',
                     background: viewMode === 'my' ? T.accent : 'transparent',
                     color: viewMode === 'my' ? '#fff' : T.textMuted,
                   }}>マイタスク</button>
                   <button onClick={() => handleViewModeChange('all')} style={{
-                    padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                    padding: '6px 14px', border: 'none', cursor: 'pointer', ...TYPO.subhead, fontFamily: 'inherit',
                     background: viewMode === 'all' ? T.accent : 'transparent',
                     color: viewMode === 'all' ? '#fff' : T.textMuted,
                   }}>全社タスク</button>
                 </div>
               )}
               {/* リスト/カード/ガント切替 (モバイルはリスト固定) */}
-              <div style={{ display: isMobile ? 'none' : 'flex', background: T.sectionBg, borderRadius: 8, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+              <div style={{ display: isMobile ? 'none' : 'flex', background: T.sectionBg, borderRadius: RADIUS.sm, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                 {[
-                  { key: 'list',  icon: '📋', label: 'リスト', title: 'リスト: 期限でグルーピング' },
-                  { key: 'board', icon: '🗂',  label: 'カード', title: 'カード: ステータス別カンバン' },
-                  { key: 'gantt', icon: '📊', label: 'ガント', title: 'ガント: 時間軸で可視化' },
+                  { key: 'list',  icon: 'note',  label: 'リスト', title: 'リスト: 期限でグルーピング' },
+                  { key: 'board', icon: 'workspace', label: 'カード', title: 'カード: ステータス別カンバン' },
+                  { key: 'gantt', icon: 'chart', label: 'ガント', title: 'ガント: 時間軸で可視化' },
                 ].map(v => (
                   <button
                     key={v.key}
@@ -1283,13 +1336,13 @@ export default function MyTasksPage({ user, members, themeKey = 'dark', initialV
                     title={v.title}
                     style={{
                       padding: '6px 12px', border: 'none', cursor: 'pointer',
-                      fontSize: 12, fontFamily: 'inherit', fontWeight: 600,
+                      ...TYPO.subhead, fontFamily: 'inherit',
                       display: 'flex', alignItems: 'center', gap: 4,
                       background: displayMode === v.key ? T.accent : 'transparent',
                       color: displayMode === v.key ? '#fff' : T.textMuted,
                     }}
                   >
-                    <span>{v.icon}</span>
+                    <Icon name={v.icon} size={13} />
                     <span>{v.label}</span>
                   </button>
                 ))}

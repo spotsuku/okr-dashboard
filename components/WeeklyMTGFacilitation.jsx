@@ -1,12 +1,15 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useAutoSave } from '../lib/useAutoSave'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { btnBrand, btnSecondary } from '../lib/iosStyles'
 import { getMeeting, MEETING_URLS, SALES_DASHBOARD_URL } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import ConfirmationsTab from './ConfirmationsTab'
 import MeetingImport from './MeetingImport'
+import Icon, { DataIcon } from './Icon'
 
 // ─── プログラムタグ フィルタ用 Context ──────────────────────────────────────
 // 機能別組織図ではなくプログラム横断で会議をする場合のためのフィルタ。
@@ -121,12 +124,6 @@ function resolveScopeLevelIds(wkly, levels) {
 
 // ─── アバター ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 function Avatar({ name, avatarUrl, size = 22 }) {
   if (!name) return null
   const color = avatarColor(name)
@@ -145,49 +142,49 @@ function stepsForFlow(meeting) {
   if (wkly?.withDiscussion) {
     // マネージャー会議:
     return [
-      { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
-      { n: 2, label: 'チームサマリー',     icon: '🤝', kind: 'team_summary' },
-      { n: 3, label: '共有事項',           icon: '📢', kind: 'shares' },
-      { n: 4, label: '横断連携・確認事項', icon: '💬', kind: 'confirmations' },
-      { n: 5, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-      { n: 6, label: '終了',               icon: '🏁', kind: 'done' },
+      { n: 1, label: 'KR順送り',           icon: 'target', kind: 'kr_loop' },
+      { n: 2, label: 'チームサマリー',     icon: 'org', kind: 'team_summary' },
+      { n: 3, label: '共有事項',           icon: 'bell', kind: 'shares' },
+      { n: 4, label: '横断連携・確認事項', icon: 'msg', kind: 'confirmations' },
+      { n: 5, label: 'ネクストアクション', icon: 'check', kind: 'next_actions' },
+      { n: 6, label: '終了',               icon: 'flag', kind: 'done' },
     ]
   }
   if (meeting?.key === 'director') {
     return [
-      { n: 1, label: 'KRサマリー閲覧',     icon: '📊', kind: 'team_summary_readonly' },
-      { n: 2, label: '共有事項',           icon: '📢', kind: 'shares' },
-      { n: 3, label: '確認事項',           icon: '💬', kind: 'confirmations' },
-      { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-      { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
+      { n: 1, label: 'KRサマリー閲覧',     icon: 'chart', kind: 'team_summary_readonly' },
+      { n: 2, label: '共有事項',           icon: 'bell', kind: 'shares' },
+      { n: 3, label: '確認事項',           icon: 'msg', kind: 'confirmations' },
+      { n: 4, label: 'ネクストアクション', icon: 'check', kind: 'next_actions' },
+      { n: 5, label: '終了',               icon: 'flag', kind: 'done' },
     ]
   }
   if (wkly?.flow === 'sales') {
     return [
-      { n: 1, label: 'セールス進捗',       icon: '📈', kind: 'sales_progress' },
-      { n: 2, label: 'KA確認',            icon: '📋', kind: 'ka_loop' },
-      { n: 3, label: '共有事項',           icon: '📢', kind: 'shares' },
-      { n: 4, label: '確認事項',           icon: '💬', kind: 'confirmations' },
-      { n: 5, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-      { n: 6, label: '終了',               icon: '🏁', kind: 'done' },
+      { n: 1, label: 'セールス進捗',       icon: 'chart', kind: 'sales_progress' },
+      { n: 2, label: 'KA確認',            icon: 'note', kind: 'ka_loop' },
+      { n: 3, label: '共有事項',           icon: 'bell', kind: 'shares' },
+      { n: 4, label: '確認事項',           icon: 'msg', kind: 'confirmations' },
+      { n: 5, label: 'ネクストアクション', icon: 'check', kind: 'next_actions' },
+      { n: 6, label: '終了',               icon: 'flag', kind: 'done' },
     ]
   }
   if (wkly?.flow === 'ka') {
     return [
-      { n: 1, label: 'KA順送り',           icon: '📋', kind: 'ka_loop' },
-      { n: 2, label: '共有事項',           icon: '📢', kind: 'shares' },
-      { n: 3, label: '確認事項',           icon: '💬', kind: 'confirmations' },
-      { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-      { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
+      { n: 1, label: 'KA順送り',           icon: 'note', kind: 'ka_loop' },
+      { n: 2, label: '共有事項',           icon: 'bell', kind: 'shares' },
+      { n: 3, label: '確認事項',           icon: 'msg', kind: 'confirmations' },
+      { n: 4, label: 'ネクストアクション', icon: 'check', kind: 'next_actions' },
+      { n: 5, label: '終了',               icon: 'flag', kind: 'done' },
     ]
   }
   // 経営企画会議・役員会議など
   return [
-    { n: 1, label: 'KR順送り',           icon: '🎯', kind: 'kr_loop' },
-    { n: 2, label: '共有事項',           icon: '📢', kind: 'shares' },
-    { n: 3, label: '確認事項',           icon: '💬', kind: 'confirmations' },
-    { n: 4, label: 'ネクストアクション', icon: '✅', kind: 'next_actions' },
-    { n: 5, label: '終了',               icon: '🏁', kind: 'done' },
+    { n: 1, label: 'KR順送り',           icon: 'target', kind: 'kr_loop' },
+    { n: 2, label: '共有事項',           icon: 'bell', kind: 'shares' },
+    { n: 3, label: '確認事項',           icon: 'msg', kind: 'confirmations' },
+    { n: 4, label: 'ネクストアクション', icon: 'check', kind: 'next_actions' },
+    { n: 5, label: '終了',               icon: 'flag', kind: 'done' },
   ]
 }
 
@@ -540,7 +537,7 @@ export default function WeeklyMTGFacilitation({
             ← 会議準備に戻る
           </button>
         )}
-        <span style={{ color: T.textMuted, fontWeight: 700 }}>🏷 プログラムで絞る:</span>
+        <span style={{ color: T.textMuted, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="pin" size={12} /> プログラムで絞る:</span>
         {allProgramTags.length > 0 ? (
           <>
             <select value={programTag || ''} onChange={e => setProgramTag(e.target.value || null)}
@@ -553,14 +550,14 @@ export default function WeeklyMTGFacilitation({
               {allProgramTags.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             {programTag && (
-              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'rgba(107,150,199,0.15)', color: '#6B96C7', fontWeight: 700 }}>
+              <span style={{ ...TYPO.footnote, padding: `2px ${SPACING.sm}px`, borderRadius: RADIUS.pill, background: T.accentBg, color: T.accent, fontWeight: 700 }}>
                 {programTag} の OKR / KR / KA のみ表示中
               </span>
             )}
           </>
         ) : (
           <span style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic' }}>
-            タグ未登録 — 「組織ページ → 🏷 プログラム管理」で定義してください
+            タグ未登録 — 「組織ページ → プログラム管理」で定義してください
           </span>
         )}
       </div>
@@ -589,18 +586,25 @@ export default function WeeklyMTGFacilitation({
                 <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
                   <button onClick={() => session?.id && goToStep(s.n)}
                     style={{
-                      flex: 1, padding: '10px 14px', borderRadius: 8, border: 'none',
+                      flex: 1, padding: '10px 14px', borderRadius: RADIUS.sm,
+                      border: `1px solid ${isActive ? '#2563eb' : isDone ? T.successBg : T.border}`,
                       cursor: session?.id ? 'pointer' : 'default', fontFamily: 'inherit',
-                      background: isActive ? T.accent : isDone ? `${T.accent}20` : T.bgSection,
-                      color: isActive ? '#fff' : isDone ? T.accent : T.textMuted,
+                      background: isActive ? BRAND_GRADIENT.cta : isDone ? T.successBg : T.sectionBg,
+                      color: isActive ? '#fff' : isDone ? T.success : T.textSub,
+                      boxShadow: isActive ? '0 2px 8px rgba(37,99,235,.28)' : 'none',
                       fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     }}>
-                    <span>{s.icon}</span>
+                    <span style={{
+                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      background: isActive ? 'rgba(255,255,255,.22)' : isDone ? T.success : T.border,
+                      color: isActive ? '#fff' : isDone ? '#fff' : T.textSub,
+                    }}><Icon name={s.icon} size={12} /></span>
                     <span>{s.n}. {s.label}</span>
-                    {isDone && <span style={{ fontSize: 12 }}>✓</span>}
+                    {isDone && <span style={{ display: 'inline-flex' }}><Icon name="check" size={12} /></span>}
                   </button>
                   {i < stepDefs.length - 1 && (
-                    <div style={{ width: 12, height: 2, background: isDone ? T.accent : T.border, flexShrink: 0 }} />
+                    <div style={{ width: 12, height: 2, background: isDone ? T.success : T.border, flexShrink: 0 }} />
                   )}
                 </div>
               )
@@ -805,9 +809,10 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
     } catch {}
   }, [isTen, isOver, meetingTitle, tenMinAlertedRef])
 
-  const bg     = isOver ? `${T.danger}18` : isFive ? `${T.danger}10` : isTen ? `${T.warn}15` : T.bgCard
-  const border = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.border
-  const accent = isOver ? T.danger        : isFive ? T.danger         : isTen ? T.warn       : T.accent
+  const bg     = isOver ? T.dangerBg : isFive ? T.dangerBg : isTen ? T.warnBg : T.bgCard
+  const border = isOver ? T.danger   : isFive ? T.danger   : isTen ? T.warn   : T.border
+  const accent = isOver ? T.danger   : isFive ? T.danger   : isTen ? T.warn   : T.accent
+  const isAlert = isOver || isFive || isTen
 
   const fmt = (mm) => {
     const m = Math.abs(mm)
@@ -816,10 +821,18 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
 
   return (
     <div style={{
-      padding: '8px 16px', background: bg, borderBottom: `2px solid ${border}`, flexShrink: 0,
+      padding: '8px 16px', background: bg, borderBottom: `1px solid ${border}`, flexShrink: 0,
     }}>
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14 }}>{isOver ? '🚨' : isTen ? '⚠️' : '⏱'}</span>
+        {isAlert ? (
+          <span style={{
+            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            background: accent, color: '#fff',
+          }}><Icon name="alert" size={13} /></span>
+        ) : (
+          <span style={{ display: 'inline-flex', color: accent }}><Icon name="clock" size={14} /></span>
+        )}
         <span style={{ fontSize: 12, color: T.textMuted }}>
           {isOver ? (
             <span style={{ color: T.danger, fontWeight: 700 }}>
@@ -922,10 +935,10 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       {/* ヒーローカード (会議名) */}
       <div style={{
         marginTop: 20, marginBottom: 22, padding: '26px 26px 22px',
-        background: `linear-gradient(135deg, ${meetColor}f5 0%, ${meetColor}c0 60%, ${meetColor}80 100%)`,
-        borderRadius: 22, color: '#FFFFFF',
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #22d3ee 100%)',
+        borderRadius: RADIUS['2xl'], color: '#fff',
         position: 'relative', overflow: 'hidden',
-        boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${meetColor}33, 0 24px 56px ${meetColor}26`,
+        boxShadow: '0 10px 30px rgba(37,99,235,.22)',
       }}>
         <div aria-hidden style={{ position: 'absolute', top: -80, right: -60, width: 280, height: 280, background: 'radial-gradient(circle, rgba(255,255,255,0.30) 0%, transparent 60%)', borderRadius: '50%', pointerEvents: 'none' }} />
         <div aria-hidden style={{ position: 'absolute', bottom: -100, left: -40, width: 240, height: 240, background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 65%)', borderRadius: '50%', pointerEvents: 'none' }} />
@@ -937,42 +950,42 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
             border: '1px solid rgba(255,255,255,0.30)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 30, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4)',
-          }}>{meeting.icon}</div>
+          }}><DataIcon value={meeting.icon} size={30} fallback="note" /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', opacity: 0.85, textTransform: 'uppercase', marginBottom: 4 }}>{meeting.schedule}</div>
             <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.2 }}>{meeting.title}</div>
-            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.95 }}>📅 対象週: <strong>{formatWeekRange(weekStart)}</strong></div>
+            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.95, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="calendar" size={13} /> 対象週: <strong>{formatWeekRange(weekStart)}</strong></div>
           </div>
         </div>
       </div>
 
       {/* 観点ピル */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
-        <Badge T={T} bg={`${T.accent}1f`} fg={T.accent}>🧭 ファシリモード</Badge>
+        <Badge T={T} bg={`${T.accent}1f`} fg={T.accent}><Icon name="bolt" size={12} /> ファシリモード</Badge>
         <Badge T={T} bg={`${T.success}1f`} fg={T.success}>{flowLabel}</Badge>
-        <Badge T={T} bg={'rgba(0,0,0,0.05)'} fg={T.textSub}>👥 {scopeLabel}</Badge>
-        {wkly?.withDiscussion && <Badge T={T} bg={`${T.warn}1f`} fg={T.warn}>💬 課題・依頼セクション有</Badge>}
+        <Badge T={T} bg={T.sectionBg} fg={T.textSub}><Icon name="user" size={12} /> {scopeLabel}</Badge>
+        {wkly?.withDiscussion && <Badge T={T} bg={`${T.warn}1f`} fg={T.warn}><Icon name="msg" size={12} /> 課題・依頼セクション有</Badge>}
       </div>
 
       {/* Notion議事録 案内 */}
       <div style={{
         marginBottom: 18, padding: '16px 20px',
-        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)`,
-        border: `1px solid ${T.accent}26`, borderLeft: `4px solid ${T.accent}`, borderRadius: 14,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}c0 100%)`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px ${T.accent}55`,
-          }}>🎙</div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.accent, letterSpacing: '-0.01em' }}>
+            width: 32, height: 32, borderRadius: RADIUS.sm, flexShrink: 0,
+            background: BRAND_GRADIENT.cta,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: '#fff',
+            boxShadow: '0 2px 8px rgba(37,99,235,.28)',
+          }}><Icon name="note" size={16} /></div>
+          <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
             Notionで録音議事録をとってください
           </div>
         </div>
-        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6, marginBottom: 10, paddingLeft: 42 }}>
+        <div style={{ ...TYPO.subhead, color: T.textSub, lineHeight: 1.6, marginBottom: 10, paddingLeft: 42 }}>
           会議のNotionページを開いて、録音と議事録の作成を開始してください。
           会議の最後に、この議事録からネクストアクションを取り込めます。
         </div>
@@ -982,11 +995,9 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
             if (!url) { alert(`${meeting?.title} のNotion URLが設定されていません`); return }
             openNotionUrl(url)
           }} style={{
-            padding: '7px 14px', borderRadius: 9, border: 'none',
-            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}d0 100%)`,
-            color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            boxShadow: `0 2px 6px ${T.accent}55`,
-          }}>📝 Notionを開く ↗</button>
+            ...btnBrand({ size: 'sm' }), borderRadius: RADIUS.sm,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}><Icon name="pencil" size={12} /> Notionを開く <Icon name="external" size={12} /></button>
         </div>
       </div>
 
@@ -994,10 +1005,10 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       <div style={{
         background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
         padding: '18px 22px', marginBottom: 18,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📋</div>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="note" size={14} /></div>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>会議の流れ</div>
         </div>
         <ol style={{ margin: 0, paddingLeft: 24, fontSize: 13, color: T.textSub, lineHeight: 1.8 }}>
@@ -1028,10 +1039,10 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       <div style={{
         background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 16,
         padding: '18px 22px', marginBottom: 22,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.success}1f`, color: T.success, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🎯</div>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.success}1f`, color: T.success, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="target" size={14} /></div>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
             今回確認する {wkly?.flow === 'ka' ? 'KA' : wkly?.flow === 'sales' ? 'KA' : 'KR'}
           </div>
@@ -1062,7 +1073,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
                   }}>
                     <input type="checkbox" checked={!excluded}
                       onChange={() => toggleExcludedLevel(level.id)} />
-                    <span style={{ fontSize: 16 }}>{level.icon || '📁'}</span>
+                    <span style={{ display: 'inline-flex' }}><DataIcon value={level.icon} size={16} fallback="folder" /></span>
                     <span style={{
                       flex: 1, fontSize: 13, fontWeight: 700, color: T.text,
                       textDecoration: excluded ? 'line-through' : 'none',
@@ -1095,10 +1106,10 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       <div style={{
         marginBottom: 14, padding: '14px 18px',
         background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>👤</div>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="user" size={14} /></div>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>本日のファシリテーター</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1124,10 +1135,10 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
       <div style={{
         marginBottom: 18, padding: '14px 18px',
         background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.warn}1f`, color: T.warn, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>⏱</div>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.warn}1f`, color: T.warn, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="clock" size={14} /></div>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>会議予定時間</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1167,7 +1178,8 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
               marginLeft: 'auto', padding: '6px 12px', borderRadius: 9,
               border: 'none', background: 'rgba(120,120,128,0.12)',
               color: T.textSub, cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
-            }}>🔔 10分前通知</button>
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}><Icon name="bell" size={12} /> 10分前通知</button>
         </div>
         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>
           会議開始から {durationDraft}分で「終了予定」。残り10分でアラートが出ます。
@@ -1201,33 +1213,33 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
                   background: `${T.warn}1a`, border: `1px solid ${T.warn}55`,
                   color: T.warn, fontSize: 13, fontWeight: 700, lineHeight: 1.5,
                 }}>
-                  🏷 この会議はプログラム別定例です。<br/>
+                  <Icon name="pin" size={13} style={{ verticalAlign: 'middle' }} /> この会議はプログラム別定例です。<br/>
                   画面上部の「プログラムで絞る」プルダウンから対象プログラムを選択してから開始してください。
                 </div>
               )}
               {inProgress ? (
                 <>
                   <button onClick={onResume} disabled={!scope || !programReady} style={bigPrimary}>
-                    <span style={{ fontSize: 18 }}>▶️</span> 続きから再開
+                    <span style={{ display: 'inline-flex' }}><Icon name="rocket" size={18} /></span> 続きから再開
                     <span style={{ fontSize: 11, opacity: 0.85 }}>(Step {sessStep})</span>
                   </button>
-                  <button onClick={onReset} style={bigSecondary}>↻ リセットして最初から</button>
+                  <button onClick={onReset} style={bigSecondary}><Icon name="refresh" size={13} style={{ verticalAlign: 'middle' }} /> リセットして最初から</button>
                 </>
               ) : isFinished ? (
                 <button onClick={onStart} disabled={!scope || !programReady} style={bigPrimary}>
-                  <span style={{ fontSize: 18 }}>▶️</span> もう一度開始
+                  <span style={{ display: 'inline-flex' }}><Icon name="rocket" size={18} /></span> もう一度開始
                   {programTag && <span style={{ fontSize: 11, opacity: 0.85 }}>（{programTag}）</span>}
                   {myName && <span style={{ fontSize: 11, opacity: 0.85 }}>（ファシリ: {myName}）</span>}
                 </button>
               ) : (
                 <button onClick={onStart} disabled={!scope || !programReady} style={bigPrimary}>
-                  <span style={{ fontSize: 18 }}>▶️</span> 会議を開始
+                  <span style={{ display: 'inline-flex' }}><Icon name="rocket" size={18} /></span> 会議を開始
                   {programTag && <span style={{ fontSize: 11, opacity: 0.85 }}>（{programTag}）</span>}
                   {myName && <span style={{ fontSize: 11, opacity: 0.85 }}>（ファシリ: {myName}）</span>}
                 </button>
               )}
               {onSwitchToList && (
-                <button onClick={onSwitchToList} style={bigSecondary}>📋 一覧モードで開く</button>
+                <button onClick={onSwitchToList} style={bigSecondary}><Icon name="note" size={13} style={{ verticalAlign: 'middle' }} /> 一覧モードで開く</button>
               )}
             </div>
 
@@ -1392,7 +1404,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
   if (items.length === 0) {
     return (
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🤷</div>
+        <div style={{ marginBottom: 12, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={36} /></div>
         <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに今四半期のKRがありません</div>
         <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>「次へ」で確認事項ステップへ進めます</div>
         <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
@@ -1471,7 +1483,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
         background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.accent}06 100%)`,
         borderRadius: 14,
         border: `1px solid ${T.accent}1f`,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>進捗</div>
@@ -1532,7 +1544,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
                   color: isActive ? '#fff' : isDone ? T.success : T.textSub,
                   fontWeight: 700,
                 }}>
-                {isDone && '✓ '}{i + 1}. {it.level?.name?.slice(0, 8)}{it.level?.name?.length > 8 ? '…' : ''}
+                {isDone && <Icon name="check" size={11} style={{ verticalAlign: 'middle', marginRight: 2 }} />}{i + 1}. {it.level?.name?.slice(0, 8)}{it.level?.name?.length > 8 ? '…' : ''}
               </button>
             )
           })}
@@ -1545,11 +1557,11 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
 // ─── KA ステータス定義 ─────────────────────────────────────────────────────
 // iOS システムカラーに統一
 const KA_STATUS_CFG = {
-  focus:  { label: '🎯 注力', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',  border: 'rgba(0,122,255,0.30)' },
-  good:   { label: '✅ Good', color: '#34C759', bg: 'rgba(52,199,89,0.10)',  border: 'rgba(52,199,89,0.30)' },
-  more:   { label: '🔺 More', color: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  border: 'rgba(255,59,48,0.30)' },
+  focus:  { label: '注力', color: '#007AFF', bg: 'rgba(0,122,255,0.10)',  border: 'rgba(0,122,255,0.30)' },
+  good:   { label: 'Good', color: '#34C759', bg: 'rgba(52,199,89,0.10)',  border: 'rgba(52,199,89,0.30)' },
+  more:   { label: 'More', color: '#FF3B30', bg: 'rgba(255,59,48,0.10)',  border: 'rgba(255,59,48,0.30)' },
   normal: { label: '未分類',  color: '#8E8E93', bg: 'rgba(142,142,147,0.10)', border: 'rgba(142,142,147,0.20)' },
-  done:   { label: '✓ 完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
+  done:   { label: '完了',  color: '#8E8E93', bg: 'rgba(142,142,147,0.08)', border: 'rgba(142,142,147,0.18)' },
 }
 const KA_STATUS_ORDER = ['normal','focus','good','more','done']
 
@@ -1589,7 +1601,7 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
             border: '1px solid rgba(255,255,255,0.30)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 28, color: '#fff',
-          }}>📈</div>
+          }}><Icon name="chart" size={28} /></div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4, letterSpacing: '-0.01em' }}>セールスチームの進捗確認</div>
             <div style={{ fontSize: 12, opacity: 0.95, lineHeight: 1.6 }}>
@@ -1604,7 +1616,7 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
         marginBottom: 18, padding: '24px 26px',
         background: `linear-gradient(180deg, ${T.bgCard} 0%, ${meetColor}08 100%)`,
         border: `1px solid ${meetColor}33`, borderRadius: 16,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
         textAlign: 'center',
       }}>
         <div style={{
@@ -1613,11 +1625,11 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
           color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 30,
           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 14px ${meetColor}55, 0 2px 4px ${meetColor}33`,
-        }}>💰</div>
+        }}><Icon name="chart" size={30} /></div>
         <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4, letterSpacing: '-0.01em' }}>営業ダッシュボード</div>
         <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16, lineHeight: 1.6, maxWidth: 480, margin: '0 auto 16px' }}>
           別タブで開いて以下を確認してください:<br />
-          📊 商談一覧・進捗　・　🎯 受注見込み　・　📈 KPI ダッシュボード
+          <Icon name="note" size={12} style={{ verticalAlign: 'middle' }} /> 商談一覧・進捗　・　<Icon name="target" size={12} style={{ verticalAlign: 'middle' }} /> 受注見込み　・　<Icon name="chart" size={12} style={{ verticalAlign: 'middle' }} /> KPI ダッシュボード
         </div>
         <a href={SALES_DASHBOARD_URL} target="_blank" rel="noopener noreferrer" style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -1630,7 +1642,7 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
         }}
           onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-        >📈 営業ダッシュボードを別タブで開く ↗</a>
+        ><Icon name="chart" size={14} /> 営業ダッシュボードを別タブで開く <Icon name="external" size={14} /></a>
         <div style={{ fontSize: 10, color: T.textMuted, marginTop: 12, fontStyle: 'italic' }}>
           ※ Google アカウントでログインが必要です（このページ内には埋め込めません）
         </div>
@@ -1846,7 +1858,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
   if (items.length === 0) {
     return (
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🤷</div>
+        <div style={{ marginBottom: 12, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={36} /></div>
         <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに今週のKAがありません</div>
         <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>「次へ」で確認事項ステップへ進めます</div>
         <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
@@ -1917,7 +1929,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.success}06 100%)`,
         borderRadius: 14,
         border: `1px solid ${T.success}1f`,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>進捗</div>
@@ -1992,7 +2004,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
                         color: isActive ? '#fff' : isDone ? T.success : T.textSub,
                         fontWeight: 700, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
-                      {isDone && '✓ '}{(item.ka.ka_title || '(無題)').slice(0, 14)}
+                      {isDone && <Icon name="check" size={10} style={{ verticalAlign: 'middle', marginRight: 2 }} />}{(item.ka.ka_title || '(無題)').slice(0, 14)}
                     </button>
                   )
                 })}
@@ -2027,8 +2039,8 @@ function Step1DirectorReview({ T, meeting, weekStart, levels, members, onPrev, o
         marginBottom: 16, padding: '14px 18px',
         background: `${T.accent}10`, border: `1px solid ${T.accent}40`, borderRadius: 10,
       }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent, marginBottom: 4 }}>
-          📊 マネージャー会議で記録されたチーム別 KRサマリーを確認
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.accent, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="chart" size={14} /> マネージャー会議で記録されたチーム別 KRサマリーを確認
         </div>
         <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
           各チームのマネージャーが書き込んだ今週分の Good/More/Focus を読み、
@@ -2212,8 +2224,8 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
         {teams.map(t => (
           <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
             style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
-            {t.team.icon || '🤝'} {t.team.name}
-            {t.hasSummary && <span style={{ marginLeft: 4 }}>✓</span>}
+            <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 4 }}><DataIcon value={t.team.icon} size={14} fallback="handshake" /></span>{t.team.name}
+            {t.hasSummary && <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="check" size={12} /></span>}
           </button>
         ))}
       </div>
@@ -2335,7 +2347,7 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
         fontFamily: 'inherit', textAlign: 'left',
       }}>
         <span style={{ fontSize: 16 }}>{expanded ? '▾' : '▸'}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>📊 先週のマネージャー定例サマリー</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.text, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chart" size={13} /> 先週のマネージャー定例サマリー</span>
         <span style={{ fontSize: 11, color: T.textMuted }}>（{lastLabel}）</span>
         <span style={{ marginLeft: 'auto', fontSize: 10, color: T.textMuted }}>
           記入済 <strong style={{ color: T.text }}>{writtenTeams}</strong> / {teams.length} チーム
@@ -2359,8 +2371,8 @@ function PreviousManagerSummary({ T, weekStart, levels, members }) {
                 {teams.map(t => (
                   <button key={t.team.id} onClick={() => setActiveTeamId(t.team.id)}
                     style={chipStyle(T, Number(activeTeamId) === Number(t.team.id))}>
-                    {t.team.icon || '🤝'} {t.team.name}
-                    {t.hasSummary && <span style={{ marginLeft: 4 }}>✓</span>}
+                    <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 4 }}><DataIcon value={t.team.icon} size={14} fallback="handshake" /></span>{t.team.name}
+                    {t.hasSummary && <span style={{ marginLeft: 4, display: 'inline-flex' }}><Icon name="check" size={12} /></span>}
                   </button>
                 ))}
               </div>
@@ -2399,12 +2411,12 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
   const krGroups = useMemo(() => {
     const order = ['q1', 'q2', 'q3', 'q4', 'annual', 'unknown']
     const labels = {
-      q1:     { label: '🔵 Q1',  color: '#1d4ed8' },
-      q2:     { label: '🟢 Q2',  color: '#0a8f5a' },
-      q3:     { label: '🟠 Q3',  color: '#c2410c' },
-      q4:     { label: '🟣 Q4',  color: '#7e22ce' },
-      annual: { label: '🌐 通期', color: '#5856d6' },
-      unknown:{ label: '? その他', color: T.textMuted },
+      q1:     { label: 'Q1',  color: '#1d4ed8' },
+      q2:     { label: 'Q2',  color: '#0a8f5a' },
+      q3:     { label: 'Q3',  color: '#c2410c' },
+      q4:     { label: 'Q4',  color: '#7e22ce' },
+      annual: { label: '通期', color: '#5856d6' },
+      unknown:{ label: 'その他', color: T.textMuted },
     }
     const buckets = Object.fromEntries(order.map(k => [k, []]))
     for (const kr of krs) {
@@ -2462,7 +2474,7 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
   return (
     <div style={{ background: T.bgSection, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 18 }}>{team?.icon || '🤝'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={team?.icon} size={18} fallback="handshake" /></span>
         <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{team?.name}</div>
         {kaCount > 0 && (
           <span style={{ padding: '2px 8px', borderRadius: 99, background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 10 }}>
@@ -2504,12 +2516,12 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
         </div>
       ) : (
         <div style={{ marginBottom: krs.length > 0 ? 12 : 0 }}>
-          <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            📝 チーム全体まとめ
+          <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="note" size={12} /> チーム全体まとめ
           </div>
-          <ReadOnlyBlock T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.success} text={good} />
-          <ReadOnlyBlock T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.danger} text={more} />
-          <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel}` : '今週'} accent={T.accent} text={focus} lastBlock />
+          <ReadOnlyBlock T={T} icon="check" label="Good" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.success} text={good} />
+          <ReadOnlyBlock T={T} icon="arrowUp" label="More" sub={prevLabel ? `先週 ${prevLabel}` : '先週'} accent={T.danger} text={more} />
+          <ReadOnlyBlock T={T} icon="target" label="Focus" sub={thisLabel ? `今週 ${thisLabel}` : '今週'} accent={T.accent} text={focus} lastBlock />
         </div>
       )}
 
@@ -2523,7 +2535,7 @@ function ReadOnlyTeamSummaryCard({ T, teamData, members, weekStart }) {
             fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em',
           }}>
             <span style={{ fontSize: 13 }}>{krsExpanded ? '▾' : '▸'}</span>
-            📊 KR 詳細 ({krs.length}件)
+            <Icon name="chart" size={12} /> KR 詳細 ({krs.length}件)
           </button>
           {krsExpanded && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
@@ -2601,7 +2613,7 @@ function KRReadOnlyRow({ T, kr, members = [], expanded, onToggle }) {
         : (current / target) * 100))
     : 0
   const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
-  const weatherIcons = { 1: '☀️', 2: '🌤', 3: '☁️', 4: '🌧' }
+  const weatherIcons = { 1: 'sun', 2: 'partly', 3: 'cloud', 4: 'rain' }
   const hasReview = !!(kr.good || kr.more || kr.focus || kr.weather)
   const ownerMember = kr.owner ? members.find(m => m?.name === kr.owner) : null
 
@@ -2630,7 +2642,7 @@ function KRReadOnlyRow({ T, kr, members = [], expanded, onToggle }) {
             {kr.owner}
           </span>
         )}
-        {kr.weather > 0 && <span style={{ fontSize: 14 }}>{weatherIcons[kr.weather]}</span>}
+        {kr.weather > 0 && <span style={{ display: 'inline-flex', color: T.textSub }}><Icon name={weatherIcons[kr.weather]} size={14} /></span>}
         <span style={{ fontSize: 11, color: T.textMuted }}>
           {current}{kr.unit} / {target}{kr.unit}
         </span>
@@ -2648,9 +2660,9 @@ function KRReadOnlyRow({ T, kr, members = [], expanded, onToggle }) {
             <div style={{ fontSize: 11, color: T.textFaint, fontStyle: 'italic' }}>このKRはまだレビューが記入されていません。</div>
           ) : (
             <>
-              <ReadOnlyBlock T={T} icon="✅" label="Good" sub="" accent={T.success} text={kr.good} />
-              <ReadOnlyBlock T={T} icon="🔺" label="More" sub="" accent={T.danger}  text={kr.more} />
-              <ReadOnlyBlock T={T} icon="🎯" label="Focus" sub="" accent={T.accent} text={kr.focus} lastBlock />
+              <ReadOnlyBlock T={T} icon="check" label="Good" sub="" accent={T.success} text={kr.good} />
+              <ReadOnlyBlock T={T} icon="arrowUp" label="More" sub="" accent={T.danger}  text={kr.more} />
+              <ReadOnlyBlock T={T} icon="target" label="Focus" sub="" accent={T.accent} text={kr.focus} lastBlock />
             </>
           )}
         </div>
@@ -2663,8 +2675,8 @@ function ReadOnlyBlock({ T, icon, label, sub, accent, text, lastBlock }) {
   if (!text) return null
   return (
     <div style={{ marginBottom: lastBlock ? 0 : 10 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: 12 }}>{icon}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <span style={{ display: 'inline-flex', color: accent }}><Icon name={icon} size={12} /></span>
         <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>{label}</span>
         <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
       </div>
@@ -2778,7 +2790,7 @@ function KREditableRow({ T, kr, members = [], weekStart, expanded, onToggle }) {
         : (currentVal / target) * 100))
     : 0
   const progressColor = progress >= 100 ? T.success : progress >= 60 ? T.accent : T.danger
-  const weatherIcons = { 1: '☀️', 2: '🌤', 3: '☁️', 4: '🌧' }
+  const weatherIcons = { 1: 'sun', 2: 'partly', 3: 'cloud', 4: 'rain' }
   const ownerMember = kr.owner ? members.find(m => m?.name === kr.owner) : null
 
   const inputBase = {
@@ -2811,7 +2823,7 @@ function KREditableRow({ T, kr, members = [], weekStart, expanded, onToggle }) {
             {kr.owner}
           </span>
         )}
-        {weather > 0 && <span style={{ fontSize: 14 }}>{weatherIcons[weather]}</span>}
+        {weather > 0 && <span style={{ display: 'inline-flex', color: T.textSub }}><Icon name={weatherIcons[weather]} size={14} /></span>}
         <span style={{ fontSize: 11, color: T.textMuted }}>
           {currentVal}{kr.unit} / {target}{kr.unit}
         </span>
@@ -2845,28 +2857,29 @@ function KREditableRow({ T, kr, members = [], weekStart, expanded, onToggle }) {
                     padding: '4px 8px', borderRadius: 6,
                     border: `1px solid ${weather === w ? T.accent : T.border}`,
                     background: weather === w ? T.accentBg : 'transparent',
-                    fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-                  }}>{weatherIcons[w]}</button>
+                    cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'inline-flex', color: weather === w ? T.accent : T.textSub,
+                  }}><Icon name={weatherIcons[w]} size={14} /></button>
               ))}
             </div>
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: 10 }}>
               {(reviewSaving || krSaving) && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
-              {(reviewSaved || krSaved) && !(reviewSaving || krSaving) && <span style={{ color: T.success }}>✓ 保存済</span>}
+              {(reviewSaved || krSaved) && !(reviewSaving || krSaving) && <span style={{ color: T.success, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="check" size={12} /> 保存済</span>}
             </span>
           </div>
           {/* Good / More / Focus */}
-          <FieldRowInline T={T} icon="✅" label="Good" accent={T.success} value={good}
+          <FieldRowInline T={T} icon="check" label="Good" accent={T.success} value={good}
             placeholder="今週うまくいったこと"
             onFocus={() => { focusedRef.current = 'good' }}
             onBlur={() => { focusedRef.current = null }}
             onChange={v => { setGood(v); scheduleReviewSave(weather, v, more, focusText) }} />
-          <FieldRowInline T={T} icon="🔺" label="More" accent={T.danger} value={more}
+          <FieldRowInline T={T} icon="arrowUp" label="More" accent={T.danger} value={more}
             placeholder="課題・改善したいこと"
             onFocus={() => { focusedRef.current = 'more' }}
             onBlur={() => { focusedRef.current = null }}
             onChange={v => { setMore(v); scheduleReviewSave(weather, good, v, focusText) }} />
-          <FieldRowInline T={T} icon="🎯" label="Focus" accent={T.accent} value={focusText}
+          <FieldRowInline T={T} icon="target" label="Focus" accent={T.accent} value={focusText}
             placeholder="来週の注力アクション"
             onFocus={() => { focusedRef.current = 'focus' }}
             onBlur={() => { focusedRef.current = null }}
@@ -2880,8 +2893,8 @@ function KREditableRow({ T, kr, members = [], weekStart, expanded, onToggle }) {
 function FieldRowInline({ T, icon, label, accent, value, placeholder, onChange, onFocus, onBlur }) {
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 12 }}>{icon}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ display: 'inline-flex', color: accent }}><Icon name={icon} size={12} /></span>
         <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>{label}</span>
       </div>
       <textarea value={value} placeholder={placeholder} rows={2}
@@ -3006,7 +3019,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
   if (teams.length === 0) {
     return (
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🤷</div>
+        <div style={{ marginBottom: 12, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={36} /></div>
         <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>対象チームが見つかりません</div>
         <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
       </div>
@@ -3063,7 +3076,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
         padding: '14px 18px',
         background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.success}06 100%)`,
         borderRadius: 14, border: `1px solid ${T.success}1f`,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>進捗 (チーム)</div>
@@ -3102,10 +3115,10 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
       <div style={{
         marginTop: 18, padding: '14px 18px',
         background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+        boxShadow: SHADOWS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🏢</div>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.accent}1f`, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="building" size={14} /></div>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>チーム一覧（クリックでジャンプ）</div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -3124,7 +3137,7 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
                   boxShadow: isActive ? `0 2px 6px ${T.accent}55` : 'none',
                   transition: 'all 0.15s ease',
                 }}>
-                {isDone && '✓ '}{t.team.icon || '🏢'} {t.team.name} <span style={{ opacity: 0.65 }}>({t.kaCount})</span>
+                {isDone && <Icon name="check" size={11} style={{ verticalAlign: 'middle', marginRight: 2 }} />}<span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 4 }}><DataIcon value={t.team.icon} size={12} fallback="building" /></span>{t.team.name} <span style={{ opacity: 0.65 }}>({t.kaCount})</span>
               </button>
             )
           })}
@@ -3134,13 +3147,13 @@ function Step1ManagerSummary({ T, meeting, weekStart, levels, members, session, 
       {/* 横断連携への誘導 */}
       <div style={{
         marginTop: 18, padding: '14px 18px',
-        background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
-        border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
-        borderRadius: 14, fontSize: 12, color: T.textSub,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+        background: T.warnBg,
+        border: `1px solid ${T.warn}`,
+        borderRadius: RADIUS.lg, fontSize: 12, color: T.textSub,
+        boxShadow: SHADOWS.xs,
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${T.warn}1f`, color: T.warn, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>💡</div>
+          <div style={{ width: 28, height: 28, borderRadius: RADIUS.sm, background: T.warn, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}><Icon name="bolt" size={14} /></div>
           <div style={{ lineHeight: 1.6 }}>
             各チーム共有が一巡したら「横断連携の確認へ →」で Step 2 へ。<br />
             曖昧な業務の引き取り、チーム間の依頼・連携は <strong style={{ color: T.warn }}>「確認事項」</strong>として記録します。
@@ -3157,7 +3170,7 @@ function TeamSummaryCard({ T, teamData, members, weekStart }) {
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 14, padding: '22px 26px' }}>
       {/* ヘッダー: チーム名 + 担当者リスト */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 24 }}>{team?.icon || '🤝'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={team?.icon} size={24} fallback="handshake" /></span>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{team?.name}</div>
         <span style={{
           padding: '3px 10px', borderRadius: 99, background: `${T.accent}18`,
@@ -3287,25 +3300,25 @@ function TeamSummaryEditor({ T, team, weekStart }) {
       {/* 保存インジケータ */}
       <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 6, textAlign: 'right', minHeight: 14 }}>
         {saving && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
-        {saved && !saving && <span style={{ color: T.success }}>✓ 保存済</span>}
+        {saved && !saving && <span style={{ color: T.success, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="check" size={12} /> 保存済</span>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-        <ReviewBox T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success}
+        <ReviewBox T={T} icon="check" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success}
           value={summary.good}
           onChange={v => change('good', v)}
           onFocus={() => setFocusedField('good')}
           onBlur={() => { setFocusedField(null); flush(summary) }}
           placeholder="チームの良かったこと・続けたいこと"
         />
-        <ReviewBox T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger}
+        <ReviewBox T={T} icon="arrowUp" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger}
           value={summary.more}
           onChange={v => change('more', v)}
           onFocus={() => setFocusedField('more')}
           onBlur={() => { setFocusedField(null); flush(summary) }}
           placeholder="チームの課題・改善点"
         />
-        <ReviewBox T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent}
+        <ReviewBox T={T} icon="target" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent}
           value={summary.focus}
           onChange={v => change('focus', v)}
           onFocus={() => setFocusedField('focus')}
@@ -3379,16 +3392,17 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 18,
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       padding: '24px 28px', marginBottom: 18, position: 'relative',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
+      boxShadow: SHADOWS.lg,
     }}>
       {/* 期間バナー (通期/Q期 を一目で判別) */}
       <PeriodBanner T={T} period={objective?.period} />
 
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14 }}>{team?.icon || '🏢'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={team?.icon} size={14} fallback="building" /></span>
         <strong style={{ color: T.textSub, fontWeight: 700 }}>{team?.name}</strong>
         <span>›</span>
         <span style={{ color: T.textSub }}>{objective?.title}</span>
@@ -3399,8 +3413,8 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
           </>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 10 }}>
-          {autoSave.saving && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
-          {autoSave.saved && !autoSave.saving && <span style={{ color: T.success }}>✓ 保存済</span>}
+          {autoSave.saving && <span style={{ color: T.accent, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="refresh" size={12} /> 保存中…</span>}
+          {autoSave.saved && !autoSave.saving && <span style={{ color: T.success, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="check" size={12} /> 保存済</span>}
         </span>
       </div>
 
@@ -3450,21 +3464,21 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
 
       {/* good / more / focus */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-        <ReviewBox T={T} icon="✅" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success}
+        <ReviewBox T={T} icon="check" label="Good" sub={prevLabel ? `先週 ${prevLabel} の振り返り` : '先週の振り返り'} accent={T.success}
           value={good}
           onChange={v => { setGood(v); autoSave.save('good', v) }}
           onFocus={() => setFocusedField('good')}
           onBlur={() => { setFocusedField(null); autoSave.saveNow('good', good) }}
           placeholder="良かったこと・続けたいこと"
         />
-        <ReviewBox T={T} icon="🔺" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger}
+        <ReviewBox T={T} icon="arrowUp" label="More" sub={prevLabel ? `先週 ${prevLabel} の課題` : '先週の課題'} accent={T.danger}
           value={more}
           onChange={v => { setMore(v); autoSave.save('more', v) }}
           onFocus={() => setFocusedField('more')}
           onBlur={() => { setFocusedField(null); autoSave.saveNow('more', more) }}
           placeholder="課題・改善点"
         />
-        <ReviewBox T={T} icon="🎯" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent}
+        <ReviewBox T={T} icon="target" label="Focus" sub={thisLabel ? `今週 ${thisLabel} の注力` : '今週の注力'} accent={T.accent}
           value={focusOutput}
           onChange={v => { setFocusOutput(v); autoSave.save('focus_output', v) }}
           onFocus={() => setFocusedField('focus_output')}
@@ -3478,10 +3492,10 @@ function KAEditCard({ T, ka, team, objective, kr, members, weekStart }) {
 
 // ─── KR編集カード（Phase 3-2） ─────────────────────────────────────────────
 const WEATHERS = [
-  { v: 1, icon: '☀️', label: '快晴' },
-  { v: 2, icon: '🌤', label: '晴れ' },
-  { v: 3, icon: '☁️', label: '曇り' },
-  { v: 4, icon: '🌧',  label: '雨'  },
+  { v: 1, icon: 'sun', label: '快晴' },
+  { v: 2, icon: 'partly', label: '晴れ' },
+  { v: 3, icon: 'cloud', label: '曇り' },
+  { v: 4, icon: 'rain',  label: '雨'  },
 ]
 
 // 指定 monday の前週月曜日を返す（YYYY-MM-DD）
@@ -3624,21 +3638,21 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
     <div style={{
       background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 18,
       padding: '24px 28px', marginBottom: 18, position: 'relative',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
+      boxShadow: SHADOWS.lg,
     }}>
       {/* 期間バナー (通期/Q期 を一目で判別) */}
       <PeriodBanner T={T} period={objective?.period} />
 
       {/* 階層パンくず */}
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span>{level?.icon || '🏢'}</span>
+        <span style={{ display:'inline-flex' }}><DataIcon value={level?.icon} size={14} fallback="building" /></span>
         <strong style={{ color: T.textSub }}>{level?.name}</strong>
         <span>›</span>
         <span style={{ color: T.textSub }}>{objective?.title}</span>
         {/* 保存インジケータ */}
         <span style={{ marginLeft: 'auto', fontSize: 10 }}>
           {(krAutoSave.saving || reviewSaving) && <span style={{ color: T.accent }}>⟳ 保存中…</span>}
-          {(krAutoSave.saved || reviewSaved) && !(krAutoSave.saving || reviewSaving) && <span style={{ color: T.success }}>✓ 保存済</span>}
+          {(krAutoSave.saved || reviewSaved) && !(krAutoSave.saving || reviewSaving) && <span style={{ color: T.success, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="check" size={12} /> 保存済</span>}
         </span>
       </div>
 
@@ -3696,8 +3710,9 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
               style={{
                 padding: '6px 10px', borderRadius: 8, border: `1px solid ${active ? T.accent : T.border}`,
                 background: active ? `${T.accent}18` : 'transparent', cursor: 'pointer',
-                fontSize: 18, lineHeight: 1, fontFamily: 'inherit',
-              }}>{w.icon}</button>
+                lineHeight: 1, fontFamily: 'inherit',
+                display: 'inline-flex', color: active ? T.accent : T.textSub,
+              }}><Icon name={w.icon} size={18} /></button>
           )
         })}
       </div>
@@ -3705,7 +3720,7 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
       {/* good / more / focus 入力 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
         {/* Good */}
-        <ReviewBox T={T} icon="✅" label="Good" sub={`先週 ${formatWeekRange2(prevWeek)}`} accent={T.success}
+        <ReviewBox T={T} icon="check" label="Good" sub={`先週 ${formatWeekRange2(prevWeek)}`} accent={T.success}
           value={good}
           onChange={v => { setGood(v); scheduleReviewSave(weather, v, more, focusText) }}
           onFocus={() => setFocusedField('good')}
@@ -3713,7 +3728,7 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
           placeholder="良かったこと・続けたいこと"
         />
         {/* More */}
-        <ReviewBox T={T} icon="🔺" label="More" sub={`先週 ${formatWeekRange2(prevWeek)}`} accent={T.danger}
+        <ReviewBox T={T} icon="arrowUp" label="More" sub={`先週 ${formatWeekRange2(prevWeek)}`} accent={T.danger}
           value={more}
           onChange={v => { setMore(v); scheduleReviewSave(weather, good, v, focusText) }}
           onFocus={() => setFocusedField('more')}
@@ -3721,7 +3736,7 @@ function KREditCard({ T, kr, objective, level, weekStart, members, periodLabel }
           placeholder="課題・改善したいこと"
         />
         {/* Focus */}
-        <ReviewBox T={T} icon="🎯" label="Focus" sub={`今週 ${formatWeekRange2(weekStart)}`} accent={T.accent}
+        <ReviewBox T={T} icon="target" label="Focus" sub={`今週 ${formatWeekRange2(weekStart)}`} accent={T.accent}
           value={focusText}
           onChange={v => { setFocusText(v); scheduleReviewSave(weather, good, more, v) }}
           onFocus={() => setFocusedField('focusText')}
@@ -3752,8 +3767,8 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
       background: T.bgSection, borderRadius: 8, border: `1px solid ${T.border}`,
       padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6,
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <span style={{ fontSize: 12 }}>{icon}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', color: accent }}><Icon name={icon} size={12} /></span>
         <span style={{ fontSize: 12, fontWeight: 700, color: accent }}>{label}</span>
         <span style={{ fontSize: 10, color: T.textMuted }}>{sub}</span>
       </div>
@@ -3767,7 +3782,7 @@ function ReviewBox({ T, icon, label, sub, accent, value, onChange, onFocus, onBl
         rows={minRows}
         style={{
           width: '100%', boxSizing: 'border-box',
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 6,
+          background: 'rgba(255,255,255,.7)', border: `1px solid ${T.border}`, borderRadius: 7,
           padding: '6px 8px', color: T.text, fontSize: 12, lineHeight: 1.6,
           outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden',
           minHeight: minRows * 20 + 14,
@@ -3796,19 +3811,19 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
       {isShare ? (
         <div style={{
           maxWidth: 1280, width: '100%', margin: '14px auto 0', padding: '14px 18px',
-          background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
-          border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
-          borderRadius: 14, fontSize: 12, color: T.textSub,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+          background: T.bgCard,
+          border: `1px solid ${T.border}`,
+          borderRadius: RADIUS.lg, fontSize: 12, color: T.textSub,
+          boxShadow: SHADOWS.md,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-              background: `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`,
+              width: 32, height: 32, borderRadius: RADIUS.sm, flexShrink: 0,
+              background: T.accentBg,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, color: '#fff',
-            }}>📢</div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: T.warn }}>共有事項タイム</div>
+              fontSize: 16, color: T.accent,
+            }}><Icon name="bell" size={16} /></div>
+            <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text }}>共有事項タイム</div>
           </div>
           <div style={{ paddingLeft: 42, lineHeight: 1.6 }}>
             会議参加者全員に共有したいトピックを順に発表します。新規追加は「＋ 新規作成」から。
@@ -3817,20 +3832,19 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
       ) : withDiscussion ? (
         <div style={{
           maxWidth: 1280, width: '100%', margin: '14px auto 0', padding: '16px 20px',
-          background: `linear-gradient(180deg, ${T.bgCard} 0%, ${T.warn}08 100%)`,
-          border: `1px solid ${T.warn}33`, borderLeft: `4px solid ${T.warn}`,
-          borderRadius: 14, fontSize: 12, color: T.textSub,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+          background: T.warnBg,
+          border: `1px solid ${T.warn}`,
+          borderRadius: RADIUS.lg, fontSize: 12, color: T.textSub,
+          boxShadow: SHADOWS.md,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-              background: `linear-gradient(135deg, ${T.warn} 0%, ${T.warn}c0 100%)`,
+              width: 32, height: 32, borderRadius: RADIUS.sm, flexShrink: 0,
+              background: T.warn,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 16, color: '#fff',
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 4px ${T.warn}55`,
-            }}>🤝</div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: T.warn, letterSpacing: '-0.01em' }}>横断連携の確認</div>
+            }}><Icon name="org" size={16} /></div>
+            <div style={{ ...TYPO.headline, fontWeight: 800, color: T.warn, letterSpacing: '-0.01em' }}>横断連携の確認</div>
           </div>
           <div style={{ paddingLeft: 42, lineHeight: 1.7 }}>
             各チームの共有を踏まえ、以下を「確認事項」として記録してください：<br />
@@ -3867,16 +3881,10 @@ function Step2Confirmations({ T, myName, members, withDiscussion, lockedKind = '
 
 // ─── 共通ボタンスタイル ────────────────────────────────────────────────────
 function primaryBtn(T) {
-  return {
-    padding: '10px 22px', borderRadius: 8, border: 'none', cursor: 'pointer',
-    background: T.accent, color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-  }
+  return { ...btnBrand({ size: 'lg' }), borderRadius: RADIUS.sm }
 }
 function secondaryBtn(T) {
-  return {
-    padding: '10px 18px', borderRadius: 8, border: `1px solid ${T.borderMid}`, cursor: 'pointer',
-    background: 'transparent', color: T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-  }
+  return { ...btnSecondary({ T, size: 'lg' }), borderRadius: RADIUS.sm }
 }
 
 // ─── Step 3: ネクストアクション ─────────────────────────────────────────────
@@ -4019,7 +4027,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
             border: '1px solid rgba(255,255,255,0.30)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 26, color: '#fff',
-          }}>✅</div>
+          }}><Icon name="check" size={26} /></div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, letterSpacing: '-0.01em' }}>ネクストアクションを確定</div>
             <div style={{ fontSize: 12, opacity: 0.95, lineHeight: 1.6 }}>
@@ -4078,8 +4086,9 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
           padding: '8px 14px', borderRadius: 7, border: 'none',
           background: T.accent, color: '#fff', cursor: 'pointer',
           fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          display: 'inline-flex', alignItems: 'center', gap: 4,
           boxShadow: `0 2px 8px ${T.accent}40`,
-        }}>📋 Notionから取り込み</button>
+        }}><Icon name="note" size={12} /> Notionから取り込み</button>
       </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -4088,7 +4097,7 @@ function Step3NextActions({ T, meeting, weekStart, session, myName, members, lev
         <div style={{ fontSize: 11, color: T.textMuted, marginRight: 8 }}>
           記録: <strong style={{ color: T.text }}>{(items || []).filter(it => (it.title || '').trim()).length}</strong> 件
         </div>
-        <button onClick={handleFinish} style={primaryBtn(T)}>🏁 会議を終了</button>
+        <button onClick={handleFinish} style={primaryBtn(T)}><Icon name="flag" size={13} style={{ verticalAlign: 'middle' }} /> 会議を終了</button>
       </div>
 
       {/* Notion議事録 取り込みモーダル */}
@@ -4206,47 +4215,47 @@ function NextActionRow({ T, item, members, scopeKAs = [], onDelete }) {
       </select>
       <button onClick={onDelete} title="削除" style={{
         background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer',
-        fontSize: 14, padding: '0 4px', fontFamily: 'inherit',
-      }}>✕</button>
+        padding: '0 4px', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center',
+      }}><Icon name="cross" size={14} /></button>
     </div>
   )
 }
 
 // ─── Step 4: 終了画面 ────────────────────────────────────────────────────────
 function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
-  const meetColor = meeting?.color || T.success
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 24px', textAlign: 'center', position: 'relative' }}>
       <div aria-hidden style={{
         position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
         width: 700, height: 500,
-        background: `radial-gradient(ellipse, ${meetColor}1f 0%, transparent 60%)`,
+        background: `radial-gradient(ellipse, ${T.accent}1f 0%, transparent 60%)`,
         pointerEvents: 'none', filter: 'blur(40px)', zIndex: 0,
       }} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: 'relative', zIndex: 1, padding: '36px 24px' }}>
         <div style={{
-          width: 96, height: 96, borderRadius: 28, margin: '0 auto 20px',
-          background: `linear-gradient(135deg, ${meetColor} 0%, ${meetColor}c0 100%)`,
+          width: 64, height: 64, borderRadius: RADIUS.lg, margin: '0 auto 20px',
+          background: BRAND_GRADIENT.cta,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 50, color: '#fff',
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.3), 0 8px 24px ${meetColor}55, 0 16px 40px ${meetColor}33`,
-        }}>🎉</div>
-        <h2 style={{ fontSize: 28, fontWeight: 900, color: T.text, margin: 0, marginBottom: 8, letterSpacing: '-0.02em' }}>
-          お疲れ様でした！
+          color: '#fff',
+          boxShadow: '0 8px 22px rgba(37,99,235,.28)',
+        }}><Icon name="sparkle" size={32} /></div>
+        <h2 style={{ ...TYPO.title1, fontWeight: 700, color: T.text, margin: 0, marginBottom: 8, letterSpacing: '-0.02em' }}>
+          お疲れ様でした
         </h2>
-        <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 28, fontWeight: 500 }}>
+        <div style={{ ...TYPO.subhead, color: T.textMuted, marginBottom: 28, fontWeight: 500 }}>
           {meeting?.title} を完了しました
         </div>
 
         <div style={{
-          background: T.bgCard,
-          border: `1px solid ${T.border}`, borderRadius: 18,
-          padding: 24, marginBottom: 24, textAlign: 'left',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.04)',
+          maxWidth: 520, margin: '0 auto 24px',
+          background: 'rgba(255,255,255,.6)',
+          border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
+          padding: 24, textAlign: 'left',
+          boxShadow: SHADOWS.sm,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${meetColor}1f`, color: meetColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📊</div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>サマリー</div>
+            <div style={{ width: 28, height: 28, borderRadius: RADIUS.sm, background: T.accentBg, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}><Icon name="chart" size={14} /></div>
+            <div style={{ ...TYPO.subhead, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>サマリー</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <SummaryItem T={T} label="ファシリ" value={session?.facilitator || '—'} />
@@ -4258,18 +4267,14 @@ function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={onReset} style={{
-            padding: '10px 22px', borderRadius: 10, border: 'none',
-            background: 'rgba(120,120,128,0.12)', color: T.textSub, cursor: 'pointer',
-            fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-          }}>↺ もう一度開始</button>
+            ...btnSecondary({ T, size: 'lg' }), borderRadius: RADIUS.md,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}><Icon name="refresh" size={13} /> もう一度開始</button>
           {onSwitchToList && (
             <button onClick={onSwitchToList} style={{
-              padding: '10px 22px', borderRadius: 10, border: 'none',
-              background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accent}d0 100%)`,
-              color: '#fff', cursor: 'pointer',
-              fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
-              boxShadow: `0 2px 6px ${T.accent}55`,
-            }}>📋 一覧モードで詳細確認</button>
+              ...btnBrand({ size: 'lg' }), borderRadius: RADIUS.md,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}><Icon name="note" size={13} /> 一覧モードで詳細確認</button>
           )}
         </div>
       </div>
@@ -4281,7 +4286,7 @@ function Step4Done({ T, session, scope, meeting, onReset, onSwitchToList }) {
 function PlaceholderStep({ T, title, note, onPrev, onNext, nextLabel = '次へ →' }) {
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>🚧</div>
+      <div style={{ marginBottom: 16, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="tools" size={48} /></div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 6 }}>{title}</h2>
       <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 28 }}>{note}</div>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
@@ -4308,8 +4313,9 @@ function PlaceholderStep({ T, title, note, onPrev, onNext, nextLabel = '次へ �
 function Badge({ T, bg, fg, children }) {
   return (
     <span style={{
-      padding: '4px 10px', borderRadius: 99, background: bg, color: fg,
-      fontSize: 11, fontWeight: 700,
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '4px 10px', borderRadius: RADIUS.pill, background: bg, color: fg,
+      ...TYPO.footnote, fontWeight: 700,
     }}>{children}</span>
   )
 }
@@ -4327,11 +4333,11 @@ function getPeriodBase(periodKey) {
 }
 // Q1〜Q4 は強い色、通期は控えめ。サイズ大きめに。
 const PERIOD_THEME = {
-  annual: { bg: '#9ca3af20', fg: '#6b7280', border: '#9ca3af55', icon: '🌐', label: '通期', sub: '(週次更新は任意)' },
-  q1:     { bg: '#4d9fff22', fg: '#1d4ed8', border: '#4d9fff90', icon: '🔵', label: 'Q1',  sub: '集中期' },
-  q2:     { bg: '#00d68f22', fg: '#0a8f5a', border: '#00d68f90', icon: '🟢', label: 'Q2',  sub: '集中期' },
-  q3:     { bg: '#ff9f4322', fg: '#c2410c', border: '#ff9f4390', icon: '🟠', label: 'Q3',  sub: '集中期' },
-  q4:     { bg: '#a855f722', fg: '#7e22ce', border: '#a855f790', icon: '🟣', label: 'Q4',  sub: '集中期' },
+  annual: { bg: '#9ca3af20', fg: '#6b7280', border: '#9ca3af55', icon: 'org', label: '通期', sub: '(週次更新は任意)' },
+  q1:     { bg: '#4d9fff22', fg: '#1d4ed8', border: '#4d9fff90', icon: 'circle', label: 'Q1',  sub: '集中期' },
+  q2:     { bg: '#00d68f22', fg: '#0a8f5a', border: '#00d68f90', icon: 'circle', label: 'Q2',  sub: '集中期' },
+  q3:     { bg: '#ff9f4322', fg: '#c2410c', border: '#ff9f4390', icon: 'circle', label: 'Q3',  sub: '集中期' },
+  q4:     { bg: '#a855f722', fg: '#7e22ce', border: '#a855f790', icon: 'circle', label: 'Q4',  sub: '集中期' },
 }
 // パンくず用 (省略バージョン)
 function PeriodBadge({ T, period }) {
@@ -4347,7 +4353,7 @@ function PeriodBadge({ T, period }) {
         fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
         flexShrink: 0,
       }}>
-      <span>{cfg.icon}</span>{cfg.label}
+      <span style={{ display: 'inline-flex', color: cfg.fg }}><Icon name={cfg.icon} size={11} /></span>{cfg.label}
     </span>
   )
 }
@@ -4364,7 +4370,7 @@ function PeriodBanner({ T, period }) {
       background: cfg.bg, border: `2px solid ${cfg.border}`, borderLeft: `6px solid ${cfg.fg}`,
       borderRadius: 8,
     }}>
-      <span style={{ fontSize: 22, lineHeight: 1 }}>{cfg.icon}</span>
+      <span style={{ lineHeight: 1, display: 'inline-flex', color: cfg.fg }}><Icon name={cfg.icon} size={22} /></span>
       <span style={{ fontSize: 18, fontWeight: 900, color: cfg.fg, letterSpacing: '0.04em' }}>
         {cfg.label}
       </span>

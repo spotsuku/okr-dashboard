@@ -5,12 +5,13 @@ import { MEETING_URLS } from '../lib/meetings'
 import { openNotionUrl } from '../lib/notionLink'
 import MeetingImport from './MeetingImport'
 import { ComposeModal } from './ConfirmationsTab'
-import { COMMON_TOKENS } from '../lib/themeTokens'
-import { HeroCard } from './iosUI'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { btnPrimary, btnSecondary, accentRingStyle, btnBrand } from '../lib/iosStyles'
+import Icon from './Icon'
 import { isJpNonBusinessDay } from '../lib/jpHolidays'
 import { renderTextWithLinks } from '../lib/renderTextWithLinks'
 
-// 🌅 朝会タブ (ヘッダーから遷移)
+// 朝会タブ (ヘッダーから遷移)
 //   ステップ1: メンバー順番報告 (昨日の振り返り + 今日のタスク)
 //   ステップ2: 共有事項タイム
 //   ステップ3: 確認事項タイム
@@ -242,19 +243,19 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
   }
 
   if (loading) {
-    return <div style={{ padding: 40, color: T.textMuted, fontSize: 13 }}>読み込み中...</div>
+    return <div style={{ padding: SPACING['3xl'] + SPACING.sm, color: T.textMuted, ...TYPO.body }}>読み込み中...</div>
   }
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
         {/* ヘッダ */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0 }}>🌅 朝会</h1>
-          <span style={{ fontSize: 12, color: T.textMuted }}>{todayLabel}</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACING.md, marginBottom: SPACING.lg, flexWrap: 'wrap' }}>
+          <h1 style={{ ...TYPO.title1, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: SPACING.sm }}><Icon name="morning" size={22} />朝会</h1>
+          <span style={{ ...TYPO.subhead, color: T.textMuted }}>{todayLabel}</span>
           <div style={{ flex: 1 }} />
           {meeting && meeting.step >= 1 && meeting.step < 5 && (
-            <button onClick={resetMeeting} style={btnSt(T)}>↻ リセット</button>
+            <button onClick={resetMeeting} style={btnSt(T)}><Icon name="refresh" size={12} /> リセット</button>
           )}
         </div>
 
@@ -285,11 +286,12 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
             {/* ファシリ表示 */}
             {meeting.facilitator && (
               <div style={{
-                marginBottom: 12, padding: '6px 12px',
-                background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
-                fontSize: 11, color: T.textMuted,
+                marginBottom: SPACING.md, padding: `${SPACING.sm - 2}px ${SPACING.md}px`,
+                background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
+                ...TYPO.footnote, fontWeight: 600, color: T.textMuted,
+                display: 'flex', alignItems: 'center', gap: SPACING.xs,
               }}>
-                👤 ファシリ: <strong style={{ color: T.text }}>{meeting.facilitator}</strong>
+                <Icon name="user" size={12} /> ファシリ: <strong style={{ color: T.text }}>{meeting.facilitator}</strong>
               </div>
             )}
 
@@ -332,18 +334,18 @@ export default function MorningMeetingPage({ user, members = [], themeKey = 'dar
         {/* 終了 */}
         {meeting && meeting.step === 5 && (
           <div style={{
-            background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-            padding: 40, textAlign: 'center',
+            background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+            padding: SPACING['3xl'] + SPACING.sm, textAlign: 'center',
           }}>
-            <div style={{ fontSize: 48, marginBottom: 14 }}>🏁</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8 }}>
+            <div style={{ color: T.success, marginBottom: SPACING.lg, display: 'flex', justifyContent: 'center' }}><Icon name="flag" size={48} /></div>
+            <div style={{ ...TYPO.title3, color: T.text, marginBottom: SPACING.sm }}>
               今日の朝会は終了しました
             </div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 20 }}>
+            <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginBottom: SPACING.xl }}>
               {meeting.facilitator && <>ファシリ: {meeting.facilitator}　</>}
               {meeting.finished_at && `終了時刻: ${jstHHMM(meeting.finished_at)}`}
             </div>
-            <button onClick={resetMeeting} style={btnSt(T, T.accent)}>↻ 開始ページに戻る</button>
+            <button onClick={resetMeeting} style={btnSt(T, T.accent)}><Icon name="refresh" size={12} /> 開始ページに戻る</button>
           </div>
         )}
       </div>
@@ -361,23 +363,48 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 40px' }}>
-      {/* ヒーローカード (iPad 風) */}
-      <HeroCard T={T}
-        eyebrow="平日毎日"
-        title="🌅 朝会"
-        subtitle={`本日 ${todayLabel}${isResume ? ' ・ リセット済み' : ''}`}
-        color="#FF9500"
-      />
+      {/* ヒーロー (ブランドブルー → シアン) */}
+      <div style={{
+        marginTop: SPACING.lg, marginBottom: SPACING['2xl'],
+        padding: `${SPACING['2xl']}px ${SPACING['2xl'] + 4}px`,
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #22d3ee 100%)',
+        borderRadius: RADIUS['2xl'], color: '#fff',
+        position: 'relative', overflow: 'hidden',
+        boxShadow: '0 10px 30px rgba(37,99,235,.22)',
+      }}>
+        <div aria-hidden style={{
+          position: 'absolute', top: -80, right: -60, width: 280, height: 280,
+          background: 'radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 60%)',
+          borderRadius: '50%', pointerEvents: 'none',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: SPACING.lg }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: RADIUS.lg, flexShrink: 0,
+            background: 'rgba(255,255,255,0.18)',
+            border: '1px solid rgba(255,255,255,0.28)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff',
+          }}><Icon name="sun" size={32} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              ...TYPO.caption, fontWeight: 800, letterSpacing: '0.18em',
+              opacity: 0.85, textTransform: 'uppercase', marginBottom: SPACING.xs,
+            }}>平日毎日</div>
+            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.15 }}>朝会</div>
+            <div style={{ ...TYPO.subhead, opacity: 0.92, marginTop: SPACING.xs }}>{`本日 ${todayLabel}${isResume ? ' ・ リセット済み' : ''}`}</div>
+          </div>
+        </div>
+      </div>
 
       {/* Notion 議事録案内 */}
       <div style={{
-        marginBottom: 18, padding: '14px 18px',
-        background: T.accentBg, border: `1px solid ${T.accent}40`, borderRadius: 10,
+        marginBottom: SPACING.lg + 2, padding: `${SPACING.md + 2}px ${SPACING.lg + 2}px`,
+        background: T.accentBg, border: `1px solid ${T.accent}40`, borderRadius: RADIUS.md,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 4 }}>
-          🎙 Notionで録音議事録をとってください
+        <div style={{ ...TYPO.callout, fontWeight: 800, color: T.accent, marginBottom: SPACING.xs, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="note" size={14} /> Notionで録音議事録をとってください
         </div>
-        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6, marginBottom: 8 }}>
+        <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textSub, lineHeight: 1.6, marginBottom: SPACING.sm }}>
           朝会のNotionページを開いて、録音と議事録の作成を開始してください。
           会議の最後に、この議事録からネクストアクションを取り込めます。
         </div>
@@ -386,21 +413,21 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
           if (!url) { alert('朝会のNotion URLが設定されていません'); return }
           openNotionUrl(url)
         }} style={{
-          padding: '6px 12px', borderRadius: 6, border: `1px solid ${T.accent}80`,
-          background: 'transparent', color: T.accent, fontSize: 11, fontWeight: 700,
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}>📝 Notionを開く ↗</button>
+          padding: `${SPACING.sm - 2}px ${SPACING.md}px`, borderRadius: RADIUS.xs, border: `1px solid ${T.accent}80`,
+          background: 'transparent', color: T.accent, ...TYPO.footnote, fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="pencil" size={12} /> Notionを開く <Icon name="external" size={12} /></button>
       </div>
 
       {/* 進行アジェンダ */}
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: 18, marginBottom: 18,
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+        padding: SPACING.lg + 2, marginBottom: SPACING.lg + 2,
       }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 10, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 700, marginBottom: SPACING.sm + 2, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           会議の流れ
         </div>
-        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: T.textSub, lineHeight: 1.8 }}>
+        <ol style={{ margin: 0, paddingLeft: SPACING.lg + 2, ...TYPO.body, fontWeight: 500, color: T.textSub, lineHeight: 1.8 }}>
           <li><strong style={{ color: T.text }}>個別報告</strong>：メンバーが順に「昨日の振り返り (KPT) と今日のタスク」を共有</li>
           <li><strong style={{ color: T.text }}>確認事項タイム</strong>：未解決の確認事項を返信・解決化</li>
           <li><strong style={{ color: T.text }}>ネクストアクション</strong>：誰がいつまでに何をやるかを記録</li>
@@ -410,25 +437,25 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
 
       {/* 参加メンバー */}
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: 18, marginBottom: 18,
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+        padding: SPACING.lg + 2, marginBottom: SPACING.lg + 2,
       }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 10, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 700, marginBottom: SPACING.sm + 2, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           参加メンバー ({members.length}人)
         </div>
         {noMembers ? (
-          <div style={{ fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>
+          <div style={{ ...TYPO.subhead, color: T.textMuted, fontStyle: 'italic' }}>
             メンバーが登録されていません。組織設定からメンバーを追加してください。
           </div>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs + 2 }}>
             {members.map((m, idx) => (
               <span key={m.name} style={{
-                padding: '4px 10px', borderRadius: 99,
+                padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.pill,
                 background: T.sectionBg, color: T.textSub,
-                fontSize: 11, fontWeight: 600,
+                ...TYPO.footnote, fontWeight: 600,
               }}>
-                <span style={{ color: T.textMuted, marginRight: 4 }}>{idx + 1}.</span>{m.name}
+                <span style={{ color: T.textMuted, marginRight: SPACING.xs }}>{idx + 1}.</span>{m.name}
               </span>
             ))}
           </div>
@@ -437,24 +464,23 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
 
       {/* ファシリテーター */}
       <div style={{
-        marginBottom: 16, padding: '12px 16px', background: T.bgCard,
-        border: `1px solid ${T.border}`, borderRadius: 10,
+        marginBottom: SPACING.lg, padding: `${SPACING.md}px ${SPACING.lg}px`, background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
       }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 700, marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           本日のファシリテーター
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: '#ff9f43', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 800, flexShrink: 0,
+            ...accentRingStyle({ color: T.accent, size: 32 }),
+            borderRadius: '50%',
+            ...TYPO.headline, fontWeight: 800,
           }}>{(facilitatorDraft || '?').charAt(0)}</div>
           <select value={facilitatorDraft || ''}
             onChange={e => onFacilitatorChange && onFacilitatorChange(e.target.value)}
             style={{
-              flex: 1, background: T.bg, border: `1px solid ${T.borderMid}`, borderRadius: 7,
-              padding: '8px 10px', fontSize: 13, color: T.text,
+              flex: 1, background: T.bg, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.sm - 1,
+              padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, ...TYPO.body, color: T.text,
               cursor: 'pointer', fontFamily: 'inherit', outline: 'none', fontWeight: 700,
             }}>
             <option value="">-- ファシリ未選択 --</option>
@@ -465,23 +491,23 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
 
       {/* 予定時間 */}
       <div style={{
-        marginBottom: 22, padding: '12px 16px', background: T.bgCard,
-        border: `1px solid ${T.border}`, borderRadius: 10,
+        marginBottom: SPACING['2xl'] - 2, padding: `${SPACING.md}px ${SPACING.lg}px`, background: T.bgCard,
+        border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
       }}>
-        <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <div style={{ ...TYPO.footnote, color: T.textMuted, fontWeight: 700, marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           会議予定時間
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' }}>
           {[15, 30, 45, 60, 90].map(m => {
             const active = Number(durationDraft) === m
             return (
               <button key={m}
                 onClick={() => onDurationChange && onDurationChange(m)}
                 style={{
-                  padding: '6px 14px', borderRadius: 7, border: `1px solid ${active ? T.accent : T.borderMid}`,
+                  padding: `${SPACING.sm - 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1, border: `1px solid ${active ? T.accent : T.borderMid}`,
                   background: active ? T.accentBg : 'transparent',
                   color: active ? T.accent : T.textSub,
-                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', ...TYPO.subhead, fontWeight: 700,
                 }}>{m}分</button>
             )
           })}
@@ -489,10 +515,10 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
             value={durationDraft || 30}
             onChange={e => onDurationChange && onDurationChange(Number(e.target.value) || 30)}
             style={{
-              width: 70, background: T.bg, border: `1px solid ${T.borderMid}`, borderRadius: 7,
-              padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+              width: 70, background: T.bg, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.sm - 1,
+              padding: `${SPACING.sm - 2}px ${SPACING.sm + 2}px`, color: T.text, ...TYPO.subhead, fontFamily: 'inherit', outline: 'none',
             }} />
-          <span style={{ fontSize: 11, color: T.textMuted }}>分</span>
+          <span style={{ ...TYPO.footnote, color: T.textMuted }}>分</span>
           <button onClick={() => {
               if (typeof Notification === 'undefined') { alert('お使いのブラウザは通知に対応していません'); return }
               if (Notification.permission === 'granted') { alert('通知は既に許可されています'); return }
@@ -501,12 +527,13 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
               })
             }}
             style={{
-              marginLeft: 'auto', padding: '5px 10px', borderRadius: 6,
+              marginLeft: 'auto', padding: `${SPACING.xs + 1}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs,
               border: `1px dashed ${T.borderMid}`, background: 'transparent',
-              color: T.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-            }}>🔔 10分前通知を許可</button>
+              color: T.textMuted, cursor: 'pointer', ...TYPO.footnote, fontFamily: 'inherit',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="bell" size={12} /> 10分前通知を許可</button>
         </div>
-        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>
+        <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 0, color: T.textMuted, marginTop: SPACING.xs + 2 }}>
           会議開始から {durationDraft || 30}分で「終了予定」。残り10分でアラートが出ます。
         </div>
       </div>
@@ -514,19 +541,18 @@ function MorningStartScreen({ T, todayLabel, members = [], meeting, facilitatorD
       {/* 開始ボタン */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <button onClick={onStart} disabled={noMembers} style={{
-          padding: '14px 40px', borderRadius: 10, border: 'none',
-          background: noMembers
-            ? T.borderMid
-            : 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          ...(noMembers ? {} : btnBrand({ size: 'lg' })),
+          padding: `${SPACING.md + 2}px ${SPACING['3xl'] + SPACING.sm}px`, borderRadius: RADIUS.md, border: 'none',
+          background: noMembers ? T.borderMid : BRAND_GRADIENT.cta,
           color: '#fff',
-          fontSize: 15, fontWeight: 800, fontFamily: 'inherit',
+          fontSize: TYPO.title3.fontSize - 1, fontWeight: 800, fontFamily: 'inherit',
           cursor: noMembers ? 'not-allowed' : 'pointer',
-          boxShadow: noMembers ? 'none' : '0 4px 14px rgba(249,115,22,0.3)',
-          display: 'flex', alignItems: 'center', gap: 10,
+          boxShadow: noMembers ? 'none' : '0 4px 14px rgba(37,99,235,.28)',
+          display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
         }}>
-          <span style={{ fontSize: 18 }}>▶️</span>
+          <Icon name="rocket" size={18} />
           {isResume ? '朝会をもう一度開始する' : '朝会を開始する'}
-          {facilitatorDraft && <span style={{ fontSize: 11, opacity: 0.85, fontWeight: 600 }}>（ファシリ: {facilitatorDraft}）</span>}
+          {facilitatorDraft && <span style={{ ...TYPO.footnote, opacity: 0.85, fontWeight: 600 }}>（ファシリ: {facilitatorDraft}）</span>}
         </button>
       </div>
     </div>
@@ -543,10 +569,11 @@ function jstHHMM(iso) {
 
 function btnSt(T, color) {
   return {
-    padding: '6px 14px', borderRadius: 7,
+    padding: `${SPACING.sm - 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1,
     background: 'transparent', color: color || T.textSub,
     border: `1px solid ${color ? color + '60' : T.border}`,
-    fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+    ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
   }
 }
 
@@ -560,25 +587,29 @@ function StepHeader({ T, step, onJumpToStep }) {
   ]
   return (
     <div style={{
-      display: 'flex', gap: 6, marginBottom: 16, padding: 6,
-      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
+      display: 'flex', gap: SPACING.xs + 2, marginBottom: SPACING.lg, padding: SPACING.xs + 2,
+      background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
     }}>
       {steps.map(s => {
         const active = step === s.n
+        const done = s.n < step
         return (
           <button key={s.n} onClick={() => onJumpToStep(s.n)} style={{
-            flex: 1, padding: '10px 14px', borderRadius: 7, border: 'none',
-            background: active ? T.accent : 'transparent',
-            color: active ? '#fff' : T.textSub,
-            fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            flex: 1, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1,
+            border: active ? 'none' : done ? `1px solid ${T.success}30` : `1px solid ${T.border}`,
+            background: active ? BRAND_GRADIENT.cta : done ? T.successBg : 'rgba(255,255,255,0.6)',
+            color: active ? '#fff' : done ? T.success : T.textSub,
+            boxShadow: active ? '0 2px 8px rgba(37,99,235,.28)' : 'none',
+            ...TYPO.body, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs + 2,
           }}>
             <span style={{
               width: 22, height: 22, borderRadius: '50%',
-              background: active ? 'rgba(255,255,255,0.25)' : T.border,
+              background: active ? 'rgba(255,255,255,0.25)' : done ? `${T.success}26` : T.border,
+              color: active ? '#fff' : done ? T.success : T.textSub,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 800,
-            }}>{s.n}</span>
+              ...TYPO.footnote, fontWeight: 800,
+            }}>{done ? <Icon name="check" size={12} /> : s.n}</span>
             {s.label}
           </button>
         )
@@ -598,25 +629,29 @@ function Step1Report({ T, members, meeting, onNext, onPrev, onJump, onSkipToStep
     <>
       {/* 進行状況サマリー (メンバーリスト) */}
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
-        padding: 12, marginBottom: 14,
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.md,
+        padding: SPACING.md, marginBottom: SPACING.lg - 2,
       }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 8 }}>
+        <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.textMuted, marginBottom: SPACING.sm }}>
           メンバー進行状況 ({completed.size} / {members.length})
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: SPACING.xs + 2, flexWrap: 'wrap' }}>
           {members.map(m => {
             const isDone = completed.has(m.name)
             const isCurrent = m.name === current
             return (
               <button key={m.name} onClick={() => onJump(m.name)} style={{
-                padding: '4px 10px', borderRadius: 99, border: 'none',
+                padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.pill, border: 'none',
                 background: isCurrent ? T.accent : isDone ? T.successBg : T.sectionBg,
                 color: isCurrent ? '#fff' : isDone ? T.success : T.textSub,
-                fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 4,
+                ...TYPO.footnote, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: SPACING.xs,
               }}>
-                <span>{isCurrent ? '🟢' : isDone ? '✅' : '⬜'}</span>
+                {isCurrent
+                  ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', flexShrink: 0 }} />
+                  : isDone
+                    ? <Icon name="check" size={12} />
+                    : <Icon name="circle" size={12} />}
                 <span>{m.name}</span>
               </button>
             )
@@ -629,36 +664,38 @@ function Step1Report({ T, members, meeting, onNext, onPrev, onJump, onSkipToStep
         <SpeakerReport T={T} member={currentMember} />
       ) : allDone ? (
         <div style={{
-          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12,
-          padding: 30, textAlign: 'center', marginBottom: 14,
+          background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg,
+          padding: SPACING['3xl'] - 2, textAlign: 'center', marginBottom: SPACING.lg - 2,
         }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>🎉</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>全員の報告が完了しました</div>
-          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>ステップ2に進んで共有事項タイムへ</div>
+          <div style={{ color: T.success, marginBottom: SPACING.sm + 2, display: 'flex', justifyContent: 'center' }}><Icon name="sparkle" size={36} /></div>
+          <div style={{ ...TYPO.title3, fontSize: TYPO.title3.fontSize - 1, color: T.text }}>全員の報告が完了しました</div>
+          <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginTop: SPACING.xs + 2 }}>ステップ2に進んで共有事項タイムへ</div>
         </div>
       ) : null}
 
       {/* 進行ボタン */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <button onClick={onPrev} disabled={completed.size === 0} style={{
           ...btnSt(T),
           opacity: completed.size === 0 ? 0.4 : 1,
           cursor: completed.size === 0 ? 'not-allowed' : 'pointer',
-        }}>⏮ 前の人</button>
-        <div style={{ display: 'flex', gap: 8 }}>
+        }}><Icon name="chevronL" size={12} /> 前の人</button>
+        <div style={{ display: 'flex', gap: SPACING.sm }}>
           {allDone && (
             <button onClick={onSkipToStep2} style={{
-              padding: '8px 18px', borderRadius: 8,
+              padding: `${SPACING.sm}px ${SPACING.lg + 2}px`, borderRadius: RADIUS.sm,
               background: T.accent, color: '#fff', border: 'none',
-              fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-            }}>ステップ2へ →</button>
+              ...TYPO.body, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}>ステップ2へ <Icon name="arrowRight" size={13} /></button>
           )}
           {!allDone && (
             <button onClick={onNext} style={{
-              padding: '8px 18px', borderRadius: 8,
+              padding: `${SPACING.sm}px ${SPACING.lg + 2}px`, borderRadius: RADIUS.sm,
               background: T.accent, color: '#fff', border: 'none',
-              fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-            }}>⏭ 次の人へ</button>
+              ...TYPO.body, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="chevronR" size={13} /> 次の人へ</button>
           )}
         </div>
       </div>
@@ -728,70 +765,71 @@ function SpeakerReport({ T, member }) {
 
   return (
     <div style={{
-      background: `linear-gradient(180deg, ${T.bgCard} 0%, #ff9f4308 100%)`,
-      border: `1px solid #ff9f4326`,
-      borderRadius: 18, padding: '22px 24px', marginBottom: 14,
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(255,159,67,0.10), 0 16px 40px rgba(0,0,0,0.04)',
+      background: T.bgCard,
+      border: `1px solid ${T.border}`,
+      borderRadius: RADIUS.xl, padding: 0, marginBottom: SPACING.lg - 2,
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(37,99,235,0.06), 0 16px 40px rgba(0,0,0,0.04)',
       position: 'relative', overflow: 'hidden',
     }}>
-      {/* 上端に色グラデ帯 (左太線の代わり) */}
-      <div aria-hidden style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-        background: 'linear-gradient(90deg, #ff9f43 0%, #f9731680 100%)',
-      }} />
-      <div aria-hidden style={{
-        position: 'absolute', top: -50, right: -30, width: 200, height: 200,
-        background: 'radial-gradient(circle, rgba(255,159,67,0.10) 0%, transparent 60%)',
-        pointerEvents: 'none', borderRadius: '50%',
-      }} />
-      {/* 発表者ヘッダ */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, position: 'relative', zIndex: 1 }}>
+      <style>{`@keyframes mmBlink{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
+      {/* 発表者ヘッダ (アクセントソフトグラデ) */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: SPACING.lg - 2,
+        padding: `${SPACING.lg + 2}px ${SPACING.lg + 4}px`,
+        background: 'linear-gradient(120deg, rgba(14,165,233,.08), rgba(14,165,233,.02) 40%, transparent)',
+        position: 'relative', zIndex: 1,
+      }}>
         <div style={{
-          width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          width: 52, height: 52, borderRadius: RADIUS.lg, flexShrink: 0,
+          background: BRAND_GRADIENT.cta,
           color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 24, fontWeight: 900,
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px rgba(255,159,67,0.45)',
+          fontSize: 22, fontWeight: 900,
+          boxShadow: '0 4px 12px rgba(30,58,138,.28)',
         }}>{member.name.charAt(0)}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>{member.name}</div>
-          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{member.role || ''}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, letterSpacing: '-0.01em' }}>{member.name}</div>
+          <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>{member.role || ''}</div>
         </div>
         <div style={{
-          padding: '5px 14px', borderRadius: 99,
-          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
+          padding: `${SPACING.xs}px ${SPACING.md}px`, borderRadius: RADIUS.pill,
+          background: BRAND_GRADIENT.cta,
           color: '#fff',
-          fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-          boxShadow: '0 2px 6px rgba(255,159,67,0.45)',
-        }}>🎤 発表中</div>
+          ...TYPO.footnote, fontWeight: 800, letterSpacing: '0.04em',
+          boxShadow: '0 2px 6px rgba(37,99,235,.28)',
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff', animation: 'mmBlink 1.4s ease-in-out infinite', flexShrink: 0 }} />
+          発表中
+        </div>
       </div>
+      <div style={{ padding: `${SPACING.lg}px ${SPACING['2xl']}px ${SPACING['2xl'] - 2}px` }}>
 
       {loading ? (
-        <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
+        <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>読み込み中...</div>
       ) : (
         <>
           {/* 前回の振り返り (月曜は金〜日の全KPTを表示) */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8 }}>
-              📝 前回の振り返り
+          <div style={{ marginBottom: SPACING.lg }}>
+            <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.textSub, marginBottom: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+              <Icon name="note" size={13} /> 前回の振り返り
             </div>
             {kptList.length === 0 ? (
               <div style={{
-                padding: 10, fontSize: 11, color: T.textMuted, fontStyle: 'italic',
-                background: T.sectionBg, borderRadius: 6,
+                padding: SPACING.sm + 2, ...TYPO.footnote, color: T.textMuted, fontStyle: 'italic',
+                background: T.sectionBg, borderRadius: RADIUS.xs,
               }}>振り返りが未入力です</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
                 {kptList.map(k => (
                   <div key={k.dateStr} style={{
-                    padding: '10px 12px',
-                    background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
+                    padding: `${SPACING.sm + 2}px ${SPACING.md}px`,
+                    background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
                   }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 6 }}>
-                      📅 {k.dateLabel}
+                    <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.text, marginBottom: SPACING.xs + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                      <Icon name="calendar" size={12} /> {k.dateLabel}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
                       <KPTRow T={T} label="Keep"    color={T.success} text={k.keep} />
                       <KPTRow T={T} label="Problem" color={T.warn}    text={k.problem} />
                       <KPTRow T={T} label="Try"     color={T.accent}  text={k.try} />
@@ -806,44 +844,45 @@ function SpeakerReport({ T, member }) {
 
           {/* 今日のタスク + 期限切れ */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8 }}>
-              📅 今日のタスク
-              <span style={{ marginLeft: 8, padding: '1px 8px', borderRadius: 99,
+            <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.textSub, marginBottom: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap' }}>
+              <Icon name="calendar" size={13} /> 今日のタスク
+              <span style={{ marginLeft: SPACING.xs, padding: `1px ${SPACING.sm}px`, borderRadius: RADIUS.pill,
                 background: T.sectionBg, color: T.textMuted,
-                fontSize: 10, fontWeight: 700 }}>完了 {doneCnt} / 全 {tasks.length}</span>
+                ...TYPO.caption, letterSpacing: 0 }}>完了 {doneCnt} / 全 {tasks.length}</span>
               {overdueCnt > 0 && (
-                <span style={{ marginLeft: 6, padding: '1px 8px', borderRadius: 99,
+                <span style={{ marginLeft: SPACING.xs + 2, padding: `1px ${SPACING.sm}px`, borderRadius: RADIUS.pill,
                   background: T.dangerBg, color: T.danger,
-                  fontSize: 10, fontWeight: 700 }}>⚠️ 期限切れ {overdueCnt}</span>
+                  ...TYPO.caption, letterSpacing: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="alert" size={11} /> 期限切れ {overdueCnt}</span>
               )}
             </div>
             {tasks.length === 0 ? (
               <div style={{
-                padding: 10, fontSize: 11, color: T.textMuted, fontStyle: 'italic',
-                background: T.sectionBg, borderRadius: 6,
+                padding: SPACING.sm + 2, ...TYPO.footnote, color: T.textMuted, fontStyle: 'italic',
+                background: T.sectionBg, borderRadius: RADIUS.xs,
               }}>今日のタスクは未登録です</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
                 {tasks.map(t => {
                   const isDone = t.done || t.status === 'done'
                   const isOverdue = t.due_date < today && !isDone
                   return (
                     <div key={t.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '6px 10px',
-                      background: isDone ? T.successBg : (isOverdue ? T.dangerBg : T.sectionBg),
-                      border: isOverdue ? `1px solid ${T.danger}40` : 'none',
-                      borderRadius: 6, fontSize: 12,
+                      display: 'flex', alignItems: 'center', gap: SPACING.sm,
+                      padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`,
+                      background: isDone ? T.successBg : (isOverdue ? 'rgba(225,29,72,.04)' : T.sectionBg),
+                      border: isOverdue ? '1px solid rgba(225,29,72,.15)' : 'none',
+                      borderRadius: RADIUS.sm, ...TYPO.subhead, fontWeight: 500,
                       color: isDone ? T.textMuted : T.text,
                       textDecoration: isDone ? 'line-through' : 'none',
                     }}>
-                      <span>{isDone ? '✅' : '⬜'}</span>
+                      <span style={{ color: isDone ? T.success : (isOverdue ? T.danger : T.textMuted), display: 'inline-flex' }}><Icon name={isDone ? 'check' : 'circle'} size={13} /></span>
                       <span style={{ flex: 1 }}>{t.title || '(無題)'}</span>
                       {isOverdue && (
                         <span style={{
-                          flexShrink: 0, fontSize: 10, fontWeight: 700,
-                          padding: '1px 6px', borderRadius: 4,
-                          background: T.danger, color: '#fff',
+                          flexShrink: 0, ...TYPO.caption, letterSpacing: 0, fontWeight: 600,
+                          padding: `2px ${SPACING.sm}px`, borderRadius: RADIUS.xs - 1,
+                          background: T.dangerBg, color: T.danger,
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                         }}>{formatJSTMonthDay(t.due_date)} 期限切れ</span>
                       )}
                     </div>
@@ -854,6 +893,7 @@ function SpeakerReport({ T, member }) {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }
@@ -938,17 +978,17 @@ function SharingSection({ T, memberName, today }) {
   const displayUrl = url ? (url.match(/^https?:\/\//) ? url : `https://${url}`) : ''
 
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: T.textSub, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-        📢 共有事項
-        {saving && <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 400 }}>保存中…</span>}
+    <div style={{ marginBottom: SPACING.lg }}>
+      <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.textSub, marginBottom: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+        <Icon name="msg" size={13} /> 共有事項
+        {saving && <span style={{ ...TYPO.caption, letterSpacing: 0, color: T.textMuted, fontWeight: 400 }}>保存中…</span>}
         {!saving && loaded && (text || url) && (
-          <span style={{ fontSize: 10, color: T.success, fontWeight: 700 }}>✓ 保存済</span>
+          <span style={{ ...TYPO.caption, letterSpacing: 0, color: T.success, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="check" size={11} /> 保存済</span>
         )}
       </div>
       <div style={{
-        padding: 10, background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: 8,
-        display: 'flex', flexDirection: 'column', gap: 8,
+        padding: SPACING.sm + 2, background: T.sectionBg, border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
+        display: 'flex', flexDirection: 'column', gap: SPACING.sm,
       }}>
         <textarea
           value={text}
@@ -957,14 +997,14 @@ function SharingSection({ T, memberName, today }) {
           rows={3}
           disabled={!loaded}
           style={{
-            width: '100%', padding: '8px 10px', fontSize: 12, fontFamily: 'inherit',
+            width: '100%', padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, ...TYPO.subhead, fontWeight: 500, fontFamily: 'inherit',
             background: T.bgCard, color: T.text,
-            border: `1px solid ${T.border}`, borderRadius: 6,
+            border: `1px solid ${T.border}`, borderRadius: RADIUS.xs,
             outline: 'none', resize: 'vertical', boxSizing: 'border-box',
             lineHeight: 1.55,
           }}
         />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: SPACING.sm, alignItems: 'center' }}>
           <input
             type="url"
             value={url}
@@ -972,18 +1012,19 @@ function SharingSection({ T, memberName, today }) {
             placeholder="関連URL (任意) — 例: https://docs.google.com/..."
             disabled={!loaded}
             style={{
-              flex: 1, padding: '7px 10px', fontSize: 11, fontFamily: 'inherit',
+              flex: 1, padding: `${SPACING.xs + 3}px ${SPACING.sm + 2}px`, ...TYPO.footnote, fontWeight: 500, fontFamily: 'inherit',
               background: T.bgCard, color: T.text,
-              border: `1px solid ${T.border}`, borderRadius: 6,
+              border: `1px solid ${T.border}`, borderRadius: RADIUS.xs,
               outline: 'none', boxSizing: 'border-box',
             }}
           />
           {displayUrl && (
             <a href={displayUrl} target="_blank" rel="noopener noreferrer" style={{
-              flexShrink: 0, padding: '6px 10px', borderRadius: 6,
+              flexShrink: 0, padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs,
               background: T.accent, color: '#fff',
-              fontSize: 11, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
-            }}>🔗 開く</a>
+              ...TYPO.footnote, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="link" size={11} /> 開く</a>
           )}
         </div>
       </div>
@@ -993,13 +1034,13 @@ function SharingSection({ T, memberName, today }) {
 
 function KPTRow({ T, label, color, text }) {
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: SPACING.sm, alignItems: 'flex-start' }}>
       <span style={{
-        flexShrink: 0, minWidth: 66, padding: '3px 8px', borderRadius: 5,
-        background: color + '20', color, fontSize: 10, fontWeight: 700, textAlign: 'center',
+        flexShrink: 0, minWidth: 66, padding: `3px ${SPACING.sm}px`, borderRadius: RADIUS.xs - 1,
+        background: color + '20', color, ...TYPO.caption, letterSpacing: 0, textAlign: 'center',
       }}>{label}</span>
       <span style={{
-        flex: 1, fontSize: 12, color: T.text,
+        flex: 1, ...TYPO.subhead, fontWeight: 500, color: T.text,
         whiteSpace: 'pre-wrap', lineHeight: 1.55,
         padding: '3px 2px',
       }}>{text || <span style={{ color: T.textMuted, fontStyle: 'italic' }}>(未入力)</span>}</span>
@@ -1011,8 +1052,8 @@ function KPTRow({ T, label, color, text }) {
 // ─── ステップ2/3 共通: 共有事項 or 確認事項のリスト ───────────
 function MeetingItemsTime({
   T, members, myName, kind, onBack, onNext,
-  backLabel = '⏮ 戻る', nextLabel = '次へ →',
-  emoji = '📢', noun = '共有事項',
+  backLabel = '戻る', nextLabel = '次へ',
+  iconName = 'msg', noun = '共有事項',
 }) {
   const [items, setItems] = useState([])
   const [replies, setReplies] = useState({})
@@ -1072,23 +1113,24 @@ function MeetingItemsTime({
     <>
       {/* フィルタ + 件数 + 追加 */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap',
-        padding: '8px 12px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
+        display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.md, flexWrap: 'wrap',
+        padding: `${SPACING.sm}px ${SPACING.md}px`, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
       }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-          {emoji} 未解決の{noun} {filtered.length}件
+        <span style={{ ...TYPO.subhead, fontWeight: 700, color: T.text, display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+          <span style={{ color: T.warn, display: 'inline-flex' }}><Icon name={iconName} size={13} /></span> 未解決の{noun} {filtered.length}件
         </span>
         <button onClick={() => setComposing(true)} style={{
-          padding: '5px 12px', borderRadius: 6, border: 'none',
-          background: T.accent, color: '#fff',
-          fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>＋ {noun}を追加</button>
+          ...btnBrand({ size: 'sm' }),
+          padding: `${SPACING.xs + 1}px ${SPACING.md}px`, borderRadius: RADIUS.xs,
+          ...TYPO.footnote, fontWeight: 700,
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="plus" size={12} /> {noun}を追加</button>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: T.textMuted }}>宛先:</span>
+        <span style={{ ...TYPO.footnote, color: T.textMuted }}>宛先:</span>
         <select value={filterTo} onChange={e => setFilterTo(e.target.value)} style={{
-          padding: '4px 8px', borderRadius: 6,
+          padding: `${SPACING.xs}px ${SPACING.sm}px`, borderRadius: RADIUS.xs,
           background: T.bg, border: `1px solid ${T.border}`,
-          color: T.text, fontSize: 11, fontFamily: 'inherit', outline: 'none',
+          color: T.text, ...TYPO.footnote, fontFamily: 'inherit', outline: 'none',
         }}>
           <option value="">全員</option>
           {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
@@ -1105,17 +1147,17 @@ function MeetingItemsTime({
 
       {/* リスト */}
       {loading ? (
-        <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
+        <div style={{ padding: SPACING['3xl'] - 2, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>読み込み中...</div>
       ) : filtered.length === 0 ? (
         <div style={{
-          padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12,
-          background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 10,
+          padding: SPACING['3xl'] - 2, textAlign: 'center', color: T.textMuted, ...TYPO.subhead,
+          background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: RADIUS.md,
         }}>
-          <div style={{ fontSize: 28, marginBottom: 10 }}>✨</div>
+          <div style={{ color: T.success, marginBottom: SPACING.sm + 2, display: 'flex', justifyContent: 'center' }}><Icon name="sparkle" size={28} /></div>
           未解決の{noun}はありません
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm, marginBottom: SPACING.lg - 2 }}>
           {filtered.map(it => (
             <MeetingConfirmCard key={it.id} T={T} item={it}
               replies={replies[it.id] || []} myName={myName}
@@ -1125,13 +1167,14 @@ function MeetingItemsTime({
       )}
 
       {/* 進行ボタン */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', marginTop: 14 }}>
-        <button onClick={onBack} style={btnSt(T)}>{backLabel}</button>
+      <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'space-between', flexWrap: 'wrap', marginTop: SPACING.lg - 2 }}>
+        <button onClick={onBack} style={btnSt(T)}><Icon name="chevronL" size={12} /> {backLabel}</button>
         <button onClick={onNext} style={{
-          padding: '8px 22px', borderRadius: 8,
+          padding: `${SPACING.sm}px ${SPACING['2xl'] - 2}px`, borderRadius: RADIUS.sm,
           background: T.accent, color: '#fff', border: 'none',
-          fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>{nextLabel}</button>
+          ...TYPO.body, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}>{nextLabel} <Icon name="arrowRight" size={13} /></button>
       </div>
     </>
   )
@@ -1141,9 +1184,9 @@ function MeetingItemsTime({
 function Step2Shares({ T, members, myName, onBack, onNext }) {
   return (
     <MeetingItemsTime T={T} members={members} myName={myName}
-      kind="share" emoji="🟠" noun="共有事項"
-      backLabel="⏮ ステップ1 (個別報告) に戻る"
-      nextLabel="ステップ3 (確認事項タイム) へ →"
+      kind="share" iconName="msg" noun="共有事項"
+      backLabel="ステップ1 (個別報告) に戻る"
+      nextLabel="ステップ3 (確認事項タイム) へ"
       onBack={onBack} onNext={onNext} />
   )
 }
@@ -1152,9 +1195,9 @@ function Step2Shares({ T, members, myName, onBack, onNext }) {
 function Step2Confirmations({ T, members, myName, onBack, onNext }) {
   return (
     <MeetingItemsTime T={T} members={members} myName={myName}
-      kind="confirmation" emoji="🟠" noun="確認事項"
-      backLabel="⏮ ステップ2 (共有事項タイム) に戻る"
-      nextLabel="ステップ4 (ネクストアクション) へ →"
+      kind="confirmation" iconName="check" noun="確認事項"
+      backLabel="ステップ2 (共有事項タイム) に戻る"
+      nextLabel="ステップ4 (ネクストアクション) へ"
       onBack={onBack} onNext={onNext} />
   )
 }
@@ -1179,68 +1222,67 @@ function MeetingConfirmCard({ T, item, replies, myName, onResolve, onReplied }) 
   return (
     <div style={{
       background: T.bgCard, border: `1px solid ${T.border}`,
-      borderLeft: `3px solid #ff9f43`,
-      borderRadius: 8, padding: 12,
+      borderRadius: RADIUS.sm, padding: SPACING.md,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: T.textMuted }}>from</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.from_name}</span>
-        <span style={{ fontSize: 11, color: T.textFaint }}>→</span>
-        <span style={{ fontSize: 12, color: T.textMuted }}>to</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{item.to_name}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs + 2, flexWrap: 'wrap' }}>
+        <span style={{ ...TYPO.subhead, color: T.textMuted }}>from</span>
+        <span style={{ ...TYPO.subhead, fontWeight: 700, color: T.text }}>{item.from_name}</span>
+        <span style={{ color: T.textFaint, display: 'inline-flex' }}><Icon name="arrowRight" size={12} /></span>
+        <span style={{ ...TYPO.subhead, color: T.textMuted }}>to</span>
+        <span style={{ ...TYPO.subhead, fontWeight: 700, color: T.text }}>{item.to_name}</span>
       </div>
-      <div style={{ fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6, padding: '4px 2px' }}>
+      <div style={{ ...TYPO.body, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6, padding: '4px 2px' }}>
         {renderTextWithLinks(item.content, { color: T.accent })}
       </div>
       {Array.isArray(item.reference_urls) && item.reference_urls.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs + 2, marginTop: SPACING.xs + 2 }}>
           {item.reference_urls.map((u, i) => {
             const href = u.url?.match(/^https?:\/\//) ? u.url : (u.url ? `https://${u.url}` : '#')
             return (
               <a key={i} href={href} target="_blank" rel="noopener noreferrer" style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '3px 9px', borderRadius: 6,
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                padding: `3px ${SPACING.sm + 1}px`, borderRadius: RADIUS.xs,
                 background: T.accentBg, color: T.accent,
-                fontSize: 11, fontWeight: 700, textDecoration: 'none',
+                ...TYPO.footnote, fontWeight: 700, textDecoration: 'none',
                 border: `1px solid ${T.accent}30`,
-              }}>🔗 {u.label || u.url}</a>
+              }}><Icon name="link" size={11} /> {u.label || u.url}</a>
             )
           })}
         </div>
       )}
       {replies.length > 0 && (
-        <div style={{ marginTop: 8, paddingLeft: 10, borderLeft: `2px solid ${T.border}` }}>
+        <div style={{ marginTop: SPACING.sm, paddingLeft: SPACING.sm + 2, borderLeft: `2px solid ${T.border}` }}>
           {replies.map(r => (
-            <div key={r.id} style={{ marginBottom: 6, fontSize: 11 }}>
+            <div key={r.id} style={{ marginBottom: SPACING.xs + 2, ...TYPO.footnote, fontWeight: 500 }}>
               <b style={{ color: T.textSub }}>{r.from_name}</b>
-              <span style={{ color: T.text, marginLeft: 6, whiteSpace: 'pre-wrap' }}>{renderTextWithLinks(r.content, { color: T.accent })}</span>
+              <span style={{ color: T.text, marginLeft: SPACING.xs + 2, whiteSpace: 'pre-wrap' }}>{renderTextWithLinks(r.content, { color: T.accent })}</span>
             </div>
           ))}
         </div>
       )}
       {replyOpen && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: SPACING.sm }}>
           <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
             placeholder="回答を入力" rows={2}
             style={{
-              width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12,
-              background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6,
+              width: '100%', boxSizing: 'border-box', padding: `${SPACING.xs + 2}px ${SPACING.sm}px`, ...TYPO.subhead, fontWeight: 500,
+              background: T.bg, border: `1px solid ${T.border}`, borderRadius: RADIUS.xs,
               color: T.text, fontFamily: 'inherit', outline: 'none', resize: 'vertical',
             }} />
-          <div style={{ display: 'flex', gap: 6, marginTop: 4, justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: SPACING.xs + 2, marginTop: SPACING.xs, justifyContent: 'flex-end' }}>
             <button onClick={() => { setReplyOpen(false); setReplyText('') }} style={btnSt(T)}>キャンセル</button>
             <button onClick={send} disabled={!replyText.trim() || saving} style={{
-              padding: '4px 12px', borderRadius: 6,
+              padding: `${SPACING.xs}px ${SPACING.md}px`, borderRadius: RADIUS.xs,
               background: replyText.trim() ? T.accent : T.border, color: '#fff', border: 'none',
-              fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+              ...TYPO.footnote, fontWeight: 700, fontFamily: 'inherit',
               cursor: replyText.trim() && !saving ? 'pointer' : 'not-allowed',
             }}>{saving ? '送信中…' : '送信'}</button>
           </div>
         </div>
       )}
-      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-        {!replyOpen && <button onClick={() => setReplyOpen(true)} style={btnSt(T)}>💬 返信</button>}
-        <button onClick={onResolve} style={btnSt(T, T.success)}>✓ 確認済みにする</button>
+      <div style={{ display: 'flex', gap: SPACING.xs + 2, marginTop: SPACING.sm }}>
+        {!replyOpen && <button onClick={() => setReplyOpen(true)} style={btnSt(T)}><Icon name="msg" size={12} /> 返信</button>}
+        <button onClick={onResolve} style={btnSt(T, T.success)}><Icon name="check" size={12} /> 確認済みにする</button>
       </div>
     </div>
   )
@@ -1286,12 +1328,12 @@ function MorningTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef })
 
   return (
     <div style={{
-      marginBottom: 12, padding: '8px 14px',
-      background: bg, border: `1px solid ${border}`, borderRadius: 8,
-      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      marginBottom: SPACING.md, padding: `${SPACING.sm}px ${SPACING.md + 2}px`,
+      background: bg, border: `1px solid ${border}`, borderRadius: RADIUS.sm,
+      display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, flexWrap: 'wrap',
     }}>
-      <span style={{ fontSize: 14 }}>{isOver ? '🚨' : isTen ? '⚠️' : '⏱'}</span>
-      <span style={{ fontSize: 12, color: T.textMuted }}>
+      <span style={{ color: accent, display: 'inline-flex' }}><Icon name={isOver || isTen ? 'alert' : 'clock'} size={14} /></span>
+      <span style={{ ...TYPO.subhead, color: T.textMuted }}>
         {isOver ? (
           <span style={{ color: T.danger, fontWeight: 700 }}>
             終了予定時刻を <strong>{fmt(remainingMin)}</strong> 過ぎています
@@ -1304,10 +1346,10 @@ function MorningTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef })
           <>残り <strong style={{ color: T.text }}>{fmt(remainingMin)}</strong></>
         )}
       </span>
-      <span style={{ fontSize: 11, color: T.textMuted }}>
+      <span style={{ ...TYPO.footnote, color: T.textMuted }}>
         経過 {elapsedMin}分 / 予定 {durationMinutes || 30}分
       </span>
-      <div style={{ flex: 1, height: 4, background: T.sectionBg, borderRadius: 99, overflow: 'hidden', minWidth: 80 }}>
+      <div style={{ flex: 1, height: 4, background: T.sectionBg, borderRadius: RADIUS.pill, overflow: 'hidden', minWidth: 80 }}>
         <div style={{
           height: '100%', width: `${Math.min(100, ratio * 100)}%`,
           background: accent, transition: 'width 0.3s',
@@ -1396,25 +1438,25 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
   return (
     <>
       <div style={{
-        marginBottom: 12, padding: '12px 14px',
-        background: T.warnBg, border: `1px solid ${T.warn}40`, borderRadius: 10,
+        marginBottom: SPACING.md, padding: `${SPACING.md}px ${SPACING.md + 2}px`,
+        background: T.warnBg, border: `1px solid ${T.warn}40`, borderRadius: RADIUS.md,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: T.warn, marginBottom: 4 }}>
-          ✅ ネクストアクションを確定
+        <div style={{ ...TYPO.callout, fontWeight: 800, color: T.warn, marginBottom: SPACING.xs, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <Icon name="check" size={13} /> ネクストアクションを確定
         </div>
-        <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.6 }}>
+        <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textSub, lineHeight: 1.6 }}>
           朝会で出た決定事項・依頼を <strong>誰がいつまでに何をやるか</strong> 記録します。
         </div>
       </div>
 
-      {/* 🚨 全社の停滞タスクレビュー (期限切れ + 本日期限) */}
+      {/* 全社の停滞タスクレビュー (期限切れ + 本日期限) */}
       <CompanyStaleTasksReview T={T} />
 
       {/* テーブルヘッダ */}
       <div style={{
         display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
-        gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
-        border: `1px solid ${T.border}`, marginBottom: 6, fontSize: 11,
+        gap: SPACING.sm, padding: `${SPACING.sm}px ${SPACING.md}px`, background: T.bgCard, borderRadius: RADIUS.sm,
+        border: `1px solid ${T.border}`, marginBottom: SPACING.xs + 2, ...TYPO.footnote,
         color: T.textMuted, fontWeight: 700,
       }}>
         <div>担当</div>
@@ -1425,16 +1467,16 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
 
       {/* 行 */}
       {items === null ? (
-        <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中…</div>
+        <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>読み込み中…</div>
       ) : items.length === 0 ? (
         <div style={{
-          padding: '20px 14px', background: T.bgCard, border: `1px dashed ${T.borderMid}`,
-          borderRadius: 8, fontSize: 12, color: T.textMuted, textAlign: 'center', marginBottom: 8,
+          padding: `${SPACING.xl}px ${SPACING.md + 2}px`, background: T.bgCard, border: `1px dashed ${T.borderMid}`,
+          borderRadius: RADIUS.sm, ...TYPO.subhead, color: T.textMuted, textAlign: 'center', marginBottom: SPACING.sm,
         }}>
           まだネクストアクションが登録されていません。下のボタンから追加してください。
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}>
           {items.map(it => (
             <MorningNextActionRow key={it.id} T={T} item={it} members={members} onDelete={() => deleteItem(it.id)} />
           ))}
@@ -1442,36 +1484,37 @@ function Step3NextActionsMorning({ T, meeting, members, onBack, onFinish }) {
       )}
 
       {loadError && (
-        <div style={{ marginBottom: 8, padding: '6px 10px', background: T.dangerBg, border: `1px solid ${T.danger}40`, borderRadius: 6, color: T.danger, fontSize: 11 }}>
+        <div style={{ marginBottom: SPACING.sm, padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, background: T.dangerBg, border: `1px solid ${T.danger}40`, borderRadius: RADIUS.xs, color: T.danger, ...TYPO.footnote }}>
           取得エラー: {loadError}
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: SPACING.sm, marginBottom: SPACING.lg + 2, flexWrap: 'wrap' }}>
         <button onClick={addItem} style={{
-          padding: '8px 14px', borderRadius: 7, border: `1px dashed ${T.accent}80`,
+          padding: `${SPACING.sm}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1, border: `1px dashed ${T.accent}80`,
           background: 'transparent', color: T.accent, cursor: 'pointer',
-          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-        }}>＋ アクションを追加</button>
+          ...TYPO.subhead, fontWeight: 700, fontFamily: 'inherit',
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="plus" size={13} /> アクションを追加</button>
         <button onClick={() => setImportOpen(true)} style={{
-          padding: '8px 14px', borderRadius: 7, border: 'none',
-          background: 'linear-gradient(135deg, #ff9f43 0%, #f97316 100%)',
-          color: '#fff', cursor: 'pointer',
-          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-          boxShadow: '0 2px 8px rgba(249,115,22,0.25)',
-        }}>📋 Notionから取り込み</button>
+          ...btnBrand({ size: 'sm' }),
+          padding: `${SPACING.sm}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm - 1,
+          ...TYPO.subhead, fontWeight: 700,
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="note" size={13} /> Notionから取り込み</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={onBack} style={btnSt(T)}>⏮ ステップ2に戻る</button>
-        <div style={{ fontSize: 11, color: T.textMuted }}>
+      <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={onBack} style={btnSt(T)}><Icon name="chevronL" size={12} /> ステップ2に戻る</button>
+        <div style={{ ...TYPO.footnote, color: T.textMuted }}>
           記録: <strong style={{ color: T.text }}>{(items || []).filter(it => (it.title || '').trim()).length}</strong> 件
         </div>
         <button onClick={handleFinish} style={{
-          padding: '8px 22px', borderRadius: 8,
+          padding: `${SPACING.sm}px ${SPACING['2xl'] - 2}px`, borderRadius: RADIUS.sm,
           background: T.success, color: '#fff', border: 'none',
-          fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>🏁 朝会を終了</button>
+          ...TYPO.body, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+        }}><Icon name="flag" size={13} /> 朝会を終了</button>
       </div>
 
       {/* Notion議事録 取り込みモーダル */}
@@ -1518,7 +1561,7 @@ function MorningNextActionRow({ T, item, members, onDelete }) {
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: '140px 130px 1fr 32px',
-      gap: 8, padding: '8px 12px', background: T.bgCard, borderRadius: 8,
+      gap: SPACING.sm, padding: `${SPACING.sm}px ${SPACING.md}px`, background: T.bgCard, borderRadius: RADIUS.sm,
       border: `1px solid ${T.border}`, alignItems: 'center',
     }}>
       <select value={assignee}
@@ -1526,9 +1569,9 @@ function MorningNextActionRow({ T, item, members, onDelete }) {
         onBlur={() => { focusedRef.current = null; saveField('assignee', assignee) }}
         onChange={e => { setAssignee(e.target.value); saveField('assignee', e.target.value) }}
         style={{
-          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
-          padding: '4px 6px', color: assignee ? T.text : T.textMuted,
-          fontSize: 12, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', fontWeight: 700,
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: RADIUS.xs - 1,
+          padding: `${SPACING.xs}px ${SPACING.xs + 2}px`, color: assignee ? T.text : T.textMuted,
+          ...TYPO.subhead, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', fontWeight: 700,
         }}>
         <option value="">--</option>
         {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
@@ -1539,8 +1582,8 @@ function MorningNextActionRow({ T, item, members, onDelete }) {
         onBlur={() => { focusedRef.current = null; saveField('due_date', dueDate || null) }}
         onChange={e => setDueDate(e.target.value)}
         style={{
-          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
-          padding: '4px 6px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: RADIUS.xs - 1,
+          padding: `${SPACING.xs}px ${SPACING.xs + 2}px`, color: T.text, ...TYPO.subhead, fontWeight: 500, fontFamily: 'inherit', outline: 'none',
         }} />
       <input
         value={title}
@@ -1549,13 +1592,13 @@ function MorningNextActionRow({ T, item, members, onDelete }) {
         onChange={e => setTitle(e.target.value)}
         placeholder="内容（何をやるか）"
         style={{
-          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 5,
-          padding: '6px 8px', color: T.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+          background: 'transparent', border: `1px solid ${T.border}`, borderRadius: RADIUS.xs - 1,
+          padding: `${SPACING.xs + 2}px ${SPACING.sm}px`, color: T.text, ...TYPO.subhead, fontWeight: 500, fontFamily: 'inherit', outline: 'none',
         }} />
       <button onClick={onDelete} title="削除" style={{
         background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer',
-        fontSize: 14, padding: '0 4px', fontFamily: 'inherit',
-      }}>✕</button>
+        padding: '0 4px', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}><Icon name="cross" size={14} /></button>
     </div>
   )
 }
@@ -1637,7 +1680,7 @@ function CompanyStaleTasksReview({ T }) {
 
   if (tasks === null) {
     return (
-      <div style={{ padding: 16, textAlign: 'center', color: T.textMuted, fontSize: 12, marginBottom: 12 }}>
+      <div style={{ padding: SPACING.lg, textAlign: 'center', color: T.textMuted, ...TYPO.subhead, marginBottom: SPACING.md }}>
         全社タスク 読み込み中…
       </div>
     )
@@ -1657,83 +1700,91 @@ function CompanyStaleTasksReview({ T }) {
 
   return (
     <div style={{
-      marginBottom: 14, background: T.bgCard,
-      border: `1px solid ${T.border}`, borderLeft: `4px solid ${overdueCount > 0 ? T.danger : T.warn}`,
-      borderRadius: 10, overflow: 'hidden',
+      marginBottom: SPACING.lg - 2, background: T.bgCard,
+      border: `1px solid ${overdueCount > 0 ? T.danger + '30' : T.warn + '30'}`,
+      borderRadius: RADIUS.md, overflow: 'hidden',
     }}>
       {/* ヘッダ */}
       <div
         onClick={() => setCollapsed(c => !c)}
         style={{
-          padding: '10px 14px', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap',
           background: overdueCount > 0 ? `${T.danger}08` : `${T.warn}08`,
         }}>
-        <span style={{ fontSize: 16 }}>🚨</span>
+        <span style={{ color: overdueCount > 0 ? T.danger : T.warn, display: 'inline-flex' }}><Icon name="alert" size={16} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>
+          <div style={{ ...TYPO.callout, color: T.text }}>
             全社の停滞タスク レビュー
-            <span style={{ marginLeft: 8, fontSize: 10, color: T.textMuted, fontWeight: 600 }}>
+            <span style={{ marginLeft: SPACING.sm, ...TYPO.caption, letterSpacing: 0, color: T.textMuted, fontWeight: 600 }}>
               期限切れ {overdueCount}件 ・ 本日期限 {todayCount}件 ・ 合計未完 {totalOpen}件
             </span>
           </div>
-          <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>
-            朝会の場で「終わってるよ」というタスクは ✓完了 を押してその場で反映 (Realtime同期)
+          <div style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.textMuted, marginTop: 2 }}>
+            朝会の場で「終わってるよ」というタスクは 完了 を押してその場で反映 (Realtime同期)
           </div>
         </div>
         <button
           style={{
-            padding: '4px 10px', borderRadius: 6, background: 'transparent',
-            border: `1px solid ${T.border}`, color: T.textSub, fontSize: 10, fontFamily: 'inherit',
-            cursor: 'pointer',
+            padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs, background: 'transparent',
+            border: `1px solid ${T.border}`, color: T.textSub, ...TYPO.caption, letterSpacing: 0, fontFamily: 'inherit',
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
           }}
-        >{collapsed ? '▼ 展開' : '▲ 折りたたむ'}</button>
+        ><Icon name={collapsed ? 'chevronD' : 'chevronU'} size={11} /> {collapsed ? '展開' : '折りたたむ'}</button>
       </div>
 
       {!collapsed && (
-        <div style={{ padding: '10px 14px' }}>
+        <div style={{ padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px` }}>
           {loadError && (
-            <div style={{ marginBottom: 8, padding: '6px 10px', background: T.dangerBg, border: `1px solid ${T.danger}40`, borderRadius: 6, color: T.danger, fontSize: 11 }}>
+            <div style={{ marginBottom: SPACING.sm, padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, background: T.dangerBg, border: `1px solid ${T.danger}40`, borderRadius: RADIUS.xs, color: T.danger, ...TYPO.footnote }}>
               取得エラー: {loadError}
             </div>
           )}
           {totalOpen === 0 ? (
-            <div style={{ padding: 12, fontSize: 12, color: T.success, textAlign: 'center', fontWeight: 700 }}>
-              ✓ 期限切れ・今日期限の未完了タスクはありません
+            <div style={{ padding: SPACING.md, ...TYPO.subhead, color: T.success, textAlign: 'center', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs }}>
+              <Icon name="check" size={13} /> 期限切れ・今日期限の未完了タスクはありません
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2 }}>
               {sortedAssignees.map(assignee => {
                 const assigneeTasks = grouped[assignee].filter(t => !t.done)
                 if (assigneeTasks.length === 0) return null
                 return (
                   <div key={assignee} style={{
                     background: T.sectionBg, border: `1px solid ${T.borderLight}`,
-                    borderRadius: 8, padding: '8px 10px',
+                    borderRadius: RADIUS.sm, padding: `${SPACING.sm}px ${SPACING.sm + 2}px`,
                   }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: T.textSub, marginBottom: 6 }}>
-                      👤 {assignee} <span style={{ color: T.textMuted, fontWeight: 600 }}>({assigneeTasks.length}件)</span>
+                    <div style={{ ...TYPO.footnote, fontWeight: 800, color: T.textSub, marginBottom: SPACING.xs + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                      <Icon name="user" size={12} /> {assignee} <span style={{ color: T.textMuted, fontWeight: 600 }}>({assigneeTasks.length}件)</span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
                       {assigneeTasks.map(task => {
                         const overdue = task.due_date && task.due_date < today
                         const days = task.due_date ? Math.round((new Date(today) - new Date(task.due_date)) / 86400000) : 0
+                        // 超過日数で 4 段階に色強度を上げる
+                        const badgeTier = !overdue
+                          ? { bg: T.warnBg, fg: T.warn }
+                          : days <= 2
+                            ? { bg: 'rgba(248,113,113,.18)', fg: '#dc2626' }
+                            : days <= 8
+                              ? { bg: 'rgba(239,68,68,.18)', fg: '#b91c1c' }
+                              : { bg: 'rgba(220,38,38,.22)', fg: '#991b1b' }
                         return (
                           <div key={task.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '6px 8px',
-                            background: overdue ? `${T.danger}08` : `${T.warn}08`,
-                            border: `1px solid ${overdue ? T.danger + '30' : T.warn + '30'}`,
-                            borderRadius: 6, fontSize: 12,
+                            display: 'flex', alignItems: 'center', gap: SPACING.sm,
+                            padding: `${SPACING.xs + 2}px ${SPACING.sm}px`,
+                            background: overdue ? 'rgba(225,29,72,.04)' : `${T.warn}08`,
+                            border: `1px solid ${overdue ? 'rgba(225,29,72,.15)' : T.warn + '30'}`,
+                            borderRadius: RADIUS.sm, ...TYPO.subhead, fontWeight: 500,
                           }}>
                             <span style={{
-                              padding: '2px 6px', borderRadius: 4,
-                              background: overdue ? T.danger : T.warn, color: '#fff',
+                              padding: `2px ${SPACING.xs + 2}px`, borderRadius: RADIUS.xs - 2,
+                              background: badgeTier.bg, color: badgeTier.fg,
                               fontSize: 9, fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0,
                             }}>
                               {overdue ? `${days}日超過` : '今日'}
                             </span>
-                            <span style={{ fontSize: 10, color: T.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            <span style={{ ...TYPO.caption, letterSpacing: 0, fontWeight: 600, color: T.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
                               {task.due_date ? task.due_date.slice(5) : ''}
                             </span>
                             <span style={{ flex: 1, color: T.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1743,9 +1794,9 @@ function CompanyStaleTasksReview({ T }) {
                               value={task.status || 'not_started'}
                               onChange={e => changeStatus(task, e.target.value)}
                               style={{
-                                padding: '2px 4px', fontSize: 10, fontFamily: 'inherit',
+                                padding: `2px ${SPACING.xs}px`, ...TYPO.caption, letterSpacing: 0, fontWeight: 600, fontFamily: 'inherit',
                                 background: T.bgCard, color: T.textSub, border: `1px solid ${T.border}`,
-                                borderRadius: 4, cursor: 'pointer',
+                                borderRadius: RADIUS.xs - 2, cursor: 'pointer',
                               }}>
                               <option value="not_started">未着手</option>
                               <option value="in_progress">進行中</option>
@@ -1755,12 +1806,13 @@ function CompanyStaleTasksReview({ T }) {
                               onClick={() => toggleDone(task)}
                               title="完了マーク"
                               style={{
-                                padding: '4px 10px', borderRadius: 5,
+                                padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs - 1,
                                 background: T.success, color: '#fff', border: 'none',
-                                fontSize: 10, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
+                                ...TYPO.caption, letterSpacing: 0, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer',
                                 whiteSpace: 'nowrap', flexShrink: 0,
+                                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
                               }}>
-                              ✓ 完了
+                              <Icon name="check" size={11} /> 完了
                             </button>
                           </div>
                         )

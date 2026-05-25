@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { MODULE_META } from '../lib/meetings/moduleRegistry'
 import MeetingShell from './meetings/MeetingShell'
 import MeetingEditModal from './MeetingEditModal'
+import Icon, { DataIcon } from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 
 // ─────────────────────────────────────────────────────────────
 // 組織設定 → 会議設定セクション (Phase 5e)
@@ -79,94 +81,97 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
   if (!orgId) return null
 
   const sectionStyle = {
-    padding: 14,
-    marginBottom: 12,
+    padding: SPACING.lg - 2,
+    marginBottom: SPACING.md,
     background: T.sectionBg,
     border: `1px solid ${T.border}`,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
   }
 
   return (
     <>
       <div style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 16 }}>🗓️</span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>会議設定</span>
-          <span style={{ fontSize: 10, color: T.textMuted, padding: '1px 6px', background: T.bgCard, borderRadius: 99 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm + 2 }}>
+          <Icon name="calendar" size={16} style={{ color: T.text }} />
+          <span style={{ ...TYPO.callout, color: T.text }}>会議設定</span>
+          <span style={{ ...TYPO.caption, color: T.textMuted, padding: '1px 6px', background: T.bgCard, borderRadius: RADIUS.pill }}>
             Phase 5e (プレビュー)
           </span>
         </div>
-        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 10 }}>
+        <div style={{ ...TYPO.footnote, color: T.textMuted, marginBottom: SPACING.sm + 2 }}>
           組織の会議体一覧。各会議は「個人報告 / KA確認 / KR確認 / 共有事項 / 確認事項 / ネクストアクション」のモジュールを組み合わせて構成されます。
           {!canManage && '（編集には owner/admin 権限が必要）'}
         </div>
 
         {/* 新規追加ボタン */}
         {canManage && (
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: SPACING.sm + 2 }}>
             <button onClick={() => setEditMeeting({ meeting: null })} style={{
-              padding: '6px 14px', borderRadius: 7,
+              padding: '6px 14px', borderRadius: RADIUS.sm,
               border: `1px dashed ${T.accent}`,
-              background: `${T.accent}10`, color: T.accent,
-              fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              background: T.accentBg, color: T.accent,
+              ...TYPO.subhead, cursor: 'pointer', fontFamily: 'inherit',
             }}>+ 新規会議を追加</button>
           </div>
         )}
 
-        {loading && <div style={{ fontSize: 11, color: T.textMuted }}>読み込み中…</div>}
-        {err && <div style={{ fontSize: 11, color: T.danger }}>エラー: {err}</div>}
+        {loading && <div style={{ ...TYPO.footnote, color: T.textMuted }}>読み込み中…</div>}
+        {err && <div style={{ ...TYPO.footnote, color: T.danger }}>エラー: {err}</div>}
         {!loading && meetings.length === 0 && (
-          <div style={{ fontSize: 11, color: T.textFaint, padding: 10, textAlign: 'center' }}>
+          <div style={{ ...TYPO.footnote, color: T.textFaint, padding: SPACING.sm + 2, textAlign: 'center' }}>
             会議が登録されていません。supabase_organization_meetings.sql を実行してください。
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
           {meetings.map(m => (
             <div key={m.id} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
+              display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
               padding: '8px 12px',
-              background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8,
+              background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
             }}>
               <div style={{
-                width: 28, height: 28, borderRadius: 8,
+                width: 28, height: 28, borderRadius: RADIUS.sm,
                 background: `${m.color || T.accent}20`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 14, flexShrink: 0,
-              }}>{m.icon || '📋'}</div>
+              }}><DataIcon value={m.icon} size={14} fallback="note" /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.title}</div>
-                <div style={{ fontSize: 10, color: T.textMuted, display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                <div style={{ ...TYPO.callout, color: T.text }}>{m.title}</div>
+                <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, display: 'flex', gap: SPACING.xs, flexWrap: 'wrap', marginTop: 2 }}>
                   {(m.modules || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map((mod, i) => {
                     const meta = MODULE_META[mod.type] || { icon: '?', label: mod.type }
                     return (
                       <span key={i} style={{
-                        padding: '1px 5px', background: T.sectionBg, borderRadius: 4,
-                      }}>{meta.icon} {meta.label}</span>
+                        padding: '1px 5px', background: T.sectionBg, borderRadius: RADIUS.xs - 2,
+                      }}><DataIcon value={meta.icon} size={11} /> {meta.label}</span>
                     )
                   })}
                 </div>
               </div>
               <button onClick={() => setPreviewMeeting(m)} title="プレビュー" style={{
-                padding: '4px 10px', borderRadius: 6,
+                padding: '4px 10px', borderRadius: RADIUS.xs,
                 border: `1px solid ${T.border}`,
                 background: T.bgCard, color: T.text,
-                fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-              }}>👁</button>
+                ...TYPO.footnote, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center',
+              }}><Icon name="eye" size={13} /></button>
               {canManage && (
                 <>
                   <button onClick={() => setEditMeeting({ meeting: m })} title="編集" style={{
-                    padding: '4px 10px', borderRadius: 6,
+                    padding: '4px 10px', borderRadius: RADIUS.xs,
                     border: `1px solid ${T.border}`,
                     background: T.bgCard, color: T.text,
-                    fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                  }}>✏️</button>
+                    ...TYPO.footnote, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center',
+                  }}><Icon name="pencil" size={13} /></button>
                   <button onClick={() => handleDelete(m)} title="アーカイブ" style={{
-                    padding: '4px 10px', borderRadius: 6,
+                    padding: '4px 10px', borderRadius: RADIUS.xs,
                     border: `1px solid ${T.border}`,
                     background: T.bgCard, color: T.danger,
-                    fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                  }}>🗑️</button>
+                    ...TYPO.footnote, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center',
+                  }}><Icon name="trash" size={13} /></button>
                 </>
               )}
             </div>
@@ -192,18 +197,18 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
           style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 1000, padding: 20,
+            zIndex: 1000, padding: SPACING.xl,
           }}
         >
           <div style={{
             width: '90vw', maxWidth: 1200,
             height: '90vh',
             background: T.bg,
-            borderRadius: 16,
+            borderRadius: RADIUS.xl - 2,
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+            boxShadow: SHADOWS.xl,
           }}>
             <MeetingShell
               meeting={previewMeeting}

@@ -1,6 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useCurrentOrg } from '../lib/orgContext'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger, inputStyle, sectionHeaderStyle, accentRingStyle } from '../lib/iosStyles'
 
 // ぺろっぺの組織知識を CRUD する admin 用パネル (モーダル形式で開く)
 // Props: { T, owner (=自分の名前), onClose }
@@ -63,37 +66,38 @@ export default function COOKnowledgePanel({ T, owner, onClose }) {
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 9999, padding: 20,
+      zIndex: 9999, padding: SPACING.xl,
     }}>
       <div style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.lg,
         width: '100%', maxWidth: 760, maxHeight: '92vh',
         display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        boxShadow: SHADOWS.xl,
       }}>
         <div style={{
-          padding: '14px 18px', borderBottom: `1px solid ${T.border}`,
-          display: 'flex', alignItems: 'center', gap: 8,
+          padding: `${SPACING.md + 2}px ${SPACING.lg + 2}px`, borderBottom: `1px solid ${T.border}`,
+          display: 'flex', alignItems: 'center', gap: SPACING.sm,
         }}>
-          <span style={{ fontSize: 20 }}>🐸</span>
+          <span style={{ color: T.accent, display: 'inline-flex' }}><Icon name="ai" size={20} /></span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>ぺろっぺ 設定</div>
-            <div style={{ fontSize: 11, color: T.textMuted }}>組織知の追加・編集 (CEO/admin)</div>
+            <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text }}>ぺろっぺ 設定</div>
+            <div style={{ ...TYPO.footnote, color: T.textMuted }}>組織知の追加・編集 (CEO/admin)</div>
           </div>
           <button onClick={onClose} style={{
             background: 'transparent', border: 'none', color: T.textSub,
-            fontSize: 22, cursor: 'pointer', padding: '0 8px',
-          }}>×</button>
+            cursor: 'pointer', padding: `0 ${SPACING.sm}px`, display: 'inline-flex',
+          }}><Icon name="cross" size={20} /></button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: SPACING.lg }}>
           {!creating && (
             <button onClick={() => setCreating(true)} style={{
-              width: '100%', padding: '10px 14px', borderRadius: 8,
+              width: '100%', padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.sm,
               background: 'transparent', border: `1px dashed ${T.accent}`,
-              color: T.accent, fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12,
-            }}>+ 新規追加</button>
+              color: T.accent, ...TYPO.body, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit', marginBottom: SPACING.md,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+            }}><Icon name="plus" size={14} /> 新規追加</button>
           )}
           {creating && (
             <KnowledgeForm T={T} owner={owner} orgId={orgId}
@@ -102,16 +106,16 @@ export default function COOKnowledgePanel({ T, owner, onClose }) {
           )}
 
           {loading ? (
-            <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
+            <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>読み込み中...</div>
           ) : error ? (
-            <div style={{ padding: 12, color: T.danger, fontSize: 12, background: T.dangerBg, borderRadius: 8 }}>⚠️ {error}</div>
+            <div style={{ padding: SPACING.md, color: T.danger, ...TYPO.subhead, background: T.dangerBg, borderRadius: RADIUS.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="alert" size={14} /> {error}</div>
           ) : items.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+            <div style={{ padding: SPACING['3xl'], textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>
               組織知がまだ登録されていません<br />
-              <span style={{ fontSize: 10 }}>上のボタンから追加してください</span>
+              <span style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal' }}>上のボタンから追加してください</span>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2 }}>
               {items.map(it => editingId === it.id ? (
                 <KnowledgeForm key={it.id} T={T} owner={owner} orgId={orgId} initial={it}
                   onCancel={() => setEditingId(null)}
@@ -134,41 +138,38 @@ function KnowledgeCard({ T, item, onEdit, onRemove, onRefresh }) {
   const isDrive = item.kind === 'drive_file'
   const cacheStatus = (() => {
     if (!isDrive) return null
-    if (item.drive_cache_error) return { label: '❌ 取得エラー', color: T.danger }
-    if (!item.drive_cached_at) return { label: '⚠️ 未取得', color: T.warn }
-    return { label: `✓ 取得済 (${item.drive_cached_at?.slice(0, 10)})`, color: T.success }
+    if (item.drive_cache_error) return { label: '取得エラー', icon: 'cross', color: T.danger }
+    if (!item.drive_cached_at) return { label: '未取得', icon: 'alert', color: T.warn }
+    return { label: `取得済 (${item.drive_cached_at?.slice(0, 10)})`, icon: 'check', color: T.success }
   })()
   return (
     <div style={{
-      padding: 12, background: item.enabled ? T.sectionBg : 'transparent',
-      border: `1px solid ${T.border}`, borderRadius: 8,
+      padding: SPACING.md, background: item.enabled ? T.sectionBg : 'transparent',
+      border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
       opacity: item.enabled ? 1 : 0.5,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: 14 }}>{isDrive ? '📁' : '📝'}</span>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>{item.title}</div>
-        <span style={{
-          padding: '2px 8px', borderRadius: 99, background: T.bgCard,
-          color: T.textMuted, fontSize: 10, fontWeight: 700,
-        }}>優先度 {item.priority}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, marginBottom: SPACING.xs + 2 }}>
+        <span style={{ color: T.textSub, display: 'inline-flex' }}><Icon name={isDrive ? 'drive' : 'note'} size={14} /></span>
+        <div style={{ ...TYPO.callout, color: T.text, flex: 1 }}>{item.title}</div>
+        <span style={{ ...pillStyle({ color: T.textMuted }), background: T.bgCard }}>優先度 {item.priority}</span>
       </div>
       {isDrive ? (
         <div>
-          <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4, fontFamily: 'monospace' }}>
+          <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, marginBottom: SPACING.xs, fontFamily: 'monospace' }}>
             ID: {item.drive_file_id}
           </div>
-          <div style={{ fontSize: 11, color: cacheStatus?.color, marginBottom: 6 }}>
-            {cacheStatus?.label}
+          <div style={{ ...TYPO.footnote, color: cacheStatus?.color, marginBottom: SPACING.xs + 2, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            <Icon name={cacheStatus?.icon} size={12} /> {cacheStatus?.label}
           </div>
           {item.drive_cache_error && (
-            <div style={{ fontSize: 10, color: T.danger, marginBottom: 6, padding: 4, background: T.dangerBg, borderRadius: 4 }}>
+            <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.danger, marginBottom: SPACING.xs + 2, padding: SPACING.xs, background: T.dangerBg, borderRadius: RADIUS.xs }}>
               {item.drive_cache_error}
             </div>
           )}
           {item.drive_cached_text && (
             <div style={{
-              fontSize: 10, color: T.textMuted, padding: 6, background: T.bgCard,
-              borderRadius: 4, maxHeight: 60, overflow: 'hidden', whiteSpace: 'pre-wrap',
+              ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, padding: SPACING.xs + 2, background: T.bgCard,
+              borderRadius: RADIUS.xs, maxHeight: 60, overflow: 'hidden', whiteSpace: 'pre-wrap',
             }}>
               {item.drive_cached_text.slice(0, 200)}{item.drive_cached_text.length > 200 ? '...' : ''}
             </div>
@@ -176,28 +177,19 @@ function KnowledgeCard({ T, item, onEdit, onRemove, onRefresh }) {
         </div>
       ) : (
         <div style={{
-          fontSize: 11, color: T.text, padding: 6, background: T.bgCard,
-          borderRadius: 4, maxHeight: 100, overflow: 'hidden', whiteSpace: 'pre-wrap', lineHeight: 1.6,
+          ...TYPO.footnote, color: T.text, padding: SPACING.xs + 2, background: T.bgCard,
+          borderRadius: RADIUS.xs, maxHeight: 100, overflow: 'hidden', whiteSpace: 'pre-wrap', lineHeight: 1.6,
         }}>{item.content}</div>
       )}
-      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: SPACING.xs + 2, marginTop: SPACING.sm }}>
         {isDrive && (
-          <button onClick={onRefresh} style={btn(T)}>🔄 Drive 再取得</button>
+          <button onClick={onRefresh} style={{ ...btnSecondary({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="refresh" size={12} /> Drive 再取得</button>
         )}
-        <button onClick={onEdit} style={btn(T)}>編集</button>
-        <button onClick={onRemove} style={btn(T, T.danger)}>削除</button>
+        <button onClick={onEdit} style={btnSecondary({ T, size: 'sm' })}>編集</button>
+        <button onClick={onRemove} style={btnDanger({ T, size: 'sm' })}>削除</button>
       </div>
     </div>
   )
-}
-
-function btn(T, color) {
-  return {
-    padding: '5px 12px', borderRadius: 6,
-    background: 'transparent', color: color || T.textSub,
-    border: `1px solid ${color ? color + '60' : T.border}`,
-    fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-  }
 }
 
 function KnowledgeForm({ T, owner, orgId, initial, onCancel, onSaved }) {
@@ -246,44 +238,40 @@ function KnowledgeForm({ T, owner, orgId, initial, onCancel, onSaved }) {
   }
 
   const inputSt = {
-    width: '100%', padding: '8px 10px', fontSize: 13,
-    background: T.bg, border: `1px solid ${T.border}`,
-    borderRadius: 6, color: T.text, fontFamily: 'inherit',
-    outline: 'none', boxSizing: 'border-box',
+    ...inputStyle({ T }),
+    padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, fontSize: TYPO.body.fontSize,
+    background: T.bg, borderRadius: RADIUS.xs,
   }
-  const labelSt = { fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 4, display: 'block' }
+  const labelSt = { ...TYPO.footnote, fontWeight: 700, color: T.textSub, marginBottom: SPACING.xs, display: 'block' }
 
   return (
     <div style={{
-      padding: 14, background: T.sectionBg,
-      border: `1px solid ${T.accent}40`, borderRadius: 8,
-      marginBottom: 10,
+      padding: SPACING.md + 2, background: T.sectionBg,
+      border: `1px solid ${T.accent}40`, borderRadius: RADIUS.sm,
+      marginBottom: SPACING.sm + 2,
     }}>
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: SPACING.sm + 2 }}>
         <label style={labelSt}>種類</label>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: SPACING.xs + 2 }}>
           {[
-            { key: 'text', label: '📝 テキスト' },
-            { key: 'drive_file', label: '📁 Drive ファイル' },
+            { key: 'text', label: 'テキスト', icon: 'note' },
+            { key: 'drive_file', label: 'Drive ファイル', icon: 'drive' },
           ].map(k => (
             <button key={k.key} onClick={() => setKind(k.key)} style={{
-              padding: '6px 12px', borderRadius: 6,
-              background: kind === k.key ? T.accent : 'transparent',
-              color: kind === k.key ? '#fff' : T.textSub,
-              border: `1px solid ${kind === k.key ? T.accent : T.border}`,
-              fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-            }}>{k.label}</button>
+              ...(kind === k.key ? btnPrimary({ T, size: 'sm' }) : btnSecondary({ T, size: 'sm' })),
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name={k.icon} size={12} /> {k.label}</button>
           ))}
         </div>
       </div>
 
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: SPACING.sm + 2 }}>
         <label style={labelSt}>タイトル *</label>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="例: NEO福岡の事業部構成" style={inputSt} />
       </div>
 
       {kind === 'text' && (
-        <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: SPACING.sm + 2 }}>
           <label style={labelSt}>本文 *</label>
           <textarea value={content} onChange={e => setContent(e.target.value)}
             placeholder="ぺろっぺに知っておいてほしい内容を自由に記述..."
@@ -292,24 +280,23 @@ function KnowledgeForm({ T, owner, orgId, initial, onCancel, onSaved }) {
       )}
 
       {kind === 'drive_file' && (
-        <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: SPACING.sm + 2 }}>
           <label style={labelSt}>Drive ファイル *</label>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: SPACING.xs + 2 }}>
             <input value={driveInput} onChange={e => setDriveInput(e.target.value)}
               placeholder="URL / ID を貼り付け、または右のボタンから選択"
               style={{ ...inputSt, flex: 1 }} />
             <button type="button" onClick={() => setPickerOpen(true)} style={{
-              padding: '0 14px', borderRadius: 6, whiteSpace: 'nowrap',
-              background: T.accent, color: '#fff', border: 'none',
-              fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-            }}>📁 Drive から選択</button>
+              ...btnPrimary({ T, size: 'md' }), whiteSpace: 'nowrap',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="drive" size={14} /> Drive から選択</button>
           </div>
           {driveInput && (
-            <div style={{ marginTop: 4, fontSize: 10, color: driveFileId ? T.success : T.danger }}>
-              {driveFileId ? `✓ ID: ${driveFileId}` : '⚠️ 有効な ID/URL ではありません'}
+            <div style={{ marginTop: SPACING.xs, ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: driveFileId ? T.success : T.danger, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+              <Icon name={driveFileId ? 'check' : 'alert'} size={12} /> {driveFileId ? `ID: ${driveFileId}` : '有効な ID/URL ではありません'}
             </div>
           )}
-          <div style={{ marginTop: 6, fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>
+          <div style={{ marginTop: SPACING.xs + 2, ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, lineHeight: 1.5 }}>
             ※ Google Docs / Sheets / Slides / PDF の本文取得に対応。保存時に自動で Drive から取得します。
           </div>
           {pickerOpen && (
@@ -324,28 +311,22 @@ function KnowledgeForm({ T, owner, orgId, initial, onCancel, onSaved }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 14, marginBottom: 14, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: SPACING.md + 2, marginBottom: SPACING.md + 2, alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
           <label style={labelSt}>優先度 (0-100)</label>
           <input type="number" value={priority} onChange={e => setPriority(e.target.value)}
             min={0} max={100} style={inputSt} />
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.text, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, ...TYPO.subhead, color: T.text, cursor: 'pointer' }}>
           <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
           有効
         </label>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onCancel} disabled={saving} style={{
-          padding: '8px 14px', borderRadius: 7,
-          background: 'transparent', color: T.textSub, border: `1px solid ${T.border}`,
-          fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>キャンセル</button>
+      <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'flex-end' }}>
+        <button onClick={onCancel} disabled={saving} style={btnSecondary({ T, size: 'md' })}>キャンセル</button>
         <button onClick={save} disabled={saving || !canSave} style={{
-          padding: '8px 16px', borderRadius: 7,
-          background: canSave ? T.accent : T.border, color: '#fff', border: 'none',
-          fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+          ...(canSave ? btnPrimary({ T, size: 'md' }) : btnGhost({ T, size: 'md' })),
           cursor: saving || !canSave ? 'not-allowed' : 'pointer',
         }}>{saving ? '保存中…' : '保存'}</button>
       </div>
@@ -364,13 +345,13 @@ const SUPPORTED_DRIVE_MIMES = new Set([
 ])
 
 function driveIcon(mimeType, isFolder) {
-  if (isFolder) return '📁'
-  if (!mimeType) return '📄'
-  if (mimeType.includes('document')) return '📝'
-  if (mimeType.includes('spreadsheet')) return '📊'
-  if (mimeType.includes('presentation')) return '🖼️'
-  if (mimeType.includes('pdf')) return '📕'
-  return '📄'
+  if (isFolder) return 'drive'
+  if (!mimeType) return 'note'
+  if (mimeType.includes('document')) return 'note'
+  if (mimeType.includes('spreadsheet')) return 'chart'
+  if (mimeType.includes('presentation')) return 'eye'
+  if (mimeType.includes('pdf')) return 'note'
+  return 'note'
 }
 
 function DrivePicker({ T, owner, onClose, onSelect }) {
@@ -433,65 +414,65 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 10000, padding: 20,
+      zIndex: 10000, padding: SPACING.xl,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 12,
+        background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.lg,
         width: '100%', maxWidth: 640, maxHeight: '88vh',
         display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        boxShadow: SHADOWS.xl,
       }}>
         <div style={{
-          padding: '12px 16px', borderBottom: `1px solid ${T.border}`,
-          display: 'flex', alignItems: 'center', gap: 8,
+          padding: `${SPACING.md}px ${SPACING.lg}px`, borderBottom: `1px solid ${T.border}`,
+          display: 'flex', alignItems: 'center', gap: SPACING.sm,
         }}>
-          <span style={{ fontSize: 16 }}>📁</span>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, flex: 1 }}>Drive ファイル選択</div>
+          <span style={{ color: T.textSub, display: 'inline-flex' }}><Icon name="drive" size={16} /></span>
+          <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text, flex: 1 }}>Drive ファイル選択</div>
           <button onClick={onClose} style={{
             background: 'transparent', border: 'none', color: T.textSub,
-            fontSize: 20, cursor: 'pointer', padding: '0 6px',
-          }}>×</button>
+            cursor: 'pointer', padding: `0 ${SPACING.xs + 2}px`, display: 'inline-flex',
+          }}><Icon name="cross" size={18} /></button>
         </div>
 
-        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ padding: `${SPACING.sm + 2}px ${SPACING.lg}px`, borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
+          <span style={{ color: T.textMuted, display: 'inline-flex' }}><Icon name="search" size={14} /></span>
           <input value={query} onChange={e => setQuery(e.target.value)}
-            placeholder="🔍 ファイル名/本文で検索 (空欄でブラウズに戻る)"
+            placeholder="ファイル名/本文で検索 (空欄でブラウズに戻る)"
             style={{
-              width: '100%', padding: '8px 10px', fontSize: 13,
-              background: T.bg, border: `1px solid ${T.border}`,
-              borderRadius: 6, color: T.text, fontFamily: 'inherit',
-              outline: 'none', boxSizing: 'border-box',
+              ...inputStyle({ T }),
+              padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, fontSize: TYPO.body.fontSize,
+              background: T.bg, borderRadius: RADIUS.xs,
             }} />
         </div>
 
         {!searchMode && breadcrumb.length > 0 && (
           <div style={{
-            padding: '8px 16px', borderBottom: `1px solid ${T.border}`,
-            display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
-            fontSize: 11, color: T.textMuted,
+            padding: `${SPACING.sm}px ${SPACING.lg}px`, borderBottom: `1px solid ${T.border}`,
+            display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap',
+            ...TYPO.footnote, color: T.textMuted,
           }}>
             {breadcrumb.map((c, i) => (
-              <span key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span key={c.id} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
                 {i > 0 && <span>/</span>}
                 <button onClick={() => setFolderId(c.isRoot ? '' : c.id)} style={{
-                  background: 'transparent', border: 'none', padding: '2px 4px',
+                  background: 'transparent', border: 'none', padding: `2px ${SPACING.xs}px`,
                   color: i === breadcrumb.length - 1 ? T.text : T.accent,
-                  fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  ...TYPO.footnote, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
                 }}>{c.name}</button>
               </span>
             ))}
           </div>
         )}
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 8, minHeight: 200 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: SPACING.sm, minHeight: 200 }}>
           {loading ? (
-            <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>読み込み中...</div>
+            <div style={{ padding: SPACING['2xl'], textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>読み込み中...</div>
           ) : error ? (
-            <div style={{ margin: 8, padding: 10, color: T.danger, fontSize: 12, background: T.dangerBg, borderRadius: 6 }}>
-              ⚠️ {error}
+            <div style={{ margin: SPACING.sm, padding: SPACING.sm + 2, color: T.danger, ...TYPO.subhead, background: T.dangerBg, borderRadius: RADIUS.xs, display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+              <Icon name="alert" size={14} /> {error}
             </div>
           ) : items.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+            <div style={{ padding: SPACING['2xl'], textAlign: 'center', color: T.textMuted, ...TYPO.subhead }}>
               {searchMode ? '一致するファイルがありません' : 'このフォルダは空です'}
             </div>
           ) : (
@@ -505,8 +486,8 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
                     onSelect(it)
                   }}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '8px 12px', borderRadius: 6, marginBottom: 2,
+                    display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+                    padding: `${SPACING.sm}px ${SPACING.md}px`, borderRadius: RADIUS.xs, marginBottom: 2,
                     cursor: supported ? 'pointer' : 'not-allowed',
                     opacity: supported ? 1 : 0.45,
                     background: 'transparent',
@@ -514,13 +495,13 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
                   onMouseEnter={e => { if (supported) e.currentTarget.style.background = T.sectionBg }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                 >
-                  <span style={{ fontSize: 18 }}>{driveIcon(it.mimeType, it.isFolder)}</span>
+                  <span style={{ color: it.isFolder ? T.accent : T.textSub, display: 'inline-flex' }}><Icon name={driveIcon(it.mimeType, it.isFolder)} size={18} /></span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontSize: 13, color: T.text, fontWeight: it.isFolder ? 700 : 500,
+                      ...TYPO.body, color: T.text, fontWeight: it.isFolder ? 700 : 500,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>{it.name}</div>
-                    <div style={{ fontSize: 10, color: T.textMuted }}>
+                    <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted }}>
                       {it.isFolder ? 'フォルダ' : (
                         supported
                           ? (it.owner || '') + (it.modifiedTime ? ` · ${it.modifiedTime.slice(0, 10)}` : '')
@@ -535,14 +516,10 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
         </div>
 
         <div style={{
-          padding: '10px 16px', borderTop: `1px solid ${T.border}`,
-          display: 'flex', justifyContent: 'flex-end', gap: 8,
+          padding: `${SPACING.sm + 2}px ${SPACING.lg}px`, borderTop: `1px solid ${T.border}`,
+          display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm,
         }}>
-          <button onClick={onClose} style={{
-            padding: '7px 14px', borderRadius: 7,
-            background: 'transparent', color: T.textSub, border: `1px solid ${T.border}`,
-            fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-          }}>キャンセル</button>
+          <button onClick={onClose} style={btnSecondary({ T, size: 'md' })}>キャンセル</button>
         </div>
       </div>
     </div>

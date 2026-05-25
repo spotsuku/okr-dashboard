@@ -2,8 +2,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import KASection from './KASection'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS } from '../lib/themeTokens'
+import { btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
+import { pctColor as okrPctColor } from '../lib/okrColors'
+import ObjectiveHeader from './okr/ObjectiveHeader'
+import AssigneeChip from './okr/AssigneeChip'
+import QTabs from './okr/QTabs'
+import AICoachCard from './okr/AICoachCard'
+import OkrCard from './okr/OkrCard'
+import ProgressBar from './okr/ProgressBar'
 
 // KASection に渡すテーマオブジェクト (OwnerOKRView の THEMES から抽出)
 function makeKATheme(t) {
@@ -32,13 +40,8 @@ const THEMES = {
 let _t = THEMES.dark
 const T = () => _t
 
-// 進捗率に応じた色 (4 段階)
-function progressColor(t, pct) {
-  if (pct >= 100) return t.success
-  if (pct >= 60)  return t.accent
-  if (pct >= 30)  return t.warn
-  return t.danger
-}
+// 進捗率に応じた色 (4 段階): 0-29 danger / 30-59 warn / 60-99 success / 100+ accent
+function progressColor(t, pct) { return okrPctColor(t, pct) }
 
 function calcObjProgress(krs) {
   if (!krs?.length) return 0
@@ -57,31 +60,6 @@ function rawPeriod(period) { return period?.includes('_') ? period.split('_').po
 const PERIOD_ORDER = { annual: 0, q1: 1, q2: 2, q3: 3, q4: 4 }
 const PERIOD_LABELS = { annual: '通期', q1: 'Q1', q2: 'Q2', q3: 'Q3', q4: 'Q4' }
 
-// ─── ProgressBar (値で色が変わる 4 段階) ───────────────────────────────
-function ProgressBar({ t, value, max = 100, showLabel = false, width }) {
-  const pct = Math.min(Math.max(value || 0, 0), 150)
-  const color = progressColor(t, pct)
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width }}>
-      <div style={{
-        flex: 1, height: 4, background: t.sectionBg, borderRadius: 99, overflow: 'hidden',
-      }}>
-        <div style={{
-          height: '100%', width: `${Math.min(pct, 100)}%`,
-          background: color, borderRadius: 99,
-          transition: 'width 300ms ease-out',
-        }} />
-      </div>
-      {showLabel && (
-        <span style={{
-          fontSize: 11, fontWeight: 600, color: t.textSub,
-          minWidth: 32, textAlign: 'right',
-        }}>{pct}%</span>
-      )}
-    </div>
-  )
-}
-
 // ─── Status タイル (KA の状態を 22×22 タイルで表現) ───────────────────
 function StatusTile({ t, status }) {
   const cfg = {
@@ -93,10 +71,10 @@ function StatusTile({ t, status }) {
   }[status] || { bg: t.sectionBg, fg: t.textMuted, mark: '—' }
   return (
     <span style={{
-      width: 22, height: 22, borderRadius: 6,
+      width: 22, height: 22, borderRadius: RADIUS.xs,
       background: cfg.bg, color: cfg.fg,
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 12, fontWeight: 600, flexShrink: 0,
+      ...TYPO.subhead, flexShrink: 0,
     }}>{cfg.mark}</span>
   )
 }
@@ -105,18 +83,18 @@ function StatusTile({ t, status }) {
 function KARowMini({ t, ka }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
+      display: 'flex', alignItems: 'center', gap: SPACING.md,
       padding: '10px 18px',
       borderBottom: `1px solid ${t.border}`,
     }}>
       <StatusTile t={t} status={ka.status} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 13, color: t.text,
+          ...TYPO.body, color: t.text,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{ka.ka_title || '(無題)'}</div>
         {(ka.good || ka.focus_output) && (
-          <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2,
+          <div style={{ ...TYPO.footnote, color: t.textMuted, marginTop: 2,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             <span style={{ color: t.success, fontWeight: 600 }}>K</span> {(ka.good || ka.focus_output || '').slice(0, 60)}
@@ -125,14 +103,14 @@ function KARowMini({ t, ka }) {
       </div>
       {ka.owner && (
         <span style={{
-          fontSize: 11, color: t.textSub,
+          ...TYPO.footnote, color: t.textSub,
           minWidth: 80, textAlign: 'right',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{ka.owner}</span>
       )}
       {ka.week_start && (
         <span style={{
-          fontSize: 11, color: t.textMuted,
+          ...TYPO.footnote, color: t.textMuted,
           fontFamily: 'ui-monospace, SF Mono, monospace',
           minWidth: 38, textAlign: 'right',
         }}>
@@ -146,7 +124,7 @@ function KARowMini({ t, ka }) {
   )
 }
 
-export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', themeKey = 'dark', onEdit, onDelete, refreshKey }) {
+export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYear = '2026', themeKey = 'dark', onEdit, onDelete, refreshKey }) {
   _t = THEMES[themeKey] || THEMES.dark
 
   const [objectives, setObjectives] = useState([])
@@ -230,12 +208,12 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   if (!ownerName) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint }}>
       <Icon name="user" size={36} stroke={1.4} />
-      <div style={{ fontSize: 15, color: T().text, marginTop: 12 }}>メンバーを選択してください</div>
-      <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>左のリストからメンバーを選ぶと、その人が担当する OKR が表示されます</div>
+      <div style={{ ...TYPO.headline, fontWeight: 500, color: T().text, marginTop: SPACING.md }}>メンバーを選択してください</div>
+      <div style={{ ...TYPO.body, marginTop: 6, color: T().textMuted }}>左のリストからメンバーを選ぶと、その人が担当する OKR が表示されます</div>
     </div>
   )
 
-  if (loading) return <div style={{ padding: 40, color: T().textMuted, fontSize: 13 }}>読み込み中...</div>
+  if (loading) return <div style={{ padding: 40, color: T().textMuted, ...TYPO.body }}>読み込み中...</div>
 
   // 期間グループ化
   const grouped = {}
@@ -252,8 +230,8 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   if (!availablePeriods.length) return (
     <div style={{ padding: '60px 20px', textAlign: 'center', color: T().textFaint, maxWidth: 600, margin: '40px auto' }}>
       <Icon name="target" size={36} stroke={1.4} />
-      <div style={{ fontSize: 15, color: T().text, marginTop: 12 }}>{ownerName} さんの OKR がありません</div>
-      <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>{fiscalYear} 年度の OKR が設定されていません</div>
+      <div style={{ ...TYPO.headline, fontWeight: 500, color: T().text, marginTop: SPACING.md }}>{ownerName} さんの OKR がありません</div>
+      <div style={{ ...TYPO.body, marginTop: 6, color: T().textMuted }}>{fiscalYear} 年度の OKR が設定されていません</div>
     </div>
   )
 
@@ -261,56 +239,44 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
   const periodLabel = effectivePeriod === 'annual' ? '通期' : effectivePeriod.toUpperCase()
 
   return (
-    <div style={{ padding: '24px 28px 80px', maxWidth: 1100, margin: '0 auto', background: t.bg, minHeight: '100%' }}>
-      {/* ヘッダー: メンバー名 + 年度 */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
-          <div style={{ fontSize: 22, fontWeight: 600, color: t.text, letterSpacing: '-0.005em' }}>
-            {ownerName} さんの OKR
+    <div style={{ padding: '24px 28px 80px', width: '100%', background: t.bg, minHeight: '100%' }}>
+      {/* ヘッダー: アバター + 役職 + {名前} のOKR + 年度 (週次ビューと統一様式) */}
+      {(() => {
+        const om = (members || []).find(m => m.name === ownerName)
+        const palette = ['#5A8A7A','#E8875A','#6B8DB5','#B07D9E','#C4956A','#5B9EA6','#8B7EC8','#D4816B']
+        const ac = palette[Math.abs([...ownerName].reduce((h, ch) => ch.charCodeAt(0) + ((h << 5) - h), 0)) % palette.length]
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.xl }}>
+            {om?.avatar_url ? (
+              <img src={om.avatar_url} alt={ownerName} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${ac}60`, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: `${ac}25`, border: `2px solid ${ac}60`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: TYPO.headline.fontSize, fontWeight: 700, color: ac, flexShrink: 0 }}>{ownerName.slice(0, 2)}</div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...TYPO.caption, fontWeight: 500, color: t.textMuted, marginBottom: 1 }}>{om?.role || 'メンバー'}</div>
+              <div style={{ ...TYPO.title3, fontWeight: 700, color: t.text }}>{ownerName} のOKR</div>
+            </div>
+            <span style={{
+              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: RADIUS.pill,
+              background: t.accentBg, color: t.accentText,
+            }}><Icon name="calendar" size={12} /> {fiscalYear}年度</span>
           </div>
-          <span style={{
-            fontSize: 11, fontWeight: 600, color: t.accent,
-            padding: '2px 8px', borderRadius: 99,
-            background: `${t.accent}1a`, border: `1px solid ${t.accent}40`,
-          }}>{fiscalYear}年度</span>
-        </div>
-        <div style={{ fontSize: 12, color: t.textMuted }}>担当する OKR の一覧と進捗状況</div>
-      </div>
+        )
+      })()}
 
-      {/* Period strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <div style={{
-          display: 'inline-flex',
-          background: t.bgCard, border: `1px solid ${t.border}`,
-          borderRadius: 9, overflow: 'hidden',
-        }}>
-          {allPeriods.map((p, i) => {
-            const count = (grouped[p] || []).length
-            const isActive = effectivePeriod === p
-            return (
-              <button key={p} onClick={() => setActivePeriod(p)} style={{
-                padding: '6px 14px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
-                border: 'none',
-                borderRight: i < allPeriods.length - 1 ? `1px solid ${t.border}` : 'none',
-                background: isActive ? t.sectionBg : t.bgCard,
-                color: isActive ? t.text : (count ? t.textSub : t.textFaint),
-                fontWeight: isActive ? 600 : 500,
-                opacity: count ? 1 : 0.5,
-              }}>
-                {PERIOD_LABELS[p]}{count > 0 && <span style={{ marginLeft: 4, fontSize: 10, color: t.textMuted }}>({count})</span>}
-              </button>
-            )
-          })}
-        </div>
-        <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: t.textMuted }}>
-          {fiscalYear}年度 · {periodLabel}
-        </span>
-      </div>
+      {/* Q タブ (.qtab) — 下線スタイル + 件数バッジ */}
+      <QTabs
+        T={t}
+        tabs={allPeriods.map((p) => ({ key: p, label: PERIOD_LABELS[p], count: (grouped[p] || []).length }))}
+        active={effectivePeriod}
+        onChange={setActivePeriod}
+        trailing={`${fiscalYear}年度 · ${periodLabel}`}
+      />
 
       {/* Objective Cards */}
       {currentObjs.length === 0 && (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: t.textFaint, fontSize: 13 }}>
+        <div style={{ padding: '40px 20px', textAlign: 'center', color: t.textFaint, ...TYPO.body }}>
           この期間の OKR はありません
         </div>
       )}
@@ -320,78 +286,32 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
         const objKAs = kaReports.filter(r => Number(r.objective_id) === Number(obj.id))
         const totalKaCount = objKAs.length
         return (
-          <div key={obj.id} style={{ marginBottom: 24 }}>
-            {/* Objective Card (sticky) */}
-            <div style={{
-              position: 'sticky', top: 0, zIndex: 5,
-              padding: '8px 0 0',
-              background: `linear-gradient(180deg, ${t.bg} 0%, ${t.bg} 85%, transparent 100%)`,
-              marginBottom: 4,
-            }}>
-              <div style={{
-                padding: 20,
-                background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 12,
-                display: 'flex', alignItems: 'flex-start', gap: 14,
-                backdropFilter: 'blur(16px) saturate(160%)',
-                WebkitBackdropFilter: 'blur(16px) saturate(160%)',
-                boxShadow: '0 4px 14px rgba(15,23,42,.06)',
-              }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 9,
-                background: `${t.accent}1a`, color: t.accent,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
-                <Icon name="target" size={16} stroke={1.6} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 10.5, fontWeight: 600, color: t.textMuted,
-                  letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4,
-                }}>
-                  Objective{obj.owner ? ` · ${obj.owner}` : ''}
-                </div>
-                <div style={{
-                  fontSize: 22, fontWeight: 600, color: t.text,
-                  letterSpacing: '-0.005em', lineHeight: 1.25, marginBottom: 12,
-                }}>{obj.title}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                  <div style={{ maxWidth: 320, flex: '1 1 200px' }}>
-                    <ProgressBar t={t} value={prog} showLabel />
-                  </div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, color: t.accent,
-                    padding: '2px 8px', borderRadius: 99,
-                    background: `${t.accent}1a`, border: `1px solid ${t.accent}40`,
-                  }}>KR {obj.key_results.length}件</span>
-                  <span style={{
-                    fontSize: 11, fontWeight: 500, color: t.textSub,
-                    padding: '2px 8px', borderRadius: 99,
-                    background: t.sectionBg, border: `1px solid ${t.border}`,
-                  }}>KA {totalKaCount}件</span>
-                  {onEdit && (
-                    <button onClick={() => onEdit(obj)} style={{
-                      marginLeft: 'auto',
-                      background: 'transparent', border: `1px solid ${t.border}`, color: t.textSub,
-                      borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                    }}>編集</button>
-                  )}
-                </div>
-              </div>
-              </div>
-            </div>
+          <div key={obj.id} style={{ marginBottom: SPACING['2xl'] }}>
+            {/* OBJECTIVE ヘッダ (共有部品 ObjectiveHeader) */}
+            <ObjectiveHeader
+              T={t}
+              periodLabel={periodLabel}
+              pct={prog}
+              ownerName={obj.owner}
+              ownerAvatarUrl={(members || []).find(m => m.name === obj.owner)?.avatar_url || undefined}
+              title={obj.title}
+              krCount={obj.key_results.length}
+              kaCount={totalKaCount}
+              right={onEdit ? (
+                <button onClick={() => onEdit(obj)} style={{
+                  ...btnSecondary({ T: t, size: 'sm' }),
+                  color: t.textSub,
+                }}>編集</button>
+              ) : undefined}
+              style={{ marginBottom: 14 }}
+            />
 
-            {/* Key Results → Key Actions セパレータ */}
+            {/* Key Results → Key Actions ストリップ */}
             <div style={{
-              padding: '14px 4px 10px',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <span style={{ width: 18, height: 1, background: t.border }} />
-              <span style={{
-                fontSize: 10.5, fontWeight: 600, color: t.textMuted,
-                letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap',
-              }}>Key Results → Key Actions</span>
-              <span style={{ flex: 1, height: 1, background: t.border }} />
-            </div>
+              fontSize: 10.5, fontWeight: 700, color: t.textMuted,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              margin: '14px 0 8px',
+            }}>Key Results → Key Actions</div>
 
             {/* KR Blocks */}
             {obj.key_results.map(kr => {
@@ -402,48 +322,38 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
                 : 0
               const krKAs = objKAs.filter(ka => Number(ka.kr_id) === Number(kr.id))
               return (
-                <div key={kr.id} style={{
-                  marginBottom: 12, padding: 0,
-                  background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 12,
-                  overflow: 'hidden',
-                }}>
-                  {/* KR ヘッダ */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    padding: '14px 18px',
-                    borderBottom: `1px solid ${t.border}`,
-                  }}>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, color: t.accent,
-                      padding: '2px 8px', borderRadius: 5,
-                      background: `${t.accent}1a`, border: `1px solid ${t.accent}40`,
-                      letterSpacing: '0.04em', flexShrink: 0,
-                    }}>KR</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: 15, fontWeight: 600, color: t.text, marginBottom: 4,
+                <OkrCard key={kr.id} T={t} padding={0} style={{ marginBottom: 10, overflow: 'hidden' }}>
+                  {/* KR カード ヘッダ (.krc) */}
+                  <div style={{ padding: '14px 16px', borderBottom: `1px solid ${t.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{
+                        padding: '1px 7px', fontSize: 10, fontWeight: 700,
+                        background: t.accentBg, color: t.accentText, borderRadius: RADIUS.xs,
+                        flexShrink: 0,
+                      }}>KR</span>
+                      <span style={{
+                        flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: t.text,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>{kr.title}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: t.textSub }}>
-                        <span style={{ fontFamily: 'ui-monospace, SF Mono, monospace' }}>
-                          {kr.current ?? 0}
-                          <span style={{ color: t.textMuted }}> / {kr.target ?? 0} {kr.unit || ''}</span>
-                        </span>
-                        {kr.owner && (
-                          <>
-                            <span style={{ width: 1, height: 12, background: t.border }} />
-                            <span style={{ fontSize: 11.5, color: t.textSub }}>{kr.owner}</span>
-                          </>
-                        )}
-                      </div>
+                      }}>{kr.title}</span>
+                      <span style={{
+                        fontSize: 10.5, color: t.textMuted, fontFamily: 'ui-monospace, monospace',
+                        display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                      }}>
+                        {kr.current ?? 0} / {kr.target ?? 0} {kr.unit || ''}
+                        {kr.owner && (<>{' · '}<AssigneeChip T={t} name={kr.owner} avatarUrl={(members || []).find(m => m.name === kr.owner)?.avatar_url || undefined} /></>)}
+                      </span>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace',
+                        color: progressColor(t, kp), flexShrink: 0,
+                      }}>{kp}%</span>
                     </div>
-                    <div style={{ width: 140, flexShrink: 0 }}>
-                      <ProgressBar t={t} value={kp} showLabel />
+                    <div style={{ marginTop: 8, display: 'flex' }}>
+                      <ProgressBar T={t} pct={kp} height={3} />
                     </div>
                   </div>
                   {/* KA セクション (KASection を埋め込み) */}
                   <KASection krId={kr.id} objectiveId={obj.id} levelId={obj.level_id} theme={makeKATheme(t)} />
-                </div>
+                </OkrCard>
               )
             })}
 
@@ -453,20 +363,19 @@ export default function OwnerOKRView({ ownerName, levels, fiscalYear = '2026', t
               const unlinked = objKAs.filter(ka => !ka.kr_id || !krIds.has(Number(ka.kr_id)))
               if (!unlinked.length) return null
               return (
-                <div style={{
-                  marginBottom: 12, padding: 0,
-                  background: t.bgCard, border: `1px dashed ${t.border}`, borderRadius: 12,
-                  overflow: 'hidden',
-                }}>
+                <OkrCard T={t} padding={0} style={{ marginBottom: SPACING.md, overflow: 'hidden' }}>
                   <div style={{
-                    fontSize: 10.5, fontWeight: 600, color: t.textMuted,
-                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                    ...TYPO.caption, fontWeight: 600, color: t.textMuted,
+                    textTransform: 'uppercase',
                     padding: '12px 18px', borderBottom: `1px solid ${t.border}`,
                   }}>その他の KA ({unlinked.length}件)</div>
                   {unlinked.map(ka => <KARowMini key={ka.id} t={t} ka={ka} />)}
-                </div>
+                </OkrCard>
               )
             })()}
+
+            {/* AI コーチカード (共有部品 AICoachCard) — KR カード列の末尾 */}
+            <AICoachCard T={t} />
           </div>
         )
       })}

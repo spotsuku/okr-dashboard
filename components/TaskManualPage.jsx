@@ -14,7 +14,9 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { btnPrimary, btnSecondary, inputStyle } from '../lib/iosStyles'
+import Icon, { DataIcon } from './Icon'
 
 // ─────────────────────────────────────────────────
 // テーマ
@@ -163,11 +165,11 @@ function UrlChip({ url, T }) {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         background: T.linkBg, border: `1px solid ${T.linkBorder}`,
-        borderRadius: 6, padding: '3px 10px', fontSize: 11,
+        borderRadius: RADIUS.xs, padding: '3px 10px', fontSize: TYPO.footnote.fontSize,
         color: T.link, textDecoration: 'none', fontWeight: 500,
         maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
-      <span style={{ fontSize: 10 }}>🔗</span>{url.label || url.href}
+      <Icon name="link" size={11} />{url.label || url.href}
     </a>
   )
 }
@@ -175,19 +177,19 @@ function UrlChip({ url, T }) {
 function UrlEditRow({ url, onChangeLabel, onChangeHref, onDelete, T }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
+      display: 'flex', alignItems: 'center', gap: SPACING.xs + 2,
       background: T.linkBg, border: `1px solid ${T.linkBorder}`,
-      borderRadius: 7, padding: '5px 9px', marginTop: 4,
+      borderRadius: RADIUS.xs + 1, padding: '5px 9px', marginTop: SPACING.xs,
     }}>
       <input type="text" value={url.label} placeholder="表示名" onChange={e => onChangeLabel(e.target.value)}
-        style={{ width: 88, flexShrink: 0, background: 'transparent', border: 'none', borderBottom: `1px dashed ${T.borderMid}`, color: T.link, fontSize: 11, fontWeight: 600, outline: 'none', fontFamily: 'inherit', paddingBottom: 1 }} />
-      <span style={{ color: T.textMuted, fontSize: 10, flexShrink: 0 }}>→</span>
+        style={{ width: 88, flexShrink: 0, background: 'transparent', border: 'none', borderBottom: `1px dashed ${T.borderMid}`, color: T.link, fontSize: TYPO.footnote.fontSize, fontWeight: 600, outline: 'none', fontFamily: 'inherit', paddingBottom: 1 }} />
+      <span style={{ color: T.textMuted, fontSize: TYPO.caption.fontSize, flexShrink: 0 }}><Icon name="arrowRight" size={11} /></span>
       <input type="url" value={url.href} placeholder="https://..." onChange={e => onChangeHref(e.target.value)}
-        style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', borderBottom: `1px dashed ${T.borderMid}`, color: T.textSub, fontSize: 11, outline: 'none', fontFamily: 'inherit', paddingBottom: 1 }} />
+        style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', borderBottom: `1px dashed ${T.borderMid}`, color: T.textSub, fontSize: TYPO.footnote.fontSize, outline: 'none', fontFamily: 'inherit', paddingBottom: 1 }} />
       <button onClick={onDelete}
-        style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', fontSize: 13, padding: '0 2px', lineHeight: 1 }}
+        style={{ background: 'none', border: 'none', color: T.textFaint, cursor: 'pointer', fontSize: TYPO.callout.fontSize, padding: '0 2px', lineHeight: 1, display: 'inline-flex' }}
         onMouseEnter={e => e.currentTarget.style.color = T.warn}
-        onMouseLeave={e => e.currentTarget.style.color = T.textFaint}>✕</button>
+        onMouseLeave={e => e.currentTarget.style.color = T.textFaint}><Icon name="cross" size={13} /></button>
     </div>
   )
 }
@@ -209,55 +211,55 @@ function StepCard({ step, si, phaseColor, editMode, onChange, onDelete, T }) {
   const inSt = (extra = {}) => ({
     width: '100%', boxSizing: 'border-box',
     background: T.bgInput, border: `1px solid ${T.editRing}55`,
-    borderRadius: 5, padding: '5px 8px', color: T.text,
-    fontSize: 12, outline: 'none', fontFamily: 'inherit', ...extra,
+    borderRadius: RADIUS.xs - 1, padding: '5px 8px', color: T.text,
+    fontSize: TYPO.subhead.fontSize, outline: 'none', fontFamily: 'inherit', ...extra,
   })
   const dispSt = (extra = {}) => ({
-    fontSize: 12, color: T.textSub, lineHeight: 1.65,
-    background: T.bgCard2, borderRadius: 5, padding: '5px 9px', minHeight: 30,
+    fontSize: TYPO.subhead.fontSize, color: T.textSub, lineHeight: 1.65,
+    background: T.bgCard2, borderRadius: RADIUS.xs - 1, padding: '5px 9px', minHeight: 30,
     whiteSpace: 'pre-wrap', ...extra,
   })
 
   return (
     <div style={{
       background: T.bgCard, border: `1px solid ${open ? phaseColor + '45' : T.border}`,
-      borderRadius: 10, marginBottom: 8, overflow: 'hidden',
-      boxShadow: open ? '0 4px 14px rgba(0,0,0,0.07)' : 'none',
+      borderRadius: RADIUS.md, marginBottom: SPACING.sm, overflow: 'hidden',
+      boxShadow: open ? SHADOWS.sm : SHADOWS.none,
       transition: 'border-color 0.2s, box-shadow 0.2s',
     }}>
       {/* ヘッダー */}
       <div onClick={() => setOpen(p => !p)}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', cursor: 'pointer', userSelect: 'none' }}>
+        style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, padding: '13px 16px', cursor: 'pointer', userSelect: 'none' }}>
         <div style={{
-          width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-          background: phaseColor, color: '#fff', fontSize: 11, fontWeight: 700,
+          width: 26, height: 26, borderRadius: RADIUS.xs + 1, flexShrink: 0,
+          background: phaseColor, color: '#fff', fontSize: TYPO.footnote.fontSize, fontWeight: 700,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>{si + 1}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {editMode
-            ? <input value={step.title} onClick={e => e.stopPropagation()} onChange={e => onChange('title', e.target.value)} placeholder="ステップ名" style={inSt({ fontWeight: 600, fontSize: 13 })} />
-            : <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{step.title || '（ステップ名未入力）'}</span>}
+            ? <input value={step.title} onClick={e => e.stopPropagation()} onChange={e => onChange('title', e.target.value)} placeholder="ステップ名" style={inSt({ fontWeight: 600, fontSize: TYPO.callout.fontSize })} />
+            : <span style={{ fontSize: TYPO.callout.fontSize, fontWeight: 700, color: T.text }}>{step.title || '（ステップ名未入力）'}</span>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flexShrink: 0 }}>
           {!open && (step.urls || []).filter(u => u.href).length > 0 && (
-            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99, background: T.linkBg, color: T.link, fontWeight: 700, border: `1px solid ${T.linkBorder}` }}>
-              🔗{(step.urls || []).filter(u => u.href).length}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, padding: '1px 6px', borderRadius: RADIUS.pill, background: T.linkBg, color: T.link, fontWeight: 700, border: `1px solid ${T.linkBorder}` }}>
+              <Icon name="link" size={10} />{(step.urls || []).filter(u => u.href).length}
             </span>
           )}
           {editMode && (
             <button onClick={e => { e.stopPropagation(); onDelete() }}
-              style={{ background: T.warnBg, border: `1px solid ${T.warn}40`, color: T.warn, borderRadius: 5, padding: '2px 8px', fontSize: 10, cursor: 'pointer' }}>
-              ✕ 削除
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: T.warnBg, border: `1px solid ${T.warn}40`, color: T.warn, borderRadius: RADIUS.xs - 1, padding: '2px 8px', fontSize: TYPO.caption.fontSize, cursor: 'pointer' }}>
+              <Icon name="cross" size={10} /> 削除
             </button>
           )}
-          <span style={{ fontSize: 10, color: T.textFaint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+          <span style={{ color: T.textFaint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-flex' }}><Icon name="chevronD" size={12} /></span>
         </div>
       </div>
 
       {/* 詳細 */}
       {open && (
         <div style={{ padding: '0 16px 16px 54px', borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.md, marginBottom: SPACING.md }}>
             {/* 担当者 */}
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: T.textMuted, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>担当者</div>
@@ -279,14 +281,14 @@ function StepCard({ step, si, phaseColor, editMode, onChange, onDelete, T }) {
                         onChangeLabel={v => updateUrl(ui, 'label', v)}
                         onChangeHref={v => updateUrl(ui, 'href', v)}
                         onDelete={() => deleteUrl(ui)} T={T} />
-                    : url.href ? <div key={ui} style={{ marginTop: 4 }}><UrlChip url={url} T={T} /></div> : null
+                    : url.href ? <div key={ui} style={{ marginTop: SPACING.xs }}><UrlChip url={url} T={T} /></div> : null
                 ))}
                 {editMode && (
                   <button onClick={addUrl}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 5, background: 'none', border: `1px dashed ${T.borderMid}`, borderRadius: 5, padding: '3px 9px', cursor: 'pointer', color: T.textMuted, fontSize: 11, fontFamily: 'inherit', transition: '0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, marginTop: 5, background: 'none', border: `1px dashed ${T.borderMid}`, borderRadius: RADIUS.xs - 1, padding: '3px 9px', cursor: 'pointer', color: T.textMuted, fontSize: TYPO.footnote.fontSize, fontFamily: 'inherit', transition: '0.15s' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = T.link; e.currentTarget.style.color = T.link }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = T.borderMid; e.currentTarget.style.color = T.textMuted }}>
-                    ＋ URLを追加
+                    <Icon name="plus" size={12} /> URLを追加
                   </button>
                 )}
               </div>
@@ -294,22 +296,22 @@ function StepCard({ step, si, phaseColor, editMode, onChange, onDelete, T }) {
           </div>
 
           {/* 完了条件 */}
-          <div style={{ background: T.greenBg, border: `1px solid ${T.greenBorder}`, borderRadius: 8, padding: '10px 13px', marginBottom: 9 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: T.green, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>✅ 完了条件</div>
+          <div style={{ background: T.greenBg, border: `1px solid ${T.greenBorder}`, borderRadius: RADIUS.sm, padding: '10px 13px', marginBottom: 9 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700, color: T.green, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}><Icon name="check" size={11} /> 完了条件</div>
             {editMode
               ? <textarea value={step.condition} onChange={e => onChange('condition', e.target.value)} placeholder="完了の定義を記入" rows={2}
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: T.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }} />
-              : <span style={{ fontSize: 12, color: T.text, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{step.condition || <span style={{ color: T.textFaint, fontStyle: 'italic' }}>未入力</span>}</span>}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: T.text, fontSize: TYPO.subhead.fontSize, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }} />
+              : <span style={{ fontSize: TYPO.subhead.fontSize, color: T.text, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{step.condition || <span style={{ color: T.textFaint, fontStyle: 'italic' }}>未入力</span>}</span>}
           </div>
 
           {/* 注意点 */}
           {(step.caution || editMode) && (
-            <div style={{ background: '#FFF8F0', border: '1px solid #E8C49A', borderRadius: 8, padding: '10px 13px' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#B86B30', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>⚠️ 注意点</div>
+            <div style={{ background: T.warnBg, border: `1px solid ${T.warn}40`, borderRadius: RADIUS.sm, padding: '10px 13px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700, color: T.warn, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}><Icon name="alert" size={11} /> 注意点</div>
               {editMode
                 ? <textarea value={step.caution} onChange={e => onChange('caution', e.target.value)} placeholder="（任意）特記事項・落とし穴など" rows={2}
-                    style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: '#57524A', fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }} />
-                : <span style={{ fontSize: 12, color: '#57524A', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{step.caution}</span>}
+                    style={{ width: '100%', boxSizing: 'border-box', background: 'transparent', border: 'none', color: T.textSub, fontSize: TYPO.subhead.fontSize, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }} />
+                : <span style={{ fontSize: TYPO.subhead.fontSize, color: T.textSub, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{step.caution}</span>}
             </div>
           )}
         </div>
@@ -330,12 +332,12 @@ function PhaseBlock({ phase, pi, deptColor, editMode, onUpdate, onDelete, onAddS
     ? { background: T.greenBg, color: T.green, border: `1px solid ${T.greenBorder}` }
     : { background: `${deptColor}18`, color: deptColor, border: `1px solid ${deptColor}40` }
 
-  const selSt = { background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '4px 8px', color: T.text, fontSize: 11, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }
-  const inpSt = (fw) => ({ background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: 5, padding: '4px 8px', color: T.text, outline: 'none', fontFamily: 'inherit', fontSize: fw ? 15 : 11, fontWeight: fw ? 700 : 400 })
+  const selSt = { background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: RADIUS.xs, padding: '4px 8px', color: T.text, fontSize: TYPO.footnote.fontSize, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }
+  const inpSt = (fw) => ({ background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: RADIUS.xs - 1, padding: '4px 8px', color: T.text, outline: 'none', fontFamily: 'inherit', fontSize: fw ? 15 : TYPO.footnote.fontSize, fontWeight: fw ? 700 : 400 })
 
   return (
     <div style={{ marginBottom: 36 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: 14, flexWrap: 'wrap' }}>
         {editMode ? (
           <>
             <select value={phase.badgeClass} onChange={e => onUpdate(pi, 'badgeClass', e.target.value)} style={selSt}>
@@ -344,12 +346,12 @@ function PhaseBlock({ phase, pi, deptColor, editMode, onUpdate, onDelete, onAddS
             </select>
             <input value={phase.badge} onChange={e => onUpdate(pi, 'badge', e.target.value)} placeholder="バッジ名" style={{ ...inpSt(false), width: 120 }} />
             <input value={phase.title} onChange={e => onUpdate(pi, 'title', e.target.value)} placeholder="フェーズのタイトル" style={{ ...inpSt(true), flex: 1, minWidth: 160 }} />
-            <button onClick={() => onDelete(pi)} style={{ padding: '4px 12px', borderRadius: 5, background: T.warnBg, border: `1px solid ${T.warn}40`, color: T.warn, fontSize: 11, cursor: 'pointer', marginLeft: 'auto', whiteSpace: 'nowrap' }}>✕ フェーズ削除</button>
+            <button onClick={() => onDelete(pi)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: RADIUS.xs - 1, background: T.warnBg, border: `1px solid ${T.warn}40`, color: T.warn, fontSize: TYPO.footnote.fontSize, cursor: 'pointer', marginLeft: 'auto', whiteSpace: 'nowrap' }}><Icon name="cross" size={11} /> フェーズ削除</button>
           </>
         ) : (
           <>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 13px', borderRadius: 20, ...badgeSt }}>{phase.badge}</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{phase.title}</span>
+            <span style={{ fontSize: TYPO.footnote.fontSize, fontWeight: 700, padding: '3px 13px', borderRadius: RADIUS.pill, ...badgeSt }}>{phase.badge}</span>
+            <span style={{ fontSize: TYPO.title3.fontSize, fontWeight: 700, color: T.text }}>{phase.title}</span>
           </>
         )}
       </div>
@@ -368,10 +370,10 @@ function PhaseBlock({ phase, pi, deptColor, editMode, onUpdate, onDelete, onAddS
       ))}
       {editMode && (
         <button onClick={() => onAddStep(pi)}
-          style={{ width: '100%', padding: '9px', marginTop: 4, background: 'none', border: `1.5px dashed ${T.borderDash}`, borderRadius: 9, cursor: 'pointer', color: T.textMuted, fontSize: 12, fontFamily: 'inherit', transition: '0.2s' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, width: '100%', padding: '9px', marginTop: SPACING.xs, background: 'none', border: `1.5px dashed ${T.borderDash}`, borderRadius: RADIUS.sm + 1, cursor: 'pointer', color: T.textMuted, fontSize: TYPO.subhead.fontSize, fontFamily: 'inherit', transition: '0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = T.editRing; e.currentTarget.style.color = T.editRing }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = T.borderDash; e.currentTarget.style.color = T.textMuted }}>
-          ＋ ステップを追加
+          <Icon name="plus" size={13} /> ステップを追加
         </button>
       )}
     </div>
@@ -385,18 +387,18 @@ function ConceptFlow({ phases, deptColor, T }) {
   const steps = phases.flatMap(ph => ph.steps.map(s => ({ title: s.title, cls: ph.badgeClass })))
   if (steps.length === 0) return null
   return (
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12, padding: '16px 20px', marginBottom: 28, overflowX: 'auto' }}>
-      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.textMuted, marginBottom: 10 }}>全体の流れ（概念）</div>
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.lg, padding: '16px 20px', marginBottom: 28, overflowX: 'auto' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.textMuted, marginBottom: SPACING.sm + 2 }}>全体の流れ（概念）</div>
       <div style={{ display: 'flex', alignItems: 'center', minWidth: 'max-content' }}>
         {steps.map((s, i) => {
           const c = s.cls === 'onboard' ? T.green : deptColor
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: 96, padding: '4px 2px' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: c, color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 7 }}>{i + 1}</div>
-                <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: T.textSub }}>{s.title || '…'}</span>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: c, color: '#fff', fontSize: TYPO.subhead.fontSize, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 7 }}>{i + 1}</div>
+                <span style={{ fontSize: TYPO.footnote.fontSize, fontWeight: 600, lineHeight: 1.4, color: T.textSub }}>{s.title || '…'}</span>
               </div>
-              {i < steps.length - 1 && <span style={{ color: T.textFaint, fontSize: 16, padding: '0 2px', paddingBottom: 18 }}>→</span>}
+              {i < steps.length - 1 && <span style={{ color: T.textFaint, padding: '0 2px', paddingBottom: 18, display: 'inline-flex' }}><Icon name="arrowRight" size={16} /></span>}
             </div>
           )
         })}
@@ -416,10 +418,10 @@ function RoleBlock({ role, deptColor, editMode, onUpdate, T }) {
       background: `${deptColor}0d`,
       border: `1px solid ${deptColor}30`,
       borderLeft: `4px solid ${deptColor}`,
-      borderRadius: 10, padding: '16px 20px', marginBottom: 20,
+      borderRadius: RADIUS.md, padding: '16px 20px', marginBottom: SPACING.xl,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: deptColor, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 8 }}>
-        🎯 チームの役割
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, fontSize: TYPO.caption.fontSize, fontWeight: 700, color: deptColor, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: SPACING.sm }}>
+        <Icon name="target" size={12} /> チームの役割
       </div>
       {editMode ? (
         <textarea
@@ -430,13 +432,13 @@ function RoleBlock({ role, deptColor, editMode, onUpdate, T }) {
           style={{
             width: '100%', boxSizing: 'border-box',
             background: T.bgInput, border: `1px solid ${T.editRing}55`,
-            borderRadius: 6, padding: '8px 10px', color: T.text,
-            fontSize: 13, lineHeight: 1.75, outline: 'none',
+            borderRadius: RADIUS.xs, padding: '8px 10px', color: T.text,
+            fontSize: TYPO.body.fontSize, lineHeight: 1.75, outline: 'none',
             fontFamily: 'inherit', resize: 'vertical',
           }}
         />
       ) : (
-        <p style={{ fontSize: 13, color: T.textSub, lineHeight: 1.85, margin: 0 }}>{role}</p>
+        <p style={{ fontSize: TYPO.body.fontSize, color: T.textSub, lineHeight: 1.85, margin: 0 }}>{role}</p>
       )}
     </div>
   )
@@ -454,34 +456,36 @@ function StanceBlock({ stance, deptColor, editMode, onUpdate, T }) {
 
   return (
     <div style={{ marginBottom: 28 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.textMuted }}>
-          💡 考え方・スタンス
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: 14 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, fontSize: TYPO.footnote.fontSize, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.textMuted }}>
+          <Icon name="sparkle" size={13} /> 考え方・スタンス
         </span>
         <div style={{ flex: 1, height: 1, background: T.border }} />
         {editMode && (
           <button onClick={addItem} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
             background: 'none', border: `1px dashed ${T.borderMid}`,
-            borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
-            color: T.textMuted, fontSize: 11, fontFamily: 'inherit',
-          }}>＋ 追加</button>
+            borderRadius: RADIUS.xs, padding: '3px 10px', cursor: 'pointer',
+            color: T.textMuted, fontSize: TYPO.footnote.fontSize, fontFamily: 'inherit',
+          }}><Icon name="plus" size={11} /> 追加</button>
         )}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 11 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: SPACING.sm + 3 }}>
         {(stance || []).map((item, i) => (
           <div key={i} style={{
             background: T.bgCard, border: `1px solid ${T.border}`,
-            borderRadius: 12, padding: '16px', position: 'relative',
+            borderRadius: RADIUS.lg, padding: SPACING.lg, position: 'relative',
           }}>
             {editMode && (
               <button onClick={() => delItem(i)} style={{
                 position: 'absolute', top: 8, right: 8,
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: T.textFaint, fontSize: 13, padding: '0 2px',
+                color: T.textFaint, fontSize: TYPO.callout.fontSize, padding: '0 2px',
+                display: 'inline-flex',
               }}
                 onMouseEnter={e => e.currentTarget.style.color = T.warn}
                 onMouseLeave={e => e.currentTarget.style.color = T.textFaint}
-              >✕</button>
+              ><Icon name="cross" size={13} /></button>
             )}
             {editMode ? (
               <>
@@ -489,15 +493,15 @@ function StanceBlock({ stance, deptColor, editMode, onUpdate, T }) {
                   style={{ width: 36, background: 'transparent', border: 'none', fontSize: 19, outline: 'none', marginBottom: 7, display: 'block', cursor: 'text' }} />
                 <input value={item.title} onChange={e => updItem(i, 'title', e.target.value)}
                   placeholder="タイトル"
-                  style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: 5, padding: '4px 7px', color: T.text, fontSize: 13, fontWeight: 700, outline: 'none', fontFamily: 'inherit', marginBottom: 6 }} />
+                  style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: RADIUS.xs - 1, padding: '4px 7px', color: T.text, fontSize: TYPO.body.fontSize, fontWeight: 700, outline: 'none', fontFamily: 'inherit', marginBottom: SPACING.xs + 2 }} />
                 <textarea value={item.body} onChange={e => updItem(i, 'body', e.target.value)}
                   rows={3} placeholder="内容"
-                  style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: 5, padding: '4px 7px', color: T.textSub, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.65 }} />
+                  style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.editRing}55`, borderRadius: RADIUS.xs - 1, padding: '4px 7px', color: T.textSub, fontSize: TYPO.subhead.fontSize, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.65 }} />
               </>
             ) : (
               <>
                 <div style={{ fontSize: 19, marginBottom: 7 }}>{item.icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>{item.title}</div>
+                <div style={{ fontSize: TYPO.body.fontSize, fontWeight: 700, color: T.text, marginBottom: SPACING.xs }}>{item.title}</div>
                 <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.7 }}>{item.body}</div>
               </>
             )}
@@ -539,12 +543,12 @@ function Sidebar({ levels, selected, onSelect, query, onQuery, T }) {
   })
 
   return (
-    <div style={{ width: 210, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.bgCard, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: 280, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.bgCard, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '12px 10px 8px', flexShrink: 0 }}>
         <div style={{ position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: T.textFaint, pointerEvents: 'none' }}>🔍</span>
+          <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: T.textFaint, pointerEvents: 'none', display: 'inline-flex' }}><Icon name="search" size={12} /></span>
           <input type="text" value={query} onChange={e => onQuery(e.target.value)} placeholder="チームを検索..."
-            style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: 7, padding: '6px 8px 6px 28px', color: T.text, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
+            style={{ width: '100%', boxSizing: 'border-box', background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: RADIUS.xs + 1, padding: '6px 8px 6px 28px', color: T.text, fontSize: TYPO.footnote.fontSize, outline: 'none', fontFamily: 'inherit' }} />
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 16px' }}>
@@ -552,17 +556,17 @@ function Sidebar({ levels, selected, onSelect, query, onQuery, T }) {
           const dc = getDeptColor(dept.name)
           return (
             <div key={dept.id} style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: dc, padding: '6px 8px 4px', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ fontSize: TYPO.caption.fontSize, fontWeight: 700, color: dc, padding: '6px 8px 4px', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: dc, flexShrink: 0 }} />{dept.name}
               </div>
               {teams.map(team => {
                 const isAct = Number(selected) === Number(team.id)
                 return (
                   <div key={team.id} onClick={() => onSelect(team.id)}
-                    style={{ padding: '7px 8px 7px 16px', borderRadius: 7, cursor: 'pointer', marginBottom: 2, fontSize: 12, fontWeight: isAct ? 700 : 500, color: isAct ? T.navText : T.textSub, background: isAct ? T.navActiveBg : 'transparent', borderLeft: `2px solid ${isAct ? T.navBorder : 'transparent'}`, transition: 'all 0.15s' }}
+                    style={{ padding: '7px 8px 7px 16px', borderRadius: RADIUS.xs + 1, cursor: 'pointer', marginBottom: 2, fontSize: TYPO.subhead.fontSize, fontWeight: isAct ? 700 : 500, color: isAct ? T.navText : T.textSub, background: isAct ? T.navActiveBg : 'transparent', borderLeft: `2px solid ${isAct ? T.navBorder : 'transparent'}`, transition: 'all 0.15s' }}
                     onMouseEnter={e => { if (!isAct) e.currentTarget.style.background = T.bgHover }}
                     onMouseLeave={e => { if (!isAct) e.currentTarget.style.background = 'transparent' }}>
-                    {team.icon} {team.name}
+                    <DataIcon value={team.icon} size={14} /> {team.name}
                   </div>
                 )
               })}
@@ -570,7 +574,7 @@ function Sidebar({ levels, selected, onSelect, query, onQuery, T }) {
           )
         })}
         {Object.keys(grouped).length === 0 && (
-          <div style={{ fontSize: 12, color: T.textFaint, fontStyle: 'italic', padding: '16px 8px', textAlign: 'center' }}>チームが見つかりません</div>
+          <div style={{ fontSize: TYPO.subhead.fontSize, color: T.textFaint, fontStyle: 'italic', padding: '16px 8px', textAlign: 'center' }}>チームが見つかりません</div>
         )}
       </div>
     </div>
@@ -712,28 +716,44 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
 
         {/* 未選択 */}
         {!selLevel && !loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12, color: T.textFaint }}>
-            <div style={{ fontSize: 48 }}>📋</div>
-            <div style={{ fontSize: 15, color: T.textMuted }}>左のチームを選んでください</div>
-            <div style={{ fontSize: 12 }}>チームごとにフェーズ別の業務マニュアルを管理できます</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 480, flexDirection: 'column', gap: SPACING.md, color: T.textFaint, padding: SPACING.xl, textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: RADIUS.lg, background: T.accentBg, border: `1px solid ${T.accent}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.accent }}>
+              <Icon name="note" size={28} />
+            </div>
+            <div>
+              <div style={{ fontSize: TYPO.headline.fontSize, fontWeight: 700, color: T.text, marginBottom: SPACING.xs + 2 }}>左のチームを選んでください</div>
+              <div style={{ fontSize: TYPO.subhead.fontSize, color: T.textSub, lineHeight: 1.7, maxWidth: 360 }}>
+                チームごとに「フェーズ別の業務マニュアル」を管理できます。<br />
+                新メンバーが入ったときの「迷い」をぐっと減らします。
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: SPACING.xs + 2, marginTop: SPACING.xs, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 380 }}>
+              {['オンボーディング', '定例運営', '引き継ぎ', 'トラブル対応'].map((t, i) => (
+                <span key={i} style={{
+                  padding: '4px 12px', fontSize: TYPO.footnote.fontSize, fontWeight: 500, color: T.textSub,
+                  background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.pill,
+                }}>{t}</span>
+              ))}
+            </div>
+            <div style={{ fontSize: TYPO.caption.fontSize, color: T.textMuted, marginTop: SPACING.xs + 2 }}>テンプレ候補から始めることもできます</div>
           </div>
         )}
 
         {/* ローディング */}
         {selectedId && loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: T.accent, fontSize: 14 }}>読み込み中...</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: T.accent, fontSize: TYPO.headline.fontSize }}>読み込み中...</div>
         )}
 
         {/* DBエラー */}
         {dbError && (
-          <div style={{ margin: '24px 28px', padding: '14px 18px', background: T.errorBg, border: `1px solid ${T.errorBorder}`, borderRadius: 10, color: T.errorText, fontSize: 13 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>⚠️ データベースエラー</div>
-            <div style={{ fontSize: 12, fontFamily: 'monospace', marginBottom: 10 }}>{dbError}</div>
-            <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.7 }}>
+          <div style={{ margin: '24px 28px', padding: '14px 18px', background: T.errorBg, border: `1px solid ${T.errorBorder}`, borderRadius: RADIUS.md, color: T.errorText, fontSize: TYPO.body.fontSize }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, marginBottom: SPACING.sm - 2 }}><Icon name="alert" size={14} /> データベースエラー</div>
+            <div style={{ fontSize: TYPO.subhead.fontSize, fontFamily: 'monospace', marginBottom: SPACING.sm + 2 }}>{dbError}</div>
+            <div style={{ fontSize: TYPO.subhead.fontSize, color: T.textMuted, lineHeight: 1.7 }}>
               <b>対処法：</b>Supabase SQL Editor で <code>supabase_manual_setup.sql</code> を実行してテーブルを作成してください。<br />
               テーブル作成後、ページをリロードして再度お試しください。
             </div>
-            <button onClick={() => loadData(selectedId)} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 7, background: T.accentSolid, border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>再読み込み</button>
+            <button onClick={() => loadData(selectedId)} style={{ marginTop: SPACING.sm + 2, padding: '6px 14px', borderRadius: RADIUS.xs + 1, background: T.accentSolid, border: 'none', color: '#fff', fontSize: TYPO.subhead.fontSize, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>再読み込み</button>
           </div>
         )}
 
@@ -742,38 +762,38 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
           <div style={{ padding: '24px 28px', maxWidth: 860, margin: '0 auto' }}>
 
             {/* ページヘッダー */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, color: T.textFaint, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ marginBottom: SPACING.xl }}>
+              <div style={{ fontSize: TYPO.footnote.fontSize, color: T.textFaint, marginBottom: SPACING.sm - 2, display: 'flex', alignItems: 'center', gap: SPACING.sm - 2 }}>
                 <span>{selItem?.dept?.name}</span>
-                <span style={{ opacity: 0.4 }}>›</span>
+                <span style={{ opacity: 0.4, display: 'inline-flex' }}><Icon name="chevronR" size={11} /></span>
                 <span style={{ color: T.textMuted }}>{selLevel.name}</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <h1 style={{ fontSize: 22, fontWeight: 700, color: T.text, margin: 0 }}>{selLevel.icon} {selLevel.name}</h1>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: `${deptColor}18`, color: deptColor, border: `1px solid ${deptColor}40` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md, flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: TYPO.title1.fontSize, fontWeight: 700, color: T.text, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}><DataIcon value={selLevel.icon} size={20} /> {selLevel.name}</h1>
+                <span style={{ fontSize: TYPO.footnote.fontSize, fontWeight: 700, padding: '3px 10px', borderRadius: RADIUS.pill, background: `${deptColor}18`, color: deptColor, border: `1px solid ${deptColor}40` }}>
                   {cur.phases.length}フェーズ
                 </span>
-                <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: T.bgCard, color: T.textMuted, border: `1px solid ${T.border}` }}>
+                <span style={{ fontSize: TYPO.footnote.fontSize, padding: '3px 10px', borderRadius: RADIUS.pill, background: T.bgCard, color: T.textMuted, border: `1px solid ${T.border}` }}>
                   {totalSteps}ステップ
                 </span>
 
                 {/* 操作ボタン */}
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: SPACING.sm, alignItems: 'center' }}>
                   {isAdmin && (
                     <button onClick={() => setEditMode(p => !p)}
-                      style={{ padding: '7px 16px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: editMode ? T.editRing : T.bgCard, border: `1px solid ${editMode ? T.editRing : T.borderMid}`, color: editMode ? '#fff' : T.textSub, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      style={{ padding: '7px 16px', borderRadius: RADIUS.sm, cursor: 'pointer', fontFamily: 'inherit', fontSize: TYPO.subhead.fontSize, fontWeight: 700, background: editMode ? T.editRing : T.bgCard, border: `1px solid ${editMode ? T.editRing : T.borderMid}`, color: editMode ? '#fff' : T.textSub, transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: SPACING.sm - 2 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: editMode ? '#fff' : T.textFaint }} />
-                      {editMode ? '編集中...' : '✎ 編集モード'}
+                      {editMode ? '編集中...' : <><Icon name="pencil" size={12} /> 編集モード</>}
                     </button>
                   )}
                   {dirty && (
                     <>
                       <button onClick={saveData} disabled={saving}
-                        style={{ padding: '7px 18px', borderRadius: 8, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: savedFlash ? T.green : T.accentSolid, border: 'none', color: '#fff', opacity: saving ? 0.6 : 1, transition: 'background 0.3s' }}>
-                        {saving ? '保存中...' : savedFlash ? '✓ 保存しました' : '保存する'}
+                        style={{ ...btnPrimary({ T, size: 'md', color: savedFlash ? T.green : T.accentSolid }), display: 'inline-flex', alignItems: 'center', gap: SPACING.xs, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+                        {saving ? '保存中...' : savedFlash ? <><Icon name="check" size={13} /> 保存しました</> : '保存する'}
                       </button>
                       <button onClick={() => { if (confirm('変更を破棄しますか？')) loadData(selectedId) }}
-                        style={{ padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, background: 'transparent', border: `1px solid ${T.borderMid}`, color: T.textMuted }}>
+                        style={{ ...btnSecondary({ T, size: 'md' }), color: T.textMuted, borderColor: T.borderMid }}>
                         元に戻す
                       </button>
                     </>
@@ -784,8 +804,8 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
 
             {/* 編集ヒント */}
             {editMode && (
-              <div style={{ fontSize: 11, color: T.editRing, background: `rgba(59,130,246,0.08)`, border: `1px solid rgba(59,130,246,0.2)`, borderRadius: 8, padding: '8px 14px', marginBottom: 20, textAlign: 'center' }}>
-                ✎ 編集モード中 — テキストをクリックして直接編集できます。保存するまで変更はDBに反映されません。
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs, fontSize: TYPO.footnote.fontSize, color: T.editRing, background: T.accentBg, border: `1px solid ${T.accent}40`, borderRadius: RADIUS.sm, padding: '8px 14px', marginBottom: SPACING.xl, textAlign: 'center' }}>
+                <Icon name="pencil" size={12} /> 編集モード中 — テキストをクリックして直接編集できます。保存するまで変更はDBに反映されません。
               </div>
             )}
 
@@ -819,19 +839,19 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
             {/* フェーズ追加 */}
             {editMode && (
               <button onClick={onAddPhase}
-                style={{ width: '100%', padding: '10px', marginBottom: 36, background: 'none', border: `1.5px dashed ${T.borderDash}`, borderRadius: 10, cursor: 'pointer', color: T.textMuted, fontSize: 12, fontFamily: 'inherit', transition: '0.2s' }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs, width: '100%', padding: '10px', marginBottom: 36, background: 'none', border: `1.5px dashed ${T.borderDash}`, borderRadius: RADIUS.md, cursor: 'pointer', color: T.textMuted, fontSize: TYPO.subhead.fontSize, fontFamily: 'inherit', transition: '0.2s' }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = T.editRing; e.currentTarget.style.color = T.editRing }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = T.borderDash; e.currentTarget.style.color = T.textMuted }}>
-                ＋ フェーズを追加
+                <Icon name="plus" size={13} /> フェーズを追加
               </button>
             )}
 
             {/* フェーズ0件 */}
             {cur.phases.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '48px 20px', border: `1px dashed ${T.borderDash}`, borderRadius: 12, color: T.textFaint }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-                <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 6 }}>業務フローがまだ登録されていません</div>
-                {isAdmin && <div style={{ fontSize: 12 }}>「編集モード」をオンにして「＋ フェーズを追加」から始めましょう</div>}
+              <div style={{ textAlign: 'center', padding: '48px 20px', border: `1px dashed ${T.borderDash}`, borderRadius: RADIUS.lg, color: T.textFaint }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: SPACING.md }}><Icon name="note" size={36} /></div>
+                <div style={{ fontSize: TYPO.headline.fontSize, color: T.textMuted, marginBottom: SPACING.sm - 2 }}>業務フローがまだ登録されていません</div>
+                {isAdmin && <div style={{ fontSize: TYPO.subhead.fontSize }}>「編集モード」をオンにして「＋ フェーズを追加」から始めましょう</div>}
               </div>
             )}
           </div>
@@ -840,8 +860,8 @@ export default function TaskManualPage({ levels, isAdmin, themeKey = 'dark' }) {
 
       {/* 保存フラッシュ */}
       {savedFlash && (
-        <div style={{ position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', background: T.green, color: '#fff', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', zIndex: 500, pointerEvents: 'none' }}>
-          ✓ Supabaseに保存しました
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', background: T.green, color: '#fff', borderRadius: RADIUS.sm, padding: '9px 20px', fontSize: TYPO.body.fontSize, fontWeight: 700, boxShadow: SHADOWS.lg, zIndex: 500, pointerEvents: 'none' }}>
+          <Icon name="check" size={14} /> Supabaseに保存しました
         </div>
       )}
       <style>{`@keyframes fadeUp { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>

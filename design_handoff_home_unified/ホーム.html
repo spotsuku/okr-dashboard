@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ホーム — AI WorkSpace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-card:rgba(255,255,255,.78); --bg-card-2:rgba(255,255,255,.55);
+    --sunken:rgba(255,255,255,.5);
+    --border:rgba(15,23,42,.08); --border-mid:rgba(15,23,42,.12); --border-strong:rgba(15,23,42,.18);
+    --text:#0f172a; --text-sub:#475569; --text-muted:#94a3b8;
+    --accent:#0ea5e9; --accent-bg:rgba(14,165,233,.12); --accent-text:#0369a1;
+    --success:#059669; --success-bg:rgba(5,150,105,.12);
+    --warn:#d97706; --warn-bg:rgba(217,119,6,.12);
+    --danger:#e11d48; --danger-bg:rgba(225,29,72,.12);
+    --info:#0284c7;
+    --sh-card:0 1px 0 rgba(255,255,255,.7) inset, 0 4px 18px rgba(15,23,42,.04);
+    --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:18px; --r-2xl:22px; --r-pill:99px;
+    --brand-cta:linear-gradient(120deg,#2563eb 0%,#22d3ee 100%);
+  }
+  html,body{margin:0;padding:0}
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    font-family:'Inter','Noto Sans JP',-apple-system,system-ui,sans-serif;
+    color:var(--text); font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(900px 600px at 0% 0%, rgba(226,232,240,.5), transparent 55%),
+      linear-gradient(180deg,#fbfcfe 0%,#f5f7fa 100%);
+    min-height:100vh; display:flex;
+  }
+  .org-rail{width:56px;background:#0f172a;padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0;min-height:100vh}
+  .org-rail .org{width:36px;height:36px;border-radius:10px;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+  .org-rail .org.active{background:linear-gradient(135deg,#dc2626,#ef4444)}
+  .org-rail .org.active::before{content:'';position:absolute;left:-12px;top:50%;transform:translateY(-50%);width:3px;height:20px;border-radius:99px;background:#fff}
+  .org-rail .org.muted{background:linear-gradient(135deg,#ec4899,#f472b6)}
+
+  .app{flex:1;display:flex;flex-direction:column;min-width:0}
+  .glass-bar{position:sticky;top:0;z-index:30;padding:10px 22px;background:rgba(255,255,255,.7);backdrop-filter:blur(18px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
+  .brand{display:flex;align-items:center;gap:8px;text-decoration:none;padding-right:12px;border-right:1px solid var(--border)}
+  .brand-mark{width:26px;height:26px;border-radius:7px;background:var(--brand-cta);display:flex;align-items:center;justify-content:center;color:#fff}
+  .brand-text{display:flex;flex-direction:column;line-height:1.15}
+  .brand-text .eyebrow{font-size:8.5px;color:var(--text-muted);letter-spacing:0.08em}
+  .brand-text .name{font-size:12px;font-weight:700;color:var(--text)}
+  nav.main{display:flex;align-items:center;gap:2px}
+  .nav-item{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--text-sub);cursor:pointer}
+  .nav-item:hover{background:rgba(15,23,42,.04)}
+  .nav-item.active{background:var(--accent-bg);color:var(--accent-text);font-weight:600}
+  .search{display:flex;align-items:center;gap:7px;height:30px;padding:0 11px;min-width:200px;background:rgba(255,255,255,.6);border:1px solid var(--border);border-radius:7px;color:var(--text-muted);font-size:12px}
+  .kbd{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;font-size:10px;font-weight:600;color:var(--text-muted);background:rgba(255,255,255,.7);border:1px solid var(--border);border-radius:4px;font-family:ui-monospace,monospace}
+  .year-toggle{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:rgba(255,255,255,.5)}
+  .year-toggle .y{padding:4px 10px;font-size:11px;color:var(--text-muted)}
+  .year-toggle .y.active{background:var(--brand-cta);color:#fff;font-weight:600}
+  .icon-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,.5);color:var(--text-sub);cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+  .content{flex:1;padding:32px 28px 80px;max-width:1180px;margin:0 auto;width:100%}
+
+  /* === Onboarding === */
+  .onboard{
+    margin-bottom: 22px;
+    background: rgba(255,255,255,.78); backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--border); border-radius: var(--r-xl);
+    box-shadow: var(--sh-card);
+    overflow: hidden;
+  }
+  .onboard-head{
+    padding: 14px 18px;
+    background: linear-gradient(120deg, rgba(37,99,235,.08), rgba(34,211,238,.06));
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .onboard-head .ic{
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--brand-cta); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(37,99,235,.28);
+    flex-shrink: 0;
+  }
+  .onboard-head .tx{flex:1}
+  .onboard-head .tt{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .onboard-head .nm{font-size:14px;font-weight:700}
+  .onboard-head .meta{font-size:11.5px;color:var(--text-sub)}
+  .onboard-head .bar{height:5px;background:rgba(15,23,42,.06);border-radius:99px;overflow:hidden;margin-top:6px}
+  .onboard-head .fill{height:100%;background:var(--brand-cta);transition:width .3s}
+  .onboard-head .next-btn{flex-shrink:0}
+  .onboard-head .dismiss{padding:6px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:14px}
+
+  .onboard-steps{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}
+  .onboard-step{
+    padding:14px 14px 12px;
+    background:#fff; border:none; text-align:left;
+    cursor:pointer; font-family:inherit;
+    display:flex; flex-direction:column; gap:6px;
+    position:relative; transition:background .12s;
+  }
+  .onboard-step:hover{background:rgba(37,99,235,.04)}
+  .onboard-step.active{background:rgba(37,99,235,.05)}
+  .onboard-step .top{display:flex;align-items:center;gap:6px}
+  .onboard-step .cb{
+    width:20px;height:20px;border-radius:99px;
+    border:1.5px dashed rgba(15,23,42,.2);
+    background:transparent;
+    display:flex;align-items:center;justify-content:center; flex-shrink:0;
+  }
+  .onboard-step.done .cb{background:var(--success);border:1.5px solid var(--success);color:#fff}
+  .onboard-step.active .cb{border:1.5px solid var(--accent);background:var(--accent-bg);color:var(--accent-text)}
+  .onboard-step.active .cb::after{content:'';position:absolute;width:30px;height:30px;border-radius:99px;background:rgba(14,165,233,.18);animation:pulse 1.8s ease-in-out infinite;pointer-events:none;margin-top:-5px;margin-left:-5px}
+  @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.4)}}
+  .onboard-step .num{font-size:10.5px;font-weight:700;color:var(--text-muted);letter-spacing:0.06em}
+  .onboard-step.done .num{color:var(--success)}
+  .onboard-step.active .num{color:var(--accent-text)}
+  .onboard-step .ti{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.4}
+  .onboard-step .dd{font-size:11px;color:var(--text-sub);line-height:1.55}
+  .onboard-step .ti-ic{margin-right:3px;color:var(--text-muted)}
+  .onboard-step.done .ti-ic, .onboard-step.active .ti-ic{color:inherit}
+
+  /* MyCOO tip on home */
+  .mycoo-tip{
+    display:flex; align-items:flex-start; gap:10px;
+    padding:12px 14px;
+    background:linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06));
+    border:1px solid rgba(37,99,235,.18); border-radius:var(--r-md);
+    margin:14px 16px 0;
+  }
+  .mycoo-tip .ic{
+    width:26px;height:26px;border-radius:7px;
+    background:linear-gradient(135deg,#3b82f6,#1e3a8a);
+    color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    box-shadow:0 2px 6px rgba(30,58,138,.24);
+  }
+  .mycoo-tip .tx .nm{font-size:11px;font-weight:700;color:var(--accent-text);letter-spacing:0.04em;margin-bottom:2px}
+  .mycoo-tip .tx .body{font-size:12px;color:var(--text);line-height:1.6}
+  .welcome{
+    display:flex;align-items:center;gap:14px;margin-bottom:24px;
+  }
+  .welcome .av{
+    width:48px;height:48px;border-radius:14px;
+    background:linear-gradient(135deg,#3b82f6,#1e3a8a);
+    color:#fff;font-size:18px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 12px rgba(30,58,138,.28);
+  }
+  .welcome h1{font-size:22px;font-weight:700;letter-spacing:-0.015em;margin:0 0 2px}
+  .welcome .sub{font-size:12.5px;color:var(--text-sub);display:flex;align-items:center;gap:10px}
+  .welcome .live{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--success)}
+  .welcome .live .d{width:6px;height:6px;border-radius:99px;background:var(--success);box-shadow:0 0 0 3px rgba(5,150,105,.15)}
+  .welcome .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .welcome .right .pill{padding:5px 10px;font-size:11.5px;background:rgba(255,255,255,.7);border:1px solid var(--border);border-radius:99px;color:var(--text-sub);font-family:ui-monospace,monospace}
+
+  /* Primary destination cards (My / Company) */
+  .dest-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:24px}
+  .dest{
+    position:relative;overflow:hidden;
+    background:var(--bg-card);backdrop-filter:blur(20px) saturate(160%);
+    border:1px solid var(--border);border-radius:var(--r-xl);
+    box-shadow:var(--sh-card);
+    padding:24px;
+    display:flex;flex-direction:column;gap:14px;
+    cursor:pointer;
+    text-decoration:none;color:inherit;
+    transition:transform .15s,box-shadow .15s,border-color .15s;
+  }
+  .dest:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(15,23,42,.08);border-color:var(--border-mid)}
+  .dest .top{display:flex;align-items:flex-start;gap:14px}
+  .dest .ic{
+    width:48px;height:48px;border-radius:12px;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;flex-shrink:0;
+  }
+  .dest.me .ic{background:var(--brand-cta);box-shadow:0 4px 12px rgba(37,99,235,.28)}
+  .dest.company .ic{background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 4px 12px rgba(5,150,105,.28)}
+  .dest h2{font-size:18px;font-weight:700;letter-spacing:-0.005em;margin:0 0 4px}
+  .dest .desc{font-size:12.5px;color:var(--text-sub);line-height:1.6}
+  .dest .stats{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+    padding:14px 0 4px;border-top:1px solid var(--border);margin-top:auto;
+  }
+  .dest .stat .lbl{font-size:10.5px;color:var(--text-muted);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px}
+  .dest .stat .val{font-size:18px;font-weight:700;font-family:ui-monospace,monospace;letter-spacing:-0.01em}
+  .dest .stat .val.warn{color:var(--warn)}
+  .dest .stat .val.success{color:var(--success)}
+  .dest .stat .val.accent{color:var(--accent-text)}
+  .dest .stat .unit{font-size:11px;color:var(--text-muted);font-weight:500;margin-left:3px}
+  .dest .open-link{
+    position:absolute;top:24px;right:24px;
+    display:inline-flex;align-items:center;gap:5px;
+    padding:5px 11px;font-size:11.5px;font-weight:600;
+    background:rgba(255,255,255,.7);border:1px solid var(--border);
+    border-radius:99px;color:var(--text-sub);
+  }
+  .dest:hover .open-link{background:#fff;color:var(--text)}
+
+  /* Section header */
+  .sec-head{display:flex;align-items:baseline;gap:10px;margin:8px 0 14px}
+  .sec-head h3{font-size:13px;font-weight:700;margin:0;display:flex;align-items:center;gap:6px}
+  .sec-head .desc{font-size:11.5px;color:var(--text-muted)}
+  .sec-head .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+  /* Custom links */
+  .links-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .link-card{
+    background:var(--bg-card);backdrop-filter:blur(20px);
+    border:1px solid var(--border);border-radius:var(--r-md);
+    padding:14px;
+    display:flex;align-items:center;gap:10px;
+    cursor:pointer;text-decoration:none;color:inherit;
+    transition:transform .12s,border-color .12s;
+  }
+  .link-card:hover{transform:translateY(-1px);border-color:var(--border-mid)}
+  .link-card .ic{
+    width:34px;height:34px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .link-card .info{flex:1;min-width:0}
+  .link-card .nm{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .link-card .url{font-size:10.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,monospace}
+  .link-card .ext{color:var(--text-muted);flex-shrink:0}
+
+  .link-add{
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    padding:14px;
+    background:rgba(255,255,255,.4);
+    border:1.5px dashed var(--border-mid);
+    border-radius:var(--r-md);
+    color:var(--text-sub);font-size:12.5px;font-weight:500;
+    cursor:pointer;
+    transition:background .12s,border-color .12s,color .12s;
+  }
+  .link-add:hover{background:rgba(37,99,235,.04);border-color:rgba(37,99,235,.3);color:var(--accent-text)}
+
+  /* Add link modal preview */
+  .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);backdrop-filter:blur(4px);z-index:50;align-items:center;justify-content:center}
+  .modal-backdrop.open{display:flex}
+  .modal{
+    width:420px;max-width:calc(100vw - 40px);
+    background:#fff;border:1px solid var(--border);border-radius:14px;
+    box-shadow:0 24px 60px rgba(15,23,42,.18);
+    overflow:hidden;
+  }
+  .modal-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .modal-head h4{font-size:14px;font-weight:700;margin:0;flex:1}
+  .modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+  .modal-body label{font-size:11.5px;font-weight:600;color:var(--text-sub);margin-bottom:4px;display:block}
+  .modal-body input{width:100%;padding:8px 12px;font-size:13px;background:rgba(15,23,42,.025);border:1px solid var(--border);border-radius:8px;font-family:inherit;color:var(--text);outline:none}
+  .modal-body input:focus{border-color:var(--accent);background:#fff}
+  .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:rgba(15,23,42,.02)}
+
+  .btn-primary{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;font-size:12.5px;font-weight:600;background:var(--brand-cta);color:#fff;border:1px solid #2563eb;border-radius:8px;cursor:pointer;font-family:inherit;text-decoration:none;box-shadow:0 2px 8px rgba(37,99,235,.28),inset 0 1px 0 rgba(255,255,255,.25)}
+  .btn-secondary{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;font-size:12px;font-weight:500;background:rgba(255,255,255,.7);border:1px solid var(--border);border-radius:7px;color:var(--text);cursor:pointer;font-family:inherit}
+  .btn-ghost{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;font-size:12px;background:transparent;border:1px solid transparent;border-radius:7px;color:var(--text-sub);cursor:pointer;font-family:inherit}
+
+  /* Recent activity / quick info */
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+  .card{background:var(--bg-card);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-card);overflow:hidden}
+  .card-head{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .card-head h4{font-size:12.5px;font-weight:700;margin:0;display:flex;align-items:center;gap:6px}
+  .card-head .cnt{margin-left:auto;font-size:10.5px;color:var(--text-muted)}
+  .activity-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px}
+  .activity-row:last-child{border-bottom:none}
+  .activity-row .av{width:24px;height:24px;border-radius:99px;background:linear-gradient(135deg,#94a3b8,#64748b);color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .activity-row .body{flex:1;min-width:0;line-height:1.5}
+  .activity-row .who{font-weight:600;color:var(--text)}
+  .activity-row .what{color:var(--text-sub)}
+  .activity-row .time{font-size:10.5px;color:var(--text-muted);font-family:ui-monospace,monospace;flex-shrink:0}
+
+  @media (max-width: 900px){
+    .dest-grid, .info-grid{grid-template-columns:1fr}
+    .links-grid{grid-template-columns:repeat(2,1fr)}
+    nav.main{display:none}
+  }
+</style>
+</head>
+<body>
+
+<aside class="org-rail">
+  <div class="org active">N</div>
+  <div class="org muted">テ</div>
+</aside>
+
+<div class="app">
+  <header class="glass-bar">
+    <a class="brand" href="#">
+      <span class="brand-mark">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></svg>
+      </span>
+      <div class="brand-text"><span class="eyebrow">AI WORKSPACE</span><span class="name">NEO福岡</span></div>
+    </a>
+    <nav class="main">
+      <span class="nav-item active"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>ホーム</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>ワークスペース</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>OKR</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>週次MTG</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>朝会</span>
+      <span class="nav-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v16M3 21h18M10 8h4M10 12h4M10 16h4"/></svg>組織</span>
+    </nav>
+    <div style="flex:1"></div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <span>検索…</span><span style="flex:1"></span><span class="kbd">⌘K</span>
+    </div>
+    <div class="year-toggle"><span class="y">2025年度</span><span class="y active">2026年度</span></div>
+    <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg></button>
+    <button class="icon-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></button>
+  </header>
+
+  <main class="content">
+
+    <!-- Welcome -->
+    <div class="welcome">
+      <div class="av">三</div>
+      <div>
+        <h1>おかえりなさい、三木智弘さん</h1>
+        <div class="sub">
+          <span>5/23(土) · 土曜日です</span>
+          <span class="live"><span class="d"></span>稼働中 10:26〜</span>
+        </div>
+      </div>
+      <div class="right">
+        <span class="pill">経過 3h 48m</span>
+      </div>
+    </div>
+
+    <!-- Onboarding (初期ユーザーを迫らずに付き添う) -->
+    <div class="onboard">
+      <div class="onboard-head">
+        <div class="ic">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-3 1-6 4-9l5-5a8 8 0 0 1 5-2 8 8 0 0 1-2 5l-5 5c-3 3-6 4-9 4zm5-9a2 2 0 1 0 4 0 2 2 0 0 0-4 0"/></svg>
+        </div>
+        <div class="tx">
+          <div class="tt">
+            <span class="nm">AI WorkSpace を使いはじめる</span>
+            <span class="meta">2 / 7 完了 · 所要 約 10 分</span>
+          </div>
+          <div class="bar"><div class="fill" style="width:29%"></div></div>
+        </div>
+        <button class="btn-primary next-btn">
+          次は「Google 連携」へ
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </button>
+        <button class="dismiss" title="今は閉じる">✕</button>
+      </div>
+      <div class="onboard-steps">
+        <button class="onboard-step done">
+          <div class="top">
+            <span class="cb"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+            <span class="num">STEP 1</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+            プロフィールを設定
+          </div>
+          <div class="dd">名前・役職・アバターを設定して、チームのメンバーから認識されやすくしましょう。</div>
+        </button>
+        <button class="onboard-step done">
+          <div class="top">
+            <span class="cb"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+            <span class="num">STEP 2</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 2 L13.5 9 L20 11 L13.5 13 L12 20 L10.5 13 L4 11 L10.5 9 Z"/></svg>
+            MyCOO に話しかける
+          </div>
+          <div class="dd">右下の青いオーブが AI コーチ。「今日何をやるべき？」など、何でも相談できます。</div>
+        </button>
+        <button class="onboard-step active">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 3 · 今ここ</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1m1 7a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+            Google 連携
+          </div>
+          <div class="dd">カレンダー・Gmailと連携して、AI が今日の予定とタスクを自動で整理します。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 4</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1m1 7a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+            カスタムリンクを登録
+          </div>
+          <div class="dd">よく使うツール（Slack / Notion / freee など）を登録して、ホームをあなたの作業拠点にしましょう。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 5</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="m13 3-9 12h7l-1 6 9-12h-7z"/></svg>
+            明日のタスクを追加
+          </div>
+          <div class="dd">「明日 11時 提案資料を送る」のように自然文で書くだけ。AI が日付と担当を解析します。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 6</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M3 22v-5h5"/></svg>
+            振り返りを書く
+          </div>
+          <div class="dd">今日の Keep / Problem / Try を 1 行ずつだけで OK。連続記入でバッジが貰えます。</div>
+        </button>
+        <button class="onboard-step">
+          <div class="top">
+            <span class="cb"></span>
+            <span class="num">STEP 7</span>
+          </div>
+          <div class="ti">
+            <svg class="ti-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>
+            今期の目標を看る
+          </div>
+          <div class="dd">チームの目標 (OKR / KR) を確認して、自分のタスクとようなぐのを見てみましょう。</div>
+        </button>
+      </div>
+      <!-- MyCOO suggestion -->
+      <div class="mycoo-tip">
+        <div class="ic">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 L13.5 9 L20 11 L13.5 13 L12 20 L10.5 13 L4 11 L10.5 9 Z"/></svg>
+        </div>
+        <div class="tx">
+          <div class="nm">MyCOO からのヒント</div>
+          <div class="body">セットアップは今日中に終わらせると、明日の朝からスムーズに使いはじめられます。わからないことがあれば右下のオーブから警しかけてください。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Destinations: 2 cards -->
+    <div class="dest-grid">
+
+      <!-- My page -->
+      <a class="dest me" href="#">
+        <span class="open-link">
+          開く
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </span>
+        <div class="top">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+          </div>
+          <div>
+            <h2>マイページ</h2>
+            <div class="desc">今日のタスク・自分の目標・振り返り。<br>業務を一括で見渡せる、毎日の起点になる画面。</div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="lbl">今日のタスク</div><div class="val warn">7<span class="unit">件</span></div></div>
+          <div class="stat"><div class="lbl">期限切れ</div><div class="val" style="color:var(--danger)">3<span class="unit">件</span></div></div>
+          <div class="stat"><div class="lbl">未読メール</div><div class="val accent">5<span class="unit">件</span></div></div>
+        </div>
+      </a>
+
+      <!-- Company dashboard -->
+      <a class="dest company" href="#">
+        <span class="open-link">
+          開く
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </span>
+        <div class="top">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V11m4 10V8m4 13V13m4 8V5m4 16V10"/></svg>
+          </div>
+          <div>
+            <h2>全社ダッシュボード</h2>
+            <div class="desc">事業部の進捗・KR の達成状況・タスク完了率を一目で。<br>経営層・マネージャー向けのサマリー画面。</div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="lbl">KR 達成率</div><div class="val success">62<span class="unit">%</span></div></div>
+          <div class="stat"><div class="lbl">タスク完了率</div><div class="val accent">74<span class="unit">%</span></div></div>
+          <div class="stat"><div class="lbl">未対応 確認事項</div><div class="val warn">8<span class="unit">件</span></div></div>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Custom links -->
+    <div class="sec-head">
+      <h3>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1m1 7a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+        カスタムリンク
+      </h3>
+      <span class="desc">よく使うツール・社内ドキュメント・外部サービスをここに追加できます</span>
+      <div class="right">
+        <button class="btn-ghost" id="manage-btn">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          管理
+        </button>
+      </div>
+    </div>
+    <div class="links-grid">
+
+      <a class="link-card" href="#">
+        <div class="ic" style="background:rgba(225,29,72,.12);color:var(--danger)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="m3 7 9 7 9-7"/></svg>
+        </div>
+        <div class="info">
+          <div class="nm">Gmail</div>
+          <div class="url">mail.google.com</div>
+        </div>
+        <span class="ext">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+        </span>
+      </a>
+
+      <a class="link-card" href="#">
+        <div class="ic" style="background:rgba(14,165,233,.12);color:var(--accent-text)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+        </div>
+        <div class="info">
+          <div class="nm">Google カレンダー</div>
+          <div class="url">calendar.google.com</div>
+        </div>
+        <span class="ext">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+        </span>
+      </a>
+
+      <a class="link-card" href="#">
+        <div class="ic" style="background:rgba(168,85,247,.12);color:#7c3aed">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        </div>
+        <div class="info">
+          <div class="nm">Notion (社内 Wiki)</div>
+          <div class="url">notion.so/neo-fukuoka</div>
+        </div>
+        <span class="ext">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+        </span>
+      </a>
+
+      <a class="link-card" href="#">
+        <div class="ic" style="background:rgba(245,158,11,.12);color:var(--warn)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M5 12c0 4 4 7 7 7s7-3 7-7M5 12c0-4 4-7 7-7s7 3 7 7M12 5v14"/></svg>
+        </div>
+        <div class="info">
+          <div class="nm">Slack</div>
+          <div class="url">neo-fukuoka.slack.com</div>
+        </div>
+        <span class="ext">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+        </span>
+      </a>
+
+      <a class="link-card" href="#">
+        <div class="ic" style="background:rgba(5,150,105,.12);color:var(--success)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8l5 9-4 7H7L3 13z"/></svg>
+        </div>
+        <div class="info">
+          <div class="nm">Google ドライブ</div>
+          <div class="url">drive.google.com</div>
+        </div>
+        <span class="ext">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+        </span>
+      </a>
+
+      <a class="link-card" href="#">
+        <div class="ic" style="background:rgba(99,102,241,.12);color:#4f46e5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 4-4 8-9 8s-9-4-9-8 4-8 9-8 9 4 9 8z"/><path d="M9 10h.01M15 10h.01M9 14c1 1 2 1 3 1s2 0 3-1"/></svg>
+        </div>
+        <div class="info">
+          <div class="nm">ChatGPT</div>
+          <div class="url">chat.openai.com</div>
+        </div>
+        <span class="ext">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+        </span>
+      </a>
+
+      <a class="link-card" href="#">
+        <div class="ic" style="background:rgba(14,165,233,.12);color:var(--accent-text)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h7l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM14 4v4h4M9 13h6M9 17h4"/></svg>
+        </div>
+        <div class="info">
+          <div class="nm">経費精算 (freee)</div>
+          <div class="url">accounts.secure.freee.co.jp</div>
+        </div>
+        <span class="ext">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4L10 14M5 5h5m4 9v5H5V8h5"/></svg>
+        </span>
+      </a>
+
+      <button class="link-add" id="add-link-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        リンクを追加
+      </button>
+
+    </div>
+
+    <!-- Activity (light) -->
+    <div class="info-grid">
+      <div class="card">
+        <div class="card-head">
+          <h4>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            最近の動き
+          </h4>
+          <span class="cnt">直近 24 時間</span>
+        </div>
+        <div class="activity-row">
+          <span class="av" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">森</span>
+          <div class="body"><span class="who">森朝香</span> <span class="what">が共有事項を解決しました — 「広報のお知らせ担当」</span></div>
+          <span class="time">15 分前</span>
+        </div>
+        <div class="activity-row">
+          <span class="av" style="background:linear-gradient(135deg,#10b981,#34d399)">古</span>
+          <div class="body"><span class="who">古野絢太</span> <span class="what">が KA を Focus に変更 — 「商談クロージング」</span></div>
+          <span class="time">2 時間前</span>
+        </div>
+        <div class="activity-row">
+          <span class="av" style="background:linear-gradient(135deg,#a855f7,#c084fc)">中</span>
+          <div class="body"><span class="who">中島啓太</span> <span class="what">が議事録を投稿しました — 「評議会 5/22」</span></div>
+          <span class="time">今朝</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h4>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 1 1-3.4-6.5L21 4l-.8 4.3A8 8 0 0 1 21 12"/></svg>
+            お知らせ
+          </h4>
+          <span class="cnt">2 件</span>
+        </div>
+        <div class="activity-row">
+          <span class="av" style="background:var(--accent-bg);color:var(--accent-text)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/></svg>
+          </span>
+          <div class="body"><span class="what">2026 年度 OKR の入力期限が <b style="color:var(--text)">5/30(金)</b> までです</span></div>
+          <span class="time">期限まで 7 日</span>
+        </div>
+        <div class="activity-row">
+          <span class="av" style="background:var(--warn-bg);color:var(--warn)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4v.01"/><circle cx="12" cy="12" r="9"/></svg>
+          </span>
+          <div class="body"><span class="what">三木浩江さんから <b style="color:var(--text)">未解決の確認事項</b> が 1 件あります</span></div>
+          <span class="time">昨日</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Add link modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h4>カスタムリンクを追加</h4>
+      <button class="icon-btn" id="modal-close" style="margin-left:auto">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <label>表示名</label>
+        <input placeholder="例: 経費精算" />
+      </div>
+      <div>
+        <label>URL</label>
+        <input placeholder="https://..." />
+      </div>
+      <div>
+        <label>アイコン色</label>
+        <div style="display:flex;gap:6px">
+          <span style="width:24px;height:24px;border-radius:6px;background:var(--accent-bg);cursor:pointer;border:2px solid var(--accent)"></span>
+          <span style="width:24px;height:24px;border-radius:6px;background:rgba(5,150,105,.15);cursor:pointer"></span>
+          <span style="width:24px;height:24px;border-radius:6px;background:rgba(217,119,6,.15);cursor:pointer"></span>
+          <span style="width:24px;height:24px;border-radius:6px;background:rgba(225,29,72,.15);cursor:pointer"></span>
+          <span style="width:24px;height:24px;border-radius:6px;background:rgba(168,85,247,.15);cursor:pointer"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-secondary" id="modal-cancel">キャンセル</button>
+      <button class="btn-primary">追加する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const modal = document.getElementById('modal');
+  document.getElementById('add-link-btn').onclick = () => modal.classList.add('open');
+  document.getElementById('modal-close').onclick = () => modal.classList.remove('open');
+  document.getElementById('modal-cancel').onclick = () => modal.classList.remove('open');
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('open'); };
+</script>
+
+</body>
+</html>

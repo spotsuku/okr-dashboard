@@ -1,7 +1,10 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, pillStyle, sectionHeaderStyle } from '../lib/iosStyles'
+import Icon, { DataIcon } from './Icon'
 import { LargeTitle, BgGlow, SegmentedControl } from './iosUI'
 import { useLayerLabels } from '../lib/levelLabels'
 
@@ -52,11 +55,6 @@ const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f', 3: '#ffd166' }
 const toPeriodKey = (period, year) => year === '2026' ? period : `${year}_${period}`
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 
 function getPeriodLabel(periodKey) {
   if (!periodKey) return ''
@@ -86,7 +84,7 @@ function Ring({ value, color, size = 46 }) {
 function Stars({ score, size = 13 }) {
   return (
     <div style={{ display: 'flex', gap: 1 }}>
-      {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: size, opacity: i <= score ? 1 : 0.18 }}>★</span>)}
+      {[1,2,3,4,5].map(i => <span key={i} style={{ display: 'inline-flex', opacity: i <= score ? 1 : 0.18 }}><Icon name="star" size={size} /></span>)}
     </div>
   )
 }
@@ -95,9 +93,9 @@ function Bar({ value, color, max = 150 }) {
   const pct = Math.min((value / max) * 100, 100)
   const marker = (100 / max) * 100
   return (
-    <div style={{ width: '100%', height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 99, position: 'relative', overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: RADIUS.pill, position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', left: `${marker}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.25)', zIndex: 2 }} />
-      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)', boxShadow: `0 0 6px ${color}80` }} />
+      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: RADIUS.pill, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)', boxShadow: `0 0 6px ${color}80` }} />
     </div>
   )
 }
@@ -373,40 +371,40 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
 
   const maxDist = Math.max(1, ...ratingDistribution.map(d => d.count))
 
-  if (loading) return <div style={{ padding: 40, color: '#4d9fff', fontSize: 14 }}>読み込み中...</div>
+  if (loading) return <div style={{ padding: SPACING['2xl'], color: wT().accent, ...TYPO.headline }}>読み込み中...</div>
 
   return (
-    <div style={{ padding: '0 24px 24px', maxWidth: 1100, margin: '0 auto', position: 'relative' }}>
+    <div style={{ padding: `0 ${SPACING['2xl']}px ${SPACING['2xl']}px`, maxWidth: 1100, margin: '0 auto', position: 'relative' }}>
       <BgGlow T={wT()} color="#AF52DE" />
       <div style={{ position: 'relative', zIndex: 1 }}>
       <LargeTitle T={wT()}
-        title="📊 全社サマリー"
+        title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.sm }}><Icon name="chart" size={26} /> 全社サマリー</span>}
         subtitle={`${fiscalYear}年度 ・ 期間別 OKR 進捗の全社集計`}
         right={<SegmentedControl T={wT()} value={activePeriod} onChange={setActivePeriod} items={periodTabs} />}
       />
 
       {/* ─── 全社サマリーヘッダー ─── */}
       <div style={{
-        background: wT().bgCard, border: `1px solid ${wT().border}`, borderRadius: 14,
-        padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap',
+        ...cardStyle({ T: wT(), padding: `${SPACING['2xl']}px 28px` }),
+        marginBottom: SPACING.xl, display: 'flex', alignItems: 'center', gap: SPACING['2xl'], flexWrap: 'wrap',
       }}>
         <Ring value={globalStats.avg} color={globalStats.rating.color} size={90} />
         <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: wT().text, marginBottom: 4 }}>全社 OKR サマリー</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, padding: '2px 10px', borderRadius: 99, background: `${globalStats.rating.color}18`, color: globalStats.rating.color }}>{globalStats.rating.label}</span>
+          <div style={{ ...TYPO.title2, color: wT().text, marginBottom: SPACING.xs }}>全社 OKR サマリー</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+            <span style={pillStyle({ color: globalStats.rating.color })}>{globalStats.rating.label}</span>
             <Stars score={globalStats.rating.score} size={12} />
           </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <Stat label="Objective" value={globalStats.totalObjectives} unit="件" color="#4d9fff" />
-            <Stat label="Key Result" value={globalStats.totalKRs} unit="件" color="#00d68f" />
+          <div style={{ display: 'flex', gap: SPACING.lg, flexWrap: 'wrap' }}>
+            <Stat label="Objective" value={globalStats.totalObjectives} unit="件" color={wT().accent} />
+            <Stat label="Key Result" value={globalStats.totalKRs} unit="件" color={wT().success} />
             <Stat label="全社平均" value={`${globalStats.avg}%`} color={globalStats.rating.color} />
           </div>
         </div>
       </div>
 
       {allObjectives.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 40, color: wT().textMuted, fontSize: 13 }}>
+        <div style={{ textAlign: 'center', padding: SPACING['2xl'], color: wT().textMuted, ...TYPO.body }}>
           この期間にOKRデータがありません
         </div>
       )}
@@ -416,39 +414,38 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
       {allObjectives.length > 0 && (
         <>
           {/* ─── 部署別達成状況 ─── */}
-          <SectionHeader title="部署別 OKR 達成状況" icon="📊" themeKey={themeKey} />
+          <SectionHeader title="部署別 OKR 達成状況" icon="chart" themeKey={themeKey} />
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: 10, marginBottom: 24,
+            gap: SPACING.sm, marginBottom: SPACING['2xl'],
           }}>
             {departmentStats.map(dept => {
               const layerColor = LAYER_COLORS[dept.depth] || '#a0a8be'
               const layerLabel = layerLabels[dept.depth] || ''
               return (
                 <div key={dept.level.id} style={{
-                  background: wT().bgCard, border: `1px solid ${wT().border}`,
+                  ...cardStyle({ T: wT(), padding: '14px 16px' }),
                   borderLeft: `3px solid ${layerColor}`,
-                  borderRadius: 10, padding: '14px 16px',
                   transition: 'border-color 0.15s',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
                     <Ring value={dept.avgProgress} color={dept.rating.color} size={44} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: wT().text }}>{dept.level.icon} {dept.level.name}</span>
-                        {layerLabel && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: `${layerColor}18`, color: layerColor }}>{layerLabel}</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, marginBottom: 3 }}>
+                        <span style={{ ...TYPO.callout, color: wT().text, display: 'inline-flex', alignItems: 'center', gap: 4 }}><DataIcon value={dept.level.icon} size={13}/> {dept.level.name}</span>
+                        {layerLabel && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: RADIUS.pill, background: `${layerColor}18`, color: layerColor }}>{layerLabel}</span>}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: dept.rating.color }}>{dept.rating.label}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                        <span style={{ ...TYPO.footnote, fontWeight: 700, color: dept.rating.color }}>{dept.rating.label}</span>
                         <Stars score={dept.rating.score} size={9} />
                       </div>
                     </div>
                   </div>
                   <Bar value={dept.avgProgress} color={dept.rating.color} />
-                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                    <span style={{ fontSize: 10, color: wT().textMuted }}>目標 <b style={{ color: wT().textSub }}>{dept.objectiveCount}</b>件</span>
-                    <span style={{ fontSize: 10, color: wT().textMuted }}>KR <b style={{ color: wT().textSub }}>{dept.krCount}</b>件</span>
-                    <span style={{ fontSize: 10, color: wT().textMuted, marginLeft: 'auto' }}>{dept.avgProgress}%</span>
+                  <div style={{ display: 'flex', gap: SPACING.md, marginTop: SPACING.sm }}>
+                    <span style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: wT().textMuted }}>目標 <b style={{ color: wT().textSub }}>{dept.objectiveCount}</b>件</span>
+                    <span style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: wT().textMuted }}>KR <b style={{ color: wT().textSub }}>{dept.krCount}</b>件</span>
+                    <span style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: wT().textMuted, marginLeft: 'auto' }}>{dept.avgProgress}%</span>
                   </div>
                 </div>
               )
@@ -456,45 +453,45 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
           </div>
 
           {/* ─── 評価分布 ─── */}
-          <SectionHeader title="評価分布" icon="📈" themeKey={themeKey} />
+          <SectionHeader title="評価分布" icon="chart" themeKey={themeKey} />
           <div style={{
-            background: wT().bgCard, border: `1px solid ${wT().border}`, borderRadius: 12,
-            padding: '16px 20px', marginBottom: 24,
+            ...cardStyle({ T: wT(), padding: `${SPACING.lg}px ${SPACING.xl}px` }),
+            marginBottom: SPACING['2xl'],
           }}>
             {ratingDistribution.map(r => (
-              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: r.color, width: 56, textAlign: 'right', flexShrink: 0 }}>{r.label}</span>
-                <div style={{ flex: 1, height: 18, background: wT().borderLight, borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+                <span style={{ ...TYPO.footnote, fontWeight: 700, color: r.color, width: 56, textAlign: 'right', flexShrink: 0 }}>{r.label}</span>
+                <div style={{ flex: 1, height: 18, background: wT().borderLight, borderRadius: RADIUS.xs, overflow: 'hidden', position: 'relative' }}>
                   <div style={{
-                    height: '100%', borderRadius: 4,
+                    height: '100%', borderRadius: RADIUS.xs,
                     width: r.count > 0 ? `${Math.max((r.count / maxDist) * 100, 3)}%` : '0%',
                     background: `${r.color}60`,
                     transition: 'width 0.5s cubic-bezier(0.4,0,0.2,1)',
                   }} />
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: wT().textSub, width: 36, flexShrink: 0 }}>{r.count}件</span>
+                <span style={{ ...TYPO.footnote, fontWeight: 700, color: wT().textSub, width: 36, flexShrink: 0 }}>{r.count}件</span>
               </div>
             ))}
           </div>
 
           {/* ─── 目標一覧（部署別） ─── */}
-          <SectionHeader title="目標一覧" icon="📋" themeKey={themeKey} />
+          <SectionHeader title="目標一覧" icon="note" themeKey={themeKey} />
           <div style={{
-            background: wT().bgCard, border: `1px solid ${wT().border}`, borderRadius: 12,
-            overflow: 'hidden', marginBottom: 24,
+            ...cardStyle({ T: wT(), padding: 0 }),
+            overflow: 'hidden', marginBottom: SPACING['2xl'],
           }}>
             {objectivesByDept.map((group, gi) => (
               <div key={group.level.id}>
                 {/* 部署ヘッダー */}
                 <div style={{
-                  padding: '8px 16px', background: wT().bgCard2,
+                  padding: `${SPACING.sm}px ${SPACING.lg}px`, background: wT().bgCard2,
                   borderBottom: `1px solid ${wT().border}`,
                   borderTop: gi > 0 ? `1px solid ${wT().border}` : 'none',
-                  display: 'flex', alignItems: 'center', gap: 6,
+                  display: 'flex', alignItems: 'center', gap: SPACING.xs,
                 }}>
-                  <span style={{ fontSize: 11, color: LAYER_COLORS[group.depth] || '#a0a8be' }}>{group.level.icon}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: wT().textSub }}>{group.level.name}</span>
-                  <span style={{ fontSize: 10, color: wT().textMuted }}>{group.objectives.length}件</span>
+                  <span style={{ display: 'inline-flex', color: LAYER_COLORS[group.depth] || '#a0a8be' }}><DataIcon value={group.level.icon} size={11}/></span>
+                  <span style={{ ...TYPO.footnote, fontWeight: 700, color: wT().textSub }}>{group.level.name}</span>
+                  <span style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: wT().textMuted }}>{group.objectives.length}件</span>
                 </div>
                 {/* Objective 行 */}
                 {group.objectives.map(obj => {
@@ -503,28 +500,28 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
                   const krCount = obj.key_results?.length || 0
                   return (
                     <div key={obj.id} style={{
-                      padding: '8px 16px', borderBottom: `1px solid ${wT().borderLight}`,
-                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: `${SPACING.sm}px ${SPACING.lg}px`, borderBottom: `1px solid ${wT().borderLight}`,
+                      display: 'flex', alignItems: 'center', gap: SPACING.sm,
                     }}>
                       <Ring value={pct} color={rating.color} size={32} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: wT().text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj.title}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: rating.color }}>{rating.label}</span>
+                        <div style={{ ...TYPO.subhead, color: wT().text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj.title}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, marginTop: 2 }}>
+                          <span style={{ ...TYPO.caption, fontWeight: 700, letterSpacing: 'normal', color: rating.color }}>{rating.label}</span>
                           <Stars score={rating.score} size={8} />
-                          <span style={{ fontSize: 10, color: wT().textMuted }}>KR {krCount}件</span>
-                          {obj.period && <span style={{ fontSize: 9, color: wT().textFaint, padding: '1px 5px', borderRadius: 99, border: `1px solid ${wT().borderLight}` }}>{getPeriodLabel(obj.period)}</span>}
+                          <span style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: wT().textMuted }}>KR {krCount}件</span>
+                          {obj.period && <span style={{ fontSize: 9, color: wT().textFaint, padding: '1px 5px', borderRadius: RADIUS.pill, border: `1px solid ${wT().borderLight}` }}>{getPeriodLabel(obj.period)}</span>}
                         </div>
                       </div>
                       {obj.owner && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, flexShrink: 0 }}>
                           <div style={{
                             width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
                             background: `${avatarColor(obj.owner)}30`, border: `1.5px solid ${avatarColor(obj.owner)}60`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: 8, fontWeight: 700, color: avatarColor(obj.owner),
                           }}>{obj.owner.replace(/\s+/g, '').slice(0, 2)}</div>
-                          <span style={{ fontSize: 10, color: wT().textMuted }}>{obj.owner}</span>
+                          <span style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: wT().textMuted }}>{obj.owner}</span>
                         </div>
                       )}
                     </div>
@@ -544,54 +541,52 @@ export default function CompanySummaryPage({ levels, members, themeKey = 'dark',
 function SectionHeader({ title, icon, themeKey }) {
   const wT = () => W_THEMES[themeKey]
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-      <span style={{ fontSize: 14 }}>{icon}</span>
-      <span style={{ fontSize: 13, fontWeight: 800, color: wT().text }}>{title}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs, marginBottom: SPACING.sm }}>
+      <span style={{ display: 'inline-flex', color: wT().textSub }}><Icon name={icon} size={14} /></span>
+      <span style={{ ...TYPO.callout, fontWeight: 800, color: wT().text }}>{title}</span>
     </div>
   )
 }
 
 // 🏆 ランキングカード (Top3 表示)
 function RankingCard({ T, title, emoji, subtitle, entries }) {
-  const medals = ['🥇', '🥈', '🥉']
-  const medalBg = ['#FFD60018', '#C7C7CC18', '#FF950018']
   const medalColor = ['#FFD60a', '#C7C7CC', '#FF9500']
+  const medalBg = ['#FFD60018', '#C7C7CC18', '#FF950018']
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`,
-      borderRadius: 14, padding: '14px 16px',
-      display: 'flex', flexDirection: 'column', gap: 8,
+      ...cardStyle({ T, padding: '14px 16px' }),
+      display: 'flex', flexDirection: 'column', gap: SPACING.sm,
     }}>
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 18 }}>{emoji}</span>
-          <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+          <span style={{ display: 'inline-flex', color: T.accent }}><Icon name={emoji} size={18} /></span>
+          <span style={{ ...TYPO.headline, fontWeight: 800, color: T.text }}>{title}</span>
         </div>
-        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>{subtitle}</div>
+        <div style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: T.textMuted, marginTop: 1 }}>{subtitle}</div>
       </div>
       {entries.length === 0 ? (
-        <div style={{ padding: 12, fontSize: 11, color: T.textMuted, textAlign: 'center' }}>
+        <div style={{ padding: SPACING.md, ...TYPO.footnote, fontWeight: 500, color: T.textMuted, textAlign: 'center' }}>
           データ不足
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
           {entries.map((e, i) => (
             <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '6px 8px', borderRadius: 8,
+              display: 'flex', alignItems: 'center', gap: SPACING.sm,
+              padding: '6px 8px', borderRadius: RADIUS.sm,
               background: medalBg[i],
               border: `1px solid ${medalColor[i]}30`,
             }}>
-              <span style={{ fontSize: 18, width: 22, textAlign: 'center' }}>{medals[i]}</span>
+              <span style={{ display: 'inline-flex', justifyContent: 'center', width: 22, color: medalColor[i] }}><Icon name="medal" size={18} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {e.name}
                 </div>
                 {e.sub && (
                   <div style={{ fontSize: 9, color: T.textMuted, marginTop: 1 }}>{e.sub}</div>
                 )}
               </div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: medalColor[i], whiteSpace: 'nowrap' }}>
+              <div style={{ ...TYPO.headline, fontWeight: 800, color: medalColor[i], whiteSpace: 'nowrap' }}>
                 {e.main}
               </div>
             </div>
@@ -606,7 +601,7 @@ function Stat({ label, value, unit, color }) {
   return (
     <div>
       <div style={{ fontSize: 9, color: '#606880', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}{unit && <span style={{ fontSize: 10, fontWeight: 600, color: '#a0a8be' }}>{unit}</span>}</div>
+      <div style={{ ...TYPO.title3, color }}>{value}{unit && <span style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: '#a0a8be' }}>{unit}</span>}</div>
     </div>
   )
 }

@@ -1,12 +1,25 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { SegmentedControl } from './iosUI'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
+import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
+import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
 import { useAutoSave } from '../lib/useAutoSave'
 import { computeKAKey } from '../lib/kaKey'
+import { fetchObjectivesByOwner, fetchKeyResultsByOwner, fetchWeeklyReportsByOwner, fetchKaTasksByAssignee, filterObjectivesByFY } from '../lib/okrData'
+import ObjectiveHeader from './okr/ObjectiveHeader'
+import AssigneeChip from './okr/AssigneeChip'
+import QTabs from './okr/QTabs'
+import AICoachCard from './okr/AICoachCard'
+import KATableHeader from './okr/KATableHeader'
+import MemberSidebar from './okr/MemberSidebar'
+import OkrCard from './okr/OkrCard'
+import ProgressBar from './okr/ProgressBar'
+import { KRBlock } from './okr/KRBlock'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -31,22 +44,11 @@ function formatWeekLabel(mondayStr) {
 }
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 const PERIOD_LABELS = { annual:'通期', q1:'Q1', q2:'Q2', q3:'Q3', q4:'Q4' }
 // 年度プレフィックスを除去してraw期間キーを取得 (2025_q4 → q4)
 function rawPeriod(period) { return period?.includes('_') ? period.split('_').pop() : period }
 function periodLabel(period) { return PERIOD_LABELS[rawPeriod(period)] || period }
-const LAYER_COLORS  = { 0:'#ff6b6b', 1:'#4d9fff', 2:'#00d68f', 3:'#ffd166' }
 
-function getDepth(levelId, levels) {
-  let d = 0, cur = levels.find(l => Number(l.id) === Number(levelId))
-  while (cur && cur.parent_id) { d++; cur = levels.find(l => Number(l.id) === Number(cur.parent_id)) }
-  return d
-}
 function calcPct(current, target, lowerIsBetter) {
   if (!target) return 0
   const r = lowerIsBetter ? target / Math.max(current, 0.001) : current / target
@@ -63,18 +65,19 @@ const KR_STAR_CFG = [
   { label:'110%〜119%',color:'#ff9f43' }, { label:'120%以上',   color:'#a855f7' },
 ]
 const WEATHER_CFG = [
-  { score:0, icon:'—',  label:'未選択',       color:'#606880' },
-  { score:1, icon:'⛈', label:'嵐',           color:'#8090b0' },
-  { score:2, icon:'🌧', label:'雨',           color:'#4d9fff' },
-  { score:3, icon:'☁️', label:'曇り',         color:'#a0a8be' },
-  { score:4, icon:'🌤', label:'晴れのち曇り',  color:'#ffd166' },
-  { score:5, icon:'☀️', label:'快晴',         color:'#ff9f43' },
+  { score:0, icon:null,     label:'未選択',       color:'#606880' },
+  { score:1, icon:'storm',  label:'嵐',           color:'#8090b0' },
+  { score:2, icon:'rain',   label:'雨',           color:'#4d9fff' },
+  { score:3, icon:'cloud',  label:'曇り',         color:'#a0a8be' },
+  { score:4, icon:'partly', label:'晴れのち曇り',  color:'#ffd166' },
+  { score:5, icon:'sun',    label:'快晴',         color:'#ff9f43' },
 ]
 const STATUS_CFG = {
-  focus:  { label:'🎯 注力', color:'#007AFF', bg:'rgba(0,122,255,0.10)', border:'rgba(0,122,255,0.30)' },
-  good:   { label:'✅ Good', color:'#34C759', bg:'rgba(52,199,89,0.10)', border:'rgba(52,199,89,0.30)' },
-  more:   { label:'🔺 More', color:'#FF3B30', bg:'rgba(255,59,48,0.10)', border:'rgba(255,59,48,0.30)' },
+  focus:  { label:'注力', color:'#007AFF', bg:'rgba(0,122,255,0.10)', border:'rgba(0,122,255,0.30)' },
+  good:   { label:'Good', color:'#34C759', bg:'rgba(52,199,89,0.10)', border:'rgba(52,199,89,0.30)' },
+  more:   { label:'More', color:'#FF3B30', bg:'rgba(255,59,48,0.10)', border:'rgba(255,59,48,0.30)' },
   normal: { label:'未分類',  color:'#8E8E93', bg:'rgba(142,142,147,0.10)', border:'rgba(142,142,147,0.20)' },
+  done:   { label:'完了', color:'#34C759', bg:'rgba(52,199,89,0.12)', border:'rgba(52,199,89,0.35)' },
 }
 
 // ─── Avatar（画像 or イニシャル） ─────────────────────────────────────────────
@@ -106,8 +109,9 @@ function Avatar({ name, avatarUrl, size = 22, wT }) {
   )
 }
 
-// ─── KRカード ─────────────────────────────────────────────────────────────────
-function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
+// ─── KRカード (旧: MyOKRPage 専用)。週次×個人も共有 KRBlock に統一したため削除済み ───
+// （KR 描画は components/okr/KRBlock.jsx の KRBlock を使用）
+function _KRCard_REMOVED({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const [currentVal,  setCurrentVal]  = useState(String(kr.current ?? ''))
   const [editingVal,  setEditingVal]  = useState(false)
   const [krEditing,   setKrEditing]   = useState(false)
@@ -128,7 +132,7 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
   const pct      = calcPct(parseFloat(currentVal)||0, kr.target, kr.lower_is_better)
   const stars    = calcKRStars(parseFloat(currentVal)||0, kr.target, kr.lower_is_better)
   const starCfg  = KR_STAR_CFG[stars]
-  const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
+  const pctColor = okrPctColor(wT(), pct)
 
   useEffect(() => {
     // 週が変わったら入力をリセットして新しい週のレビューを読み込む
@@ -174,91 +178,76 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
 
-  const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
+  const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'7px 9px', color:wT().text, fontSize:TYPO.subhead.fontSize, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
 
   return (
-    <div style={{
-      border:`1px solid ${open ? pctColor+'40' : pctColor+'15'}`,
-      borderRadius:14, marginBottom:10, overflow:'hidden',
-      position: 'relative',
-      boxShadow: open
-        ? `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${pctColor}26`
-        : '0 1px 2px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.03)',
-      transition:'all 0.2s ease',
+    <OkrCard T={wT()} padding="0" style={{
+      marginBottom:SPACING.sm, overflow:'hidden', position:'relative',
+      boxShadow: open ? SHADOWS.md : undefined,
     }}>
-      {/* 上端に色グラデ帯 (左太線の代わり) */}
-      <div aria-hidden style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-        background: `linear-gradient(90deg, ${pctColor} 0%, ${pctColor}80 100%)`,
-      }} />
       <div onClick={() => setOpen(p=>!p)} style={{
         padding:'14px 16px',
-        background: open
-          ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${pctColor}08 100%)`
-          : wT().bgCard,
         cursor:'pointer', userSelect:'none',
       }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-          <span style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4 }}>{pct}%</span>
-          <span style={{ fontSize:13, fontWeight:600, color:wT().text, flex:1, lineHeight:1.4 }}>{kr.title}</span>
-          <div onClick={e=>e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:4 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:5 }}>
+          <span style={{ ...TYPO.footnote, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:RADIUS.xs }}>{pct}%</span>
+          <span style={{ ...TYPO.body, fontWeight:600, color:wT().text, flex:1, lineHeight:1.4 }}>{kr.title}</span>
+          <div onClick={e=>e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:SPACING.xs }}>
             {editingVal ? (
               <>
                 <input type="number" value={currentVal} onChange={e=>setCurrentVal(e.target.value)}
                   onKeyDown={e=>{ if(e.key==='Enter') saveKR(); if(e.key==='Escape') setEditingVal(false) }}
-                  autoFocus style={{ width:70, background:wT().bgCard2, border:`1px solid #4d9fff80`, borderRadius:6, padding:'3px 7px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textAlign:'right' }} />
-                <span style={{ fontSize:11, color:wT().textMuted }}>{kr.unit} / {kr.target}{kr.unit}</span>
-                <button onClick={saveKR} style={{ padding:'3px 8px', borderRadius:5, background:'#4d9fff', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer' }}>{krSaving?'…':'✓'}</button>
-                <button onClick={()=>setEditingVal(false)} style={{ padding:'3px 6px', borderRadius:5, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textMuted, fontSize:10, cursor:'pointer' }}>✕</button>
+                  autoFocus style={{ width:70, background:wT().bgCard2, border:`1px solid ${wT().info}80`, borderRadius:RADIUS.xs, padding:'3px 7px', color:wT().text, fontSize:TYPO.subhead.fontSize, outline:'none', fontFamily:'inherit', textAlign:'right' }} />
+                <span style={{ ...TYPO.footnote, fontWeight:500, color:wT().textMuted }}>{kr.unit} / {kr.target}{kr.unit}</span>
+                <button onClick={saveKR} style={{ padding:'3px 8px', borderRadius:RADIUS.xs, background:wT().info, border:'none', color:'#fff', fontSize:TYPO.caption.fontSize, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center' }}>{krSaving?'…':<Icon name="check" size={11} />}</button>
+                <button onClick={()=>setEditingVal(false)} style={{ padding:'3px 6px', borderRadius:RADIUS.xs, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textMuted, fontSize:TYPO.caption.fontSize, cursor:'pointer', display:'inline-flex', alignItems:'center' }}><Icon name="cross" size={11} /></button>
               </>
             ) : (
-              <div onClick={()=>setEditingVal(true)} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:6, cursor:'pointer', border:`1px solid transparent` }}
+              <div onClick={()=>setEditingVal(true)} style={{ display:'flex', alignItems:'center', gap:SPACING.xs, padding:'3px 8px', borderRadius:RADIUS.xs, cursor:'pointer', border:`1px solid transparent` }}
                 onMouseEnter={e=>{ e.currentTarget.style.borderColor=wT().borderMid; e.currentTarget.style.background=wT().borderLight }}
                 onMouseLeave={e=>{ e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.background='transparent' }}>
-                {krSaved && <span style={{ fontSize:10, color:'#00d68f', fontWeight:700 }}>✓ </span>}
-                <span style={{ fontSize:12, color:wT().text, fontWeight:600 }}>{parseFloat(currentVal)||0}{kr.unit}</span>
-                <span style={{ fontSize:11, color:wT().textMuted }}>/ {kr.target}{kr.unit}</span>
-                <span style={{ fontSize:9, color:wT().textFaint }}>✎</span>
+                {krSaved && <span style={{ color:wT().success, fontWeight:700, display:'inline-flex', alignItems:'center' }}><Icon name="check" size={11} /></span>}
+                <span style={{ ...TYPO.subhead, color:wT().text, fontWeight:600 }}>{parseFloat(currentVal)||0}{kr.unit}</span>
+                <span style={{ ...TYPO.footnote, fontWeight:500, color:wT().textMuted }}>/ {kr.target}{kr.unit}</span>
+                <span style={{ color:wT().textFaint, display:'inline-flex', alignItems:'center' }}><Icon name="pencil" size={10} /></span>
               </div>
             )}
           </div>
-          <span style={{ fontSize:12, letterSpacing:1, color:'#ffd166', flexShrink:0 }}>{'★'.repeat(stars)}<span style={{ color:wT().borderMid }}>{'★'.repeat(5-stars)}</span></span>
-          {!open && weather > 0 && <span style={{ fontSize:16 }}>{WEATHER_CFG[weather]?.icon}</span>}
-          <span style={{ fontSize:11, color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-block' }}>▾</span>
+          <span style={{ display:'inline-flex', gap:1, flexShrink:0 }}>{[1,2,3,4,5].map(n => <Icon key={n} name="star" size={13} style={{ color: n<=stars ? wT().warn : wT().borderMid }} />)}</span>
+          {!open && weather > 0 && <span style={{ color: WEATHER_CFG[weather]?.color, display:'inline-flex' }}><Icon name={WEATHER_CFG[weather]?.icon} size={16} /></span>}
+          <span style={{ color:wT().textFaint, transform:open?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', display:'inline-flex', alignItems:'center' }}><Icon name="chevronD" size={14} /></span>
         </div>
-        <div style={{ height:4, borderRadius:2, background:wT().borderLight, overflow:'hidden' }}>
-          <div style={{ height:'100%', width:`${Math.min(pct,100)}%`, background:pctColor, borderRadius:2, transition:'width 0.4s' }} />
-        </div>
+        <ProgressBar T={wT()} pct={pct} height={4} />
         {!open && (good||more) && (
-          <div style={{ display:'flex', gap:12, marginTop:5, flexWrap:'wrap' }}>
-            {good && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#00d68f', fontSize:10 }}>✅</span><span>{good.slice(0,50)}{good.length>50?'…':''}</span></div>}
-            {more && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:3 }}><span style={{ color:'#ff6b6b', fontSize:10 }}>🔺</span><span>{more.slice(0,50)}{more.length>50?'…':''}</span></div>}
+          <div style={{ display:'flex', gap:SPACING.md, marginTop:5, flexWrap:'wrap' }}>
+            {good && <div style={{ ...TYPO.footnote, fontWeight:500, color:wT().textSub, display:'flex', gap:3, alignItems:'center' }}><span style={{ color:wT().success, display:'inline-flex' }}><Icon name="check" size={11} /></span><span>{good.slice(0,50)}{good.length>50?'…':''}</span></div>}
+            {more && <div style={{ ...TYPO.footnote, fontWeight:500, color:wT().textSub, display:'flex', gap:3, alignItems:'center' }}><span style={{ color:wT().danger, display:'inline-flex' }}><Icon name="alert" size={11} /></span><span>{more.slice(0,50)}{more.length>50?'…':''}</span></div>}
           </div>
         )}
       </div>
 
       {open && (
         <div style={{ padding:'12px 14px', background:wT().bgCard2 }} onClick={e=>e.stopPropagation()}>
-          <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:14, marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${wT().border}` }}>
-            <div style={{ borderRight:`1px solid ${wT().border}`, paddingRight:14 }}>
-              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>KR達成評価（自動）</div>
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <span style={{ fontSize:20, letterSpacing:2, color:'#ffd166' }}>{'★'.repeat(stars)}<span style={{ color:wT().borderMid }}>{'★'.repeat(5-stars)}</span></span>
+          <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:SPACING.lg, marginBottom:SPACING.md, padding:'10px 12px', background:wT().bgCard, borderRadius:RADIUS.sm, border:`1px solid ${wT().border}` }}>
+            <div style={{ borderRight:`1px solid ${wT().border}`, paddingRight:SPACING.lg }}>
+              <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:5 }}>KR達成評価（自動）</div>
+              <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm }}>
+                <span style={{ display:'inline-flex', gap:2 }}>{[1,2,3,4,5].map(n => <Icon key={n} name="star" size={18} style={{ color: n<=stars ? wT().warn : wT().borderMid }} />)}</span>
                 <div>
-                  <div style={{ fontSize:12, fontWeight:700, color:starCfg.color }}>{starCfg.label}</div>
-                  <div style={{ fontSize:10, color:wT().textMuted }}>達成率 {pct}%</div>
+                  <div style={{ ...TYPO.subhead, fontWeight:700, color:starCfg.color }}>{starCfg.label}</div>
+                  <div style={{ ...TYPO.caption, fontWeight:500, color:wT().textMuted }}>達成率 {pct}%</div>
                 </div>
               </div>
             </div>
             <div>
-              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>今週の体感・主観</div>
+              <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:5 }}>今週の体感・主観</div>
               <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
                 {WEATHER_CFG.slice(1).map(w => {
                   const isActive = w.score === weather
                   return (
-                    <div key={w.score} onClick={()=>setWeather(isActive?0:w.score)} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:7, cursor:'pointer', transition:'all 0.15s', background:isActive?`${w.color}15`:'transparent', border:`1px solid ${isActive?w.color+'60':wT().borderMid}` }}>
-                      <span style={{ fontSize:16 }}>{w.icon}</span>
-                      <span style={{ fontSize:11, fontWeight:isActive?700:400, color:isActive?w.color:wT().textMuted }}>{w.label}</span>
+                    <div key={w.score} onClick={()=>setWeather(isActive?0:w.score)} style={{ display:'flex', alignItems:'center', gap:SPACING.xs, padding:'4px 10px', borderRadius:RADIUS.xs, cursor:'pointer', transition:'all 0.15s', background:isActive?`${w.color}15`:'transparent', border:`1px solid ${isActive?w.color+'60':wT().borderMid}` }}>
+                      <span style={{ color:w.color, display:'inline-flex' }}><Icon name={w.icon} size={16} /></span>
+                      <span style={{ ...TYPO.footnote, fontWeight:isActive?700:400, color:isActive?w.color:wT().textMuted }}>{w.label}</span>
                     </div>
                   )
                 })}
@@ -266,78 +255,78 @@ function KRCard({ kr, myName, members, wT, currentWeek, onKRUpdated }) {
             </div>
           </div>
           {/* KR編集セクション */}
-          <div style={{ marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${krEditing?'rgba(255,159,67,0.4)':wT().border}`, transition:'border-color 0.15s' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:wT().warn, textTransform:'uppercase', letterSpacing:'0.08em', display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="pencil" size={11} /> KR設定</div>
+          <div style={{ marginBottom:SPACING.md, padding:'10px 12px', background:wT().bgCard, borderRadius:RADIUS.sm, border:`1px solid ${krEditing?`${wT().warn}66`:wT().border}`, transition:'border-color 0.15s' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?SPACING.sm:0 }}>
+              <div style={{ ...TYPO.caption, color:wT().warn, textTransform:'uppercase', display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="pencil" size={11} /> KR設定</div>
               {!krEditing && (
-                <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:'1px solid rgba(255,159,67,0.3)', background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
+                <button onClick={() => setKrEditing(true)} style={{ ...TYPO.caption, fontWeight:600, padding:'3px 10px', borderRadius:RADIUS.xs, border:`1px solid ${wT().warn}4d`, background:wT().warnBg, color:wT().warn, cursor:'pointer', fontFamily:'inherit' }}>編集</button>
               )}
             </div>
             {!krEditing ? (
-              <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:6, fontSize:12, color:wT().textSub, flexWrap:'wrap' }}>
+              <div style={{ display:'flex', gap:SPACING.lg, alignItems:'center', marginTop:SPACING.xs+2, fontSize:TYPO.subhead.fontSize, color:wT().textSub, flexWrap:'wrap' }}>
                 <span>タイトル: <b style={{ color:wT().text }}>{kr.title}</b></span>
                 <span>現在値: <b style={{ color:pctColor }}>{parseFloat(currentVal)||0}{kr.unit}</b></span>
                 <span>目標: <b style={{ color:wT().text }}>{kr.target}{kr.unit}</b></span>
               </div>
             ) : (
               <div>
-                <div style={{ marginBottom:6 }}>
-                  <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>タイトル</div>
-                  <input value={krTitle} onChange={e=>setKrTitle(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                <div style={{ marginBottom:SPACING.xs+2 }}>
+                  <div style={{ ...TYPO.caption, fontWeight:500, color:wT().textMuted, marginBottom:3 }}>タイトル</div>
+                  <input value={krTitle} onChange={e=>setKrTitle(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'7px 9px', color:wT().text, fontSize:TYPO.subhead.fontSize, outline:'none', fontFamily:'inherit' }} />
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:SPACING.sm, marginBottom:SPACING.sm }}>
                   <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>現在値</div>
-                    <input type="number" value={currentVal} onChange={e=>setCurrentVal(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:pctColor, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                    <div style={{ ...TYPO.caption, fontWeight:500, color:wT().textMuted, marginBottom:3 }}>現在値</div>
+                    <input type="number" value={currentVal} onChange={e=>setCurrentVal(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'7px 9px', color:pctColor, fontSize:TYPO.body.fontSize, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>目標値</div>
-                    <input type="number" value={krTarget} onChange={e=>setKrTarget(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
+                    <div style={{ ...TYPO.caption, fontWeight:500, color:wT().textMuted, marginBottom:3 }}>目標値</div>
+                    <input type="number" value={krTarget} onChange={e=>setKrTarget(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'7px 9px', color:wT().text, fontSize:TYPO.body.fontSize, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>単位</div>
-                    <input value={krUnit} onChange={e=>setKrUnit(e.target.value)} placeholder="件, %, 万円..." style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
+                    <div style={{ ...TYPO.caption, fontWeight:500, color:wT().textMuted, marginBottom:3 }}>単位</div>
+                    <input value={krUnit} onChange={e=>setKrUnit(e.target.value)} placeholder="件, %, 万円..." style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'7px 9px', color:wT().text, fontSize:TYPO.subhead.fontSize, outline:'none', fontFamily:'inherit' }} />
                   </div>
                 </div>
-                <div style={{ display:'flex', justifyContent:'flex-end', gap:6 }}>
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:SPACING.xs+2 }}>
                   <button onClick={() => { setKrEditing(false); setKrTitle(kr.title||''); setCurrentVal(String(kr.current??'')); setKrTarget(String(kr.target??'')); setKrUnit(kr.unit||'') }}
-                    style={{ padding:'4px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>キャンセル</button>
+                    style={{ padding:'4px 10px', borderRadius:RADIUS.xs, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:TYPO.caption.fontSize, cursor:'pointer', fontFamily:'inherit' }}>キャンセル</button>
                   <button onClick={saveKRFull} disabled={krSaving}
-                    style={{ padding:'4px 14px', borderRadius:6, background:krSaved?'#00d68f':'#ff9f43', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-                    {krSaved?'✓ 保存済み':krSaving?'保存中...':'KRを保存'}
+                    style={{ padding:'4px 14px', borderRadius:RADIUS.xs, background:krSaved?wT().success:wT().warn, border:'none', color:'#fff', fontSize:TYPO.caption.fontSize, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:4 }}>
+                    {krSaved?<><Icon name="check" size={11} /> 保存済み</>:krSaving?'保存中...':'KRを保存'}
                   </button>
                 </div>
               </div>
             )}
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, minWidth:0 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:SPACING.sm, marginBottom:SPACING.sm, minWidth:0 }}>
             <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:wT().success, background:`${wT().success}1a`, padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="check" size={11} /> Good — うまくいったこと</div>
-              <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="進んでいること・良かったこと" style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
+              <div style={{ ...TYPO.caption, color:wT().success, background:`${wT().success}1a`, padding:'3px 8px', borderRadius:RADIUS.xs, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="check" size={11} /> Good — うまくいったこと</div>
+              <textarea value={good} onChange={e=>setGood(e.target.value)} rows={3} placeholder="進んでいること・良かったこと" style={taS} onFocus={e=>e.target.style.borderColor=`${wT().success}66`} onBlur={e=>e.target.style.borderColor=wT().border} />
             </div>
             <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-block' }}>🔺 More — 課題・改善点</div>
-              <textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} placeholder="うまくいっていないこと・課題" style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
+              <div style={{ ...TYPO.caption, color:wT().danger, background:wT().dangerBg, padding:'3px 8px', borderRadius:RADIUS.xs, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="alert" size={11} /> More — 課題・改善点</div>
+              <textarea value={more} onChange={e=>setMore(e.target.value)} rows={3} placeholder="うまくいっていないこと・課題" style={taS} onFocus={e=>e.target.style.borderColor=`${wT().danger}66`} onBlur={e=>e.target.style.borderColor=wT().border} />
             </div>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.sm }}>
             <div style={{ flex:1, height:1, background:wT().border }} />
-            <span style={{ fontSize:10, color:wT().textMuted }}>↓ Moreへの対応</span>
+            <span style={{ ...TYPO.caption, fontWeight:500, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><Icon name="chevronD" size={11} /> Moreへの対応</span>
             <div style={{ flex:1, height:1, background:wT().border }} />
           </div>
-          <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:wT().info, background:`${wT().info}1a`, padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> 来週の注力アクション</div>
-            <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか・何に力を入れるか" style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border} />
+          <div style={{ marginBottom:SPACING.sm+2 }}>
+            <div style={{ ...TYPO.caption, color:wT().info, background:`${wT().info}1a`, padding:'3px 8px', borderRadius:RADIUS.xs, marginBottom:SPACING.xs, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> 来週の注力アクション</div>
+            <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2} placeholder="Moreに対してどう動くか・何に力を入れるか" style={taS} onFocus={e=>e.target.style.borderColor=`${wT().info}66`} onBlur={e=>e.target.style.borderColor=wT().border} />
           </div>
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <button onClick={()=>setOpen(false)} style={{ padding:'5px 12px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={saveReview} disabled={saving} style={{ padding:'5px 16px', borderRadius:6, background:saved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', transition:'background 0.3s' }}>
-              {saved?'✓ 保存済み（週次MTGに反映）':saving?'保存中...':'保存して週次MTGに反映'}
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:SPACING.sm }}>
+            <button onClick={()=>setOpen(false)} style={{ padding:'5px 12px', borderRadius:RADIUS.xs, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:TYPO.footnote.fontSize, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
+            <button onClick={saveReview} disabled={saving} style={{ padding:'5px 16px', borderRadius:RADIUS.xs, background:saved?wT().success:wT().info, border:'none', color:'#fff', fontSize:TYPO.footnote.fontSize, fontWeight:700, cursor:'pointer', fontFamily:'inherit', transition:'background 0.3s', display:'inline-flex', alignItems:'center', gap:4 }}>
+              {saved?<><Icon name="check" size={11} /> 保存済み（週次MTGに反映）</>:saving?'保存中...':'保存して週次MTGに反映'}
             </button>
           </div>
         </div>
       )}
-    </div>
+    </OkrCard>
   )
 }
 
@@ -400,28 +389,28 @@ function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle,
   const doneCount = tasks.filter(t=>t.done).length
 
   return (
-    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:420, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:wT().accent, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> タスク {doneCount}/{tasks.length}</span>
-        <button onClick={addTask} style={{ marginLeft:4, background:'rgba(168,85,247,0.1)', border:'1px solid rgba(168,85,247,0.3)', borderRadius:4, color:'#a855f7', fontSize:10, padding:'2px 6px', cursor:'pointer', fontFamily:'inherit' }}>＋</button>
-        <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
+    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:420, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:RADIUS.md, boxShadow:SHADOWS.lg, padding:SPACING.md }}>
+      <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.sm }}>
+        <span style={{ ...TYPO.caption, color:wT().accent, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> タスク {doneCount}/{tasks.length}</span>
+        <button onClick={addTask} style={{ marginLeft:SPACING.xs, background:wT().accentBg, border:`1px solid ${wT().accent}4d`, borderRadius:RADIUS.xs, color:wT().accent, padding:'2px 6px', cursor:'pointer', fontFamily:'inherit', display:'inline-flex', alignItems:'center' }}><Icon name="plus" size={11} /></button>
+        <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', display:'inline-flex', alignItems:'center' }}><Icon name="cross" size={14} /></button>
       </div>
-      {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
+      {!loaded && <div style={{ ...TYPO.footnote, fontWeight:500, color:wT().textMuted, padding:SPACING.sm }}>読み込み中...</div>}
       {tasks.map(t => {
         const key = t.id; const tc = avatarColor(t.assignee); const isSaving = saving[key]
         return (
-          <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
-            <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${t.done?'#00d68f':wT().borderMid}`, background:t.done?'#00d68f':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {t.done && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
+          <div key={key} style={{ display:'flex', alignItems:'center', gap:SPACING.sm, padding:'5px 8px', borderRadius:RADIUS.xs, marginBottom:SPACING.xs, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
+            <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:RADIUS.xs, border:`1.5px solid ${t.done?wT().success:wT().borderMid}`, background:t.done?wT().success:'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {t.done && <span style={{ color:'#fff', display:'inline-flex' }}><Icon name="check" size={10} /></span>}
             </div>
-            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
-            <select value={t.assignee||''} onChange={e=>updateTask(key,'assignee',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
+            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:TYPO.subhead.fontSize, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
+            <select value={t.assignee||''} onChange={e=>updateTask(key,'assignee',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:TYPO.footnote.fontSize, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
               <option value="">担当</option>
               {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
-            <input type="date" value={t.due_date||''} onChange={e=>updateTask(key,'due_date',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
-            <button onClick={()=>saveTask(key)} disabled={isSaving} style={{ padding:'2px 8px', borderRadius:4, border:'none', background:isSaving?'#666':'#a855f7', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>{isSaving?'...':'保存'}</button>
-            <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:3, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>
+            <input type="date" value={t.due_date||''} onChange={e=>updateTask(key,'due_date',e.target.value)} style={{ background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().border}`, borderRadius:RADIUS.xs, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:TYPO.footnote.fontSize, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
+            <button onClick={()=>saveTask(key)} disabled={isSaving} style={{ padding:'2px 8px', borderRadius:RADIUS.xs, border:'none', background:isSaving?wT().textMuted:wT().accent, color:'#fff', fontSize:TYPO.caption.fontSize, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>{isSaving?'...':'保存'}</button>
+            <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:RADIUS.xs, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}><Icon name="cross" size={12} /></button>
           </div>
         )
       })}
@@ -445,7 +434,7 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
   const autoSave = useAutoSave('weekly_reports', report.id, { enabled: true })
   const cfg = STATUS_CFG[status] || STATUS_CFG.normal
   const ownerMember = members?.find(m => m.name === (ownerDraft||report.owner))
-  const STATUS_ORDER = ['normal','focus','good','more']
+  const STATUS_ORDER = ['normal','focus','good','more','done']
 
   const myKAKey = computeKAKey(report)
   useEffect(() => {
@@ -547,112 +536,95 @@ function MyKARow({ report, onSave, onDelete, wT, members, myName: completedBy, o
     }
   }
 
-  const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:12 }
-  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:'1px solid transparent', borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.5, minHeight:36, transition:'border-color 0.15s' }
+  const cellS = kaCellStyle(wT())
+  const taS = kaTextareaStyle(wT())
 
   return (
     <tr>
-      {/* 担当 */}
-      <td style={{ ...cellS, width:90 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+      {/* 担当 — 18×18 グラデアバター + 名前 */}
+      <td style={{ ...cellS, width:52 }}>
+        <div style={{ position:'relative', width:20, height:20 }} title={ownerDraft||report.owner||''}>
           <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={20} wT={wT} />
           <select value={ownerDraft} onChange={e=>handleOwnerChange(e.target.value)}
             onFocus={()=>autoSave.setFocusedField('owner')} onBlur={()=>autoSave.setFocusedField(null)}
-            style={{ flex:1, background:'transparent', border:'none', color:ownerDraft?avatarColor(ownerDraft):wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', fontWeight:600, minWidth:0, maxWidth:60 }}>
+            aria-label="担当" title={ownerDraft||report.owner||'担当'}
+            style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, cursor:'pointer', border:'none', appearance:'none', WebkitAppearance:'none', padding:0, margin:0 }}>
             <option value="">--</option>
             {members?.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
         </div>
       </td>
       {/* KAタイトル */}
-      <td style={{ ...cellS, minWidth:120 }}>
+      <td style={{ ...cellS, minWidth:120, fontSize:12 }}>
         {editingTitle ? (
           <textarea autoFocus value={kaTitle} onChange={e=>setKaTitle(e.target.value)}
             onBlur={handleTitleBlur}
             onKeyDown={handleTitleKeyDown}
             rows={2}
-            style={{ width:'100%', boxSizing:'border-box', background:wT().bgCard2||wT().bgCard, border:'1px solid #4d9fff80', borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:12, fontWeight:600, outline:'none', fontFamily:'inherit', resize:'vertical', lineHeight:1.5 }} />
+            style={{ width:'100%', boxSizing:'border-box', background:wT().bgCard2||wT().bgCard, border:`1px solid ${wT().info}80`, borderRadius:RADIUS.xs, padding:'4px 6px', color:wT().text, fontSize:TYPO.subhead.fontSize, fontWeight:600, outline:'none', fontFamily:'inherit', resize:'vertical', lineHeight:1.5 }} />
         ) : (
           <div onClick={() => { setEditingTitle(true); autoSave.setFocusedField('ka_title') }}
-            style={{ fontSize:12, fontWeight:600, color:wT().text, cursor:'text', lineHeight:1.4, minHeight:20, whiteSpace:'pre-wrap' }}>
+            style={{ fontSize:TYPO.subhead.fontSize, fontWeight:600, color:wT().text, cursor:'text', lineHeight:1.4, minHeight:20, whiteSpace:'pre-wrap' }}>
             {kaTitle||report.ka_title||'(無題)'}
           </div>
         )}
       </td>
       {/* ステータス */}
-      <td style={{ ...cellS, width:70, textAlign:'center' }}>
+      <td style={{ ...cellS, width:90, textAlign:'center' }}>
         <span onClick={cycleStatus}
-          style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:99, cursor:'pointer', background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}`, whiteSpace:'nowrap', display:'inline-block' }}>
+          style={{ ...TYPO.caption, padding:'3px 7px', borderRadius:RADIUS.pill, cursor:'pointer', background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}`, whiteSpace:'nowrap', display:'inline-block' }}>
           {cfg.label}
         </span>
       </td>
-      {/* Good */}
+      {/* Good (success) */}
       <td style={cellS}>
         <textarea value={good}
           onChange={e=>handleFieldChange('good', e.target.value, setGood)}
-          onFocus={e=>{autoSave.setFocusedField('good');e.target.style.borderColor='rgba(0,214,143,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('good',good);e.target.style.borderColor='transparent';e.target.rows=2}}
+          onFocus={e=>{autoSave.setFocusedField('good');e.target.style.borderColor=`${wT().success}66`;e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('good',good);e.target.style.borderColor=wT().border;e.target.rows=2}}
           rows={2} placeholder="Good"
-          style={{ ...taS, color:good?wT().text:wT().textFaint }} />
+          style={{ ...taS, color:good?wT().text:wT().textMuted, fontStyle:good?'normal':'italic' }} />
       </td>
-      {/* More */}
+      {/* More (warn) */}
       <td style={cellS}>
         <textarea value={more}
           onChange={e=>handleFieldChange('more', e.target.value, setMore)}
-          onFocus={e=>{autoSave.setFocusedField('more');e.target.style.borderColor='rgba(255,107,107,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('more',more);e.target.style.borderColor='transparent';e.target.rows=2}}
+          onFocus={e=>{autoSave.setFocusedField('more');e.target.style.borderColor=`${wT().warn}66`;e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('more',more);e.target.style.borderColor=wT().border;e.target.rows=2}}
           rows={2} placeholder="More"
-          style={{ ...taS, color:more?wT().text:wT().textFaint }} />
+          style={{ ...taS, color:more?wT().text:wT().textMuted, fontStyle:more?'normal':'italic' }} />
       </td>
-      {/* Focus */}
+      {/* Focus (accent) */}
       <td style={cellS}>
         <textarea value={focusOutput}
           onChange={e=>handleFieldChange('focus_output', e.target.value, setFocusOutput)}
-          onFocus={e=>{autoSave.setFocusedField('focus_output');e.target.style.borderColor='rgba(77,159,255,0.4)';e.target.rows=4}}
-          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('focus_output',focusOutput);e.target.style.borderColor='transparent';e.target.rows=2}}
+          onFocus={e=>{autoSave.setFocusedField('focus_output');e.target.style.borderColor=`${wT().accent}66`;e.target.rows=4}}
+          onBlur={e=>{autoSave.setFocusedField(null);autoSave.saveNow('focus_output',focusOutput);e.target.style.borderColor=wT().border;e.target.rows=2}}
           rows={2} placeholder="Focus"
-          style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
+          style={{ ...taS, color:focusOutput?wT().text:wT().textMuted, fontStyle:focusOutput?'normal':'italic' }} />
       </td>
       {/* Tasks + Delete */}
-      <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:4, justifyContent:'center' }}>
-          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:'#a855f7', cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
+      <td style={{ ...cellS, width:70, textAlign:'center', position:'relative', borderRight:'none' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:SPACING.xs, justifyContent:'center' }}>
+          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:TYPO.footnote.fontSize, color:wT().accent, cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:RADIUS.xs, background:showTasks?wT().accentBg:'transparent' }}>
             {`${taskCount.done}/${taskCount.total}`}
           </span>
-          <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
+          <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:RADIUS.xs, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:wT().dangerBg, color:wT().danger, flexShrink:0 }}><Icon name="cross" size={11} /></button>
         </div>
         {showTasks && <TaskPopover report={report} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
       </td>
       {/* 自動保存インジケーター */}
-      <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
-        {autoSave.saving && <span style={{ fontSize:9, color:'#4d9fff' }}>⟳</span>}
-        {autoSave.saved && <span style={{ fontSize:9, color:'#00d68f' }}>✓</span>}
+      <td style={{ ...cellS, width:20, padding:'10px 2px', borderRight:'none' }}>
+        {autoSave.saving && <span style={{ color:wT().info, display:'inline-flex' }}><Icon name="refresh" size={11} /></span>}
+        {autoSave.saved && <span style={{ color:wT().success, display:'inline-flex' }}><Icon name="check" size={11} /></span>}
       </td>
     </tr>
   )
 }
 
-// KAテーブルヘッダー
-function KATableHeader({ wT }) {
-  const thS = { padding:'4px 8px', fontSize:10, fontWeight:600, color:wT().textMuted, textAlign:'left', borderBottom:`1px solid ${wT().border}` }
-  return (
-    <thead>
-      <tr>
-        <th style={{ ...thS, width:90 }}>担当</th>
-        <th style={{ ...thS, minWidth:120 }}>KA</th>
-        <th style={{ ...thS, width:70, textAlign:'center' }}>状態</th>
-        <th style={thS}>Good</th>
-        <th style={thS}>More</th>
-        <th style={thS}>Focus</th>
-        <th style={{ ...thS, width:70, textAlign:'center' }}>タスク</th>
-        <th style={{ ...thS, width:20 }}></th>
-      </tr>
-    </thead>
-  )
-}
-
+// KAテーブルヘッダー (.kt 相当) — Good/More/Focus を色分け + 期間サブ表記 [§5]
 // ─── メインページ ──────────────────────────────────────────────────────────────
-export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
+export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fiscalYear = '2026', onAIFeedback, showMemberPicker = false }) {
   const { isMobile, isTablet } = useResponsive()
   // テーマは lib/themeTokens.js で一元管理
   const W_THEMES = {
@@ -663,6 +635,14 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
   const myMember = members.find(m => m.email === user?.email)
   const myName   = myMember?.name || user?.email || ''
+  // 週次+個人ビュー: 左のメンバー一覧で選んだ人の OKR を表示する (null=自分)。
+  // 年間+個人と同じ「メンバーを選ぶ → その人の OKR」UX に揃える。
+  // showMemberPicker=false (マイページ等) では常に自分の OKR のみ。
+  const [selectedMember, setSelectedMember] = useState(null)
+  const viewName = (showMemberPicker && selectedMember) || myName
+  // 部署フィルタ (メンバー一覧を所属部署で絞り込む。null=全部署。絞り込みは MemberSidebar 内)
+  const [deptFilter, setDeptFilter] = useState(null)
+  const viewMember = members.find(m => m.name === viewName) || myMember
 
   const [objectives, setObjectives] = useState([])
   const [keyResults, setKeyResults] = useState([])
@@ -670,6 +650,9 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const [kaTasks,    setKaTasks]    = useState({}) // { reportId: [tasks] } - kept for potential future use
   const [reviews,    setReviews]    = useState({})
   const [loading,    setLoading]    = useState(true)
+  // KRBlock の並び替え / KA 移動 後にデータを再取得するためのトリガ
+  const [reloadTick, setReloadTick] = useState(0)
+  const reload = useCallback(() => setReloadTick(t => t + 1), [])
   const [activeObjId,setActiveObjId]= useState(() => {
     if (typeof window === 'undefined') return null
     const saved = localStorage.getItem('myOKR_activeObjId')
@@ -680,16 +663,6 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
     if (activeObjId == null) localStorage.removeItem('myOKR_activeObjId')
     else localStorage.setItem('myOKR_activeObjId', String(activeObjId))
   }, [activeObjId])
-  const [activeLevelId,setActiveLevelId]= useState(() => {
-    if (typeof window === 'undefined') return null
-    const saved = localStorage.getItem('myOKR_activeLevelId')
-    return saved && saved !== 'null' ? Number(saved) : null
-  })
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (activeLevelId == null) localStorage.removeItem('myOKR_activeLevelId')
-    else localStorage.setItem('myOKR_activeLevelId', String(activeLevelId))
-  }, [activeLevelId])
   // 現在のQを自動判定（4月=Q1, 7月=Q2, 10月=Q3, 1月=Q4）
   const getCurrentQ = () => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' }
   const [activePeriod,setActivePeriod]=useState(getCurrentQ())
@@ -714,9 +687,11 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   // 「今週」or「翌週」の選択（前週の金曜日に翌週の Good/More を書きたいケース対応）
   const [weekMode, setWeekMode] = useState('this') // 'this' | 'next'
   const selectedWeek = weekMode === 'next' ? nextWeek : currentWeek
+  // KRBlock に渡す週一覧 (今週 + 翌週)。WeeklyMTG の weeksList と同形 (YYYY-MM-DD ソート済み配列)
+  const weeksList = [...new Set([currentWeek, nextWeek])].filter(Boolean).sort()
 
   useEffect(() => {
-    if (!myName) return
+    if (!viewName) return
     const load = async () => {
       setLoading(true)
       // 今週と翌週のみを対象とする (週次MTG の内容を引用するビュー)
@@ -724,18 +699,15 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       //   絞って取得し、過去週の取り残しは表示しない
       const weeksToLoad = Array.from(new Set([currentWeek, nextWeek])).filter(Boolean)
 
-      // ① 自分がOwner/KR担当/KA担当のデータを並行取得
-      const [{ data: myObjs }, { data: myKRs }, { data: myKAs }, { data: myAssignedTasks }] = await Promise.all([
-        supabase.from('objectives').select('id,title,level_id,period,owner,archived_at').eq('owner', myName).order('period').range(0, 49999).then(r => ({ ...r, data: (r.data || []).filter(o => !o.archived_at) })),
-        supabase.from('key_results').select('*').eq('owner', myName).range(0, 49999),
-        supabase.from('weekly_reports').select('*').eq('owner', myName).neq('status', 'done').in('week_start', weeksToLoad).range(0, 49999),
-        supabase.from('ka_tasks').select('*').eq('assignee', myName).eq('done', false).range(0, 49999),
+      // ① 自分がOwner/KR担当/KA担当のデータを並行取得 (共有データ層 lib/okrData)
+      const [myObjs, myKRs, myKAs, myAssignedTasks] = await Promise.all([
+        fetchObjectivesByOwner(viewName),
+        fetchKeyResultsByOwner(viewName),
+        fetchWeeklyReportsByOwner(viewName, { weeks: weeksToLoad }),
+        fetchKaTasksByAssignee(viewName),
       ])
       // ★ 年度フィルタを適用
-      const filterByFY = (objs) => (objs || []).filter(o => {
-        if (fiscalYear === '2026') return !o.period.includes('_')
-        return o.period.startsWith(`${fiscalYear}_`)
-      })
+      const filterByFY = (objs) => filterObjectivesByFY(objs, fiscalYear)
       const ownedObjs = filterByFY(myObjs)
 
       // ①-b 他人のKAで自分がタスク担当のものも取得 (今週と翌週のみ)
@@ -828,47 +800,78 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
       setLoading(false)
     }
     load()
-  }, [myName, fiscalYear, currentWeek, selectedWeek])
+  }, [viewName, fiscalYear, currentWeek, selectedWeek, reloadTick])
 
   const selectedObj = activeObjId ? objectives.find(o=>o.id===Number(activeObjId)) : null
   const objKRs = activeObjId ? keyResults.filter(kr=>Number(kr.objective_id)===Number(activeObjId)) : []
   const objKAs = activeObjId ? kaReports.filter(r=>Number(r.objective_id)===Number(activeObjId)) : []
   const visibleObjs = objectives.filter(o => {
     if (activePeriod !== 'all' && rawPeriod(o.period) !== activePeriod) return false
-    if (activeLevelId && Number(o.level_id) !== Number(activeLevelId)) return false
     return true
   })
 
   const handleKASave = (updated) => setKaReports(p=>p.map(r=>r.id===updated.id?updated:r))
 
-  // KA を追加: 選択週 (今週 or 翌週) の weekly_reports に新規行を insert
-  //   owner は閲覧中メンバー (自分のマイOKR なら自分)
-  const handleKAAdd = async (kr) => {
-    if (!kr || !activeObjId) return
-    const obj = selectedObj
-    const levelId = obj?.level_id
-    const payload = {
-      week_start: selectedWeek,
-      level_id: levelId,
-      objective_id: activeObjId,
-      kr_id: kr.id,
-      kr_title: kr.title,
-      ka_title: '新しいKA',
-      owner: myName || '',
-      status: 'normal',
+  // KRBlock の内部 addKA が insert 済みの行を渡してくる (週次MTG と同じ契約)。
+  //   KRBlock の insert は owner を付与しないため、マイOKR では owner=viewName を
+  //   補完してから state に反映する (owner スコープのデータ取得・重複排除・sibling
+  //   同期が owner を前提にしているため)。
+  const handleKAAdd = async (newRow) => {
+    if (!newRow || !newRow.id) { reload(); return }
+    let row = newRow
+    if (!row.owner && viewName) {
+      const { data, error } = await supabase.from('weekly_reports')
+        .update({ owner: viewName }).eq('id', row.id).select().single()
+      if (!error && data) row = data
+      else row = { ...row, owner: viewName }
     }
-    // sort_order 付きで試し、カラムが無ければフォールバック
-    const currentKAs = kaReports.filter(r => Number(r.kr_id) === Number(kr.id))
-    const maxOrder = currentKAs.reduce((m, r) => Math.max(m, r.sort_order || 0), 0)
-    let res = await supabase.from('weekly_reports')
-      .insert({ ...payload, sort_order: maxOrder + 1 }).select().single()
-    if (res.error) {
-      if (/sort_order/i.test(res.error.message || '')) {
-        res = await supabase.from('weekly_reports').insert(payload).select().single()
-      }
-      if (res.error) { alert('KA追加失敗: ' + res.error.message); return }
+    setKaReports(p => p.some(r => r.id === row.id) ? p : [...p, row])
+  }
+  // KR担当者の変更 (KRBlock の onKROwnerChange) — DB 更新 + ローカル state 反映
+  const handleKROwnerChange = async (krId, newOwner) => {
+    const { error } = await supabase.from('key_results').update({ owner: newOwner }).eq('id', krId)
+    if (error) { console.error('KR owner update failed:', error); alert('KR担当者の保存に失敗しました。'); return }
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, owner: newOwner } : kr))
+  }
+  // KR の current/target/title/unit 等の更新 (KRBlock の onKRUpdate)。成否を返す。
+  const handleKRUpdate = async (krId, fields) => {
+    const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
+    if (error) { console.error('KR update failed:', error); return false }
+    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    return true
+  }
+  // 会議中の共同編集と同様、閲覧中が自分のときのみ編集可。
+  //   KRBlock は canEditKA(kaOwner, objOwner, krOwner) のシグネチャで呼ぶ。
+  const isViewingSelf = !showMemberPicker || !selectedMember || selectedMember === myName
+  const canEditKA = useCallback(() => isViewingSelf, [isViewingSelf])
+  // KRBlock の onMoveKA: 別KRへ KA を移動 (全週分まとめて) → 再取得
+  const handleMoveKA = async (reportId, targetKrId) => {
+    const { data: src } = await supabase.from('weekly_reports')
+      .select('id, kr_id, ka_title, owner, objective_id')
+      .eq('id', reportId).maybeSingle()
+    if (!src) { reload(); return }
+    if (Number(src.kr_id) === Number(targetKrId)) { reload(); return }
+    const oldKaKey = computeKAKey(src)
+    const newKaKey = computeKAKey({ ...src, kr_id: targetKrId })
+    const { data: targetKr } = await supabase.from('key_results')
+      .select('id, title').eq('id', targetKrId).maybeSingle()
+    const { data: siblings } = await supabase.from('weekly_reports')
+      .select('id, owner')
+      .eq('kr_id', src.kr_id)
+      .eq('ka_title', src.ka_title || '')
+      .eq('objective_id', src.objective_id)
+    const srcOwner = (src.owner || '').trim()
+    const ids = (siblings || [])
+      .filter(r => (r.owner || '').trim() === srcOwner)
+      .map(r => r.id)
+    const updateIds = ids.length > 0 ? ids : [reportId]
+    await supabase.from('weekly_reports')
+      .update({ kr_id: targetKrId, kr_title: targetKr?.title || '' })
+      .in('id', updateIds)
+    if (oldKaKey && newKaKey && oldKaKey !== newKaKey) {
+      await supabase.from('ka_tasks').update({ ka_key: newKaKey }).eq('ka_key', oldKaKey)
     }
-    if (res.data) setKaReports(p => [...p, res.data])
+    reload()
   }
   // KA 削除: 同じ ka_key を持つ他週の行もまとめて削除
   //   (マイOKR は重複排除で 1 KA = 1 行表示しているが、DB には複数週分あるので一括削除)
@@ -901,80 +904,71 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
 
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
-  // 組織図サイドバー
-  const roots = levels.filter(l => !l.parent_id)
-  // 自分のObjectiveがある組織のみハイライト
-  const myLevelIds = new Set(objectives.map(o => Number(o.level_id)))
-  function renderSb(level, indent=0) {
-    const d = getDepth(level.id, levels)
-    const color = LAYER_COLORS[d] || '#a0a8be'
-    const isActive = Number(activeLevelId)===Number(level.id)
-    const hasMyObj = myLevelIds.has(Number(level.id))
-    return (
-      <div key={level.id}>
-        <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
-          style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', paddingLeft:8+indent*14, borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent', opacity:hasMyObj?1:0.5 }}>
-          <span style={{ fontSize:13 }}>{level.icon}</span>
-          <span style={{ fontSize:11, flex:1, fontWeight:isActive?700:hasMyObj?600:400, color:isActive?color:hasMyObj?wT().textSub:wT().textFaint }}>{level.name}</span>
-          {hasMyObj && <span style={{ fontSize:8, color, lineHeight:1 }}>●</span>}
-        </div>
-        {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
-      </div>
-    )
-  }
-
-  if (loading) return <div style={{ padding:40, color:'#4d9fff', fontSize:14 }}>読み込み中...</div>
+  if (loading) return <div style={{ padding:SPACING['3xl']+8, color:wT().info, fontSize:TYPO.headline.fontSize }}>読み込み中...</div>
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text }}>
+    <div style={{ display:'flex', flexDirection:'row', height:'100%', background:wT().bg, color:wT().text }}>
+
+      {/* メンバー一覧サイドバー (最左・全高。年間×個人と同じシェル。showMemberPicker のときだけ) */}
+      {!isMobile && showMemberPicker && (
+        <div style={{ width: isTablet ? 180 : 240, flexShrink:0, borderRight:`1px solid ${wT().border}`, overflowY:'auto', background:wT().bgSidebar }}>
+          <MemberSidebar T={wT()} members={members} levels={levels}
+            selectedName={viewName}
+            onSelect={(n)=>{ setSelectedMember(n); setActiveObjId(null) }}
+            deptFilter={deptFilter} onDeptFilterChange={setDeptFilter} />
+        </div>
+      )}
+
+      {/* 右カラム: ヘッダ + 期間タブ + (Objective一覧 / KR ペイン) */}
+      <div style={{ display:'flex', flexDirection:'column', flex:1, minWidth:0, overflow:'hidden' }}>
 
       {/* ヘッダー (iOS 風グラスバー) */}
       <div style={{
         padding:'14px 20px', borderBottom:`1px solid ${wT().border}`,
-        display:'flex', alignItems:'center', gap:12, flexShrink:0,
-        background: 'rgba(255,255,255,0.65)',
+        display:'flex', alignItems:'center', gap:SPACING.md, flexShrink:0,
+        background: wT().headerBg,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       }}>
-        {/* ユーザーアバター（画像 or イニシャル） */}
-        {myMember?.avatar_url ? (
+        {/* ユーザーアバター（閲覧中メンバーの画像 or イニシャル） */}
+        {viewMember?.avatar_url ? (
           <img
-            src={myMember.avatar_url}
-            alt={myName}
-            style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover', border:`2px solid ${avatarColor(myName)}60`, flexShrink:0 }}
+            src={viewMember.avatar_url}
+            alt={viewName}
+            style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover', border:`2px solid ${avatarColor(viewName)}60`, flexShrink:0 }}
           />
         ) : (
-          <div style={{ width:36, height:36, borderRadius:'50%', background:`${avatarColor(myName)}25`, border:`2px solid ${avatarColor(myName)}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:avatarColor(myName), flexShrink:0 }}>
-            {myName.slice(0,2)}
+          <div style={{ width:36, height:36, borderRadius:'50%', background:`${avatarColor(viewName)}25`, border:`2px solid ${avatarColor(viewName)}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:TYPO.headline.fontSize, fontWeight:700, color:avatarColor(viewName), flexShrink:0 }}>
+            {viewName.slice(0,2)}
           </div>
         )}
         <div>
-          <div style={{ fontSize:10, color:wT().textMuted, marginBottom:1 }}>{myMember?.role || 'メンバー'}</div>
-          <div style={{ fontSize:15, fontWeight:700 }}>{myName} のOKR</div>
+          <div style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted, marginBottom:1 }}>{viewMember?.role || 'メンバー'}</div>
+          <div style={{ fontSize:TYPO.title3.fontSize, fontWeight:700 }}>{viewName} のOKR</div>
         </div>
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background: fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color: fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
-            📅 {fiscalYear}年度
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:SPACING.sm }}>
+          <div style={{ fontSize:TYPO.footnote.fontSize, fontWeight:700, padding:'3px 10px', borderRadius:RADIUS.pill, background: fiscalYear==='2026'?wT().infoBg:wT().warnBg, color: fiscalYear==='2026'?wT().info:wT().warn, border:`1px solid ${fiscalYear==='2026'?`${wT().info}4d`:`${wT().warn}4d`}`, display:'inline-flex', alignItems:'center', gap:5 }}>
+            <Icon name="calendar" size={12} /> {fiscalYear}年度
           </div>
           {/* 今週/翌週 切り替えトグル */}
-          <div style={{ display:'flex', gap:0, background:wT().bgCard2 || 'rgba(255,255,255,0.04)', borderRadius:99, padding:2, border:`1px solid ${wT().borderMid}` }}>
+          <div style={{ display:'flex', gap:0, background:wT().bgCard2 || wT().bgSoft, borderRadius:RADIUS.pill, padding:2, border:`1px solid ${wT().borderMid}` }}>
             <button onClick={()=>setWeekMode('this')}
               style={{
-                fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:99, border:'none', cursor:'pointer', fontFamily:'inherit',
-                background: weekMode==='this' ? '#00d68f' : 'transparent',
+                fontSize:TYPO.footnote.fontSize, fontWeight:700, padding:'4px 12px', borderRadius:RADIUS.pill, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: weekMode==='this' ? wT().success : 'transparent',
                 color: weekMode==='this' ? '#fff' : wT().textMuted,
                 transition:'all 0.15s',
               }}>今週</button>
             <button onClick={()=>setWeekMode('next')}
               style={{
-                fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:99, border:'none', cursor:'pointer', fontFamily:'inherit',
-                background: weekMode==='next' ? '#ff9f43' : 'transparent',
+                fontSize:TYPO.footnote.fontSize, fontWeight:700, padding:'4px 12px', borderRadius:RADIUS.pill, border:'none', cursor:'pointer', fontFamily:'inherit',
+                background: weekMode==='next' ? wT().warn : 'transparent',
                 color: weekMode==='next' ? '#fff' : wT().textMuted,
                 transition:'all 0.15s',
               }}>翌週</button>
           </div>
           <div style={{
-            fontSize:12, fontWeight:800, padding:'5px 12px', borderRadius:99,
+            fontSize:TYPO.subhead.fontSize, fontWeight:800, padding:'5px 12px', borderRadius:RADIUS.pill,
             background: weekMode==='next' ? `${wT().warn}1f` : `${wT().success}1f`,
             color: weekMode==='next' ? wT().warn : wT().success,
             border: `1px solid ${weekMode==='next' ? `${wT().warn}80` : `${wT().success}59`}`,
@@ -986,75 +980,51 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         </div>
       </div>
 
-      {/* 期間タブ (iOS SegmentedControl) */}
-      <div style={{ display:'flex', gap:8, padding:'10px 20px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center' }}>
-        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700 }}>期間</span>
-        <SegmentedControl T={wT()} value={activePeriod} onChange={key => { setActivePeriod(key); setActiveObjId(null) }}
-          items={periodTabs.map(([key, label]) => ({ key, label }))} size="sm" />
+      {/* 期間タブ (共通 QTabs) */}
+      <div style={{ padding:'10px 20px 0', flexShrink:0 }}>
+        <QTabs
+          T={wT()}
+          tabs={periodTabs.map(([key, label]) => ({
+            key, label,
+            count: objectives.filter(o => key === 'all' ? true : rawPeriod(o.period) === key).length,
+          }))}
+          active={activePeriod}
+          onChange={key => { setActivePeriod(key); setActiveObjId(null) }}
+        />
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* 組織図サイドバー */}
-        {!isMobile && (
-          <div style={{ width: isTablet ? 120 : 155, flexShrink:0, borderRight:`1px solid ${wT().border}`, padding:'10px 8px', overflowY:'auto', background:wT().bgSidebar }}>
-            <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
-            <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?`${wT().info}4d`:'transparent'}`, background:!activeLevelId?`${wT().info}1f`:'transparent', color:!activeLevelId?wT().info:wT().textSub }}>
-              <Icon name="building" size={12} /><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500 }}>全部署</span>
-            </div>
-            {roots.map(r=>renderSb(r,0))}
-          </div>
-        )}
-
         {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
-          <div style={{ fontSize:10, color:wT().info, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
+          <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
-            <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
+            <div style={{ fontSize:TYPO.subhead.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
           )}
           {visibleObjs.map(obj => {
             const isActive = Number(activeObjId) === Number(obj.id)
-            const d = getDepth(obj.level_id, levels)
-            const color = LAYER_COLORS[d] || '#a0a8be'
             const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
             const objKRsCount = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id)).length
             const objKAsCount = kaReports.filter(r=>Number(r.objective_id)===Number(obj.id)).length
             const myKRs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const avgPct = myKRs.length > 0 ? Math.round(myKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/myKRs.length) : 0
-            const pctColor = avgPct>=100?'#00d68f':avgPct>=60?'#4d9fff':'#ff6b6b'
+            const pctColor = okrPctColor(wT(), avgPct)
             return (
-              <div key={obj.id} onClick={()=>setActiveObjId(isActive?null:obj.id)} style={{
-                padding:'12px 14px', borderRadius:12, marginBottom:8, cursor:'pointer',
-                border:`1px solid ${isActive?color+'4d':color+'1a'}`,
-                background: isActive
-                  ? `linear-gradient(180deg, ${wT().bgCard} 0%, ${color}0d 100%)`
-                  : wT().bgCard,
-                boxShadow: isActive
-                  ? `0 1px 2px rgba(0,0,0,0.04), 0 4px 12px ${color}26`
-                  : '0 1px 2px rgba(0,0,0,0.03), 0 2px 6px rgba(0,0,0,0.03)',
-                transition:'all 0.2s ease',
-              }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+              <OkrCard key={obj.id} T={wT()} active={isActive} onClick={()=>setActiveObjId(isActive?null:obj.id)} padding="12px 14px" style={{ marginBottom:SPACING.sm }}>
+                <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm, marginBottom:SPACING.sm }}>
                   <span style={{
-                    fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:6,
-                    background:`linear-gradient(135deg, ${color} 0%, ${color}c0 100%)`, color:'#fff',
-                    boxShadow: `0 1px 2px ${color}55`,
+                    ...TYPO.caption, fontWeight:700, padding:'2px 8px', borderRadius:RADIUS.xs,
+                    background:wT().accentBg, color:wT().accentText,
                   }}>{periodLabel(obj.period)}</span>
-                  {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
+                  {level && <span style={{ fontSize:TYPO.caption.fontSize, fontWeight:500, color:wT().textMuted }}><DataIcon value={level.icon} size={11}/> {level.name}</span>}
                 </div>
-                <div style={{ fontSize:13, fontWeight:700, lineHeight:1.4, marginBottom:8, color:wT().text, letterSpacing:'-0.01em' }}>{obj.title}</div>
-                <div style={{ height:5, borderRadius:99, background:'rgba(0,0,0,0.05)', overflow:'hidden', marginBottom:7 }}>
-                  <div style={{
-                    height:'100%', width:`${Math.min(avgPct,100)}%`,
-                    background:`linear-gradient(90deg, ${pctColor} 0%, ${pctColor}cc 100%)`,
-                    borderRadius:99, transition:'width 0.4s',
-                  }} />
+                <div style={{ fontSize:TYPO.body.fontSize, fontWeight:700, lineHeight:1.4, marginBottom:SPACING.sm, color:wT().text, letterSpacing:'-0.01em' }}>{obj.title}</div>
+                <ProgressBar T={wT()} pct={avgPct} height={5} style={{ marginBottom:7 }} />
+                <div style={{ display:'flex', gap:SPACING.sm, fontSize:TYPO.caption.fontSize, color:wT().textMuted, alignItems:'center' }}>
+                  <span style={{ color:pctColor, fontWeight:800, fontSize:TYPO.subhead.fontSize }}>{avgPct}%</span>
+                  <span style={{ padding:'1px 7px', borderRadius:RADIUS.pill, background:wT().borderLight, fontWeight:700 }}>KR {objKRsCount}</span>
+                  <span style={{ padding:'1px 7px', borderRadius:RADIUS.pill, background: objKAsCount>0?wT().accentBg:wT().borderLight, color:objKAsCount>0?wT().accent:wT().textFaint, fontWeight:700 }}>KA {objKAsCount}</span>
                 </div>
-                <div style={{ display:'flex', gap:8, fontSize:10, color:wT().textMuted, alignItems:'center' }}>
-                  <span style={{ color:pctColor, fontWeight:800, fontSize:12 }}>{avgPct}%</span>
-                  <span style={{ padding:'1px 7px', borderRadius:99, background:'rgba(0,0,0,0.04)', fontWeight:700 }}>KR {objKRsCount}</span>
-                  <span style={{ padding:'1px 7px', borderRadius:99, background: objKAsCount>0?wT().accentBg:'rgba(0,0,0,0.04)', color:objKAsCount>0?wT().accent:wT().textFaint, fontWeight:700 }}>KA {objKAsCount}</span>
-                </div>
-              </div>
+              </OkrCard>
             )
           })}
         </div>
@@ -1062,46 +1032,40 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         {/* 右：KR + KA詳細 */}
         <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && !activeObjId ? 'none' : 'block' }}>
           {isMobile && activeObjId && (
-            <button onClick={() => setActiveObjId(null)} style={{ marginBottom: 8, padding: '6px 12px', borderRadius: 7, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>← Objective一覧に戻る</button>
+            <button onClick={() => setActiveObjId(null)} style={{ marginBottom: SPACING.sm, padding: '6px 12px', borderRadius: RADIUS.xs, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: TYPO.subhead.fontSize, cursor: 'pointer', fontFamily: 'inherit', display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="chevronL" size={12} /> Objective一覧に戻る</button>
           )}
           {!selectedObj ? (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:SPACING.sm+2, color:wT().textFaint }}>
               <Icon name="target" size={36} stroke={1.4} />
-              <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
+              <div style={{ fontSize:TYPO.subhead.fontSize }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
             <>
               {(() => {
-                const d = getDepth(selectedObj.level_id, levels)
-                const color = LAYER_COLORS[d] || '#a0a8be'
+                // OBJECTIVE ヘッダ (.objh) — 共通 ObjectiveHeader 部品で全ビュー統一 [§2厳守]
+                const objAvgPct = objKRs.length > 0
+                  ? Math.round(objKRs.reduce((s,kr)=>s+calcPct(kr.current,kr.target,kr.lower_is_better),0)/objKRs.length)
+                  : 0
+                const objLevel = levels.find(l=>Number(l.id)===Number(selectedObj.level_id))
                 return (
-                  <div style={{
-                    position:'relative', overflow:'hidden',
-                    padding:'18px 22px',
-                    background:`linear-gradient(135deg, ${color}f0 0%, ${color}b0 100%)`,
-                    color:'#fff',
-                    borderRadius:16, marginBottom:16,
-                    boxShadow: `0 1px 2px rgba(0,0,0,0.06), 0 8px 24px ${color}33`,
-                  }}>
-                    <div aria-hidden style={{
-                      position:'absolute', top:-50, right:-30, width:180, height:180,
-                      background:'radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 60%)',
-                      borderRadius:'50%', pointerEvents:'none',
-                    }} />
-                    <div style={{ position:'relative', zIndex:1 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:99, background:'rgba(255,255,255,0.25)', color:'#fff', backdropFilter:'blur(10px)' }}>{periodLabel(selectedObj.period)}</span>
-                        <span style={{ fontSize:10, opacity:0.85, letterSpacing:'0.18em', textTransform:'uppercase', fontWeight:700 }}>Objective</span>
-                      </div>
-                      <div style={{ fontSize:17, fontWeight:800, color:'#fff', lineHeight:1.4, letterSpacing:'-0.01em' }}>{selectedObj.title}</div>
-                    </div>
-                  </div>
+                  <ObjectiveHeader
+                    T={wT()}
+                    deptName={objLevel?.name}
+                    periodLabel={periodLabel(selectedObj.period)}
+                    pct={objAvgPct}
+                    ownerName={viewName}
+                    ownerAvatarUrl={viewMember?.avatar_url}
+                    title={selectedObj.title}
+                    krCount={objKRs.length}
+                    kaCount={objKAs.length}
+                    style={{ marginBottom:SPACING.lg }}
+                  />
                 )
               })()}
 
               {onAIFeedback && (
                 <div style={{ marginBottom:14 }}>
-                  <button onClick={() => {
+                  <AICoachCard T={wT()} onClick={() => {
                     const krSummary = objKRs.map(kr => {
                       const rev = reviews[kr.id]
                       const pct = calcPct(kr.current, kr.target, kr.lower_is_better)
@@ -1115,66 +1079,45 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                       (r.good ? ` Good:${r.good}` : '') +
                       (r.more ? ` More:${r.more}` : '')
                     ).join('\n')
-                    const msg = `${myName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
+                    const msg = `${viewName}さんの今週のOKR進捗についてフィードバックをください。\n\nObjective: ${selectedObj.title}\n\n${krSummary}${kaSummary ? '\n\nKA一覧:\n' + kaSummary : ''}\n\n良かった点・改善点・来週へのアドバイス・励ましの言葉を日本語で簡潔にお願いします。`
                     onAIFeedback(msg)
-                  }} style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 14px', borderRadius:10, border:'1px solid rgba(168,85,247,0.35)', background:'rgba(168,85,247,0.08)', cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}
-                    onMouseEnter={e=>e.currentTarget.style.background='rgba(168,85,247,0.15)'}
-                    onMouseLeave={e=>e.currentTarget.style.background='rgba(168,85,247,0.08)'}>
-                    <div style={{ width:30, height:30, borderRadius:'50%', background:'linear-gradient(135deg,#4d9fff,#a855f7)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0 }}>🤖</div>
-                    <div style={{ textAlign:'left' }}>
-                      <div style={{ fontSize:12, fontWeight:700, color:'#a855f7' }}>AIコーチにフィードバックをもらう</div>
-                      <div style={{ fontSize:10, color:wT().textMuted }}>現在のKR・KA状況をもとにアドバイスをもらえます</div>
-                    </div>
-                    <span style={{ marginLeft:'auto', fontSize:11, color:'#a855f7' }}>→</span>
-                  </button>
+                  }} />
                 </div>
               )}
 
               {objKRs.length > 0 && (
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> Key Results（{objKRs.length}件）</div>
-                  {objKRs.map(kr => {
-                    const krKAs = objKAs.filter(r => Number(r.kr_id) === Number(kr.id))
-                    return (
-                      <div key={kr.id} style={{ marginBottom:14 }}>
-                        <KRCard kr={kr} myName={myName} members={members} wT={wT} currentWeek={selectedWeek} onKRUpdated={() => {
-                          // KR更新後にデータをリロード
-                          supabase.from('key_results').select('*').eq('objective_id', activeObjId).then(({ data }) => {
-                            if (data) setKeyResults(prev => {
-                              const otherKRs = prev.filter(k => Number(k.objective_id) !== Number(activeObjId))
-                              return [...otherKRs, ...data]
-                            })
-                          })
-                        }} />
-                        <div style={{ marginLeft:12, borderLeft:`2px solid ${wT().border}`, paddingLeft:10, marginTop:4 }}>
-                          {krKAs.length > 0 && (
-                            <>
-                              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:600, marginBottom:4, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> KA（{krKAs.length}件）</div>
-                              <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
-                                <KATableHeader wT={wT} />
-                                <tbody>
-                                  {krKAs.map(r => (
-                                    <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
-                                  ))}
-                                </tbody>
-                              </table>
-                            </>
-                          )}
-                          <div onClick={() => handleKAAdd(kr)} style={{
-                            display:'flex', alignItems:'center', gap:6, padding:'6px 10px', cursor:'pointer',
-                            color:wT().textMuted, fontSize:11, marginTop: krKAs.length > 0 ? 4 : 0,
-                            borderTop: krKAs.length > 0 ? `1px solid ${wT().border}` : 'none',
-                          }}>
-                            <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div style={{ marginBottom:SPACING.lg }}>
+                  <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> Key Results（{objKRs.length}件）</div>
+                  {objKRs.map(kr => (
+                    <KRBlock
+                      key={kr.id}
+                      kr={kr}
+                      reports={objKAs}
+                      onAddKA={handleKAAdd}
+                      onSaveKA={handleKASave}
+                      onDeleteKA={handleKADelete}
+                      members={members}
+                      wT={wT}
+                      levelId={selectedObj?.level_id}
+                      objId={selectedObj?.id}
+                      objOwner={selectedObj?.owner}
+                      canEditKA={canEditKA}
+                      onKROwnerChange={handleKROwnerChange}
+                      onKRUpdate={handleKRUpdate}
+                      activeWeek={selectedWeek}
+                      reviewVersion={selectedWeek}
+                      onReorder={reload}
+                      objectiveTitle={selectedObj?.title}
+                      completedBy={myName}
+                      weeksList={weeksList}
+                      onMoveKA={handleMoveKA}
+                      viewMode="both"
+                    />
+                  ))}
                 </div>
               )}
               {objKRs.length === 0 && (
-                <div style={{ fontSize:12, color:wT().textFaint, fontStyle:'italic', padding:'10px 4px', marginBottom:12 }}>このObjectiveにKRがありません</div>
+                <div style={{ fontSize:TYPO.subhead.fontSize, color:wT().textFaint, fontStyle:'italic', padding:'10px 4px', marginBottom:SPACING.md }}>このObjectiveにKRがありません</div>
               )}
 
               {(() => {
@@ -1183,21 +1126,24 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                 if (unlinkedKAs.length === 0) return null
                 return (
                   <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
-                    <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'auto' }}>
-                      <KATableHeader wT={wT} />
-                      <tbody>
-                        {unlinkedKAs.map(r => (
-                          <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
-                        ))}
-                      </tbody>
-                    </table>
+                    <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
+                    <OkrCard T={wT()} padding="0" style={{ overflow:'hidden' }}>
+                      <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
+                        <KATableHeader T={wT()} subGood={formatWeekLabel(selectedWeek)} subMore={formatWeekLabel(selectedWeek)} subFocus={formatWeekLabel(selectedWeek)} />
+                        <tbody>
+                          {unlinkedKAs.map(r => (
+                            <MyKARow key={r.id} report={r} onSave={handleKASave} onDelete={handleKADelete} wT={wT} members={members} myName={myName} objectiveTitle={selectedObj?.title} />
+                          ))}
+                        </tbody>
+                      </table>
+                    </OkrCard>
                   </div>
                 )
               })()}
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

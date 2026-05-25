@@ -1,9 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { computeKAKey } from '../lib/kaKey'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, TRANSITION } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, btnDanger, inputStyle, sectionHeaderStyle } from '../lib/iosStyles'
 import { LargeTitle, BgGlow } from './iosUI'
+import Icon from './Icon'
 
 // ─── ヘルパー ──────────────────────────────────────────────────────────────────
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DD文字列を返す
@@ -57,11 +60,6 @@ const STATUS_OPTIONS = [
 ]
 
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 
 // ─── 共通UI ───────────────────────────────────────────────────────────────────
 function DeptSelect({ value, onChange, levels, wT }) {
@@ -71,13 +69,13 @@ function DeptSelect({ value, onChange, levels, wT }) {
     if (!level) return []
     const depth = getLevelDepth(levelId, levels)
     const prefix = '\u3000'.repeat(indent)
-    const result = [<option key={level.id} value={String(level.id)}>{prefix}{level.icon} {level.name}（{LAYER_LABELS[depth] || ''}）</option>]
+    const result = [<option key={level.id} value={String(level.id)}>{prefix}{level.name}（{LAYER_LABELS[depth] || ''}）</option>]
     levels.filter(l => Number(l.parent_id) === Number(levelId)).forEach(c => result.push(...renderOpts(c.id, indent + 1)))
     return result
   }
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
-      style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: value ? wT.text : wT.textMuted, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+      style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: value ? wT.text : wT.textMuted, ...TYPO.subhead, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
       <option value="">-- 部署を選択 --</option>
       {roots.flatMap(r => renderOpts(r.id, 0))}
     </select>
@@ -135,53 +133,53 @@ function OKRBulkTab({ levels, members, fiscalYear, wT }) {
 
   const reset = () => { setRows([emptyRow(1), emptyRow(2)]); setStep('input'); setError('') }
 
-  const sInput = (extra) => ({ background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: wT.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', ...extra })
+  const sInput = (extra) => ({ background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: wT.text, ...TYPO.subhead, fontWeight: 400, outline: 'none', fontFamily: 'inherit', ...extra })
 
   if (step === 'done') return (
-    <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-      <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
-      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>OKR登録完了！</div>
-      <div style={{ fontSize: 14, color: wT.textMuted, marginBottom: 28 }}>{fiscalYear}年度のOKRダッシュボードに反映されました</div>
-      <button onClick={reset} style={{ background: '#4d9fff', border: 'none', color: '#fff', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>続けて登録する</button>
+    <div style={{ textAlign: 'center', padding: `${SPACING['3xl'] + SPACING.lg}px ${SPACING.xl}px` }}>
+      <div style={{ marginBottom: SPACING.lg, color: wT.success, display: 'flex', justifyContent: 'center' }}><Icon name="check" size={56} /></div>
+      <div style={{ ...TYPO.title1, color: wT.text, marginBottom: SPACING.sm }}>OKR登録完了！</div>
+      <div style={{ ...TYPO.headline, fontWeight: 500, color: wT.textMuted, marginBottom: SPACING['3xl'] - 4 }}>{fiscalYear}年度のOKRダッシュボードに反映されました</div>
+      <button onClick={reset} style={{ ...btnPrimary({ T: wT, size: 'lg', color: wT.accent }) }}>続けて登録する</button>
     </div>
   )
 
   if (step === 'preview') return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, marginBottom: 20, background: 'rgba(77,159,255,0.08)', border: '1px solid rgba(77,159,255,0.25)' }}>
-        <span style={{ fontSize: 18 }}>📅</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#4d9fff' }}>{fiscalYear}年度として{validRows.length}件のOKRを登録します</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.md, marginBottom: SPACING.xl, background: wT.accentBg, border: `1px solid ${wT.accentBg}` }}>
+        <span style={{ color: wT.accent, display: 'inline-flex' }}><Icon name="calendar" size={18} /></span>
+        <span style={{ ...TYPO.callout, color: wT.accent }}>{fiscalYear}年度として{validRows.length}件のOKRを登録します</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2, marginBottom: SPACING.xl }}>
         {validRows.map((row, i) => {
           const level = levels.find(l => l.id === parseInt(row.levelId))
           const d = level ? getLevelDepth(level.id, levels) : 0
           const color = LAYER_COLORS[d] || '#a0a8be'
           const validKRs = row.krs.filter(k => k.title.trim())
           return (
-            <div key={row._id} style={{ background: wT.bgCard, border: `1px solid ${color}30`, borderLeft: `3px solid ${color}`, borderRadius: 10, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${color}18`, color }}>{level?.icon} {level?.name}</span>
-                <span style={{ fontSize: 11, color: wT.textMuted }}>{getPeriodLabel(toPeriodKey(row.period, fiscalYear))}</span>
-                {row.owner && <span style={{ fontSize: 11, color: avatarColor(row.owner), fontWeight: 600 }}>👤 {row.owner}</span>}
+            <div key={row._id} style={{ ...cardStyle({ T: wT, padding: `${SPACING.md + 2}px ${SPACING.lg}px` }), border: `1px solid ${color}30`, borderLeft: `3px solid ${color}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+                <span style={{ ...pillStyle({ color, size: 'md' }), gap: 4 }}><Icon name="building" size={11} /> {level?.name}</span>
+                <span style={{ ...TYPO.footnote, fontWeight: 600, color: wT.textMuted }}>{getPeriodLabel(toPeriodKey(row.period, fiscalYear))}</span>
+                {row.owner && <span style={{ ...TYPO.footnote, color: avatarColor(row.owner), display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="user" size={11} /> {row.owner}</span>}
               </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: wT.text, marginBottom: validKRs.length ? 10 : 0 }}>{row.title}</div>
+              <div style={{ ...TYPO.headline, color: wT.text, marginBottom: validKRs.length ? SPACING.sm + 2 : 0 }}>{row.title}</div>
               {validKRs.map((kr, ki) => (
-                <div key={kr._id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: wT.bgCard2, borderRadius: 6, marginTop: 5 }}>
-                  <span style={{ fontSize: 10, color: '#4d9fff', fontWeight: 700 }}>KR{ki + 1}</span>
-                  <span style={{ fontSize: 12, color: wT.textSub, flex: 1 }}>{kr.title}</span>
-                  <span style={{ fontSize: 11, color: wT.textMuted }}>{kr.current || 0}{kr.unit} / {kr.target || 0}{kr.unit}</span>
+                <div key={kr._id} style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, padding: `${SPACING.xs + 1}px ${SPACING.sm}px`, background: wT.bgCard2, borderRadius: RADIUS.xs, marginTop: SPACING.xs + 1 }}>
+                  <span style={{ ...TYPO.caption, color: wT.accent }}>KR{ki + 1}</span>
+                  <span style={{ ...TYPO.subhead, color: wT.textSub, flex: 1 }}>{kr.title}</span>
+                  <span style={{ ...TYPO.footnote, color: wT.textMuted }}>{kr.current || 0}{kr.unit} / {kr.target || 0}{kr.unit}</span>
                 </div>
               ))}
             </div>
           )
         })}
       </div>
-      {error && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={() => setStep('input')} style={{ background: 'transparent', border: `1px solid ${wT.borderMid}`, color: wT.textSub, borderRadius: 8, padding: '10px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← 戻って修正する</button>
-        <button onClick={handleRegister} disabled={registering} style={{ flex: 1, background: 'linear-gradient(135deg,#4d9fff,#a855f7)', border: 'none', color: '#fff', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 700, cursor: registering ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: registering ? 0.6 : 1 }}>
-          {registering ? '登録中...' : `✅ ${validRows.length}件のOKRを${fiscalYear}年度に登録する`}
+      {error && <div style={{ color: wT.danger, background: wT.dangerBg, borderRadius: RADIUS.sm, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, ...TYPO.subhead, marginBottom: SPACING.md }}>{error}</div>}
+      <div style={{ display: 'flex', gap: SPACING.sm + 2 }}>
+        <button onClick={() => setStep('input')} style={{ ...btnSecondary({ T: wT, size: 'md' }), color: wT.textSub }}>← 戻って修正する</button>
+        <button onClick={handleRegister} disabled={registering} style={{ flex: 1, ...btnPrimary({ T: wT, size: 'lg', color: wT.accent }), opacity: registering ? 0.6 : 1, cursor: registering ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          {registering ? '登録中...' : <><Icon name="check" size={14} /> {validRows.length}件のOKRを{fiscalYear}年度に登録する</>}
         </button>
       </div>
     </div>
@@ -190,82 +188,82 @@ function OKRBulkTab({ levels, members, fiscalYear, wT }) {
   // 入力フォーム
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: fiscalYear === '2026' ? 'rgba(77,159,255,0.15)' : 'rgba(255,159,67,0.15)', color: fiscalYear === '2026' ? '#4d9fff' : '#ff9f43' }}>📅 {fiscalYear}年度</div>
-        <div style={{ fontSize: 12, color: wT.textMuted }}>OKRタイトル・部署・担当者・KRを入力してください</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.lg }}>
+        <div style={{ ...pillStyle({ color: fiscalYear === '2026' ? wT.accent : wT.warn, size: 'md' }), gap: 4 }}><Icon name="calendar" size={11} /> {fiscalYear}年度</div>
+        <div style={{ ...TYPO.subhead, color: wT.textMuted }}>OKRタイトル・部署・担当者・KRを入力してください</div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md, marginBottom: SPACING.lg }}>
         {rows.map((row) => (
-          <div key={row._id} style={{ background: wT.bgCard, border: `1px solid ${row.title && row.levelId ? 'rgba(77,159,255,0.25)' : wT.border}`, borderRadius: 12, padding: '14px 16px', borderLeft: `3px solid ${row.title && row.levelId ? '#4d9fff' : wT.border}` }}>
+          <div key={row._id} style={{ ...cardStyle({ T: wT, padding: `${SPACING.md + 2}px ${SPACING.lg}px` }), border: `1px solid ${row.title && row.levelId ? wT.accentBg : wT.border}`, borderLeft: `3px solid ${row.title && row.levelId ? wT.accent : wT.border}` }}>
             {/* ヘッダー行 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(77,159,255,0.15)', border: '1px solid rgba(77,159,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#4d9fff', flexShrink: 0 }}>{row._idx}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm + 2 }}>
+              <div style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: wT.accentBg, border: `1px solid ${wT.accentBg}`, display: 'flex', alignItems: 'center', justifyContent: 'center', ...TYPO.caption, color: wT.accent, flexShrink: 0 }}>{row._idx}</div>
               <input value={row.title} onChange={e => updateRow(row._id, 'title', e.target.value)} placeholder="目標タイトル（必須）"
-                style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${wT.border}`, color: wT.text, fontSize: 14, fontWeight: 600, outline: 'none', fontFamily: 'inherit', padding: '3px 4px' }}
-                onFocus={e => e.target.style.borderBottomColor = '#4d9fff'}
+                style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${wT.border}`, color: wT.text, ...TYPO.headline, fontWeight: 600, outline: 'none', fontFamily: 'inherit', padding: '3px 4px' }}
+                onFocus={e => e.target.style.borderBottomColor = wT.accent}
                 onBlur={e => e.target.style.borderBottomColor = wT.border} />
               {rows.length > 1 && (
-                <button onClick={() => removeRow(row._id)} style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'rgba(255,107,107,0.08)', color: '#ff6b6b', cursor: 'pointer', fontSize: 10, flexShrink: 0 }}>✕</button>
+                <button onClick={() => removeRow(row._id)} style={{ width: 22, height: 22, borderRadius: RADIUS.xs - 2, border: 'none', background: wT.dangerBg, color: wT.danger, cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={12} /></button>
               )}
             </div>
             {/* 部署・担当者・期間 */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, paddingLeft: 30 }}>
+            <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', marginBottom: SPACING.sm + 2, paddingLeft: 30 }}>
               <div style={{ flex: 2, minWidth: 140 }}>
-                <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>部署 <span style={{ color: '#ff6b6b' }}>*</span></div>
+                <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>部署 <span style={{ color: wT.danger }}>*</span></div>
                 <DeptSelect value={row.levelId} onChange={val => updateRow(row._id, 'levelId', val)} levels={levels} wT={wT} />
               </div>
               <div style={{ flex: 2, minWidth: 100 }}>
-                <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>担当者</div>
+                <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>担当者</div>
                 <select value={row.owner} onChange={e => updateRow(row._id, 'owner', e.target.value)}
-                  style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: row.owner ? avatarColor(row.owner) : wT.textMuted, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.owner ? 600 : 400 }}>
+                  style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: row.owner ? avatarColor(row.owner) : wT.textMuted, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.owner ? 600 : 400 }}>
                   <option value="">-- 未設定 --</option>
                   {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
               </div>
               <div style={{ flex: 1, minWidth: 80 }}>
-                <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>期間</div>
+                <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>期間</div>
                 <select value={row.period} onChange={e => updateRow(row._id, 'period', e.target.value)}
-                  style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: wT.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                  style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: wT.text, ...TYPO.subhead, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                   {PERIOD_OPTS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
             </div>
             {/* KR入力 */}
             <div style={{ paddingLeft: 30 }}>
-              <div style={{ fontSize: 9, color: '#4d9fff', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Key Results</div>
+              <div style={{ ...TYPO.caption, color: wT.accent, textTransform: 'uppercase', marginBottom: SPACING.xs + 2 }}>Key Results</div>
               {row.krs.map((kr, ki) => (
-                <div key={kr._id} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6, padding: '6px 8px', background: wT.bgCard2, borderRadius: 7, border: `1px solid ${wT.border}` }}>
-                  <span style={{ fontSize: 10, color: '#4d9fff', fontWeight: 700, flexShrink: 0 }}>KR{ki + 1}</span>
+                <div key={kr._id} style={{ display: 'flex', gap: SPACING.xs + 2, alignItems: 'center', marginBottom: SPACING.xs + 2, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, background: wT.bgCard2, borderRadius: RADIUS.sm - 1, border: `1px solid ${wT.border}` }}>
+                  <span style={{ ...TYPO.caption, color: wT.accent, flexShrink: 0 }}>KR{ki + 1}</span>
                   <input value={kr.title} onChange={e => updateKR(row._id, kr._id, 'title', e.target.value)} placeholder="KRタイトル"
                     style={{ flex: 3, minWidth: 80, ...sInput({}) }} />
                   <input value={kr.current} onChange={e => updateKR(row._id, kr._id, 'current', e.target.value)} placeholder="現在値"
                     style={{ width: 64, ...sInput({}) }} />
-                  <span style={{ fontSize: 10, color: wT.textFaint }}>/</span>
+                  <span style={{ ...TYPO.caption, color: wT.textFaint }}>/</span>
                   <input value={kr.target} onChange={e => updateKR(row._id, kr._id, 'target', e.target.value)} placeholder="目標値"
                     style={{ width: 64, ...sInput({}) }} />
                   <input value={kr.unit} onChange={e => updateKR(row._id, kr._id, 'unit', e.target.value)} placeholder="単位"
                     style={{ width: 44, ...sInput({}) }} />
                   {row.krs.length > 1 && (
-                    <button onClick={() => removeKR(row._id, kr._id)} style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', color: wT.textFaint, cursor: 'pointer', fontSize: 11, flexShrink: 0 }}>✕</button>
+                    <button onClick={() => removeKR(row._id, kr._id)} style={{ width: 18, height: 18, borderRadius: RADIUS.xs - 3, border: 'none', background: 'transparent', color: wT.textFaint, cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={11} /></button>
                   )}
                 </div>
               ))}
-              <button onClick={() => addKR(row._id)} style={{ fontSize: 10, color: '#4d9fff', background: 'rgba(77,159,255,0.06)', border: '1px dashed rgba(77,159,255,0.25)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>＋ KRを追加</button>
+              <button onClick={() => addKR(row._id)} style={{ ...TYPO.caption, color: wT.accent, background: wT.accentBg, border: `1px dashed ${wT.accentBg}`, borderRadius: RADIUS.xs, padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="plus" size={11} /> KRを追加</button>
             </div>
           </div>
         ))}
       </div>
 
-      <button onClick={addRow} style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: `1px dashed ${wT.borderMid}`, color: wT.textMuted, borderRadius: 10, padding: '10px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 16 }}>
-        ＋ OKRを追加
+      <button onClick={addRow} style={{ width: '100%', background: wT.sectionBg, border: `1px dashed ${wT.borderMid}`, color: wT.textMuted, borderRadius: RADIUS.md, padding: SPACING.sm + 2, ...TYPO.subhead, cursor: 'pointer', fontFamily: 'inherit', marginBottom: SPACING.lg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+        <Icon name="plus" size={13} /> OKRを追加
       </button>
 
       <button onClick={() => { if (validRows.length === 0) { setError('タイトルと部署を1件以上入力してください'); return } setError(''); setStep('preview') }}
-        style={{ width: '100%', background: validRows.length > 0 ? 'linear-gradient(135deg,#4d9fff,#a855f7)' : 'rgba(255,255,255,0.06)', border: 'none', color: validRows.length > 0 ? '#fff' : '#404660', borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: validRows.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+        style={{ width: '100%', ...(validRows.length > 0 ? btnPrimary({ T: wT, size: 'lg', color: wT.accent }) : { background: wT.sunken, border: 'none', color: wT.textFaint, borderRadius: RADIUS.md, fontWeight: 800, fontFamily: 'inherit' }), padding: SPACING.md + 2, fontSize: 15, cursor: validRows.length > 0 ? 'pointer' : 'not-allowed' }}>
         プレビューを確認する（{validRows.length}件）→
       </button>
-      {error && <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 8 }}>{error}</div>}
+      {error && <div style={{ color: wT.danger, ...TYPO.footnote, marginTop: SPACING.sm }}>{error}</div>}
     </div>
   )
 }
@@ -337,46 +335,46 @@ function KABulkTab({ levels, members, fiscalYear, wT }) {
   const reset = () => { setRows([emptyRow(1), emptyRow(2), emptyRow(3)]); setStep('input'); setError('') }
 
   if (step === 'done') return (
-    <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-      <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
-      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>KA登録完了！</div>
-      <div style={{ fontSize: 14, color: wT.textMuted, marginBottom: 28 }}>週次MTGページに反映されました</div>
-      <button onClick={reset} style={{ background: '#00d68f', border: 'none', color: '#fff', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>続けて登録する</button>
+    <div style={{ textAlign: 'center', padding: `${SPACING['3xl'] + SPACING.lg}px ${SPACING.xl}px` }}>
+      <div style={{ marginBottom: SPACING.lg, color: wT.success, display: 'flex', justifyContent: 'center' }}><Icon name="check" size={56} /></div>
+      <div style={{ ...TYPO.title1, color: wT.text, marginBottom: SPACING.sm }}>KA登録完了！</div>
+      <div style={{ ...TYPO.headline, fontWeight: 500, color: wT.textMuted, marginBottom: SPACING['3xl'] - 4 }}>週次MTGページに反映されました</div>
+      <button onClick={reset} style={{ ...btnPrimary({ T: wT, size: 'lg', color: wT.success }) }}>続けて登録する</button>
     </div>
   )
 
   if (step === 'preview') return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, marginBottom: 20, background: 'rgba(0,214,143,0.08)', border: '1px solid rgba(0,214,143,0.25)' }}>
-        <span style={{ fontSize: 18 }}>📋</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#00d68f' }}>{validRows.length}件のKAを登録します</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.md, marginBottom: SPACING.xl, background: wT.successBg, border: `1px solid ${wT.successBg}` }}>
+        <span style={{ color: wT.success, display: 'inline-flex' }}><Icon name="note" size={18} /></span>
+        <span style={{ ...TYPO.callout, color: wT.success }}>{validRows.length}件のKAを登録します</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm, marginBottom: SPACING.xl }}>
         {validRows.map((row) => {
           const statusCfg = STATUS_OPTIONS.find(s => s.value === row.status) || STATUS_OPTIONS[0]
           const level = row.levelId ? levels.find(l => l.id === parseInt(row.levelId)) : null
           const obj = row.objectiveId ? objectives.find(o => o.id === parseInt(row.objectiveId)) : null
           const kr = row.krId ? keyResults.find(k => k.id === parseInt(row.krId)) : null
           return (
-            <div key={row._id} style={{ background: wT.bgCard, border: `1px solid ${statusCfg.color}30`, borderLeft: `3px solid ${statusCfg.color}`, borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${statusCfg.color}18`, color: statusCfg.color }}>{statusCfg.label}</span>
-                {level && <span style={{ fontSize: 11, color: wT.textMuted }}>{level.icon} {level.name}</span>}
-                {row.owner && <span style={{ fontSize: 11, color: avatarColor(row.owner), fontWeight: 600 }}>👤 {row.owner}</span>}
-                <span style={{ fontSize: 11, color: wT.textFaint, marginLeft: 'auto' }}>📅 {row.weekStart}</span>
+            <div key={row._id} style={{ ...cardStyle({ T: wT, padding: `${SPACING.md}px ${SPACING.md + 2}px` }), border: `1px solid ${statusCfg.color}30`, borderLeft: `3px solid ${statusCfg.color}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs + 2, flexWrap: 'wrap' }}>
+                <span style={{ ...pillStyle({ color: statusCfg.color, size: 'md' }) }}>{statusCfg.label}</span>
+                {level && <span style={{ ...TYPO.footnote, color: wT.textMuted, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="building" size={11} /> {level.name}</span>}
+                {row.owner && <span style={{ ...TYPO.footnote, color: avatarColor(row.owner), display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="user" size={11} /> {row.owner}</span>}
+                <span style={{ ...TYPO.footnote, fontWeight: 600, color: wT.textFaint, marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="calendar" size={11} /> {row.weekStart}</span>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: wT.text, marginBottom: (obj || kr) ? 6 : 0 }}>{row.kaTitle}</div>
-              {obj && <div style={{ fontSize: 11, color: '#4d9fff', background: 'rgba(77,159,255,0.08)', borderRadius: 5, padding: '2px 8px', display: 'inline-block', marginRight: 6 }}>🎯 {obj.title}</div>}
-              {kr && <div style={{ fontSize: 11, color: '#a855f7', background: 'rgba(168,85,247,0.08)', borderRadius: 5, padding: '2px 8px', display: 'inline-block' }}>📊 {kr.title}</div>}
+              <div style={{ ...TYPO.subhead, color: wT.text, marginBottom: (obj || kr) ? SPACING.xs + 2 : 0 }}>{row.kaTitle}</div>
+              {obj && <div style={{ ...TYPO.footnote, color: wT.accent, background: wT.accentBg, borderRadius: RADIUS.xs - 1, padding: `2px ${SPACING.sm}px`, display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: SPACING.xs + 2 }}><Icon name="target" size={11} /> {obj.title}</div>}
+              {kr && <div style={{ ...TYPO.footnote, color: '#a855f7', background: 'rgba(168,85,247,0.08)', borderRadius: RADIUS.xs - 1, padding: `2px ${SPACING.sm}px`, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chart" size={11} /> {kr.title}</div>}
             </div>
           )
         })}
       </div>
-      {error && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={() => setStep('input')} style={{ background: 'transparent', border: `1px solid ${wT.borderMid}`, color: wT.textSub, borderRadius: 8, padding: '10px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← 戻って修正する</button>
-        <button onClick={handleRegister} disabled={registering} style={{ flex: 1, background: 'linear-gradient(135deg,#00d68f,#4d9fff)', border: 'none', color: '#fff', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 700, cursor: registering ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: registering ? 0.6 : 1 }}>
-          {registering ? '登録中...' : `✅ ${validRows.length}件のKAを登録する`}
+      {error && <div style={{ color: wT.danger, background: wT.dangerBg, borderRadius: RADIUS.sm, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, ...TYPO.subhead, marginBottom: SPACING.md }}>{error}</div>}
+      <div style={{ display: 'flex', gap: SPACING.sm + 2 }}>
+        <button onClick={() => setStep('input')} style={{ ...btnSecondary({ T: wT, size: 'md' }), color: wT.textSub }}>← 戻って修正する</button>
+        <button onClick={handleRegister} disabled={registering} style={{ flex: 1, ...btnPrimary({ T: wT, size: 'lg', color: wT.success }), opacity: registering ? 0.6 : 1, cursor: registering ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          {registering ? '登録中...' : <><Icon name="check" size={14} /> {validRows.length}件のKAを登録する</>}
         </button>
       </div>
     </div>
@@ -385,32 +383,32 @@ function KABulkTab({ levels, members, fiscalYear, wT }) {
   // 入力フォーム
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <div style={{ fontSize: 12, color: wT.textMuted }}>KAタイトル・担当者・部署・紐づくKRを入力してください</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.lg }}>
+        <div style={{ ...TYPO.subhead, color: wT.textMuted }}>KAタイトル・担当者・部署・紐づくKRを入力してください</div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2, marginBottom: SPACING.lg }}>
         {rows.map((row) => {
           const statusCfg = STATUS_OPTIONS.find(s => s.value === row.status) || STATUS_OPTIONS[0]
           const objsForLevel = row.levelId ? getObjsForLevel(row.levelId) : filteredObjs
           const krsForObj = row.objectiveId ? getKRsForObj(row.objectiveId) : []
           return (
-            <div key={row._id} style={{ background: wT.bgCard, border: `1px solid ${row.kaTitle ? statusCfg.color + '35' : wT.border}`, borderLeft: `3px solid ${row.kaTitle ? statusCfg.color : wT.border}`, borderRadius: 12, padding: '12px 14px', transition: 'all 0.15s' }}>
+            <div key={row._id} style={{ ...cardStyle({ T: wT, padding: `${SPACING.md}px ${SPACING.md + 2}px` }), border: `1px solid ${row.kaTitle ? statusCfg.color + '35' : wT.border}`, borderLeft: `3px solid ${row.kaTitle ? statusCfg.color : wT.border}` }}>
               {/* タイトル行 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${statusCfg.color}15`, border: `1px solid ${statusCfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: statusCfg.color, flexShrink: 0 }}>{row._idx}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm + 2 }}>
+                <div style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: `${statusCfg.color}15`, border: `1px solid ${statusCfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', ...TYPO.caption, color: statusCfg.color, flexShrink: 0 }}>{row._idx}</div>
                 <input value={row.kaTitle} onChange={e => updateRow(row._id, 'kaTitle', e.target.value)} placeholder="KAタイトルを入力（必須）"
-                  style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${wT.border}`, color: wT.text, fontSize: 13, fontWeight: 600, outline: 'none', fontFamily: 'inherit', padding: '3px 4px' }}
-                  onFocus={e => e.target.style.borderBottomColor = '#00d68f'}
+                  style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${wT.border}`, color: wT.text, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', padding: '3px 4px' }}
+                  onFocus={e => e.target.style.borderBottomColor = wT.success}
                   onBlur={e => e.target.style.borderBottomColor = wT.border} />
                 {rows.length > 1 && (
-                  <button onClick={() => removeRow(row._id)} style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'rgba(255,107,107,0.08)', color: '#ff6b6b', cursor: 'pointer', fontSize: 10, flexShrink: 0 }}>✕</button>
+                  <button onClick={() => removeRow(row._id)} style={{ width: 22, height: 22, borderRadius: RADIUS.xs - 2, border: 'none', background: wT.dangerBg, color: wT.danger, cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={12} /></button>
                 )}
               </div>
               {/* 詳細入力 */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 30, marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', paddingLeft: 30, marginBottom: SPACING.sm }}>
                 <div style={{ flex: 2, minWidth: 130 }}>
-                  <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>部署</div>
+                  <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>部署</div>
                   <DeptSelect value={row.levelId} onChange={val => {
                     updateRow(row._id, 'levelId', val)
                     updateRow(row._id, 'objectiveId', '')
@@ -419,51 +417,51 @@ function KABulkTab({ levels, members, fiscalYear, wT }) {
                   }} levels={levels} wT={wT} />
                 </div>
                 <div style={{ flex: 2, minWidth: 100 }}>
-                  <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>担当者</div>
+                  <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>担当者</div>
                   <select value={row.owner} onChange={e => updateRow(row._id, 'owner', e.target.value)}
-                    style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: row.owner ? avatarColor(row.owner) : wT.textMuted, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.owner ? 600 : 400 }}>
+                    style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: row.owner ? avatarColor(row.owner) : wT.textMuted, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.owner ? 600 : 400 }}>
                     <option value="">-- 未設定 --</option>
                     {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1, minWidth: 90 }}>
-                  <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>ステータス</div>
+                  <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>ステータス</div>
                   <select value={row.status} onChange={e => updateRow(row._id, 'status', e.target.value)}
-                    style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${statusCfg.color}50`, borderRadius: 6, padding: '6px 8px', color: statusCfg.color, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: 600 }}>
+                    style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${statusCfg.color}50`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: statusCfg.color, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                     {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 1, minWidth: 120 }}>
-                  <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>週</div>
+                  <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>週</div>
                   <select value={row.weekStart} onChange={e => updateRow(row._id, 'weekStart', e.target.value)}
-                    style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: wT.text, fontSize: 11, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                    style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: wT.text, ...TYPO.footnote, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                     {weeks.map(w => <option key={w} value={w}>{w}{w === weeks[0] ? '（今週）' : ''}</option>)}
                   </select>
                 </div>
               </div>
               {/* OKR・KR紐付け */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 30 }}>
+              <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', paddingLeft: 30 }}>
                 <div style={{ flex: 2, minWidth: 160 }}>
-                  <div style={{ fontSize: 9, color: '#4d9fff', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>紐づくObjective（任意）</div>
+                  <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.accent, marginBottom: 3, textTransform: 'uppercase' }}>紐づくObjective（任意）</div>
                   <select value={row.objectiveId} onChange={e => {
                     updateRow(row._id, 'objectiveId', e.target.value)
                     updateRow(row._id, 'krId', '')
                     updateRow(row._id, 'krTitle', '')
                   }}
-                    style={{ width: '100%', background: wT.bgCard2, border: '1px solid rgba(77,159,255,0.2)', borderRadius: 6, padding: '6px 8px', color: wT.text, fontSize: 11, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                    style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.accentBg}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: wT.text, ...TYPO.footnote, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                     <option value="">-- OKRを選択（任意）--</option>
                     {objsForLevel.map(o => <option key={o.id} value={String(o.id)}>[{getPeriodLabel(o.period)}] {o.title}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: 2, minWidth: 160 }}>
-                  <div style={{ fontSize: 9, color: '#a855f7', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>紐づくKR（任意）</div>
+                  <div style={{ ...TYPO.caption, fontWeight: 600, color: '#a855f7', marginBottom: 3, textTransform: 'uppercase' }}>紐づくKR（任意）</div>
                   <select value={row.krId} onChange={e => {
                     const kr = keyResults.find(k => k.id === parseInt(e.target.value))
                     updateRow(row._id, 'krId', e.target.value)
                     updateRow(row._id, 'krTitle', kr ? kr.title : '')
                   }}
                     disabled={!row.objectiveId}
-                    style={{ width: '100%', background: wT.bgCard2, border: '1px solid rgba(168,85,247,0.2)', borderRadius: 6, padding: '6px 8px', color: row.objectiveId ? wT.text : wT.textFaint, fontSize: 11, outline: 'none', fontFamily: 'inherit', cursor: row.objectiveId ? 'pointer' : 'not-allowed' }}>
+                    style={{ width: '100%', background: wT.bgCard2, border: '1px solid rgba(168,85,247,0.2)', borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: row.objectiveId ? wT.text : wT.textFaint, ...TYPO.footnote, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: row.objectiveId ? 'pointer' : 'not-allowed' }}>
                     <option value="">-- KRを選択（任意）--</option>
                     {krsForObj.map(kr => <option key={kr.id} value={String(kr.id)}>{kr.title}</option>)}
                   </select>
@@ -474,15 +472,15 @@ function KABulkTab({ levels, members, fiscalYear, wT }) {
         })}
       </div>
 
-      <button onClick={addRow} style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: `1px dashed ${wT.borderMid}`, color: wT.textMuted, borderRadius: 10, padding: '10px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 16 }}>
-        ＋ KAを追加
+      <button onClick={addRow} style={{ width: '100%', background: wT.sectionBg, border: `1px dashed ${wT.borderMid}`, color: wT.textMuted, borderRadius: RADIUS.md, padding: SPACING.sm + 2, ...TYPO.subhead, cursor: 'pointer', fontFamily: 'inherit', marginBottom: SPACING.lg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+        <Icon name="plus" size={13} /> KAを追加
       </button>
 
       <button onClick={() => { if (validRows.length === 0) { setError('KAタイトルを1件以上入力してください'); return } setError(''); setStep('preview') }}
-        style={{ width: '100%', background: validRows.length > 0 ? 'linear-gradient(135deg,#00d68f,#4d9fff)' : 'rgba(255,255,255,0.06)', border: 'none', color: validRows.length > 0 ? '#fff' : '#404660', borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: validRows.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+        style={{ width: '100%', ...(validRows.length > 0 ? btnPrimary({ T: wT, size: 'lg', color: wT.success }) : { background: wT.sunken, border: 'none', color: wT.textFaint, borderRadius: RADIUS.md, fontWeight: 800, fontFamily: 'inherit' }), padding: SPACING.md + 2, fontSize: 15, cursor: validRows.length > 0 ? 'pointer' : 'not-allowed' }}>
         プレビューを確認する（{validRows.length}件）→
       </button>
-      {error && <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 8 }}>{error}</div>}
+      {error && <div style={{ color: wT.danger, ...TYPO.footnote, marginTop: SPACING.sm }}>{error}</div>}
     </div>
   )
 }
@@ -606,52 +604,52 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
 
   // ── Done ──
   if (step === 'done') return (
-    <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-      <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
-      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Notion議事録インポート完了！</div>
-      <div style={{ fontSize: 14, color: wT.textMuted, marginBottom: 8 }}>
+    <div style={{ textAlign: 'center', padding: `${SPACING['3xl'] + SPACING.lg}px ${SPACING.xl}px` }}>
+      <div style={{ marginBottom: SPACING.lg, color: wT.warn, display: 'flex', justifyContent: 'center' }}><Icon name="check" size={56} /></div>
+      <div style={{ ...TYPO.title1, color: wT.text, marginBottom: SPACING.sm }}>Notion議事録インポート完了！</div>
+      <div style={{ ...TYPO.headline, fontWeight: 500, color: wT.textMuted, marginBottom: SPACING.sm }}>
         KA: {resultCount.ka}件 / タスク: {resultCount.task}件 登録しました
       </div>
-      {pageTitle && <div style={{ fontSize: 12, color: wT.textFaint, marginBottom: 28 }}>📄 {pageTitle}</div>}
-      <button onClick={reset} style={{ background: 'linear-gradient(135deg,#ff9f43,#ff6b6b)', border: 'none', color: '#fff', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>続けてインポートする</button>
+      {pageTitle && <div style={{ ...TYPO.footnote, color: wT.textFaint, marginBottom: SPACING['3xl'] - 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="note" size={12} /> {pageTitle}</div>}
+      <button onClick={reset} style={{ ...btnPrimary({ T: wT, size: 'lg', color: wT.warn }) }}>続けてインポートする</button>
     </div>
   )
 
   // ── Preview ──
   if (step === 'preview') return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, marginBottom: 20, background: 'rgba(255,159,67,0.08)', border: '1px solid rgba(255,159,67,0.25)' }}>
-        <span style={{ fontSize: 18 }}>📝</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#ff9f43' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, borderRadius: RADIUS.md, marginBottom: SPACING.xl, background: wT.warnBg, border: `1px solid ${wT.warnBg}` }}>
+        <span style={{ color: wT.warn, display: 'inline-flex' }}><Icon name="pencil" size={18} /></span>
+        <span style={{ ...TYPO.callout, color: wT.warn }}>
           {validRows.length}件のKA + {taskCount}件のタスクを登録します
         </span>
       </div>
       {pageTitle && (
-        <div style={{ fontSize: 12, color: wT.textMuted, marginBottom: 14, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 6 }}>
-          📄 {pageTitle}
+        <div style={{ ...TYPO.subhead, color: wT.textMuted, marginBottom: SPACING.md + 2, padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, background: wT.sectionBg, borderRadius: RADIUS.xs, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="note" size={12} /> {pageTitle}
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm, marginBottom: SPACING.xl }}>
         {validRows.map((row) => {
           const statusCfg = STATUS_OPTIONS.find(s => s.value === row.status) || STATUS_OPTIONS[0]
           const level = row.levelId ? levels.find(l => l.id === parseInt(row.levelId)) : null
           const obj = row.objectiveId ? objectives.find(o => o.id === parseInt(row.objectiveId)) : null
           const kr = row.krId ? keyResults.find(k => k.id === parseInt(row.krId)) : null
           return (
-            <div key={row._id} style={{ background: wT.bgCard, border: `1px solid ${statusCfg.color}30`, borderLeft: `3px solid ${statusCfg.color}`, borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: `${statusCfg.color}18`, color: statusCfg.color }}>{statusCfg.label}</span>
-                {level && <span style={{ fontSize: 11, color: wT.textMuted }}>{level.icon} {level.name}</span>}
-                {row.owner && <span style={{ fontSize: 11, color: avatarColor(row.owner), fontWeight: 600 }}>👤 {row.owner}</span>}
-                <span style={{ fontSize: 11, color: wT.textFaint, marginLeft: 'auto' }}>📅 {row.weekStart}</span>
+            <div key={row._id} style={{ ...cardStyle({ T: wT, padding: `${SPACING.md}px ${SPACING.md + 2}px` }), border: `1px solid ${statusCfg.color}30`, borderLeft: `3px solid ${statusCfg.color}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs + 2, flexWrap: 'wrap' }}>
+                <span style={{ ...pillStyle({ color: statusCfg.color, size: 'md' }) }}>{statusCfg.label}</span>
+                {level && <span style={{ ...TYPO.footnote, color: wT.textMuted, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="building" size={11} /> {level.name}</span>}
+                {row.owner && <span style={{ ...TYPO.footnote, color: avatarColor(row.owner), display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="user" size={11} /> {row.owner}</span>}
+                <span style={{ ...TYPO.footnote, fontWeight: 600, color: wT.textFaint, marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="calendar" size={11} /> {row.weekStart}</span>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: wT.text, marginBottom: (obj || kr || row.createTask) ? 6 : 0 }}>{row.kaTitle}</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {obj && <div style={{ fontSize: 11, color: '#4d9fff', background: 'rgba(77,159,255,0.08)', borderRadius: 5, padding: '2px 8px' }}>🎯 {obj.title}</div>}
-                {kr && <div style={{ fontSize: 11, color: '#a855f7', background: 'rgba(168,85,247,0.08)', borderRadius: 5, padding: '2px 8px' }}>📊 {kr.title}</div>}
+              <div style={{ ...TYPO.subhead, color: wT.text, marginBottom: (obj || kr || row.createTask) ? SPACING.xs + 2 : 0 }}>{row.kaTitle}</div>
+              <div style={{ display: 'flex', gap: SPACING.xs + 2, flexWrap: 'wrap' }}>
+                {obj && <div style={{ ...TYPO.footnote, color: wT.accent, background: wT.accentBg, borderRadius: RADIUS.xs - 1, padding: `2px ${SPACING.sm}px`, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="target" size={11} /> {obj.title}</div>}
+                {kr && <div style={{ ...TYPO.footnote, color: '#a855f7', background: 'rgba(168,85,247,0.08)', borderRadius: RADIUS.xs - 1, padding: `2px ${SPACING.sm}px`, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chart" size={11} /> {kr.title}</div>}
                 {row.createTask && (
-                  <div style={{ fontSize: 11, color: '#00d68f', background: 'rgba(0,214,143,0.08)', borderRadius: 5, padding: '2px 8px' }}>
-                    ✅ タスク作成{row.dueDate ? ` (〜${row.dueDate})` : ''}{row.assignee ? ` → ${row.assignee}` : ''}
+                  <div style={{ ...TYPO.footnote, color: wT.success, background: wT.successBg, borderRadius: RADIUS.xs - 1, padding: `2px ${SPACING.sm}px`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="check" size={11} /> タスク作成{row.dueDate ? ` (〜${row.dueDate})` : ''}{row.assignee ? ` → ${row.assignee}` : ''}
                   </div>
                 )}
               </div>
@@ -659,11 +657,11 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
           )
         })}
       </div>
-      {error && <div style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={() => setStep('input')} style={{ background: 'transparent', border: `1px solid ${wT.borderMid}`, color: wT.textSub, borderRadius: 8, padding: '10px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← 戻って修正する</button>
-        <button onClick={handleRegister} disabled={registering} style={{ flex: 1, background: 'linear-gradient(135deg,#ff9f43,#ff6b6b)', border: 'none', color: '#fff', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 700, cursor: registering ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: registering ? 0.6 : 1 }}>
-          {registering ? '登録中...' : `✅ ${validRows.length}件のKA + ${taskCount}件のタスクを登録する`}
+      {error && <div style={{ color: wT.danger, background: wT.dangerBg, borderRadius: RADIUS.sm, padding: `${SPACING.sm + 2}px ${SPACING.md + 2}px`, ...TYPO.subhead, marginBottom: SPACING.md }}>{error}</div>}
+      <div style={{ display: 'flex', gap: SPACING.sm + 2 }}>
+        <button onClick={() => setStep('input')} style={{ ...btnSecondary({ T: wT, size: 'md' }), color: wT.textSub }}>← 戻って修正する</button>
+        <button onClick={handleRegister} disabled={registering} style={{ flex: 1, ...btnPrimary({ T: wT, size: 'lg', color: wT.warn }), opacity: registering ? 0.6 : 1, cursor: registering ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          {registering ? '登録中...' : <><Icon name="check" size={14} /> {validRows.length}件のKA + {taskCount}件のタスクを登録する</>}
         </button>
       </div>
     </div>
@@ -673,56 +671,56 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
   return (
     <div>
       {/* URL入力 */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 12, color: wT.textMuted, marginBottom: 8 }}>Notionの議事録ページURLを入力してください</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ marginBottom: SPACING.xl }}>
+        <div style={{ ...TYPO.subhead, color: wT.textMuted, marginBottom: SPACING.sm }}>Notionの議事録ページURLを入力してください</div>
+        <div style={{ display: 'flex', gap: SPACING.sm }}>
           <input
             value={notionUrl} onChange={e => setNotionUrl(e.target.value)}
             placeholder="https://www.notion.so/..."
             onKeyDown={e => e.key === 'Enter' && handleFetch()}
-            style={{ flex: 1, background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 8, padding: '10px 12px', color: wT.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+            style={{ ...inputStyle({ T: wT }), background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, ...TYPO.subhead, padding: `${SPACING.sm + 2}px ${SPACING.md}px` }}
           />
           <button onClick={handleFetch} disabled={fetching || !notionUrl.trim()}
-            style={{ background: fetching ? wT.bgCard2 : 'linear-gradient(135deg,#ff9f43,#ff6b6b)', border: 'none', color: fetching ? wT.textMuted : '#fff', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: fetching ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            style={{ ...(fetching ? { background: wT.bgCard2, color: wT.textMuted, border: 'none', borderRadius: RADIUS.sm, fontWeight: 800, fontFamily: 'inherit' } : btnPrimary({ T: wT, size: 'lg', color: wT.warn })), padding: `${SPACING.sm + 2}px ${SPACING.xl}px`, cursor: fetching ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
             {fetching ? '取得中...' : '取得'}
           </button>
         </div>
-        {fetchError && <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 8 }}>{fetchError}</div>}
+        {fetchError && <div style={{ color: wT.danger, ...TYPO.footnote, marginTop: SPACING.sm }}>{fetchError}</div>}
       </div>
 
       {/* 取得結果 */}
       {rows.length > 0 && (
         <>
           {pageTitle && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, marginBottom: 16, background: 'rgba(255,159,67,0.06)', border: '1px solid rgba(255,159,67,0.2)' }}>
-              <span style={{ fontSize: 14 }}>📄</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#ff9f43' }}>{pageTitle}</span>
-              <span style={{ fontSize: 11, color: wT.textMuted, marginLeft: 'auto' }}>{rows.length}件のアクションアイテム</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, padding: `${SPACING.sm}px ${SPACING.md}px`, borderRadius: RADIUS.sm, marginBottom: SPACING.lg, background: wT.warnBg, border: `1px solid ${wT.warnBg}` }}>
+              <span style={{ color: wT.warn, display: 'inline-flex' }}><Icon name="note" size={14} /></span>
+              <span style={{ ...TYPO.subhead, color: wT.warn }}>{pageTitle}</span>
+              <span style={{ ...TYPO.footnote, color: wT.textMuted, marginLeft: 'auto' }}>{rows.length}件のアクションアイテム</span>
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm + 2, marginBottom: SPACING.lg }}>
             {rows.map((row) => {
               const statusCfg = STATUS_OPTIONS.find(s => s.value === row.status) || STATUS_OPTIONS[0]
               const objsForLevel = row.levelId ? getObjsForLevel(row.levelId) : filteredObjs
               const krsForObj = row.objectiveId ? getKRsForObj(row.objectiveId) : []
               return (
-                <div key={row._id} style={{ background: wT.bgCard, border: `1px solid ${row.kaTitle ? statusCfg.color + '35' : wT.border}`, borderLeft: `3px solid ${row.kaTitle ? statusCfg.color : wT.border}`, borderRadius: 12, padding: '12px 14px', transition: 'all 0.15s' }}>
+                <div key={row._id} style={{ ...cardStyle({ T: wT, padding: `${SPACING.md}px ${SPACING.md + 2}px` }), border: `1px solid ${row.kaTitle ? statusCfg.color + '35' : wT.border}`, borderLeft: `3px solid ${row.kaTitle ? statusCfg.color : wT.border}` }}>
                   {/* タイトル行 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${statusCfg.color}15`, border: `1px solid ${statusCfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: statusCfg.color, flexShrink: 0 }}>{row._idx}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm + 2 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: RADIUS.pill, background: `${statusCfg.color}15`, border: `1px solid ${statusCfg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', ...TYPO.caption, color: statusCfg.color, flexShrink: 0 }}>{row._idx}</div>
                     <input value={row.kaTitle} onChange={e => updateRow(row._id, 'kaTitle', e.target.value)} placeholder="KAタイトル"
-                      style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${wT.border}`, color: wT.text, fontSize: 13, fontWeight: 600, outline: 'none', fontFamily: 'inherit', padding: '3px 4px' }}
-                      onFocus={e => e.target.style.borderBottomColor = '#ff9f43'}
+                      style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${wT.border}`, color: wT.text, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', padding: '3px 4px' }}
+                      onFocus={e => e.target.style.borderBottomColor = wT.warn}
                       onBlur={e => e.target.style.borderBottomColor = wT.border} />
                     {rows.length > 1 && (
-                      <button onClick={() => removeRow(row._id)} style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'rgba(255,107,107,0.08)', color: '#ff6b6b', cursor: 'pointer', fontSize: 10, flexShrink: 0 }}>✕</button>
+                      <button onClick={() => removeRow(row._id)} style={{ width: 22, height: 22, borderRadius: RADIUS.xs - 2, border: 'none', background: wT.dangerBg, color: wT.danger, cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={12} /></button>
                     )}
                   </div>
                   {/* 詳細入力 */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 30, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', paddingLeft: 30, marginBottom: SPACING.sm }}>
                     <div style={{ flex: 2, minWidth: 130 }}>
-                      <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>部署</div>
+                      <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>部署</div>
                       <DeptSelect value={row.levelId} onChange={val => {
                         updateRow(row._id, 'levelId', val)
                         updateRow(row._id, 'objectiveId', '')
@@ -731,77 +729,77 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
                       }} levels={levels} wT={wT} />
                     </div>
                     <div style={{ flex: 2, minWidth: 100 }}>
-                      <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>担当者</div>
+                      <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>担当者</div>
                       <select value={row.owner} onChange={e => updateRow(row._id, 'owner', e.target.value)}
-                        style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: row.owner ? avatarColor(row.owner) : wT.textMuted, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.owner ? 600 : 400 }}>
+                        style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: row.owner ? avatarColor(row.owner) : wT.textMuted, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.owner ? 600 : 400 }}>
                         <option value="">-- 未設定 --</option>
                         {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                       </select>
                     </div>
                     <div style={{ flex: 1, minWidth: 90 }}>
-                      <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>ステータス</div>
+                      <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>ステータス</div>
                       <select value={row.status} onChange={e => updateRow(row._id, 'status', e.target.value)}
-                        style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${statusCfg.color}50`, borderRadius: 6, padding: '6px 8px', color: statusCfg.color, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: 600 }}>
+                        style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${statusCfg.color}50`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: statusCfg.color, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                         {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                       </select>
                     </div>
                     <div style={{ flex: 1, minWidth: 120 }}>
-                      <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>週</div>
+                      <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>週</div>
                       <select value={row.weekStart} onChange={e => updateRow(row._id, 'weekStart', e.target.value)}
-                        style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: wT.text, fontSize: 11, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                        style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: wT.text, ...TYPO.footnote, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                         {weeks.map(w => <option key={w} value={w}>{w}{w === weeks[0] ? '（今週）' : ''}</option>)}
                       </select>
                     </div>
                   </div>
                   {/* OKR・KR紐付け */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 30, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', paddingLeft: 30, marginBottom: SPACING.sm }}>
                     <div style={{ flex: 2, minWidth: 160 }}>
-                      <div style={{ fontSize: 9, color: '#4d9fff', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>紐づくObjective（任意）</div>
+                      <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.accent, marginBottom: 3, textTransform: 'uppercase' }}>紐づくObjective（任意）</div>
                       <select value={row.objectiveId} onChange={e => {
                         updateRow(row._id, 'objectiveId', e.target.value)
                         updateRow(row._id, 'krId', '')
                         updateRow(row._id, 'krTitle', '')
                       }}
-                        style={{ width: '100%', background: wT.bgCard2, border: '1px solid rgba(77,159,255,0.2)', borderRadius: 6, padding: '6px 8px', color: wT.text, fontSize: 11, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                        style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.accentBg}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: wT.text, ...TYPO.footnote, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
                         <option value="">-- OKRを選択（任意）--</option>
                         {objsForLevel.map(o => <option key={o.id} value={String(o.id)}>[{getPeriodLabel(o.period)}] {o.title}</option>)}
                       </select>
                     </div>
                     <div style={{ flex: 2, minWidth: 160 }}>
-                      <div style={{ fontSize: 9, color: '#a855f7', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>紐づくKR（任意）</div>
+                      <div style={{ ...TYPO.caption, fontWeight: 600, color: '#a855f7', marginBottom: 3, textTransform: 'uppercase' }}>紐づくKR（任意）</div>
                       <select value={row.krId} onChange={e => {
                         const kr = keyResults.find(k => k.id === parseInt(e.target.value))
                         updateRow(row._id, 'krId', e.target.value)
                         updateRow(row._id, 'krTitle', kr ? kr.title : '')
                       }}
                         disabled={!row.objectiveId}
-                        style={{ width: '100%', background: wT.bgCard2, border: '1px solid rgba(168,85,247,0.2)', borderRadius: 6, padding: '6px 8px', color: row.objectiveId ? wT.text : wT.textFaint, fontSize: 11, outline: 'none', fontFamily: 'inherit', cursor: row.objectiveId ? 'pointer' : 'not-allowed' }}>
+                        style={{ width: '100%', background: wT.bgCard2, border: '1px solid rgba(168,85,247,0.2)', borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: row.objectiveId ? wT.text : wT.textFaint, ...TYPO.footnote, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: row.objectiveId ? 'pointer' : 'not-allowed' }}>
                         <option value="">-- KRを選択（任意）--</option>
                         {krsForObj.map(kr => <option key={kr.id} value={String(kr.id)}>{kr.title}</option>)}
                       </select>
                     </div>
                   </div>
                   {/* タスク作成オプション */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingLeft: 30, alignItems: 'flex-end' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: row.createTask ? '#00d68f' : wT.textMuted, fontWeight: row.createTask ? 600 : 400 }}>
+                  <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', paddingLeft: 30, alignItems: 'flex-end' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2, cursor: 'pointer', ...TYPO.subhead, color: row.createTask ? wT.success : wT.textMuted, fontWeight: row.createTask ? 600 : 400 }}>
                       <input type="checkbox" checked={row.createTask} onChange={e => updateRow(row._id, 'createTask', e.target.checked)}
-                        style={{ accentColor: '#00d68f' }} />
+                        style={{ accentColor: wT.success }} />
                       タスクも作成
                     </label>
                     {row.createTask && (
                       <>
                         <div style={{ minWidth: 100 }}>
-                          <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>担当者</div>
+                          <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>担当者</div>
                           <select value={row.assignee} onChange={e => updateRow(row._id, 'assignee', e.target.value)}
-                            style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: row.assignee ? avatarColor(row.assignee) : wT.textMuted, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.assignee ? 600 : 400 }}>
+                            style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: row.assignee ? avatarColor(row.assignee) : wT.textMuted, ...TYPO.subhead, outline: 'none', fontFamily: 'inherit', cursor: 'pointer', fontWeight: row.assignee ? 600 : 400 }}>
                             <option value="">-- KA担当者と同じ --</option>
                             {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                           </select>
                         </div>
                         <div style={{ minWidth: 130 }}>
-                          <div style={{ fontSize: 9, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>期限</div>
+                          <div style={{ ...TYPO.caption, fontWeight: 600, color: wT.textMuted, marginBottom: 3, textTransform: 'uppercase' }}>期限</div>
                           <input type="date" value={row.dueDate} onChange={e => updateRow(row._id, 'dueDate', e.target.value)}
-                            style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: 6, padding: '6px 8px', color: wT.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }} />
+                            style={{ width: '100%', background: wT.bgCard2, border: `1px solid ${wT.borderMid}`, borderRadius: RADIUS.xs, padding: `${SPACING.sm - 2}px ${SPACING.sm}px`, color: wT.text, ...TYPO.subhead, fontWeight: 400, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }} />
                         </div>
                       </>
                     )}
@@ -812,10 +810,10 @@ function NotionImportTab({ levels, members, fiscalYear, wT }) {
           </div>
 
           <button onClick={() => { if (validRows.length === 0) { setError('KAタイトルを1件以上入力してください'); return } setError(''); setStep('preview') }}
-            style={{ width: '100%', background: validRows.length > 0 ? 'linear-gradient(135deg,#ff9f43,#ff6b6b)' : 'rgba(255,255,255,0.06)', border: 'none', color: validRows.length > 0 ? '#fff' : '#404660', borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: validRows.length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+            style={{ width: '100%', ...(validRows.length > 0 ? btnPrimary({ T: wT, size: 'lg', color: wT.warn }) : { background: wT.sunken, border: 'none', color: wT.textFaint, borderRadius: RADIUS.md, fontWeight: 800, fontFamily: 'inherit' }), padding: SPACING.md + 2, fontSize: 15, cursor: validRows.length > 0 ? 'pointer' : 'not-allowed' }}>
             プレビューを確認する（KA {validRows.length}件 + タスク {taskCount}件）→
           </button>
-          {error && <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 8 }}>{error}</div>}
+          {error && <div style={{ color: wT.danger, ...TYPO.footnote, marginTop: SPACING.sm }}>{error}</div>}
         </>
       )}
     </div>
@@ -839,32 +837,32 @@ export default function BulkRegisterPage({ levels, themeKey = 'dark', fiscalYear
   }, [])
 
   const tabs = [
-    { key: 'okr', label: '🎯 OKR一括登録', desc: '目標・KRをまとめて入力', grad: 'linear-gradient(135deg,#4d9fff,#a855f7)' },
-    { key: 'ka',  label: '📋 KA一括登録',  desc: 'KAをまとめて入力',      grad: 'linear-gradient(135deg,#00d68f,#4d9fff)' },
-    { key: 'notion', label: '📝 Notion取込', desc: '議事録からKA・タスク登録', grad: 'linear-gradient(135deg,#ff9f43,#ff6b6b)' },
+    { key: 'okr', label: 'OKR一括登録', icon: 'target', desc: '目標・KRをまとめて入力', color: wT.accent },
+    { key: 'ka',  label: 'KA一括登録',  icon: 'note',   desc: 'KAをまとめて入力',      color: wT.success },
+    { key: 'notion', label: 'Notion取込', icon: 'pencil', desc: '議事録からKA・タスク登録', color: wT.warn },
   ]
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: wT.bg, color: wT.text, position: 'relative' }}>
       <BgGlow T={wT} color="#AF52DE" />
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 28px 28px', position: 'relative', zIndex: 1 }}>
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: `0 ${SPACING['3xl'] - 4}px ${SPACING['3xl'] - 4}px`, position: 'relative', zIndex: 1 }}>
         <LargeTitle T={wT}
           title="一括登録"
           subtitle={`${fiscalYear}年度 ・ OKR・KA・Notion を複数件まとめて入力`}
-          right={<span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 99, background: wT.accentBg, color: wT.accent }}>📅 {fiscalYear}年度</span>}
+          right={<span style={{ ...pillStyle({ color: wT.accent, size: 'lg' }), gap: 4 }}><Icon name="calendar" size={12} /> {fiscalYear}年度</span>}
         />
 
         {/* タブ */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: 'rgba(255,255,255,0.04)', padding: 4, borderRadius: 12, border: `1px solid ${wT.border}` }}>
+        <div style={{ display: 'flex', gap: SPACING.xs, marginBottom: SPACING['3xl'] - 4, background: wT.sectionBg, padding: SPACING.xs, borderRadius: RADIUS.lg, border: `1px solid ${wT.border}` }}>
           {tabs.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-              flex: 1, padding: '10px 16px', borderRadius: 9, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-              background: activeTab === tab.key ? tab.grad : 'transparent',
+              flex: 1, padding: `${SPACING.sm + 2}px ${SPACING.lg}px`, borderRadius: RADIUS.md - 1, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+              background: activeTab === tab.key ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}d0 100%)` : 'transparent',
               color: activeTab === tab.key ? '#fff' : wT.textMuted,
-              transition: 'all 0.15s',
+              transition: TRANSITION.fast,
             }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>{tab.label}</div>
-              <div style={{ fontSize: 10, opacity: activeTab === tab.key ? 0.85 : 0.6, marginTop: 2 }}>{tab.desc}</div>
+              <div style={{ ...TYPO.headline, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs + 2 }}><Icon name={tab.icon} size={14} /> {tab.label}</div>
+              <div style={{ ...TYPO.caption, fontWeight: 600, opacity: activeTab === tab.key ? 0.85 : 0.6, marginTop: 2 }}>{tab.desc}</div>
             </button>
           ))}
         </div>

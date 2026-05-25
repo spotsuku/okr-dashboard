@@ -2,6 +2,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { AVAILABLE_MODULES, MODULE_META } from '../lib/meetings/moduleRegistry'
+import Icon, { DataIcon } from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { inputStyle, btnSecondary, btnBrand } from '../lib/iosStyles'
 
 // ─────────────────────────────────────────────────────────────
 // 会議の追加 / 編集モーダル (Phase 5e 本格)
@@ -14,7 +17,7 @@ import { AVAILABLE_MODULES, MODULE_META } from '../lib/meetings/moduleRegistry'
 //   onSaved      - 保存成功時のコールバック (一覧再読み込みなど)
 // ─────────────────────────────────────────────────────────────
 
-const PRESET_ICONS = ['🌅', '🚀', '🌱', '🏛️', '💰', '👔', '📋', '📊', '🏷', '🎯', '📅', '⚡']
+const PRESET_ICONS = ['sun', 'rocket', 'leaf', 'building', 'coin', 'user', 'note', 'chart', 'tag', 'target', 'calendar', 'bolt']
 const PRESET_COLORS = [
   '#ff9f43', '#4d9fff', '#ffd166', '#ff6b6b', '#FF9500', '#00d68f',
   '#a855f7', '#5856d6', '#6B96C7', '#34C759',
@@ -29,7 +32,7 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   const isNew = !meeting
   const [title, setTitle]       = useState(meeting?.title || '')
   const [key, setKey]           = useState(meeting?.key || '')
-  const [icon, setIcon]         = useState(meeting?.icon || '📋')
+  const [icon, setIcon]         = useState(meeting?.icon || 'note')
   const [color, setColor]       = useState(meeting?.color || '#4d9fff')
   const [dayOfWeek, setDayOfWeek] = useState(meeting?.day_of_week ?? null)
   const [modules, setModules]   = useState(() => {
@@ -131,12 +134,9 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
     onClose && onClose()
   }
 
-  const inputSt = {
-    padding: '8px 12px', borderRadius: 7, border: `1px solid ${T.border}`,
-    background: T.bg, color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box',
-  }
-  const labelSt = { fontSize: 11, color: T.textMuted, fontWeight: 700, marginBottom: 4, display: 'block' }
-  const sectionSt = { marginBottom: 14 }
+  const inputSt = { ...inputStyle({ T }), ...TYPO.body, background: T.bg }
+  const labelSt = { ...TYPO.footnote, color: T.textMuted, fontWeight: 700, marginBottom: SPACING.xs, display: 'block' }
+  const sectionSt = { marginBottom: SPACING.lg - 2 }
 
   // モジュール候補 (まだ追加されていないもの)
   const availableToAdd = AVAILABLE_MODULES.filter(m => !modules.some(x => x.type === m.type))
@@ -147,41 +147,38 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1100, padding: 20,
+        zIndex: 1100, padding: SPACING.xl,
       }}
     >
       <div style={{
         width: '90vw', maxWidth: 700, maxHeight: '90vh',
-        background: T.bg, borderRadius: 14, overflow: 'hidden',
+        background: T.bg, borderRadius: RADIUS.lg, overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        boxShadow: SHADOWS.xl,
       }}>
         {/* ヘッダー */}
         <div style={{
-          padding: '12px 16px',
+          padding: `${SPACING.md}px ${SPACING.lg}px`,
           borderBottom: `1px solid ${T.border}`,
-          display: 'flex', alignItems: 'center', gap: 10,
+          display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
           background: T.bgCard,
         }}>
-          <span style={{ fontSize: 18 }}>{isNew ? '➕' : '✏️'}</span>
-          <span style={{ flex: 1, fontSize: 14, fontWeight: 800, color: T.text }}>
+          <Icon name={isNew ? 'plus' : 'pencil'} size={18} style={{ color: T.text }} />
+          <span style={{ flex: 1, ...TYPO.headline, fontWeight: 800, color: T.text }}>
             {isNew ? '会議を追加' : `会議を編集: ${meeting.title}`}
           </span>
           <button onClick={onClose} style={{
-            padding: '4px 10px', borderRadius: 6,
-            border: `1px solid ${T.border}`,
-            background: 'transparent', color: T.textSub,
-            fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+            ...btnSecondary({ T, size: 'sm' }),
           }}>キャンセル</button>
         </div>
 
         {/* 本体 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: SPACING.lg }}>
           {err && (
             <div style={{
-              padding: 8, marginBottom: 12,
-              background: `${T.danger}15`, border: `1px solid ${T.danger}40`,
-              borderRadius: 7, color: T.danger, fontSize: 12,
+              padding: SPACING.sm, marginBottom: SPACING.md,
+              background: T.dangerBg, border: `1px solid ${T.danger}40`,
+              borderRadius: RADIUS.sm, color: T.danger, ...TYPO.subhead,
             }}>{err}</div>
           )}
 
@@ -198,29 +195,31 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
               placeholder="例: weekly-team" style={inputSt}
               disabled={!isNew}
             />
-            {!isNew && <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>key は編集できません (進行履歴との互換性のため)</div>}
+            {!isNew && <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, marginTop: 2 }}>key は編集できません (進行履歴との互換性のため)</div>}
           </div>
 
-          <div style={{ ...sectionSt, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ ...sectionSt, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.sm + 2 }}>
             <div>
               <label style={labelSt}>アイコン</label>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: SPACING.xs, flexWrap: 'wrap' }}>
                 {PRESET_ICONS.map(i => (
                   <button key={i} onClick={() => setIcon(i)} style={{
-                    width: 32, height: 32, borderRadius: 8,
+                    width: 32, height: 32, borderRadius: RADIUS.sm,
                     border: `1px solid ${icon === i ? T.accent : T.border}`,
-                    background: icon === i ? `${T.accent}18` : T.bgCard,
-                    fontSize: 16, cursor: 'pointer',
-                  }}>{i}</button>
+                    background: icon === i ? T.accentBg : T.bgCard,
+                    color: icon === i ? T.accent : T.text,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}><Icon name={i} size={18} /></button>
                 ))}
               </div>
             </div>
             <div>
               <label style={labelSt}>色</label>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: SPACING.xs, flexWrap: 'wrap' }}>
                 {PRESET_COLORS.map(c => (
                   <button key={c} onClick={() => setColor(c)} style={{
-                    width: 28, height: 28, borderRadius: 8,
+                    width: 28, height: 28, borderRadius: RADIUS.sm,
                     border: color === c ? `2px solid ${T.text}` : `1px solid ${T.border}`,
                     background: c, cursor: 'pointer',
                   }} />
@@ -242,7 +241,7 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
           <div style={sectionSt}>
             <label style={labelSt}>モジュール構成 (= 会議のステップ順序) <span style={{ color: T.danger }}>*</span></label>
             <div
-              style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}
               onDragLeave={handleDragLeave}
             >
               {modules.map((m, idx) => {
@@ -258,33 +257,33 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
                     onDrop={handleDrop(idx)}
                     onDragEnd={handleDragEnd}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '8px 10px',
+                      display: 'flex', alignItems: 'center', gap: SPACING.sm,
+                      padding: `${SPACING.sm}px ${SPACING.sm + 2}px`,
                       background: T.bgCard,
                       border: `1px solid ${isDropHover ? T.accent : T.border}`,
                       borderTop: isDropHover ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
-                      borderRadius: 8,
+                      borderRadius: RADIUS.sm,
                       cursor: 'grab',
                       opacity: isDragging ? 0.4 : 1,
                       transition: 'border 0.1s, opacity 0.15s',
                       userSelect: 'none',
                     }}
                   >
-                    <span style={{ fontSize: 12, color: T.textMuted, width: 14, cursor: 'grab' }} title="ドラッグして並び替え">⋮⋮</span>
-                    <span style={{ fontSize: 11, color: T.textMuted, width: 18, textAlign: 'center' }}>{idx + 1}</span>
-                    <span style={{ fontSize: 18 }}>{meta.icon}</span>
+                    <span style={{ color: T.textMuted, width: 14, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="ドラッグして並び替え"><Icon name="more" size={14} /></span>
+                    <span style={{ ...TYPO.footnote, color: T.textMuted, width: 18, textAlign: 'center' }}>{idx + 1}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', color: T.textSub }}><DataIcon value={meta.icon} size={18} /></span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{meta.label}</div>
-                      <div style={{ fontSize: 10, color: T.textMuted }}>{meta.desc}</div>
+                      <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.text }}>{meta.label}</div>
+                      <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted }}>{meta.desc}</div>
                     </div>
-                    <button onClick={() => handleMoveModule(idx, -1)} disabled={idx === 0} title="上へ" style={iconBtnSt(T, idx === 0)}>↑</button>
-                    <button onClick={() => handleMoveModule(idx, 1)} disabled={idx === modules.length - 1} title="下へ" style={iconBtnSt(T, idx === modules.length - 1)}>↓</button>
-                    <button onClick={() => handleRemoveModule(idx)} title="削除" style={{ ...iconBtnSt(T, false), color: T.danger }}>×</button>
+                    <button onClick={() => handleMoveModule(idx, -1)} disabled={idx === 0} title="上へ" style={iconBtnSt(T, idx === 0)}><Icon name="chevronU" size={13} /></button>
+                    <button onClick={() => handleMoveModule(idx, 1)} disabled={idx === modules.length - 1} title="下へ" style={iconBtnSt(T, idx === modules.length - 1)}><Icon name="chevronD" size={13} /></button>
+                    <button onClick={() => handleRemoveModule(idx)} title="削除" style={{ ...iconBtnSt(T, false), color: T.danger }}><Icon name="cross" size={13} /></button>
                   </div>
                 )
               })}
               {modules.length === 0 && (
-                <div style={{ padding: 12, textAlign: 'center', fontSize: 11, color: T.textFaint, background: T.bgCard, borderRadius: 8 }}>
+                <div style={{ padding: SPACING.md, textAlign: 'center', ...TYPO.footnote, color: T.textFaint, background: T.bgCard, borderRadius: RADIUS.sm }}>
                   下から追加してください
                 </div>
               )}
@@ -292,15 +291,16 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
 
             {availableToAdd.length > 0 && (
               <>
-                <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 4 }}>追加可能なモジュール:</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, marginBottom: SPACING.xs }}>追加可能なモジュール:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs }}>
                   {availableToAdd.map(m => (
                     <button key={m.type} onClick={() => handleAddModule(m.type)} style={{
-                      padding: '4px 10px', borderRadius: 6,
+                      padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs,
                       border: `1px dashed ${T.border}`,
                       background: 'transparent', color: T.text,
-                      fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                    }}>+ {m.icon} {m.label}</button>
+                      ...TYPO.footnote, cursor: 'pointer', fontFamily: 'inherit',
+                      display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                    }}>+ <DataIcon value={m.icon} size={14} /> {m.label}</button>
                   ))}
                 </div>
               </>
@@ -310,22 +310,17 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
 
         {/* フッター */}
         <div style={{
-          padding: '10px 16px',
+          padding: `${SPACING.sm + 2}px ${SPACING.lg}px`,
           borderTop: `1px solid ${T.border}`,
-          display: 'flex', justifyContent: 'flex-end', gap: 8,
+          display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm,
           background: T.bgCard,
         }}>
           <button onClick={onClose} style={{
-            padding: '8px 16px', borderRadius: 7,
-            border: `1px solid ${T.border}`,
-            background: 'transparent', color: T.textSub,
-            fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            ...btnSecondary({ T, size: 'md' }),
           }}>キャンセル</button>
           <button onClick={handleSave} disabled={saving} style={{
-            padding: '8px 20px', borderRadius: 7,
-            border: 'none', background: saving ? T.border : T.accent,
-            color: '#fff', fontSize: 12, fontWeight: 700,
-            cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            ...btnBrand({ size: 'md' }),
+            ...(saving ? { background: T.border, color: '#fff', boxShadow: 'none', cursor: 'not-allowed' } : {}),
           }}>{saving ? '保存中…' : (isNew ? '作成' : '保存')}</button>
         </div>
       </div>
@@ -335,11 +330,11 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
 
 function iconBtnSt(T, disabled) {
   return {
-    width: 26, height: 26, borderRadius: 6,
+    width: 26, height: 26, borderRadius: RADIUS.xs,
     border: `1px solid ${T.border}`,
     background: 'transparent',
     color: disabled ? T.textFaint : T.textSub,
-    fontSize: 13, fontWeight: 700,
+    ...TYPO.subhead, fontWeight: 700,
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontFamily: 'inherit',
     display: 'flex', alignItems: 'center', justifyContent: 'center',

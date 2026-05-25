@@ -45,15 +45,22 @@ export async function POST(request) {
       return json({ error: '招待権限がありません (owner/admin のみ)' }, { status: 403 })
     }
 
-    // 1) members 行を upsert (email で一意)
-    const { data: existing } = await sb.from('members').select('id').eq('email', email).maybeSingle()
+    // 1) この組織用の members 行を取得/作成 (members は per-org 行)
+    const { data: existing } = await sb.from('members')
+      .select('id').eq('email', email).eq('organization_id', organization_id).maybeSingle()
     let memberId = existing?.id
     if (!memberId) {
       const { data: ins, error: insErr } = await sb.from('members')
         .insert({ email, name: name || email.split('@')[0], is_admin: role !== 'member', organization_id })
         .select('id').single()
-      if (insErr) return json({ error: '招待メンバー作成失敗: ' + insErr.message }, { status: 500 })
-      memberId = ins.id
+      if (insErr) {
+        // 旧グローバル一意制約が残る環境向けフォールバック (supabase_org_member_peruser.sql 未適用時)
+        const { data: anyExisting } = await sb.from('members').select('id').eq('email', email).maybeSingle()
+        if (anyExisting) memberId = anyExisting.id
+        else return json({ error: '招待メンバー作成失敗: ' + insErr.message }, { status: 500 })
+      } else {
+        memberId = ins.id
+      }
     }
 
     // 2) organization_members に追加 (重複は無視)

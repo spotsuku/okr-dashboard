@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>背景の強さ比較 — ダッシュボード</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --text:#0f172a; --text-sub:#475569; --text-muted:#94a3b8;
+    --border:rgba(15,23,42,.08); --border-strong:rgba(15,23,42,.16);
+    --accent:#0ea5e9; --accent-bg:rgba(14,165,233,.12); --accent-text:#0369a1;
+    --success:#059669; --success-bg:rgba(5,150,105,.12);
+    --warn:#d97706; --warn-bg:rgba(217,119,6,.12);
+    --danger:#e11d48;
+    --brand-cta:linear-gradient(120deg,#2563eb 0%,#22d3ee 100%);
+  }
+  html,body{margin:0;padding:0}
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    font-family:'Inter','Noto Sans JP',-apple-system,system-ui,sans-serif;
+    color:var(--text); font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased;
+    background:#f1f5f9;
+    padding: 32px 20px 80px;
+    min-height:100vh;
+  }
+  .container{max-width: 1400px; margin: 0 auto}
+  h1{font-size:24px; font-weight:700; letter-spacing:-0.015em; margin:0 0 4px}
+  .lead{font-size:13px; color:var(--text-sub); margin:0 0 24px; max-width: 720px; line-height: 1.7}
+
+  .grid{display:grid; grid-template-columns: repeat(2, 1fr); gap: 18px}
+  .opt{
+    background:#fff; border:1px solid var(--border); border-radius:14px;
+    overflow:hidden;
+    box-shadow: 0 4px 14px rgba(15,23,42,.05);
+  }
+  .opt-head{padding: 14px 18px; border-bottom: 1px solid var(--border)}
+  .opt-head .tag{
+    display:inline-block;
+    padding:2px 9px; font-size:10.5px; font-weight:700; letter-spacing:0.04em;
+    border-radius:99px; margin-bottom:6px;
+    background: var(--accent-bg); color: var(--accent-text);
+  }
+  .opt-head .tag.warn{background:var(--warn-bg); color:var(--warn)}
+  .opt-head h2{font-size:15px; font-weight:700; margin:0 0 2px}
+  .opt-head .sub{font-size:11.5px; color:var(--text-sub); line-height: 1.55}
+  .opt-head .pros{
+    margin-top: 8px; display:flex; gap:6px; flex-wrap:wrap;
+  }
+  .opt-head .pros .pp{
+    padding:2px 8px; font-size:10.5px; border-radius:99px;
+    background: var(--success-bg); color: var(--success); font-weight:500;
+  }
+  .opt-head .pros .cc{
+    padding:2px 8px; font-size:10.5px; border-radius:99px;
+    background: rgba(225,29,72,.08); color: var(--danger); font-weight:500;
+  }
+
+  /* Mini dashboard preview */
+  .preview{
+    height: 380px; position: relative; overflow: hidden;
+  }
+  .preview.bg-current{
+    background:
+      radial-gradient(1200px 800px at 8% 0%, rgba(186,230,253,.55), transparent 60%),
+      radial-gradient(1100px 900px at 100% 22%, rgba(187,247,208,.45), transparent 60%),
+      radial-gradient(900px 700px at 80% 100%, rgba(224,242,254,.6), transparent 60%),
+      linear-gradient(180deg,#f6fafd 0%,#eef4f9 100%);
+  }
+  .preview.bg-subtle{
+    background:
+      radial-gradient(900px 600px at 0% 0%, rgba(226,232,240,.5), transparent 55%),
+      linear-gradient(180deg,#fbfcfe 0%,#f5f7fa 100%);
+  }
+  .preview.bg-flat{
+    background: #fafbfc;
+  }
+  .preview.bg-grid{
+    background: #fafbfc;
+    background-image:
+      linear-gradient(to right, rgba(15,23,42,.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15,23,42,.025) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .mini-bar{
+    height: 38px; padding: 0 14px;
+    background: rgba(255,255,255,.7); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    display:flex; align-items:center; gap:10px;
+    font-size: 11px; color: var(--text-sub);
+  }
+  .mini-bar .brand{
+    width:18px; height:18px; border-radius:5px; background:var(--brand-cta);
+    display:inline-block;
+  }
+  .mini-bar .item{padding:3px 8px; border-radius:5px}
+  .mini-bar .item.active{background:var(--accent-bg); color:var(--accent-text); font-weight:600}
+  .mini-bar .spacer{flex:1}
+  .mini-bar .y{padding:2px 8px; background:rgba(255,255,255,.6); border:1px solid var(--border); border-radius:5px; font-size:10px}
+
+  .mini-body{padding: 12px; display:grid; grid-template-columns: 1fr 1.1fr 1fr; gap:10px; height: calc(100% - 38px)}
+  .mini-card{
+    background: rgba(255,255,255,.78); backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 2px 8px rgba(15,23,42,.04);
+  }
+  .mini-card .h{font-size:10.5px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:5px; margin-bottom:2px}
+  .mini-card .h .d{width:8px; height:8px; border-radius:99px; background:var(--accent)}
+  .mini-card .h.danger .d{background:var(--danger)}
+  .mini-card .h.warn .d{background:var(--warn)}
+  .mini-card .row{
+    display:flex; align-items:center; gap:6px;
+    padding:5px 6px; font-size:10px;
+    border-bottom: 1px solid rgba(15,23,42,.04);
+  }
+  .mini-card .row:last-child{border-bottom:none}
+  .mini-card .row .check{width:9px; height:9px; border-radius:99px; border:1.2px solid var(--border-strong); flex-shrink:0}
+  .mini-card .row .check.dn{background:var(--success); border-color:var(--success)}
+  .mini-card .row .t{flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .mini-card .row .time{font-size:9px; color:var(--text-muted); font-family:ui-monospace, monospace}
+  .mini-card .row .ai{
+    padding:2px 6px; font-size:8.5px; font-weight:600; border-radius:4px;
+    background:var(--brand-cta); color:#fff;
+  }
+  .mini-card .row .read{
+    padding:2px 6px; font-size:8.5px; font-weight:600; border-radius:4px;
+    background:var(--success-bg); color:var(--success);
+  }
+  .mini-card .empty{font-size:10px; color:var(--text-muted); padding:10px 6px}
+
+  .note{
+    padding: 14px 18px; border-top: 1px solid var(--border);
+    background: rgba(15,23,42,.02);
+    font-size: 11.5px; color: var(--text-sub); line-height: 1.65;
+  }
+  .note b{color:var(--text)}
+
+  @media (max-width: 900px){
+    .grid{grid-template-columns: 1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>背景の強さ比較</h1>
+  <p class="lead">
+    ビジネスツールとしての「静かさ」と、ブランドらしい「Glass の印象」のバランスを 4 パターンで比較。
+    左上が現状（A）、右下が最も静か（D）。CTA・カード自体は同じ Glass 仕様のまま、<b>背景の差し色だけ</b>を変えています。
+  </p>
+
+  <div class="grid">
+
+    <!-- A: Current -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="tag warn">A · 現状</span>
+        <h2>3 色オーロラ（水色 + ミント + 淡水色）</h2>
+        <div class="sub">3 つの radial-gradient を重ね、Glass の「浮遊感」を最大化。LP・オンボーディング向け。</div>
+        <div class="pros">
+          <span class="pp">ブランド印象が強い</span>
+          <span class="pp">Glass の質感が活きる</span>
+          <span class="cc">業務ツールには賑やか</span>
+          <span class="cc">緑が入り目が散る</span>
+        </div>
+      </div>
+      <div class="preview bg-current">
+        <div class="mini-bar">
+          <span class="brand"></span>
+          <span class="item active">ダッシュボード</span>
+          <span class="item">タスク</span>
+          <span class="item">メール</span>
+          <span class="item">OKR</span>
+          <span class="spacer"></span>
+          <span class="y">2026年度</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-card">
+            <div class="h"><span class="d"></span>今日やること</div>
+            <div class="row"><span class="check dn"></span><span class="t">議事録を共有</span><span class="time">完了</span></div>
+            <div class="row"><span class="check"></span><span class="t">提案書 v2 を送付</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">申込フォーム確認</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">会議の準備</span><span class="time">13:30</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h danger"><span class="d"></span>Gmail (5)</div>
+            <div class="row"><span class="t">森朝香: Re:【NEO福岡】…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">中道稔: Re: ご挨拶…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Kotegawa: Re: 資料…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Sansan: ニュース</span><span class="read">既読</span><span class="ai">AI</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h warn"><span class="d"></span>マイOKR</div>
+            <div class="row"><span class="t">KR「テスト」未記入</span></div>
+            <div class="row"><span class="t">KR「会員企業数72社」</span></div>
+            <div class="row"><span class="t">KR「マッチング率」</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>所感:</b> 緑の radial が右上にあり、ビジネス用途では「アプリ自体が話しかけてくる」感が強め。LP では◎、毎日見るダッシュボードでは情報密度との両立が課題。
+      </div>
+    </div>
+
+    <!-- B: Subtle (recommended) -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="tag">B · 推奨 / 静かな Glass</span>
+        <h2>淡い青グレーのワンエッジ</h2>
+        <div class="sub">左上だけに薄く 1 つの radial を残し、ベースはほぼ白。Glass カードの輪郭は残しつつ、背景は黙る。</div>
+        <div class="pros">
+          <span class="pp">業務ツールらしい静けさ</span>
+          <span class="pp">Glass の質感は残る</span>
+          <span class="pp">情報の視認性が最良</span>
+          <span class="cc">ブランド印象はやや弱い</span>
+        </div>
+      </div>
+      <div class="preview bg-subtle">
+        <div class="mini-bar">
+          <span class="brand"></span>
+          <span class="item active">ダッシュボード</span>
+          <span class="item">タスク</span>
+          <span class="item">メール</span>
+          <span class="item">OKR</span>
+          <span class="spacer"></span>
+          <span class="y">2026年度</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-card">
+            <div class="h"><span class="d"></span>今日やること</div>
+            <div class="row"><span class="check dn"></span><span class="t">議事録を共有</span><span class="time">完了</span></div>
+            <div class="row"><span class="check"></span><span class="t">提案書 v2 を送付</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">申込フォーム確認</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">会議の準備</span><span class="time">13:30</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h danger"><span class="d"></span>Gmail (5)</div>
+            <div class="row"><span class="t">森朝香: Re:【NEO福岡】…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">中道稔: Re: ご挨拶…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Kotegawa: Re: 資料…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Sansan: ニュース</span><span class="read">既読</span><span class="ai">AI</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h warn"><span class="d"></span>マイOKR</div>
+            <div class="row"><span class="t">KR「テスト」未記入</span></div>
+            <div class="row"><span class="t">KR「会員企業数72社」</span></div>
+            <div class="row"><span class="t">KR「マッチング率」</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>所感:</b> Linear / Notion / Vercel に近い静けさ。CTA の青グラデと MyCOO オーブだけがブランド色のシグナルになるので、視線誘導が逆に効く。<b>毎日使うダッシュボードはこちら推奨</b>。
+      </div>
+    </div>
+
+    <!-- C: Flat -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="tag">C · ほぼフラット</span>
+        <h2>単色オフホワイト</h2>
+        <div class="sub">グラデなし。Glass カードの輪郭・影だけで層を作る。最もスプレッドシート的な静けさ。</div>
+        <div class="pros">
+          <span class="pp">最大の情報密度</span>
+          <span class="pp">疲れにくい</span>
+          <span class="cc">Glass 感が弱まる</span>
+          <span class="cc">ブランド体験が薄い</span>
+        </div>
+      </div>
+      <div class="preview bg-flat">
+        <div class="mini-bar">
+          <span class="brand"></span>
+          <span class="item active">ダッシュボード</span>
+          <span class="item">タスク</span>
+          <span class="item">メール</span>
+          <span class="item">OKR</span>
+          <span class="spacer"></span>
+          <span class="y">2026年度</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-card">
+            <div class="h"><span class="d"></span>今日やること</div>
+            <div class="row"><span class="check dn"></span><span class="t">議事録を共有</span><span class="time">完了</span></div>
+            <div class="row"><span class="check"></span><span class="t">提案書 v2 を送付</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">申込フォーム確認</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">会議の準備</span><span class="time">13:30</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h danger"><span class="d"></span>Gmail (5)</div>
+            <div class="row"><span class="t">森朝香: Re:【NEO福岡】…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">中道稔: Re: ご挨拶…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Kotegawa: Re: 資料…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Sansan: ニュース</span><span class="read">既読</span><span class="ai">AI</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h warn"><span class="d"></span>マイOKR</div>
+            <div class="row"><span class="t">KR「テスト」未記入</span></div>
+            <div class="row"><span class="t">KR「会員企業数72社」</span></div>
+            <div class="row"><span class="t">KR「マッチング率」</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>所感:</b> もっとも事務的。Notion / Linear の Light テーマに近い。半透明カードがフラットな白にのると Glass の意味が薄れるので、採用するならカード背景も不透明白（rgba(255,255,255,1)）に倒して整合させたい。
+      </div>
+    </div>
+
+    <!-- D: Grid -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="tag">D · グリッド</span>
+        <h2>ドット / 細グリッドの極淡パターン</h2>
+        <div class="sub">背景に 32px グリッドの極薄ライン。Figma / Linear のキャンバス感。背景は静かなまま、空間に「方眼」のリズム。</div>
+        <div class="pros">
+          <span class="pp">構造的・プロダクトっぽい</span>
+          <span class="pp">SaaS の典型として安定</span>
+          <span class="cc">好みが分かれる</span>
+          <span class="cc">印刷 / PPT で映りが弱い</span>
+        </div>
+      </div>
+      <div class="preview bg-grid">
+        <div class="mini-bar">
+          <span class="brand"></span>
+          <span class="item active">ダッシュボード</span>
+          <span class="item">タスク</span>
+          <span class="item">メール</span>
+          <span class="item">OKR</span>
+          <span class="spacer"></span>
+          <span class="y">2026年度</span>
+        </div>
+        <div class="mini-body">
+          <div class="mini-card">
+            <div class="h"><span class="d"></span>今日やること</div>
+            <div class="row"><span class="check dn"></span><span class="t">議事録を共有</span><span class="time">完了</span></div>
+            <div class="row"><span class="check"></span><span class="t">提案書 v2 を送付</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">申込フォーム確認</span><span class="time">今日</span></div>
+            <div class="row"><span class="check"></span><span class="t">会議の準備</span><span class="time">13:30</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h danger"><span class="d"></span>Gmail (5)</div>
+            <div class="row"><span class="t">森朝香: Re:【NEO福岡】…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">中道稔: Re: ご挨拶…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Kotegawa: Re: 資料…</span><span class="read">既読</span><span class="ai">AI</span></div>
+            <div class="row"><span class="t">Sansan: ニュース</span><span class="read">既読</span><span class="ai">AI</span></div>
+          </div>
+          <div class="mini-card">
+            <div class="h warn"><span class="d"></span>マイOKR</div>
+            <div class="row"><span class="t">KR「テスト」未記入</span></div>
+            <div class="row"><span class="t">KR「会員企業数72社」</span></div>
+            <div class="row"><span class="t">KR「マッチング率」</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>所感:</b> 「プロダクトを作っている感」を出したい場合に有効。ビジネス層には Figma 的でも、経営層には少し玄人寄りに映る。
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top: 28px; padding: 18px 22px; background:#fff; border:1px solid var(--border); border-radius: 12px;">
+    <div style="font-size:12px; font-weight:700; color:var(--text); margin-bottom:8px">推奨</div>
+    <div style="font-size:13px; color:var(--text-sub); line-height: 1.75">
+      毎日使うダッシュボードは <b style="color:var(--text)">B（静かな Glass）</b> が最適バランスです。
+      LP / ヒーロー / オンボーディングなど「印象を残す画面」だけ A の 3 色オーロラを残し、
+      アプリ内部は B で統一すると、業務ツールとして落ち着きます。
+      CTA の青グラデと MyCOO オーブは A と同じ強さで保つので、ブランドの「強い差し色」は失われません。
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

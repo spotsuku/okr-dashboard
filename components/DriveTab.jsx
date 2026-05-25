@@ -1,5 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Icon from './Icon'
+import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, inputStyle, sectionHeaderStyle } from '../lib/iosStyles'
 
 function useIsMobile(bp = 768) {
   const [m, setM] = useState(() => typeof window === 'undefined' ? false : window.innerWidth < bp)
@@ -12,18 +15,19 @@ function useIsMobile(bp = 768) {
   return m
 }
 
-// MIME type → アイコン
+// MIME type → Icon 名 (Icon.jsx の既存名にマップ)
+// 注: image/video/audio/pdf 専用アイコンが Icon.jsx に無いため近似で代替。
 function iconFor(mimeType, isFolder) {
-  if (isFolder) return '📁'
-  if (!mimeType) return '📄'
-  if (mimeType.includes('document')) return '📝'
-  if (mimeType.includes('spreadsheet')) return '📊'
-  if (mimeType.includes('presentation')) return '📊'
-  if (mimeType.includes('pdf')) return '📕'
-  if (mimeType.includes('image')) return '🖼️'
-  if (mimeType.includes('video')) return '🎬'
-  if (mimeType.includes('audio')) return '🎵'
-  return '📄'
+  if (isFolder) return 'drive'
+  if (!mimeType) return 'note'
+  if (mimeType.includes('document')) return 'note'
+  if (mimeType.includes('spreadsheet')) return 'chart'
+  if (mimeType.includes('presentation')) return 'chart'
+  if (mimeType.includes('pdf')) return 'note'
+  if (mimeType.includes('image')) return 'eye'
+  if (mimeType.includes('video')) return 'eye'
+  if (mimeType.includes('audio')) return 'msg'
+  return 'note'
 }
 
 function formatRelative(iso) {
@@ -48,20 +52,21 @@ export default function DriveTab({ T, myName, viewingName }) {
       {/* スマホ用サブタブ */}
       {isMobile && (
         <div style={{
-          display: 'flex', padding: '6px 10px', gap: 4,
+          display: 'flex', padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, gap: SPACING.xs,
           borderBottom: `1px solid ${T.border}`, background: T.bgCard, flexShrink: 0,
         }}>
           {[
-            { key: 'chat', label: '🤖 チャット' },
-            { key: 'browse', label: '📂 ブラウザ' },
+            { key: 'chat', icon: 'ai', label: 'チャット' },
+            { key: 'browse', icon: 'drive', label: 'ブラウザ' },
           ].map(t => (
             <button key={t.key} onClick={() => setMobilePane(t.key)}
               style={{
-                flex: 1, padding: '8px 10px', borderRadius: 7, border: 'none',
+                flex: 1, padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.sm, border: 'none',
                 background: mobilePane === t.key ? T.navActiveBg : 'transparent',
                 color: mobilePane === t.key ? T.navActiveText : T.textSub,
-                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              }}>{t.label}</button>
+                ...TYPO.subhead, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs + 2,
+              }}><Icon name={t.icon} size={14} />{t.label}</button>
           ))}
         </div>
       )}
@@ -140,9 +145,9 @@ function DriveChat({ T, owner }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
       <div style={{
-        padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
-        display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
-        background: 'rgba(255,255,255,0.65)',
+        padding: `${SPACING.md}px ${SPACING.lg + 2}px`, borderBottom: `1px solid ${T.border}`,
+        display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, flexShrink: 0,
+        background: T.sectionBg,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       }}>
@@ -150,33 +155,25 @@ function DriveChat({ T, owner }) {
           width: 32, height: 32, borderRadius: 9, flexShrink: 0,
           background: `linear-gradient(135deg, #5AC8FA 0%, #007AFF 100%)`,
           color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 16,
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px rgba(0,122,255,0.45)',
-        }}>🤖</div>
-        <div style={{ fontSize: 14, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
+        }}><Icon name="ai" size={16} /></div>
+        <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
           ドライブ AI
         </div>
         <button onClick={() => setHistory([])} disabled={busy} style={{
-          padding: '6px 12px', borderRadius: 9,
-          background: 'rgba(120,120,128,0.12)', color: T.textSub,
-          border: 'none', fontSize: 11, fontWeight: 700,
-          cursor: 'pointer', fontFamily: 'inherit',
+          ...btnGhost({ T, size: 'sm' }),
         }}>クリア</button>
       </div>
 
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: SPACING.md + 2 }}>
         {history.length === 0 && (
           <div style={{
-            padding: 18,
-            background: `linear-gradient(180deg, ${T.bgCard} 0%, rgba(0,122,255,0.05) 100%)`,
-            border: '1px solid rgba(0,122,255,0.18)',
-            borderRadius: 14,
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
-            fontSize: 12, color: T.textSub, lineHeight: 1.7,
+            ...cardStyle({ T, accent: T.accent, padding: SPACING.lg + 2 }),
+            ...TYPO.subhead, fontWeight: 600, color: T.textSub, lineHeight: 1.7,
           }}>
             ネオ福岡 共有ドライブ内の資料を検索できます。<br />
             例:
-            <ul style={{ paddingLeft: 18, margin: '6px 0 0' }}>
+            <ul style={{ paddingLeft: SPACING.lg + 2, margin: `${SPACING.xs + 2}px 0 0` }}>
               <li>「やずや提案の最新版どこ?」</li>
               <li>「先週の経営会議の議事録を要約して」</li>
               <li>「面川さんが書いた研修資料」</li>
@@ -185,25 +182,31 @@ function DriveChat({ T, owner }) {
           </div>
         )}
         {history.map((h, i) => (
-          <div key={i} style={{ marginBottom: 12 }}>
+          <div key={i} style={{ marginBottom: SPACING.md }}>
             <div style={{
-              padding: '10px 12px', borderRadius: 8,
+              padding: `${SPACING.sm + 2}px ${SPACING.md}px`, borderRadius: RADIUS.sm,
               background: h.role === 'user' ? T.accentBg : T.sectionBg,
               border: `1px solid ${h.role === 'user' ? T.accent + '40' : T.border}`,
-              fontSize: 13, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6,
+              ...TYPO.body, color: T.text, whiteSpace: 'pre-wrap', lineHeight: 1.6,
             }}>
-              <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 6, fontWeight: 700 }}>
-                {h.role === 'user' ? '🙂 あなた' : '🤖 AI'}
+              <div style={{
+                ...TYPO.caption, color: T.textMuted, marginBottom: SPACING.xs + 2, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}>
+                <Icon name={h.role === 'user' ? 'user' : 'ai'} size={11} />
+                {h.role === 'user' ? 'あなた' : 'AI'}
               </div>
               {h.content}
             </div>
             {h.files && h.files.length > 0 && (
-              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ marginTop: SPACING.sm, display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2 }}>
                 <div style={{
-                  fontSize: 10, fontWeight: 700, color: T.textMuted,
-                  letterSpacing: 0.5, padding: '0 4px',
+                  ...TYPO.caption, fontWeight: 700, color: T.textMuted,
+                  letterSpacing: 0.5, padding: `0 ${SPACING.xs}px`,
+                  display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
                 }}>
-                  📌 候補ファイル ({h.files.length}件中 上位{Math.min(8, h.files.length)}件)
+                  <Icon name="pin" size={11} />
+                  候補ファイル ({h.files.length}件中 上位{Math.min(8, h.files.length)}件)
                 </div>
                 {h.files.slice(0, 8).map(f => (
                   <FileCard key={f.id} T={T} file={f} />
@@ -213,29 +216,31 @@ function DriveChat({ T, owner }) {
           </div>
         ))}
         {busy && (
-          <div style={{ padding: 10, fontSize: 12, color: T.textMuted }}>考え中…</div>
+          <div style={{ padding: SPACING.sm + 2, ...TYPO.subhead, fontWeight: 600, color: T.textMuted }}>考え中…</div>
         )}
         {err && (
           <div style={{
-            padding: 10, fontSize: 12, color: T.danger,
+            padding: SPACING.sm + 2, ...TYPO.subhead, fontWeight: 600, color: T.danger,
             background: T.dangerBg, border: `1px solid ${T.danger}40`,
-            borderRadius: 6, lineHeight: 1.5,
+            borderRadius: RADIUS.xs, lineHeight: 1.5,
           }}>
-            <div style={{ marginBottom: 6 }}>⚠️ {err}</div>
+            <div style={{
+              marginBottom: SPACING.xs + 2,
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="alert" size={12} /> {err}</div>
             {lastUserMsg && (
               <button onClick={() => send(lastUserMsg)} disabled={busy} style={{
-                padding: '4px 12px', borderRadius: 6,
-                background: T.accent, color: '#fff', border: 'none',
-                fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-              }}>🔄 再試行</button>
+                ...btnPrimary({ T, size: 'sm' }),
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}><Icon name="refresh" size={11} /> 再試行</button>
             )}
           </div>
         )}
       </div>
 
       <div style={{
-        padding: 10, borderTop: `1px solid ${T.border}`,
-        display: 'flex', gap: 6, flexShrink: 0, background: T.bgCard,
+        padding: SPACING.sm + 2, borderTop: `1px solid ${T.border}`,
+        display: 'flex', gap: SPACING.xs + 2, flexShrink: 0, background: T.bgCard,
       }}>
         <textarea
           value={input}
@@ -247,17 +252,14 @@ function DriveChat({ T, owner }) {
           rows={2}
           disabled={busy}
           style={{
-            flex: 1, background: T.bg, color: T.text,
-            border: `1px solid ${T.border}`, borderRadius: 6,
-            padding: '8px 10px', fontSize: 13, fontFamily: 'inherit',
-            resize: 'vertical', outline: 'none',
+            ...inputStyle({ T }), flex: 1, width: 'auto', background: T.bg,
+            ...TYPO.body, resize: 'vertical',
           }}
         />
         <button onClick={() => send()} disabled={busy || !input.trim()} style={{
-          padding: '0 16px', borderRadius: 6,
-          background: busy ? T.border : T.accent, color: '#fff',
-          border: 'none', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-          cursor: busy ? 'not-allowed' : 'pointer',
+          ...btnPrimary({ T, size: 'md' }),
+          padding: `0 ${SPACING.lg}px`,
+          ...(busy ? { background: T.border, boxShadow: 'none', cursor: 'not-allowed' } : {}),
         }}>送信</button>
       </div>
     </div>
@@ -267,27 +269,28 @@ function DriveChat({ T, owner }) {
 function FileCard({ T, file }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      padding: '8px 10px', background: T.bgCard,
-      border: `1px solid ${T.border}`, borderRadius: 7,
-      fontSize: 12,
+      display: 'flex', alignItems: 'center', gap: SPACING.sm,
+      padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, background: T.bgCard,
+      border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
+      ...TYPO.subhead, fontWeight: 600,
     }}>
-      <span style={{ fontSize: 18 }}>{iconFor(file.mimeType, file.isFolder)}</span>
+      <span style={{ color: T.textSub, display: 'inline-flex' }}>
+        <Icon name={iconFor(file.mimeType, file.isFolder)} size={18} />
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontWeight: 700, color: T.text,
+          ...TYPO.subhead, fontWeight: 700, color: T.text,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{file.name}</div>
-        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
+        <div style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, marginTop: 1 }}>
           {file.owner && `${file.owner} · `}{formatRelative(file.modifiedTime)}
         </div>
       </div>
       {file.webViewLink && (
         <a href={file.webViewLink} target="_blank" rel="noreferrer" style={{
-          padding: '4px 10px', borderRadius: 5,
-          background: T.accentBg, color: T.accent, fontSize: 10, fontWeight: 700,
-          textDecoration: 'none', whiteSpace: 'nowrap',
-        }}>Drive で開く ↗</a>
+          ...pillStyle({ color: T.accent, size: 'sm' }),
+          textDecoration: 'none',
+        }}>Drive で開く <Icon name="external" size={10} /></a>
       )}
     </div>
   )
@@ -374,55 +377,52 @@ function DriveBrowser({ T, owner }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
       {/* ヘッダ + 検索 */}
       <div style={{
-        padding: '12px 18px', borderBottom: `1px solid ${T.border}`,
-        background: 'rgba(255,255,255,0.65)',
+        padding: `${SPACING.md}px ${SPACING.lg + 2}px`, borderBottom: `1px solid ${T.border}`,
+        background: T.sectionBg,
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm + 2, marginBottom: SPACING.sm + 2 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 9, flexShrink: 0,
             background: `linear-gradient(135deg, #FFCC00 0%, #FF9500 100%)`,
             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16,
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 6px rgba(255,149,0,0.45)',
-          }}>📂</div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
+          }}><Icon name="drive" size={16} /></div>
+          <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text, flex: 1, letterSpacing: '-0.01em' }}>
             {searchMode ? `「${searchQ}」の検索結果` : folderName}
           </div>
           <button onClick={() => load(folderId)} disabled={loading} title="再読込" style={{
-            padding: '4px 8px', borderRadius: 6,
-            background: 'transparent', border: `1px solid ${T.border}`,
-            color: T.textSub, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-          }}>🔄</button>
+            ...btnSecondary({ T, size: 'sm' }),
+            padding: `${SPACING.xs}px ${SPACING.sm}px`,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icon name="refresh" size={13} /></button>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: SPACING.xs }}>
           <input
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') runSearch() }}
-            placeholder="🔍 共有ドライブ内を検索 (タイトル/本文)"
+            placeholder="共有ドライブ内を検索 (タイトル/本文)"
             style={{
-              flex: 1, padding: '6px 10px', fontSize: 12,
-              background: T.bg, border: `1px solid ${T.border}`,
-              borderRadius: 6, color: T.text, fontFamily: 'inherit', outline: 'none',
+              ...inputStyle({ T }), flex: 1, width: 'auto',
+              padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`, ...TYPO.subhead,
+              fontWeight: 500, background: T.bg,
             }}
           />
           <button onClick={runSearch} disabled={searchLoading || !searchQ.trim()} style={{
-            padding: '6px 12px', borderRadius: 6,
-            background: T.accent, color: '#fff', border: 'none',
-            fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            ...btnPrimary({ T, size: 'sm' }),
+            padding: `${SPACING.xs + 2}px ${SPACING.md}px`, ...TYPO.subhead, fontWeight: 700,
             cursor: searchLoading || !searchQ.trim() ? 'not-allowed' : 'pointer',
             opacity: searchLoading || !searchQ.trim() ? 0.6 : 1,
           }}>{searchLoading ? '…' : '検索'}</button>
           {searchMode && (
             <button onClick={() => { setSearchMode(false); setSearchQ('') }} style={{
-              padding: '6px 10px', borderRadius: 6,
-              background: 'transparent', color: T.textSub,
-              border: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}>×</button>
+              ...btnSecondary({ T, size: 'sm' }),
+              padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}><Icon name="cross" size={13} /></button>
           )}
         </div>
       </div>
@@ -430,21 +430,21 @@ function DriveBrowser({ T, owner }) {
       {/* パンくず */}
       {!searchMode && breadcrumb.length > 0 && (
         <div style={{
-          padding: '8px 12px', borderBottom: `1px solid ${T.border}`,
-          fontSize: 11, color: T.textSub,
-          display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
+          padding: `${SPACING.sm}px ${SPACING.md}px`, borderBottom: `1px solid ${T.border}`,
+          ...TYPO.footnote, fontWeight: 600, color: T.textSub,
+          display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap',
           background: T.sectionBg, flexShrink: 0,
         }}>
           {breadcrumb.map((b, i) => (
-            <span key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {i > 0 && <span style={{ color: T.textFaint }}>›</span>}
+            <span key={b.id} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+              {i > 0 && <span style={{ color: T.textFaint, display: 'inline-flex' }}><Icon name="chevronR" size={11} /></span>}
               <button
                 onClick={() => { setFolderId(b.isRoot ? null : b.id); setSearchMode(false); setSearchQ('') }}
                 style={{
-                  padding: '2px 6px', borderRadius: 4,
+                  padding: `2px ${SPACING.xs + 2}px`, borderRadius: RADIUS.xs - 2,
                   background: i === breadcrumb.length - 1 ? T.accentBg : 'transparent',
                   color: i === breadcrumb.length - 1 ? T.accent : T.textSub,
-                  border: 'none', fontSize: 11, fontWeight: 600,
+                  border: 'none', ...TYPO.footnote, fontWeight: 600,
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >{b.name}</button>
@@ -454,41 +454,43 @@ function DriveBrowser({ T, owner }) {
       )}
 
       {/* アイテム一覧 */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: SPACING.sm + 2 }}>
         {loading ? (
-          <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+          <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead, fontWeight: 600 }}>
             読み込み中...
           </div>
         ) : isUnconnected ? (
-          <div style={{ padding: 14, fontSize: 12, color: T.textMuted, lineHeight: 1.7 }}>
+          <div style={{ padding: SPACING.md + 2, ...TYPO.subhead, fontWeight: 600, color: T.textMuted, lineHeight: 1.7 }}>
             未連携です。連携タブで Google 連携してください。
           </div>
         ) : error ? (
           <div style={{
-            padding: 10, fontSize: 12, color: T.danger,
+            padding: SPACING.sm + 2, ...TYPO.subhead, fontWeight: 600, color: T.danger,
             background: T.dangerBg, border: `1px solid ${T.danger}40`,
-            borderRadius: 6, lineHeight: 1.6,
+            borderRadius: RADIUS.xs, lineHeight: 1.6,
           }}>
-            ⚠️ {error}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+              <Icon name="alert" size={12} /> {error}
+            </span>
             {needsReauth && (
-              <div style={{ marginTop: 6, fontSize: 11 }}>
+              <div style={{ marginTop: SPACING.xs + 2, ...TYPO.footnote, fontWeight: 600 }}>
                 「連携」タブから再認証してください (drive.readonly スコープ不足の可能性)
               </div>
             )}
           </div>
         ) : displayItems.length === 0 ? (
-          <div style={{ padding: 20, textAlign: 'center', color: T.textMuted, fontSize: 12 }}>
+          <div style={{ padding: SPACING.xl, textAlign: 'center', color: T.textMuted, ...TYPO.subhead, fontWeight: 600 }}>
             {searchMode ? '該当ファイルなし' : '空のフォルダ'}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
             {displayItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => clickItem(item)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 10px', borderRadius: 6,
+                  display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
+                  padding: `${SPACING.sm}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs,
                   background: 'transparent', border: `1px solid transparent`,
                   cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
                 }}
@@ -501,19 +503,21 @@ function DriveBrowser({ T, owner }) {
                   e.currentTarget.style.borderColor = 'transparent'
                 }}
               >
-                <span style={{ fontSize: 20 }}>{iconFor(item.mimeType, item.isFolder)}</span>
+                <span style={{ color: T.textSub, display: 'inline-flex' }}>
+                  <Icon name={iconFor(item.mimeType, item.isFolder)} size={20} />
+                </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: 12, fontWeight: item.isFolder ? 700 : 600, color: T.text,
+                    ...TYPO.subhead, fontWeight: item.isFolder ? 700 : 600, color: T.text,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>{item.name}</div>
-                  <div style={{ fontSize: 10, color: T.textMuted, marginTop: 1 }}>
+                  <div style={{ ...TYPO.caption, fontWeight: 600, color: T.textMuted, marginTop: 1 }}>
                     {item.owner && `${item.owner} · `}
                     {formatRelative(item.modifiedTime)}
                   </div>
                 </div>
                 {!item.isFolder && (
-                  <span style={{ fontSize: 10, color: T.textMuted }}>↗</span>
+                  <span style={{ color: T.textMuted, display: 'inline-flex' }}><Icon name="external" size={12} /></span>
                 )}
               </button>
             ))}

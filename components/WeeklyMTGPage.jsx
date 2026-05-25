@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useResponsive } from '../lib/useResponsive'
-import { COMMON_TOKENS } from '../lib/themeTokens'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
+import { btnBrand } from '../lib/iosStyles'
 import { HeroCard, DashboardTile } from './iosUI'
 import { useAutoSave } from '../lib/useAutoSave'
 import { buildQuarterMap } from '../lib/objectiveMatching'
@@ -10,7 +12,16 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
-import Icon from './Icon'
+import Icon, { DataIcon } from './Icon'
+import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
+import KATableHeader from './okr/KATableHeader'
+import { pctColor as okrPctColor, pctColorBg as okrPctColorBg } from '../lib/okrColors'
+import AssigneeChip from './okr/AssigneeChip'
+import QTabs from './okr/QTabs'
+import OkrCard from './okr/OkrCard'
+import OrgTreeSidebar from './okr/OrgTreeSidebar'
+import ProgressBar from './okr/ProgressBar'
+import { KRBlock, Avatar, OwnerBadge, formatWeekLabel, getPrevMondayStr, statusCfg, autoGrowTextarea, calcStars, KARow, TaskPopover, WeatherPicker } from './okr/KRBlock'
 
 // 会議ごとのアイコン (SVG・currentColor を継承)
 const Ico = ({ size=22, children }) => (
@@ -42,22 +53,25 @@ function getDepth(levelId, levels) {
   return d
 }
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
-function avatarColor(name) {
-  if (!name) return '#606880'
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
-}
 const LAYER_COLORS = { 0: '#ff6b6b', 1: '#4d9fff', 2: '#00d68f', 3: '#ffd166' }
+// 部署スコープ用の定義済みパープル (success/accent/warn 以外の第4軸として既存パープルを踏襲)
+const PURPLE    = '#a855f7'
+const PURPLE_BG = 'rgba(168,85,247,0.14)'
 
 // ★ doneを追加した5種ステータス
+// 色は themeTokens のステータス色に揃える (light/dark で自動切替するよう描画側で wT() 参照)。
+// ここでは fallback 用に固定値を残しつつ、描画時に statusCfg(wT) で上書きする。
 const STATUS_CFG = {
   focus:  { label: '注力', color: '#4d9fff', bg: 'rgba(77,159,255,0.12)',  border: 'rgba(77,159,255,0.3)' },
-  good:   { label: '✅ Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
-  more:   { label: '🔺 More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
+  good:   { label: 'Good', color: '#00d68f', bg: 'rgba(0,214,143,0.1)',    border: 'rgba(0,214,143,0.3)' },
+  more:   { label: 'More', color: '#ff6b6b', bg: 'rgba(255,107,107,0.1)',  border: 'rgba(255,107,107,0.3)' },
   normal: { label: '未分類',  color: '#606880', bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)' },
-  done:   { label: '✓ 完了',  color: '#a0a8be', bg: 'rgba(160,168,190,0.08)', border: 'rgba(160,168,190,0.2)' },
+  done:   { label: '完了',  color: '#a0a8be', bg: 'rgba(160,168,190,0.08)', border: 'rgba(160,168,190,0.2)' },
 }
 const STATUS_ORDER = ['normal','focus','good','more','done']
+
+// 達成率 % → 4 段階の状態色 (0-29 danger / 30-59 warn / 60-99 success / 100+ accent)
+function pctColorOf(pct, T) { return okrPctColor(T, pct) }
 
 function getPeriodLabel(periodKey) {
   if (!periodKey) return ''
@@ -116,74 +130,47 @@ function ObjectiveCompactCard({ title, ownerName, members, wT, label, labelColor
       return next
     })
   }
-  const bgBase = isDone ? 'rgba(0,214,143,0.08)' : `${labelColor}0e`
-  const borderBase = isDone ? 'rgba(0,214,143,0.3)' : `${labelColor}30`
   return (
-    <div style={{
-      padding: expanded ? '10px 14px' : '7px 12px',
-      background: bgBase,
-      border: `1px solid ${borderBase}`,
-      borderLeft: `3px solid ${labelColor}`,
-      borderRadius: 8,
-      ...style,
-    }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:`${labelColor}22`, color:labelColor, flexShrink:0 }}>{label}</span>
+    <OkrCard T={wT()} padding={expanded ? `${SPACING.sm + 2}px ${SPACING.lg - 2}px` : `7px ${SPACING.md}px`} style={style}>
+      <div style={{ display:'flex', alignItems:'center', gap:SPACING.sm }}>
+        <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 7px', borderRadius:RADIUS.pill, background:`${labelColor}22`, color:labelColor, flexShrink:0 }}>{label}</span>
         {!expanded && (
           <div style={{
             flex: 1, minWidth: 0,
-            fontSize: 12, fontWeight: 700, color: titleColor,
+            ...TYPO.subhead, fontWeight: 700, color: titleColor,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             lineHeight: 1.4,
           }} title={title}>{title}</div>
         )}
         {expanded && (
-          <span style={{ fontSize:10, color:wT().textMuted }}>Objective</span>
+          <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted }}>Objective</span>
         )}
         {isDone && expanded && (
-          <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>🏆 達成済み</span>
+          <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 8px', borderRadius:RADIUS.pill, background:wT().successBg, color:wT().success, display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="trophy" size={11} /> 達成済み</span>
         )}
         {ownerName && <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
-          <OwnerBadge name={ownerName} members={members} size={20} />
+          <OwnerBadge name={ownerName} members={members} size={18} T={wT()} />
         </div>}
         <button
           onClick={toggle}
           title={expanded ? '折りたたむ' : '全文表示'}
           style={{
             background: 'transparent', border: `1px solid ${wT().border}`,
-            borderRadius: 5, padding: '2px 7px', fontSize: 10,
+            borderRadius: RADIUS.xs - 1, padding: '2px 7px', fontSize: 10,
             cursor: 'pointer', fontFamily: 'inherit', color: wT().textMuted,
-            flexShrink: 0,
+            flexShrink: 0, display:'inline-flex', alignItems:'center',
           }}
-        >{expanded ? '▴' : '▾'}</button>
+        ><Icon name={expanded ? 'chevronU' : 'chevronD'} size={12} /></button>
       </div>
       {expanded && (
-        <div style={{ fontSize:14, fontWeight:700, color:titleColor, lineHeight:1.5, marginTop:6 }}>
+        <div style={{ ...TYPO.headline, fontWeight:700, color:titleColor, lineHeight:1.5, marginTop:6 }}>
           {title}
         </div>
       )}
-    </div>
+    </OkrCard>
   )
 }
 
-// textarea を内容に応じて自動拡張 (KA記入欄用)
-function autoGrowTextarea(el, minRows = 3) {
-  if (!el) return
-  el.style.height = 'auto'
-  // フォントサイズ11, lineHeight 1.55 → 1行 ≒ 17px。パディング込みで minRows * 17 + 12
-  const minH = minRows * 17 + 12
-  el.style.height = Math.max(el.scrollHeight, minH) + 'px'
-}
-
-function formatWeekLabel(mondayStr) {
-  // mondayStrは "YYYY-MM-DD" を想定（JSTの月曜日）。曜日依存ロジックを避けてパース
-  const [y, m, day] = mondayStr.split('-').map(Number)
-  // 月曜日から +6 日を足してその週の日曜日を計算（JST曜日にズレがないようUTCで計算）
-  const sun = new Date(Date.UTC(y, m - 1, day + 6))
-  const m2 = sun.getUTCMonth() + 1
-  const d2 = sun.getUTCDate()
-  return m === m2 ? `${m}/${day}〜${d2}` : `${m}/${day}〜${m2}/${d2}`
-}
 // schedule文字列(月曜/火曜/...)から月曜起点の曜日offset(0-6)を返す
 function scheduleToOffset(schedule) {
   const map = { '月曜':0, '火曜':1, '水曜':2, '木曜':3, '金曜':4, '土曜':5, '日曜':6 }
@@ -196,12 +183,6 @@ function formatMeetingDayLabel(mondayStr, schedule) {
   const meetDate = new Date(Date.UTC(y, m - 1, day + offset))
   const wd = ['日','月','火','水','木','金','土'][meetDate.getUTCDay()]
   return `${meetDate.getUTCMonth()+1}/${meetDate.getUTCDate()}(${wd})`
-}
-// 「先週」の月曜日(週の月曜から-7日)
-function getPrevMondayStr(mondayStr) {
-  const [y, m, day] = mondayStr.split('-').map(Number)
-  const prev = new Date(Date.UTC(y, m - 1, day - 7))
-  return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth()+1).padStart(2,'0')}-${String(prev.getUTCDate()).padStart(2,'0')}`
 }
 function isFriday() {
   // JST基準の曜日判定
@@ -217,791 +198,6 @@ function getNextMonday() {
     thisMon.getUTCDate() + 7
   ))
   return toDateStr(nextMon)
-}
-
-// ─── アバター ─────────────────────────────────────────────────────────────────
-function Avatar({ name, avatarUrl, size = 22 }) {
-  const [hov, setHov] = useState(false)
-  if (!name) return null
-  const color = avatarColor(name)
-  return (
-    <div style={{ position:'relative', display:'inline-flex', flexShrink:0 }}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
-      {avatarUrl
-        ? <img src={avatarUrl} alt={name} style={{ width:size, height:size, borderRadius:'50%', objectFit:'cover', border:`1.5px solid ${color}60` }} />
-        : <div style={{ width:size, height:size, borderRadius:'50%', background:`${color}25`, border:`1.5px solid ${color}60`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:size*0.38, fontWeight:700, color }}>{name.slice(0,2)}</div>
-      }
-      {hov && <div style={{ position:'absolute', bottom:'110%', left:'50%', transform:'translateX(-50%)', background:'rgba(0,0,0,0.88)', color:'#fff', fontSize:10, fontWeight:600, padding:'3px 8px', borderRadius:5, whiteSpace:'nowrap', zIndex:200, pointerEvents:'none' }}>{name}</div>}
-    </div>
-  )
-}
-function OwnerBadge({ name, members, size = 18 }) {
-  if (!name) return null
-  const m = members.find(x => x.name === name)
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
-      <Avatar name={name} avatarUrl={m?.avatar_url} size={size} />
-      <span style={{ fontSize:size*0.65, color:avatarColor(name), fontWeight:600 }}>{name}</span>
-    </div>
-  )
-}
-
-// ─── 天気 ──────────────────────────────────────────────────────────────────────
-const WEATHER_CFG = [
-  { score:0, icon:'—',  label:'未選択',      color:'#606880', bg:'rgba(255,255,255,0.05)' },
-  { score:1, icon:'⛈', label:'嵐',          color:'#8090b0', bg:'rgba(128,144,176,0.12)' },
-  { score:2, icon:'🌧', label:'雨',          color:'#4d9fff', bg:'rgba(77,159,255,0.12)'  },
-  { score:3, icon:'☁️', label:'曇り',        color:'#a0a8be', bg:'rgba(160,168,190,0.12)' },
-  { score:4, icon:'🌤', label:'晴れのち曇り', color:'#ffd166', bg:'rgba(255,209,102,0.15)' },
-  { score:5, icon:'☀️', label:'快晴',        color:'#ff9f43', bg:'rgba(255,159,67,0.12)'  },
-]
-const KR_STAR_CFG = [
-  { label:'80%未満', color:'#606880' },{ label:'80%〜89%', color:'#ffd166' },
-  { label:'90%〜99%', color:'#4d9fff' },{ label:'100%〜109%', color:'#00d68f' },
-  { label:'110%〜119%', color:'#ff9f43' },{ label:'120%以上', color:'#a855f7' },
-]
-function calcStars(cur, tgt, lib) {
-  if (!tgt) return 0
-  const p = (lib ? tgt/Math.max(cur,0.001) : cur/tgt)*100
-  if (p>=120) return 5; if (p>=110) return 4; if (p>=100) return 3
-  if (p>=90)  return 2; if (p>=80)  return 1; return 0
-}
-function WeatherPicker({ value, onChange, wT }) {
-  return (
-    <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-      {WEATHER_CFG.slice(1).map(w => {
-        const on = w.score === value
-        return (
-          <div key={w.score} onClick={() => onChange(on ? 0 : w.score)}
-            style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, cursor:'pointer', userSelect:'none', background:on?w.bg:'transparent', border:`1px solid ${on?w.color+'70':wT().borderMid}`, transform:on?'scale(1.06)':'scale(1)', transition:'all 0.15s' }}>
-            <span style={{ fontSize:20 }}>{w.icon}</span>
-            <span style={{ fontSize:11, fontWeight:on?700:500, color:on?w.color:wT().textMuted }}>{w.label}</span>
-          </div>
-        )
-      })}
-      {value > 0 && <button onClick={() => onChange(0)} style={{ fontSize:10, color:wT().textFaint, background:'transparent', border:`1px solid ${wT().border}`, borderRadius:6, padding:'4px 8px', cursor:'pointer', fontFamily:'inherit' }}>リセット</button>}
-    </div>
-  )
-}
-
-// ─── タスクポップオーバー ──────────────────────────────────────────────────────
-function TaskPopover({ report, members, wT, onClose, onTaskCountChange, kaTitle, objectiveTitle, completedBy }) {
-  const reportId = report?.id
-  const kaKey = computeKAKey(report)
-  const [tasks, setTasks] = useState([])
-  const [loaded, setLoaded] = useState(false)
-  const [saving, setSaving] = useState({})
-  const ref = useRef(null)
-  const tasksRef = useRef(tasks)
-  tasksRef.current = tasks
-
-  useEffect(() => {
-    if (!kaKey) return
-    // ka_keyが同じタスクを全て取得（週を跨いで同じKAの全タスク）
-    supabase.from('ka_tasks').select('*').eq('ka_key', kaKey).order('id')
-      .then(({data}) => { setTasks(data||[]); setLoaded(true) })
-  }, [kaKey])
-
-  useEffect(() => {
-    if (loaded && onTaskCountChange) {
-      const saved = tasks.filter(t => t.id)
-      onTaskCountChange({ done: saved.filter(t => t.done).length, total: saved.length })
-    }
-  }, [tasks, loaded]) // eslint-disable-line
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose() }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
-
-  // タスク追加時に即座にDBに挿入して実IDを取得
-  const addTask = async () => {
-    const d = { title:'', assignee:null, due_date:null, done:false, report_id:reportId, ka_key:kaKey }
-    const {data:ins} = await supabase.from('ka_tasks').insert(d).select().single()
-    if (ins) setTasks(p => [...p, ins])
-  }
-  const updateTask = (key, f, v) => {
-    setTasks(p => p.map(t => t.id===key ? {...t,[f]:v} : t))
-  }
-  const removeTask = async (key) => {
-    await supabase.from('ka_tasks').delete().eq('id', key)
-    setTasks(p => p.filter(x => x.id!==key))
-  }
-  const toggleDone = async (key) => {
-    const t = tasks.find(x => x.id===key)
-    const nd = !t.done
-    await supabase.from('ka_tasks').update({ done:nd }).eq('id', key)
-    setTasks(p => p.map(x => x.id===key ? {...x,done:nd} : x))
-  }
-  const saveTask = async (key) => {
-    const t = tasksRef.current.find(x => x.id===key)
-    if (!t) return
-    setSaving(p => ({...p, [key]: true}))
-    const d = { title:t.title||'', assignee:t.assignee||null, due_date:t.due_date||null, done:t.done }
-    await supabase.from('ka_tasks').update(d).eq('id', t.id)
-    setSaving(p => { const n = {...p}; delete n[key]; return n })
-  }
-  const doneCount = tasks.filter(t=>t.done).length
-
-  return (
-    <div ref={ref} style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:420, background:wT().bgCard, border:`1px solid ${wT().borderMid}`, borderRadius:10, boxShadow:'0 8px 30px rgba(0,0,0,0.3)', padding:12 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:'#a855f7' }}>📋 タスク {doneCount}/{tasks.length}</span>
-        <button onClick={onClose} style={{ marginLeft:'auto', background:'transparent', border:'none', color:wT().textFaint, cursor:'pointer', fontSize:14 }}>✕</button>
-      </div>
-      {!loaded && <div style={{ fontSize:11, color:wT().textMuted, padding:8 }}>読み込み中...</div>}
-      {tasks.map(t => {
-        const key = t.id; const tc = avatarColor(t.assignee); const isSaving = saving[key]
-        return (
-          <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, marginBottom:4, background:t.done?wT().borderLight:wT().bgCard, border:`1px solid ${t.done?wT().border:wT().borderMid}`, opacity:t.done?0.6:1 }}>
-            <div onClick={()=>toggleDone(key)} style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${t.done?'#00d68f':wT().borderMid}`, background:t.done?'#00d68f':'transparent', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {t.done && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
-            </div>
-            <input value={t.title} onChange={e=>updateTask(key,'title',e.target.value)} placeholder="タスク内容" style={{ flex:1, background:'transparent', border:'none', color:t.done?wT().textMuted:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', textDecoration:t.done?'line-through':'none' }}/>
-            <select value={t.assignee||''} onChange={e=>updateTask(key,'assignee',e.target.value)} style={{ background:wT().bgCard2, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.assignee?tc:wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', flexShrink:0, maxWidth:80 }}>
-              <option value="">担当</option>
-              {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
-            <input type="date" value={t.due_date||''} onChange={e=>updateTask(key,'due_date',e.target.value)} style={{ background:wT().bgCard2, border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 6px', color:t.due_date?wT().text:wT().textMuted, fontSize:11, outline:'none', fontFamily:'inherit', flexShrink:0, maxWidth:110 }}/>
-            <button onClick={()=>saveTask(key)} disabled={isSaving} style={{ padding:'2px 8px', borderRadius:4, border:'none', background:isSaving?'#666':'#a855f7', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>{isSaving?'...':'保存'}</button>
-            <button onClick={()=>removeTask(key)} style={{ width:18, height:18, borderRadius:3, border:'none', background:'transparent', color:wT().textFaint, cursor:'pointer', fontSize:12, flexShrink:0 }}>✕</button>
-          </div>
-        )
-      })}
-      <div onClick={addTask} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', borderRadius:7, border:`1px dashed ${wT().borderMid}`, cursor:'pointer', color:wT().textMuted, fontSize:11, marginTop:2 }}>
-        <span style={{ fontSize:14, lineHeight:1 }}>+</span> タスクを追加
-      </div>
-    </div>
-  )
-}
-
-// ─── KAテーブル行 ──────────────────────────────────────────────────────────────
-function KARow({ report, onSave, onDelete, members, wT, canEdit, dragHandleProps, dragIdx, overIdx, rowIdx, onDragOver, onDrop, objectiveTitle, completedBy }) {
-  const [good,         setGood]         = useState(report.good || '')
-  const [more,         setMore]         = useState(report.more || '')
-  const [focusOutput,  setFocusOutput]  = useState(report.focus_output || '')
-  const [status,       setStatus]       = useState(report.status || 'normal')
-  const [ownerDraft,   setOwnerDraft]   = useState(report.owner || '')
-  const [kaTitle,      setKaTitle]      = useState(report.ka_title || '')
-  const [editingTitle, setEditingTitle] = useState(false)
-  const [showTasks,    setShowTasks]    = useState(false)
-  const [taskCount,    setTaskCount]    = useState({ done:0, total:0 })
-  const lastEnterRef   = useRef(0)
-
-  const autoSave = useAutoSave('weekly_reports', report.id, { enabled: canEdit })
-  const cfg = STATUS_CFG[status] || STATUS_CFG.normal
-  const ownerMember = members.find(m => m.name === (ownerDraft||report.owner))
-
-  // タスクカウント取得（ka_keyで同じKAの全タスクをカウント）
-  const kaKey = computeKAKey(report)
-  useEffect(() => {
-    if (!kaKey) return
-    supabase.from('ka_tasks').select('id,done').eq('ka_key', kaKey)
-      .then(({data}) => {
-        if (data) setTaskCount({ done:data.filter(t=>t.done).length, total:data.length })
-      })
-  }, [kaKey])
-
-  // リモート更新をマージ（フォーカス中フィールドは上書きしない）
-  useEffect(() => {
-    const ff = autoSave.focusedField
-    if (ff !== 'good' && report.good !== undefined) setGood(report.good || '')
-    if (ff !== 'more' && report.more !== undefined) setMore(report.more || '')
-    if (ff !== 'focus_output' && report.focus_output !== undefined) setFocusOutput(report.focus_output || '')
-    if (ff !== 'status') setStatus(report.status || 'normal')
-    if (ff !== 'owner') setOwnerDraft(report.owner || '')
-    if (ff !== 'ka_title') setKaTitle(report.ka_title || '')
-  }, [report.good, report.more, report.focus_output, report.status, report.owner, report.ka_title])
-
-  const handleFieldChange = (field, value, setter) => {
-    setter(value)
-    autoSave.save(field, value)
-    onSave({ ...report, [field]: value })
-  }
-
-  const cycleStatus = () => {
-    const idx = STATUS_ORDER.indexOf(status)
-    const next = STATUS_ORDER[(idx+1) % STATUS_ORDER.length]
-    setStatus(next)
-    autoSave.save('status', next)
-    onSave({ ...report, status: next })
-  }
-
-  // KA のタイトル/オーナー変更時に、既存タスクの ka_key を追従更新する
-  // （同じKAの他週の行が更新される場合もあるので ka_key 単位で UPDATE）
-  const syncTaskKaKey = async (oldKey, newKey) => {
-    if (!oldKey || !newKey || oldKey === newKey) return
-    await supabase.from('ka_tasks').update({ ka_key: newKey }).eq('ka_key', oldKey)
-  }
-
-  // 同じ KA (同じ ka_key) を持つ他週の weekly_reports 行にも同じフィールドを
-  // 反映させる。Postgres では owner の NULL と '' が別物扱いになるため、
-  // 候補を取得してから JS 側で正規化比較して UPDATE 対象 id を決める。
-  const syncSiblingWeeks = async (field, value) => {
-    const { data: candidates } = await supabase.from('weekly_reports')
-      .select('id, owner')
-      .eq('kr_id', report.kr_id)
-      .eq('ka_title', report.ka_title || '')
-      .eq('objective_id', report.objective_id)
-      .neq('id', report.id)
-    const targetOwner = (report.owner || '').trim()
-    const ids = (candidates || [])
-      .filter(r => (r.owner || '').trim() === targetOwner)
-      .map(r => r.id)
-    if (ids.length === 0) return
-    await supabase.from('weekly_reports').update({ [field]: value }).in('id', ids)
-  }
-
-  const handleOwnerChange = (val) => {
-    setOwnerDraft(val)
-    autoSave.save('owner', val)
-    onSave({ ...report, owner: val })
-    const oldKey = computeKAKey(report)
-    const newKey = computeKAKey({ ...report, owner: val })
-    syncTaskKaKey(oldKey, newKey)
-    // 他週の同じ KA 行の owner も追従
-    syncSiblingWeeks('owner', val)
-  }
-
-  const handleTitleBlur = () => {
-    setEditingTitle(false)
-    autoSave.setFocusedField(null)
-    if (kaTitle.trim() && kaTitle !== report.ka_title) {
-      const newTitle = kaTitle.trim()
-      autoSave.saveNow('ka_title', newTitle)
-      onSave({ ...report, ka_title: newTitle })
-      const oldKey = computeKAKey(report)
-      const newKey = computeKAKey({ ...report, ka_title: newTitle })
-      syncTaskKaKey(oldKey, newKey)
-      // 他週の同じ KA 行の ka_title も追従
-      syncSiblingWeeks('ka_title', newTitle)
-    }
-  }
-
-  const handleTitleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      setKaTitle(report.ka_title)
-      setEditingTitle(false)
-      autoSave.setFocusedField(null)
-      return
-    }
-    if (e.key === 'Enter') {
-      const now = Date.now()
-      if (now - lastEnterRef.current < 500) {
-        // ダブルEnter → 確定（最後の改行を除去）
-        e.preventDefault()
-        setKaTitle(prev => prev.replace(/\n$/, ''))
-        // 次のティックでblur
-        setTimeout(() => e.target?.blur(), 0)
-      }
-      lastEnterRef.current = now
-    }
-  }
-
-  const cellS = { padding:'6px 8px', borderBottom:`1px solid ${wT().border}`, verticalAlign:'top', fontSize:12 }
-  // KA記入欄: 改行が気になりすぎないよう fontSize 11、lineHeight 1.55、自動拡張
-  const taS = { width:'100%', boxSizing:'border-box', background:'transparent', border:`1px solid transparent`, borderRadius:5, padding:'5px 7px', color:wT().text, fontSize:11, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55, overflow:'hidden', transition:'border-color 0.15s' }
-  const isDone = status === 'done'
-  const isDragging = dragIdx !== undefined && dragIdx === rowIdx
-  const isDragOver = overIdx !== undefined && overIdx === rowIdx && dragIdx !== null && dragIdx !== rowIdx
-
-  return (
-    <tr style={{ opacity: isDone ? 0.5 : isDragging ? 0.4 : 1, background: isDone ? wT().borderLight : 'transparent', borderTop: isDragOver ? '2px solid #4d9fff' : 'none' }}
-      onDragOver={onDragOver} onDrop={onDrop}>
-      {/* ドラッグハンドル */}
-      <td style={{ ...cellS, width:28, textAlign:'center', cursor:'grab' }}>
-        <span {...(dragHandleProps||{})} style={{ color:wT().textFaint, fontSize:13, userSelect:'none' }} title="ドラッグで並べ替え">⠿</span>
-      </td>
-      {/* 担当 */}
-      <td style={{ ...cellS, width:90 }}>
-        {canEdit ? (
-          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-            <Avatar name={ownerDraft||report.owner} avatarUrl={ownerMember?.avatar_url} size={20} />
-            <select value={ownerDraft} onChange={e=>handleOwnerChange(e.target.value)}
-              onFocus={()=>autoSave.setFocusedField('owner')} onBlur={()=>autoSave.setFocusedField(null)}
-              style={{ flex:1, background:'transparent', border:'none', color:ownerDraft?avatarColor(ownerDraft):wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', fontWeight:600, minWidth:0, maxWidth:60 }}>
-              <option value="">--</option>
-              {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
-          </div>
-        ) : (
-          <OwnerBadge name={ownerDraft||report.owner} members={members} size={20} />
-        )}
-      </td>
-      {/* KAタイトル */}
-      <td style={{ ...cellS, minWidth:120 }}>
-        {editingTitle && canEdit ? (
-          <textarea autoFocus value={kaTitle} onChange={e=>setKaTitle(e.target.value)}
-            onBlur={handleTitleBlur}
-            onKeyDown={handleTitleKeyDown}
-            rows={2}
-            style={{ width:'100%', boxSizing:'border-box', background:wT().bgCard2, border:'1px solid #4d9fff80', borderRadius:5, padding:'4px 6px', color:wT().text, fontSize:12, fontWeight:600, outline:'none', fontFamily:'inherit', resize:'vertical', lineHeight:1.5 }} />
-        ) : (
-          <div onClick={() => { if (canEdit) { setEditingTitle(true); autoSave.setFocusedField('ka_title') } }}
-            style={{ fontSize:12, fontWeight:600, color:isDone?wT().textMuted:wT().text, textDecoration:isDone?'line-through':'none', cursor:canEdit?'text':'default', lineHeight:1.4, minHeight:20, whiteSpace:'pre-wrap' }}>
-            {kaTitle||report.ka_title||'(無題)'}
-          </div>
-        )}
-      </td>
-      {/* ステータス */}
-      <td style={{ ...cellS, width:70, textAlign:'center' }}>
-        <span onClick={canEdit?cycleStatus:undefined}
-          style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:99, cursor:canEdit?'pointer':'default', background:cfg.bg, color:cfg.color, border:`1px solid ${cfg.border}`, whiteSpace:'nowrap', display:'inline-block' }}>
-          {cfg.label}
-        </span>
-      </td>
-      {/* Good */}
-      <td style={cellS}>
-        <textarea value={good} readOnly={!canEdit}
-          ref={el => { if (el) autoGrowTextarea(el, 3) }}
-          onChange={e=>{ handleFieldChange('good', e.target.value, setGood); autoGrowTextarea(e.target, 3) }}
-          onFocus={e=>{ autoSave.setFocusedField('good'); e.target.style.borderColor='rgba(0,214,143,0.4)'; autoGrowTextarea(e.target, 5) }}
-          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('good',good); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
-          placeholder={canEdit?"良かったこと・続けたいこと":""}
-          style={{ ...taS, color:good?wT().text:wT().textFaint }} />
-      </td>
-      {/* More */}
-      <td style={cellS}>
-        <textarea value={more} readOnly={!canEdit}
-          ref={el => { if (el) autoGrowTextarea(el, 3) }}
-          onChange={e=>{ handleFieldChange('more', e.target.value, setMore); autoGrowTextarea(e.target, 3) }}
-          onFocus={e=>{ autoSave.setFocusedField('more'); e.target.style.borderColor='rgba(255,107,107,0.4)'; autoGrowTextarea(e.target, 5) }}
-          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('more',more); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
-          placeholder={canEdit?"課題・改善点":""}
-          style={{ ...taS, color:more?wT().text:wT().textFaint }} />
-      </td>
-      {/* Focus */}
-      <td style={cellS}>
-        <textarea value={focusOutput} readOnly={!canEdit}
-          ref={el => { if (el) autoGrowTextarea(el, 3) }}
-          onChange={e=>{ handleFieldChange('focus_output', e.target.value, setFocusOutput); autoGrowTextarea(e.target, 3) }}
-          onFocus={e=>{ autoSave.setFocusedField('focus_output'); e.target.style.borderColor='rgba(77,159,255,0.4)'; autoGrowTextarea(e.target, 5) }}
-          onBlur={e=>{ autoSave.setFocusedField(null); autoSave.saveNow('focus_output',focusOutput); e.target.style.borderColor='transparent'; autoGrowTextarea(e.target, 3) }}
-          placeholder={canEdit?"重点アクション":""}
-          style={{ ...taS, color:focusOutput?wT().text:wT().textFaint }} />
-      </td>
-      {/* Tasks + Delete */}
-      <td style={{ ...cellS, width:70, textAlign:'center', position:'relative' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:4, justifyContent:'center' }}>
-          <span onClick={()=>setShowTasks(p=>!p)} style={{ fontSize:11, color:'#a855f7', cursor:'pointer', fontWeight:600, padding:'2px 6px', borderRadius:4, background:showTasks?'rgba(168,85,247,0.12)':'transparent' }}>
-            {`${taskCount.done}/${taskCount.total}`}
-          </span>
-          <button onClick={()=>onDelete(report.id)} style={{ width:18, height:18, borderRadius:3, border:'none', cursor:'pointer', fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,107,107,0.08)', color:'#ff6b6b', flexShrink:0 }}>✕</button>
-        </div>
-        {showTasks && <TaskPopover report={report} members={members} wT={wT} onClose={()=>setShowTasks(false)} onTaskCountChange={setTaskCount} kaTitle={report.ka_title} objectiveTitle={objectiveTitle} completedBy={completedBy} />}
-      </td>
-      {/* 自動保存インジケーター */}
-      <td style={{ ...cellS, width:20, padding:'6px 2px' }}>
-        {autoSave.saving && <span style={{ fontSize:9, color:'#4d9fff' }}>⟳</span>}
-        {autoSave.saved && <span style={{ fontSize:9, color:'#00d68f' }}>✓</span>}
-      </td>
-    </tr>
-  )
-}
-
-// ─── KRブロック ───────────────────────────────────────────────────────────────
-function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, levelId, objId, objOwner, canEditKA, onKROwnerChange, onKRUpdate, activeWeek, reviewVersion, onReorder, objectiveTitle, completedBy, weeksList, onMoveKA, viewMode = 'both' }) {
-  // viewMode: 'kr' = KR重点 / 'ka' = KA重点 / 'both' = 両方表示
-  const activeReports = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status !== 'done')
-    .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
-  const doneReports   = reports.filter(r => Number(r.kr_id)===Number(kr.id) && r.status === 'done')
-  const [showDone, setShowDone] = useState(false)
-  const [showKAInKRMode, setShowKAInKRMode] = useState(false)
-  const [dragIdx, setDragIdx] = useState(null)
-  const [overIdx, setOverIdx] = useState(null)
-  const [dropHighlight, setDropHighlight] = useState(false)
-
-  const handleDragStart = (idx, reportId) => {
-    setDragIdx(idx)
-    // cross-KR drag用にdataTransferにreportIdとsource kr_idをセット
-    window.__dragKA = { reportId, sourceKrId: kr.id }
-  }
-  const handleDragOver = (e, idx) => { e.preventDefault(); setOverIdx(idx) }
-  const handleDrop = async (idx) => {
-    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setOverIdx(null); return }
-    const reordered = [...activeReports]
-    const [moved] = reordered.splice(dragIdx, 1)
-    reordered.splice(idx, 0, moved)
-    const updates = reordered.map((r, i) => ({ id: r.id, sort_order: i }))
-    setDragIdx(null); setOverIdx(null)
-    for (const u of updates) {
-      await supabase.from('weekly_reports').update({ sort_order: u.sort_order }).eq('id', u.id)
-    }
-    if (onReorder) onReorder()
-  }
-  const handleDragEnd = () => { setDragIdx(null); setOverIdx(null); setDropHighlight(false); window.__dragKA = null }
-
-  // Cross-KR drop handler
-  const handleKRDragOver = (e) => {
-    e.preventDefault()
-    if (window.__dragKA && window.__dragKA.sourceKrId !== kr.id) {
-      setDropHighlight(true)
-    }
-  }
-  const handleKRDragLeave = () => setDropHighlight(false)
-  const handleKRDrop = async (e) => {
-    e.preventDefault()
-    setDropHighlight(false)
-    const drag = window.__dragKA
-    if (!drag || drag.sourceKrId === kr.id) return
-    window.__dragKA = null
-    // KAを別のKRに移動
-    if (onMoveKA) await onMoveKA(drag.reportId, kr.id)
-  }
-
-  const pct = kr.target ? Math.min(Math.round((kr.current/kr.target)*100), 150) : 0
-  const pctColor = pct >= 100 ? '#00d68f' : pct >= 60 ? '#4d9fff' : '#ff6b6b'
-  const stars = calcStars(kr.current, kr.target, kr.lower_is_better)
-  const starCfg = KR_STAR_CFG[stars] || KR_STAR_CFG[0]
-
-  const [review,       setReview]       = useState(null)
-  const [weather,      setWeather]      = useState(0)
-  const [good,         setGood]         = useState('')
-  const [more,         setMore]         = useState('')
-  const [focus,        setFocus]        = useState('')
-  const [reviewOpen,   setReviewOpen]   = useState(viewMode === 'kr')
-  const [reviewSaving, setReviewSaving] = useState(false)
-  const [reviewSaved,  setReviewSaved]  = useState(false)
-  const reviewRef = useRef(null) // review IDをrefで保持
-  const autoSaveTimer = useRef(null)
-  const [krEditing,    setKrEditing]    = useState(false)
-  const [krTitle,      setKrTitle]      = useState(kr.title || '')
-  const [krCurrent,    setKrCurrent]    = useState(String(kr.current ?? ''))
-  const [krTarget,     setKrTarget]     = useState(String(kr.target ?? ''))
-  const [krUnit,       setKrUnit]       = useState(kr.unit || '')
-  const [krSaving,     setKrSaving]     = useState(false)
-  const [krSaved,      setKrSaved]      = useState(false)
-  const weekStart = activeWeek || toDateStr(getMonday(new Date()))
-
-  useEffect(() => {
-    supabase.from('kr_weekly_reviews').select('*').eq('kr_id', kr.id).eq('week_start', weekStart).maybeSingle()
-      .then(({data}) => {
-        if (data) { setReview(data); reviewRef.current = data.id; setWeather(data.weather||0); setGood(data.good||''); setMore(data.more||''); setFocus(data.focus||'') }
-        else { setReview(null); reviewRef.current = null; setWeather(0); setGood(''); setMore(''); setFocus('') }
-      })
-  }, [kr.id, weekStart, reviewVersion])
-
-  // 自動保存（デバウンス1秒）
-  const doSaveReview = useCallback(async (w, g, m, f) => {
-    setReviewSaving(true)
-    const payload = { kr_id:kr.id, week_start:weekStart, weather:w, good:g, more:m, focus:f, updated_at:new Date().toISOString() }
-    if (reviewRef.current) {
-      await supabase.from('kr_weekly_reviews').update(payload).eq('id', reviewRef.current)
-    } else {
-      const {data} = await supabase.from('kr_weekly_reviews').insert(payload).select().single()
-      if (data) { reviewRef.current = data.id; setReview(data) }
-    }
-    setReviewSaving(false); setReviewSaved(true); setTimeout(() => setReviewSaved(false), 1500)
-  }, [kr.id, weekStart])
-
-  const scheduleAutoSave = (w, g, m, f) => {
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-    autoSaveTimer.current = setTimeout(() => doSaveReview(w, g, m, f), 1000)
-  }
-  useEffect(() => { return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) } }, [])
-
-  const updateGood = (v) => { setGood(v); scheduleAutoSave(weather, v, more, focus) }
-  const updateMore = (v) => { setMore(v); scheduleAutoSave(weather, good, v, focus) }
-  const updateFocus = (v) => { setFocus(v); scheduleAutoSave(weather, good, more, v) }
-  const updateWeather = (v) => { setWeather(v); doSaveReview(v, good, more, focus) } // 天気は即時保存
-
-  const saveReview = () => doSaveReview(weather, good, more, focus)
-
-  const saveKR = async () => {
-    if (!onKRUpdate) return
-    setKrSaving(true)
-    const ok = await onKRUpdate(kr.id, {
-      title: krTitle.trim() || kr.title,
-      current: parseFloat(krCurrent) || 0,
-      target: parseFloat(krTarget) || 0,
-      unit: krUnit,
-    })
-    setKrSaving(false)
-    if (ok) { setKrSaved(true); setTimeout(() => setKrSaved(false), 1500); setKrEditing(false) }
-  }
-
-  // 完了 KR をアーカイブ (この会議カードから非表示。アーカイブ画面から復元可能)
-  const krDone = kr.target > 0 && (kr.lower_is_better ? kr.current <= kr.target : kr.current >= kr.target)
-  const archiveKR = async () => {
-    if (!onKRUpdate) return
-    if (!window.confirm(`「${kr.title}」をアーカイブしますか？\nこの会議の KR 一覧から非表示になります (アーカイブ画面から復元可能)`)) return
-    await onKRUpdate(kr.id, { archived_at: new Date().toISOString() })
-  }
-
-  const addKA = async () => {
-    const maxOrder = activeReports.reduce((max, r) => Math.max(max, r.sort_order||0), 0)
-    const payload = {
-      week_start: weekStart, level_id:levelId, objective_id:objId,
-      kr_id:kr.id, kr_title:kr.title, ka_title:'新しいKA', status:'normal',
-      sort_order: maxOrder + 1,
-    }
-    // 1回目: sort_order あり
-    let firstRes = await supabase.from('weekly_reports').insert(payload).select().single()
-    if (firstRes.error) {
-      console.warn('KA insert failed (with sort_order), retrying without:', firstRes.error)
-      // sort_order カラムが無い環境向けのフォールバック。それ以外のエラーならその時点で alert
-      const isSortOrderIssue = /sort_order/i.test(firstRes.error.message || '')
-      if (!isSortOrderIssue) {
-        alert('KAの追加に失敗しました: ' + (firstRes.error.message || JSON.stringify(firstRes.error)))
-        return
-      }
-      const { sort_order, ...payloadNoSort } = payload
-      const res = await supabase.from('weekly_reports').insert(payloadNoSort).select().single()
-      if (res.error) {
-        console.error('KA追加エラー (retry):', res.error)
-        alert('KAの追加に失敗しました: ' + (res.error.message || JSON.stringify(res.error)))
-        return
-      }
-      firstRes = res
-    }
-    // insert が成功しても SELECT で見えないケース (RLS の USING が restrictive など) を検知
-    if (!firstRes.data) {
-      alert('KAをDBには書き込めましたが、読み戻しに失敗しています。Supabase の RLS (SELECT USING) 設定を確認してください。')
-      return
-    }
-    // 追加した行を直接親に渡してローカル state に反映する (reload() のページング上限で
-    // 新 KA が欠落するケースに備える)
-    onAddKA(firstRes.data)
-  }
-
-  const taS = { width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit', resize:'none', lineHeight:1.55 }
-  const hasReview = weather > 0 || good || more || focus
-
-  return (
-    <div style={{ marginBottom:16, border: dropHighlight ? '2px dashed #4d9fff' : '2px solid transparent', borderRadius:12, transition:'border-color 0.15s' }}
-      onDragOver={handleKRDragOver} onDragLeave={handleKRDragLeave} onDrop={handleKRDrop}>
-      {/* KRヘッダー */}
-      <div onClick={() => setReviewOpen(p=>!p)} style={{ padding:'10px 14px', background:wT().bgCard, borderLeft:`4px solid ${pctColor}`, cursor:'pointer', userSelect:'none', borderRadius:'10px 10px 0 0', border:`1px solid ${wT().border}`, borderBottom: reviewOpen ? `1px solid ${wT().border}` : 'none' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:pctColor, background:`${pctColor}15`, padding:'2px 7px', borderRadius:4, flexShrink:0 }}>{pct}%</div>
-          <span style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.4, flex:1 }}>
-            <span style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.12)', padding:'1px 5px', borderRadius:3, marginRight:6, verticalAlign:'middle' }}>KR</span>
-            {kr.title}
-          </span>
-          <span style={{ fontSize:11, color:wT().textMuted, flexShrink:0 }}>{kr.current}{kr.unit} / {kr.target}{kr.unit}</span>
-          {kr.owner && <OwnerBadge name={kr.owner} members={members} size={20} />}
-          <div onClick={e => e.stopPropagation()} style={{ flexShrink:0 }}>
-            <select value={kr.owner||''} onChange={e => onKROwnerChange(kr.id, e.target.value)}
-              style={{ background:wT().bgCard2, border:`1px solid ${wT().borderMid}`, borderRadius:5, padding:'3px 8px', color:kr.owner?avatarColor(kr.owner):wT().textMuted, fontSize:11, cursor:'pointer', fontFamily:'inherit', outline:'none', minWidth:80 }}>
-              <option value="">KR担当</option>
-              {members.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
-          </div>
-          <span style={{ fontSize:13, letterSpacing:1, flexShrink:0, color:starCfg.color }}>{'★'.repeat(stars)}{'☆'.repeat(5-stars)}</span>
-          {!reviewOpen && weather > 0 && <span style={{ fontSize:18 }}>{WEATHER_CFG[weather]?.icon}</span>}
-          <span style={{ fontSize:11, color:wT().textFaint, transform:reviewOpen?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', flexShrink:0 }}>▾</span>
-        </div>
-        <div style={{ height:4, borderRadius:2, background:wT().borderLight, overflow:'hidden' }}>
-          <div style={{ height:'100%', width:`${Math.min(pct,100)}%`, background:pctColor, borderRadius:2 }}/>
-        </div>
-        {!reviewOpen && hasReview && (
-          <div style={{ display:'flex', gap:12, marginTop:6, flexWrap:'wrap' }}>
-            {good && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:4 }}><span style={{ color:'#00d68f', fontSize:10, fontWeight:700 }}>✅</span>{good.slice(0,50)}{good.length>50?'…':''}</div>}
-            {more && <div style={{ fontSize:11, color:wT().textSub, display:'flex', gap:4 }}><span style={{ color:'#ff6b6b', fontSize:10, fontWeight:700 }}>🔺</span>{more.slice(0,50)}{more.length>50?'…':''}</div>}
-          </div>
-        )}
-      </div>
-
-      {/* KRレビュー */}
-      {reviewOpen && (
-        <div style={{ padding:'12px 14px', background:wT().bgCard2, border:`1px solid ${wT().border}`, borderTop:'none' }} onClick={e=>e.stopPropagation()}>
-          <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:16, marginBottom:14, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${wT().border}` }}>
-            <div style={{ borderRight:`1px solid ${wT().border}`, paddingRight:16 }}>
-              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>KR達成評価（自動）</div>
-              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                <div style={{ fontSize:22, letterSpacing:2, color:starCfg.color }}>{'★'.repeat(stars)}<span style={{ color:wT().borderMid }}>{'★'.repeat(5-stars)}</span></div>
-                <div>
-                  <div style={{ fontSize:12, fontWeight:700, color:starCfg.color }}>{starCfg.label}</div>
-                  <div style={{ fontSize:10, color:wT().textMuted }}>達成率 {pct}%</div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>今週の体感・主観</div>
-              <WeatherPicker value={weather} onChange={updateWeather} wT={wT} />
-            </div>
-          </div>
-          {/* KR編集セクション */}
-          <div style={{ marginBottom:12, padding:'10px 12px', background:wT().bgCard, borderRadius:8, border:`1px solid ${krEditing?'rgba(255,159,67,0.4)':wT().border}`, transition:'border-color 0.15s' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:krEditing?8:0 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#ff9f43', textTransform:'uppercase', letterSpacing:'0.08em' }}>📝 KR設定</div>
-              {!krEditing && (
-                <div style={{ display:'flex', gap:6 }}>
-                  {krDone && (
-                    <button onClick={archiveKR}
-                      title="完了した KR をアーカイブ (この会議の一覧から非表示・アーカイブ画面から復元可能)"
-                      style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:`1px solid ${wT().borderMid}`, background:'transparent', color:wT().textSub, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>📦 アーカイブ</button>
-                  )}
-                  <button onClick={() => setKrEditing(true)} style={{ fontSize:10, padding:'3px 10px', borderRadius:5, border:`1px solid rgba(255,159,67,0.3)`, background:'rgba(255,159,67,0.08)', color:'#ff9f43', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>編集</button>
-                </div>
-              )}
-            </div>
-            {!krEditing ? (
-              <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:6, fontSize:12, color:wT().textSub }}>
-                <span>タイトル: <b style={{ color:wT().text }}>{kr.title}</b></span>
-                <span>現在値: <b style={{ color:pctColor }}>{kr.current}{kr.unit}</b></span>
-                <span>目標: <b style={{ color:wT().text }}>{kr.target}{kr.unit}</b></span>
-              </div>
-            ) : (
-              <div>
-                <div style={{ marginBottom:6 }}>
-                  <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>タイトル</div>
-                  <input value={krTitle} onChange={e=>setKrTitle(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
-                  <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>現在値</div>
-                    <input type="number" value={krCurrent} onChange={e=>setKrCurrent(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:pctColor, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>目標値</div>
-                    <input type="number" value={krTarget} onChange={e=>setKrTarget(e.target.value)} style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:13, fontWeight:700, outline:'none', fontFamily:'inherit' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize:10, color:wT().textMuted, marginBottom:3 }}>単位</div>
-                    <input value={krUnit} onChange={e=>setKrUnit(e.target.value)} placeholder="件, %, 万円..." style={{ width:'100%', boxSizing:'border-box', background:wT().borderLight, border:`1px solid ${wT().border}`, borderRadius:7, padding:'7px 9px', color:wT().text, fontSize:12, outline:'none', fontFamily:'inherit' }} />
-                  </div>
-                </div>
-                <div style={{ display:'flex', justifyContent:'flex-end', gap:6 }}>
-                  <button onClick={() => { setKrEditing(false); setKrTitle(kr.title||''); setKrCurrent(String(kr.current??'')); setKrTarget(String(kr.target??'')); setKrUnit(kr.unit||'') }}
-                    style={{ padding:'4px 10px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>キャンセル</button>
-                  <button onClick={saveKR} disabled={krSaving}
-                    style={{ padding:'4px 14px', borderRadius:6, background:krSaved?'#00d68f':'#ff9f43', border:'none', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-                    {krSaved?'✓ 保存済み':krSaving?'保存中...':'KRを保存'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-            <div>
-              <div style={{ fontSize:10, fontWeight:700, color:'#00d68f', background:'rgba(0,214,143,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
-                ✅ good<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
-              </div>
-              <textarea value={good} onChange={e=>updateGood(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(0,214,143,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
-            </div>
-            <div>
-              <div style={{ fontSize:10, fontWeight:700, color:'#ff6b6b', background:'rgba(255,107,107,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
-                🔺 more<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(getPrevMondayStr(activeWeek))})` : ''}</span>
-              </div>
-              <textarea value={more} onChange={e=>updateMore(e.target.value)} rows={3} style={taS} onFocus={e=>e.target.style.borderColor='rgba(255,107,107,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
-            </div>
-          </div>
-          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-            <div style={{ flex:1, height:1, background:wT().border }}/><span style={{ fontSize:10, color:wT().textMuted }}>↓ Moreへの対応</span><div style={{ flex:1, height:1, background:wT().border }}/>
-          </div>
-          <div style={{ marginBottom:10 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#4d9fff', background:'rgba(77,159,255,0.1)', padding:'3px 8px', borderRadius:5, marginBottom:4, display:'inline-flex', alignItems:'center', gap:6 }}>
-              🎯 focus<span style={{ fontSize:9, fontWeight:500, opacity:0.8 }}>{activeWeek ? `(${formatWeekLabel(activeWeek)})` : ''}</span>
-            </div>
-            <textarea value={focus} onChange={e=>updateFocus(e.target.value)} rows={2} style={taS} onFocus={e=>e.target.style.borderColor='rgba(77,159,255,0.4)'} onBlur={e=>e.target.style.borderColor=wT().border}/>
-          </div>
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <span style={{ fontSize:10, color: reviewSaved ? '#00d68f' : reviewSaving ? wT().textMuted : 'transparent', fontWeight:600, transition:'color 0.3s' }}>
-              {reviewSaved ? '✓ 自動保存済み' : reviewSaving ? '保存中...' : ''}
-            </span>
-            <button onClick={()=>setReviewOpen(false)} style={{ padding:'5px 12px', borderRadius:6, background:'transparent', border:`1px solid ${wT().borderMid}`, color:wT().textSub, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>閉じる</button>
-            <button onClick={saveReview} disabled={reviewSaving} style={{ padding:'5px 16px', borderRadius:6, background:reviewSaved?'#00d68f':'#4d9fff', border:'none', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', transition:'background 0.3s' }}>
-              {reviewSaved?'✓ 保存済み':reviewSaving?'保存中...':'保存して週次MTGに反映'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* KAテーブル: KR重点モードでは折り畳み */}
-      {viewMode === 'kr' && !showKAInKRMode && (
-        <div style={{ padding:'8px 14px', background:wT().bgCard, borderRadius: '0 0 10px 10px', border:`1px solid ${wT().border}`, borderTop:'none', display:'flex', alignItems:'center', gap:8 }}>
-          <button onClick={() => setShowKAInKRMode(true)} style={{
-            fontSize:10, color:wT().textMuted, background:'transparent', border:`1px solid ${wT().border}`, borderRadius:5, padding:'3px 10px', cursor:'pointer', fontFamily:'inherit',
-          }}>📋 KA {activeReports.length}件{doneReports.length > 0 ? ` (完了${doneReports.length}件)` : ''} を表示</button>
-        </div>
-      )}
-      {(viewMode !== 'kr' || showKAInKRMode) && (
-      <div style={{ border:`1px solid ${wT().border}`, borderTop: reviewOpen ? 'none' : `1px solid ${wT().border}`, borderRadius: reviewOpen ? '0 0 10px 10px' : '0 0 10px 10px', overflow:'auto', WebkitOverflowScrolling:'touch' }}>
-        <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
-          <colgroup>
-            <col style={{ width:28 }} />
-            <col style={{ width:90 }} />
-            <col style={{ width:'18%' }} />
-            <col style={{ width:70 }} />
-            <col />
-            <col />
-            <col />
-            <col style={{ width:70 }} />
-            <col style={{ width:20 }} />
-          </colgroup>
-          <thead>
-            <tr style={{ background:wT().bgCard }}>
-              <th style={{ padding:'6px 4px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}></th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>担当</th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>KAタイトル</th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>状態</th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:'#00d68f', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                ✅ good<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
-              </th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:'#ff6b6b', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                🔺 more<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(getPrevMondayStr(activeWeek)) : ''}</div>
-              </th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:'#4d9fff', fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'left' }}>
-                🎯 focus<div style={{ fontSize:8, fontWeight:500, color:wT().textMuted, marginTop:1 }}>{activeWeek ? formatWeekLabel(activeWeek) : ''}</div>
-              </th>
-              <th style={{ padding:'6px 8px', fontSize:9, color:wT().textMuted, fontWeight:700, borderBottom:`1px solid ${wT().border}`, textAlign:'center' }}>Tasks</th>
-              <th style={{ padding:'6px 2px', borderBottom:`1px solid ${wT().border}` }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {activeReports.map((r, idx) => (
-              <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                canEdit={canEditKA(r.owner, objOwner, kr.owner)}
-                dragIdx={dragIdx} overIdx={overIdx} rowIdx={idx}
-                dragHandleProps={{ draggable:true, onDragStart:() => handleDragStart(idx, r.id), onDragEnd:handleDragEnd }}
-                onDragOver={e => handleDragOver(e, idx)}
-                onDrop={() => handleDrop(idx)}
-                objectiveTitle={objectiveTitle} completedBy={completedBy} />
-            ))}
-          </tbody>
-        </table>
-
-        {/* 完了済みKA（折りたたみ） */}
-        {doneReports.length > 0 && (
-          <div style={{ padding:'4px 12px', background:wT().bgCard, borderTop:`1px solid ${wT().border}` }}>
-            <button onClick={() => setShowDone(p=>!p)}
-              style={{ fontSize:10, color:wT().textFaint, background:'transparent', border:`1px solid ${wT().border}`, borderRadius:5, padding:'2px 8px', cursor:'pointer', fontFamily:'inherit' }}>
-              {showDone ? '完了を隠す' : `✓ 完了済み ${doneReports.length}件`}
-            </button>
-          </div>
-        )}
-        {showDone && doneReports.length > 0 && (
-          <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
-            <colgroup>
-              <col style={{ width:28 }} />
-              <col style={{ width:90 }} />
-              <col style={{ width:'18%' }} />
-              <col style={{ width:70 }} />
-              <col />
-              <col />
-              <col />
-              <col style={{ width:70 }} />
-              <col style={{ width:20 }} />
-            </colgroup>
-            <tbody>
-              {doneReports.map(r => (
-                <KARow key={r.id} report={r} onSave={onSaveKA} onDelete={onDeleteKA} members={members} wT={wT}
-                  canEdit={canEditKA(r.owner, objOwner, kr.owner)} objectiveTitle={objectiveTitle} completedBy={completedBy} />
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {/* KA追加ボタン */}
-        <div onClick={addKA} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', cursor:'pointer', color:wT().textMuted, fontSize:11, borderTop:`1px solid ${wT().border}`, background:wT().bgCard }}>
-          <span style={{ fontSize:14, lineHeight:1 }}>+</span> このKRにKAを追加
-        </div>
-      </div>
-      )}
-    </div>
-  )
 }
 
 // ─── メインページ ──────────────────────────────────────────────────────────────
@@ -1462,23 +658,6 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const doneObjs   = visibleObjs.filter(o => isObjDone(o))
   const [showDoneObjs, setShowDoneObjs] = useState(false)
 
-  const roots = levels.filter(l => !l.parent_id)
-  function renderSb(level, indent=0) {
-    const d = getDepth(level.id, levels)
-    const color = LAYER_COLORS[d] || '#a0a8be'
-    const isActive = Number(activeLevelId)===Number(level.id)
-    return (
-      <div key={level.id}>
-        <div onClick={()=>{ setActiveLevelId(isActive?null:level.id); setActiveObjId(null) }}
-          style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', paddingLeft:8+indent*14, borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${isActive?color+'40':'transparent'}`, background:isActive?`${color}18`:'transparent' }}>
-          <span style={{ fontSize:13 }}>{level.icon}</span>
-          <span style={{ fontSize:11, flex:1, fontWeight:isActive?700:500, color:isActive?color:wT().textSub }}>{level.name}</span>
-        </div>
-        {levels.filter(l=>Number(l.parent_id)===Number(level.id)).map(c=>renderSb(c, indent+1))}
-      </div>
-    )
-  }
-
   const periodTabs = [['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['all','通期']]
 
   // ─── 会議選択画面（会議が未選択、または事業部選択待ち） ───────────
@@ -1490,28 +669,28 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           {needsDeptSelect ? (
             // 事業部選択モード（マネージャー定例など）
             <>
-              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:SPACING.md, marginBottom:SPACING.xl }}>
                 <button onClick={backToMeetingSelect} style={{
-                  padding:'6px 12px', borderRadius:7, border:`1px solid ${wT().borderMid}`,
-                  background:'transparent', color:wT().text, cursor:'pointer', fontSize:12, fontFamily:'inherit',
-                }}>← 会議選択に戻る</button>
-                <div style={{ fontSize:16, fontWeight:700 }}>{currentMeeting?.title} ・ 事業部を選択</div>
+                  padding:`6px ${SPACING.md}px`, borderRadius:RADIUS.xs + 1, border:`1px solid ${wT().borderMid}`,
+                  background:'transparent', color:wT().text, cursor:'pointer', ...TYPO.subhead, fontWeight:500, fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:4,
+                }}><Icon name="chevronL" size={13} /> 会議選択に戻る</button>
+                <div style={{ ...TYPO.title3, fontWeight:700 }}>{currentMeeting?.title} ・ 事業部を選択</div>
               </div>
-              <div style={{ fontSize:12, color:wT().textMuted, marginBottom:16 }}>
+              <div style={{ ...TYPO.subhead, fontWeight:500, color:wT().textMuted, marginBottom:SPACING.lg }}>
                 マネージャー定例で確認するチームの所属事業部を選んでください。
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:12 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:SPACING.md }}>
                 {topDepts.map(d => (
                   <button key={d.id} onClick={() => setActiveLevelId(d.id)} style={{
-                    padding:'20px 16px', borderRadius:12, border:`1px solid ${wT().borderMid}`,
+                    padding:`${SPACING.xl}px ${SPACING.lg}px`, borderRadius:RADIUS.lg - 2, border:`1px solid ${wT().borderMid}`,
                     background:wT().bgCard, color:wT().text, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                    display:'flex', alignItems:'center', gap:10, transition:'all 0.15s',
+                    display:'flex', alignItems:'center', gap:SPACING.sm + 2, transition:'all 0.15s',
                   }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = (d.color || '#4d9fff'); e.currentTarget.style.transform = 'translateY(-2px)' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = (d.color || wT().accent); e.currentTarget.style.transform = 'translateY(-2px)' }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = wT().borderMid; e.currentTarget.style.transform = 'none' }}
                   >
-                    <span style={{ fontSize:22 }}>{d.icon || '📁'}</span>
-                    <span style={{ fontSize:14, fontWeight:700 }}>{d.name}</span>
+                    <DataIcon value={d.icon} size={22} fallback="folder"/>
+                    <span style={{ ...TYPO.headline, fontWeight:700 }}>{d.name}</span>
                   </button>
                 ))}
               </div>
@@ -1519,32 +698,30 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           ) : (
             // 会議選択モード (全画面を活用したスタイリッシュなレイアウト)
             <>
-              <div style={{ marginBottom: 22, display:'flex', alignItems:'baseline', gap:14, flexWrap:'wrap' }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#007AFF', letterSpacing:'0.1em', textTransform:'uppercase' }}>Weekly MTG</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: wT().text, letterSpacing:'-0.01em' }}>今週の会議を選択</div>
-                <div style={{ fontSize: 12, color: wT().textMuted }}>会議ごとに対象の部署・チーム・観点が自動で絞り込まれます</div>
+              <div style={{ marginBottom: SPACING['2xl'] - 2, display:'flex', alignItems:'baseline', gap:SPACING.md + 2, flexWrap:'wrap' }}>
+                <div style={{ ...TYPO.footnote, fontWeight: 800, color: wT().accent, letterSpacing:'0.1em', textTransform:'uppercase' }}>Weekly MTG</div>
+                <div style={{ ...TYPO.title1, color: wT().text }}>今週の会議を選択</div>
+                <div style={{ ...TYPO.subhead, fontWeight:500, color: wT().textMuted }}>会議ごとに対象の部署・チーム・観点が自動で絞り込まれます</div>
               </div>
               {displayMeetings.length === 0 && (
                 <div style={{
                   padding: '40px 24px', textAlign: 'center',
-                  background: wT().bgCard, border: `1px dashed ${wT().border}`, borderRadius: 16,
-                  marginBottom: 14,
+                  background: wT().bgCard, border: `1px dashed ${wT().border}`, borderRadius: RADIUS.xl - 2,
+                  marginBottom: SPACING.md + 2,
                 }}>
-                  <div style={{ fontSize: 14, color: wT().textSub, marginBottom: 14, lineHeight: 1.7 }}>
+                  <div style={{ ...TYPO.headline, fontWeight:500, color: wT().textSub, marginBottom: SPACING.md + 2, lineHeight: 1.7 }}>
                     まだ会議が登録されていません。<br />
                     組織設定から会議を新規作成してください。
                   </div>
                   <button
                     onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('open-org-settings', { detail: { section: 'meetings' } })) }}
                     style={{
-                      padding: '10px 22px', borderRadius: 10, border: 'none',
-                      background: wT().accent, color: '#fff',
-                      fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
-                      boxShadow: `0 2px 6px ${wT().accent}55`,
-                    }}>+ 会議を新規作成</button>
+                      ...btnBrand({ size: 'lg' }),
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}><Icon name="plus" size={14} /> 会議を新規作成</button>
                 </div>
               )}
-              <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, minmax(0,1fr))', gap:14 }}>
+              <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, minmax(0,1fr))', gap:SPACING.md + 2 }}>
                 {displayMeetings.map(m => {
                   const wm = m.weeklyMTG || {}
                   const viewBadge = wm.withDiscussion ? 'チームサマリー'
@@ -1553,62 +730,64 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                     : '両方'
                   const scope = wm.levelName || (wm.levelSelect === 'department' ? '事業部選択' : '全社')
                   const Icon = MEETING_ICONS[m.key] || MEETING_ICONS._default
+                  // scope ピル: 両方=accent / チームサマリー=success / 部署系=purple
+                  const isDeptScope = wm.levelSelect === 'department' || !!wm.levelName
+                  const pillBg   = viewBadge === 'チームサマリー' ? wT().successBg
+                    : isDeptScope ? PURPLE_BG
+                    : wT().accentBg
+                  const pillFg   = viewBadge === 'チームサマリー' ? wT().success
+                    : isDeptScope ? PURPLE
+                    : wT().accentText
                   return (
                     <button key={m.key} onClick={() => selectMeeting(m.key)}
                       style={{
                         textAlign:'left', cursor:'pointer', fontFamily:'inherit',
                         background: wT().bgCard,
+                        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
                         border: `1px solid ${wT().border}`,
-                        borderRadius: 16, padding: '20px 22px',
-                        display: 'flex', flexDirection:'column', gap: 14,
+                        borderRadius: RADIUS.lg, padding: SPACING.lg,
+                        display: 'flex', flexDirection:'column', gap: SPACING.md + 2,
                         position: 'relative', overflow: 'hidden',
                         transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.04)',
+                        boxShadow: SHADOWS.sm,
                         minHeight: 132,
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.borderColor = `${m.color}66`
-                        e.currentTarget.style.transform = 'translateY(-3px)'
-                        e.currentTarget.style.boxShadow = `0 1px 2px rgba(0,0,0,0.04), 0 12px 28px ${m.color}26`
+                        e.currentTarget.style.borderColor = wT().borderMid
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = SHADOWS.md
                       }}
                       onMouseLeave={e => {
                         e.currentTarget.style.borderColor = wT().border
                         e.currentTarget.style.transform = 'translateY(0)'
-                        e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.04)'
+                        e.currentTarget.style.boxShadow = SHADOWS.sm
                       }}>
-                      {/* 装飾: 右上に淡いカラーグロー */}
-                      <div aria-hidden style={{
-                        position: 'absolute', top: -40, right: -40, width: 140, height: 140,
-                        background: `radial-gradient(circle, ${m.color}1c 0%, transparent 65%)`,
-                        pointerEvents: 'none',
-                      }} />
                       {/* ヘッダ行: アイコン + ビューバッジ */}
                       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', position:'relative', zIndex:1 }}>
                         <div style={{
-                          flexShrink:0, width:46, height:46, borderRadius:12,
-                          background: `linear-gradient(135deg, ${m.color} 0%, ${m.color}c0 100%)`,
+                          flexShrink:0, width:38, height:38, borderRadius:RADIUS.md,
+                          background: BRAND_GRADIENT.cta,
                           color:'#fff',
                           display:'flex', alignItems:'center', justifyContent:'center',
-                          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px ${m.color}55`,
+                          boxShadow: SHADOWS.glassInset,
                         }}>
-                          <Icon size={22} />
+                          <Icon size={20} />
                         </div>
                         <span style={{
-                          flexShrink:0, fontSize:10, fontWeight:800,
-                          padding:'3px 10px', borderRadius:99,
-                          background:`${m.color}14`, color:m.color, whiteSpace:'nowrap',
-                          border: `1px solid ${m.color}30`,
+                          flexShrink:0, ...TYPO.caption, fontWeight:800,
+                          padding:'3px 10px', borderRadius:RADIUS.pill,
+                          background:pillBg, color:pillFg, whiteSpace:'nowrap',
                         }}>{viewBadge}</span>
                       </div>
                       {/* タイトル */}
                       <div style={{ position:'relative', zIndex:1 }}>
-                        <div style={{ fontSize:15, fontWeight:800, color: wT().text, marginBottom: 4, lineHeight:1.4 }}>{m.title}</div>
-                        <div style={{ fontSize:11, color: wT().textMuted, display:'flex', alignItems:'center', gap:6 }}>
+                        <div style={{ ...TYPO.headline, fontWeight:800, fontSize:15, color: wT().text, marginBottom: 4, lineHeight:1.4 }}>{m.title}</div>
+                        <div style={{ ...TYPO.footnote, fontWeight:500, color: wT().textMuted, display:'flex', alignItems:'center', gap:6 }}>
                           <span style={{
                             display:'inline-flex', alignItems:'center', gap:3,
-                            padding:'1px 7px', borderRadius:99,
-                            background: wT().bgSection || 'rgba(0,0,0,0.04)', color: wT().textSub,
-                            fontSize:10, fontWeight:700,
+                            padding:'1px 7px', borderRadius:RADIUS.pill,
+                            background: wT().bgSection || wT().sectionBg, color: wT().textSub,
+                            ...TYPO.caption, fontWeight:700,
                           }}>{m.schedule}</span>
                           <span>{scope}</span>
                         </div>
@@ -1617,8 +796,8 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                       <div style={{
                         marginTop:'auto', position:'relative', zIndex:1,
                         display:'flex', alignItems:'center', gap:6,
-                        fontSize:11, fontWeight:800, color: m.color,
-                      }}>会議を開始 <span aria-hidden>→</span></div>
+                        ...TYPO.footnote, fontSize:12, fontWeight:600, color: wT().accentText,
+                      }}>会議を開始 <Icon name="arrowRight" size={13} /></div>
                     </button>
                   )
                 })}
@@ -1639,42 +818,42 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           forceMode='facilitation' (週次MTG ナビ) では従来通り表示 */}
       {forceMode !== 'list' && (
       <div style={{
-        padding:'8px 16px', borderBottom:`2px solid ${meetingColor}`,
-        background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:10, flexShrink:0, flexWrap:'wrap',
+        padding:`${SPACING.sm}px ${SPACING.lg}px`, borderBottom:`2px solid ${meetingColor}`,
+        background:`${meetingColor}08`, display:'flex', alignItems:'center', gap:SPACING.sm + 2, flexShrink:0, flexWrap:'wrap',
       }}>
         <button onClick={backToMeetingSelect} style={{
-          padding:'5px 12px', borderRadius:7, border:`1px solid ${meetingColor}40`,
-          background:`${meetingColor}10`, color:meetingColor, cursor:'pointer', fontSize:11, fontWeight:700, fontFamily:'inherit',
-        }}>← 会議を変更</button>
+          padding:`5px ${SPACING.md}px`, borderRadius:RADIUS.xs + 1, border:`1px solid ${meetingColor}40`,
+          background:`${meetingColor}10`, color:meetingColor, cursor:'pointer', ...TYPO.footnote, fontWeight:700, fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:4,
+        }}><Icon name="chevronL" size={12} /> 会議を変更</button>
         <div style={{
-          width:28, height:28, borderRadius:8, background:`${meetingColor}15`,
+          width:28, height:28, borderRadius:RADIUS.sm, background:`${meetingColor}15`,
           display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, flexShrink:0,
-        }}>{currentMeeting?.icon || '📋'}</div>
-        <div style={{ fontSize:14, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
+        }}><DataIcon value={currentMeeting?.icon} size={15} fallback="note"/></div>
+        <div style={{ ...TYPO.headline, fontWeight:700 }}>{currentMeeting?.title || 'KAレビュー'}</div>
 
         {/* ファシリ / 一覧 モード切替トグル — forceMode 指定時 (OKR タブ「週次」/「会議」ナビ) は非表示 */}
         {!forceMode && (
-          <div style={{ display:'flex', gap:0, padding:2, background:wT().bgCard, borderRadius:7, border:`1px solid ${wT().border}` }}>
+          <div style={{ display:'flex', gap:0, padding:2, background:wT().bgCard, borderRadius:RADIUS.xs + 1, border:`1px solid ${wT().border}` }}>
             <button onClick={() => setMtgMode('facilitation')}
               title="進行ガイド付きステップ式 (ファシリが変わっても会議が進めやすい)"
               style={{
-                padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
+                padding:`${SPACING.xs}px 10px`, borderRadius:RADIUS.xs - 1, border:'none', cursor:'pointer', fontFamily:'inherit',
                 background: mtgMode === 'facilitation' ? meetingColor : 'transparent',
                 color: mtgMode === 'facilitation' ? '#fff' : wT().textSub,
-                fontSize:11, fontWeight:700,
-              }}>🧭 ファシリ</button>
+                ...TYPO.footnote, fontWeight:700, display:'inline-flex', alignItems:'center', gap:4,
+              }}><Icon name="cmd" size={12} /> ファシリ</button>
             <button onClick={() => setMtgMode('list')}
               title="従来の3ペイン表形式（KR/KAを一覧編集）"
               style={{
-                padding:'4px 10px', borderRadius:5, border:'none', cursor:'pointer', fontFamily:'inherit',
+                padding:`${SPACING.xs}px 10px`, borderRadius:RADIUS.xs - 1, border:'none', cursor:'pointer', fontFamily:'inherit',
                 background: mtgMode === 'list' ? meetingColor : 'transparent',
                 color: mtgMode === 'list' ? '#fff' : wT().textSub,
-                fontSize:11, fontWeight:700,
-              }}>📋 一覧</button>
+                ...TYPO.footnote, fontWeight:700, display:'inline-flex', alignItems:'center', gap:4,
+              }}><Icon name="note" size={12} /> 一覧</button>
           </div>
         )}
 
-        <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:`${meetingColor}15`, color:meetingColor, fontWeight:600 }}
+        <span style={{ ...TYPO.caption, fontWeight:600, padding:'2px 8px', borderRadius:RADIUS.pill, background:`${meetingColor}15`, color:meetingColor }}
           title={currentMeeting?.weeklyMTG?.withDiscussion ? 'チーム別の Good/More/Focus サマリー + 横断連携の確認'
             : meetingViewMode === 'kr' ? 'KR詳細(天気/Good/More/Focus)が展開、KAテーブルは折り畳み表示'
             : meetingViewMode === 'ka' ? 'KAテーブルを常時表示、KR詳細は折り畳み'
@@ -1684,28 +863,31 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             : meetingViewMode === 'ka' ? 'KA重点'
             : '両方'}
         </span>
-        <span style={{ fontSize:10, color:wT().textMuted, fontStyle:'italic', display:'inline-block', minWidth:0 }}>
+        <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, fontStyle:'italic', display:'inline-block', minWidth:0 }}>
           {currentMeeting?.weeklyMTG?.withDiscussion ? 'チーム別 Good/More/Focus サマリー + 横断連携'
             : meetingViewMode === 'kr' ? 'KRレビュー中心・KAは折り畳み'
             : meetingViewMode === 'ka' ? 'KA進捗中心・KR詳細は折り畳み'
             : 'KR・KA両方表示'}
         </span>
-        <div style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:fiscalYear==='2026'?'rgba(77,159,255,0.15)':'rgba(255,159,67,0.15)', color:fiscalYear==='2026'?'#4d9fff':'#ff9f43', border:`1px solid ${fiscalYear==='2026'?'rgba(77,159,255,0.3)':'rgba(255,159,67,0.3)'}` }}>
+        <div style={{ ...TYPO.footnote, fontWeight:700, padding:'3px 10px', borderRadius:RADIUS.pill, background:fiscalYear==='2026'?wT().accentBg:wT().warnBg, color:fiscalYear==='2026'?wT().accent:wT().warn, border:`1px solid ${fiscalYear==='2026'?wT().accent:wT().warn}4d` }}>
           {fiscalYear}年度
         </div>
         {myMember && (
-          <div style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:99, background:`${avatarColor(myName)}12`, border:`1px solid ${avatarColor(myName)}30` }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:RADIUS.pill, background:`${avatarColor(myName)}12`, border:`1px solid ${avatarColor(myName)}30` }}>
             <Avatar name={myName} avatarUrl={myMember.avatar_url} size={18} />
-            <span style={{ fontSize:11, color:avatarColor(myName), fontWeight:600 }}>{myName}</span>
-            <span style={{ fontSize:10, color:wT().textMuted }}>（会議中は全員KA編集可）</span>
+            <span style={{ ...TYPO.footnote, color:avatarColor(myName), fontWeight:600 }}>{myName}</span>
+            <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted }}>（会議中は全員KA編集可）</span>
           </div>
         )}
         {/* KAステータス凡例 */}
         <div style={{ display:'flex', gap:5, alignItems:'center', marginLeft:'auto', flexWrap:'wrap' }}>
-          {Object.entries(STATUS_CFG).filter(([k])=>k!=='done').map(([k,v]) => (
-            <span key={k} style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:v.bg, color:v.color, border:`1px solid ${v.border}` }}>{v.label}</span>
-          ))}
-          <span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:STATUS_CFG.done.bg, color:STATUS_CFG.done.color, border:`1px solid ${STATUS_CFG.done.border}` }}>{STATUS_CFG.done.label}</span>
+          {STATUS_ORDER.filter(k=>k!=='done').map(k => {
+            const v = statusCfg(k, wT())
+            return <span key={k} style={{ ...TYPO.caption, fontWeight:600, padding:'2px 8px', borderRadius:RADIUS.pill, background:v.bg, color:v.color, border:`1px solid ${v.border}` }}>{v.label}</span>
+          })}
+          {(() => { const v = statusCfg('done', wT()); return (
+            <span style={{ ...TYPO.caption, fontWeight:600, padding:'2px 8px', borderRadius:RADIUS.pill, background:v.bg, color:v.color, border:`1px solid ${v.border}` }}>{v.label}</span>
+          ) })()}
         </div>
       </div>
       )}
@@ -1725,7 +907,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
       <>
       {/* 週タブ：会議日を主表示 */}
       <div style={{ display:'flex', gap:4, padding: isMobile ? '5px 8px' : '7px 16px', borderBottom:`1px solid ${wT().border}`, flexShrink:0, alignItems:'center', overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
-        <span style={{ fontSize:11, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>会議日：</span>
+        <span style={{ ...TYPO.footnote, color:wT().textMuted, fontWeight:700, marginRight:4, flexShrink:0 }}>会議日：</span>
         {weeksList.map(w => {
           const isActive = activeWeek === w
           const thisMonday = toDateStr(getMonday(new Date()))
@@ -1733,41 +915,37 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
           const meetingDay = formatMeetingDayLabel(w, currentMeeting?.schedule)
           return (
             <button key={w} onClick={() => setActiveWeek(w)} style={{
-              padding:'4px 12px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', flexShrink:0,
-              background: isActive ? 'rgba(77,159,255,0.15)' : 'transparent',
-              border: `1px solid ${isActive ? 'rgba(77,159,255,0.4)' : wT().borderMid}`,
-              color: isActive ? '#4d9fff' : wT().textMuted,
-              display:'flex', flexDirection:'column', alignItems:'center', gap:1,
+              padding:`7px 11px`, borderRadius:7, cursor:'pointer', fontFamily:'inherit', flexShrink:0,
+              background: isActive ? wT().accentBg : wT().sunken,
+              border: `1px solid ${isActive ? `${wT().accent}4d` : wT().border}`,
+              color: isActive ? wT().accentText : wT().textSub,
+              display:'flex', flexDirection:'column', alignItems:'center', gap:1, lineHeight:1.3,
             }}
               title={`${formatWeekLabel(w)}の週 (${currentMeeting?.title || 'MTG'}: ${currentMeeting?.schedule || ''})`}
             >
-              <span style={{ fontSize:12, fontWeight:700 }}>{meetingDay}</span>
-              <span style={{ fontSize:9, fontWeight:500, opacity:0.75 }}>
+              <span style={{ fontSize:12, fontWeight:700, color: isActive ? wT().accentText : wT().text }}>{meetingDay}</span>
+              <span style={{ fontSize:10, fontWeight:500, color:wT().textMuted }}>
                 {formatWeekLabel(w)}{isThisWeek ? ' · 今週' : ''}
               </span>
             </button>
           )
         })}
         <button onClick={createNextWeek} style={{
-          padding:'4px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, flexShrink:0,
-          background:'rgba(0,214,143,0.1)', border:'1px solid rgba(0,214,143,0.3)', color:'#00d68f',
-        }}>＋ 翌週を作成</button>
+          marginLeft:'auto', padding:`7px 11px`, borderRadius:7, cursor:'pointer', fontFamily:'inherit', ...TYPO.footnote, fontWeight:700, flexShrink:0,
+          background:'transparent', border:`1px solid ${wT().border}`, color:wT().textSub, display:'inline-flex', alignItems:'center', gap:4,
+        }}><Icon name="plus" size={12} /> 翌週を作成</button>
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        {/* 部署サイドバー */}
-        <div style={{ width: isMobile ? 0 : isTablet ? 120 : 155, flexShrink:0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, padding: isMobile ? 0 : '10px 8px', overflowY:'auto', background:wT().bgSidebar, display: isMobile ? 'none' : 'block' }}>
-          <div style={{ fontSize:10, color:wT().textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, paddingLeft:8 }}>部署</div>
-          <div onClick={()=>{setActiveLevelId(null);setActiveObjId(null)}} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:7, cursor:'pointer', marginBottom:2, border:`1px solid ${!activeLevelId?'rgba(77,159,255,0.3)':'transparent'}`, background:!activeLevelId?'rgba(77,159,255,0.12)':'transparent' }}>
-            <span>🏢</span><span style={{ fontSize:11, flex:1, fontWeight:!activeLevelId?700:500, color:!activeLevelId?'#4d9fff':wT().textSub }}>全部署</span>
-          </div>
-          {roots.map(r=>renderSb(r,0))}
+        {/* 部署サイドバー (組織階層) — 幅 240px に統一 */}
+        <div style={{ width: isMobile ? 0 : isTablet ? 120 : 240, flexShrink:0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, padding: isMobile ? 0 : `${SPACING.sm + 2}px ${SPACING.sm}px`, overflowY:'auto', background:wT().bgSidebar, display: isMobile ? 'none' : 'block' }}>
+          <OrgTreeSidebar T={wT()} levels={levels} activeLevelId={activeLevelId} onSelectLevel={(id)=>{ setActiveLevelId(id); setActiveObjId(null) }} />
         </div>
 
         {/* Objective一覧 */}
-        <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && mobilePanel !== 'list' ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
-          <div style={{ fontSize:10, color:'#4d9fff', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Objective ({activeObjs.length}件)</div>
-          {visibleObjs.length===0 && <div style={{ fontSize:12, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>}
+        <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? SPACING.sm : SPACING.sm + 2, background:wT().bg, display: isMobile && mobilePanel !== 'list' ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
+          <div style={{ ...TYPO.caption, color:wT().accent, fontWeight:700, textTransform:'uppercase', marginBottom:SPACING.sm }}>Objective ({activeObjs.length}件)</div>
+          {visibleObjs.length===0 && <div style={{ ...TYPO.subhead, fontWeight:500, color:wT().textFaintest, fontStyle:'italic', padding:`${SPACING.sm + 2}px ${SPACING.xs}px` }}>Objectiveがありません</div>}
 
           {/* アクティブなObjective */}
           {activeObjs.map(obj => {
@@ -1778,26 +956,26 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
             const krs = keyResults.filter(kr=>Number(kr.objective_id)===Number(obj.id))
             const kaCount = weekReports.filter(r=>Number(r.objective_id)===Number(obj.id)&&r.status!=='done').length
             return (
-              <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:'10px 12px', borderRadius:9, marginBottom:7, cursor:'pointer', border:`1px solid ${isActive?color+'60':wT().border}`, background:isActive?`${color}10`:wT().bgCard, transition:'all 0.12s' }}>
+              <OkrCard key={obj.id} T={wT()} active={isActive} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} padding={`${SPACING.sm + 2}px ${SPACING.md}px`} style={{ marginBottom:7 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:99, background:`${color}18`, color }}>{getPeriodLabel(obj.period)}</span>
-                  {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
+                  <span style={{ ...TYPO.caption, fontWeight:700, padding:'2px 6px', borderRadius:RADIUS.pill, background:`${color}18`, color }}>{getPeriodLabel(obj.period)}</span>
+                  {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><DataIcon value={level.icon} size={12}/> {level.name}</span>}
                 </div>
-                <div style={{ fontSize:12, fontWeight:600, lineHeight:1.4, marginBottom:5, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
-                {obj.owner && <div style={{ marginBottom:5 }}><OwnerBadge name={obj.owner} members={members} size={16} /></div>}
-                <div style={{ display:'flex', gap:8, fontSize:10, color:wT().textMuted }}>
+                <div style={{ ...TYPO.subhead, lineHeight:1.4, marginBottom:5, color:isActive?wT().text:wT().textSub }}>{obj.title}</div>
+                {obj.owner && <div style={{ marginBottom:5 }}><OwnerBadge name={obj.owner} members={members} size={16} T={wT()} /></div>}
+                <div style={{ display:'flex', gap:SPACING.sm, ...TYPO.caption, fontWeight:600, color:wT().textMuted }}>
                   <span>KR {krs.length}件</span>
-                  <span style={{ color:kaCount>0?'#4d9fff':wT().textFaint }}>KA {kaCount}件</span>
+                  <span style={{ color:kaCount>0?wT().accent:wT().textFaint }}>KA {kaCount}件</span>
                 </div>
-              </div>
+              </OkrCard>
             )
           })}
 
           {/* ★ 達成済みObjective（折りたたみ） */}
           {doneObjs.length > 0 && (
-            <div style={{ marginTop:8 }}>
-              <button onClick={() => setShowDoneObjs(p=>!p)} style={{ width:'100%', padding:'7px 10px', borderRadius:8, border:`1px solid rgba(0,214,143,0.2)`, background:'rgba(0,214,143,0.05)', color:'#00d68f', cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:6, justifyContent:'center' }}>
-                🏆 達成済み {doneObjs.length}件 {showDoneObjs?'▲':'▼'}
+            <div style={{ marginTop:SPACING.sm }}>
+              <button onClick={() => setShowDoneObjs(p=>!p)} style={{ width:'100%', padding:`7px ${SPACING.sm + 2}px`, borderRadius:RADIUS.sm, border:`1px solid ${wT().success}33`, background:wT().successBg, color:wT().success, cursor:'pointer', fontFamily:'inherit', ...TYPO.footnote, fontWeight:700, display:'flex', alignItems:'center', gap:6, justifyContent:'center' }}>
+                <Icon name="trophy" size={12} /> 達成済み {doneObjs.length}件 <Icon name={showDoneObjs?'chevronU':'chevronD'} size={12} />
               </button>
               {showDoneObjs && doneObjs.map(obj => {
                 const isActive = Number(activeObjId)===Number(obj.id)
@@ -1805,14 +983,14 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 const color = LAYER_COLORS[d] || '#a0a8be'
                 const level = levels.find(l=>Number(l.id)===Number(obj.level_id))
                 return (
-                  <div key={obj.id} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} style={{ padding:'9px 12px', borderRadius:9, marginTop:5, cursor:'pointer', border:`1px solid ${isActive?'rgba(0,214,143,0.5)':'rgba(0,214,143,0.15)'}`, background:isActive?'rgba(0,214,143,0.1)':'rgba(0,214,143,0.04)', transition:'all 0.12s', opacity:0.8 }}>
+                  <OkrCard key={obj.id} T={wT()} active={isActive} onClick={()=>{setActiveObjId(isActive?null:obj.id);setRightPeriod(getCurrentQ());if(isMobile&&!isActive)setMobilePanel('detail')}} padding={`9px ${SPACING.md}px`} style={{ marginTop:5, opacity:0.8 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
-                      <span style={{ fontSize:11 }}>🏆</span>
-                      <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:99, background:'rgba(0,214,143,0.15)', color:'#00d68f' }}>{getPeriodLabel(obj.period)}</span>
-                      {level && <span style={{ fontSize:10, color:wT().textMuted }}>{level.icon} {level.name}</span>}
+                      <Icon name="trophy" size={11} style={{ color:wT().success }} />
+                      <span style={{ ...TYPO.caption, fontWeight:700, padding:'1px 6px', borderRadius:RADIUS.pill, background:wT().successBg, color:wT().success }}>{getPeriodLabel(obj.period)}</span>
+                      {level && <span style={{ ...TYPO.caption, fontWeight:600, color:wT().textMuted, display:'inline-flex', alignItems:'center', gap:3 }}><DataIcon value={level.icon} size={11}/> {level.name}</span>}
                     </div>
-                    <div style={{ fontSize:11, fontWeight:600, lineHeight:1.4, color:'#00d68f' }}>{obj.title}</div>
-                  </div>
+                    <div style={{ ...TYPO.footnote, fontWeight:600, lineHeight:1.4, color:wT().success }}>{obj.title}</div>
+                  </OkrCard>
                 )
               })}
             </div>
@@ -1822,12 +1000,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         {/* 右：KR + KA詳細 */}
         <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && mobilePanel !== 'detail' ? 'none' : 'block' }}>
           {isMobile && mobilePanel === 'detail' && (
-            <button onClick={() => setMobilePanel('list')} style={{ marginBottom: 8, padding: '6px 12px', borderRadius: 7, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>← Objective一覧に戻る</button>
+            <button onClick={() => setMobilePanel('list')} style={{ marginBottom: SPACING.sm, padding: `6px ${SPACING.md}px`, borderRadius: RADIUS.xs + 1, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, ...TYPO.subhead, fontWeight:500, cursor: 'pointer', fontFamily: 'inherit', display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="chevronL" size={13} /> Objective一覧に戻る</button>
           )}
           {!selectedObj ? (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:10, color:wT().textFaint }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:SPACING.sm + 2, color:wT().textFaint }}>
               <Icon name="target" size={36} stroke={1.4} />
-              <div style={{ fontSize:13 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
+              <div style={{ ...TYPO.subhead, fontWeight:500 }}>{isMobile ? 'Objectiveを選択' : '左のObjectiveをクリックしてください'}</div>
             </div>
           ) : (
             <>
@@ -1841,15 +1019,17 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                 labelColor={objColor}
                 titleColor={wT().text}
                 storageKey={`weeklymtg-obj-expand-${selectedObj.id}`}
-                style={{ marginBottom: 10 }}
+                style={{ marginBottom: SPACING.sm + 2 }}
               />
 
-              {/* 期間切替タブ (コンパクト) */}
-              <div style={{ display:'flex', gap:3, marginBottom:10 }}>
-                {[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,lbl]) => (
-                  <button key={key} onClick={()=>setRightPeriod(key)} style={{ padding:'3px 12px', borderRadius:6, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:600, background:rightPeriod===key?'rgba(77,159,255,0.15)':'transparent', border:`1px solid ${rightPeriod===key?'rgba(77,159,255,0.4)':wT().borderMid}`, color:rightPeriod===key?'#4d9fff':wT().textMuted }}>{lbl}</button>
-                ))}
-              </div>
+              {/* 期間切替タブ (.qtab: 下線スタイル・共有部品) */}
+              <QTabs
+                T={wT()}
+                tabs={[['q1','Q1'],['q2','Q2'],['q3','Q3'],['q4','Q4'],['annual','通期']].map(([key,label]) => ({ key, label }))}
+                active={rightPeriod}
+                onChange={(key)=>setRightPeriod(key)}
+                trailing={`${fiscalYear}年度 · ${getPeriodLabel(rightPeriod === 'annual' ? 'annual' : rightPeriod)}`}
+              />
 
               {/* 選択期間のObjective表示 (コンパクト) */}
               {rightObj && rightPeriod !== 'annual' && (
@@ -1859,27 +1039,27 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                   members={members}
                   wT={wT}
                   label={getPeriodLabel(rightObj.period)}
-                  labelColor="#4d9fff"
-                  titleColor={isObjDone(rightObj) ? '#00d68f' : wT().text}
+                  labelColor={wT().accent}
+                  titleColor={isObjDone(rightObj) ? wT().success : wT().text}
                   isDone={isObjDone(rightObj)}
                   storageKey={`weeklymtg-obj-expand-${rightObj.id}`}
-                  style={{ marginBottom: 10 }}
+                  style={{ marginBottom: SPACING.sm + 2 }}
                 />
               )}
               {!rightObj && rightPeriod !== 'annual' && selectedObjKRs.length === 0 && (
-                <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>この期間のOKRはまだ設定されていません</div>
+                <div style={{ textAlign:'center', padding:SPACING['2xl'] + 6, color:wT().textFaint, ...TYPO.subhead, fontWeight:500 }}>この期間のOKRはまだ設定されていません</div>
               )}
               {!rightObj && rightPeriod !== 'annual' && selectedObjKRs.length > 0 && (
-                <div style={{ padding:'10px 14px', background: wT().bgCard, border: `1px solid ${wT().border}`, borderRadius:8, marginBottom:14 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:wT().textSub, marginBottom:4 }}>
+                <OkrCard T={wT()} padding={`${SPACING.sm + 2}px ${SPACING.lg - 2}px`} style={{ marginBottom:SPACING.lg - 2 }}>
+                  <div style={{ ...TYPO.subhead, fontWeight:700, color:wT().textSub, marginBottom:4 }}>
                     {rightPeriod.toUpperCase()} ― 通期OKRのKR
                   </div>
-                  <div style={{ fontSize:13, fontWeight:600, color:wT().text, lineHeight:1.4 }}>{selectedObj?.title}</div>
-                </div>
+                  <div style={{ ...TYPO.body, fontWeight:600, color:wT().text, lineHeight:1.4 }}>{selectedObj?.title}</div>
+                </OkrCard>
               )}
 
-              {rightObj && selectedObjKRs.length===0 && <div style={{ textAlign:'center', padding:30, color:wT().textFaint, fontSize:12 }}>KRが登録されていません。OKRページからKRを追加してください。</div>}
-              {loading && <div style={{ textAlign:'center', padding:20, color:'#4d9fff', fontSize:13 }}>読み込み中...</div>}
+              {rightObj && selectedObjKRs.length===0 && <div style={{ textAlign:'center', padding:SPACING['2xl'] + 6, color:wT().textFaint, ...TYPO.subhead, fontWeight:500 }}>KRが登録されていません。OKRページからKRを追加してください。</div>}
+              {loading && <div style={{ textAlign:'center', padding:SPACING.xl, color:wT().accent, ...TYPO.body }}>読み込み中...</div>}
               {!loading && rightObj && selectedObjKRs.map(kr => (
                 <KRBlock
                   key={kr.id}
