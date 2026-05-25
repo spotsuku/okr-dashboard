@@ -4022,7 +4022,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, background: T.bg }}>
       {/* ヘッダー */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
