@@ -238,7 +238,7 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
   const periodLabel = effectivePeriod === 'annual' ? '通期' : effectivePeriod.toUpperCase()
 
   return (
-    <div style={{ padding: '24px 28px 80px', width: '100%', background: t.bg, minHeight: '100%' }}>
+    <div style={{ padding: '24px 28px 80px', background: t.bg, minHeight: '100%' }}>
       {/* ヘッダー: アバター + 役職 + {名前} のOKR + 年度 (週次ビューと統一様式) */}
       {(() => {
         const om = (members || []).find(m => m.name === ownerName)

@@ -457,7 +457,7 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
   )
 
   return (
-    <div style={{ padding: '0 24px 24px', width: '100%', margin: '0', position: 'relative' }}>
+    <div style={{ padding: '0 24px 24px', width: '100%', boxSizing: 'border-box', margin: '0', position: 'relative' }}>
       <div style={{ position: 'relative', zIndex: 1 }}>
       {/* コンパクト見出し: 縦幅を抑えて OKR 本体に画面を譲る */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0 6px', marginBottom: 8, flexWrap: 'wrap' }}>
