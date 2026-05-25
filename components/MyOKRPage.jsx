@@ -1029,7 +1029,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         </div>
 
         {/* 右：KR + KA詳細 */}
-        <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && !activeObjId ? 'none' : 'block' }}>
+        <div style={{ flex:1, minWidth:0, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && !activeObjId ? 'none' : 'block' }}>
           {isMobile && activeObjId && (
             <button onClick={() => setActiveObjId(null)} style={{ marginBottom: SPACING.sm, padding: '6px 12px', borderRadius: RADIUS.xs, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, fontSize: TYPO.subhead.fontSize, cursor: 'pointer', fontFamily: 'inherit', display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="chevronL" size={12} /> Objective一覧に戻る</button>
           )}
@@ -1105,6 +1105,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                   <div>
                     <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="workspace" size={11} /> その他のKA（{unlinkedKAs.length}件）</div>
                     <OkrCard T={wT()} padding="0" style={{ overflow:'hidden' }}>
+                      <div style={{ overflowX:'auto' }}>
                       <table style={{ width:'100%', minWidth:700, borderCollapse:'collapse', tableLayout:'fixed' }}>
                         <KATableHeader T={wT()} subGood={formatWeekLabel(selectedWeek)} subMore={formatWeekLabel(selectedWeek)} subFocus={formatWeekLabel(selectedWeek)} />
                         <tbody>
@@ -1113,6 +1114,7 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     </OkrCard>
                   </div>
                 )
