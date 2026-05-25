@@ -20,7 +20,12 @@ export default function LoginPage({ orgName = null }) {
     setError('')
     setMessage('')
     if (isSignUp) {
-      const { data, error } = await supabase.auth.signUp({ email, password })
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        // 確認メールのリンクをクリック後、本番URLへ着地させる
+        options: { emailRedirectTo: PRODUCTION_URL },
+      })
       if (error) {
         // レート制限など Supabase の英語メッセージをそのまま出すと不親切なので翻訳
         if (/after \d+ seconds/i.test(error.message)) {
