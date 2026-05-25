@@ -20,9 +20,28 @@ export default function LoginPage({ orgName = null }) {
     setError('')
     setMessage('')
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) setError(error.message)
-      else setMessage('アカウントを作成しました。ログインしてください。')
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        // レート制限など Supabase の英語メッセージをそのまま出すと不親切なので翻訳
+        if (/after \d+ seconds/i.test(error.message)) {
+          setError('短時間に複数回試行されました。少し時間をおいて再度お試しください。')
+        } else if (/already registered|already exists/i.test(error.message)) {
+          setError('このメールアドレスは既に登録されています。ログインしてください。')
+          setIsSignUp(false)
+        } else {
+          setError(error.message)
+        }
+      } else if (data?.user && (data.user.identities?.length ?? 0) === 0) {
+        // 確認メール有効時、既存ユーザーで signUp すると user は返るが identities が空
+        setError('このメールアドレスは既に登録されています。ログインしてください。')
+        setIsSignUp(false)
+      } else if (data?.session) {
+        // 確認メール無効 → 即セッション発行。onAuthStateChange がログイン状態へ遷移させる
+        setMessage('アカウントを作成しました。')
+      } else {
+        // 確認メール有効 → セッション無し。メール認証が必要
+        setMessage('確認メールを送信しました。メール内のリンクをクリックして認証を完了してください。')
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setError('メールアドレスまたはパスワードが正しくありません')
