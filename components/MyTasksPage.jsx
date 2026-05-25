@@ -405,6 +405,9 @@ function getTaskStatus(task) {
 
 // ─── タスクカード（リスト・ボード共通）─────────────────
 function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDeleteTask, myName, compact }) {
+  const { isMobile } = useResponsive()
+  // モバイルは compact 同様に縦積み (左:内容 / 下:操作行) にして横詰まりを防ぐ
+  const stack = compact || isMobile
   const today = toDateStr(new Date())
   const thisMonday = getMondayOf(new Date())
   const thisSunday = toDateStr(new Date(new Date(thisMonday + 'T00:00:00').getTime() + 6 * 86400000))
@@ -436,8 +439,8 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
 
   return (
     <div style={{
-      display: 'flex', alignItems: compact ? 'flex-start' : 'flex-start',
-      flexDirection: compact ? 'column' : 'row', gap: compact ? SPACING.xs + 3 : SPACING.sm + 2,
+      display: 'flex', alignItems: 'flex-start',
+      flexDirection: stack ? 'column' : 'row', gap: stack ? SPACING.xs + 3 : SPACING.sm + 2,
       padding: compact ? '10px 11px' : '14px 16px',
       background: rowBg,
       border: `1px solid ${rowBorder}`,
@@ -445,7 +448,7 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
       boxShadow: isDone ? SHADOWS.none : SHADOWS.xs,
       transition: 'all 0.2s ease',
     }}>
-      <div style={{ flex: compact ? 'none' : 1, width: compact ? '100%' : 'auto', minWidth: 0 }}>
+      <div style={{ flex: stack ? 'none' : 1, width: stack ? '100%' : 'auto', minWidth: 0 }}>
         {isEditing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <input ref={editRef} value={editTitle} onChange={e => setEditTitle(e.target.value)}
@@ -468,12 +471,12 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: compact ? 'flex-start' : 'center', flexDirection: compact ? 'column' : 'row', gap: compact ? 3 : SPACING.xs + 2 }}>
+            <div style={{ display: 'flex', alignItems: compact ? 'flex-start' : 'baseline', flexDirection: compact ? 'column' : 'row', flexWrap: 'wrap', gap: compact ? 3 : SPACING.xs + 2 }}>
               <span onClick={() => !isDone && startEdit()} style={{ fontSize: 13.5, fontWeight: 600, color: isDone ? T.textMuted : T.text, textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.45, cursor: isDone ? 'default' : 'pointer' }} title={isDone ? '' : 'クリックして編集'}>
                 {task.title || '(未入力)'}
               </span>
               {task.assignee && (
-                <span style={{ fontSize: compact ? 10.5 : 12, letterSpacing: 0, color: T.accentText, fontWeight: 500 }}>
+                <span style={{ fontSize: compact ? 10.5 : 12, letterSpacing: 0, color: T.accentText, fontWeight: 500, whiteSpace: 'nowrap' }}>
                   @{task.assignee}
                 </span>
               )}
@@ -502,7 +505,7 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
         )}
       </div>
       {!isEditing && (
-        <div style={{ flexShrink: 0, width: compact ? '100%' : 'auto', display: 'flex', alignItems: 'center', gap: compact ? SPACING.xs + 2 : SPACING.xs + 2 }}>
+        <div style={{ flexShrink: 0, width: stack ? '100%' : 'auto', display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
           <StatusBadge status={status} onChange={(s) => onStatusChange(task.id, s)} T={T} />
           {!compact && !isDone && (
             <button onClick={startEdit} title="編集" style={{
@@ -522,7 +525,7 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
             isOverdue ? (
               <span style={{
                 ...pillStyle({ color: T.danger, size: 'md' }),
-                marginLeft: compact ? 'auto' : 0,
+                marginLeft: stack ? 'auto' : 0,
                 fontWeight: 700, fontFamily: 'ui-monospace, monospace',
               }}>
                 <Icon name="alert" size={11} /> {formatDate(task.due_date)}
@@ -530,7 +533,7 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
             ) : (
               <span style={{
                 fontSize: compact ? 9.5 : TYPO.footnote.fontSize, fontWeight: 600,
-                marginLeft: compact ? 'auto' : 0,
+                marginLeft: stack ? 'auto' : 0,
                 fontFamily: 'ui-monospace, monospace',
                 color: isDone ? T.success : task.due_date <= thisSunday ? T.warn : T.textMuted,
               }}>
@@ -538,7 +541,7 @@ function TaskCard({ task, kaMap, objMap, T, onStatusChange, onUpdateTask, onDele
               </span>
             )
           ) : (
-            <span style={{ fontSize: compact ? 9.5 : TYPO.footnote.fontSize, fontWeight: 600, marginLeft: compact ? 'auto' : 0, color: T.textFaint }}>期限なし</span>
+            <span style={{ fontSize: compact ? 9.5 : TYPO.footnote.fontSize, fontWeight: 600, marginLeft: stack ? 'auto' : 0, color: T.textFaint }}>期限なし</span>
           )}
         </div>
       )}
