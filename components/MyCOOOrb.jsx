@@ -28,6 +28,10 @@ function Sparkle({ size = 26, fill = '#fff' }) {
 }
 
 const CHIPS = ['今日の優先順位は？', '今週の目標を確認', '振り返りを書く']
+// OKR フィードバック (旧 AICoachCard をオーブに移植)。
+// COO AI (/api/integrations/coo/ai) は owner の KR/KA 文脈を自前で参照するため、
+// クライアントから OKR データを埋め込む必要はなく、依頼プロンプトのみ送る。
+const OKR_FEEDBACK_PROMPT = '今週のOKR(KR・KA)の進捗についてフィードバックをください。良かった点・改善点・来週へのアドバイス・励ましの言葉を簡潔にお願いします。'
 
 export default function MyCOOOrb({ user, members = [], T, orgId }) {
   const { isMobile } = useResponsive()
@@ -309,6 +313,7 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
             {/* サジェスチョンチップ */}
             <div style={{ display: 'flex', gap: SPACING.xs + 2, flexWrap: 'wrap', borderTop: `1px solid ${T.border}`, padding: '6px 12px' }}>
               <button onClick={() => window.dispatchEvent(new CustomEvent('okr:open-quicktask'))} style={{ ...chipStyle, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="plus" size={11} /> タスクを追加</button>
+              <button onClick={() => send(OKR_FEEDBACK_PROMPT)} style={{ ...chipStyle, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="sparkle" size={11} /> OKRフィードバック</button>
               {CHIPS.map(c => (
                 <button key={c} onClick={() => send(c)} style={chipStyle}>{c}</button>
               ))}
