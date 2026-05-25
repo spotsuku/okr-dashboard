@@ -189,12 +189,12 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     const [krsRes, krReviewsRes, kasRes, objsRes, prevKrReviewsRes, prevKasRes] = await Promise.all([
       supabase.from('key_results').select('id, title, target, current, unit, owner, objective_id, archived_at').eq('owner', viewingName).range(0, 49999),
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', krWeekStart).range(0, 49999),
-      supabase.from('weekly_reports').select('id, ka_title, kr_id, kr_title, level_id, objective_id, owner, status, good, more, focus_output, week_start, reference_urls, ka_key')
+      supabase.from('weekly_reports').select('*')
         .eq('owner', viewingName).in('week_start', [currentMon, nextMon]).neq('status', 'done').range(0, 49999),
       supabase.from('objectives').select('id, title, period, level_id').is('archived_at', null).range(0, 49999),
       // 先週分の参照 (読み取り専用、入力エリア上部に表示)
       supabase.from('kr_weekly_reviews').select('*').eq('week_start', prevKrWeekStart).range(0, 49999),
-      supabase.from('weekly_reports').select('kr_id, ka_title, good, more, focus_output, ka_key')
+      supabase.from('weekly_reports').select('*')
         .eq('owner', viewingName).eq('week_start', prevMon).range(0, 49999),
     ])
 
@@ -308,24 +308,6 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         ka,
         objective: om[ka.objective_id] || null,
       }))
-
-    // ── 一時診断ログ (KA記入0件の原因調査用。原因確定後に削除する) ──
-    console.warn('[KA-DIAG]', JSON.stringify({
-      viewingName, currentMon, nextMon, chosenKaWeek,
-      allKas: allKas.length,
-      currentWeekKas: currentWeekKas.length,
-      nextWeekKas: nextWeekKas.length,
-      chosenKas: chosenKas.length,
-      kaQueue: kaQueue.length,
-      periodFilter, deptFilter, curQ,
-      sample: chosenKas.slice(0, 6).map(k => ({
-        ws: k.week_start, owner: k.owner, objId: k.objective_id,
-        period: om[k.objective_id]?.period, rawP: rawPeriod(om[k.objective_id]?.period),
-        inScope: inScope(k.objective_id),
-        good: (k.good || '').slice(0, 8), more: (k.more || '').slice(0, 8), fo: (k.focus_output || '').slice(0, 8),
-        status: k.status, kr_id: k.kr_id, title: (k.ka_title || '').slice(0, 16),
-      })),
-    }))
 
     setQueue({ kr: krQueue, ka: kaQueue })
     setIndex({ kr: 0, ka: 0 })
