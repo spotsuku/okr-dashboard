@@ -15,6 +15,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+import { authedFetch } from '../lib/authedFetch'
 import { OrgProvider, useCurrentOrg } from '../lib/orgContext'
 import { LicenseProvider } from '../lib/license/licenseContext'
 import LoginPage from './LoginPage'
@@ -166,23 +167,95 @@ function FullPageError({ text }) {
 
 function NoOrgScreen({ email }) {
   const [createOpen, setCreateOpen] = useState(false)
+  const [invites, setInvites] = useState(null)   // null=取得中 / [] / [{...}]
+  const [joining, setJoining] = useState(null)    // 参加処理中の organization_id
+  const [joinError, setJoinError] = useState('')
   const router = useRouter()
+
+  // 参加可能な招待 (= email が名簿に居るが未リンクの組織) を取得
+  useEffect(() => {
+    let alive = true
+    authedFetch('/api/org/my-invites')
+      .then(r => (r.ok ? r.json() : { invites: [] }))
+      .then(d => { if (alive) setInvites(d.invites || []) })
+      .catch(() => { if (alive) setInvites([]) })
+    return () => { alive = false }
+  }, [])
+
+  const join = async (org) => {
+    setJoining(org.organization_id); setJoinError('')
+    try {
+      const r = await authedFetch('/api/org/my-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization_id: org.organization_id }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setJoinError(d.error || '参加に失敗しました'); setJoining(null); return }
+      if (d.slug) router.replace(`/${d.slug}`)
+      else window.location.reload()
+    } catch {
+      setJoinError('参加に失敗しました'); setJoining(null)
+    }
+  }
+
+  const hasInvites = Array.isArray(invites) && invites.length > 0
+
   return (
     <div style={{
       minHeight: '100vh', background: '#090d18', color: '#fff',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     }}>
-      <div style={{ maxWidth: 480, textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: 480, width: '100%', textAlign: 'center', fontFamily: 'sans-serif' }}>
         <div style={{ marginBottom: 12 }}><Icon name="building" size={32} /></div>
-        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>所属組織がありません</div>
-        <div style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, marginBottom: 20 }}>
-          {email} は現在どの組織にも所属していません。<br />
-          自分で新しい組織を作るか、管理者から招待を受けてください。
+        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>
+          {hasInvites ? '組織に参加' : '所属組織がありません'}
         </div>
+        <div style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, marginBottom: 20 }}>
+          {hasInvites ? (
+            <>{email} は以下の組織に招待されています。<br />参加するか、新しい組織を作成できます。</>
+          ) : (
+            <>{email} は現在どの組織にも所属していません。<br />自分で新しい組織を作るか、管理者から招待を受けてください。</>
+          )}
+        </div>
+
+        {/* 招待されている組織への参加導線 */}
+        {hasInvites && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+            {invites.map(org => (
+              <button key={org.organization_id} onClick={() => join(org)} disabled={joining != null} style={{
+                padding: '12px 16px', borderRadius: 10, background: '#16223b',
+                border: '1px solid #2a3a5c', color: '#fff',
+                cursor: joining != null ? 'not-allowed' : 'pointer', textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 10,
+                opacity: joining != null && joining !== org.organization_id ? 0.5 : 1,
+              }}>
+                <span style={{
+                  width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                  background: '#4d9fff22', color: '#4d9fff',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800,
+                }}>{(org.name || '?').slice(0, 1)}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{org.name || org.slug}</span>
+                  <span style={{ display: 'block', fontSize: 11, color: '#9ca3af' }}>
+                    {joining === org.organization_id ? '参加中…' : `${org.is_admin ? '管理者' : 'メンバー'}として参加`}
+                  </span>
+                </span>
+                <Icon name="chevronR" size={16} />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {joinError && (
+          <div style={{ fontSize: 12, color: '#fca5a5', marginBottom: 12 }}>{joinError}</div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => setCreateOpen(true)} style={{
-            padding: '10px 20px', borderRadius: 8, background: '#4d9fff', color: '#fff',
-            border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+            padding: '10px 20px', borderRadius: 8,
+            background: hasInvites ? '#1f2937' : '#4d9fff', color: '#fff',
+            border: hasInvites ? '1px solid #374151' : 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}><Icon name="plus" size={15} /> 新しい組織を作成</button>
           <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }} style={{
