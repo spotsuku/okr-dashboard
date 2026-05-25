@@ -24,6 +24,10 @@ function formatWeekLabel(weekStartStr, offsetWeeks = 0) {
   const dt = new Date(t)
   return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}週`
 }
+// period の正規化 (アプリ標準: "YYYY_q1" 等の接頭辞を除去 → "q1")。
+// MyOKRPage / okrData と同じ規則。これを通さず生比較すると接頭辞付き期間が
+// スコープから漏れる (記入カードに KA が出ない不具合の原因)。
+function rawPeriod(period) { return period?.includes('_') ? period.split('_').pop() : period }
 // 現在のQ判定 (4-6月=q1 / 7-9=q2 / 10-12=q3 / 1-3=q4)
 function getCurrentQuarter() {
   const m = new Date().getMonth()
@@ -258,7 +262,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     //   'all'        → すべて
     const curQ = getCurrentQuarter()
     const inPeriod = (objId) => {
-      const p = om[objId]?.period
+      const p = rawPeriod(om[objId]?.period)
       if (!p) return false
       if (periodFilter === 'all') return true
       if (periodFilter === 'auto') return p === curQ || p === 'annual'
@@ -734,7 +738,7 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
   const obj = card.objective
   const title = isKR ? kr.title : (ka.ka_title || '(無題)')
   const deptLabel = obj ? deptLabelOf?.(obj.level_id) : ''
-  const isAnnual = obj?.period === 'annual'
+  const isAnnual = rawPeriod(obj?.period) === 'annual'
   // 週ラベル (絶対日のみ)
   // KR: good/more = weekStart週、focus = weekStart+1週
   // KA: good/more = weekStart-1週、focus = weekStart週
