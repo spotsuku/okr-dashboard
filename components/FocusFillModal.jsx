@@ -309,6 +309,24 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
         objective: om[ka.objective_id] || null,
       }))
 
+    // ── 一時診断ログ (KA記入0件の原因調査用。原因確定後に削除する) ──
+    console.warn('[KA-DIAG]', JSON.stringify({
+      viewingName, currentMon, nextMon, chosenKaWeek,
+      allKas: allKas.length,
+      currentWeekKas: currentWeekKas.length,
+      nextWeekKas: nextWeekKas.length,
+      chosenKas: chosenKas.length,
+      kaQueue: kaQueue.length,
+      periodFilter, deptFilter, curQ,
+      sample: chosenKas.slice(0, 6).map(k => ({
+        ws: k.week_start, owner: k.owner, objId: k.objective_id,
+        period: om[k.objective_id]?.period, rawP: rawPeriod(om[k.objective_id]?.period),
+        inScope: inScope(k.objective_id),
+        good: (k.good || '').slice(0, 8), more: (k.more || '').slice(0, 8), fo: (k.focus_output || '').slice(0, 8),
+        status: k.status, kr_id: k.kr_id, title: (k.ka_title || '').slice(0, 16),
+      })),
+    }))
+
     setQueue({ kr: krQueue, ka: kaQueue })
     setIndex({ kr: 0, ka: 0 })
     setCompleted({ kr: krQueue.length === 0, ka: kaQueue.length === 0 })
