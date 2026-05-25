@@ -721,6 +721,19 @@ async function handle(request) {
   const dayName = ['日', '月', '火', '水', '木', '金', '土'][nowJst.getUTCDay()]
   const todayJst = `${Y}-${M}-${D}(${dayName}) ${h}:${min} JST`
 
+  // 今週 (月曜始まり〜日曜終わり) と今週末 (土・日) を JST 確定値で算出。
+  // 「今週」「今週末」の境界を明示しないと LLM が週末の日付を誤って推論するため。
+  const baseY = nowJst.getUTCFullYear(), baseMo = nowJst.getUTCMonth(), baseD = nowJst.getUTCDate()
+  const dow = nowJst.getUTCDay() // 0=日..6=土
+  const toMonday = dow === 0 ? -6 : 1 - dow
+  const mkJ = (offset) => new Date(Date.UTC(baseY, baseMo, baseD + offset))
+  const fmtJ = (dt) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}(${DOW_JA[dt.getUTCDay()]})`
+  const weekMonday = mkJ(toMonday)
+  const weekSat = mkJ(toMonday + 5)
+  const weekSun = mkJ(toMonday + 6)
+  const weekRangeStr = `${fmtJ(weekMonday)} 〜 ${fmtJ(weekSun)}`
+  const weekendStr = `${fmtJ(weekSat)}〜${fmtJ(weekSun)}`
+
   const coachInstruction = mode === 'speed'
     ? `今は ⚡ スピードモード です。問いを返さず、直接的な助言や情報を簡潔に提供してください。それでも一般論ではなく必ず NEO 文脈に接続してください。`
     : `今は 🎯 コーチモード です。即答せず、まず 2〜3 個の問いで状況を深掘りしてください (GROW モデル: Goal/Reality/Options/Will)。本人が「今すぐ答え欲しい」「時間ない」と言えばスピードモードに切替えて短く答えてください。`
@@ -747,7 +760,12 @@ async function handle(request) {
 ## 現在の状況
 - 日時: ${todayJst} (タイムゾーンは Asia/Tokyo)
   ※ ユーザーは日本にいます。回答時の時刻表現はすべて JST で行ってください
+- 今週 (週は月曜始まり・日曜終わり): ${weekRangeStr}
+- 今週末 (= 土曜・日曜): ${weekendStr}
+- 平日 = 月〜金 / 週末 = 土・日
 - 対話相手: ${owner} さん
+
+**日付の絶対ルール (厳守)**: 「今日」「明日」「今週」「今週末」「来週」などを文章に書くときは、必ず上記の確定値と後述の「日付・曜日参照表」に一致させること。自分で曜日や週末の日付を計算・推論しないこと。例えば今日が月曜なら「今週末」は今日ではなく上記 ${weekendStr} を指す。締切や週のゴールを示すときも実際の日付・曜日が上記と矛盾しないか必ず確認すること。
 
 ## NEO福岡について (組織知)
 ${knowledgeText || '(まだ組織知が登録されていません)'}
