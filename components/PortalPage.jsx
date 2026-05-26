@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { avatarColor } from '../lib/avatarColor'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
+import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, GLASS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { cardStyle, btnGhost, btnBrand, btnSecondary } from '../lib/iosStyles'
 import Icon from './Icon'
@@ -140,6 +141,7 @@ function displayUrl(url) {
 
 export default function PortalPage({ user, onNavigate, themeKey = 'dark', members = [], T: passedT }) {
   const T = passedT || THEMES[themeKey] || THEMES.dark
+  const { isMobile } = useResponsive()
 
   // 組織コンテキスト (org-scope クエリ用) と自分のメンバー名
   const { currentOrg } = useCurrentOrg()
@@ -522,7 +524,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
         style={destCard}>
         <span style={openPill}>開く <Icon name="arrowRight" size={11} /></span>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, paddingRight: 64 }}>
           <div style={{
             width: 48, height: 48, borderRadius: 12, background: tileBg,
             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -617,7 +619,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: T.bg, position: 'relative' }}>
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '32px 28px 80px', position: 'relative' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: isMobile ? '16px 12px 72px' : '32px 28px 80px', position: 'relative' }}>
 
         {/* ─── Welcome strip ─── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
@@ -658,7 +660,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
           }}>
             {/* ヘッダ */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 14,
+              display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
               padding: '14px 18px',
               background: 'linear-gradient(120deg, rgba(37,99,235,.08), rgba(34,211,238,.06))',
               borderBottom: `1px solid ${T.border}`,
@@ -670,7 +672,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
               }}>
                 <Icon name="rocket" size={17} stroke={1.8} />
               </div>
-              <div style={{ minWidth: 0, flexShrink: 0, width: 220 }}>
+              <div style={{ minWidth: 0, flex: isMobile ? '1 1 100%' : '0 0 220px' }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>AI WorkSpace を使いはじめる</div>
                 <div style={{ fontSize: 11.5, color: T.textSub, marginTop: 1 }}>{onbDoneCount} / {ONB_STEPS.length} 完了 · 所要 約 10 分</div>
                 <div style={{ height: 5, borderRadius: 99, background: 'rgba(15,23,42,.06)', marginTop: 6, overflow: 'hidden' }}>
@@ -692,7 +694,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
             </div>
 
             {/* 7ステップグリッド */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1, background: T.border }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(7,1fr)', gap: 1, background: T.border }}>
               {ONB_STEPS.map((s, i) => {
                 const done = !!onbDone[s.key]
                 const active = !done && onbNextStep && onbNextStep.key === s.key
@@ -756,7 +758,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
         )}
 
         {/* ─── Destination grid (2 cards) ─── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 12 : 18, marginBottom: 24 }}>
           <DestCard
             kind="me"
             icon="user"
@@ -791,7 +793,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 10 }}>
           {customLinks.map(l => {
             const c = linkColorTokens(T, l.color)
             return (
@@ -830,7 +832,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
         </div>
 
         {/* ─── 情報グリッド ─── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, marginTop: 18 }}>
           <InfoCard icon="clock" iconColor={T.accent} title="最近の動き"
             emptyText="最近の動きはありません" isEmpty={recentItems.length === 0}>
             {recentItems.map((item, i) => (
