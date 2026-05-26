@@ -1066,11 +1066,9 @@ function MeetingItemsTime({
     const { data } = await supabase.from('member_confirmations')
       .select('*').eq('status', 'open').order('created_at', { ascending: false })
     const filtered = (data || []).filter(it => {
-      // kind 一致 (旧データは confirmation 扱い)
-      if ((it.kind || 'confirmation') !== kind) return false
-      // 朝会向け: meeting_keys 未指定 or 'morning' を含むもの
-      const mks = Array.isArray(it.meeting_keys) ? it.meeting_keys : []
-      return mks.length === 0 || mks.includes('morning')
+      // kind 一致 (旧データは confirmation 扱い)。会議タグに関わらず、未解決(open)の
+      // 共有/確認はすべて朝会に表示する (朝会＝その日の共有・確認の総まとめ)。
+      return (it.kind || 'confirmation') === kind
     })
     setItems(filtered)
     if (filtered.length > 0) {

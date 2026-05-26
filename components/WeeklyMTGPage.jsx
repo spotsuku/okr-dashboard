@@ -246,8 +246,9 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
   // 会議別ビュー: どの会議モードで表示するか (null = 会議選択画面)
   // 起動時はデフォルトで会議選択画面から開始するが、
-  // 進行中のセッションがあれば下の useEffect でその会議を自動オープンする
+  // 進行中(開始済み・未終了)の会議キー。会議選択画面でバッジ表示するために使う。
   const [activeMeetingKey, setActiveMeetingKey] = useState(null)
+  const [inProgressKeys, setInProgressKeys] = useState([])
 
   // ファシリ / 一覧 モード切替 (会議選択後)
   // localStorage で保存して同じ会議に戻った時の好みを記憶
@@ -294,32 +295,25 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     setActiveObjId(null)
   }
 
-  // 進行中のセッションがあれば自動でその会議を開く
-  // (started_at != null かつ finished_at == null) を「進行中」とみなす
+  // 会議の自動オープンと進行中バッジ
+  // 方針A: 「週次MTG」タブを開いても進行中の会議に自動では入らず、まず
+  // 「今週の会議を選択」画面を出す。古い未終了の会議へ勝手に入って戸惑う問題への対応。
+  // 進行中(開始済み・未終了)の会議はカードに「進行中」バッジを出し、選べば再開できる。
+  // ※ forceMode='list' (OKRタブ「週次」埋め込み) は従来どおり先頭会議を自動選択する。
   useEffect(() => {
-    // 既に何か開いていれば何もしない
-    if (activeMeetingKey) return
-    // forceMode='list' (= OKR タブ「週次」) のときは会議選択画面を飛ばして
-    // 自動で最初の会議を選択 → ユーザーは会議切り替え UI で他の会議も見られる
-    if (forceMode === 'list' && WEEKLY_MTG_MEETINGS.length > 0) {
+    if (!activeMeetingKey && forceMode === 'list' && WEEKLY_MTG_MEETINGS.length > 0) {
       selectMeeting(WEEKLY_MTG_MEETINGS[0].key)
-      return
     }
     let alive = true
     const weekMon = toDateStr(getMonday(new Date()))
     supabase.from('weekly_mtg_sessions')
-      .select('meeting_key, step, started_at, finished_at')
+      .select('meeting_key, started_at, finished_at')
       .eq('week_start', weekMon)
       .not('started_at', 'is', null)
       .is('finished_at', null)
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
       .then(({ data }) => {
-        if (!alive || !data) return
-        if (data.meeting_key && WEEKLY_MTG_MEETINGS.some(m => m.key === data.meeting_key)) {
-          selectMeeting(data.meeting_key)
-        }
+        if (!alive) return
+        setInProgressKeys([...new Set((data || []).map(d => d.meeting_key).filter(Boolean))])
       })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -724,6 +718,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
               <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, minmax(0,1fr))', gap:SPACING.md + 2 }}>
                 {displayMeetings.map(m => {
                   const wm = m.weeklyMTG || {}
+                  const isInProgress = inProgressKeys.includes(m.key)
                   const viewBadge = wm.withDiscussion ? 'チームサマリー'
                     : wm.viewMode === 'kr' ? 'KR重点'
                     : wm.viewMode === 'ka' ? 'KA重点'
@@ -773,11 +768,21 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                         }}>
                           <Icon size={20} />
                         </div>
-                        <span style={{
-                          flexShrink:0, ...TYPO.caption, fontWeight:800,
-                          padding:'3px 10px', borderRadius:RADIUS.pill,
-                          background:pillBg, color:pillFg, whiteSpace:'nowrap',
-                        }}>{viewBadge}</span>
+                        <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                          {isInProgress && (
+                            <span style={{
+                              ...TYPO.caption, fontWeight:800,
+                              padding:'3px 9px', borderRadius:RADIUS.pill,
+                              background: wT().warnBg || '#fef3c7', color: wT().warn || '#b45309',
+                              whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:4,
+                            }}>● 進行中</span>
+                          )}
+                          <span style={{
+                            ...TYPO.caption, fontWeight:800,
+                            padding:'3px 10px', borderRadius:RADIUS.pill,
+                            background:pillBg, color:pillFg, whiteSpace:'nowrap',
+                          }}>{viewBadge}</span>
+                        </div>
                       </div>
                       {/* タイトル */}
                       <div style={{ position:'relative', zIndex:1 }}>
@@ -797,7 +802,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
                         marginTop:'auto', position:'relative', zIndex:1,
                         display:'flex', alignItems:'center', gap:6,
                         ...TYPO.footnote, fontSize:12, fontWeight:600, color: wT().accentText,
-                      }}>会議を開始 <Icon name="arrowRight" size={13} /></div>
+                      }}>{isInProgress ? '再開する' : '会議を開始'} <Icon name="arrowRight" size={13} /></div>
                     </button>
                   )
                 })}
