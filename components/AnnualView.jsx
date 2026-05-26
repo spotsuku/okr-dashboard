@@ -453,6 +453,19 @@ export default function AnnualView({ levels, onAddObjective, onEdit, onDelete, r
       </div>
       <div style={{ fontSize: 15, marginBottom: SPACING.xs + 2, color: T().text }}>{activeLevelId ? 'この組織の' : ''}{fiscalYear}年度の通期OKRがありません</div>
       <div style={{ fontSize: TYPO.body.fontSize }}>まず「通期」の目標を追加してください</div>
+      {onAddObjective && (
+        <button
+          onClick={() => onAddObjective({ period: 'annual', level_id: activeLevelId })}
+          style={{
+            marginTop: SPACING.lg, padding: '9px 20px', borderRadius: RADIUS.sm, border: 'none',
+            background: T().addBtnBg, color: '#fff', fontSize: TYPO.subhead.fontSize, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <Icon name="plus" size={14} stroke={2} /> OKR を追加
+        </button>
+      )}
     </div>
   )
 
