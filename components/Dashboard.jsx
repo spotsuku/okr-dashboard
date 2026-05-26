@@ -943,6 +943,39 @@ export default function Dashboard({ user, onSignOut }) {
     }
     return '2026'
   })
+  // 選択できる年度リスト (組織ごとに localStorage で永続化・「＋」で追加可)
+  const [fiscalYears, setFiscalYears]       = useState(['2025', '2026'])
+  const fyStorageKey = `okr_fiscal_years_${currentOrg?.id || 'default'}`
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let list = null
+    try { list = JSON.parse(localStorage.getItem(fyStorageKey) || 'null') } catch { /* noop */ }
+    if (!Array.isArray(list) || list.length === 0) list = ['2025', '2026']
+    if (fiscalYear && !list.includes(fiscalYear)) list = [...list, fiscalYear]
+    setFiscalYears([...new Set(list)].sort())
+  }, [fyStorageKey]) // eslint-disable-line
+  const persistFiscalYears = (list) => {
+    const sorted = [...new Set(list)].sort()
+    setFiscalYears(sorted)
+    try { localStorage.setItem(fyStorageKey, JSON.stringify(sorted)) } catch { /* noop */ }
+  }
+  const addFiscalYear = () => {
+    const max = fiscalYears.reduce((m, y) => Math.max(m, Number(y) || 0), 0)
+    const base = max || new Date().getFullYear()
+    const input = window.prompt('追加する年度（西暦4桁）', String(base + 1))
+    if (input == null) return
+    const yr = String(input).trim()
+    if (!/^\d{4}$/.test(yr)) { window.alert('西暦4桁で入力してください (例: 2027)'); return }
+    persistFiscalYears([...fiscalYears, yr])
+    setFiscalYear(yr)
+  }
+  const removeFiscalYear = (yr) => {
+    if (fiscalYears.length <= 1) return
+    if (!window.confirm(`${yr}年度を一覧から外しますか？\n(OKR データ自体は削除されません。再追加すれば再表示できます)`)) return
+    const list = fiscalYears.filter(y => y !== yr)
+    persistFiscalYears(list)
+    if (fiscalYear === yr) setFiscalYear(list[list.length - 1])
+  }
   const [activePeriod, setActivePeriod]     = useState(() => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' })
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
@@ -1580,11 +1613,25 @@ export default function Dashboard({ user, onSignOut }) {
             <span style={{ fontSize: 9, padding: '1px 5px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 4, color: T.textMuted, fontFamily: 'ui-monospace, monospace' }}>⌘K</span>
           </div>
 
-          {/* 年度切り替え */}
-          <div data-tour="year" style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
-            {['2025', '2026'].map(yr => (
-              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? BRAND_GRADIENT.cta : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
-            ))}
+          {/* 年度切り替え (組織ごとに追加可) */}
+          <div data-tour="year" style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, alignItems: 'center' }}>
+            {fiscalYears.map(yr => {
+              const active = fiscalYear === yr
+              return (
+                <button key={yr} onClick={() => setFiscalYear(yr)}
+                  onContextMenu={canEditOKR ? (e) => { e.preventDefault(); removeFiscalYear(yr) } : undefined}
+                  title={canEditOKR ? `${yr}年度に切替（右クリックで一覧から削除）` : `${yr}年度に切替`}
+                  style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: active ? BRAND_GRADIENT.cta : 'transparent', color: active ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>{yr}年度</button>
+              )
+            })}
+            {canEditOKR && (
+              <button onClick={addFiscalYear} title="年度を追加"
+                style={{ padding: '4px 7px', borderRadius: 7, border: 'none', cursor: 'pointer', background: 'transparent', color: T.textMuted, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.bgCard; e.currentTarget.style.color = T.accent }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T.textMuted }}>
+                <Icon name="plus" size={13} stroke={2.4} />
+              </button>
+            )}
           </div>
 
           {/* 右側 */}
