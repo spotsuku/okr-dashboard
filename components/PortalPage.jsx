@@ -228,7 +228,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
           .eq('organization_id', orgId).eq('status', 'open')],
         // 3. 最近の動き: 直近 KR レビュー
         ['recentKrRevs', supabase.from('kr_weekly_reviews')
-          .select('kr_id, good, more, focus, created_at, updated_at')
+          .select('kr_id, good, more, focus, updated_at')
           .eq('organization_id', orgId)
           .order('updated_at', { ascending: false }).limit(8)],
         // 3. 最近の動き: 直近 KPT ログ
@@ -298,7 +298,7 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
         if (!((rv.good || '').trim() || (rv.more || '').trim() || (rv.focus || '').trim())) return
         const name = krOwnerMap[rv.kr_id]
         if (!name) return
-        recent.push({ name, action: 'KR の週次レビューを記入しました', detail: krTitleMap[rv.kr_id] || '', ts: rv.updated_at || rv.created_at })
+        recent.push({ name, action: 'KR の週次レビューを記入しました', detail: krTitleMap[rv.kr_id] || '', ts: rv.updated_at })
       })
       ;(r.recentKpt?.data || []).forEach(row => {
         if (!row.owner) return
