@@ -971,6 +971,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
 function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onGoToSummary, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
   const isMobile = useIsMobile()
+  const { currentOrg } = useCurrentOrg()  // 始業/終業・KPT 保存時に「今表示中の組織」を明示付与する
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -1037,11 +1038,12 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   })()
 
   // 昨日ログを強制終業
-  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM }) {
+  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM, reflectionDate }) {
     if (!pendingYesterdayLog) return
     setBusy(true)
     const createdJST = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
     const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
+    // 勤怠(出勤記録)は対象の未終業ログの日付で締める
     const endUtc = new Date(Date.UTC(
       createdJST.getUTCFullYear(), createdJST.getUTCMonth(), createdJST.getUTCDate(),
       hh - 9, mm, 0
@@ -1050,15 +1052,22 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
     const { error: e1 } = await supabase.from('coaching_logs')
       .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.id)
-    if (e1) { setBusy(false); alert('昨日の終業記録に失敗しました: ' + e1.message); return }
+    if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
-      // KPT の created_at は work_log の日付 + 終業時刻にする (朝会の前回振り返りクエリで拾われるように)
-      await supabase.from('coaching_logs').insert({
+      // 振り返り(KPT)は本人が選んだ「対象日」で保存する (既定=未終業ログの勤務日)。
+      // どの日の振り返りかを本人に選ばせ、朝会での認知齟齬(火曜に金曜が出る等)を防ぐ。
+      const baseISO = reflectionDate ||
+        `${createdJST.getUTCFullYear()}-${String(createdJST.getUTCMonth()+1).padStart(2,'0')}-${String(createdJST.getUTCDate()).padStart(2,'0')}`
+      const [ry, rmo, rd] = baseISO.split('-').map(Number)
+      const kptUtc = new Date(Date.UTC(ry, rmo - 1, rd, hh - 9, mm, 0))
+      const { error: e2 } = await supabase.from('coaching_logs').insert({
         owner: myName, log_type: 'kpt',
-        week_start: getMondayJSTStr(new Date(pendingYesterdayLog.created_at)),
-        created_at: endUtc.toISOString(),
+        organization_id: currentOrg?.id,
+        week_start: getMondayJSTStr(kptUtc),
+        created_at: kptUtc.toISOString(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
       })
+      if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
     }
     setBusy(false)
     setPendingYesterdayLog(false)
@@ -1350,6 +1359,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     const { error } = await supabase.from('coaching_logs').insert({
       owner: myName,
       log_type: 'work_log',
+      organization_id: currentOrg?.id,
       week_start: getMondayJSTStr(),
       content: JSON.stringify({ start_at: new Date().toISOString() }),
     })
@@ -1375,10 +1385,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       const { error: e2 } = await supabase.from('coaching_logs').insert({
         owner: myName,
         log_type: 'kpt',
+        organization_id: currentOrg?.id,
         week_start: getMondayJSTStr(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
       })
-      if (e2) console.warn('KPT保存エラー', e2)
+      if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
     }
     setBusy(false)
     setKptOpen(false)
@@ -1400,6 +1411,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           <KPTModal
             T={T} busy={busy} force
             yesterdayDateStr={yesterdayDateStr}
+            pendingDateISO={new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
+            todayISO={new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
             startedAt={parseLogContent(pendingYesterdayLog.content).start_at}
             onSave={forceCloseYesterday}
             onCancel={() => {}}
@@ -3403,11 +3416,35 @@ function PopGoalCard({ T, icon, title, gradient, accent, value, loading, canEdit
 
 // ─── KPT入力モーダル ───────────────────────────────────────────────────────
 // force=true: 朝の昨日強制KPT用。キャンセル不可 + 終業時刻入力 + 最低1項目必須
-function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterdayDateStr }) {
+function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterdayDateStr, pendingDateISO, todayISO }) {
   const [keep, setKeep] = useState('')
   const [problem, setProblem] = useState('')
   const [tryNote, setTryNote] = useState('')
   const [endTimeHHMM, setEndTimeHHMM] = useState('18:00')
+  // 振り返りの「対象日」。既定は未終業ログの勤務日。公欠/始業忘れ等は本人が選び直す。
+  const [reflectionDate, setReflectionDate] = useState(pendingDateISO || todayISO || '')
+  // 対象日の選択肢 (未終業日〜今日) に (今日)(昨日)(おととい)(N日前) の相対ラベルを自動付与
+  const dayOptions = useMemo(() => {
+    if (!force || !pendingDateISO || !todayISO) return []
+    const toUTC = (iso) => { const [y, mo, d] = iso.split('-').map(Number); return Date.UTC(y, mo - 1, d) }
+    const todayMs = toUTC(todayISO)
+    const WD = ['日','月','火','水','木','金','土']
+    const out = []
+    let cur = pendingDateISO
+    for (let i = 0; i < 31 && cur <= todayISO; i++) {
+      const [y, mo, d] = cur.split('-').map(Number)
+      const wd = WD[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()]
+      const diff = Math.round((todayMs - toUTC(cur)) / 86400000)
+      const rel = diff === 0 ? '今日' : diff === 1 ? '昨日' : diff === 2 ? 'おととい' : `${diff}日前`
+      const tags = [rel]
+      if (cur === pendingDateISO) tags.push('未終業')
+      out.push({ value: cur, label: `${mo}/${d}(${wd}) ・${tags.join(' ・')}` })
+      const nx = new Date(Date.UTC(y, mo - 1, d + 1))
+      cur = `${nx.getUTCFullYear()}-${String(nx.getUTCMonth()+1).padStart(2,'0')}-${String(nx.getUTCDate()).padStart(2,'0')}`
+    }
+    return out
+  }, [force, pendingDateISO, todayISO])
+  const selectedLabel = (dayOptions.find(o => o.value === reflectionDate) || {}).label || yesterdayDateStr || ''
 
   const now = new Date()
   const jst = new Date(now.getTime() + 9 * 3600 * 1000)
@@ -3471,10 +3508,12 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
             }}>{force ? <Icon name="alert" size={18} /> : <Icon name="clock" size={18} />}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: T.text, letterSpacing: '-0.01em' }}>
-                {force ? '昨日の振り返りを入力してください' : '今日の振り返り'}
+                {force ? '振り返りの記入' : '今日の振り返り'}
               </div>
-              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>
-                {dateStr}{worked ? ` · 稼働 ${worked}` : ''}
+              <div style={{ fontSize: 13, fontWeight: 700, color: force ? T.warn : T.textMuted, marginTop: 3 }}>
+                {force
+                  ? <>対象日: {selectedLabel} の振り返り</>
+                  : `${dateStr}${worked ? ` · 稼働 ${worked}` : ''}`}
               </div>
             </div>
           </div>
@@ -3484,14 +3523,33 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
               background: T.warnBg, color: T.warn,
               fontSize: 12, borderRadius: 9, lineHeight: 1.5, fontWeight: 600,
             }}>
-              昨日の業務が終業されていません。振り返りを入力してから今日を始業できます。
+              {yesterdayDateStr} の勤務が終業されていません。振り返りを入力すると今日を始業できます。<br />
+              この振り返りは <strong>{selectedLabel}</strong> の分として保存されます。別の日なら下の「対象日」を選び直してください。
             </div>
           )}
         </div>
 
+        {force && dayOptions.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="calendar" size={12} /> この振り返りの対象日</label>
+            <div style={hintStyle}>「いつの振り返りか」を選んでください（既定: 未終業の {yesterdayDateStr}）</div>
+            <select
+              value={reflectionDate}
+              onChange={e => setReflectionDate(e.target.value)}
+              style={{
+                padding: '7px 10px', background: T.sectionBg,
+                border: `1px solid ${T.borderMid}`, borderRadius: 6,
+                color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', minWidth: 200,
+              }}
+            >
+              {dayOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        )}
+
         {force && (
           <div style={{ marginBottom: 14 }}>
-            <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="clock" size={12} /> 昨日の終業時刻 (JST)</label>
+            <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="clock" size={12} /> 終業時刻 (JST)</label>
             <input
               type="time"
               value={endTimeHHMM}
@@ -3534,7 +3592,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
             >キャンセル</button>
           )}
           <button
-            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM })}
+            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM, reflectionDate })}
             disabled={busy || !canSave}
             style={{
               background: canSave ? T.info : T.border,
@@ -3544,7 +3602,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
               opacity: busy ? 0.6 : 1,
               display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
             }}
-          >{force ? <><Icon name="check" size={13} /> 保存して昨日を終業</> : <><Icon name="check" size={13} /> 保存して終業</>}</button>
+          >{force ? <><Icon name="check" size={13} /> 保存して終業</> : <><Icon name="check" size={13} /> 保存して終業</>}</button>
         </div>
       </div>
     </div>

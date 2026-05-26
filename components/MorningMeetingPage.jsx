@@ -715,50 +715,56 @@ function SpeakerReport({ T, member }) {
   const yesterday = getPrevReviewJSTDateStr()
   const today = toJSTDateStr(new Date())
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      setLoading(true)
-      // 範囲内の KPT (coaching_logs) を全件取得 (新しい順)
-      // 上限を「今日 00:00」で切ると、今朝入力した KPT が範囲外で取れないため
-      // 上限なし (= NOW まで) にして、今日入力したものも拾う。
-      const { data: kpts } = await supabase.from('coaching_logs')
-        .select('*').eq('owner', member.name).eq('log_type', 'kpt')
-        .gte('created_at', yesterday + 'T00:00:00+09:00')
-        .order('created_at', { ascending: false }).limit(20)
-      // 今日のタスク + 期限切れの未完了タスク
-      const { data: ts } = await supabase.from('ka_tasks')
-        .select('id, title, due_date, done, status')
-        .eq('assignee', member.name).lte('due_date', today)
-        .order('due_date', { ascending: true })
-      if (!alive) return
-      // 日付ごとに最新1件だけ採用 (同じ日に複数KPTがあれば直近のみ)
-      // 04:00 JST 境界: 深夜0〜4時に書かれた振り返りは「前日の振り返り」として扱う
-      const byDate = new Map()
-      for (const row of (kpts || [])) {
-        const dateStr = toBoundaryJSTDateStr(new Date(row.created_at))
-        if (byDate.has(dateStr)) continue
-        const c = parseLogContent(row.content)
-        byDate.set(dateStr, {
-          dateStr,
-          dateLabel: formatJSTMonthDay(dateStr),
-          keep: c.keep, problem: c.problem, try: c.try,
-        })
-      }
-      // 新しい日付が上に来るように
-      const list = Array.from(byDate.values())
-        .sort((a, b) => (a.dateStr < b.dateStr ? 1 : -1))
-      setKptList(list)
-      // 過去日の完了済みタスクは除外 (= 今日 or 期限切れ未完了 のみ残す)
-      const filtered = (ts || []).filter(t => {
-        const isDone = t.done || t.status === 'done'
-        return t.due_date === today || !isDone
+  const load = useCallback(async () => {
+    setLoading(true)
+    // 範囲内の KPT (coaching_logs) を全件取得 (新しい順)
+    // 上限を「今日 00:00」で切ると、今朝入力した KPT が範囲外で取れないため
+    // 上限なし (= NOW まで) にして、今日入力したものも拾う。
+    const { data: kpts } = await supabase.from('coaching_logs')
+      .select('*').eq('owner', member.name).eq('log_type', 'kpt')
+      .gte('created_at', yesterday + 'T00:00:00+09:00')
+      .order('created_at', { ascending: false }).limit(20)
+    // 今日のタスク + 期限切れの未完了タスク
+    const { data: ts } = await supabase.from('ka_tasks')
+      .select('id, title, due_date, done, status')
+      .eq('assignee', member.name).lte('due_date', today)
+      .order('due_date', { ascending: true })
+    // 日付ごとに最新1件だけ採用 (同じ日に複数KPTがあれば直近のみ)
+    // 04:00 JST 境界: 深夜0〜4時に書かれた振り返りは「前日の振り返り」として扱う
+    const byDate = new Map()
+    for (const row of (kpts || [])) {
+      const dateStr = toBoundaryJSTDateStr(new Date(row.created_at))
+      if (byDate.has(dateStr)) continue
+      const c = parseLogContent(row.content)
+      byDate.set(dateStr, {
+        dateStr,
+        dateLabel: formatJSTMonthDay(dateStr),
+        keep: c.keep, problem: c.problem, try: c.try,
       })
-      setTasks(filtered)
-      setLoading(false)
-    })()
-    return () => { alive = false }
+    }
+    // 新しい日付が上に来るように
+    const list = Array.from(byDate.values())
+      .sort((a, b) => (a.dateStr < b.dateStr ? 1 : -1))
+    setKptList(list)
+    // 過去日の完了済みタスクは除外 (= 今日 or 期限切れ未完了 のみ残す)
+    const filtered = (ts || []).filter(t => {
+      const isDone = t.done || t.status === 'done'
+      return t.due_date === today || !isDone
+    })
+    setTasks(filtered)
+    setLoading(false)
   }, [member.name, yesterday, today])
+
+  // 初回ロード + リアルタイム反映 (会議中に振り返り/タスクを登録したら即反映する)
+  useEffect(() => {
+    load()
+    const safe = String(member.name || '').replace(/[^\w-]/g, '_')
+    const ch = supabase.channel(`morning_kpt_${safe}_${Math.random().toString(36).slice(2, 7)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coaching_logs', filter: `owner=eq.${member.name}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ka_tasks', filter: `assignee=eq.${member.name}` }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [load, member.name])
 
   const doneCnt = tasks.filter(t => t.done || t.status === 'done').length
   const overdueCnt = tasks.filter(t => t.due_date < today && !(t.done || t.status === 'done')).length
@@ -1066,11 +1072,9 @@ function MeetingItemsTime({
     const { data } = await supabase.from('member_confirmations')
       .select('*').eq('status', 'open').order('created_at', { ascending: false })
     const filtered = (data || []).filter(it => {
-      // kind 一致 (旧データは confirmation 扱い)
-      if ((it.kind || 'confirmation') !== kind) return false
-      // 朝会向け: meeting_keys 未指定 or 'morning' を含むもの
-      const mks = Array.isArray(it.meeting_keys) ? it.meeting_keys : []
-      return mks.length === 0 || mks.includes('morning')
+      // kind 一致 (旧データは confirmation 扱い)。会議タグに関わらず、未解決(open)の
+      // 共有/確認はすべて朝会に表示する (朝会＝その日の共有・確認の総まとめ)。
+      return (it.kind || 'confirmation') === kind
     })
     setItems(filtered)
     if (filtered.length > 0) {
