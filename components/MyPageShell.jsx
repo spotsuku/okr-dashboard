@@ -963,7 +963,10 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             zIndex: 30, boxShadow: '0 -4px 18px rgba(0,0,0,0.18)',
           }}>
             {MOBILE_NAV.map(item => {
-              const active = activeTab === item.key
+              // 全社サマリー表示中は個人タブ(マイページ等)をアクティブにしない。
+              // (summaryMode は実体が dashboard タブなので、そのままだと「マイページ」が
+              //  点灯し“マイページにいる”ように見えてしまう)
+              const active = !summaryMode && activeTab === item.key
               return (
                 <button
                   key={item.key}
