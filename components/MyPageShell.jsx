@@ -1641,7 +1641,15 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             }>
               {taskBoard.loading ? <Loading T={T} /> :
                 taskBoard.today.length === 0
-                  ? <div style={{ fontSize: 11, color: T.textMuted, padding: 6, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sparkle" size={12} /> 今日のタスクはありません</div>
+                  ? <EmptyRich T={T} icon="sparkle" title="今日のタスクはありません"
+                      desc={isViewingSelf ? '自然文でサッと登録できます。下のテンプレからどうぞ。' : undefined}
+                      mycooTip={isViewingSelf ? 'まずは今日やることを1件だけ決めてみましょう。' : undefined}>
+                      {isViewingSelf && ['1on1の議事録', '振り返りメモ', 'KR進捗を更新'].map(tpl => (
+                        <button key={tpl} onClick={() => window.dispatchEvent(new CustomEvent('okr:quickfill', { detail: { text: tpl } }))} style={emptyChipStyle(T)}>
+                          <Icon name="plus" size={9} stroke={2.4} /> {tpl}
+                        </button>
+                      ))}
+                    </EmptyRich>
                   : <TaskList T={T} tasks={taskBoard.today} canEdit={isViewingSelf} onToggle={toggleTaskDone} showDue />}
             </Section>
           )}
@@ -4867,6 +4875,34 @@ const TASK_STATUS_CONFIG = {
   done:        { icon: '●', color: '#34C759', label: '完了' },
 }
 
+// 空状態のリッチ表示 (design_handoff_empty_states 準拠): 中性アイコン + 見出し + 説明 + アクション + 任意の MyCOO ヒント
+function EmptyRich({ T, icon, title, desc, children, mycooTip }) {
+  return (
+    <div style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center' }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(15,23,42,.04)', color: T.textSub, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <Icon name={icon} size={26} stroke={1.5} />
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{title}</div>
+      {desc && <div style={{ fontSize: 11.5, color: T.textSub, lineHeight: 1.6, maxWidth: 300 }}>{desc}</div>}
+      {children && <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap', justifyContent: 'center' }}>{children}</div>}
+      {mycooTip && (
+        <div style={{ marginTop: 8, width: '100%', boxSizing: 'border-box', padding: '12px 14px', background: 'linear-gradient(135deg, rgba(37,99,235,.06), rgba(34,211,238,.06))', borderRadius: 10, border: '1px solid rgba(37,99,235,.12)', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left' }}>
+          <div style={{ width: 24, height: 24, borderRadius: 7, background: 'linear-gradient(135deg,#3b82f6,#1e3a8a)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(30,58,138,.24)', flexShrink: 0 }}><Icon name="ai" size={13} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: T.accent, marginBottom: 1, letterSpacing: '.04em' }}>MyCOO からの提案</div>
+            <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.55 }}>{mycooTip}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 空状態のテンプレチップ (クイックタスク追加へ流し込む) / CTA ボタン共通スタイル
+function emptyChipStyle(T) {
+  return { padding: '4px 10px', fontSize: 11, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 99, cursor: 'pointer', color: T.textSub, display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'inherit' }
+}
+
 function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
   const today = toJSTDateStr(new Date())
   // 期日 → 状態 (normal / today / soon(3日以内) / overdue / done) を解決
@@ -4986,7 +5022,14 @@ function WeekTasks({ T, byWeekday, canEdit, onToggle }) {
   const today = toJSTDateStr(new Date())
   const todayWd = new Date(today + 'T00:00:00Z').getUTCDay()
   const totalCount = Object.values(byWeekday).reduce((s, arr) => s + arr.length, 0)
-  if (totalCount === 0) return <div style={{ fontSize: 11, color: T.textMuted, padding: 6, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="sparkle" size={12} /> 今週の期限タスクはありません</div>
+  if (totalCount === 0) return (
+    <EmptyRich T={T} icon="calendar" title="今週の予定はまだありません"
+      desc="「今週の Why」を 3 分で整理すると、優先タスクが見えてきます。">
+      <button onClick={() => window.dispatchEvent(new CustomEvent('mycoo:open'))} style={{
+        ...btnBrand({ size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: 6,
+      }}><Icon name="ai" size={13} /> MyCOO と整理する</button>
+    </EmptyRich>
+  )
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {days.map(d => {

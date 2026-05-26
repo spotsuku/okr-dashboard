@@ -161,10 +161,20 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
       }
     }
     function onOpenEvent(e) { openPalette(e?.detail?.preset || '') }
+    function onQuickFill(e) {
+      const text = e?.detail?.text || ''
+      if (inline) {
+        setDraft(text)
+        setTimeout(() => { inputRef.current?.focus(); inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }, 30)
+      } else {
+        openPalette(text)
+      }
+    }
     window.addEventListener('keydown', onKey)
     window.addEventListener('okr:open-quicktask', onOpenEvent)
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('okr:open-quicktask', onOpenEvent) }
-  }, [open, openPalette])
+    window.addEventListener('okr:quickfill', onQuickFill)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('okr:open-quicktask', onOpenEvent); window.removeEventListener('okr:quickfill', onQuickFill) }
+  }, [open, openPalette, inline])
 
   async function add(keepOpen) {
     if (!parsed.title || saving) return
