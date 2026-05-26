@@ -4868,6 +4868,24 @@ const TASK_STATUS_CONFIG = {
 
 function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
   const today = toJSTDateStr(new Date())
+  // 期日 → 状態 (normal / today / soon(3日以内) / overdue / done) を解決
+  const dueInfo = (due, done) => {
+    const [, m, d] = (due || '').split('-').map(Number)
+    const md = (m && d) ? `${m}/${d}` : ''
+    if (done) return { state: 'done', icon: 'check', lbl: '完了', date: md }
+    const diff = Math.round((Date.parse(due + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000)
+    if (diff < 0)  return { state: 'overdue', icon: 'alert',    lbl: '遅延', date: md }
+    if (diff === 0) return { state: 'today',  icon: 'clock',    lbl: '期限', date: '今日' }
+    if (diff <= 3)  return { state: 'soon',   icon: 'clock',    lbl: '期限', date: md }
+    return { state: 'normal', icon: 'calendar', lbl: '期限', date: md }
+  }
+  const dueTone = {
+    normal:  { bg: T.sectionBg, color: T.textSub, border: T.border },
+    today:   { bg: T.accentBg,  color: T.accent,  border: `${T.accent}40` },
+    soon:    { bg: T.warnBg,    color: T.warn,    border: `${T.warn}40` },
+    overdue: { bg: T.dangerBg,  color: T.danger,  border: `${T.danger}40` },
+    done:    { bg: T.successBg, color: T.success, border: `${T.success}40` },
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {tasks.map((t, i) => {
@@ -4879,36 +4897,44 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
         const nextLabel = status === 'not_started' ? '進行中'
                         : status === 'in_progress' ? '完了'
                         : '未着手'
-        // 状態の丸 (= 16px / border 1.5px / 背景: 完了は塗り、進行中は半円、それ以外は透明)
-        const dotBorder = done ? T.success : overdue ? T.danger : inProgress ? T.accent : (T.borderStrong || T.border)
-        const dotBg = done
-          ? T.success
+        // 18px 円チェックボックス: 未完了でも薄くチェックを常時表示
+        const cb = done
+          ? { bg: T.success, border: T.success, color: '#fff' }
           : inProgress
-            ? `conic-gradient(${T.accent} 50%, transparent 50%)`
-            : 'transparent'
+            ? { bg: T.accentBg, border: T.accent, color: T.accent }
+            : overdue
+              ? { bg: T.bgCard, border: `${T.danger}66`, color: `${T.danger}66` }
+              : { bg: T.bgCard, border: (T.borderStrong || T.border), color: (T.textFaint || 'rgba(15,23,42,.2)') }
+        const info = (showDue && t.due_date) ? dueInfo(t.due_date, done) : null
+        const tone = info ? dueTone[info.state] : null
         return (
           <div key={t.id} style={{
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '10px 14px',
             borderBottom: i < tasks.length - 1 ? `1px solid ${T.border}` : 'none',
             background: T.bgCard,
-            opacity: done ? 0.55 : 1,
+            opacity: done ? 0.6 : 1,
             cursor: canEdit ? 'pointer' : 'default',
           }}>
             <button
               onClick={() => canEdit && onToggle(t)}
               disabled={!canEdit}
               title={canEdit ? `クリックで「${nextLabel}」に変更` : '閲覧のみ'}
+              onMouseEnter={canEdit && !done ? (e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.color = T.accent; e.currentTarget.style.background = T.accentBg } : undefined}
+              onMouseLeave={canEdit && !done ? (e) => { e.currentTarget.style.borderColor = cb.border; e.currentTarget.style.color = cb.color; e.currentTarget.style.background = cb.bg } : undefined}
               style={{
-                width: 16, height: 16, flexShrink: 0,
+                width: 18, height: 18, flexShrink: 0,
                 borderRadius: 99,
-                border: `1.5px solid ${dotBorder}`,
-                background: dotBg,
-                color: '#fff',
+                border: `1.5px solid ${cb.border}`,
+                background: cb.bg,
+                color: cb.color,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: 0, cursor: canEdit ? 'pointer' : 'not-allowed',
+                transition: 'all .15s',
               }}
-            >{done && <Icon name="check" size={11} stroke={3} />}</button>
+            >
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={done ? 3 : 2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7" /></svg>
+            </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 13, color: done ? T.textMuted : T.text,
@@ -4922,14 +4948,18 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
                 KR: {truncate(t.weekly_reports.kr_title, 14)}
               </span>
             )}
-            {showDue && t.due_date && (
+            {info && (
               <span style={{
-                fontSize: 11,
-                color: overdue ? T.danger : T.textMuted,
-                fontWeight: overdue ? 500 : 400,
-                fontFamily: overdue ? 'ui-monospace, SF Mono, monospace' : 'inherit',
-                minWidth: 56, textAlign: 'right', flexShrink: 0,
-              }}>{t.due_date}</span>
+                display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                padding: '3px 10px 3px 8px', borderRadius: 99,
+                fontSize: 11.5, fontFamily: '"Inter","Noto Sans JP",system-ui,sans-serif',
+                letterSpacing: '.01em',
+                background: tone.bg, color: tone.color, border: `1px solid ${tone.border}`,
+              }}>
+                <Icon name={info.icon} size={11} />
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.06em', opacity: .75 }}>{info.lbl}</span>
+                <span style={{ fontWeight: 700 }}>{info.date}</span>
+              </span>
             )}
           </div>
         )
