@@ -720,18 +720,10 @@ function SpeakerReport({ T, member }) {
     // 範囲内の KPT (coaching_logs) を全件取得 (新しい順)
     // 上限を「今日 00:00」で切ると、今朝入力した KPT が範囲外で取れないため
     // 上限なし (= NOW まで) にして、今日入力したものも拾う。
-    let { data: kpts } = await supabase.from('coaching_logs')
+    const { data: kpts } = await supabase.from('coaching_logs')
       .select('*').eq('owner', member.name).eq('log_type', 'kpt')
       .gte('created_at', yesterday + 'T00:00:00+09:00')
       .order('created_at', { ascending: false }).limit(20)
-    // フォールバック: 「前回の営業日〜今」に1件も無ければ、その人の最新KPTを1件出す。
-    // (数日前にしか書いていない人でも、最新の振り返りを会議の材料として表示する)
-    if (!kpts || kpts.length === 0) {
-      const res = await supabase.from('coaching_logs')
-        .select('*').eq('owner', member.name).eq('log_type', 'kpt')
-        .order('created_at', { ascending: false }).limit(1)
-      kpts = res.data || []
-    }
     // 今日のタスク + 期限切れの未完了タスク
     const { data: ts } = await supabase.from('ka_tasks')
       .select('id, title, due_date, done, status')
