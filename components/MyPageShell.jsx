@@ -313,7 +313,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 
   // 下メニュー項目 (モバイル時のみ表示)
   const MOBILE_NAV = [
-    { key: 'dashboard',  icon: 'home',     label: 'ホーム' },
+    { key: 'dashboard',  icon: 'user',     label: 'マイページ' },
     { key: 'wbs',        icon: 'check',    label: 'タスク' },
     { key: 'mail',       icon: 'mail',     label: 'メール' },
     { key: 'calendar',   icon: 'calendar', label: 'カレンダー' },
@@ -371,6 +371,27 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             }}
           >{isMobile ? <Icon name="cross" size={11} /> : (collapsed ? '»' : '«')}</button>
         </div>
+
+        {/* プロダクトの本当のホーム (全社ポータル) への導線 — サイドバー最上部 */}
+        {!collapsed && (
+          <div style={{ padding: '8px 10px', borderBottom: `1px solid ${T.border}` }}>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('okr:goto', { detail: { page: 'portal' } }))
+                if (isMobile) setMobileSidebarOpen(false)
+              }}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                padding: '9px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                background: T.accentBg || T.sectionBg, color: T.accent || T.text,
+                border: `1px solid ${T.border}`, fontSize: 12.5, fontWeight: 700,
+              }}
+            >
+              <Icon name="home" size={15} /> ホーム
+              <span style={{ marginLeft: 'auto', color: T.textMuted, fontSize: 10, fontWeight: 500 }}>全社トップ</span>
+            </button>
+          </div>
+        )}
 
         {/* 検索 */}
         {!collapsed && (
