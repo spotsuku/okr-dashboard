@@ -221,7 +221,7 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
       <div style={{ ...cardStyle({ T, padding: 0 }), borderRadius: RADIUS.xl, border: `1px solid ${T.border}`, background: T.bgCard, fontFamily: '"Inter","Noto Sans JP",system-ui,sans-serif', color: T.text }}>
         <div style={{ padding: '12px 16px 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ display: 'inline-flex', color: T.info || T.accent }}><Icon name="bolt" size={15} /></span>
-          <span style={{ ...TYPO.subhead, fontWeight: 800, color: T.text }}>クイック追加</span>
+          <span style={{ ...TYPO.subhead, fontWeight: 800, color: T.text }}>クイックタスク追加</span>
           <span style={{ ...TYPO.caption, color: T.textMuted }}>自然文で日付・KR をまとめて指定できます</span>
         </div>
         <div style={{ padding: '8px 12px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

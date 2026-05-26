@@ -8,6 +8,7 @@ import Icon, { DataIcon } from './Icon'
 import { SegmentedControl, EmptyState } from './iosUI'
 import MyOKRPageNew from './MyOKRPage'
 import MyTasksPage, { TaskCreateModal } from './MyTasksPage'
+import { avatarColor } from '../lib/avatarColor'
 import QuickTaskPalette from './QuickTaskPalette'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
@@ -1012,7 +1013,7 @@ function QuickStartGuide({ T, onGoToTab }) {
   }, [])
 
   const steps = [
-    { key: 'task',   icon: 'bolt',    label: 'まずはタスクを追加してみよう', hint: '上のクイック追加から',           act: () => { if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' }) } },
+    { key: 'task',   icon: 'bolt',    label: 'まずはタスクを追加してみよう', hint: '上のクイックタスク追加から',           act: () => { if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' }) } },
     { key: 'google', icon: 'link',    label: 'Google と連携してみよう',     hint: 'カレンダー・Gmail を自動整理',  act: () => { persist({ ...state, done: { ...state.done, google: true } }); onGoToTab && onGoToTab('integrations') } },
     { key: 'mycoo',  icon: 'sparkle', label: 'MyCOO と話してみよう',        hint: '右下の AI コーチに相談',        act: () => { persist({ ...state, done: { ...state.done, mycoo: true } }); if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mycoo:open')) } },
   ]
@@ -4937,9 +4938,9 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: 13, color: done ? T.textMuted : T.text,
+                fontSize: 13.5, color: done ? T.textMuted : T.text,
                 textDecoration: done ? 'line-through' : 'none',
-                fontWeight: 400, lineHeight: 1.4,
+                fontWeight: 600, lineHeight: 1.4, letterSpacing: '.01em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{label}</div>
             </div>
@@ -4947,6 +4948,15 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
               <span style={{ fontSize: 11, color: T.textMuted, fontFamily: 'ui-monospace, SF Mono, monospace', flexShrink: 0 }}>
                 KR: {truncate(t.weekly_reports.kr_title, 14)}
               </span>
+            )}
+            {t.assignee && (
+              <span title={t.assignee} style={{
+                width: 24, height: 24, borderRadius: 99, flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: avatarColor(t.assignee), color: '#fff',
+                fontSize: 11, fontWeight: 700,
+                boxShadow: '0 1px 3px rgba(15,23,42,.12)',
+              }}>{String(t.assignee).slice(0, 1)}</span>
             )}
             {info && (
               <span style={{
