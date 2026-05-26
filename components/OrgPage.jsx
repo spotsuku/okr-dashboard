@@ -300,10 +300,11 @@ function UserListTab({ members, currentUser, isAdmin }) {
   })
 
   return (
-    <div style={{ maxWidth: 900 }}>
-      {/* Slack 連携 (admin のみ) */}
-      {isAdmin && <SlackSyncPanel />}
-      {isAdmin && <ConfirmationsWebhookPanel currentUser={currentUser} />}
+    <div>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      {/* ─── メイン: ユーザーアカウント ─── */}
+      <div style={{ flex: '1 1 560px', minWidth: 0 }}>
+      {isAdmin && <InvitePanel />}
 
       {/* サマリー */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -449,6 +450,17 @@ function UserListTab({ members, currentUser, isAdmin }) {
           )
         })}
       </div>
+      </div>{/* /メインカラム */}
+
+      {/* ─── サイド: サブ設定 (Slack 同期 / 通知チャンネル) ─── */}
+      {isAdmin && (
+        <div style={{ flex: '0 1 340px', minWidth: 280, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: T().textMuted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>サブ設定</div>
+          <SlackSyncPanel />
+          <ConfirmationsWebhookPanel currentUser={currentUser} />
+        </div>
+      )}
+      </div>{/* /2カラム */}
 
       {/* 紐付けモーダル */}
       {linkModal && (
@@ -546,6 +558,61 @@ function UserListTab({ members, currentUser, isAdmin }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════
+// メンバー招待カード (admin 用)
+// メール招待のバックエンドは無いため、ログインURLを共有 → 本人がログインで
+// AUTH アカウントが自動作成され、下の一覧で「紐付け」する運用を案内する。
+// ══════════════════════════════════════════════════
+function InvitePanel() {
+  const [copied, setCopied] = useState(false)
+  const loginUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(loginUrl)
+      setCopied(true); setTimeout(() => setCopied(false), 2000)
+    } catch { /* クリップボード不可環境では無視 */ }
+  }
+  const steps = [
+    'このリンクを招待したいメンバーに共有する',
+    '本人が Google でログインすると、アカウントが自動作成されます',
+    '下の一覧に表示されたら「紐付け」で組織図メンバーと結び付ける',
+  ]
+  return (
+    <div style={{
+      marginBottom: 20, padding: '16px 20px', borderRadius: RADIUS.lg,
+      background: T().accentBg, border: `1px solid ${T().badgeBorder}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
+        <span style={{ color: T().accent, display: 'inline-flex' }}><Icon name="users" size={18} /></span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: T().text }}>メンバーを招待</span>
+      </div>
+      <div style={{ fontSize: 12, color: T().textSub, marginBottom: 12, lineHeight: 1.6 }}>
+        下のリンクを共有するだけ。メンバー本人が Google ログインすると自動でアカウントが作られます。
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <input readOnly value={loginUrl} onFocus={e => e.target.select()} style={{
+          flex: 1, minWidth: 200, boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8,
+          border: `1px solid ${T().border}`, background: T().bgCard, color: T().text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+        }} />
+        <button onClick={copy} style={{
+          padding: '9px 18px', borderRadius: 8, border: 'none',
+          background: copied ? T().success : BRAND_GRADIENT.cta, color: '#fff',
+          fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+        }}><Icon name={copied ? 'check' : 'link'} size={13} /> {copied ? 'コピーしました' : 'リンクをコピー'}</button>
+      </div>
+      <ol style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {steps.map((s, i) => (
+          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: T().textSub, lineHeight: 1.5 }}>
+            <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: T().accent, color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+            <span>{s}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
@@ -1117,10 +1184,10 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 
   if (depts.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
-        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}><Icon name="building" size={36} /></div>
-        <div style={{ fontSize: 15 }}>この年度の組織データがありません</div>
-        <div style={{ fontSize: 13, marginTop: 6 }}>OKRページの「組織を管理」から追加してください</div>
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textMuted, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: T().textFaint }}><Icon name="building" size={36} /></div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T().text }}>この年度の組織データがありません</div>
+        <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>OKRページの「組織を管理」から追加してください</div>
       </div>
     )
   }
@@ -1538,10 +1605,10 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
   }
   if (tasks.length === 0 && (!levelHierarchy || Object.keys(levelHierarchy).length === 0)) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textFaintest, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
-        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}><Icon name="note" size={36} /></div>
-        <div style={{ fontSize: 15 }}>業務データがありません</div>
-        <div style={{ fontSize: 13, marginTop: 6 }}>組織図タブでチームを追加するか、org_tasks テーブルにデータを追加してください</div>
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textMuted, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: T().textFaint }}><Icon name="note" size={36} /></div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T().text }}>業務データがありません</div>
+        <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>組織図タブでチームを追加するか、org_tasks テーブルにデータを追加してください</div>
       </div>
     )
   }
@@ -3685,10 +3752,10 @@ function OnboardingChecklist({ T, levels, members, tasks, jdRows, manuals, onTab
   const rootCount = levels.filter(l => !l.parent_id).length
   const jdFilled = members.filter(m => (jdRows[m.name] || jdRows[String(m.id)] || []).length > 0).length
   const steps = [
-    { id: 'members', tab: 'users',    title: 'メンバーを招待',   desc: 'Slack User ID を同期して、チームメンバーを揃えましょう', done: members.length > 0, count: `${members.length}人` },
     { id: 'chart',   tab: 'chart',    title: '組織図を作る',     desc: '事業部・チーム・責任者を設定。Slack 通知の宛先にもなります', done: rootCount > 0, count: `${rootCount}事業部` },
-    { id: 'jd',      tab: 'members',  title: 'メンバーJDを入力', desc: '誰が何を担当しているかを明示すると、業務一覧が自動補完されます', done: jdFilled > 0, count: `${jdFilled}/${members.length}` },
-    { id: 'tasks',   tab: 'tasks',    title: '業務一覧を整理',   desc: 'チームごとの業務を入力すると、工数管理が使えるようになります', done: (tasks?.length || 0) > 0, count: `${tasks?.length || 0}件` },
+    { id: 'members', tab: 'users',    title: 'メンバーを招待',   desc: '招待リンクを共有して、チームメンバーを揃えましょう', done: members.length > 0, count: `${members.length}人` },
+    { id: 'tasks',   tab: 'tasks',    title: '業務一覧を整理',   desc: 'チームごとの業務を入力。担当はメンバーJDにも自動反映されます', done: (tasks?.length || 0) > 0, count: `${tasks?.length || 0}件` },
+    { id: 'jd',      tab: 'members',  title: 'メンバーJDを入力', desc: '業務一覧から自動補完された担当を確認・補足します', done: jdFilled > 0, count: `${jdFilled}/${members.length}` },
     { id: 'manual',  tab: 'taskflow', title: '業務マニュアル',   desc: '新メンバーが入ったときの「迷い」を減らします', done: (manuals?.length || 0) > 0, count: (manuals?.length || 0) > 0 ? `${manuals.length}件` : '未着手' },
   ]
   const doneCount = steps.filter(s => s.done).length
