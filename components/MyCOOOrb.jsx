@@ -51,6 +51,12 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
   const scrollRef = React.useRef(null)
   const composingRef = React.useRef(false)
 
+  // オーブのチャットパネル開閉を通知 (カレンダー等が右下の重なりを避けてレイアウトを寄せるため)
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('mycoo:orb', { detail: { open } }))
+  }, [open])
+
   // 既存タブ MyCOO と同じ会話履歴 (coaching_chats / kind='coo') を共有。
   // タブで話した続きをオーブから、オーブで話した続きをタブから続けられる。
   React.useEffect(() => {

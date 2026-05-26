@@ -549,9 +549,19 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
   }, [])
   const todayYMD = jstYMD(now)
 
+  // MyCOO オーブ(右下 固定パネル)が開いている間は、週ビューの列を左へ寄せて
+  // 土日(右端)がオーブに隠れないようにする。
+  const [orbOpen, setOrbOpen] = useState(false)
+  useEffect(() => {
+    const h = (e) => setOrbOpen(!!e?.detail?.open)
+    window.addEventListener('mycoo:orb', h)
+    return () => window.removeEventListener('mycoo:orb', h)
+  }, [])
+  const orbPad = orbOpen && days.length > 1 ? 410 : 0
+
   return (
     <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
-      <div style={{ display: 'flex', minWidth: days.length === 1 ? 'auto' : 720 }}>
+      <div style={{ display: 'flex', minWidth: days.length === 1 ? 'auto' : 720, paddingRight: orbPad, transition: 'padding-right 0.2s ease' }}>
         {/* 時間軸列 */}
         <div style={{
           width: TIME_COL, flexShrink: 0,
@@ -628,15 +638,17 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
               borderRight: `1px solid ${T.border}`,
               display: 'flex', flexDirection: 'column',
             }}>
-              {/* 日ヘッダ */}
+              {/* 日ヘッダ (sticky)。イベント(zIndex 1〜5)・現在時刻線(3)より前面かつ
+                 不透明にして、スクロール時に予定が透けて見づらくならないようにする。 */}
               <div style={{
                 height: 38, padding: '6px 8px',
                 borderBottom: `1px solid ${T.border}`,
-                background: isToday ? T.accentBg : T.bgCard,
+                background: T.bgCard,
+                boxShadow: isToday ? `inset 0 0 0 999px ${T.accentBg}` : 'none',
                 color: isToday ? T.accent : T.text,
                 ...TYPO.subhead, fontWeight: 700,
                 display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                position: 'sticky', top: 0, zIndex: 1,
+                position: 'sticky', top: 0, zIndex: 8,
               }}>
                 {jstLabel(d)}
               </div>
