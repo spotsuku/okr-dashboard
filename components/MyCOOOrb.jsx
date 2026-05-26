@@ -57,6 +57,13 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
     window.dispatchEvent(new CustomEvent('mycoo:orb', { detail: { open } }))
   }, [open])
 
+  // 外部から「MyCOOと話す」導線でオーブを開けるようにする
+  React.useEffect(() => {
+    const onOpen = () => { setOpen(true); setNudge(null) }
+    window.addEventListener('mycoo:open', onOpen)
+    return () => window.removeEventListener('mycoo:open', onOpen)
+  }, [])
+
   // 既存タブ MyCOO と同じ会話履歴 (coaching_chats / kind='coo') を共有。
   // タブで話した続きをオーブから、オーブで話した続きをタブから続けられる。
   React.useEffect(() => {

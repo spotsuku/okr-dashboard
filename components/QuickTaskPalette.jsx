@@ -121,7 +121,7 @@ function Kbd({ children }) {
   return <span style={{ display: 'inline-block', minWidth: 14, padding: '2px 6px', ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', fontFamily: 'ui-monospace, monospace', background: T.border, borderRadius: RADIUS.xs, color: T.textMuted }}>{children}</span>
 }
 
-export default function QuickTaskPalette({ user, members = [] }) {
+export default function QuickTaskPalette({ user, members = [], inline = false }) {
   const myName = React.useMemo(() => members.find(m => m.email === user?.email)?.name || '', [members, user])
   const [open, setOpen] = React.useState(false)
   const [draft, setDraft] = React.useState('')
@@ -202,7 +202,7 @@ export default function QuickTaskPalette({ user, members = [] }) {
     else if (e.key === 'Escape') { e.preventDefault(); setOpen(false) }
   }
 
-  if (!open) return null
+  if (!inline && !open) return null
 
   const PreviewRow = ({ label, children }) => (
     <>
@@ -213,6 +213,46 @@ export default function QuickTaskPalette({ user, members = [] }) {
   const pill = (tone, children) => (
     <span style={{ ...pillStyle({ color: tone.fg, size: 'md' }), background: tone.bg, fontWeight: 600 }}>{children}</span>
   )
+
+  // ─── インライン版 (マイページ常時表示用のコンパクトバー) ───
+  if (inline) {
+    const TEMPLATES = ['1on1の議事録', '経費精算', '〇〇さんへ返信', '振り返りメモ', 'KR進捗を更新']
+    return (
+      <div style={{ ...cardStyle({ T, padding: 0 }), borderRadius: RADIUS.xl, border: `1px solid ${T.border}`, background: T.bgCard, fontFamily: '"Inter","Noto Sans JP",system-ui,sans-serif', color: T.text }}>
+        <div style={{ padding: '12px 16px 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', color: T.info || T.accent }}><Icon name="bolt" size={15} /></span>
+          <span style={{ ...TYPO.subhead, fontWeight: 800, color: T.text }}>クイック追加</span>
+          <span style={{ ...TYPO.caption, color: T.textMuted }}>自然文で日付・KR をまとめて指定できます</span>
+        </div>
+        <div style={{ padding: '8px 12px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ width: 30, height: 30, borderRadius: RADIUS.sm, flexShrink: 0, background: 'linear-gradient(135deg,#3b82f6,#1e3a8a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+            <Icon name="plus" size={15} stroke={2.6} />
+          </div>
+          <input ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={onInputKey}
+            onCompositionStart={() => { composingRef.current = true }} onCompositionEnd={() => { composingRef.current = false }}
+            placeholder="例: 明日 11時 提案書をクライアントに送る #KR2-売上"
+            style={{ flex: 1, minWidth: 150, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, color: T.text, fontFamily: 'inherit', padding: '4px 0' }} />
+          {parsed.dateLabel && pill(TONE.date, <><Icon name="calendar" size={11} /> {parsed.dateLabel}</>)}
+          {parsed.goal && pill(TONE.goal, <><Icon name="target" size={11} /> {parsed.goal}</>)}
+          <button onClick={() => add(false)} disabled={!parsed.title || saving} style={{
+            ...btnBrand({ size: 'sm' }),
+            ...(parsed.title ? {} : { background: T.textFaint, boxShadow: 'none' }),
+            cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
+            display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+          }}>{saving ? '追加中…' : <>追加 <Icon name="arrowRight" size={13} /></>}</button>
+        </div>
+        <div style={{ padding: '0 14px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ ...TYPO.caption, color: T.textMuted }}>テンプレ:</span>
+          {TEMPLATES.map(t => (
+            <button key={t} onClick={() => { setDraft(t); setTimeout(() => inputRef.current?.focus(), 10) }} style={{
+              ...TYPO.caption, padding: '4px 10px', borderRadius: RADIUS.pill,
+              border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, cursor: 'pointer', fontFamily: 'inherit',
+            }}>{t}</button>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
