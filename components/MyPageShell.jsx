@@ -971,6 +971,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
 function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onGoToSummary, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
   const isMobile = useIsMobile()
+  const { currentOrg } = useCurrentOrg()  // 始業/終業・KPT 保存時に「今表示中の組織」を明示付与する
   const content = parseLogContent(workLog?.content)
   const st = statusOf(workLog)
 
@@ -1053,12 +1054,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     if (e1) { setBusy(false); alert('昨日の終業記録に失敗しました: ' + e1.message); return }
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
       // KPT の created_at は work_log の日付 + 終業時刻にする (朝会の前回振り返りクエリで拾われるように)
-      await supabase.from('coaching_logs').insert({
+      const { error: e2 } = await supabase.from('coaching_logs').insert({
         owner: myName, log_type: 'kpt',
+        organization_id: currentOrg?.id,
         week_start: getMondayJSTStr(new Date(pendingYesterdayLog.created_at)),
         created_at: endUtc.toISOString(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
       })
+      if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
     }
     setBusy(false)
     setPendingYesterdayLog(false)
@@ -1350,6 +1353,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     const { error } = await supabase.from('coaching_logs').insert({
       owner: myName,
       log_type: 'work_log',
+      organization_id: currentOrg?.id,
       week_start: getMondayJSTStr(),
       content: JSON.stringify({ start_at: new Date().toISOString() }),
     })
@@ -1375,10 +1379,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       const { error: e2 } = await supabase.from('coaching_logs').insert({
         owner: myName,
         log_type: 'kpt',
+        organization_id: currentOrg?.id,
         week_start: getMondayJSTStr(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
       })
-      if (e2) console.warn('KPT保存エラー', e2)
+      if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
     }
     setBusy(false)
     setKptOpen(false)
