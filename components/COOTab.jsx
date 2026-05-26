@@ -213,8 +213,8 @@ export default function COOTab({
             <div style={{ marginTop: SPACING.lg - 2, ...TYPO.subhead, fontWeight: 500 }}>
               <strong>例:</strong>
               <ul style={{ paddingLeft: 18, margin: '6px 0' }}>
-                <li>「やずや案件が進まない、どうしたらいい?」</li>
-                <li>「増田さん今忙しい? タスクお願いしていい?」</li>
+                <li>「あの案件が進まない、どうしたらいい?」</li>
+                <li>「○○さん今忙しい? タスクお願いしていい?」</li>
                 <li>「来週の OKR 会議で何を議論すべき?」</li>
                 <li>「私の今期の重点を教えて」</li>
               </ul>

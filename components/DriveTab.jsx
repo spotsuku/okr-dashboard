@@ -171,12 +171,12 @@ function DriveChat({ T, owner }) {
             ...cardStyle({ T, accent: T.accent, padding: SPACING.lg + 2 }),
             ...TYPO.subhead, fontWeight: 600, color: T.textSub, lineHeight: 1.7,
           }}>
-            ネオ福岡 共有ドライブ内の資料を検索できます。<br />
+            共有ドライブ内の資料を AI で検索できます。<br />
             例:
             <ul style={{ paddingLeft: SPACING.lg + 2, margin: `${SPACING.xs + 2}px 0 0` }}>
-              <li>「やずや提案の最新版どこ?」</li>
-              <li>「先週の経営会議の議事録を要約して」</li>
-              <li>「面川さんが書いた研修資料」</li>
+              <li>「最新版の提案資料はどこ?」</li>
+              <li>「先週の会議の議事録を要約して」</li>
+              <li>「研修資料を探して」</li>
               <li>「○○の提案書の内容を教えて」</li>
             </ul>
           </div>
@@ -299,7 +299,7 @@ function FileCard({ T, file }) {
 // ─── Drive ブラウザ (階層 + 検索) ──────────────────────────────
 function DriveBrowser({ T, owner }) {
   const [folderId, setFolderId] = useState(null)  // null=ルート
-  const [folderName, setFolderName] = useState('ネオ福岡')
+  const [folderName, setFolderName] = useState('共有ドライブ')
   const [breadcrumb, setBreadcrumb] = useState([])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -327,7 +327,7 @@ function DriveBrowser({ T, owner }) {
       }
       setItems(j.items || [])
       setBreadcrumb(j.breadcrumb || [])
-      if (j.folder) setFolderName(j.folder.name || 'ネオ福岡')
+      if (j.folder) setFolderName(j.folder.name || '共有ドライブ')
     } catch (e) {
       setError(e.message || '読み込みエラー')
     } finally {
