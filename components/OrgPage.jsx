@@ -1132,7 +1132,7 @@ function useOrgData(fiscalYear, orgId) {
 // ══════════════════════════════════════════════════
 // タブ1: 組織図（levelsテーブルから動的生成）
 // ══════════════════════════════════════════════════
-function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMetaUpdate, onWebhookSave, onManagerSave }) {
+function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMetaUpdate, onWebhookSave, onManagerSave, onManage }) {
   const [editingMeta, setEditingMeta] = useState(null)
   const [metaBuf, setMetaBuf] = useState({})
   const [saving, setSaving] = useState(false)
@@ -1187,7 +1187,12 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
       <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textMuted, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
         <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: T().textFaint }}><Icon name="building" size={36} /></div>
         <div style={{ fontSize: 16, fontWeight: 700, color: T().text }}>この年度の組織データがありません</div>
-        <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>OKRページの「組織を管理」から追加してください</div>
+        <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>「組織を管理」から事業部・チーム・責任者を追加してください</div>
+        {isAdmin && onManage && (
+          <button onClick={onManage} style={{ marginTop: 18, padding: '9px 20px', borderRadius: 9, border: 'none', background: T().accent, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 2px 6px ${T().accent}40`, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="building" size={14} /> 組織を管理
+          </button>
+        )}
       </div>
     )
   }
@@ -1366,7 +1371,7 @@ function OrgChart({ levels, teamMeta, members, onMemberClick, isAdmin, onTeamMet
 // ══════════════════════════════════════════════════
 // タブ2: 業務一覧（管理者は編集・並び替え可）
 // ══════════════════════════════════════════════════
-function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser, levels, orgTableError }) {
+function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistory, setTaskHistory, currentUser, levels, orgTableError, onManage }) {
   const [filterDept, setFilterDept] = useState('')
   const [filterOwner, setFilterOwner] = useState('')
   const [query, setQuery] = useState('')
@@ -1608,7 +1613,12 @@ function TaskList({ tasks, setTasks, members, onMemberClick, isAdmin, taskHistor
       <div style={{ textAlign: 'center', padding: '60px 20px', color: T().textMuted, border: `1px dashed ${T().border}`, borderRadius: 14 }}>
         <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: T().textFaint }}><Icon name="note" size={36} /></div>
         <div style={{ fontSize: 16, fontWeight: 700, color: T().text }}>業務データがありません</div>
-        <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>組織図タブでチームを追加するか、org_tasks テーブルにデータを追加してください</div>
+        <div style={{ fontSize: 13, marginTop: 6, color: T().textMuted }}>まず「組織を管理」で事業部・チームを追加し、各チームに業務を登録してください</div>
+        {isAdmin && onManage && (
+          <button onClick={onManage} style={{ marginTop: 18, padding: '9px 20px', borderRadius: 9, border: 'none', background: T().accent, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 2px 6px ${T().accent}40`, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="building" size={14} /> 組織を管理
+          </button>
+        )}
       </div>
     )
   }
@@ -3938,6 +3948,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
 
         {activeTab === 'chart' && (
           <OrgChart levels={levels} teamMeta={teamMeta} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin} onTeamMetaUpdate={handleTeamMetaUpdate}
+            onManage={() => setShowOrgManage(true)}
             onWebhookSave={(levelId, url) => setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, slack_webhook_url: url } : l))}
             onManagerSave={(levelId, mid) => setLevels(prev => prev.map(l => Number(l.id) === Number(levelId) ? { ...l, manager_id: mid } : l))} />
         )}
@@ -3946,6 +3957,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
         )}
         {activeTab === 'tasks' && (
           <TaskList tasks={tasks} setTasks={setTasks} members={members} onMemberClick={handleMemberClick} isAdmin={isAdmin}
+            onManage={() => setShowOrgManage(true)}
             taskHistory={taskHistory} setTaskHistory={setTaskHistory} currentUser={user?.email} levels={levels} orgTableError={orgTableError} />
         )}
         {activeTab === 'taskflow' && (
