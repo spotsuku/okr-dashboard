@@ -1053,12 +1053,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.id)
     if (e1) { setBusy(false); alert('昨日の終業記録に失敗しました: ' + e1.message); return }
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
-      // KPT の created_at は work_log の日付 + 終業時刻にする (朝会の前回振り返りクエリで拾われるように)
+      // 振り返り(KPT)は「実際に書いた当日」の日付で保存する。
+      // (未終業ログの日付に遡らせると、例: 金曜の未終業を火曜に締めた場合に
+      //  振り返りが金曜付けになり、当日の朝会/「今週」に出ず混乱する。勤怠ログの
+      //  終業時刻 endUtc は出勤記録として元の日付のまま保持する。)
       const { error: e2 } = await supabase.from('coaching_logs').insert({
         owner: myName, log_type: 'kpt',
         organization_id: currentOrg?.id,
-        week_start: getMondayJSTStr(new Date(pendingYesterdayLog.created_at)),
-        created_at: endUtc.toISOString(),
+        week_start: getMondayJSTStr(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
       })
       if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
