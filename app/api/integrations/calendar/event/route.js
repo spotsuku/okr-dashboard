@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic'
 
 import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
-async function resolveIntegration(owner) {
-  const res = await getIntegration(owner, 'google')
+async function resolveIntegration(owner, organizationId) {
+  const res = await getIntegration(owner, 'google', organizationId)
   if (res.error || !res.integration) {
     return { error: res.error || '未連携', status: 400 }
   }
@@ -47,11 +47,11 @@ function buildEventPayload({ summary, description, start_iso, end_iso, attendee_
 export async function POST(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
-  const { owner, summary, description, start_iso, end_iso, attendee_emails, add_meet, recurrence } = body || {}
+  const { owner, summary, description, start_iso, end_iso, attendee_emails, add_meet, recurrence, organization_id } = body || {}
   if (!owner || !summary || !start_iso || !end_iso) {
     return json({ error: 'owner / summary / start_iso / end_iso が必要です' }, { status: 400 })
   }
-  const resolved = await resolveIntegration(owner)
+  const resolved = await resolveIntegration(owner, organization_id)
   if (resolved.error) return json({ error: resolved.error, needsReauth: resolved.needsReauth }, { status: resolved.status })
 
   const payload = buildEventPayload({ summary, description, start_iso, end_iso, attendee_emails, add_meet, recurrence })
@@ -74,9 +74,9 @@ export async function POST(request) {
 export async function PATCH(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
-  const { owner, event_id, updates } = body || {}
+  const { owner, event_id, updates, organization_id } = body || {}
   if (!owner || !event_id) return json({ error: 'owner / event_id が必要です' }, { status: 400 })
-  const resolved = await resolveIntegration(owner)
+  const resolved = await resolveIntegration(owner, organization_id)
   if (resolved.error) return json({ error: resolved.error, needsReauth: resolved.needsReauth }, { status: resolved.status })
 
   const payload = buildEventPayload(updates || {})
@@ -98,9 +98,9 @@ export async function PATCH(request) {
 export async function DELETE(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
-  const { owner, event_id } = body || {}
+  const { owner, event_id, organization_id } = body || {}
   if (!owner || !event_id) return json({ error: 'owner / event_id が必要です' }, { status: 400 })
-  const resolved = await resolveIntegration(owner)
+  const resolved = await resolveIntegration(owner, organization_id)
   if (resolved.error) return json({ error: resolved.error, needsReauth: resolved.needsReauth }, { status: resolved.status })
 
   const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(event_id)}`)

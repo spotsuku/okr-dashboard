@@ -17,6 +17,7 @@ export async function GET(request) {
     const firstOwner = (membersParam.split(',')[0] || '').trim()
     if (await shouldMock(firstOwner)) return Response.json(demoResponse('calendar/multi-events'))
   }
+  const organizationId = url.searchParams.get('organization_id')
   const startIso = url.searchParams.get('start')
   const endIso = url.searchParams.get('end')
 
@@ -27,7 +28,7 @@ export async function GET(request) {
   if (names.length === 0) return json({ members: [] })
 
   const results = await Promise.all(names.map(async name => {
-    const res = await getIntegration(name, 'google')
+    const res = await getIntegration(name, 'google', organizationId)
     if (res.error || !res.integration) {
       return { name, connected: false, events: [], error: res.error || '未連携' }
     }

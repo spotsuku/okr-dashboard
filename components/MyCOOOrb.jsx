@@ -180,12 +180,14 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
         attendee_emails: plan.attendee_emails || [],
         add_meet: !!plan.add_meet,
         recurrence: plan.recurrence || [],
+        organization_id: orgId,
       }
     } else if (type === 'update') {
       method = 'PATCH'
       body = {
         owner: myName,
         event_id: plan.event_id,
+        organization_id: orgId,
         updates: {
           summary: plan.summary,
           description: plan.description,
@@ -197,7 +199,7 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
       }
     } else if (type === 'delete') {
       method = 'DELETE'
-      body = { owner: myName, event_id: plan.event_id }
+      body = { owner: myName, event_id: plan.event_id, organization_id: orgId }
     } else {
       throw new Error(`unknown proposal type: ${type}`)
     }

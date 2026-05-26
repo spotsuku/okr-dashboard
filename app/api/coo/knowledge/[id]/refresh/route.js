@@ -63,7 +63,7 @@ export async function POST(request, { params }) {
       return json({ error: 'drive_file タイプではありません' }, { status: 400 })
     }
     // owner の Google 連携トークンを使って Drive 取得
-    const igRes = await getIntegration(owner, 'google')
+    const igRes = await getIntegration(owner, 'google', orgId)
     if (igRes.error || !igRes.integration) {
       return json({ error: igRes.error || 'Google 未連携' }, { status: 400 })
     }

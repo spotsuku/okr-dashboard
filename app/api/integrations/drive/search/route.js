@@ -30,6 +30,7 @@ export async function GET(request) {
 async function handleGet(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const organizationId = url.searchParams.get('organization_id')
   const query = (url.searchParams.get('q') || '').trim()
   const mime = url.searchParams.get('mime')  // 任意
 
@@ -39,7 +40,7 @@ async function handleGet(request) {
   const driveId = getDriveId()
   if (!driveId) return json({ error: 'NEO_FUKUOKA_DRIVE_ID 環境変数が未設定です' }, { status: 500 })
 
-  const res = await getIntegration(owner, 'google')
+  const res = await getIntegration(owner, 'google', organizationId)
   if (res.error || !res.integration) return json({ error: res.error || '未連携' }, { status: 400 })
   if (res.expired) return json({ error: 'トークン期限切れ', needsReauth: true }, { status: 401 })
   const integration = res.integration

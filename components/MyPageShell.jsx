@@ -5130,16 +5130,18 @@ function ConfirmationsBanner({ T, viewingName, isViewingSelf, onGoToTab }) {
 
 // ─── CalendarBox: ダッシュボードの直近8時間カレンダー ────────────────────
 function CalendarBox({ T, viewingName, onGoToTab }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [needsReauth, setNeedsReauth] = useState(false)
 
   useEffect(() => {
-    if (!viewingName) return
+    if (!viewingName || !orgId) return
     let alive = true
     setLoading(true); setError(''); setNeedsReauth(false)
-    fetch(`/api/integrations/calendar/events?owner=${encodeURIComponent(viewingName)}&hours=8`)
+    fetch(`/api/integrations/calendar/events?owner=${encodeURIComponent(viewingName)}&organization_id=${encodeURIComponent(orgId)}&hours=8`)
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
@@ -5154,7 +5156,7 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
       .catch(e => { if (alive) setError(e.message || 'エラー') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [viewingName])
+  }, [viewingName, orgId])
 
   const isUnconnected = error.startsWith('未連携')
   const visible = items.slice(0, 5)
@@ -5225,17 +5227,19 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
 
 // ─── GmailBox: ダッシュボードの重要メール 5件 ────────────────────────────
 function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkRead }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [rawItems, setRawItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [needsReauth, setNeedsReauth] = useState(false)
 
   useEffect(() => {
-    if (!viewingName) return
+    if (!viewingName || !orgId) return
     let alive = true
     setLoading(true); setError(''); setNeedsReauth(false)
     // 返信済み・既読が混じっても 5 件確保するため多めに取る
-    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&limit=20&category=important`)
+    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&organization_id=${encodeURIComponent(orgId)}&limit=20&category=important`)
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
@@ -5250,7 +5254,7 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
       .catch(e => { if (alive) setError(e.message || 'エラー') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [viewingName])
+  }, [viewingName, orgId])
 
   // 返信済み・既読を除外し、先頭 5 件に絞る
   const items = rawItems
@@ -5363,6 +5367,8 @@ function passesSystemFilter(it) {
 }
 
 function CompanyMailTab({ T, members }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [byMember, setByMember] = useState({})  // { name: items[] }
   const [loading, setLoading] = useState(true)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -5370,7 +5376,7 @@ function CompanyMailTab({ T, members }) {
   useEffect(() => {
     let alive = true
     const validMembers = (members || []).filter(m => m.email && m.name && m.name !== '👀 ゲスト')
-    if (validMembers.length === 0) { setLoading(false); return }
+    if (validMembers.length === 0 || !orgId) { setLoading(false); return }
 
     setLoading(true)
     setProgress({ done: 0, total: validMembers.length })
@@ -5384,7 +5390,7 @@ function CompanyMailTab({ T, members }) {
         if (!alive) return
         const batch = validMembers.slice(i, i + BATCH)
         await Promise.all(batch.map(m =>
-          fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(m.name)}&limit=30&category=all`)
+          fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(m.name)}&organization_id=${encodeURIComponent(orgId)}&limit=30&category=all`)
             .then(r => r.json().catch(() => ({})))
             .then(j => {
               done++
@@ -5400,7 +5406,7 @@ function CompanyMailTab({ T, members }) {
     }
     alivePromise.finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [members])
+  }, [members, orgId])
 
   // フラット化
   const allItems = []
@@ -5526,6 +5532,8 @@ function CompanyMailTab({ T, members }) {
 }
 
 function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, readMarks, onMarkRead, onUnmarkRead }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [allItems, setAllItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -5533,10 +5541,10 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
   const [activeCat, setActiveCat] = useState('to_me')
 
   useEffect(() => {
-    if (!viewingName) return
+    if (!viewingName || !orgId) return
     let alive = true
     setLoading(true); setError(''); setNeedsReauth(false)
-    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&limit=50&category=all`)
+    fetch(`/api/integrations/gmail/threads?owner=${encodeURIComponent(viewingName)}&organization_id=${encodeURIComponent(orgId)}&limit=50&category=all`)
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
@@ -5551,7 +5559,7 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
       .catch(e => { if (alive) setError(e.message || 'エラー') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [viewingName])
+  }, [viewingName, orgId])
 
   const isUnconnected = error.startsWith('未連携')
 
@@ -5697,6 +5705,8 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
 }
 
 function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkRead, onUnmarkRead, viewingName }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [expanded, setExpanded] = useState(false)
   const [fullBody, setFullBody] = useState(null)
   const [loadingBody, setLoadingBody] = useState(false)
@@ -5726,7 +5736,7 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
     if (fullBody !== null || loadingBody) return
     setLoadingBody(true); setBodyError('')
     try {
-      const r = await fetch(`/api/integrations/gmail/message?owner=${encodeURIComponent(viewingName || '')}&id=${encodeURIComponent(mail.id)}`)
+      const r = await fetch(`/api/integrations/gmail/message?owner=${encodeURIComponent(viewingName || '')}&organization_id=${encodeURIComponent(orgId || '')}&id=${encodeURIComponent(mail.id)}`)
       const j = await r.json().catch(() => ({}))
       if (!r.ok) setBodyError(j.error || `HTTP ${r.status}`)
       else setFullBody(j.text || '(本文なし)')
@@ -5847,6 +5857,8 @@ function MailCard({ mail, T, color, canReply, onOpenAIReply, readMarked, onMarkR
 
 // ─── GmailAIModal: AI返信草稿 生成 + 下書き作成 or mailto フォールバック ─────
 function GmailAIModal({ open, onClose, mail, owner, T }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -5927,6 +5939,7 @@ function GmailAIModal({ open, onClose, mail, owner, T }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           owner,
+          organization_id: orgId,
           threadId: mail.threadId,
           messageIdHeader: mail.messageIdHeader,
           to: toEmail,

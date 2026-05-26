@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useCurrentOrg } from '../lib/orgContext'
 import Icon from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { cardStyle, accentRingStyle, btnSecondary } from '../lib/iosStyles'
@@ -29,6 +30,8 @@ function formatRelative(iso) {
 const IS_DEMO = (typeof process !== 'undefined') && process.env?.NEXT_PUBLIC_DEMO_MODE === 'true'
 
 export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [integ, setInteg] = useState(null)        // { access_token, scope, expires_at, metadata, connected_at }
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -36,21 +39,32 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
   const [successMsg, setSuccessMsg] = useState('')
 
   const load = useCallback(async () => {
-    if (!myName) { setLoading(false); return }
+    if (!myName || !orgId) { setLoading(false); return }
     setLoading(true)
-    // .maybeSingle() は 1 行存在しても null を返すことがあるため使わない
-    const { data: rows, error } = await supabase
+    // .maybeSingle() は 1 行存在しても null を返すことがあるため使わない。
+    // 連携は組織ごとに分離 (organization_id で絞る)。
+    let { data: rows, error } = await supabase
       .from('user_integrations')
       .select('service, scope, expires_at, metadata, connected_at')
       .eq('owner', myName)
       .eq('service', 'google')
+      .eq('organization_id', orgId)
       .limit(1)
+    // マイグレーション未適用 (organization_id 列が無い) 環境フォールバック
+    if (error && (error.code === '42703' || /organization_id|column/i.test(error.message || ''))) {
+      ;({ data: rows, error } = await supabase
+        .from('user_integrations')
+        .select('service, scope, expires_at, metadata, connected_at')
+        .eq('owner', myName)
+        .eq('service', 'google')
+        .limit(1))
+    }
     if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
       setErrorMsg(`読み込みエラー: ${error.message}`)
     }
     setInteg((rows && rows[0]) || null)
     setLoading(false)
-  }, [myName])
+  }, [myName, orgId])
 
   useEffect(() => { load() }, [load])
 
@@ -85,9 +99,11 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
       return
     }
     if (!myName) { setErrorMsg('ユーザー情報が取得できません'); return }
+    if (!orgId) { setErrorMsg('組織が選択されていません'); return }
     setBusy(true)
     const u = new URL('/api/integrations/google/start', window.location.origin)
     u.searchParams.set('owner', myName)
+    u.searchParams.set('organization_id', orgId)
     u.searchParams.set('return_to', window.location.pathname + window.location.search)
     window.location.href = u.toString()
   }
@@ -100,7 +116,7 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
       const r = await fetch('/api/integrations/google/disconnect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner: myName }),
+        body: JSON.stringify({ owner: myName, organization_id: orgId }),
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)

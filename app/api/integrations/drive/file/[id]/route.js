@@ -34,10 +34,11 @@ async function handleGet(request, { params }) {
   const fileId = params.id
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const organizationId = url.searchParams.get('organization_id')
   if (!owner) return json({ error: 'owner が必要です' }, { status: 400 })
   if (!fileId) return json({ error: 'file_id が必要です' }, { status: 400 })
 
-  const res = await getIntegration(owner, 'google')
+  const res = await getIntegration(owner, 'google', organizationId)
   if (res.error || !res.integration) return json({ error: res.error || '未連携' }, { status: 400 })
   if (res.expired) return json({ error: 'トークン期限切れ', needsReauth: true }, { status: 401 })
   const integration = res.integration

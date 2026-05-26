@@ -355,6 +355,8 @@ function driveIcon(mimeType, isFolder) {
 }
 
 function DrivePicker({ T, owner, onClose, onSelect }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [folderId, setFolderId] = useState('')  // 空 = ルート
   const [folder, setFolder] = useState(null)
   const [breadcrumb, setBreadcrumb] = useState([])
@@ -367,11 +369,13 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
 
   // ブラウズ取得
   const browse = useCallback(async (fid) => {
+    if (!orgId) return
     setLoading(true); setError('')
     try {
       const u = new URL('/api/integrations/drive/list', window.location.origin)
       u.searchParams.set('owner', owner)
       if (fid) u.searchParams.set('folder_id', fid)
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
@@ -381,7 +385,7 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
     } catch (e) {
       setError(e.message)
     } finally { setLoading(false) }
-  }, [owner])
+  }, [owner, orgId])
 
   // 検索
   const search = useCallback(async (q) => {
@@ -392,6 +396,7 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
       const u = new URL('/api/integrations/drive/search', window.location.origin)
       u.searchParams.set('owner', owner)
       u.searchParams.set('q', q.trim())
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
@@ -399,7 +404,7 @@ function DrivePicker({ T, owner, onClose, onSelect }) {
     } catch (e) {
       setError(e.message)
     } finally { setLoading(false) }
-  }, [owner, folderId, browse])
+  }, [owner, folderId, browse, orgId])
 
   useEffect(() => { browse(folderId) }, [browse, folderId])
 

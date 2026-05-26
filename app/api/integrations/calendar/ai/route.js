@@ -112,8 +112,8 @@ function resolveEmails(names, members) {
   }).filter(Boolean)
 }
 
-async function getEventsForMember(name, startIso, endIso) {
-  const res = await getIntegration(name, 'google')
+async function getEventsForMember(name, startIso, endIso, organizationId) {
+  const res = await getIntegration(name, 'google', organizationId)
   if (res.error || !res.integration) return { name, events: [], error: res.error || '未連携' }
   if (res.expired) return { name, events: [], error: 'トークン期限切れ' }
   const apiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
@@ -208,13 +208,13 @@ async function executeTool(name, input, ctx) {
   try {
     if (name === 'list_events') {
       const results = await Promise.all((input.members || []).map(n =>
-        getEventsForMember(n, input.start_iso, input.end_iso)
+        getEventsForMember(n, input.start_iso, input.end_iso, ctx.organizationId)
       ))
       return { ok: true, results }
     }
     if (name === 'find_free_slots') {
       const memberEvents = await Promise.all((input.members || []).map(n =>
-        getEventsForMember(n, input.start_iso, input.end_iso)
+        getEventsForMember(n, input.start_iso, input.end_iso, ctx.organizationId)
       ))
       const slots = computeFreeSlots(memberEvents, input.start_iso, input.end_iso, input.duration_min, input.working_hours)
       return { ok: true, slots, memberStatuses: memberEvents.map(m => ({ name: m.name, error: m.error, eventCount: m.events.length })) }
@@ -274,7 +274,7 @@ async function executeTool(name, input, ctx) {
 export async function POST(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
-  const { owner, message, context = {}, history = [] } = body || {}
+  const { owner, message, context = {}, history = [], organization_id } = body || {}
   if (!owner || !message) return json({ error: 'owner / message が必要です' }, { status: 400 })
 
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -285,6 +285,7 @@ export async function POST(request) {
     owner,
     origin,
     members: context.members || [],
+    organizationId: organization_id,
   }
 
   const today = context.today_iso || new Date().toISOString()

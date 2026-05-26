@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useCurrentOrg } from '../lib/orgContext'
 import Icon from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, inputStyle, sectionHeaderStyle } from '../lib/iosStyles'
@@ -99,6 +100,8 @@ export default function DriveTab({ T, myName, viewingName }) {
 
 // ─── AI チャットパネル ─────────────────────────────────────────
 function DriveChat({ T, owner }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [history, setHistory] = useState([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -126,6 +129,7 @@ function DriveChat({ T, owner }) {
         body: JSON.stringify({
           owner, message: msg,
           history: history.map(h => ({ role: h.role, content: h.content })),
+          organization_id: orgId,
         }),
       })
       const j = await r.json()
@@ -298,6 +302,8 @@ function FileCard({ T, file }) {
 
 // ─── Drive ブラウザ (階層 + 検索) ──────────────────────────────
 function DriveBrowser({ T, owner }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [folderId, setFolderId] = useState(null)  // null=ルート
   const [folderName, setFolderName] = useState('共有ドライブ')
   const [breadcrumb, setBreadcrumb] = useState([])
@@ -313,11 +319,13 @@ function DriveBrowser({ T, owner }) {
   const [searchLoading, setSearchLoading] = useState(false)
 
   const load = useCallback(async (fid) => {
+    if (!orgId) return
     setLoading(true); setError(''); setNeedsReauth(false)
     try {
       const u = new URL('/api/integrations/drive/list', window.location.origin)
       u.searchParams.set('owner', owner)
       if (fid) u.searchParams.set('folder_id', fid)
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) {
@@ -333,9 +341,9 @@ function DriveBrowser({ T, owner }) {
     } finally {
       setLoading(false)
     }
-  }, [owner])
+  }, [owner, orgId])
 
-  useEffect(() => { if (owner) load(folderId) }, [load, owner, folderId])
+  useEffect(() => { if (owner && orgId) load(folderId) }, [load, owner, folderId, orgId])
 
   const runSearch = useCallback(async () => {
     const q = searchQ.trim()
@@ -345,6 +353,7 @@ function DriveBrowser({ T, owner }) {
       const u = new URL('/api/integrations/drive/search', window.location.origin)
       u.searchParams.set('owner', owner)
       u.searchParams.set('q', q)
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) {
@@ -359,7 +368,7 @@ function DriveBrowser({ T, owner }) {
     } finally {
       setSearchLoading(false)
     }
-  }, [owner, searchQ])
+  }, [owner, searchQ, orgId])
 
   const clickItem = (item) => {
     if (item.isFolder) {

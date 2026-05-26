@@ -51,6 +51,7 @@ const PALETTE = [
 
 export default function CalendarTab({ T, myName, members, viewingName }) {
   const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   // 週開始日 (JST月曜の UTC 00:00)
   const [weekStart, setWeekStart] = useState(() => jstMonday(new Date()))
@@ -95,12 +96,14 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
   // フェッチ
   const fetchEvents = useCallback(async () => {
     if (selected.length === 0) { setData({ members: [] }); return }
+    if (!orgId) return
     setLoading(true); setError('')
     try {
       const u = new URL('/api/integrations/calendar/multi-events', window.location.origin)
       u.searchParams.set('members', selected.join(','))
       u.searchParams.set('start', startISO)
       u.searchParams.set('end', endISO)
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
@@ -110,7 +113,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
     } finally {
       setLoading(false)
     }
-  }, [selected, startISO, endISO])
+  }, [selected, startISO, endISO, orgId])
   useEffect(() => { fetchEvents() }, [fetchEvents])
 
   // 全員空きスロット (15分粒度、業務時間内のみ)
@@ -187,6 +190,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           members={members}
           emailOf={emailOf}
           orgPath={orgPath}
+          orgId={orgId}
           onClose={() => setCreateSlot(null)}
           onCreated={async () => { setCreateSlot(null); await fetchEvents() }}
         />
@@ -196,7 +200,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
 }
 
 // ─── 予定作成モーダル (空き枠タップで開く / Googleカレンダーへ作成) ────────
-function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, onClose, onCreated }) {
+function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, orgId, onClose, onCreated }) {
   const pad = (n) => String(n).padStart(2, '0')
   const minToTime = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`
   const [title, setTitle] = useState('')
@@ -228,6 +232,7 @@ function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, onClo
           start_iso, end_iso,
           attendee_emails: attendees.map(emailOf).filter(Boolean),
           add_meet: addMeet,
+          organization_id: orgId,
         }),
       })
       const j = await r.json().catch(() => ({}))
