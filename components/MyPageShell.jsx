@@ -174,8 +174,9 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   }, [])
 
   // 全社サマリーモード (個別メンバーの代わりに全社の今日タスクを集約表示)
-  // ワークスペース起動時は全社サマリーをデフォルト表示。
-  const [summaryMode, setSummaryMode] = useState(true)
+  // ワークスペース起動時は「自分のマイページ」をデフォルト表示する。
+  // 全社サマリーへはサイドバー上部、またはマイページ内のボタンから移動できる。
+  const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
 
@@ -799,6 +800,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 onWorkLogChange={reloadWorkLogs}
                 onGoToTab={(key) => setActiveTab(key)}
                 onGoToSummary={() => setActiveTab('team_summary')}
+                onGoToCompanySummary={() => { setSummaryMode(true); if (myName) setViewingName(myName) }}
                 onOpenFocusFill={(mode) => setFocusFillOpen(mode || 'kr')}
                 onOpenAIReply={(mail) => setAiReplyMail(mail)}
                 mailReadMarks={mailReadMarks}
@@ -997,7 +999,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
 }
 
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
-function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onGoToSummary, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
+function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onGoToSummary, onGoToCompanySummary, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
   const isMobile = useIsMobile()
   const { currentOrg } = useCurrentOrg()  // 始業/終業・KPT 保存時に「今表示中の組織」を明示付与する
   const content = parseLogContent(workLog?.content)
@@ -1515,6 +1517,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+          {onGoToCompanySummary && (
+            <button onClick={onGoToCompanySummary} title="全社サマリーを開く" style={{
+              background: T.sectionBg, border: `1px solid ${T.border}`, color: T.textSub,
+              borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+              display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+            }}><Icon name="chart" size={13} /> 全社サマリーへ</button>
+          )}
           {isViewingSelf && st === 'on' && (
             <button onClick={() => setKptOpen(true)} disabled={busy} style={{
               ...btnBrand({ size: 'md' }),
