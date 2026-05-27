@@ -1,12 +1,17 @@
 import { ImageResponse } from 'next/og'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
 
 // iOS「ホーム画面に追加」用の apple-touch-icon。
-// 旧アイコンは余白＋リングが主役で小さく表示すると「O」に見えたため、
-// 全面ブランドグラデ＋大きな「AI」のフルブリードに変更。
+// ダッシュボードと同じロゴ(public/icon.png)を使う。ただし元画像は余白が広く、
+// 小さく丸くマスクされると輪(O)に見えるため、白背景の上にロゴを拡大配置して
+// 余白をトリミングし、ロゴがくっきり出るようにする。
 export const size = { width: 180, height: 180 }
 export const contentType = 'image/png'
 
-export default function AppleIcon() {
+export default async function AppleIcon() {
+  const logo = await readFile(join(process.cwd(), 'public', 'icon.png'))
+  const src = `data:image/png;base64,${logo.toString('base64')}`
   return new ImageResponse(
     (
       <div
@@ -16,15 +21,11 @@ export default function AppleIcon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#ffffff',
-          fontSize: 108,
-          fontWeight: 800,
-          letterSpacing: -6,
-          backgroundColor: '#2563eb',
-          backgroundImage: 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 52%, #22d3ee 100%)',
+          background: '#ffffff',
         }}
       >
-        AI
+        {/* container(180)より大きく描いて中央寄せ → 周囲の余白がトリミングされる */}
+        <img src={src} width="232" height="232" />
       </div>
     ),
     { ...size },
