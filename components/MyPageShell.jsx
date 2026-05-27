@@ -996,67 +996,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   )
 }
 
-// ─── スタートガイド: スポットライトツアー後の3ステップ導線 ─────────────
-// タスク追加(クイック追加) → Google連携 → MyCOO の順に促す。
-// ツアー完了(localStorage 'onboarding_v1_completed') 後に表示し、全完了 or 手動で閉じると消える。
-function QuickStartGuide({ T, onGoToTab }) {
-  const KEY = 'mypage_quickstart_v1'
-  const [state, setState] = useState(() => {
-    if (typeof window === 'undefined') return { dismissed: false, done: {} }
-    try { return JSON.parse(window.localStorage.getItem(KEY)) || { dismissed: false, done: {} } } catch { return { dismissed: false, done: {} } }
-  })
-  const tourDone = typeof window !== 'undefined' && window.localStorage.getItem('onboarding_v1_completed') === '1'
-  const persist = (next) => { setState(next); try { window.localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* noop */ } }
-  // タスク作成を検知して①を完了扱いに
-  useEffect(() => {
-    const h = () => setState(s => { const n = { ...s, done: { ...s.done, task: true } }; try { window.localStorage.setItem(KEY, JSON.stringify(n)) } catch {} ; return n })
-    window.addEventListener('okr:task-created', h)
-    return () => window.removeEventListener('okr:task-created', h)
-  }, [])
-
-  const steps = [
-    { key: 'task',   icon: 'bolt',    label: 'まずはタスクを追加してみよう', hint: '上のクイックタスク追加から',           act: () => { if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' }) } },
-    { key: 'google', icon: 'link',    label: 'Google と連携してみよう',     hint: 'カレンダー・Gmail を自動整理',  act: () => { persist({ ...state, done: { ...state.done, google: true } }); onGoToTab && onGoToTab('integrations') } },
-    { key: 'mycoo',  icon: 'sparkle', label: 'MyCOO と話してみよう',        hint: '右下の AI コーチに相談',        act: () => { persist({ ...state, done: { ...state.done, mycoo: true } }); if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mycoo:open')) } },
-  ]
-  const doneCount = steps.filter(s => state.done[s.key]).length
-  if (!tourDone || state.dismissed || doneCount === steps.length) return null
-
-  return (
-    <div style={{ ...cardStyle({ T, padding: 0 }), borderRadius: RADIUS.xl, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderBottom: `1px solid ${T.border}`, background: T.sectionBg }}>
-        <Icon name="rocket" size={14} style={{ color: T.accent }} />
-        <span style={{ ...TYPO.subhead, fontWeight: 800, color: T.text }}>次のステップ</span>
-        <span style={{ ...TYPO.caption, color: T.textMuted }}>{doneCount} / {steps.length}</span>
-        <button onClick={() => persist({ ...state, dismissed: true })} title="閉じる" style={{ marginLeft: 'auto', width: 24, height: 24, borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="cross" size={11} /></button>
-      </div>
-      <div style={{ padding: '6px 0' }}>
-        {steps.map((s, i) => {
-          const done = !!state.done[s.key]
-          return (
-            <button key={s.key} onClick={s.act} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
-              padding: '9px 14px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              <span style={{
-                width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                background: done ? T.success : 'transparent', color: '#fff',
-                border: done ? 'none' : `1.5px dashed ${T.borderMid}`,
-              }}>{done ? <Icon name="check" size={12} stroke={2.4} /> : <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 700 }}>{i + 1}</span>}</span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', ...TYPO.subhead, fontWeight: 700, color: done ? T.textMuted : T.text, textDecoration: done ? 'line-through' : 'none' }}>{s.label}</span>
-                <span style={{ display: 'block', ...TYPO.caption, color: T.textMuted }}>{s.hint}</span>
-              </span>
-              {!done && <Icon name="chevronR" size={15} style={{ color: T.textFaint, flexShrink: 0 }} />}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ─── ダッシュボードタブ（3カラム骨組み） ───────────────────────────────────
 function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, members, levels = [], isAdmin = false, workLog, onWorkLogChange, onGoToTab, onGoToSummary, onOpenFocusFill, onOpenAIReply, mailReadMarks, onMarkMailRead, fiscalYear = '2026' }) {
   const isMobile = useIsMobile()
@@ -1609,11 +1548,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         )}
       </div>
 
-      {/* クイック追加 + スタートガイド (自分のページのみ) */}
+      {/* クイック追加 (自分のページのみ) */}
+      {/* スタートガイドの3ステップ導線は初回スポットライトツアーに集約したため、ここでは常設表示しない */}
       {isViewingSelf && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: isMobile ? '12px 14px 0' : '10px 10px 0', flexShrink: 0 }}>
           <QuickTaskPalette user={{ email: viewingMember?.email }} members={members} inline />
-          <QuickStartGuide T={T} onGoToTab={onGoToTab} />
         </div>
       )}
 
@@ -1636,10 +1575,19 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         }}>
           {showW('today') && (
             <Section dataTour="ws-today" T={T} icon={<Icon name="bolt" size={14} />} accent={T.accent} title={`今日やること${taskBoard.today.length ? ` (${taskBoard.today.length})` : ''}`} flex={1} headerRight={
-              <button onClick={loadTasks} title="再読み込み" style={{
-                background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
-                borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
-              }}><Icon name="refresh" size={11} /></button>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={() => onGoToTab && onGoToTab('wbs')} title="タスクタブを開く" style={{
+                  padding: '3px 8px', borderRadius: 6,
+                  background: 'transparent', color: T.accent,
+                  border: `1px solid ${T.accent}40`,
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                }}>タスクタブへ <Icon name="arrowRight" size={11} /></button>
+                <button onClick={loadTasks} title="再読み込み" style={{
+                  background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
+                  borderRadius: 6, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                }}><Icon name="refresh" size={11} /></button>
+              </div>
             }>
               {taskBoard.loading ? <Loading T={T} /> :
                 taskBoard.today.length === 0
@@ -4936,20 +4884,24 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
         const nextLabel = status === 'not_started' ? '進行中'
                         : status === 'in_progress' ? '完了'
                         : '未着手'
-        // 18px 円チェックボックス: 未完了でも薄くチェックを常時表示
+        // 18px 円チェックボックス: 完了=緑塗り / 着手中=黄(途中であることを明示) / 未着手=薄い枠
         const cb = done
           ? { bg: T.success, border: T.success, color: '#fff' }
           : inProgress
-            ? { bg: T.accentBg, border: T.accent, color: T.accent }
+            ? { bg: T.warnBg, border: T.warn, color: T.warn }
             : overdue
               ? { bg: T.bgCard, border: `${T.danger}66`, color: `${T.danger}66` }
               : { bg: T.bgCard, border: (T.borderStrong || T.border), color: (T.textFaint || 'rgba(15,23,42,.2)') }
+        // ホバー時のハイライト: 着手中は黄を維持し、それ以外はアクセント色で「押せる」ことを示す
+        const hoverTone = inProgress
+          ? { bg: T.warnBg, border: T.warn, color: T.warn }
+          : { bg: T.accentBg, border: T.accent, color: T.accent }
         const info = (showDue && t.due_date) ? dueInfo(t.due_date, done) : null
         const tone = info ? dueTone[info.state] : null
         return (
           <div key={t.id} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 14px',
+            display: 'flex', alignItems: 'center', gap: 9,
+            padding: '6px 14px',
             borderBottom: i < tasks.length - 1 ? `1px solid ${T.border}` : 'none',
             background: T.bgCard,
             opacity: done ? 0.6 : 1,
@@ -4959,7 +4911,7 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
               onClick={() => canEdit && onToggle(t)}
               disabled={!canEdit}
               title={canEdit ? `クリックで「${nextLabel}」に変更` : '閲覧のみ'}
-              onMouseEnter={canEdit && !done ? (e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.color = T.accent; e.currentTarget.style.background = T.accentBg } : undefined}
+              onMouseEnter={canEdit && !done ? (e) => { e.currentTarget.style.borderColor = hoverTone.border; e.currentTarget.style.color = hoverTone.color; e.currentTarget.style.background = hoverTone.bg } : undefined}
               onMouseLeave={canEdit && !done ? (e) => { e.currentTarget.style.borderColor = cb.border; e.currentTarget.style.color = cb.color; e.currentTarget.style.background = cb.bg } : undefined}
               style={{
                 width: 18, height: 18, flexShrink: 0,
@@ -4972,15 +4924,20 @@ function TaskList({ T, tasks, canEdit, onToggle, showDue = false }) {
                 transition: 'all .15s',
               }}
             >
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={done ? 3 : 2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7" /></svg>
+              {inProgress
+                ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round"><path d="M6 12h12" /></svg>
+                : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={done ? 3 : 2.6} strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7" /></svg>}
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: 13.5, color: done ? T.textMuted : T.text,
+                fontSize: 12.5, color: done ? T.textMuted : T.text,
                 textDecoration: done ? 'line-through' : 'none',
-                fontWeight: 600, lineHeight: 1.4, letterSpacing: '.01em',
+                fontWeight: 600, lineHeight: 1.35, letterSpacing: '.01em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{label}</div>
+              {inProgress && (
+                <span style={{ display: 'block', fontSize: 9.5, fontWeight: 700, letterSpacing: '.06em', color: T.warn, lineHeight: 1.3 }}>着手中</span>
+              )}
             </div>
             {t.weekly_reports?.kr_title && (
               <span style={{ fontSize: 11, color: T.textMuted, fontFamily: 'ui-monospace, SF Mono, monospace', flexShrink: 0 }}>
