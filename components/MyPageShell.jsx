@@ -148,8 +148,10 @@ function SummaryPlaceholder({ T, title, note }) {
 // ─── Main component ────────────────────────────────────────────────────────
 export default function MyPageShell({ user, members, levels, themeKey = 'dark', fiscalYear = '2026', onAIFeedback }) {
   const T = THEMES[themeKey] || THEMES.dark
+  const { viewAsMember } = useCurrentOrg()
   const myName = useMemo(() => members?.find(m => m.email === user?.email)?.name || '', [members, user])
-  const isAdmin = useMemo(() => members?.find(m => m.email === user?.email)?.is_admin === true, [members, user])
+  // viewAsMember (管理者のメンバー目線プレビュー) 中は admin 権限を無効化して member の見え方を再現
+  const isAdmin = useMemo(() => !viewAsMember && members?.find(m => m.email === user?.email)?.is_admin === true, [members, user, viewAsMember])
 
   const [viewingName, setViewingName] = useState(myName)
   useEffect(() => { if (myName && !viewingName) setViewingName(myName) }, [myName, viewingName])

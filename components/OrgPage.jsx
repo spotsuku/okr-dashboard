@@ -3812,7 +3812,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   // グローバルテーマを更新
   _T = THEMES[themeKey] || THEMES.dark
 
-  const { currentOrg } = useCurrentOrg()
+  const { currentOrg, viewAsMember } = useCurrentOrg()
   const orgId = currentOrg?.id
 
   const [activeTab, setActiveTab] = useState('chart')
@@ -3821,7 +3821,9 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
   useEffect(() => { try { setOnbDismissed(localStorage.getItem(onbKey) === '1') } catch { setOnbDismissed(false) } }, [onbKey])
   const dismissOnb = () => { try { localStorage.setItem(onbKey, '1') } catch {} setOnbDismissed(true) }
   const [jumpMemberName, setJumpMemberName] = useState(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdminRaw, setIsAdmin] = useState(false)
+  // viewAsMember (管理者のメンバー目線プレビュー) 中は admin UI を隠す
+  const isAdmin = isAdminRaw && !viewAsMember
 
   const { levels, teamMeta, members, tasks, jdRows, taskHistory, setTaskHistory, manuals, setManuals, loading, syncStatus, orgTableError, reload, setLevels, setTeamMeta, setMembers, setTasks, setJdRows } = useOrgData(fiscalYear, orgId)
   const [showOrgManage, setShowOrgManage] = useState(false)

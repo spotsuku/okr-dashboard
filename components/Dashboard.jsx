@@ -919,11 +919,13 @@ export default function Dashboard({ user, onSignOut }) {
   // (例: 同 email が NEO 福岡とデモ org の両方にいる guest@demo.local) でも、
   // levels / members など全データクエリをこの id で絞ることで他 org のデータが
   // 混ざらないようにする (RLS は両 org を許容するためフロント側で明示フィルタ必須)。
-  const { currentOrg } = useCurrentOrg()
+  const { currentOrg, viewAsMember, setViewAsMember } = useCurrentOrg()
+  const isRealAdmin = ['owner', 'admin'].includes(currentOrg?.role)
   // OKR / KR の追加・編集・アーカイブ・並び替え等のミューテーションは
   // owner / admin ロールのみに許可。member は閲覧のみ。
   // KA (KASection / weekly_reports) は対象外で従来どおり全員編集可。
-  const canEditOKR = ['owner', 'admin'].includes(currentOrg?.role)
+  // viewAsMember (管理者のメンバー目線プレビュー) 中は member 相当に落とす。
+  const canEditOKR = !viewAsMember && ['owner', 'admin'].includes(currentOrg?.role)
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(() => {
@@ -1642,6 +1644,16 @@ export default function Dashboard({ user, onSignOut }) {
                 <Icon name="ai" size={15} />
               </button>
             )}
+            {/* メンバー目線プレビュー中インジケータ (クリックで解除) */}
+            {viewAsMember && (
+              <button onClick={() => setViewAsMember(false)} title="クリックで管理者表示に戻る" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, height: 32, padding: '0 10px',
+                borderRadius: 8, border: `1px solid ${T.accent}`, background: T.accentBg, color: T.accent,
+                fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}>
+                <Icon name="user" size={12} /> メンバー目線で表示中 <Icon name="cross" size={11} />
+              </button>
+            )}
             {/* ユーザーメニュー (テーマ切替・同期状態もここに集約) */}
             <div data-tour="user-menu" style={{ position: 'relative' }} onMouseEnter={e => e.currentTarget.querySelector('.user-dropdown').style.display='block'} onMouseLeave={e => e.currentTarget.querySelector('.user-dropdown').style.display='none'}>
               <button style={{ background: T.bgCard, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, height: 32, padding: '0 8px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1657,6 +1669,16 @@ export default function Dashboard({ user, onSignOut }) {
                     {syncStatus === 'synced' ? '同期済' : syncStatus === 'error' ? 'エラー' : '同期中'}
                   </span>
                 </div>
+                {isRealAdmin && (
+                  <>
+                    <button onClick={() => setViewAsMember(!viewAsMember)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: viewAsMember ? T.accentBg : 'transparent', color: viewAsMember ? T.accent : T.text, fontSize: 12, fontFamily: 'inherit', fontWeight: viewAsMember ? 700 : 400 }}>
+                      <Icon name="user" size={13} />
+                      {viewAsMember ? 'メンバー目線を解除（管理者に戻る）' : 'メンバー目線で表示'}
+                    </button>
+                    <div style={{ padding: '0 12px 6px 30px', fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>編集ボタン等を非表示にして一般メンバーの見え方を確認します（データ閲覧自体は制限されません）。</div>
+                    <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
+                  </>
+                )}
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
                 {hasGoogle
