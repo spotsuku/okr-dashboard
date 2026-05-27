@@ -325,10 +325,18 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
     { key: 'retrospect', icon: 'refresh',  label: '振り返り' },
   ]
   // サイドバードロワー下部の「その他」メニュー
+  // マイページのヘッダー(サブタブ)の全項目を網羅し、ドロワーから全機能へ遷移できるようにする
   const SIDEBAR_OTHER = [
-    { key: 'drive',        icon: 'drive',  label: 'ドライブ' },
-    { key: 'okr_edit',     icon: 'target', label: 'OKR' },
-    { key: 'integrations', icon: 'link',   label: '連携' },
+    { key: 'dashboard',    icon: 'chart',    label: 'ダッシュボード' },
+    { key: 'wbs',          icon: 'check',    label: 'タスク' },
+    { key: 'mail',         icon: 'mail',     label: 'メール',     requiresFlag: 'google_integration' },
+    { key: 'okr_edit',     icon: 'target',   label: 'OKR' },
+    { key: 'retrospect',   icon: 'refresh',  label: '振り返り' },
+    { key: 'calendar',     icon: 'calendar', label: 'カレンダー', requiresFlag: 'google_integration' },
+    { key: 'drive',        icon: 'drive',    label: 'ドライブ',   requiresFlag: 'google_integration' },
+    { key: 'coo',          icon: 'ai',       label: 'MyCOO',      requiresFlag: 'coo_knowledge' },
+    { key: 'confirm',      icon: 'bell',     label: '共有・確認' },
+    { key: 'integrations', icon: 'link',     label: '連携' },
   ]
 
   return (
@@ -544,8 +552,11 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               fontSize: 10, fontWeight: 700, color: T.textMuted,
               letterSpacing: 0.5, padding: '4px 12px', marginBottom: 2,
             }}>その他</div>
-            {SIDEBAR_OTHER.map(item => {
-              const isActive = activeTab === item.key
+            {SIDEBAR_OTHER
+              .filter(item => !item.requiresFlag || enabledModules?.[item.requiresFlag])
+              .map(item => {
+              const isActive = !summaryMode && activeTab === item.key
+              const showBadge = item.key === 'confirm' && unresolvedConfirmCount > 0
               return (
                 <button
                   key={item.key}
@@ -563,6 +574,14 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 >
                   <span style={{ display: 'inline-flex', width: 16 }}><Icon name={item.icon} size={16} /></span>
                   <span>{item.label}</span>
+                  {showBadge && (
+                    <span style={{
+                      marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px',
+                      borderRadius: 99, background: T.danger, color: '#fff',
+                      fontSize: 10, fontWeight: 800,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    }}>{unresolvedConfirmCount}</span>
+                  )}
                 </button>
               )
             })}
