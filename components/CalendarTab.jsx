@@ -169,18 +169,28 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
             <Icon name="alert" size={13} /> {error}
           </div>
         )}
-        <WeekGrid
-          T={T}
-          days={days}
-          dataMembers={data.members || []}
-          selected={selected}
-          colorOf={colorOf}
-          emailOf={emailOf}
-          freeSlots={freeSlots}
-          myName={myName}
-          orgId={orgId}
-          onSlotClick={(ymd, startMin) => setCreateSlot({ ymd, startMin, endMin: Math.min(startMin + 60, HOUR_TO * 60) })}
-        />
+        {(() => {
+          // 自分が未連携で、表示できる連携済みメンバーが居ない → カレンダーを出さず連携ボタンだけ
+          const selfUnconnected = selected.includes(myName) && statusByName[myName] && statusByName[myName].connected === false
+          const anyConnected = selected.some(n => statusByName[n] && statusByName[n].connected)
+          if (!loading && selfUnconnected && !anyConnected) {
+            return <CalendarConnectPrompt T={T} myName={myName} orgId={orgId} />
+          }
+          return (
+            <WeekGrid
+              T={T}
+              days={days}
+              dataMembers={data.members || []}
+              selected={selected}
+              colorOf={colorOf}
+              emailOf={emailOf}
+              freeSlots={freeSlots}
+              myName={myName}
+              orgId={orgId}
+              onSlotClick={(ymd, startMin) => setCreateSlot({ ymd, startMin, endMin: Math.min(startMin + 60, HOUR_TO * 60) })}
+            />
+          )
+        })()}
       </div>
 
       {/* 空き枠タップ → 予定作成フォーム (GCal風) */}
@@ -891,6 +901,42 @@ function computeFreeSlots(data, days, selected) {
     result[ymd] = free
   }
   return result
+}
+
+// ─── 自分が未連携のとき: カレンダーを出さず連携ボタンだけを大きく表示 ───
+function CalendarConnectPrompt({ T, myName, orgId }) {
+  const connect = () => {
+    if (!myName || !orgId) return
+    const u = new URL('/api/integrations/google/start', window.location.origin)
+    u.searchParams.set('owner', myName)
+    u.searchParams.set('organization_id', orgId)
+    u.searchParams.set('return_to', window.location.pathname + window.location.search)
+    window.location.href = u.toString()
+  }
+  const feat = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', fontSize: 10.5, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 99, color: T.textSub }
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 18px' }}>
+      <div style={{ maxWidth: 360, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: '#fff', border: `1px solid ${T.border}`, boxShadow: '0 2px 8px rgba(15,23,42,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="calendar" size={28} stroke={1.6} style={{ color: T.textSub }} />
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Google カレンダーと連携</div>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>連携すると、自分の予定をこの画面に表示し、会議リマインドや空き時間の提案ができるようになります。</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', margin: '2px 0 4px' }}>
+          {['会議リマインド', '空き時間提案', '予定の作成'].map(f => (
+            <span key={f} style={feat}><span style={{ width: 5, height: 5, borderRadius: 99, background: T.success }} />{f}</span>
+          ))}
+        </div>
+        <button onClick={connect} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '10px 22px', borderRadius: 10, border: 'none',
+          background: BRAND_GRADIENT.cta, color: '#fff', fontSize: 13, fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 12px rgba(30,58,138,.22)',
+        }}><Icon name="link" size={14} /> Google を連携する</button>
+        <div style={{ fontSize: 10.5, color: T.textMuted }}>3 分で完了 · クレジットカード不要</div>
+      </div>
+    </div>
+  )
 }
 
 // ─── 未連携メンバーのフッター ────────────────────────
