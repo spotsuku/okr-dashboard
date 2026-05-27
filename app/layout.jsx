@@ -3,6 +3,11 @@ import { COMMON_TOKENS, FONT_STACK } from '../lib/themeTokens'
 export const metadata = {
   title: 'AI WorkSpace',
   description: 'AI WorkSpace - OKR / KR / タスク / 振り返り / AIコーチを統合したワークスペース',
+  appleWebApp: {
+    capable: true,
+    title: 'AI WorkSpace',
+    statusBarStyle: 'default',
+  },
 }
 
 export const viewport = {

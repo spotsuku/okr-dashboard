@@ -647,6 +647,26 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
           </div>
         </div>
 
+        {/* ─── Destination grid (2 cards) ─── オンボーディングより上に常設 */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 12 : 18, marginBottom: 22 }}>
+          <DestCard
+            kind="me"
+            icon="user"
+            title="マイページ"
+            desc="今日のタスク・自分の目標・振り返り。業務を一括で見渡せる、毎日の起点になる画面。"
+            stats={myStats}
+            onClick={() => { try { window.__okrOpenMyDashboard = true } catch {} ; onNavigate('mycoach') }}
+          />
+          <DestCard
+            kind="company"
+            icon="chart"
+            title="全社サマリー"
+            desc="事業部の進捗・KR の達成状況・タスク完了率を一目で。経営層・マネージャー向けのサマリー画面。"
+            stats={companyStats}
+            onClick={() => onNavigate('mycoach')}
+          />
+        </div>
+
         {/* ─── オンボーディング (7ステップ) ─── */}
         {!onbDismissed && (
           <div style={{
@@ -756,26 +776,6 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
             </div>
           </div>
         )}
-
-        {/* ─── Destination grid (2 cards) ─── */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 12 : 18, marginBottom: 24 }}>
-          <DestCard
-            kind="me"
-            icon="user"
-            title="マイページ"
-            desc="今日のタスク・自分の目標・振り返り。業務を一括で見渡せる、毎日の起点になる画面。"
-            stats={myStats}
-            onClick={() => { try { window.__okrOpenMyDashboard = true } catch {} ; onNavigate('mycoach') }}
-          />
-          <DestCard
-            kind="company"
-            icon="chart"
-            title="全社サマリー"
-            desc="事業部の進捗・KR の達成状況・タスク完了率を一目で。経営層・マネージャー向けのサマリー画面。"
-            stats={companyStats}
-            onClick={() => onNavigate('mycoach')}
-          />
-        </div>
 
         {/* ─── カスタムリンク ─── */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '8px 0 14px' }}>
