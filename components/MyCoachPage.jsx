@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { authedFetch } from '../lib/authedFetch'
 import { supabase } from '../lib/supabase'
+import { useCurrentOrg } from '../lib/orgContext'
 import { useResponsive } from '../lib/useResponsive'
 import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { cardStyle, pillStyle, btnSecondary, btnGhost, btnBrand, inputStyle } from '../lib/iosStyles'
@@ -73,6 +74,8 @@ const TASK_STATUS_ORDER = ['not_started', 'in_progress', 'done']
 
 export default function MyCoachPage({ user, members, levels, themeKey = 'dark', fiscalYear = '2026' }) {
   const T = THEMES[themeKey] || THEMES.dark
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const { isMobile, isTablet, isMobileOrTablet } = useResponsive()
   const [showChat, setShowChat] = useState(false)
   const myName = members?.find(m => m.email === user?.email)?.name || user?.email || ''
@@ -190,8 +193,9 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     setLoading(false)
 
     // 今日のカレンダー予定を取得 (失敗・未連携時は無視。AI文脈に追加するためのもの)
+    if (!orgId) { setTodayEvents([]); return }
     try {
-      const r = await fetch(`/api/integrations/calendar/events?owner=${encodeURIComponent(myName)}&hours=14`)
+      const r = await fetch(`/api/integrations/calendar/events?owner=${encodeURIComponent(myName)}&hours=14&organization_id=${encodeURIComponent(orgId || '')}`)
       if (r.ok) {
         const data = await r.json()
         setTodayEvents(Array.isArray(data?.items) ? data.items : [])
@@ -201,7 +205,7 @@ export default function MyCoachPage({ user, members, levels, themeKey = 'dark', 
     } catch {
       setTodayEvents([])
     }
-  }, [myName, thisMonday, fiscalYear])
+  }, [myName, thisMonday, fiscalYear, orgId])
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])

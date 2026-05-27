@@ -17,8 +17,9 @@ function formatTime(iso) {
 export async function GET(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const organizationId = url.searchParams.get('organization_id')
   const hours = Math.max(1, Math.min(24, Number(url.searchParams.get('hours')) || 8))
-  const result = await getIntegration(owner, 'google')
+  const result = await getIntegration(owner, 'google', organizationId)
   if (result.error) return json({ error: result.error }, { status: 400 })
   if (result.expired) return json({
     error: result.refreshError

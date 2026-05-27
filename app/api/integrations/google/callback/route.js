@@ -32,11 +32,12 @@ export async function GET(request) {
   } catch {
     return redirectWithError(request, '/', 'state の検証に失敗しました')
   }
-  const { owner, returnTo } = state || {}
+  const { owner, organizationId, returnTo } = state || {}
 
   if (googleError) return redirectWithError(request, returnTo, `Google認可エラー: ${googleError}`)
   if (!code) return redirectWithError(request, returnTo, 'Google から code が返りませんでした')
   if (!owner) return redirectWithError(request, returnTo, 'state に owner が含まれていません')
+  if (!organizationId) return redirectWithError(request, returnTo, 'state に organization_id が含まれていません (組織ごとに連携が必要です)')
 
   const clientId = process.env.GOOGLE_CLIENT_ID
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
@@ -98,13 +99,14 @@ export async function GET(request) {
       const { data: existingRows } = await admin
         .from('user_integrations')
         .select('refresh_token')
-        .eq('owner', owner).eq('service', 'google')
+        .eq('owner', owner).eq('service', 'google').eq('organization_id', organizationId)
         .limit(1)
       existingRefresh = existingRows?.[0]?.refresh_token || null
     } catch { /* noop */ }
 
-    const { error } = await admin.from('user_integrations').upsert({
+    const row = {
       owner,
+      organization_id: organizationId,
       service: 'google',
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token || existingRefresh,
@@ -113,7 +115,13 @@ export async function GET(request) {
       metadata: { email },
       connected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'owner,service' })
+    }
+    let { error } = await admin.from('user_integrations').upsert(row, { onConflict: 'owner,service,organization_id' })
+    // マイグレーション未適用 (organization_id 列/制約が無い) 環境向けフォールバック
+    if (error && /organization_id|column|constraint|conflict|on conflict/i.test(error.message || '')) {
+      const { organization_id, ...legacy } = row
+      ;({ error } = await admin.from('user_integrations').upsert(legacy, { onConflict: 'owner,service' }))
+    }
     if (error) return redirectWithError(request, returnTo, `DB保存エラー: ${error.message}`)
   } catch (e) {
     return redirectWithError(request, returnTo, `DB保存例外: ${e.message}`)

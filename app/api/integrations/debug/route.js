@@ -26,6 +26,7 @@ export async function GET(request) {
     return json({ error: 'forbidden' }, { status: 403 })
   }
   const owner = url.searchParams.get('owner')
+  const organizationId = url.searchParams.get('organization_id')
 
   const env = {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || null,
@@ -140,7 +141,7 @@ export async function GET(request) {
       }
 
       // calendar/events 等が実際に使う getIntegration を直接呼んで結果を比較
-      const integ = await getIntegration(owner, 'google')
+      const integ = await getIntegration(owner, 'google', organizationId)
       const getIntegrationResult = {
         hasIntegration: !!integ.integration,
         error: integ.error || null,

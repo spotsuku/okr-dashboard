@@ -157,8 +157,8 @@ function resolveEmails(names, members) {
   }).filter(Boolean)
 }
 
-async function getEventsForMember(name, startIso, endIso) {
-  const res = await getIntegration(name, 'google')
+async function getEventsForMember(name, startIso, endIso, organizationId) {
+  const res = await getIntegration(name, 'google', organizationId)
   if (res.error || !res.integration) return { name, events: [], error: res.error || '未連携' }
   if (res.expired) return { name, events: [], error: 'トークン期限切れ' }
   const apiUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
@@ -281,9 +281,9 @@ async function loadKnowledge(supabase, orgId) {
 }
 
 // ─── 今日の Google Calendar 予定を取得 (本日中の残予定) ───
-async function fetchTodayCalendar(owner) {
+async function fetchTodayCalendar(owner, orgId) {
   try {
-    const igRes = await getIntegration(owner, 'google')
+    const igRes = await getIntegration(owner, 'google', orgId)
     if (igRes.error || !igRes.integration || igRes.expired) return []
     const integration = igRes.integration
 
@@ -354,7 +354,7 @@ async function loadUserContext(supabase, owner, orgId) {
     supabase.from('ka_tasks').select('id, title, due_date, done, status').eq('assignee', owner).eq('organization_id', orgId).neq('status', 'done').order('due_date'),
     supabase.from('coaching_logs').select('content, created_at').eq('owner', owner).eq('organization_id', orgId).eq('log_type', 'kpt').order('created_at', { ascending: false }).limit(3),
     supabase.from('coaching_logs').select('content').eq('owner', owner).eq('organization_id', orgId).eq('log_type', 'work_log').gte('created_at', new Date(Date.now() - 18 * 3600 * 1000).toISOString()).order('created_at', { ascending: false }).limit(1),
-    fetchTodayCalendar(owner),
+    fetchTodayCalendar(owner, orgId),
   ])
 
   const member = memberRes.data?.[0]
@@ -565,7 +565,7 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
     if (name === 'search_drive') {
       const driveId = process.env.NEO_FUKUOKA_DRIVE_ID
       if (!driveId) return { ok: false, error: 'NEO_FUKUOKA_DRIVE_ID 未設定' }
-      const igRes = await getIntegration(owner, 'google')
+      const igRes = await getIntegration(owner, 'google', ctx.orgId)
       if (igRes.error || !igRes.integration) return { ok: false, error: igRes.error || 'Google 未連携' }
       if (igRes.expired) return { ok: false, error: 'Google トークン期限切れ' }
       const integration = igRes.integration
@@ -596,13 +596,13 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
     // ─── カレンダー操作 ───
     if (name === 'list_events') {
       const results = await Promise.all((input.members || []).map(n =>
-        getEventsForMember(n, input.start_iso, input.end_iso)
+        getEventsForMember(n, input.start_iso, input.end_iso, ctx.orgId)
       ))
       return { ok: true, results }
     }
     if (name === 'find_free_slots') {
       const memberEvents = await Promise.all((input.members || []).map(n =>
-        getEventsForMember(n, input.start_iso, input.end_iso)
+        getEventsForMember(n, input.start_iso, input.end_iso, ctx.orgId)
       ))
       const slots = computeFreeSlots(memberEvents, input.start_iso, input.end_iso, input.duration_min, input.working_hours)
       return { ok: true, slots, memberStatuses: memberEvents.map(m => ({ name: m.name, error: m.error, eventCount: m.events.length })) }

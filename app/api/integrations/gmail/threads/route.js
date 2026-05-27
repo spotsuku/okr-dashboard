@@ -71,13 +71,14 @@ function extractFromName(from) {
 export async function GET(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const organizationId = url.searchParams.get('organization_id')
   if (isDemoMode() && await shouldMock(owner)) {
     return Response.json(demoResponse('gmail/threads'))
   }
   const limit = Math.max(1, Math.min(50, Number(url.searchParams.get('limit')) || 5))
   const category = url.searchParams.get('category') || 'important'
 
-  const result = await getIntegration(owner, 'google')
+  const result = await getIntegration(owner, 'google', organizationId)
   if (result.error) return json({ error: result.error }, { status: 400 })
   if (result.expired) return json({
     error: result.refreshError

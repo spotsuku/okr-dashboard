@@ -162,8 +162,9 @@ export async function POST(request) {
 async function handlePost(request) {
   let body
   try { body = await request.json() } catch { return json({ error: 'JSON parse error' }, { status: 400 }) }
-  const { owner, message, history = [] } = body || {}
+  const { owner, message, history = [], organization_id } = body || {}
   if (!owner || !message) return json({ error: 'owner / message が必要です' }, { status: 400 })
+  const organizationId = organization_id
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return json({ error: 'ANTHROPIC_API_KEY が未設定です' }, { status: 500 })
@@ -171,7 +172,7 @@ async function handlePost(request) {
   const driveId = getDriveId()
   if (!driveId) return json({ error: 'NEO_FUKUOKA_DRIVE_ID が未設定です' }, { status: 500 })
 
-  const res = await getIntegration(owner, 'google')
+  const res = await getIntegration(owner, 'google', organizationId)
   if (res.error || !res.integration) return json({ error: res.error || '未連携' }, { status: 400 })
   if (res.expired) return json({ error: 'トークン期限切れ', needsReauth: true }, { status: 401 })
   const integration = res.integration

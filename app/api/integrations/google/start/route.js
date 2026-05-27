@@ -22,17 +22,19 @@ function getOrigin(request) {
 export async function GET(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const organizationId = url.searchParams.get('organization_id') || url.searchParams.get('org')
   const returnTo = url.searchParams.get('return_to') || '/'
   const debug = url.searchParams.get('debug') === '1'
 
   if (!owner && !debug) return new Response('owner is required', { status: 400 })
+  if (!organizationId && !debug) return new Response('organization_id is required (組織ごとに連携が必要です)', { status: 400 })
 
   const clientId = process.env.GOOGLE_CLIENT_ID
   if (!clientId) return new Response('GOOGLE_CLIENT_ID が未設定です', { status: 500 })
 
   const redirectUri = `${getOrigin(request)}/api/integrations/google/callback`
   const state = Buffer.from(
-    JSON.stringify({ owner: owner || 'debug', returnTo }),
+    JSON.stringify({ owner: owner || 'debug', organizationId: organizationId || null, returnTo }),
     'utf-8'
   ).toString('base64url')
 

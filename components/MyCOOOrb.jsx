@@ -57,6 +57,13 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
     window.dispatchEvent(new CustomEvent('mycoo:orb', { detail: { open } }))
   }, [open])
 
+  // 外部から「MyCOOと話す」導線でオーブを開けるようにする
+  React.useEffect(() => {
+    const onOpen = () => { setOpen(true); setNudge(null) }
+    window.addEventListener('mycoo:open', onOpen)
+    return () => window.removeEventListener('mycoo:open', onOpen)
+  }, [])
+
   // 既存タブ MyCOO と同じ会話履歴 (coaching_chats / kind='coo') を共有。
   // タブで話した続きをオーブから、オーブで話した続きをタブから続けられる。
   React.useEffect(() => {
@@ -173,12 +180,14 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
         attendee_emails: plan.attendee_emails || [],
         add_meet: !!plan.add_meet,
         recurrence: plan.recurrence || [],
+        organization_id: orgId,
       }
     } else if (type === 'update') {
       method = 'PATCH'
       body = {
         owner: myName,
         event_id: plan.event_id,
+        organization_id: orgId,
         updates: {
           summary: plan.summary,
           description: plan.description,
@@ -190,7 +199,7 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
       }
     } else if (type === 'delete') {
       method = 'DELETE'
-      body = { owner: myName, event_id: plan.event_id }
+      body = { owner: myName, event_id: plan.event_id, organization_id: orgId }
     } else {
       throw new Error(`unknown proposal type: ${type}`)
     }

@@ -53,10 +53,11 @@ function htmlToText(html) {
 export async function GET(request) {
   const url = new URL(request.url)
   const owner = url.searchParams.get('owner')
+  const organizationId = url.searchParams.get('organization_id')
   const id = url.searchParams.get('id')
   if (!id) return json({ error: 'id が必要です' }, { status: 400 })
 
-  const result = await getIntegration(owner, 'google')
+  const result = await getIntegration(owner, 'google', organizationId)
   if (result.error) return json({ error: result.error }, { status: 400 })
   if (result.expired) return json({
     error: result.refreshError

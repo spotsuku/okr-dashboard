@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useCurrentOrg } from '../lib/orgContext'
 import Icon from './Icon'
-import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { inputStyle, btnPrimary, btnSecondary } from '../lib/iosStyles'
 
 // ─── Date utilities (JST) ─────────────────────────────────────────────────
@@ -51,6 +51,7 @@ const PALETTE = [
 
 export default function CalendarTab({ T, myName, members, viewingName }) {
   const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   // 週開始日 (JST月曜の UTC 00:00)
   const [weekStart, setWeekStart] = useState(() => jstMonday(new Date()))
@@ -95,12 +96,14 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
   // フェッチ
   const fetchEvents = useCallback(async () => {
     if (selected.length === 0) { setData({ members: [] }); return }
+    if (!orgId) return
     setLoading(true); setError('')
     try {
       const u = new URL('/api/integrations/calendar/multi-events', window.location.origin)
       u.searchParams.set('members', selected.join(','))
       u.searchParams.set('start', startISO)
       u.searchParams.set('end', endISO)
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
@@ -110,7 +113,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
     } finally {
       setLoading(false)
     }
-  }, [selected, startISO, endISO])
+  }, [selected, startISO, endISO, orgId])
   useEffect(() => { fetchEvents() }, [fetchEvents])
 
   // 全員空きスロット (15分粒度、業務時間内のみ)
@@ -166,16 +169,28 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
             <Icon name="alert" size={13} /> {error}
           </div>
         )}
-        <WeekGrid
-          T={T}
-          days={days}
-          dataMembers={data.members || []}
-          selected={selected}
-          colorOf={colorOf}
-          emailOf={emailOf}
-          freeSlots={freeSlots}
-          onSlotClick={(ymd, startMin) => setCreateSlot({ ymd, startMin, endMin: Math.min(startMin + 60, HOUR_TO * 60) })}
-        />
+        {(() => {
+          // 自分が未連携で、表示できる連携済みメンバーが居ない → カレンダーを出さず連携ボタンだけ
+          const selfUnconnected = selected.includes(myName) && statusByName[myName] && statusByName[myName].connected === false
+          const anyConnected = selected.some(n => statusByName[n] && statusByName[n].connected)
+          if (!loading && selfUnconnected && !anyConnected) {
+            return <CalendarConnectPrompt T={T} myName={myName} orgId={orgId} />
+          }
+          return (
+            <WeekGrid
+              T={T}
+              days={days}
+              dataMembers={data.members || []}
+              selected={selected}
+              colorOf={colorOf}
+              emailOf={emailOf}
+              freeSlots={freeSlots}
+              myName={myName}
+              orgId={orgId}
+              onSlotClick={(ymd, startMin) => setCreateSlot({ ymd, startMin, endMin: Math.min(startMin + 60, HOUR_TO * 60) })}
+            />
+          )
+        })()}
       </div>
 
       {/* 空き枠タップ → 予定作成フォーム (GCal風) */}
@@ -187,6 +202,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           members={members}
           emailOf={emailOf}
           orgPath={orgPath}
+          orgId={orgId}
           onClose={() => setCreateSlot(null)}
           onCreated={async () => { setCreateSlot(null); await fetchEvents() }}
         />
@@ -196,7 +212,7 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
 }
 
 // ─── 予定作成モーダル (空き枠タップで開く / Googleカレンダーへ作成) ────────
-function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, onClose, onCreated }) {
+function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, orgId, onClose, onCreated }) {
   const pad = (n) => String(n).padStart(2, '0')
   const minToTime = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`
   const [title, setTitle] = useState('')
@@ -228,6 +244,7 @@ function CreateEventModal({ T, slot, ownerName, members, emailOf, orgPath, onClo
           start_iso, end_iso,
           attendee_emails: attendees.map(emailOf).filter(Boolean),
           add_meet: addMeet,
+          organization_id: orgId,
         }),
       })
       const j = await r.json().catch(() => ({}))
@@ -537,7 +554,7 @@ function miniBtn(T) {
 }
 
 // ─── 週グリッド (時間 × 日) ───────────────────────────────────────────
-function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots, onSlotClick }) {
+function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots, onSlotClick, myName, orgId }) {
   const TIME_COL = 56
   // 0:00 JST 起点での当日経過分 → top px
   const minToPx = (mins) => ((mins - HOUR_FROM * 60) / SLOT_MIN) * SLOT_PX
@@ -759,7 +776,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
         })}
       </div>
       {/* 凡例 + 未連携リスト */}
-      <UnconnectedFooter T={T} dataMembers={dataMembers} selected={selected} />
+      <UnconnectedFooter T={T} dataMembers={dataMembers} selected={selected} myName={myName} orgId={orgId} />
     </div>
   )
 }
@@ -886,12 +903,59 @@ function computeFreeSlots(data, days, selected) {
   return result
 }
 
-// ─── 未連携メンバーのフッター (連携依頼 mailto) ────────────────────────
-function UnconnectedFooter({ T, dataMembers, selected }) {
+// ─── 自分が未連携のとき: カレンダーを出さず連携ボタンだけを大きく表示 ───
+function CalendarConnectPrompt({ T, myName, orgId }) {
+  const connect = () => {
+    if (!myName || !orgId) return
+    const u = new URL('/api/integrations/google/start', window.location.origin)
+    u.searchParams.set('owner', myName)
+    u.searchParams.set('organization_id', orgId)
+    u.searchParams.set('return_to', window.location.pathname + window.location.search)
+    window.location.href = u.toString()
+  }
+  const feat = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', fontSize: 10.5, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 99, color: T.textSub }
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 18px' }}>
+      <div style={{ maxWidth: 360, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: '#fff', border: `1px solid ${T.border}`, boxShadow: '0 2px 8px rgba(15,23,42,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="calendar" size={28} stroke={1.6} style={{ color: T.textSub }} />
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Google カレンダーと連携</div>
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>連携すると、自分の予定をこの画面に表示し、会議リマインドや空き時間の提案ができるようになります。</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', margin: '2px 0 4px' }}>
+          {['会議リマインド', '空き時間提案', '予定の作成'].map(f => (
+            <span key={f} style={feat}><span style={{ width: 5, height: 5, borderRadius: 99, background: T.success }} />{f}</span>
+          ))}
+        </div>
+        <button onClick={connect} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '10px 22px', borderRadius: 10, border: 'none',
+          background: BRAND_GRADIENT.cta, color: '#fff', fontSize: 13, fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 12px rgba(30,58,138,.22)',
+        }}><Icon name="link" size={14} /> Google を連携する</button>
+        <div style={{ fontSize: 10.5, color: T.textMuted }}>3 分で完了 · クレジットカード不要</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── 未連携メンバーのフッター ────────────────────────
+// 自分自身が未連携なら「Google を連携」ボタン (OAuth開始)、他メンバーなら連携依頼 mailto。
+function UnconnectedFooter({ T, dataMembers, selected, myName, orgId }) {
   const { currentOrg } = useCurrentOrg()
   const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   const unconnected = (dataMembers || []).filter(r => selected.includes(r.name) && !r.connected)
   if (unconnected.length === 0) return null
+
+  const connectSelf = () => {
+    if (!myName || !orgId) return
+    const u = new URL('/api/integrations/google/start', window.location.origin)
+    u.searchParams.set('owner', myName)
+    u.searchParams.set('organization_id', orgId)
+    u.searchParams.set('return_to', window.location.pathname + window.location.search)
+    window.location.href = u.toString()
+  }
+
   return (
     <div style={{
       padding: `${SPACING.sm + 2}px ${SPACING.lg}px`, borderTop: `1px solid ${T.border}`,
@@ -902,6 +966,20 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.sm }}>
         {unconnected.map(r => {
+          // 自分自身 → 直接 Google 連携ボタン
+          if (r.name === myName) {
+            return (
+              <button key={r.name} onClick={connectSelf}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                  padding: '4px 12px', borderRadius: RADIUS.xs, border: 'none',
+                  background: BRAND_GRADIENT.cta, color: '#fff',
+                  cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', ...TYPO.footnote,
+                }}>
+                <Icon name="link" size={12} /> Google を連携する
+              </button>
+            )
+          }
           const subject = encodeURIComponent('OKR Dashboard カレンダー連携のお願い')
           const link = typeof window !== 'undefined'
             ? `${window.location.origin}${orgPath}?page=integrations`

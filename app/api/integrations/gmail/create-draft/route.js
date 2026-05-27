@@ -38,12 +38,12 @@ export async function POST(request) {
     return json({ error: 'リクエストBodyのJSONが不正です' }, { status: 400 })
   }
 
-  const { owner, threadId, messageIdHeader, to, subject, body } = payload || {}
+  const { owner, threadId, messageIdHeader, to, subject, body, organization_id } = payload || {}
   if (!owner) return json({ error: 'owner が未指定です' }, { status: 400 })
   if (!to) return json({ error: '宛先 (to) が未指定です' }, { status: 400 })
   if (!body) return json({ error: '本文 (body) が未指定です' }, { status: 400 })
 
-  const result = await getIntegration(owner, 'google')
+  const result = await getIntegration(owner, 'google', organization_id)
   if (result.error) return json({ error: result.error }, { status: 400 })
   if (result.expired) {
     return json({

@@ -62,8 +62,7 @@ export async function refreshGoogleToken(integration) {
       refresh_token: data.refresh_token || integration.refresh_token,
       updated_at: new Date().toISOString(),
     })
-    .eq('owner', integration.owner)
-    .eq('service', integration.service)
+    .eq('id', integration.id)
     .select()
   if (error) throw new Error(`トークン更新DBエラー: ${error.message}`)
   const updated = updatedRows && updatedRows[0]
@@ -71,9 +70,12 @@ export async function refreshGoogleToken(integration) {
   return updated
 }
 
-// owner + service の連携を取得。期限切れなら自動リフレッシュ
-export async function getIntegration(owner, service = 'google') {
+// owner + service + organization_id の連携を取得。期限切れなら自動リフレッシュ。
+// organizationId を必須にすることで「組織を絶対にまたがない」を担保する
+// (マイグレーション適用前で organization_id 列が無い環境のみ、従来の owner+service で読む)。
+export async function getIntegration(owner, service = 'google', organizationId = null) {
   if (!owner) return { error: 'owner が指定されていません' }
+  if (!organizationId) return { error: 'organization_id が指定されていません (組織ごとに連携が必要です)' }
 
   // 環境変数チェック (未設定なら即座に原因特定できるようにする)
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -85,12 +87,23 @@ export async function getIntegration(owner, service = 'google') {
 
   // ※ .maybeSingle() は 1 行存在しても null を返すケースがあるため配列取得して自前で絞る
   const admin = getAdminClient()
-  const { data: rows, error } = await admin
+  let { data: rows, error } = await admin
     .from('user_integrations')
     .select('*')
     .eq('owner', owner)
     .eq('service', service)
+    .eq('organization_id', organizationId)
     .limit(1)
+  // マイグレーション未適用 (organization_id 列が無い) 環境向けフォールバック:
+  // 従来の owner+service で読む (この時点ではタブも機能フラグで隠れている前提)
+  if (error && /organization_id|column/i.test(error.message || '')) {
+    ;({ data: rows, error } = await admin
+      .from('user_integrations')
+      .select('*')
+      .eq('owner', owner)
+      .eq('service', service)
+      .limit(1))
+  }
   if (error) {
     console.error('[getIntegration] supabase error', { owner, service, error })
     const detail = [error.message, error.code && `code=${error.code}`, error.hint && `hint=${error.hint}`]

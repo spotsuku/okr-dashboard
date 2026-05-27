@@ -919,11 +919,13 @@ export default function Dashboard({ user, onSignOut }) {
   // (例: 同 email が NEO 福岡とデモ org の両方にいる guest@demo.local) でも、
   // levels / members など全データクエリをこの id で絞ることで他 org のデータが
   // 混ざらないようにする (RLS は両 org を許容するためフロント側で明示フィルタ必須)。
-  const { currentOrg } = useCurrentOrg()
+  const { currentOrg, viewAsMember, setViewAsMember } = useCurrentOrg()
+  const isRealAdmin = ['owner', 'admin'].includes(currentOrg?.role)
   // OKR / KR の追加・編集・アーカイブ・並び替え等のミューテーションは
   // owner / admin ロールのみに許可。member は閲覧のみ。
   // KA (KASection / weekly_reports) は対象外で従来どおり全員編集可。
-  const canEditOKR = ['owner', 'admin'].includes(currentOrg?.role)
+  // viewAsMember (管理者のメンバー目線プレビュー) 中は member 相当に落とす。
+  const canEditOKR = !viewAsMember && ['owner', 'admin'].includes(currentOrg?.role)
   const [levels, setLevels]               = useState([])
   const [nodeObjectives, setNodeObjectives] = useState({})
   const [activeLevelId, setActiveLevelId]   = useState(() => {
@@ -943,6 +945,39 @@ export default function Dashboard({ user, onSignOut }) {
     }
     return '2026'
   })
+  // 選択できる年度リスト (組織ごとに localStorage で永続化・「＋」で追加可)
+  const [fiscalYears, setFiscalYears]       = useState(['2025', '2026'])
+  const fyStorageKey = `okr_fiscal_years_${currentOrg?.id || 'default'}`
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let list = null
+    try { list = JSON.parse(localStorage.getItem(fyStorageKey) || 'null') } catch { /* noop */ }
+    if (!Array.isArray(list) || list.length === 0) list = ['2025', '2026']
+    if (fiscalYear && !list.includes(fiscalYear)) list = [...list, fiscalYear]
+    setFiscalYears([...new Set(list)].sort())
+  }, [fyStorageKey]) // eslint-disable-line
+  const persistFiscalYears = (list) => {
+    const sorted = [...new Set(list)].sort()
+    setFiscalYears(sorted)
+    try { localStorage.setItem(fyStorageKey, JSON.stringify(sorted)) } catch { /* noop */ }
+  }
+  const addFiscalYear = () => {
+    const max = fiscalYears.reduce((m, y) => Math.max(m, Number(y) || 0), 0)
+    const base = max || new Date().getFullYear()
+    const input = window.prompt('追加する年度（西暦4桁）', String(base + 1))
+    if (input == null) return
+    const yr = String(input).trim()
+    if (!/^\d{4}$/.test(yr)) { window.alert('西暦4桁で入力してください (例: 2027)'); return }
+    persistFiscalYears([...fiscalYears, yr])
+    setFiscalYear(yr)
+  }
+  const removeFiscalYear = (yr) => {
+    if (fiscalYears.length <= 1) return
+    if (!window.confirm(`${yr}年度を一覧から外しますか？\n(OKR データ自体は削除されません。再追加すれば再表示できます)`)) return
+    const list = fiscalYears.filter(y => y !== yr)
+    persistFiscalYears(list)
+    if (fiscalYear === yr) setFiscalYear(list[list.length - 1])
+  }
   const [activePeriod, setActivePeriod]     = useState(() => { const m = new Date().getMonth(); return m >= 3 && m <= 5 ? 'q1' : m >= 6 && m <= 8 ? 'q2' : m >= 9 && m <= 11 ? 'q3' : 'q4' })
   const [modal, setModal]                   = useState(null)
   const [loading, setLoading]               = useState(true)
@@ -1580,11 +1615,25 @@ export default function Dashboard({ user, onSignOut }) {
             <span style={{ fontSize: 9, padding: '1px 5px', background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 4, color: T.textMuted, fontFamily: 'ui-monospace, monospace' }}>⌘K</span>
           </div>
 
-          {/* 年度切り替え */}
-          <div data-tour="year" style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0 }}>
-            {['2025', '2026'].map(yr => (
-              <button key={yr} onClick={() => setFiscalYear(yr)} style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: fiscalYear === yr ? BRAND_GRADIENT.cta : 'transparent', color: fiscalYear === yr ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}>{yr}年度</button>
-            ))}
+          {/* 年度切り替え (組織ごとに追加可) */}
+          <div data-tour="year" style={{ display: 'flex', gap: 2, background: T.bgSoft, padding: 3, borderRadius: 9, border: `1px solid ${T.border}`, flexShrink: 0, alignItems: 'center' }}>
+            {fiscalYears.map(yr => {
+              const active = fiscalYear === yr
+              return (
+                <button key={yr} onClick={() => setFiscalYear(yr)}
+                  onContextMenu={canEditOKR ? (e) => { e.preventDefault(); removeFiscalYear(yr) } : undefined}
+                  title={canEditOKR ? `${yr}年度に切替（右クリックで一覧から削除）` : `${yr}年度に切替`}
+                  style={{ padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', background: active ? BRAND_GRADIENT.cta : 'transparent', color: active ? '#fff' : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>{yr}年度</button>
+              )
+            })}
+            {canEditOKR && (
+              <button onClick={addFiscalYear} title="年度を追加"
+                style={{ padding: '4px 7px', borderRadius: 7, border: 'none', cursor: 'pointer', background: 'transparent', color: T.textMuted, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.bgCard; e.currentTarget.style.color = T.accent }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T.textMuted }}>
+                <Icon name="plus" size={13} stroke={2.4} />
+              </button>
+            )}
           </div>
 
           {/* 右側 */}
@@ -1593,6 +1642,16 @@ export default function Dashboard({ user, onSignOut }) {
             {aiChatEnabled && (
               <button onClick={() => setShowAI(p => !p)} title="AI アシスタント" style={{ background: T.bgCard, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name="ai" size={15} />
+              </button>
+            )}
+            {/* メンバー目線プレビュー中インジケータ (クリックで解除) */}
+            {viewAsMember && (
+              <button onClick={() => setViewAsMember(false)} title="クリックで管理者表示に戻る" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, height: 32, padding: '0 10px',
+                borderRadius: 8, border: `1px solid ${T.accent}`, background: T.accentBg, color: T.accent,
+                fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}>
+                <Icon name="user" size={12} /> メンバー目線で表示中 <Icon name="cross" size={11} />
               </button>
             )}
             {/* ユーザーメニュー (テーマ切替・同期状態もここに集約) */}
@@ -1610,6 +1669,16 @@ export default function Dashboard({ user, onSignOut }) {
                     {syncStatus === 'synced' ? '同期済' : syncStatus === 'error' ? 'エラー' : '同期中'}
                   </span>
                 </div>
+                {isRealAdmin && (
+                  <>
+                    <button onClick={() => setViewAsMember(!viewAsMember)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: viewAsMember ? T.accentBg : 'transparent', color: viewAsMember ? T.accent : T.text, fontSize: 12, fontFamily: 'inherit', fontWeight: viewAsMember ? 700 : 400 }}>
+                      <Icon name="user" size={13} />
+                      {viewAsMember ? 'メンバー目線を解除（管理者に戻る）' : 'メンバー目線で表示'}
+                    </button>
+                    <div style={{ padding: '0 12px 6px 30px', fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>編集ボタン等を非表示にして一般メンバーの見え方を確認します（データ閲覧自体は制限されません）。</div>
+                    <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
+                  </>
+                )}
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
                 {hasGoogle

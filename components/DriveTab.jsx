@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useCurrentOrg } from '../lib/orgContext'
 import Icon from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { cardStyle, pillStyle, btnPrimary, btnSecondary, btnGhost, inputStyle, sectionHeaderStyle } from '../lib/iosStyles'
@@ -99,6 +100,8 @@ export default function DriveTab({ T, myName, viewingName }) {
 
 // ─── AI チャットパネル ─────────────────────────────────────────
 function DriveChat({ T, owner }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [history, setHistory] = useState([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -126,6 +129,7 @@ function DriveChat({ T, owner }) {
         body: JSON.stringify({
           owner, message: msg,
           history: history.map(h => ({ role: h.role, content: h.content })),
+          organization_id: orgId,
         }),
       })
       const j = await r.json()
@@ -171,12 +175,12 @@ function DriveChat({ T, owner }) {
             ...cardStyle({ T, accent: T.accent, padding: SPACING.lg + 2 }),
             ...TYPO.subhead, fontWeight: 600, color: T.textSub, lineHeight: 1.7,
           }}>
-            ネオ福岡 共有ドライブ内の資料を検索できます。<br />
+            共有ドライブ内の資料を AI で検索できます。<br />
             例:
             <ul style={{ paddingLeft: SPACING.lg + 2, margin: `${SPACING.xs + 2}px 0 0` }}>
-              <li>「やずや提案の最新版どこ?」</li>
-              <li>「先週の経営会議の議事録を要約して」</li>
-              <li>「面川さんが書いた研修資料」</li>
+              <li>「最新版の提案資料はどこ?」</li>
+              <li>「先週の会議の議事録を要約して」</li>
+              <li>「研修資料を探して」</li>
               <li>「○○の提案書の内容を教えて」</li>
             </ul>
           </div>
@@ -298,8 +302,10 @@ function FileCard({ T, file }) {
 
 // ─── Drive ブラウザ (階層 + 検索) ──────────────────────────────
 function DriveBrowser({ T, owner }) {
+  const { currentOrg } = useCurrentOrg()
+  const orgId = currentOrg?.id || null
   const [folderId, setFolderId] = useState(null)  // null=ルート
-  const [folderName, setFolderName] = useState('ネオ福岡')
+  const [folderName, setFolderName] = useState('共有ドライブ')
   const [breadcrumb, setBreadcrumb] = useState([])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -313,11 +319,13 @@ function DriveBrowser({ T, owner }) {
   const [searchLoading, setSearchLoading] = useState(false)
 
   const load = useCallback(async (fid) => {
+    if (!orgId) return
     setLoading(true); setError(''); setNeedsReauth(false)
     try {
       const u = new URL('/api/integrations/drive/list', window.location.origin)
       u.searchParams.set('owner', owner)
       if (fid) u.searchParams.set('folder_id', fid)
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) {
@@ -327,15 +335,15 @@ function DriveBrowser({ T, owner }) {
       }
       setItems(j.items || [])
       setBreadcrumb(j.breadcrumb || [])
-      if (j.folder) setFolderName(j.folder.name || 'ネオ福岡')
+      if (j.folder) setFolderName(j.folder.name || '共有ドライブ')
     } catch (e) {
       setError(e.message || '読み込みエラー')
     } finally {
       setLoading(false)
     }
-  }, [owner])
+  }, [owner, orgId])
 
-  useEffect(() => { if (owner) load(folderId) }, [load, owner, folderId])
+  useEffect(() => { if (owner && orgId) load(folderId) }, [load, owner, folderId, orgId])
 
   const runSearch = useCallback(async () => {
     const q = searchQ.trim()
@@ -345,6 +353,7 @@ function DriveBrowser({ T, owner }) {
       const u = new URL('/api/integrations/drive/search', window.location.origin)
       u.searchParams.set('owner', owner)
       u.searchParams.set('q', q)
+      u.searchParams.set('organization_id', orgId || '')
       const r = await fetch(u.toString())
       const j = await r.json()
       if (!r.ok) {
@@ -359,7 +368,7 @@ function DriveBrowser({ T, owner }) {
     } finally {
       setSearchLoading(false)
     }
-  }, [owner, searchQ])
+  }, [owner, searchQ, orgId])
 
   const clickItem = (item) => {
     if (item.isFolder) {
