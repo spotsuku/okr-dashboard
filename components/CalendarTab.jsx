@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useCurrentOrg } from '../lib/orgContext'
 import Icon from './Icon'
-import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { TYPO, SPACING, RADIUS, SHADOWS, BRAND_GRADIENT } from '../lib/themeTokens'
 import { inputStyle, btnPrimary, btnSecondary } from '../lib/iosStyles'
 
 // ─── Date utilities (JST) ─────────────────────────────────────────────────
@@ -177,6 +177,8 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           colorOf={colorOf}
           emailOf={emailOf}
           freeSlots={freeSlots}
+          myName={myName}
+          orgId={orgId}
           onSlotClick={(ymd, startMin) => setCreateSlot({ ymd, startMin, endMin: Math.min(startMin + 60, HOUR_TO * 60) })}
         />
       </div>
@@ -542,7 +544,7 @@ function miniBtn(T) {
 }
 
 // ─── 週グリッド (時間 × 日) ───────────────────────────────────────────
-function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots, onSlotClick }) {
+function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots, onSlotClick, myName, orgId }) {
   const TIME_COL = 56
   // 0:00 JST 起点での当日経過分 → top px
   const minToPx = (mins) => ((mins - HOUR_FROM * 60) / SLOT_MIN) * SLOT_PX
@@ -764,7 +766,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
         })}
       </div>
       {/* 凡例 + 未連携リスト */}
-      <UnconnectedFooter T={T} dataMembers={dataMembers} selected={selected} />
+      <UnconnectedFooter T={T} dataMembers={dataMembers} selected={selected} myName={myName} orgId={orgId} />
     </div>
   )
 }
@@ -891,12 +893,23 @@ function computeFreeSlots(data, days, selected) {
   return result
 }
 
-// ─── 未連携メンバーのフッター (連携依頼 mailto) ────────────────────────
-function UnconnectedFooter({ T, dataMembers, selected }) {
+// ─── 未連携メンバーのフッター ────────────────────────
+// 自分自身が未連携なら「Google を連携」ボタン (OAuth開始)、他メンバーなら連携依頼 mailto。
+function UnconnectedFooter({ T, dataMembers, selected, myName, orgId }) {
   const { currentOrg } = useCurrentOrg()
   const orgPath = currentOrg?.slug ? `/${currentOrg.slug}` : ''
   const unconnected = (dataMembers || []).filter(r => selected.includes(r.name) && !r.connected)
   if (unconnected.length === 0) return null
+
+  const connectSelf = () => {
+    if (!myName || !orgId) return
+    const u = new URL('/api/integrations/google/start', window.location.origin)
+    u.searchParams.set('owner', myName)
+    u.searchParams.set('organization_id', orgId)
+    u.searchParams.set('return_to', window.location.pathname + window.location.search)
+    window.location.href = u.toString()
+  }
+
   return (
     <div style={{
       padding: `${SPACING.sm + 2}px ${SPACING.lg}px`, borderTop: `1px solid ${T.border}`,
@@ -907,6 +920,20 @@ function UnconnectedFooter({ T, dataMembers, selected }) {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.sm }}>
         {unconnected.map(r => {
+          // 自分自身 → 直接 Google 連携ボタン
+          if (r.name === myName) {
+            return (
+              <button key={r.name} onClick={connectSelf}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+                  padding: '4px 12px', borderRadius: RADIUS.xs, border: 'none',
+                  background: BRAND_GRADIENT.cta, color: '#fff',
+                  cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit', ...TYPO.footnote,
+                }}>
+                <Icon name="link" size={12} /> Google を連携する
+              </button>
+            )
+          }
           const subject = encodeURIComponent('OKR Dashboard カレンダー連携のお願い')
           const link = typeof window !== 'undefined'
             ? `${window.location.origin}${orgPath}?page=integrations`
