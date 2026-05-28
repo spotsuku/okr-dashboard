@@ -560,6 +560,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             }}>その他</div>
             {SIDEBAR_OTHER
               .filter(item => !item.requiresFlag || enabledModules?.[item.requiresFlag])
+              // モバイルでは下フッターと重複する項目をサイドから除外
+              .filter(item => !isMobile || !MOBILE_NAV.some(m => m.key === item.key))
               .map(item => {
               const isActive = !summaryMode && activeTab === item.key
               const showBadge = item.key === 'confirm' && unresolvedConfirmCount > 0
