@@ -190,7 +190,7 @@ function Modal({ title, onClose, children }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: getT().bgCard, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
+        background: getT().bgCard, border: `1px solid ${getT().border}`, borderRadius: 10,
         padding: 26, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -213,7 +213,7 @@ function FInput({ label, value, onChange, placeholder, type = 'text' }) {
       {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         style={{
-          width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+          width: '100%', background: getT().sectionBg, border: `1px solid ${getT().border}`,
           borderRadius: 8, padding: '9px 12px', color: getT().text, fontSize: 13, outline: 'none',
           fontFamily: 'inherit', boxSizing: 'border-box',
         }} />
@@ -226,7 +226,7 @@ function FSelect({ label, value, onChange, options }) {
     <div style={{ marginBottom: 13 }}>
       {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
       <select value={value} onChange={e => onChange(e.target.value)} style={{
-        width: '100%', background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)',
+        width: '100%', background: getT().bgCard2, border: `1px solid ${getT().border}`,
         borderRadius: 8, padding: '9px 12px', color: getT().text, fontSize: 13, outline: 'none',
         fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
       }}>
@@ -383,7 +383,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         <div style={{ marginBottom: 13 }}>
           <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>紐付け通期OKR <span style={{ color: '#ff6b6b' }}>*</span></div>
           <select value={parentId || ''} onChange={e => setParentId(e.target.value ? parseInt(e.target.value) : null)} style={{
-            width: '100%', background: getT().bgCard2, border: `1px solid ${parentId ? 'rgba(255,255,255,0.1)' : 'rgba(255,107,107,0.4)'}`,
+            width: '100%', background: getT().bgCard2, border: `1px solid ${parentId ? getT().border : 'rgba(255,107,107,0.4)'}`,
             borderRadius: 8, padding: '9px 12px', color: parentId ? '#e8eaf0' : '#505878', fontSize: 13,
             outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
           }}>
@@ -399,8 +399,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       <div style={{ marginBottom: 13 }}>
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>オーナー</div>
         <select value={owner} onChange={e => setOwner(e.target.value)} style={{
-          width: '100%', background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 8, padding: '9px 12px', color: owner ? '#e8eaf0' : '#505878', fontSize: 13,
+          width: '100%', background: getT().bgCard2, border: `1px solid ${getT().border}`,
+          borderRadius: 8, padding: '9px 12px', color: owner ? getT().text : getT().textFaint, fontSize: 13,
           outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
         }}>
           <option value="">-- 未設定 --</option>
@@ -412,7 +412,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5, display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
           <Icon name="flag" size={12} /> プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8 }}>
           {programTags.map(t => {
             const isOrphan = !allTags.includes(t)
             return (
@@ -469,7 +469,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           <div key={key} style={{ background: getT().bgCard, border: `1px solid ${getT().border}`, borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 11, color: getT().textMuted }}>KR {i + 1}</span>
-              {krs.length > 1 && <Btn small danger variant="ghost" onClick={() => removeKR(key)}>削除</Btn>}
+              <Btn small danger variant="ghost" onClick={() => removeKR(key)}>削除</Btn>
             </div>
             <FInput value={kr.title} onChange={v => updateKR(key, 'title', v)} placeholder="KR のタイトル" />
             <div style={{ display: 'flex', gap: 8 }}>

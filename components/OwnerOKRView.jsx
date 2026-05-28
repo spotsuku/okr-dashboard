@@ -182,7 +182,18 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
         krMap[kr.objective_id].push(kr)
       })
     }
-    const fullObjs = allObjs.map(o => ({ ...o, key_results: krMap[o.id] || [] }))
+    // 個人ビューは「閲覧中メンバー(ownerName)が担当のKR」だけに絞り込んで可読性を上げる。
+    // KR の owner が未設定 / 不明のものは目的を持つメンバーの責任範囲とみなし、ownerName と
+    // 目的のオーナーが一致するときだけ表示する。
+    const fullObjs = allObjs.map(o => {
+      const krs = krMap[o.id] || []
+      const filtered = krs.filter(kr => {
+        if (kr.owner && kr.owner === ownerName) return true
+        if (!kr.owner && o.owner === ownerName) return true
+        return false
+      })
+      return { ...o, key_results: filtered }
+    }).filter(o => o.key_results.length > 0 || o.owner === ownerName)
     fullObjs.sort((a, b) => (PERIOD_ORDER[rawPeriod(a.period)] ?? 9) - (PERIOD_ORDER[rawPeriod(b.period)] ?? 9))
 
     let allKAs = myKAs || []
