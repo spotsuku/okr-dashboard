@@ -67,10 +67,10 @@ const THEMES = {
   light: { ...COMMON_TOKENS.light, cardHover: 'rgba(0,0,0,0.02)' },
 }
 
-// ─── カスタムリンク (localStorage 永続化) ─────────────────────────
+// ─── カスタムリンク (Supabase 永続化) ──────────────────────────────
 // カスタムリンクは「アイコン色」で見分ける。色トークンキーで保存し描画時に T から解決する。
+// personal (user_email = 自分のメール) と shared (user_email = NULL) の 2 レーン。
 const LINK_COLOR_KEYS = ['accent', 'success', 'warn', 'danger', 'purple', 'indigo']
-const CUSTOM_LINKS_KEY = (email) => `portal_custom_links_v1_${email || 'guest'}`
 
 // 色キーから { bg, fg } を解決 (アイコンタイルの淡色背景 + 前景色)。purple/indigo は固定 hex (トークン未定義のため)
 function linkColorTokens(T, key) {
@@ -85,19 +85,6 @@ function linkColorTokens(T, key) {
   }
 }
 
-function loadCustomLinks(email) {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(CUSTOM_LINKS_KEY(email))
-    if (!raw) return []
-    const arr = JSON.parse(raw)
-    return Array.isArray(arr) ? arr : []
-  } catch { return [] }
-}
-function saveCustomLinks(email, links) {
-  if (typeof window === 'undefined') return
-  try { window.localStorage.setItem(CUSTOM_LINKS_KEY(email), JSON.stringify(links)) } catch { /* noop */ }
-}
 // ─── オンボーディング (7ステップ) ──────────────────────────────
 const ONB_DISMISS_KEY = (email) => `home_onboarding_dismissed_${email || 'guest'}`
 const ONB_SEEN_OKR_KEY = 'home_onb_seen_okr'
@@ -167,32 +154,54 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     task: false, reflection: false, goal: false,
   })
 
-  // カスタムリンク state
-  const [customLinks, setCustomLinks] = useState([])
+  // カスタムリンク state (Supabase 2レーン)
+  const [personalLinks, setPersonalLinks] = useState([])
+  const [sharedLinks, setSharedLinks] = useState([])
+  const [linksLoading, setLinksLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [showManage, setShowManage] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formTitle, setFormTitle] = useState('')
   const [formUrl, setFormUrl] = useState('')
   const [formColor, setFormColor] = useState('accent')
+  const [formIsShared, setFormIsShared] = useState(false)
+  const [formSaving, setFormSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  const canManageShared = currentOrg?.role === 'owner' || currentOrg?.role === 'admin'
 
-  // localStorage から読み込み (ユーザーごと)
+  // オンボーディング localStorage 読み込み (ユーザーごと)
   useEffect(() => {
-    setCustomLinks(loadCustomLinks(user?.email))
     setOnbDismissed(loadOnbDismissed(user?.email))
     setOnbSeenOkr(loadOnbSeenOkr())
   }, [user?.email])
 
   // step4 (リンク) / step7 (目標) はクライアント状態から判定
   useEffect(() => {
-    setOnbDone(prev => ({ ...prev, links: customLinks.length > 0, goal: onbSeenOkr }))
-  }, [customLinks.length, onbSeenOkr])
+    setOnbDone(prev => ({ ...prev, links: personalLinks.length > 0, goal: onbSeenOkr }))
+  }, [personalLinks.length, onbSeenOkr])
 
-  const persistLinks = useCallback((next) => {
-    setCustomLinks(next)
-    saveCustomLinks(user?.email, next)
-  }, [user?.email])
+  // Supabase からカスタムリンクを取得 (org + ユーザーが揃ったら)
+  const fetchLinks = useCallback(async () => {
+    if (!orgId || !user?.email) return
+    setLinksLoading(true)
+    const { data, error } = await supabase.from('custom_links')
+      .select('id, title, url, color, sort_order, user_email')
+      .eq('organization_id', orgId)
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true })
+    setLinksLoading(false)
+    if (error) {
+      if (!/relation.*does not exist|custom_links/i.test(error.message || '')) {
+        console.warn('[PortalPage] custom_links fetch error:', error.message)
+      }
+      return
+    }
+    const rows = data || []
+    setPersonalLinks(rows.filter(l => l.user_email === user.email))
+    setSharedLinks(rows.filter(l => !l.user_email))
+  }, [orgId, user?.email])
+
+  useEffect(() => { fetchLinks() }, [fetchLinks])
 
   // ─── 実データ読み込み (全て org-scope: .eq('organization_id', orgId)) ───
   useEffect(() => {
@@ -420,30 +429,45 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     setOnbDismissed(true)
   }
 
-  function openAddDialog() {
-    setEditingId(null); setFormTitle(''); setFormUrl(''); setFormColor('accent'); setFormError(''); setShowAdd(true)
+  function openAddDialog(isShared = false) {
+    setEditingId(null); setFormTitle(''); setFormUrl(''); setFormColor('accent')
+    setFormIsShared(isShared); setFormError(''); setFormSaving(false); setShowAdd(true)
   }
   function openEditDialog(link) {
     setEditingId(link.id); setFormTitle(link.title); setFormUrl(link.url)
     setFormColor(link.color && LINK_COLOR_KEYS.includes(link.color) ? link.color : 'accent')
-    setFormError(''); setShowManage(false); setShowAdd(true)
+    setFormIsShared(!link.user_email); setFormError(''); setFormSaving(false)
+    setShowManage(false); setShowAdd(true)
   }
-  function submitForm() {
+  async function submitForm() {
     const title = formTitle.trim()
     const url = normalizeUrl(formUrl)
     if (!title) { setFormError('表示名を入力してください'); return }
     if (!url)   { setFormError('URLを入力してください'); return }
     try { new URL(url) } catch { setFormError('URLの形式が正しくありません'); return }
-    if (editingId) {
-      persistLinks(customLinks.map(l => l.id === editingId ? { ...l, title, url, color: formColor } : l))
-    } else {
-      const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-      persistLinks([...customLinks, { id, title, url, color: formColor }])
+    setFormSaving(true)
+    const payload = {
+      organization_id: orgId,
+      user_email: formIsShared ? null : user?.email,
+      title, url, color: formColor,
+      updated_at: new Date().toISOString(),
     }
+    let error
+    if (editingId) {
+      ({ error } = await supabase.from('custom_links').update(payload).eq('id', editingId))
+    } else {
+      ({ error } = await supabase.from('custom_links').insert(payload))
+    }
+    setFormSaving(false)
+    if (error) { setFormError((editingId ? '保存' : '追加') + 'に失敗しました: ' + error.message); return }
+    await fetchLinks()
     setShowAdd(false)
   }
-  function deleteLink(id) {
-    persistLinks(customLinks.filter(l => l.id !== id))
+  async function deleteLink(id) {
+    if (!window.confirm('このリンクを削除しますか？')) return
+    const { error } = await supabase.from('custom_links').delete().eq('id', id)
+    if (error) { alert('削除に失敗しました: ' + error.message); return }
+    await fetchLinks()
   }
 
   // 表示名 (members から解決、無ければ email)
@@ -488,6 +512,59 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
     if (!onbDismissed && onbAllDone) dismissOnboarding()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onbAllDone, onbDismissed])
+
+  // ─── リンクグリッド (2レーン共通) ──────────────────────────────
+  function LinkGrid({ links, T: t, isMobile: mob, onAdd, loading, addLabel = 'リンクを追加' }) {
+    if (loading && links.length === 0) return (
+      <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', color: t.textMuted, fontSize: 12 }}>読み込み中…</div>
+    )
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 10 }}>
+        {links.map(l => {
+          const c = linkColorTokens(t, l.color)
+          return (
+            <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
+              style={{ ...cardStyle({ T: t, padding: 14 }), borderRadius: RADIUS.md, display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: c.bg, color: c.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon name="link" size={16} stroke={1.8} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+                <div style={{ fontSize: 10.5, color: t.textMuted, fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayUrl(l.url)}</div>
+              </div>
+              <span style={{ color: t.textMuted, flexShrink: 0 }}><Icon name="external" size={11} stroke={1.8} /></span>
+            </a>
+          )
+        })}
+        {onAdd && (
+          <button onClick={onAdd}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 14, background: t.sectionBg, border: `1.5px dashed ${t.borderMid}`, borderRadius: RADIUS.md, color: t.textSub, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <Icon name="plus" size={13} stroke={2.2} /> {addLabel}
+          </button>
+        )}
+        {!onAdd && links.length === 0 && (
+          <div style={{ padding: '16px 14px', gridColumn: '1/-1', color: t.textMuted, fontSize: 12, textAlign: 'center' }}>共有リンクはまだありません</div>
+        )}
+      </div>
+    )
+  }
+
+  function ManageLinkRow({ l, T: t, onEdit, onDelete }) {
+    const c = linkColorTokens(t, l.color)
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: `1px solid ${t.border}` }}>
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: c.bg, color: c.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name="link" size={14} stroke={1.8} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+          <div style={{ fontSize: 10.5, color: t.textMuted, fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayUrl(l.url)}</div>
+        </div>
+        {onEdit && <button onClick={onEdit} title="編集" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${t.border}`, background: t.sectionBg, color: t.textSub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="pencil" size={13} /></button>}
+        {onDelete && <button onClick={onDelete} title="削除" style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${t.danger}40`, background: t.sectionBg, color: t.danger, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="trash" size={14} /></button>}
+      </div>
+    )
+  }
 
   // ─── 共通スタイル断片 ──────────────────────────────
   const destCard = {
@@ -777,14 +854,13 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
           </div>
         )}
 
-        {/* ─── カスタムリンク ─── */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '8px 0 14px' }}>
+        {/* ─── カスタムリンク (2レーン) ─── */}
+        {/* 個人リンク */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '8px 0 12px' }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: T.text, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="link" size={13} style={{ color: T.accent }} /> カスタムリンク
+            <Icon name="user" size={13} style={{ color: T.accent }} /> マイリンク
           </h3>
-          <span style={{ fontSize: 11.5, color: T.textMuted }}>
-            よく使うツール・社内ドキュメント・外部サービスをここに追加できます
-          </span>
+          <span style={{ fontSize: 11.5, color: T.textMuted }}>自分だけに表示されるリンク</span>
           <div style={{ marginLeft: 'auto' }}>
             <button onClick={() => setShowManage(true)}
               style={{ ...btnGhost({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -792,44 +868,24 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
             </button>
           </div>
         </div>
+        <LinkGrid links={personalLinks} T={T} isMobile={isMobile} onAdd={() => openAddDialog(false)} loading={linksLoading} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 10 }}>
-          {customLinks.map(l => {
-            const c = linkColorTokens(T, l.color)
-            return (
-              <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
-                style={{
-                  ...cardStyle({ T, padding: 14 }), borderRadius: RADIUS.md,
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  textDecoration: 'none', color: 'inherit', cursor: 'pointer',
-                }}>
-                <div style={{
-                  width: 34, height: 34, borderRadius: 9, background: c.bg, color: c.fg,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>
-                  <Icon name="link" size={16} stroke={1.8} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
-                  <div style={{ fontSize: 10.5, color: T.textMuted, fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayUrl(l.url)}</div>
-                </div>
-                <span style={{ color: T.textMuted, flexShrink: 0 }}><Icon name="external" size={11} stroke={1.8} /></span>
-              </a>
-            )
-          })}
-
-          {/* 追加カード (点線) */}
-          <button onClick={openAddDialog}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: 14, background: T.sectionBg,
-              border: `1.5px dashed ${T.borderMid}`, borderRadius: RADIUS.md,
-              color: T.textSub, fontSize: 12.5, fontWeight: 500, cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}>
-            <Icon name="plus" size={13} stroke={2.2} /> リンクを追加
-          </button>
+        {/* 組織共有リンク */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '18px 0 12px' }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: T.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="users" size={13} style={{ color: T.success }} /> 組織共有リンク
+          </h3>
+          <span style={{ fontSize: 11.5, color: T.textMuted }}>組織メンバー全員に表示されるリンク</span>
+          {canManageShared && (
+            <div style={{ marginLeft: 'auto' }}>
+              <button onClick={() => openAddDialog(true)}
+                style={{ ...btnGhost({ T, size: 'sm' }), display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Icon name="plus" size={12} stroke={2.2} /> 追加
+              </button>
+            </div>
+          )}
         </div>
+        <LinkGrid links={sharedLinks} T={T} isMobile={isMobile} onAdd={canManageShared ? () => openAddDialog(true) : null} loading={linksLoading} addLabel="共有リンクを追加" />
 
         {/* ─── 情報グリッド ─── */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, marginTop: 18 }}>
@@ -896,6 +952,26 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
                   })}
                 </div>
               </div>
+              {canManageShared && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, background: T.sectionBg, border: `1px solid ${T.border}` }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text }}>組織全体に共有</div>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 1 }}>ONにすると組織メンバー全員に表示されます</div>
+                  </div>
+                  <button onClick={() => setFormIsShared(v => !v)} role="switch" aria-checked={formIsShared}
+                    style={{
+                      width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                      background: formIsShared ? T.success : T.borderMid,
+                      position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                    }}>
+                    <span style={{
+                      position: 'absolute', top: 2, left: formIsShared ? 22 : 2,
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      boxShadow: '0 1px 4px rgba(0,0,0,.2)', transition: 'left 0.2s',
+                    }} />
+                  </button>
+                </div>
+              )}
               {formError && (
                 <div style={{ padding: '8px 12px', borderRadius: 8, background: T.dangerSoft, color: T.danger, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Icon name="alert" size={14} /> {formError}
@@ -904,8 +980,10 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
             </div>
 
             <div style={{ padding: '12px 18px', borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'flex-end', gap: 8, background: T.sectionBg }}>
-              <button onClick={() => setShowAdd(false)} style={btnSecondary({ T, size: 'md' })}>キャンセル</button>
-              <button onClick={submitForm} style={btnBrand({ size: 'md' })}>{editingId ? '保存する' : '追加する'}</button>
+              <button onClick={() => setShowAdd(false)} style={btnSecondary({ T, size: 'md' })} disabled={formSaving}>キャンセル</button>
+              <button onClick={submitForm} style={btnBrand({ size: 'md' })} disabled={formSaving}>
+                {formSaving ? '保存中…' : (editingId ? '保存する' : '追加する')}
+              </button>
             </div>
           </div>
         </div>
@@ -932,36 +1010,24 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
                 <Icon name="cross" size={13} stroke={2} />
               </button>
             </div>
-            <div style={{ padding: '8px 0', maxHeight: '60vh', overflowY: 'auto' }}>
-              {customLinks.length === 0 ? (
-                <div style={{ padding: '24px 18px', textAlign: 'center', color: T.textMuted, fontSize: 12, lineHeight: 1.7 }}>
-                  登録済みのリンクはありません。<br />「リンクを追加」から登録してください。
-                </div>
-              ) : customLinks.map(l => {
-                const c = linkColorTokens(T, l.color)
-                return (
-                  <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: `1px solid ${T.border}` }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 8, background: c.bg, color: c.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Icon name="link" size={14} stroke={1.8} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 600, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
-                      <div style={{ fontSize: 10.5, color: T.textMuted, fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayUrl(l.url)}</div>
-                    </div>
-                    <button onClick={() => openEditDialog(l)} title="編集"
-                      style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${T.border}`, background: T.sectionBg, color: T.textSub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="pencil" size={13} />
-                    </button>
-                    <button onClick={() => deleteLink(l.id)} title="削除"
-                      style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${T.danger}40`, background: T.sectionBg, color: T.danger, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="trash" size={14} />
-                    </button>
-                  </div>
-                )
-              })}
+            <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {/* 個人リンク */}
+              <div style={{ padding: '8px 18px 4px', fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: `1px solid ${T.border}` }}>
+                <Icon name="user" size={11} /> マイリンク
+              </div>
+              {personalLinks.length === 0 ? (
+                <div style={{ padding: '12px 18px', color: T.textMuted, fontSize: 12 }}>まだ個人リンクはありません</div>
+              ) : personalLinks.map(l => <ManageLinkRow key={l.id} l={l} T={T} onEdit={() => openEditDialog(l)} onDelete={() => deleteLink(l.id)} />)}
+              {/* 組織共有リンク */}
+              <div style={{ padding: '8px 18px 4px', marginTop: 4, fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: `1px solid ${T.border}` }}>
+                <Icon name="users" size={11} /> 組織共有リンク
+              </div>
+              {sharedLinks.length === 0 ? (
+                <div style={{ padding: '12px 18px', color: T.textMuted, fontSize: 12 }}>組織共有リンクはありません</div>
+              ) : sharedLinks.map(l => <ManageLinkRow key={l.id} l={l} T={T} onEdit={canManageShared ? () => openEditDialog(l) : null} onDelete={canManageShared ? () => deleteLink(l.id) : null} />)}
             </div>
             <div style={{ padding: '12px 18px', borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'flex-end', gap: 8, background: T.sectionBg }}>
-              <button onClick={() => { setShowManage(false); openAddDialog() }} style={{ ...btnBrand({ size: 'md' }), display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <button onClick={() => { setShowManage(false); openAddDialog(false) }} style={{ ...btnBrand({ size: 'md' }), display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <Icon name="plus" size={13} stroke={2.2} /> リンクを追加
               </button>
             </div>
