@@ -61,6 +61,8 @@ export default function LoginPage({ orgName = null }) {
       provider: 'google',
       options: {
         redirectTo: PRODUCTION_URL,
+        // prompt=select_account: 前回ログインしたアカウントで自動ログインせず、毎回アカウント選択画面を表示
+        queryParams: { prompt: 'select_account' },
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
