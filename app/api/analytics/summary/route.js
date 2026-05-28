@@ -59,13 +59,32 @@ export async function GET(request) {
   }
   const memberCount = (memberRows || []).length
 
-  // イベント取得
-  const { data: events, error: evErr } = await sb.from('analytics_events')
-    .select('user_email, event_type, page, created_at')
-    .eq('organization_id', orgId)
-    .gte('created_at', sinceISO)
-    .order('created_at', { ascending: false })
-    .limit(50000)
+  // イベント取得 (feature 列は未マイグレ環境でも落ちないよう例外で吸収)
+  let events = []
+  let evErr = null
+  let hasFeatureCol = true
+  {
+    const r = await sb.from('analytics_events')
+      .select('user_email, event_type, page, feature, created_at')
+      .eq('organization_id', orgId)
+      .gte('created_at', sinceISO)
+      .order('created_at', { ascending: false })
+      .limit(50000)
+    if (r.error && /feature|column .* does not exist/i.test(r.error.message || '')) {
+      hasFeatureCol = false
+      const r2 = await sb.from('analytics_events')
+        .select('user_email, event_type, page, created_at')
+        .eq('organization_id', orgId)
+        .gte('created_at', sinceISO)
+        .order('created_at', { ascending: false })
+        .limit(50000)
+      events = r2.data || []
+      evErr = r2.error
+    } else {
+      events = r.data || []
+      evErr = r.error
+    }
+  }
 
   // テーブル未作成 (マイグレーション未適用) を検知してフロントに知らせる
   if (evErr) {
@@ -80,11 +99,13 @@ export async function GET(request) {
 
   // ユーザー別集計
   const byUser = {}        // email → { events, pageViews, logins, lastActive, pages:{page:count} }
-  const byFeature = {}     // page → { count, users:Set }
+  const byPage = {}        // page → { count, users:Set }              ← 機能 (画面) 別
+  const bySubFeature = {}  // 'page::feature' → { page, feature, count, users:Set } ← サブ機能別
   const byDay = {}         // yyyy-mm-dd → { events, users:Set }
   const activeUserSet = new Set()
   let totalEvents = 0
   let loginCount = 0
+  let featureCount = 0
 
   for (const e of rows) {
     const email = e.user_email || '(unknown)'
@@ -99,8 +120,14 @@ export async function GET(request) {
       u.pageViews++
       const p = e.page || '(none)'
       u.pages[p] = (u.pages[p] || 0) + 1
-      const f = byFeature[p] || (byFeature[p] = { count: 0, users: new Set() })
+      const f = byPage[p] || (byPage[p] = { count: 0, users: new Set() })
       f.count++; f.users.add(email)
+    }
+    if (e.event_type === 'feature' && e.feature) {
+      featureCount++
+      const key = `${e.page || ''}::${e.feature}`
+      const sf = bySubFeature[key] || (bySubFeature[key] = { page: e.page || null, feature: e.feature, count: 0, users: new Set() })
+      sf.count++; sf.users.add(email)
     }
 
     const day = fmtDay(e.created_at)
@@ -121,10 +148,17 @@ export async function GET(request) {
     }
   }).sort((a, b) => b.events - a.events)
 
-  const features = Object.entries(byFeature).map(([page, f]) => ({
+  const features = Object.entries(byPage).map(([page, f]) => ({
     page,
     count: f.count,
     users: f.users.size,
+  })).sort((a, b) => b.count - a.count)
+
+  const subFeatures = Object.values(bySubFeature).map((sf) => ({
+    page: sf.page,
+    feature: sf.feature,
+    count: sf.count,
+    users: sf.users.size,
   })).sort((a, b) => b.count - a.count)
 
   // 直近 days 日ぶんの日次トレンド (イベントが無い日も 0 で埋める)
@@ -143,15 +177,18 @@ export async function GET(request) {
   return json({
     ok: true,
     ready: true,
+    hasFeatureCol,
     range: { days, since: sinceISO },
     totals: {
       activeUsers: activeUserSet.size,
       memberCount,
       totalEvents,
       logins: loginCount,
+      featureEvents: featureCount,
     },
     users,
-    features,
+    features,        // 画面 (page) 別
+    subFeatures,     // サブ機能 (page+feature) 別
     daily,
     inactiveMembers,
   })

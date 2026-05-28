@@ -27,9 +27,29 @@ const PAGE_LABELS = {
   bulk: '一括登録',
   csv: 'CSV登録',
   analytics: '利用分析',
+  superanalytics: '全体分析（運営）',
+  mycoo_orb: 'MyCOOオーブ',
   '(none)': '(その他)',
 }
 const pageLabel = (p) => PAGE_LABELS[p] || p || '(その他)'
+
+// サブ機能 (feature) キー → 日本語ラベル
+const FEATURE_LABELS = {
+  // MyPageShell タブ
+  tab_dashboard:    'ダッシュボード',
+  tab_confirm:      '確認',
+  tab_wbs:          'タスク (WBS)',
+  tab_okr_edit:     'OKR編集',
+  tab_mail:         'メール (Gmail)',
+  tab_calendar:     'カレンダー',
+  tab_drive:        'ドライブ',
+  tab_coo:          'MyCOOチャット',
+  tab_retrospect:   '振り返り',
+  tab_integrations: '連携設定',
+  // MyCOO オーブ
+  chat_send:        'AIにメッセージ送信',
+}
+const featureLabel = (f) => FEATURE_LABELS[f] || f || '(その他)'
 
 function fmtDateTime(iso) {
   if (!iso) return '—'
@@ -70,6 +90,7 @@ export default function AnalyticsPage({ T: TProp, themeKey = 'light' }) {
   useEffect(() => { load() }, [load])
 
   const maxFeature = Math.max(1, ...((data?.features || []).map(f => f.count)))
+  const maxSubFeature = Math.max(1, ...((data?.subFeatures || []).map(f => f.count)))
   const maxDaily = Math.max(1, ...((data?.daily || []).map(d => d.activeUsers)))
 
   return (
@@ -164,6 +185,36 @@ export default function AnalyticsPage({ T: TProp, themeKey = 'light' }) {
                     </div>
                     <div style={progressBarStyle({ T, height: 8 })}>
                       <div style={progressFillStyle({ color: T.accent, value: f.count, max: maxFeature })} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* サブ機能の利用 (タブ切替・特定アクション) */}
+            <div style={{ ...cardStyle({ T }), marginTop: SPACING.lg, padding: 0 }}>
+              <div style={sectionHeaderStyle({ T })}>🧷 サブ機能の利用（タブ・アクション別）</div>
+              <div style={{ padding: SPACING.lg, display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+                {(!data.subFeatures || data.subFeatures.length === 0) && (
+                  <div style={{ color: T.textMuted, ...TYPO.subhead, lineHeight: 1.7 }}>
+                    {data.hasFeatureCol === false
+                      ? <>サブ機能列が未作成です。Supabase で <code style={{ background: T.sectionBg, padding: '1px 6px', borderRadius: RADIUS.xs }}>supabase_analytics_events_add_feature.sql</code> を実行してください。</>
+                      : 'まだ記録がありません。マイページのタブ切替や MyCOO チャット送信などを行うと蓄積されます。'}
+                  </div>
+                )}
+                {(data.subFeatures || []).map((f) => (
+                  <div key={`${f.page}::${f.feature}`}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ ...TYPO.subhead, color: T.text, fontWeight: 700 }}>
+                        {featureLabel(f.feature)}
+                        <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 500, marginLeft: 6 }}>
+                          ／ {pageLabel(f.page)}
+                        </span>
+                      </span>
+                      <span style={{ ...TYPO.footnote, color: T.textMuted }}>{f.count.toLocaleString()} 回 ・ {f.users} 人</span>
+                    </div>
+                    <div style={progressBarStyle({ T, height: 8 })}>
+                      <div style={progressFillStyle({ color: '#a855f7', value: f.count, max: maxSubFeature })} />
                     </div>
                   </div>
                 ))}
