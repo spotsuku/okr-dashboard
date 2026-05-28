@@ -17,7 +17,9 @@ import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 const MODEL = 'claude-sonnet-4-5'
 const MAX_STEPS = 8
-const MAX_READ_CHARS = 20000  // AI に渡す最大本文文字数 (tokens 節約)
+const MAX_READ_CHARS = 12000  // AI に渡す最大本文文字数 (tokens 節約)
+const MAX_TOOL_RESULT_CHARS = 8000  // 個々の tool_result を切り詰める (tokens 節約)
+const MAX_HISTORY_TURNS = 6  // 直近 N ターンの履歴のみ送る (1分あたりレート制限対策)
 
 function getDriveId() { return process.env.NEO_FUKUOKA_DRIVE_ID || '' }
 function escapeQuery(q) { return q.replace(/\\/g, '\\\\').replace(/'/g, "\\'") }
@@ -193,8 +195,10 @@ async function handlePost(request) {
 
 ツールは最大 ${MAX_STEPS} ステップまで連続実行できます。無駄な検索を避け、最初に name_only=true で絞ると効率的です。`
 
+  // 履歴は直近 N ターンに制限 (Anthropic の 1分あたり入力トークン制限を超えないため)
+  const trimmedHistory = Array.isArray(history) ? history.slice(-MAX_HISTORY_TURNS) : []
   const messages = [
-    ...history.map(h => ({ role: h.role, content: h.content })),
+    ...trimmedHistory.map(h => ({ role: h.role, content: h.content })),
     { role: 'user', content: message },
   ]
 
@@ -204,7 +208,7 @@ async function handlePost(request) {
   let lastInterimText = ''  // ループ中の interim text (step 上限到達時のフォールバックで使用)
 
   async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
-    let lastStatus = 0, lastRaw = ''
+    let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -218,14 +222,20 @@ async function handlePost(request) {
       if (r.ok) return { ok: true, data: await r.json() }
       lastStatus = r.status
       lastRaw = await r.text()
+      // 429 の retry-after ヘッダを尊重 (秒数)。Anthropic は 30〜60 秒を返すことが多い
+      const retryAfterHeader = Number(r.headers.get('retry-after') || 0)
+      if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(r.status) && attempt < maxRetries - 1) {
-        const delayMs = Math.min(8000, 1000 * Math.pow(2, attempt))
+        // 429 は分単位のレート制限なので、retry-after があればそれを使う。無ければ 12s, 24s, 36s と段階的に待つ
+        const delayMs = r.status === 429
+          ? (retryAfterHeader ? Math.min(60_000, retryAfterHeader * 1000) : (12_000 + attempt * 12_000))
+          : Math.min(8000, 1000 * Math.pow(2, attempt))
         await new Promise(res => setTimeout(res, delayMs))
         continue
       }
       break
     }
-    return { ok: false, status: lastStatus, raw: lastRaw }
+    return { ok: false, status: lastStatus, raw: lastRaw, retryAfter: lastRetryAfter }
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
@@ -237,9 +247,15 @@ async function handlePost(request) {
       messages,
     })
     if (!r.ok) {
-      const friendly = r.status === 529
-        ? 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
-        : `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      let friendly
+      if (r.status === 429) {
+        const waitSec = r.retryAfter || 60
+        friendly = `AI の利用上限に達しました (1分あたりの入力トークン制限)。約 ${waitSec} 秒後に再試行してください。会話履歴をクリアすると上限に達しにくくなります。`
+      } else if (r.status === 529) {
+        friendly = 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
+      } else {
+        friendly = `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      }
       return json({ error: friendly, actions }, { status: 503 })
     }
     const data = r.data
@@ -279,7 +295,7 @@ async function handlePost(request) {
       toolResults.push({
         type: 'tool_result',
         tool_use_id: tu.id,
-        content: JSON.stringify(result).slice(0, 16000),
+        content: JSON.stringify(result).slice(0, MAX_TOOL_RESULT_CHARS),
         is_error: !result.ok,
       })
     }
