@@ -22,6 +22,10 @@ import MyCoachPage from './MyCoachPage'
 import MyPageShell from './MyPageShell'
 import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
+import AnalyticsPage from './AnalyticsPage'
+import SuperAnalyticsPage from './SuperAnalyticsPage'
+import { setTrackContext, track, trackLoginOnce } from '../lib/track'
+import { authedFetch } from '../lib/authedFetch'
 import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
 import Icon, { DataIcon } from './Icon'
@@ -1053,6 +1057,31 @@ export default function Dashboard({ user, onSignOut }) {
     window.history.replaceState(null, '', newUrl)
   }, [activePage, fiscalYear])
 
+  // 利用分析: org / user 確定時に計測コンテキストを設定し、ログインを1回記録
+  useEffect(() => {
+    if (!currentOrg?.id || !user?.email) return
+    setTrackContext({ organizationId: currentOrg.id, userEmail: user.email })
+    trackLoginOnce()
+  }, [currentOrg?.id, user?.email])
+
+  // 利用分析: 画面遷移を page_view として記録
+  useEffect(() => {
+    if (!currentOrg?.id || !user?.email) return
+    track('page_view', activePage)
+  }, [activePage, currentOrg?.id, user?.email])
+
+  // 運営 (SUPER_ADMIN_EMAILS) かどうかをサーバーに問い合わせ、組織横断分析の導線を出すか決める
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  useEffect(() => {
+    if (!user?.email) { setIsSuperAdmin(false); return }
+    let cancelled = false
+    authedFetch('/api/analytics/super?mode=access')
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (!cancelled) setIsSuperAdmin(!!j?.isSuperAdmin) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [user?.email])
+
   useEffect(() => {
     // currentOrg が確定するまでは何もしない (空配列で初期化されたまま)。
     // currentOrg が切り替わったら organization_id で絞り直して再ロードする。
@@ -1679,6 +1708,16 @@ export default function Dashboard({ user, onSignOut }) {
                     <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                   </>
                 )}
+                {isRealAdmin && (
+                  <button onClick={() => setActivePage('analytics')} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'analytics' ? T.accentBg : 'transparent', color: activePage === 'analytics' ? T.accent : T.text, fontSize: 12, fontFamily: 'inherit', fontWeight: activePage === 'analytics' ? 700 : 400 }}>
+                    <Icon name="chart" size={13} /> 利用分析
+                  </button>
+                )}
+                {isSuperAdmin && (
+                  <button onClick={() => setActivePage('superanalytics')} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'superanalytics' ? T.accentBg : 'transparent', color: activePage === 'superanalytics' ? T.accent : T.text, fontSize: 12, fontFamily: 'inherit', fontWeight: activePage === 'superanalytics' ? 700 : 400 }}>
+                    <Icon name="chart" size={13} /> 全体分析（運営）
+                  </button>
+                )}
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
                 {hasGoogle
@@ -1813,6 +1852,8 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} forceMode="facilitation" /></div>}
       {activePage === 'morning' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><MorningMeetingPage user={user} members={members} themeKey={themeKey} /></div>}
+      {activePage === 'analytics' && isRealAdmin && <AnalyticsPage T={T} themeKey={themeKey} />}
+      {activePage === 'superanalytics' && isSuperAdmin && <SuperAnalyticsPage T={T} themeKey={themeKey} />}
       {activePage === 'csv' && <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}
