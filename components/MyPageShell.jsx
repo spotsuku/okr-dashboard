@@ -240,6 +240,19 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
       .subscribe()
     return () => { alive = false; supabase.removeChannel(ch) }
   }, [viewingName])
+  // 外部 (MyCOOオーブのナッジ等) からのタブ切替リクエスト
+  useEffect(() => {
+    const onSetTab = (e) => {
+      const t = e?.detail?.tab
+      if (!t) return
+      setActiveTab(t)
+      setSummaryMode(false)
+      setMobileSidebarOpen(false)
+    }
+    window.addEventListener('mycoach:set-tab', onSetTab)
+    return () => window.removeEventListener('mycoach:set-tab', onSetTab)
+  }, [])
+
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -4283,21 +4296,54 @@ function StreakBanner({ T, viewingName }) {
         .gte('created_at', ninety)
       const writtenDays = new Set((logs || []).map(l => toJSTDateStr(new Date(l.created_at))))
 
-      // 連続記入日数 (今日 or 直近の記入から遡る)
+      // 連続記入日数 (平日のみ集計。土日は跨いでもストリーク途切れない)
+      //   - 土日は記入が無くても streak を切らない (cursor をそのまま遡る)
+      //   - 直近の平日に記入があれば streak を加算、無ければそこで止める
       const today = toJSTDateStr(new Date())
       let cur = 0
       const cursor = new Date(today + 'T00:00:00Z')
-      while (writtenDays.has(toJSTDateStr(cursor))) {
-        cur++
-        cursor.setUTCDate(cursor.getUTCDate() - 1)
+      while (true) {
+        const dow = cursor.getUTCDay()
+        if (dow === 0 || dow === 6) {
+          // 土日: 何もせず1日遡る
+          cursor.setUTCDate(cursor.getUTCDate() - 1)
+          continue
+        }
+        if (writtenDays.has(toJSTDateStr(cursor))) {
+          cur++
+          cursor.setUTCDate(cursor.getUTCDate() - 1)
+        } else {
+          break // 平日に記入無し → ストリーク切れ
+        }
+        if (cur > 365) break // 念のため上限
       }
-      // 自己ベスト
-      const sorted = Array.from(writtenDays).sort()
+
+      // 自己ベスト (平日記入のみで集計。土日を挟んでも連続扱い)
+      const sorted = Array.from(writtenDays)
+        .filter(d => {
+          const dow = new Date(d + 'T00:00:00Z').getUTCDay()
+          return dow !== 0 && dow !== 6 // 平日記入だけ対象
+        })
+        .sort()
+      // 2 つの日付の「間」に存在する平日の数 (両端排他)
+      const weekdaysBetween = (aISO, bISO) => {
+        const a = new Date(aISO + 'T00:00:00Z')
+        const b = new Date(bISO + 'T00:00:00Z')
+        let n = 0
+        const c = new Date(a.getTime())
+        c.setUTCDate(c.getUTCDate() + 1)
+        while (c.getTime() < b.getTime()) {
+          const dw = c.getUTCDay()
+          if (dw !== 0 && dw !== 6) n++
+          c.setUTCDate(c.getUTCDate() + 1)
+        }
+        return n
+      }
       let best = 0, streak = 0, prev = null
       sorted.forEach(d => {
         if (prev) {
-          const diff = (new Date(d).getTime() - new Date(prev).getTime()) / 86400000
-          if (diff <= 1.5) streak++; else streak = 1
+          // 前回記入日と今回の間に「飛んだ平日」が 0 なら連続
+          streak = weekdaysBetween(prev, d) === 0 ? streak + 1 : 1
         } else streak = 1
         if (streak > best) best = streak
         prev = d
