@@ -657,6 +657,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           }}>
             <button
               onClick={() => setMobileSidebarOpen(true)}
+              data-tour="mobile-sidebar-btn"
               style={{
                 padding: '6px 10px', borderRadius: 7,
                 background: 'transparent', border: `1px solid ${T.border}`,
@@ -1016,6 +1017,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               return (
                 <button
                   key={item.key}
+                  data-tour={`mobile-nav-${item.key}`}
                   onClick={() => { setActiveTab(item.key); setSummaryMode(false) }}
                   style={{
                     flex: 1, background: 'transparent', border: 'none',
