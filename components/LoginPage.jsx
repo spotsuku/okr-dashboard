@@ -66,17 +66,13 @@ export default function LoginPage({ orgName = null }) {
     if (error) { setError(error.message); setGoogleLoading(false) }
   }
 
-  // 別の Google アカウントを使う場合: Google からログアウトしてから OAuth を開始する
-  // (prompt=select_account を queryParams で渡すと Google が 400 を返すケースがあるため
-  //  Google のログアウト URL を一旦通してから戻すこの方式を採る)
+  // 別の Google アカウントを使う場合: Google のアカウントページを別タブで開いて
+  // ユーザー自身でログアウト/アカウント切替してもらう。
+  // (Google の Logout?continue= リダイレクト方式は continue URL の制約が厳しく
+  //  400 を返すケースが多いため、確実なこの方式に変更)
   const handleGoogleSwitchAccount = async () => {
-    setGoogleLoading(true)
-    setError('')
-    // 1. Supabase 側もきれいに切る
     try { await supabase.auth.signOut() } catch { /* noop */ }
-    // 2. Google からログアウト → 元のページに戻す (戻ったらユーザーが再度 Google ボタンを押す)
-    const returnUrl = encodeURIComponent(window.location.origin + '/signin')
-    window.location.href = `https://accounts.google.com/Logout?continue=https://appengine.google.com/_ah/logout?continue=${returnUrl}`
+    window.open('https://accounts.google.com/Logout', '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -162,12 +158,14 @@ export default function LoginPage({ orgName = null }) {
           {googleLoading ? '処理中...' : 'Googleでログイン'}
         </button>
 
-        {/* 別の Google アカウントを使うためのリンク (Google からログアウト後に戻ってくる) */}
-        <div style={{ textAlign: 'center', marginBottom: 14 }}>
+        {/* 別の Google アカウントを使う案内 (別タブで Google ログアウトページを開く) */}
+        <div style={{ textAlign: 'center', marginBottom: 14, fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
+          別のGoogleアカウントを使う場合は、
           <button type="button" onClick={handleGoogleSwitchAccount}
-            style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
-            別のGoogleアカウントを使う
+            style={{ background: 'transparent', border: 'none', color: '#2563eb', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+            こちら
           </button>
+          で Google からログアウトしてから「Googleでログイン」を押してください
         </div>
 
         {/* 区切り線 */}
