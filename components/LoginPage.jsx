@@ -61,11 +61,22 @@ export default function LoginPage({ orgName = null }) {
       provider: 'google',
       options: {
         redirectTo: PRODUCTION_URL,
-        // prompt=select_account: 前回ログインしたアカウントで自動ログインせず、毎回アカウント選択画面を表示
-        queryParams: { prompt: 'select_account' },
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
+  }
+
+  // 別の Google アカウントを使う場合: Google からログアウトしてから OAuth を開始する
+  // (prompt=select_account を queryParams で渡すと Google が 400 を返すケースがあるため
+  //  Google のログアウト URL を一旦通してから戻すこの方式を採る)
+  const handleGoogleSwitchAccount = async () => {
+    setGoogleLoading(true)
+    setError('')
+    // 1. Supabase 側もきれいに切る
+    try { await supabase.auth.signOut() } catch { /* noop */ }
+    // 2. Google からログアウト → 元のページに戻す (戻ったらユーザーが再度 Google ボタンを押す)
+    const returnUrl = encodeURIComponent(window.location.origin + '/signin')
+    window.location.href = `https://accounts.google.com/Logout?continue=https://appengine.google.com/_ah/logout?continue=${returnUrl}`
   }
 
   return (
@@ -150,6 +161,14 @@ export default function LoginPage({ orgName = null }) {
           </svg>
           {googleLoading ? '処理中...' : 'Googleでログイン'}
         </button>
+
+        {/* 別の Google アカウントを使うためのリンク (Google からログアウト後に戻ってくる) */}
+        <div style={{ textAlign: 'center', marginBottom: 14 }}>
+          <button type="button" onClick={handleGoogleSwitchAccount}
+            style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+            別のGoogleアカウントを使う
+          </button>
+        </div>
 
         {/* 区切り線 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
