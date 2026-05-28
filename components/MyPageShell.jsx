@@ -240,6 +240,19 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
       .subscribe()
     return () => { alive = false; supabase.removeChannel(ch) }
   }, [viewingName])
+  // 外部 (MyCOOオーブのナッジ等) からのタブ切替リクエスト
+  useEffect(() => {
+    const onSetTab = (e) => {
+      const t = e?.detail?.tab
+      if (!t) return
+      setActiveTab(t)
+      setSummaryMode(false)
+      setMobileSidebarOpen(false)
+    }
+    window.addEventListener('mycoach:set-tab', onSetTab)
+    return () => window.removeEventListener('mycoach:set-tab', onSetTab)
+  }, [])
+
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return

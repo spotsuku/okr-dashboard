@@ -119,7 +119,9 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
           primaryLabel: 'リストを開く',
           primaryAction: () => {
             setNudge(null)
+            // マイページに遷移しつつ、タスク(wbs)タブに切り替える
             window.dispatchEvent(new CustomEvent('okr:goto', { detail: { page: 'mycoach' } }))
+            window.dispatchEvent(new CustomEvent('mycoach:set-tab', { detail: { tab: 'wbs' } }))
           },
         })
       }
