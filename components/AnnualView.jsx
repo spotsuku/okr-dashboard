@@ -1454,6 +1454,13 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                   {(() => { const krc = tColor(kr_r); return <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: RADIUS.pill, background: `${krc}14`, color: krc, fontWeight: 700, flexShrink: 0 }}>{kr_r.label}</span> })()}
                   {aggLabel && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: RADIUS.pill, background: T().sectionBg, color: T().textMuted, fontWeight: 700, flexShrink: 0 }}>{aggLabel}</span>}
                   <span style={{ fontSize: TYPO.body.fontSize, fontWeight: 800, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4, letterSpacing: '-0.01em' }} title={annKr.title}>{annKr.title}</span>
+                  {/* 完了 通期KR をアーカイブ (目標達成時のみ) */}
+                  {Number(annKr.target) > 0 && (annKr.lower_is_better ? Number(annKr.current) <= Number(annKr.target) : Number(annKr.current) >= Number(annKr.target)) && (
+                    <button onClick={(e) => { e.stopPropagation(); archiveKr(annKr) }} title="完了したKRをアーカイブ"
+                      style={{ padding: '2px 5px', borderRadius: RADIUS.xs, border: `1px solid ${T().border}`, background: 'transparent', color: T().textMuted, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', flexShrink: 0, fontFamily: 'inherit' }}>
+                      <Icon name="workspace" size={10} stroke={1.8} />
+                    </button>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <ProgressBar T={T()} pct={kp} height={3} />
@@ -1803,6 +1810,12 @@ function MatrixView({ T, ann, qData, members, onEdit, onDelete, handleAddQ, onDa
                           <span style={{ fontSize: TYPO.footnote.fontSize, color: T().textFaint, flexShrink: 0, cursor: 'grab' }}>⋮⋮</span>
                           <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: RADIUS.pill, background: `${qkrc}22`, color: qkrc, fontWeight: 800, flexShrink: 0 }}>{qkr_r.label}</span>
                           <span style={{ fontSize: TYPO.subhead.fontSize, fontWeight: 700, color: T().text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }} title={qkr.title}>{qkr.title}</span>
+                          {Number(qkr.target) > 0 && (qkr.lower_is_better ? Number(qkr.current) <= Number(qkr.target) : Number(qkr.current) >= Number(qkr.target)) && (
+                            <button onClick={(e) => { e.stopPropagation(); archiveKr(qkr) }} title="完了したKRをアーカイブ"
+                              style={{ padding: '2px 5px', borderRadius: RADIUS.xs, border: `1px solid ${T().border}`, background: 'transparent', color: T().textMuted, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', flexShrink: 0, fontFamily: 'inherit' }}>
+                              <Icon name="workspace" size={10} stroke={1.8} />
+                            </button>
+                          )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <ProgressBar T={T()} pct={qkp} height={4} />

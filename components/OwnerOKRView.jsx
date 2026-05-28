@@ -131,6 +131,20 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
   const [loading, setLoading] = useState(true)
   const [activePeriod, setActivePeriod] = useState('q1')
 
+  // 完了 KR を「アーカイブ」(各画面の一覧から非表示、アーカイブ画面から復元可能)
+  const archiveKR = async (kr) => {
+    if (!kr?.id) return
+    if (!window.confirm(`「${kr.title}」をアーカイブしますか？\n各画面のカードから非表示になります（アーカイブ画面から復元可能）`)) return
+    const { error } = await supabase.from('key_results')
+      .update({ archived_at: new Date().toISOString() }).eq('id', kr.id)
+    if (error) { alert('アーカイブに失敗しました: ' + error.message); return }
+    // 楽観更新: ローカルからも即時取り除く
+    setObjectives(prev => prev.map(o => ({
+      ...o,
+      key_results: (o.key_results || []).filter(k => Number(k.id) !== Number(kr.id)),
+    })))
+  }
+
   useEffect(() => {
     if (!ownerName) { setObjectives([]); setKaReports([]); setLoading(false); return }
     loadData()
@@ -356,6 +370,19 @@ export default function OwnerOKRView({ ownerName, levels, members = [], fiscalYe
                         fontSize: 13, fontWeight: 700, fontFamily: 'ui-monospace, monospace',
                         color: progressColor(t, kp), flexShrink: 0,
                       }}>{kp}%</span>
+                      {/* 完了 KR をアーカイブ (目標達成時のみ表示) */}
+                      {Number(kr.target) > 0 && (kr.lower_is_better ? Number(kr.current) <= Number(kr.target) : Number(kr.current) >= Number(kr.target)) && (
+                        <button onClick={() => archiveKR(kr)}
+                          title="完了したKRをアーカイブ（一覧から非表示・アーカイブ画面から復元可）"
+                          style={{
+                            padding: '3px 6px', borderRadius: RADIUS.xs, border: `1px solid ${t.border}`,
+                            background: 'transparent', color: t.textMuted, cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontFamily: 'inherit',
+                            flexShrink: 0,
+                          }}>
+                          <Icon name="workspace" size={10} stroke={1.8} />
+                        </button>
+                      )}
                     </div>
                     <div style={{ marginTop: 8, display: 'flex' }}>
                       <ProgressBar T={t} pct={kp} height={3} />
