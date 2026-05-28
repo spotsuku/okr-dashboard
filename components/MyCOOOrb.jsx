@@ -15,6 +15,7 @@ import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { inputStyle } from '../lib/iosStyles'
 import Icon from './Icon'
 import ProposalDialog from './ProposalDialog'
+import { trackFeature } from '../lib/track'
 
 const MYCOO_GRAD = 'linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%)'
 
@@ -135,6 +136,7 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
     const msg = (text ?? input).trim()
     if (!msg || busy) return
     setInput('')
+    trackFeature('mycoo_orb', 'chat_send', { length: msg.length })
     const history = messages.map(m => ({ role: m.role, content: m.content }))
     setMessages(p => [...p, { role: 'user', content: msg }])
     saveMessage('user', msg)

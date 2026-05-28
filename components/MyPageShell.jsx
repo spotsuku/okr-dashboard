@@ -13,6 +13,7 @@ import QuickTaskPalette from './QuickTaskPalette'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
 import CalendarTab from './CalendarTab'
+import { trackFeature } from '../lib/track'
 import DriveTab from './DriveTab'
 import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
@@ -179,6 +180,11 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // 利用分析: マイページ内のタブ切替を計測 (どのサブ機能が使われたかを把握)
+  useEffect(() => {
+    if (!activeTab) return
+    trackFeature('mycoach', `tab_${activeTab}`)
+  }, [activeTab])
 
   // オンボーディングツアーが「個人ダッシュボードを開く」要求を送ってきたら、
   // 全社サマリー → 自分の個人ダッシュボード (ダッシュボードタブ) へ切替える。
