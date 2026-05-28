@@ -154,10 +154,30 @@ function TourPage() {
           border-radius: 14px;
           padding: 16px;
         }
+        /* スマホ: 2カラムのステップカードを縦積みにして見切れを防ぐ */
+        @media (max-width: 768px) {
+          .tour-header { padding: 12px 16px !important; gap: 10px !important; flex-wrap: wrap; }
+          .tour-dots { padding: 12px 16px 0 !important; }
+          .tour-slide { padding: 18px 14px !important; }
+          .tour-footer { padding: 14px 14px 22px !important; }
+          .tour-kbd-hint { display: none !important; }
+          .tour-card { border-radius: 16px; }
+          .tour-step-card {
+            grid-template-columns: 1fr !important;
+            min-height: 0 !important;
+          }
+          .tour-step-text { padding: 26px 20px 20px !important; }
+          .tour-step-text h2 { font-size: 22px !important; }
+          .tour-step-mock {
+            padding: 20px !important;
+            border-left: none !important;
+            border-top: 1px solid rgba(15,23,42,.05) !important;
+          }
+        }
       `}</style>
 
       {/* Top bar */}
-      <header style={{
+      <header className="tour-header" style={{
         padding: '14px 28px',
         display: 'flex', alignItems: 'center', gap: 14,
         borderBottom: '1px solid rgba(15,23,42,.06)',
@@ -184,7 +204,7 @@ function TourPage() {
       </header>
 
       {/* Progress dots */}
-      <div style={{
+      <div className="tour-dots" style={{
         padding: '14px 28px 0',
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
@@ -212,7 +232,7 @@ function TourPage() {
 
       {/* Bottom controls */}
       {!isIntro && !isCta && (
-        <footer style={{
+        <footer className="tour-footer" style={{
           padding: '16px 28px 28px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
@@ -220,7 +240,7 @@ function TourPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
             戻る
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)' }}>
+          <div className="tour-kbd-hint" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)' }}>
             <Kbd2>←</Kbd2> <Kbd2>→</Kbd2> でも移動できます
           </div>
           <button className="tour-btn tour-btn-primary" onClick={next}>
@@ -368,13 +388,13 @@ function StepSlide({ step, idx, total }) {
     info:    'rgba(37,99,235,.12)',
   }[step.tone];
   return (
-    <div className="tour-card" style={{
+    <div className="tour-card tour-step-card" style={{
       padding: 0, maxWidth: 1080, width: '100%',
       display: 'grid', gridTemplateColumns: '1fr 1.05fr',
       overflow: 'hidden', minHeight: 460,
     }}>
       {/* 左: テキスト */}
-      <div style={{ padding: 48, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div className="tour-step-text" style={{ padding: 48, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <span style={{
             fontSize: 13, fontWeight: 700, color: 'var(--muted)',
@@ -396,7 +416,7 @@ function StepSlide({ step, idx, total }) {
         }}>{step.body}</p>
       </div>
       {/* 右: モックアップ */}
-      <div style={{
+      <div className="tour-step-mock" style={{
         padding: 32,
         background: 'linear-gradient(160deg, rgba(186,230,253,.25) 0%, rgba(187,247,208,.15) 100%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',

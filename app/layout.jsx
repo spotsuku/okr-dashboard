@@ -31,6 +31,10 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap"
         />
+        {/* iOS Safari は font-size < 16px の入力欄にフォーカスすると自動ズームする。
+            ピンチズーム (maximumScale:5) は残したまま、モバイルの入力欄だけ 16px に上げて
+            フォーカス時の意図しない拡大を防ぐ。 */}
+        <style>{`@media (max-width:768px){input,textarea,select{font-size:16px !important}}`}</style>
       </head>
       <body style={{
         margin: 0, padding: 0, overflowX: 'hidden',
