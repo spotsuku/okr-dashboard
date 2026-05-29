@@ -84,9 +84,19 @@ const MOBILE_STEPS = [
     placement: 'top',
   },
   {
+    // 体験ステップ: 実際にクイックタスク追加を試してもらう
+    // タスクが作成されたら自動で次のステップへ (okr:task-created を listen)
+    target: '[data-tour="quick-task"]',
+    mycoachDashboard: true,
+    interactive: 'create-task',
+    title: '実際に試してみましょう ✨',
+    body: '下の「クイックタスク追加」に、例えば「明日 14時 営業報告を作成」のように自然文で入力して「追加」を押してください。日付・KR を自動解析してタスク化します。完了すると自動で次に進みます。',
+    placement: 'top',
+  },
+  {
     target: null,
     title: '準備完了 🎉',
-    body: 'まずは「今日やること」をチェックして 1 日を始めてみましょう。途中で見直したい時はメニューからツアーを再生できます。',
+    body: 'お疲れさまでした!作成したタスクは「今日やること」に並びます。途中で見直したい時はメニューからツアーを再生できます。',
     placement: 'center',
   },
 ]
@@ -257,6 +267,21 @@ export default function OnboardingTour({ onNavigate }) {
       window.dispatchEvent(new CustomEvent('okr:open-my-dashboard'))
     }
   }, [active, idx, onNavigate])
+
+  // 体験ステップ (interactive='create-task') のとき、実際にタスクが作成されたら
+  // 自動で次のステップへ進める。これにより「説明だけで終わらない実体験ツアー」が成立する。
+  React.useEffect(() => {
+    if (!active) return
+    const step = STEP_LIST[idx]
+    if (step?.interactive !== 'create-task') return
+    function onTaskCreated() {
+      // 少し待ってから次へ (ユーザーがタスク追加の視覚フィードバックを見れるように)
+      setTimeout(() => next(), 600)
+    }
+    window.addEventListener('okr:task-created', onTaskCreated)
+    return () => window.removeEventListener('okr:task-created', onTaskCreated)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, idx])
 
   // ステップ対象を画面内へスクロール (モバイルの横スクロールナビ等で
   // 対象ボタンが画面外にあるとハイライトがずれるため)
