@@ -652,6 +652,28 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               <span style={{ display: 'inline-flex', width: 16 }}><Icon name="sparkle" size={16} /></span>
               <span>ツアーをもう一度見る</span>
             </button>
+            {/* リリース前テスト: 初回ログイン体験を完全リセット */}
+            <button
+              onClick={() => {
+                if (!window.confirm('初回ログイン体験を完全リセットします。\n\n以下が全てリセットされます:\n・スポットライトツアー (再生)\n・ホームの7ステップ案内 (再表示)\n・始業ゲートのスキップ (本日中、再有効)\n\n続行しますか?')) return
+                try {
+                  localStorage.removeItem('onboarding_v1_completed')
+                  localStorage.removeItem(`home_onboarding_dismissed_${user?.email || 'guest'}`)
+                  localStorage.removeItem('home_onb_seen_okr')
+                } catch { /* noop */ }
+                window.location.href = '/?page=portal'
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '9px 12px', borderRadius: 8, marginBottom: 8,
+                background: 'transparent', border: `1px solid ${T.border}`,
+                color: T.text, fontSize: 13, fontWeight: 600,
+                fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{ display: 'inline-flex', width: 16 }}><Icon name="refresh" size={16} /></span>
+              <span>初回ログイン体験を完全リセット</span>
+            </button>
             <button
               onClick={async () => {
                 try { await supabase.auth.signOut() } catch {}

@@ -30,14 +30,21 @@ export default function CreateOrgModal({ open, onClose, onCreated, userEmail }) 
   }, [open])
 
   // 自動 slug 生成 (name → 英小文字+ハイフン)
-  const autoSlug = (n) => n.toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+  // 日本語等で ASCII 化できない場合は org-<5桁ランダム> を fallback として返す
+  // (ユーザーが手動で slug を入力しなくても submit 可能にするため)
+  const autoSlug = (n) => {
+    const ascii = n.toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^\w\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+    if (ascii.length >= 2) return ascii
+    if (n.trim()) return 'org-' + Math.random().toString(36).slice(2, 7)
+    return ''
+  }
 
   const handleName = (v) => {
     setName(v)

@@ -1727,6 +1727,17 @@ export default function Dashboard({ user, onSignOut }) {
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/lp" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.text, fontSize: 12, textDecoration: 'none' }}>サービス紹介を見る</a>
                 <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="search" size={12} /> ツアーをもう一度見る</button>
+                {/* リリース前テスト: 初回ログイン体験を完全リセット (始業ゲート/ツアー/ホーム7ステップを全てクリア) */}
+                <button onClick={() => {
+                  if (!window.confirm('初回ログイン体験を完全リセットします。\n\n以下が全てリセットされ、新規ユーザーと同じ体験になります:\n・スポットライトツアー (再生)\n・ホームの7ステップ案内 (再表示)\n・始業ゲートのスキップ (本日中、再有効)\n\nアカウント作成不要で何度でも確認できます。続行しますか?')) return
+                  try {
+                    localStorage.removeItem('onboarding_v1_completed')
+                    localStorage.removeItem(`home_onboarding_dismissed_${user?.email || 'guest'}`)
+                    localStorage.removeItem('home_onb_seen_okr')
+                  } catch { /* noop */ }
+                  // ページリロードして「新規ユーザーと同じ初期状態」を再現
+                  window.location.href = '/?page=portal'
+                }} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="refresh" size={12} /> 初回ログイン体験を完全リセット (テスト用)</button>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>プライバシーポリシー</a>
                 <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>利用規約</a>
