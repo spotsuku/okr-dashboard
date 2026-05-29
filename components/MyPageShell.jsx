@@ -1637,7 +1637,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       {/* クイック追加 (自分のページのみ) */}
       {/* スタートガイドの3ステップ導線は初回スポットライトツアーに集約したため、ここでは常設表示しない */}
       {isViewingSelf && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: isMobile ? '12px 14px 0' : '10px 10px 0', flexShrink: 0 }}>
+        <div data-tour="quick-task" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: isMobile ? '12px 14px 0' : '10px 10px 0', flexShrink: 0 }}>
           <QuickTaskPalette user={{ email: viewingMember?.email }} members={members} inline />
         </div>
       )}
