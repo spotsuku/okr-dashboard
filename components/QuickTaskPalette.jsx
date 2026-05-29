@@ -226,7 +226,6 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
 
   // ─── インライン版 (マイページ常時表示用のコンパクトバー) ───
   if (inline) {
-    const TEMPLATES = ['1on1の議事録', '経費精算', '〇〇さんへ返信', '振り返りメモ', 'KR進捗を更新']
     return (
       <div style={{ ...cardStyle({ T, padding: 0 }), borderRadius: RADIUS.xl, border: `1px solid ${T.border}`, background: T.bgCard, fontFamily: '"Inter","Noto Sans JP",system-ui,sans-serif', color: T.text }}>
         <div style={{ padding: '12px 16px 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -250,15 +249,6 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
             cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
             display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
           }}>{saving ? '追加中…' : <>追加 <Icon name="arrowRight" size={13} /></>}</button>
-        </div>
-        <div style={{ padding: '0 14px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...TYPO.caption, color: T.textMuted }}>テンプレ:</span>
-          {TEMPLATES.map(t => (
-            <button key={t} onClick={() => { setDraft(t); setTimeout(() => inputRef.current?.focus(), 10) }} style={{
-              ...TYPO.caption, padding: '4px 10px', borderRadius: RADIUS.pill,
-              border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, cursor: 'pointer', fontFamily: 'inherit',
-            }}>{t}</button>
-          ))}
         </div>
       </div>
     )

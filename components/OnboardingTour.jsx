@@ -56,8 +56,8 @@ const MOBILE_STEPS = [
   {
     target: '[data-tour="ws-okr"]',
     mycoachDashboard: true,
-    title: 'マイOKR',
-    body: '自分の KR / KA の記入漏れがひと目で分かります。ボタンからその場で記入できます。',
+    title: 'マイOKR (目標管理)',
+    body: '自分の目標 (KR=Key Result / KA=Key Action) の今週分の記入漏れがひと目で分かります。ボタンからその場で記入できるので、振り返りと進捗の更新を一画面で完結できます。',
     placement: 'top',
   },
   {
