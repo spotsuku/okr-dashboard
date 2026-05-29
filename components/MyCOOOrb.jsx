@@ -47,6 +47,14 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
   const [busy, setBusy] = React.useState(false)
   const [nudge, setNudge] = React.useState(null) // { message, primaryLabel, primaryAction }
   const [checkmark, setCheckmark] = React.useState(false)
+  // 外部から「オーブを隠す」要求を受ける (MyCOO チャットタブ / ドライブ AI 等、
+  // モバイルで入力欄の送信ボタンとオーブが重なる画面で使う)
+  const [hiddenByHost, setHiddenByHost] = React.useState(false)
+  React.useEffect(() => {
+    function onSetVisible(e) { setHiddenByHost(!!e?.detail?.hide) }
+    window.addEventListener('mycoo:set-orb-visibility', onSetVisible)
+    return () => window.removeEventListener('mycoo:set-orb-visibility', onSetVisible)
+  }, [])
   // カレンダー予定の作成/更新/削除提案 (承認ダイアログ用)
   const [pendingProposals, setPendingProposals] = React.useState(null)
   const scrollRef = React.useRef(null)
@@ -214,6 +222,10 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
     if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
     return j
   }
+
+  // チャット系画面 (MyCOO チャットタブ / ドライブ AI 等) では送信ボタンと重なるため
+  // 親が dispatch した hide イベントでオーブを非表示にする (チャット閉じた時はオーブも非表示でよい)
+  if (hiddenByHost && !open) return null
 
   return (
     <>

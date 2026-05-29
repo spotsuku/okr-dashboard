@@ -185,6 +185,15 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
     if (!activeTab) return
     trackFeature('mycoach', `tab_${activeTab}`)
   }, [activeTab])
+  // MyCOO チャット / ドライブ AI 等の「下部に送信ボタンを持つチャット型タブ」は
+  // MyCOO オーブと座標が重なるためオーブを非表示にする
+  useEffect(() => {
+    const HIDE_ORB_TABS = ['coo', 'drive']
+    const hide = HIDE_ORB_TABS.includes(activeTab)
+    window.dispatchEvent(new CustomEvent('mycoo:set-orb-visibility', { detail: { hide } }))
+    // タブ離脱時は確実に元に戻す
+    return () => window.dispatchEvent(new CustomEvent('mycoo:set-orb-visibility', { detail: { hide: false } }))
+  }, [activeTab])
 
   // オンボーディングツアーが「個人ダッシュボードを開く」要求を送ってきたら、
   // 全社サマリー → 自分の個人ダッシュボード (ダッシュボードタブ) へ切替える。
@@ -1666,14 +1675,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               {taskBoard.loading ? <Loading T={T} /> :
                 taskBoard.today.length === 0
                   ? <EmptyRich T={T} icon="sparkle" title="今日のタスクはありません"
-                      desc={isViewingSelf ? '自然文でサッと登録できます。下のテンプレからどうぞ。' : undefined}
-                      mycooTip={isViewingSelf ? 'まずは今日やることを1件だけ決めてみましょう。' : undefined}>
-                      {isViewingSelf && ['1on1の議事録', '振り返りメモ', 'KR進捗を更新'].map(tpl => (
-                        <button key={tpl} onClick={() => window.dispatchEvent(new CustomEvent('okr:quickfill', { detail: { text: tpl } }))} style={emptyChipStyle(T)}>
-                          <Icon name="plus" size={9} stroke={2.4} /> {tpl}
-                        </button>
-                      ))}
-                    </EmptyRich>
+                      desc={isViewingSelf ? '上のクイックタスクから自然文でサッと登録できます。' : undefined}
+                      mycooTip={isViewingSelf ? 'まずは今日やることを1件だけ決めてみましょう。' : undefined}
+                    />
                   : <TaskList T={T} tasks={taskBoard.today} canEdit={isViewingSelf} onToggle={toggleTaskDone} showDue />}
             </Section>
           )}
