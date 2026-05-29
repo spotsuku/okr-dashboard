@@ -20,12 +20,14 @@ export async function GET(request) {
   const organizationId = url.searchParams.get('organization_id')
   const hours = Math.max(1, Math.min(24, Number(url.searchParams.get('hours')) || 8))
   const result = await getIntegration(owner, 'google', organizationId)
-  if (result.error) return json({ error: result.error }, { status: 400 })
+  // 未連携は「エラー」ではなく「未連携状態」として 200 で返す (コンソールに 400 を残さない)
+  if (result.error) return json({ connected: false, items: [], error: result.error }, { status: 200 })
   if (result.expired) return json({
     error: result.refreshError
       ? `自動リフレッシュに失敗: ${result.refreshError} 再連携してください`
       : 'トークン期限切れ。再連携してください',
     needsReauth: true,
+    items: [],
   }, { status: 401 })
 
   const now = new Date()

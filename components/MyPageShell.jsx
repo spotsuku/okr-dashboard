@@ -5312,10 +5312,11 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
-        if (!r.ok) {
+        // 未連携は API 側で 200 + connected:false で返ってくる (コンソール 400 を出さないため)
+        if (!r.ok || j.connected === false || j.error) {
           setError(j.error || `HTTP ${r.status}`)
           setNeedsReauth(!!j.needsReauth)
-          setItems([])
+          setItems(j.items || [])
         } else {
           setItems(j.items || [])
         }
@@ -5410,12 +5411,13 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
-        if (!r.ok) {
+        // 未連携は API 側で 200 + connected:false で返ってくる (コンソール 400 を出さないため)
+        if (!r.ok || j.connected === false || j.error) {
           setError(j.error || `HTTP ${r.status}`)
           setNeedsReauth(!!j.needsReauth)
-          setRawItems([])
+          setRawItems(j.threads || j.items || [])
         } else {
-          setRawItems(j.items || [])
+          setRawItems(j.threads || j.items || [])
         }
       })
       .catch(e => { if (alive) setError(e.message || 'エラー') })
@@ -5715,10 +5717,11 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
-        if (!r.ok) {
+        // 未連携は 200 + connected:false で返ってくる
+        if (!r.ok || j.connected === false || j.error) {
           setError(j.error || `HTTP ${r.status}`)
           setNeedsReauth(!!j.needsReauth)
-          setAllItems([])
+          setAllItems(j.allItems || j.threads || j.items || [])
         } else {
           setAllItems(j.allItems || j.items || [])
         }
