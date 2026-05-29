@@ -657,6 +657,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           }}>
             <button
               onClick={() => setMobileSidebarOpen(true)}
+              data-tour="mobile-sidebar-btn"
               style={{
                 padding: '6px 10px', borderRadius: 7,
                 background: 'transparent', border: `1px solid ${T.border}`,
@@ -1016,6 +1017,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               return (
                 <button
                   key={item.key}
+                  data-tour={`mobile-nav-${item.key}`}
                   onClick={() => { setActiveTab(item.key); setSummaryMode(false) }}
                   style={{
                     flex: 1, background: 'transparent', border: 'none',
@@ -1416,6 +1418,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   // 土日 → 直接 work_log insert
   async function handleStart() {
     if (busy || !myName) return
+    // 平日: 昨日未終業ログの判定がまだ終わっていない (DB クエリ進行中) → 早押しを防ぐ。
+    // この判定が終わる前に始業を許すと、ユーザーが先にタスク追加してしまい、
+    // 後から振り返り(KPT)モーダルが上に被ってきて手戻り/混乱の原因になる。
+    if (isWeekday && pendingYesterdayLog === null) return
     if (isWeekday) {
       setMorningOpen(true)
       return
@@ -1476,6 +1482,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           T={T} viewingMember={viewingMember} viewingName={viewingName}
           greet={greet} dateStr={dateStr} busy={busy} onStart={handleStart}
           weekday={isWeekday}
+          loading={isWeekday && pendingYesterdayLog === null}
         />
         {showYesterdayKPT && (
           <KPTModal
@@ -1758,7 +1765,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
 }
 
 // ─── 始業ゲート画面 ────────────────────────────────────────
-function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart, weekday = true }) {
+// loading=true の間は「確認中…」表示でボタン無効化。
+// 昨日未終業ログの判定が完了する前に始業されると、後から振り返りモーダルが
+// 被ってきて UX が壊れるため、判定完了まで始業を待つ。
+function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart, weekday = true, loading = false }) {
+  const disabled = busy || loading
   return (
     <div style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1782,20 +1793,20 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
         </div>
         <button
           onClick={onStart}
-          disabled={busy}
+          disabled={disabled}
           style={{
             background: `linear-gradient(135deg, ${T.success} 0%, ${T.info} 100%)`,
             color: '#fff', border: 'none', borderRadius: RADIUS.lg,
             padding: '16px 48px', fontSize: 18, fontWeight: 800,
-            cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-            opacity: busy ? 0.6 : 1, letterSpacing: 1,
+            cursor: disabled ? 'wait' : 'pointer', fontFamily: 'inherit',
+            opacity: disabled ? 0.6 : 1, letterSpacing: 1,
             boxShadow: SHADOWS.hover(T.success),
             transition: 'transform 0.1s',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
           }}
-          onMouseEnter={e => !busy && (e.currentTarget.style.transform = 'translateY(-2px)')}
+          onMouseEnter={e => !disabled && (e.currentTarget.style.transform = 'translateY(-2px)')}
           onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
-        ><Icon name="sun" size={18} /> 始業する</button>
+        >{loading ? <><Icon name="sparkle" size={18} /> 確認中…</> : <><Icon name="sun" size={18} /> 始業する</>}</button>
         {weekday && (
           <div style={{
             marginTop: 20, padding: '8px 14px',

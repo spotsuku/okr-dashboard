@@ -375,6 +375,7 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
           <button
             onClick={() => { setOpen(o => !o); setNudge(null) }}
             title="MyCOO (⌘J)"
+            data-tour="mycoo-orb"
             style={{
               position: 'relative', width: 56, height: 56, borderRadius: 99,
               background: MYCOO_GRAD, border: '3px solid rgba(255,255,255,.85)', cursor: 'pointer',
