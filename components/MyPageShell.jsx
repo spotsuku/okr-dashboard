@@ -626,6 +626,23 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>{user.email}</div>
             )}
+            {/* ツアー再生 (スマホはここからアクセス、デスクトップは右上ユーザーメニュー) */}
+            <button
+              onClick={() => {
+                setMobileSidebarOpen(false)
+                window.dispatchEvent(new CustomEvent('okr:start-tour'))
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '9px 12px', borderRadius: 8, marginBottom: 8,
+                background: 'transparent', border: `1px solid ${T.border}`,
+                color: T.text, fontSize: 13, fontWeight: 600,
+                fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{ display: 'inline-flex', width: 16 }}><Icon name="sparkle" size={16} /></span>
+              <span>ツアーをもう一度見る</span>
+            </button>
             <button
               onClick={async () => {
                 try { await supabase.auth.signOut() } catch {}
