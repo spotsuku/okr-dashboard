@@ -950,7 +950,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? SPACING.sm : SPACING.sm + 2, background:wT().bg, display: isMobile && mobilePanel !== 'list' ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ ...TYPO.caption, color:wT().accent, fontWeight:700, textTransform:'uppercase', marginBottom:SPACING.sm }}>Objective ({activeObjs.length}件)</div>
-          {visibleObjs.length===0 && <div style={{ ...TYPO.subhead, fontWeight:500, color:wT().textFaintest, fontStyle:'italic', padding:`${SPACING.sm + 2}px ${SPACING.xs}px` }}>Objectiveがありません</div>}
+          {visibleObjs.length===0 && (
+            <div style={{ ...TYPO.subhead, fontWeight:500, color:wT().textFaintest, fontStyle:'italic', padding:`${SPACING.sm + 2}px ${SPACING.xs}px`, lineHeight: 1.6 }}>
+              Objective がありません<br />
+              <span style={{ ...TYPO.caption, color: wT().textMuted, fontStyle: 'normal' }}>PC 版で OKR を追加すると表示されます</span>
+            </div>
+          )}
 
           {/* アクティブなObjective */}
           {activeObjs.map(obj => {

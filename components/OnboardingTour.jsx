@@ -54,13 +54,6 @@ const MOBILE_STEPS = [
     placement: 'top',
   },
   {
-    target: '[data-tour="ws-okr"]',
-    mycoachDashboard: true,
-    title: 'マイOKR (目標管理)',
-    body: '自分の目標 (KR=Key Result / KA=Key Action) の今週分の記入漏れがひと目で分かります。ボタンからその場で記入できるので、振り返りと進捗の更新を一画面で完結できます。',
-    placement: 'top',
-  },
-  {
     target: '[data-tour="mobile-nav-wbs"]',
     title: 'タスク',
     body: 'ガントチャート風のタスク管理。期日・優先度・担当を整理し進捗を可視化できます。',
@@ -93,7 +86,7 @@ const MOBILE_STEPS = [
   {
     target: null,
     title: '準備完了 🎉',
-    body: 'まずは「今日やること」と「マイOKR」をチェックしてみましょう。途中で見直したい時は右上メニューから再生できます。',
+    body: 'まずは「今日やること」をチェックして 1 日を始めてみましょう。途中で見直したい時はメニューからツアーを再生できます。',
     placement: 'center',
   },
 ]

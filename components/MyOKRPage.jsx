@@ -997,7 +997,10 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
-            <div style={{ fontSize:TYPO.subhead.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
+            <div style={{ fontSize:TYPO.subhead.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px', lineHeight: 1.6 }}>
+              Objective がありません<br />
+              <span style={{ fontSize: TYPO.caption.fontSize, color: wT().textMuted }}>PC 版で OKR を追加すると表示されます</span>
+            </div>
           )}
           {visibleObjs.map(obj => {
             const isActive = Number(activeObjId) === Number(obj.id)

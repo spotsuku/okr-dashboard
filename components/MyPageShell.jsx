@@ -1537,7 +1537,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   }
 
   // ─── 表示判定ヘルパー ────
-  const showW = (key) => prefs[key] !== false  // デフォルト未設定はtrue扱い
+  // デフォルト未設定は true 扱い。ただし opt-in (デフォルト非表示) のキーは defaultOff に含める。
+  // OKR を運用していない組織でも邪魔にならないよう、マイOKR は opt-in にする。
+  const DEFAULT_OFF_KEYS = new Set(['okr'])
+  const showW = (key) => DEFAULT_OFF_KEYS.has(key) ? prefs[key] === true : prefs[key] !== false
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflowX: 'hidden' }}>
@@ -1714,7 +1717,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
-          {/* マイOKR (= 旧「OKR・KA記入漏れ」を右カラムへ移動) */}
+          {/* マイOKR (= 旧「OKR・KA記入漏れ」を右カラムへ移動)
+              opt-in: OKR を運用していない組織でも邪魔にならないようデフォルト非表示 */}
+          {showW('okr') && (
           <Section dataTour="ws-okr" T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="マイOKR" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
@@ -1767,6 +1772,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               )
             })()}
           </Section>
+          )}
 
           {/* バッジコレクション (月次達成度) */}
           <BadgeCollection T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
@@ -2048,6 +2054,10 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
       { key: 'team_summary',      icon: 'chart', label: '今週のチームサマリー' },
       { key: 'achievements',      icon: 'trophy', label: '今週の成果' },
     ]},
+    { title: 'OKR (目標管理)', items: [
+      // OKR を運用している組織はここを ON にする。デフォルト OFF。
+      { key: 'okr', icon: 'target', label: 'マイOKR (KR/KA 記入漏れ一覧)', defaultOff: true },
+    ]},
   ]
   // ※ リマインダーBox (OKR/タスク/Googleカレンダー/Gmail/Slack/LINE) は常時表示
   return (
@@ -2100,7 +2110,7 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
               >
                 <input
                   type="checkbox"
-                  checked={prefs[it.key] !== false}
+                  checked={it.defaultOff ? prefs[it.key] === true : prefs[it.key] !== false}
                   onChange={() => togglePref(it.key)}
                   style={{ cursor: 'pointer', accentColor: T.accent }}
                 />
