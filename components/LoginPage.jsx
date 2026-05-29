@@ -1,9 +1,27 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ★ 本番URLを固定（これ以外のURLに飛ばない）
 const PRODUCTION_URL = 'https://aiworkspace.jp'
+
+// GSI スクリプトを 1 回だけロードする
+let _gsiLoading = null
+function loadGsiScript() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('SSR'))
+  if (window.google?.accounts?.id) return Promise.resolve()
+  if (_gsiLoading) return _gsiLoading
+  _gsiLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://accounts.google.com/gsi/client'
+    s.async = true
+    s.defer = true
+    s.onload = () => resolve()
+    s.onerror = () => reject(new Error('GSI script load failed'))
+    document.head.appendChild(s)
+  })
+  return _gsiLoading
+}
 
 // orgName を渡すと「{orgName} にサインイン」と組織名入りの見出しになる (SaaS化 Plan B)
 export default function LoginPage({ orgName = null }) {
@@ -14,6 +32,61 @@ export default function LoginPage({ orgName = null }) {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [gsiReady, setGsiReady] = useState(false)
+  const [gsiError, setGsiError] = useState('')
+  const gsiBtnRef = useRef(null)
+
+  // ─── Google Identity Services (GSI) で 1 クリック認証 ───
+  // Workspace 管理アカウントを含む全ての Google アカウントで安定して動く方式。
+  // signInWithOAuth の queryParams.prompt=select_account は Supabase が内部で付ける
+  // prompt=consent と二重になり Workspace で 400 を出すため、こちらに移行。
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let cancelled = false
+    ;(async () => {
+      try {
+        // Client ID を server から取得 (envはクライアントから直接読めないため)
+        const r = await fetch('/api/auth/google-client-id')
+        const j = await r.json()
+        if (!r.ok || !j.client_id) {
+          throw new Error(j.error || 'GOOGLE_CLIENT_ID 取得失敗')
+        }
+        await loadGsiScript()
+        if (cancelled) return
+        window.google.accounts.id.initialize({
+          client_id: j.client_id,
+          callback: async (response) => {
+            // response.credential は Google が発行した ID token (JWT)
+            setGoogleLoading(true)
+            setError('')
+            const { error: e } = await supabase.auth.signInWithIdToken({
+              provider: 'google',
+              token: response.credential,
+            })
+            setGoogleLoading(false)
+            if (e) setError('Googleログインに失敗しました: ' + e.message)
+          },
+          auto_select: false,
+          use_fedcm_for_prompt: true,
+        })
+        if (gsiBtnRef.current) {
+          // 公式ボタンを描画 (クリックでアカウントチューザーが表示される)
+          // width は実コンテナ幅 (なければ 320) を採用
+          const w = gsiBtnRef.current.offsetWidth || 320
+          window.google.accounts.id.renderButton(gsiBtnRef.current, {
+            theme: 'outline', size: 'large', type: 'standard',
+            text: 'signin_with', shape: 'rectangular',
+            logo_alignment: 'left',
+            width: Math.min(400, Math.max(240, w)),
+          })
+        }
+        setGsiReady(true)
+      } catch (e) {
+        if (!cancelled) setGsiError(e.message || 'GSI 初期化失敗')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const handleAuth = async () => {
     setLoading(true)
@@ -54,34 +127,15 @@ export default function LoginPage({ orgName = null }) {
     setLoading(false)
   }
 
-  const handleGoogle = async () => {
+  // GSI が読み込めない環境向けのフォールバック (従来の OAuth redirect)
+  const handleGoogleFallback = async () => {
     setGoogleLoading(true)
     setError('')
-    // 1クリックでアカウント選択画面を出す試行 (Notion/Slack/Linear 同様)。
-    // Supabase が内部で prompt=consent を付けると Workspace 管理アカウントで
-    // prompt 二重 → 400 になるため、access_type=online を渡して consent を抑制する。
-    // (Google API の refresh token は別 OAuth フロー /api/integrations/google で取るので
-    //  ログインの OAuth では online で問題ない。)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: PRODUCTION_URL,
-        queryParams: {
-          access_type: 'online',
-          prompt: 'select_account',
-        },
-      },
+      options: { redirectTo: PRODUCTION_URL },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
-  }
-
-  // 別の Google アカウントを使う場合: Google のアカウントページを別タブで開いて
-  // ユーザー自身でログアウト/アカウント切替してもらう。
-  // (Google の Logout?continue= リダイレクト方式は continue URL の制約が厳しく
-  //  400 を返すケースが多いため、確実なこの方式に変更)
-  const handleGoogleSwitchAccount = async () => {
-    try { await supabase.auth.signOut() } catch { /* noop */ }
-    window.open('https://accounts.google.com/Logout', '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -136,46 +190,38 @@ export default function LoginPage({ orgName = null }) {
           )}
         </div>
 
-        {/* Google ログインボタン */}
-        <button
-          onClick={handleGoogle} disabled={googleLoading}
-          style={{
-            width: '100%',
-            background: '#fff',
-            border: '1px solid rgba(15,23,42,.12)',
-            borderRadius: 12,
-            padding: '12px 14px',
-            fontSize: 14, fontWeight: 600,
-            cursor: googleLoading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            color: '#0f172a',
-            marginBottom: 18,
-            opacity: googleLoading ? 0.6 : 1,
-            boxShadow: '0 1px 2px rgba(15,23,42,.04)',
-            transition: 'all .15s',
-          }}
-          onMouseEnter={e => { if (!googleLoading) { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.transform = 'translateY(-1px)' } }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.transform = 'none' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-          {googleLoading ? '処理中...' : 'Googleでログイン'}
-        </button>
-
-        {/* 別の Google アカウントを使う場合の案内 (prompt=select_account が Workspace で 400 に
-            なるため、確実に動く「Google からログアウト → 戻って再ログイン」方式を使う) */}
-        <div style={{ textAlign: 'center', marginBottom: 14, fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
-          別のGoogleアカウントを使う場合は、
-          <button type="button" onClick={handleGoogleSwitchAccount}
-            style={{ background: 'transparent', border: 'none', color: '#2563eb', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
-            こちら
-          </button>
-          で Google からログアウトしてから再度「Googleでログイン」を押してください
+        {/* Google ログインボタン (GSI = Google Identity Services)
+            クリック → Google 公式のアカウントチューザーが開く (1クリック切替) */}
+        <div style={{ marginBottom: 14, minHeight: 44 }}>
+          {!gsiError && (
+            <div ref={gsiBtnRef} style={{ display: 'flex', justifyContent: 'center' }} />
+          )}
+          {googleLoading && (
+            <div style={{ textAlign: 'center', fontSize: 12, color: '#64748b', marginTop: 6 }}>
+              処理中...
+            </div>
+          )}
+          {gsiError && (
+            <button
+              onClick={handleGoogleFallback} disabled={googleLoading}
+              style={{
+                width: '100%', background: '#fff', border: '1px solid rgba(15,23,42,.12)',
+                borderRadius: 12, padding: '12px 14px',
+                fontSize: 14, fontWeight: 600, cursor: googleLoading ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                color: '#0f172a', opacity: googleLoading ? 0.6 : 1,
+                boxShadow: '0 1px 2px rgba(15,23,42,.04)',
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              {googleLoading ? '処理中...' : 'Googleでログイン'}
+            </button>
+          )}
         </div>
 
         {/* 区切り線 */}
