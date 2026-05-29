@@ -24,6 +24,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="ja">
       <head>
+        {/* PWA: Apple は appleWebApp が apple-mobile-web-app-capable を発行するが、
+            Chrome 等は標準名 mobile-web-app-capable を求めて deprecated 警告するため併記。 */}
+        <meta name="mobile-web-app-capable" content="yes" />
         {/* Inter + Noto Sans JP (Glass テーマで使用) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
