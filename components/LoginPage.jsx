@@ -61,6 +61,8 @@ export default function LoginPage({ orgName = null }) {
       provider: 'google',
       options: {
         redirectTo: PRODUCTION_URL,
+        // 毎回アカウント選択画面を出す (Notion/Slack/Linear 等と同じ標準挙動)
+        queryParams: { prompt: 'select_account' },
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
@@ -158,14 +160,12 @@ export default function LoginPage({ orgName = null }) {
           {googleLoading ? '処理中...' : 'Googleでログイン'}
         </button>
 
-        {/* 別の Google アカウントを使う案内 (別タブで Google ログアウトページを開く) */}
-        <div style={{ textAlign: 'center', marginBottom: 14, fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
-          別のGoogleアカウントを使う場合は、
+        {/* 万一アカウント選択画面が出ない場合のフォールバック (極小文字で目立たない位置に) */}
+        <div style={{ textAlign: 'center', marginBottom: 14 }}>
           <button type="button" onClick={handleGoogleSwitchAccount}
-            style={{ background: 'transparent', border: 'none', color: '#2563eb', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
-            こちら
+            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 10, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+            アカウント選択画面が出ない場合
           </button>
-          で Google からログアウトしてから「Googleでログイン」を押してください
         </div>
 
         {/* 区切り線 */}
