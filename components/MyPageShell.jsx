@@ -1499,7 +1499,13 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   }
 
   // ─── A. 始業ゲーティング: 自分閲覧 & 未始業 → 始業画面のみ表示 ────
-  if (isViewingSelf && st === 'none') {
+  // 初回ログインユーザー (onboarding 未完了) は始業ゲートをスキップして自由探索させる。
+  // 強制感を避け、スポットライトツアーでクイックタスク追加を体験 → 機能の便利さを実感してから
+  // 翌日以降に通常の始業フローへ。これにより初日離脱を防ぐ。
+  const isFirstTimeUser = typeof window !== 'undefined' && (() => {
+    try { return localStorage.getItem('onboarding_v1_completed') !== '1' } catch { return false }
+  })()
+  if (isViewingSelf && st === 'none' && !isFirstTimeUser) {
     // 昨日未終業(平日のみ): まず強制 KPT モーダル
     const showYesterdayKPT = isWeekday && pendingYesterdayLog && pendingYesterdayLog !== false
     return (
@@ -1530,6 +1536,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             busy={busy}
             onStart={doStartWorkLog}
             fiscalYear={fiscalYear}
+            userEmail={viewingMember?.email}
           />
         )}
       </div>
@@ -1855,7 +1862,7 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
 // ─── 朝の「今日やること」モーダル (平日・閉じ不可・最低1件必須) ─────────────
 // 既存 TaskCreateModal を呼び出す薄いラッパー。
 // 今日期日&自分アサインのタスクを DB から取得して一覧表示し、1件以上あると始業可能。
-function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart, fiscalYear = '2026' }) {
+function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart, fiscalYear = '2026', userEmail = null }) {
   const [todayTasks, setTodayTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -1876,13 +1883,12 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
 
   useEffect(() => { reload() }, [reload])
 
-  // タスク0件で開いた時は自動で追加モーダルを前面に
+  // クイックタスク追加でタスクが作成されたら一覧を再読み込み
   useEffect(() => {
-    if (!loading && todayTasks.length === 0 && !addOpen) {
-      setAddOpen(true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading])
+    function onCreated() { reload() }
+    window.addEventListener('okr:task-created', onCreated)
+    return () => window.removeEventListener('okr:task-created', onCreated)
+  }, [reload])
 
   const canStart = todayTasks.length >= 1
 
@@ -1956,15 +1962,22 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
           )}
         </div>
 
+        {/* クイックタスク追加: 自然文+日付+KR を一発で解析する強力な入力 UI。
+            「+タスクを追加 → モーダル」の従来 UI より体験が良く、ユーザーの
+            「便利だ!」感覚を初日から醸成する。 */}
+        <div style={{ marginBottom: 10 }}>
+          <QuickTaskPalette user={{ email: userEmail }} members={members} inline />
+        </div>
+        {/* 詳細入力したい場合のためのフォールバック (KA紐付け・複数日等) */}
         <button
           onClick={() => setAddOpen(true)}
           style={{
-            width: '100%', padding: '10px 14px', borderRadius: 8,
-            background: 'transparent', border: `1px dashed ${T.accent}`,
-            color: T.accent, fontSize: 13, fontWeight: 700,
+            width: '100%', padding: '6px 10px', borderRadius: 6,
+            background: 'transparent', border: 'none',
+            color: T.textMuted, fontSize: 11, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10,
           }}
-        >+ タスクを追加</button>
+        >詳細フォームで追加 (KA紐付け・複数日)</button>
 
         {/* 共有事項 / 確認事項を任意で追加 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
