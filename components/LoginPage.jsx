@@ -57,12 +57,19 @@ export default function LoginPage({ orgName = null }) {
   const handleGoogle = async () => {
     setGoogleLoading(true)
     setError('')
-    // 注: prompt=select_account は Workspace 管理アカウントで 400 を引き起こすため使わない。
-    // 別アカウント切替は handleGoogleSwitchAccount (下記の「別のGoogleアカウントを使う」リンク) で対応。
+    // 1クリックでアカウント選択画面を出す試行 (Notion/Slack/Linear 同様)。
+    // Supabase が内部で prompt=consent を付けると Workspace 管理アカウントで
+    // prompt 二重 → 400 になるため、access_type=online を渡して consent を抑制する。
+    // (Google API の refresh token は別 OAuth フロー /api/integrations/google で取るので
+    //  ログインの OAuth では online で問題ない。)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: PRODUCTION_URL,
+        queryParams: {
+          access_type: 'online',
+          prompt: 'select_account',
+        },
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
