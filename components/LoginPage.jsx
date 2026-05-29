@@ -57,12 +57,12 @@ export default function LoginPage({ orgName = null }) {
   const handleGoogle = async () => {
     setGoogleLoading(true)
     setError('')
+    // 注: prompt=select_account は Workspace 管理アカウントで 400 を引き起こすため使わない。
+    // 別アカウント切替は handleGoogleSwitchAccount (下記の「別のGoogleアカウントを使う」リンク) で対応。
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: PRODUCTION_URL,
-        // 毎回アカウント選択画面を出す (Notion/Slack/Linear 等と同じ標準挙動)
-        queryParams: { prompt: 'select_account' },
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
@@ -160,12 +160,15 @@ export default function LoginPage({ orgName = null }) {
           {googleLoading ? '処理中...' : 'Googleでログイン'}
         </button>
 
-        {/* 万一アカウント選択画面が出ない場合のフォールバック (極小文字で目立たない位置に) */}
-        <div style={{ textAlign: 'center', marginBottom: 14 }}>
+        {/* 別の Google アカウントを使う場合の案内 (prompt=select_account が Workspace で 400 に
+            なるため、確実に動く「Google からログアウト → 戻って再ログイン」方式を使う) */}
+        <div style={{ textAlign: 'center', marginBottom: 14, fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
+          別のGoogleアカウントを使う場合は、
           <button type="button" onClick={handleGoogleSwitchAccount}
-            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 10, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
-            アカウント選択画面が出ない場合
+            style={{ background: 'transparent', border: 'none', color: '#2563eb', fontSize: 11, cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+            こちら
           </button>
+          で Google からログアウトしてから再度「Googleでログイン」を押してください
         </div>
 
         {/* 区切り線 */}
