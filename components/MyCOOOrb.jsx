@@ -14,7 +14,7 @@ import { useResponsive } from '../lib/useResponsive'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { inputStyle } from '../lib/iosStyles'
 import Icon from './Icon'
-import ProposalDialog from './ProposalDialog'
+// ProposalDialog の使用は廃止 (チャット内 InlineProposalCard に変更)
 import { trackFeature } from '../lib/track'
 
 const MYCOO_GRAD = 'linear-gradient(135deg, #3b82f6 0%, #1e3a8a 100%)'
@@ -56,7 +56,7 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
     return () => window.removeEventListener('mycoo:set-orb-visibility', onSetVisible)
   }, [])
   // カレンダー予定の作成/更新/削除提案 (承認ダイアログ用)
-  const [pendingProposals, setPendingProposals] = React.useState(null)
+  // (旧 pendingProposals は廃止。proposals は各 message に紐づく)
   const scrollRef = React.useRef(null)
   const composingRef = React.useRef(false)
 
@@ -157,24 +157,53 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner: myName, message: msg, mode: 'speed', history, organization_id: orgId }),
       })
-      const j = await r.json()
+      // JSON でない応答 (タイムアウト時の HTML 等) でも握りつぶす
+      const raw = await r.text()
+      let j = {}
+      try { j = raw ? JSON.parse(raw) : {} } catch {
+        // JSON でない: 平文を error として扱う
+        j = { error: raw ? raw.slice(0, 200) : `HTTP ${r.status}` }
+      }
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
       const aiContent = j.text || '(応答なし)'
-      setMessages(p => [...p, { role: 'assistant', content: aiContent }])
-      saveMessage('assistant', aiContent)
-      // カレンダーの作成/更新/削除提案があれば承認ダイアログを出す
+      // カレンダー提案を抽出して message に紐づける (モーダル化せずインライン表示)
       const proposalActions = (j.actions || []).filter(a =>
         a.result?.proposal && ['create', 'update', 'delete'].includes(a.result.proposal)
       )
-      if (proposalActions.length > 0) {
-        setPendingProposals(proposalActions.map(a => ({ type: a.result.proposal, plan: a.result.plan })))
-      }
+      const proposals = proposalActions.map(a => ({ type: a.result.proposal, plan: a.result.plan }))
+      setMessages(p => [...p, {
+        role: 'assistant',
+        content: aiContent,
+        proposals: proposals.length > 0 ? proposals : null,
+        proposalsState: proposals.length > 0 ? 'pending' : null, // pending | approving | done | cancelled | error
+      }])
+      saveMessage('assistant', aiContent)
     } catch (e) {
       // エラーメッセージは履歴に保存しない (再質問を促す)
       setMessages(p => [...p, { role: 'assistant', content: `⚠️ ${e.message || 'エラー'}` }])
     } finally {
       setBusy(false)
     }
+  }
+
+  // インライン承認: メッセージに紐づく proposals を順次実行
+  async function approveProposalsAt(messageIdx) {
+    setMessages(p => p.map((m, i) => i === messageIdx ? { ...m, proposalsState: 'approving' } : m))
+    const target = messages[messageIdx]
+    const proposals = target?.proposals || []
+    try {
+      for (const pr of proposals) {
+        await executeProposal(pr.type, pr.plan)
+      }
+      setMessages(p => p.map((m, i) => i === messageIdx ? { ...m, proposalsState: 'done' } : m))
+    } catch (e) {
+      const errMsg = e.message || 'エラー'
+      setMessages(p => p.map((m, i) => i === messageIdx
+        ? { ...m, proposalsState: 'error', proposalsError: errMsg } : m))
+    }
+  }
+  function cancelProposalsAt(messageIdx) {
+    setMessages(p => p.map((m, i) => i === messageIdx ? { ...m, proposalsState: 'cancelled' } : m))
   }
 
   // 承認された提案を /api/integrations/calendar/event で実行 (owner = 本人)
@@ -321,16 +350,31 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
                 </div>
               )}
               {messages.map((m, i) => (
-                <div key={i} style={m.role === 'user' ? {
-                  maxWidth: '88%', alignSelf: 'flex-end', padding: '10px 14px',
-                  background: MYCOO_GRAD, color: '#fff', borderRadius: RADIUS.md, borderTopRightRadius: 4,
-                  boxShadow: '0 2px 8px rgba(30,58,138,.18)', fontSize: 12.5, lineHeight: 1.65, whiteSpace: 'pre-wrap',
-                } : {
-                  maxWidth: '88%', alignSelf: 'flex-start', padding: '10px 14px',
-                  background: T.bgCard2, color: T.text,
-                  border: `1px solid ${T.border}`, borderRadius: RADIUS.md, borderTopLeftRadius: 4,
-                  boxShadow: SHADOWS.xs, fontSize: 12.5, lineHeight: 1.65, whiteSpace: 'pre-wrap',
-                }}>{m.content}</div>
+                <div key={i} style={{
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 6,
+                }}>
+                  <div style={m.role === 'user' ? {
+                    padding: '10px 14px',
+                    background: MYCOO_GRAD, color: '#fff', borderRadius: RADIUS.md, borderTopRightRadius: 4,
+                    boxShadow: '0 2px 8px rgba(30,58,138,.18)', fontSize: 12.5, lineHeight: 1.65, whiteSpace: 'pre-wrap',
+                  } : {
+                    padding: '10px 14px',
+                    background: T.bgCard2, color: T.text,
+                    border: `1px solid ${T.border}`, borderRadius: RADIUS.md, borderTopLeftRadius: 4,
+                    boxShadow: SHADOWS.xs, fontSize: 12.5, lineHeight: 1.65, whiteSpace: 'pre-wrap',
+                  }}>{m.content}</div>
+                  {/* インライン承認カード (カレンダー作成/更新/削除の提案) */}
+                  {m.role === 'assistant' && m.proposals && m.proposals.length > 0 && (
+                    <InlineProposalCard
+                      T={T} proposals={m.proposals}
+                      state={m.proposalsState || 'pending'}
+                      errorMessage={m.proposalsError || ''}
+                      onApprove={() => approveProposalsAt(i)}
+                      onCancel={() => cancelProposalsAt(i)}
+                    />
+                  )}
+                </div>
               ))}
               {busy && (
                 <div style={{
@@ -405,35 +449,79 @@ export default function MyCOOOrb({ user, members = [], T, orgId }) {
         </div>
       </div>
 
-      {/* カレンダー予定の確認ダイアログ (作成/更新/削除を承認後に実行) */}
-      {T && pendingProposals && pendingProposals.length > 0 && (
-        <ProposalDialog
-          T={T}
-          proposals={pendingProposals}
-          onClose={() => setPendingProposals(null)}
-          onConfirm={async () => {
-            const remaining = [...pendingProposals]
-            try {
-              while (remaining.length > 0) {
-                await executeProposal(remaining[0].type, remaining[0].plan)
-                remaining.shift()
-              }
-              setPendingProposals(null)
-              const okMsg = '✅ カレンダーに反映しました。'
-              setMessages(p => [...p, { role: 'assistant', content: okMsg }])
-              saveMessage('assistant', okMsg)
-            } catch (e) {
-              const msg = e.message || 'エラー'
-              if (/403|Insufficient|insufficient auth/i.test(msg)) {
-                alert('Google の予定作成権限が不足しています。連携タブで再認証してください。')
-              } else {
-                alert(`実行エラー: ${msg}`)
-              }
-            }
-          }}
-        />
-      )}
+      {/* 確認モーダルは廃止 — 提案は各 assistant メッセージ内に InlineProposalCard として表示 */}
     </>
+  )
+}
+
+// ─── インライン提案カード (チャット内に表示) ───
+// state: pending (承認/キャンセル表示) / approving (実行中) / done (実行完了) / cancelled / error
+function InlineProposalCard({ T, proposals, state, errorMessage, onApprove, onCancel }) {
+  const jstHHMM = (iso) => {
+    const d = new Date(iso); const j = new Date(d.getTime() + 9 * 3600 * 1000)
+    return `${String(j.getUTCHours()).padStart(2,'0')}:${String(j.getUTCMinutes()).padStart(2,'0')}`
+  }
+  const shortDate = (iso) => {
+    const d = new Date(iso); const j = new Date(d.getTime() + 9 * 3600 * 1000)
+    const dow = ['日','月','火','水','木','金','土'][j.getUTCDay()]
+    return `${j.getUTCMonth() + 1}/${j.getUTCDate()}(${dow})`
+  }
+  const n = proposals.length
+  const verbOf = (t) => t === 'create' ? '作成' : t === 'update' ? '更新' : '削除'
+  return (
+    <div style={{
+      background: T.bgCard, border: `1px solid ${T.accent}55`,
+      borderRadius: RADIUS.md, padding: 10,
+      boxShadow: `0 1px 2px ${T.accent}20`,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.accentText, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <Icon name="calendar" size={12} /> 予定 {n} 件の{verbOf(proposals[0].type)}提案
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+        {proposals.map((p, idx) => (
+          <div key={idx} style={{
+            padding: '6px 8px', background: T.sectionBg, borderRadius: RADIUS.xs - 2,
+            fontSize: 11, color: T.text,
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: 2 }}>{p.plan.summary || '(無題)'}</div>
+            <div style={{ color: T.textMuted, fontSize: 10 }}>
+              {p.plan.start_iso && `${shortDate(p.plan.start_iso)} ${jstHHMM(p.plan.start_iso)}`}
+              {p.plan.end_iso && `–${jstHHMM(p.plan.end_iso)}`}
+              {p.plan.add_meet && ' · Meet 付き'}
+              {(p.plan.attendee_names || []).length > 0 && ` · 招待 ${(p.plan.attendee_names).join(',')}`}
+            </div>
+          </div>
+        ))}
+      </div>
+      {state === 'pending' && (
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{
+            padding: '5px 12px', borderRadius: RADIUS.xs, border: `1px solid ${T.border}`,
+            background: 'transparent', color: T.textSub, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+          }}>キャンセル</button>
+          <button onClick={onApprove} style={{
+            padding: '5px 12px', borderRadius: RADIUS.xs, border: 'none',
+            background: T.accent, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>{n === 1 ? '承認' : `${n} 件まとめて承認`}</button>
+        </div>
+      )}
+      {state === 'approving' && (
+        <div style={{ fontSize: 11, color: T.textMuted, textAlign: 'right' }}>実行中…</div>
+      )}
+      {state === 'done' && (
+        <div style={{ fontSize: 11, color: T.success, textAlign: 'right', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', width: '100%' }}>
+          <Icon name="check" size={12} /> カレンダーに反映しました
+        </div>
+      )}
+      {state === 'cancelled' && (
+        <div style={{ fontSize: 11, color: T.textMuted, textAlign: 'right' }}>キャンセルしました</div>
+      )}
+      {state === 'error' && (
+        <div style={{ fontSize: 11, color: T.danger, marginTop: 4, lineHeight: 1.5 }}>
+          ⚠️ 実行に失敗: {errorMessage}
+        </div>
+      )}
+    </div>
   )
 }
 
