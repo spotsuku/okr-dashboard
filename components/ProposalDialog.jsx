@@ -151,6 +151,8 @@ function ProposalBody({ T, proposal, index, total }) {
 }
 
 // 確認ダイアログ (作成/更新/削除、複数提案を一括承認可)
+// デスクトップでは左寄せ + 半透明バックドロップで背後のカレンダーを参照しながら承認可能
+// モバイルでは従来通り中央寄せ
 export default function ProposalDialog({ T, proposals, onClose, onConfirm }) {
   const [busy, setBusy] = useState(false)
   const handle = async () => {
@@ -163,20 +165,33 @@ export default function ProposalDialog({ T, proposals, onClose, onConfirm }) {
   const verb = !allSameType ? '変更' : proposals[0].type === 'create' ? '作成'
              : proposals[0].type === 'update' ? '更新' : '削除'
   const title = n === 1 ? `予定の${verb}を承認しますか？` : `${n} 件の予定の${verb}を承認しますか？`
+  // 画面幅判定 (デスクトップ判定の簡易版; SSR の関係で window 参照は使わない)
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
-      zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0,
+      // モバイルは従来の暗いバックドロップ、デスクトップは弱めにしてカレンダーを透かして見せる
+      background: isMobile ? 'rgba(0,0,0,0.55)' : 'rgba(15,23,42,0.18)',
+      zIndex: 1100,
+      display: 'flex',
+      alignItems: isMobile ? 'center' : 'flex-start',
+      justifyContent: isMobile ? 'center' : 'flex-start',
+      padding: isMobile ? 0 : '80px 0 0 32px',
     }}>
-      <div style={{
-        background: T.bgCard, borderRadius: RADIUS.lg, width: 'min(560px, 92vw)',
+      <div onClick={e => e.stopPropagation()} style={{
+        background: T.bgCard, borderRadius: RADIUS.lg, width: 'min(480px, 92vw)',
         border: `1px solid ${T.border}`, boxShadow: SHADOWS.xl,
-        display: 'flex', flexDirection: 'column', maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 100px)',
       }}>
         <div style={{
           padding: `${SPACING.md + 2}px ${SPACING.lg + 2}px`, borderBottom: `1px solid ${T.border}`,
-          ...TYPO.headline, color: T.text,
-        }}>{title}</div>
+          ...TYPO.headline, color: T.text, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm,
+        }}>
+          <span>{title}</span>
+          {!isMobile && (
+            <span style={{ ...TYPO.caption, color: T.textMuted, fontWeight: 500 }}>背景クリックで閉じる</span>
+          )}
+        </div>
         <div style={{ padding: SPACING.lg + 2, overflowY: 'auto', ...TYPO.subhead, fontWeight: 500, color: T.text, lineHeight: 1.7 }}>
           {proposals.map((p, idx) => (
             <ProposalBody key={idx} T={T} proposal={p} index={idx} total={n} />
