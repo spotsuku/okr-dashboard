@@ -1513,7 +1513,14 @@ export default function Dashboard({ user, onSignOut }) {
     }
   }
 
-  const hasGoogle = user?.identities?.some(i => i.provider === 'google')
+  // Google 連携判定: user.identities が stale でも検出できるよう 3 か所を OR で確認
+  // (Supabase は identity を identities / app_metadata.provider / app_metadata.providers の
+  //  どこかに入れる。タイミングによって片方しか反映されないことがある)
+  const hasGoogle = !!(
+    user?.identities?.some(i => i.provider === 'google') ||
+    user?.app_metadata?.provider === 'google' ||
+    (user?.app_metadata?.providers || []).includes('google')
+  )
 
   const periods = [
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
@@ -1762,14 +1769,15 @@ export default function Dashboard({ user, onSignOut }) {
                 )}
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
-                {hasGoogle ? (
-                  <>
-                    <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
-                    <button onClick={handleUnlinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.textSub, fontSize: 11, fontFamily: 'inherit' }}>Google連携を解除</button>
-                  </>
-                ) : (
+                {/* Google 連携: 状態表示 + リンク追加/解除を常に併記
+                    user.identities が stale な場合があるため、解除ボタンは hasGoogle に関わらず常時表示 */}
+                {hasGoogle && (
+                  <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
+                )}
+                {!hasGoogle && (
                   <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
                 )}
+                <button onClick={handleUnlinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.textSub, fontSize: 11, fontFamily: 'inherit' }}>Google連携を解除</button>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/lp" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.text, fontSize: 12, textDecoration: 'none' }}>サービス紹介を見る</a>
                 <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="search" size={12} /> ツアーをもう一度見る</button>

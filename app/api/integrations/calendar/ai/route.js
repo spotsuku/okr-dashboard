@@ -348,8 +348,9 @@ ${dateRefStr}
   let finalText = ''
 
   // 529 (Overloaded) / 429 (Rate limit) は指数バックオフでリトライ
+  // 429 は分単位のレート制限なので retry-after ヘッダを尊重し長めに待つ
   async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
-    let lastStatus = 0, lastRaw = ''
+    let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -363,15 +364,19 @@ ${dateRefStr}
       if (res.ok) return { ok: true, data: await res.json() }
       lastStatus = res.status
       lastRaw = await res.text()
-      // 529 / 429 / 5xx 系はリトライ
+      const retryAfterHeader = Number(res.headers.get('retry-after') || 0)
+      if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(res.status) && attempt < maxRetries - 1) {
-        const delayMs = Math.min(8000, 1000 * Math.pow(2, attempt))  // 1s, 2s, 4s, 8s
+        // 429 は分単位の枠なので長めに待つ。retry-after があればそれを優先
+        const delayMs = res.status === 429
+          ? (retryAfterHeader ? Math.min(60_000, retryAfterHeader * 1000) : (12_000 + attempt * 12_000))
+          : Math.min(8000, 1000 * Math.pow(2, attempt))
         await new Promise(r => setTimeout(r, delayMs))
         continue
       }
       break
     }
-    return { ok: false, status: lastStatus, raw: lastRaw }
+    return { ok: false, status: lastStatus, raw: lastRaw, retryAfter: lastRetryAfter }
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
