@@ -5406,11 +5406,16 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
                 {ev.title}
               </span>
               {ev.hangoutLink && (
-                <a href={ev.hangoutLink} target="_blank" rel="noreferrer" style={{
-                  padding: '2px 8px', borderRadius: 10,
-                  background: T.accentBg, color: T.accent,
-                  fontSize: 10, fontWeight: 700, textDecoration: 'none',
-                }}>参加</a>
+                <a href={ev.hangoutLink} target="_blank" rel="noreferrer"
+                  title="Google Meet に参加"
+                  style={{
+                    padding: '2px 8px', borderRadius: 10,
+                    background: '#00897b', color: '#fff',
+                    fontSize: 10, fontWeight: 700, textDecoration: 'none',
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                  }}>
+                  <span style={{ fontSize: 8 }}>▶</span> Meet
+                </a>
               )}
             </div>
           ))}
