@@ -857,43 +857,74 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
                   )
                 })}
 
-                {/* イベント (重ね合わせは横に並べてレーン化) */}
+                {/* イベント (重ね合わせは Google Calendar 風レーン化) */}
                 {(() => {
-                  // ── レーン計算: 開始順にソートして、衝突しないレーンを順番に割り当て
-                  const sorted = [...dayEvents].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin)
-                  const columns = []
-                  for (const ev of sorted) {
+                  // ── Google Calendar 風アルゴリズム ──
+                  // 「6時間以上の長時間イベント」(出社・移動・私用など) は背景レーンとして100%幅で描画し、
+                  // 短いイベント (会議・打ち合わせ等) はそれらを「無視」して独自にレーン化する。
+                  // これにより、長時間イベント1件+短時間イベント複数 の典型ケースで、
+                  // 短時間イベントが横に並び、長時間イベントも視認できる Google Calendar 風表示になる。
+                  const LONG_THRESHOLD_MIN = 6 * 60
+                  const longEvents = dayEvents.filter(e => (e.endMin - e.startMin) >= LONG_THRESHOLD_MIN)
+                  const shortEvents = dayEvents.filter(e => (e.endMin - e.startMin) < LONG_THRESHOLD_MIN)
+
+                  // 長時間イベント: 互いに重なる場合は横並びレーン化、それ以外は 100% 幅
+                  const longSorted = [...longEvents].sort((a, b) => a.startMin - b.startMin)
+                  const longCols = []
+                  for (const ev of longSorted) {
                     let placed = false
-                    for (let i = 0; i < columns.length; i++) {
-                      const last = columns[i][columns[i].length - 1]
-                      if (last.endMin <= ev.startMin) {
-                        columns[i].push(ev); ev._col = i; placed = true; break
-                      }
+                    for (let i = 0; i < longCols.length; i++) {
+                      const last = longCols[i][longCols[i].length - 1]
+                      if (last.endMin <= ev.startMin) { longCols[i].push(ev); ev._col = i; placed = true; break }
                     }
-                    if (!placed) { columns.push([ev]); ev._col = columns.length - 1 }
+                    if (!placed) { longCols.push([ev]); ev._col = longCols.length - 1 }
                   }
-                  // 重なるイベントが使うレーン総数を各 ev に
-                  for (const ev of sorted) {
+                  for (const ev of longSorted) {
                     let maxCols = ev._col + 1
-                    for (const ev2 of sorted) {
-                      if (ev === ev2) continue
-                      if (ev2.startMin < ev.endMin && ev2.endMin > ev.startMin) {
+                    for (const ev2 of longSorted) {
+                      if (ev !== ev2 && ev2.startMin < ev.endMin && ev2.endMin > ev.startMin) {
                         maxCols = Math.max(maxCols, ev2._col + 1)
                       }
                     }
                     ev._cols = maxCols
+                    ev._isLong = true
                   }
-                  return sorted.map(ev => {
+
+                  // 短いイベント: 長時間イベントを無視して独自にレーン化
+                  const shortSorted = [...shortEvents].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin)
+                  const columns = []
+                  for (const ev of shortSorted) {
+                    let placed = false
+                    for (let i = 0; i < columns.length; i++) {
+                      const last = columns[i][columns[i].length - 1]
+                      if (last.endMin <= ev.startMin) { columns[i].push(ev); ev._col = i; placed = true; break }
+                    }
+                    if (!placed) { columns.push([ev]); ev._col = columns.length - 1 }
+                  }
+                  for (const ev of shortSorted) {
+                    let maxCols = ev._col + 1
+                    for (const ev2 of shortSorted) {
+                      if (ev !== ev2 && ev2.startMin < ev.endMin && ev2.endMin > ev.startMin) {
+                        maxCols = Math.max(maxCols, ev2._col + 1)
+                      }
+                    }
+                    ev._cols = maxCols
+                    ev._isLong = false
+                  }
+
+                  const all = [...longSorted, ...shortSorted]
+                  return all.map(ev => {
                     const top = minToPx(ev.startMin)
                     const h = Math.max(SLOT_PX - 3, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 2)
                     const widthPct = 100 / ev._cols
                     const leftPct = ev._col * widthPct
                     const isNarrow = ev._cols > 1
-                    // 自分のイベントのみ in-app 編集可。他人の予定はホバー詳細のみ。
+                    // 自分のイベントのみ in-app 編集可
                     const isMine = (viewingName || myName) && ev.ownerName === (viewingName || myName)
                     return (
                       <CalendarEvent key={ev.id} ev={ev} T={T} top={top} h={h}
                         leftPct={leftPct} widthPct={widthPct} isNarrow={isNarrow}
+                        isBackground={ev._isLong}  // 長時間イベントは背景レイヤー (opacity 低・zIndex 0)
                         formatMin={formatMin}
                         onEdit={isMine ? (() => setEditingEvent(ev)) : null}
                         onMove={isMine ? (async ({ deltaMin }) => {
@@ -944,7 +975,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
 }
 
 // ─── 1イベントを描画 (ホバーで詳細・自分のイベントはドラッグで移動 / 下端でリサイズ / クリックで編集) ──
-function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin, onEdit, onMove, onResize }) {
+function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, isBackground, formatMin, onEdit, onMove, onResize }) {
   const [hover, setHover] = useState(false)
   const [dragMode, setDragMode] = useState(null) // null | 'move' | 'resize'
   const [dragOffset, setDragOffset] = useState(0) // 移動中のピクセル差分
@@ -1012,17 +1043,22 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin, 
       style={{
         position: 'absolute',
         boxSizing: 'border-box',
-        left: `calc(${leftPct}% + 2px)`,
-        width: `calc(${widthPct}% - 4px)`,
+        // 背景レイヤー (長時間イベント) は 100% 幅で前景イベントの下に潜む
+        left: isBackground ? `calc(${leftPct}% + 2px)` : `calc(${leftPct}% + 2px)`,
+        width: isBackground ? `calc(${widthPct}% - 4px)` : `calc(${widthPct}% - 4px)`,
         top: dragMode === 'move' ? top + dragOffset : top,
         height: dragMode === 'resize' ? Math.max(SLOT_PX, h + dragOffset) : h,
-        background: hover ? `${ev.color}88` : `${ev.color}55`,
+        // 背景レイヤーは半透明で前景イベントが透けて見えるように
+        background: isBackground
+          ? (hover ? `${ev.color}55` : `${ev.color}30`)
+          : (hover ? `${ev.color}88` : `${ev.color}55`),
         borderLeft: `3px solid ${ev.color}`,
         borderRadius: RADIUS.xs - 1, padding: minimal ? '2px 3px' : '3px 5px',
         fontSize: 10, color: T.text,
         overflow: 'hidden', cursor: dragMode ? (dragMode === 'resize' ? 'ns-resize' : 'grabbing') : (onMove ? 'grab' : 'pointer'),
         boxShadow: hover || dragMode ? `0 4px 12px ${ev.color}55, 0 0 0 1px ${ev.color}80` : 'none',
-        zIndex: dragMode ? 50 : (hover ? 5 : 1),
+        // 背景レイヤー (長時間イベント) は zIndex 0 で前景イベントの下に置く
+        zIndex: dragMode ? 50 : (hover ? 5 : (isBackground ? 0 : 2)),
         transition: dragMode ? 'none' : 'all 0.15s ease',
         opacity: dragMode ? 0.8 : 1,
         userSelect: 'none',
