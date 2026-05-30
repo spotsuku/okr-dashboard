@@ -1471,6 +1471,42 @@ export default function Dashboard({ user, onSignOut }) {
     if (error) alert('紐づけに失敗しました: ' + error.message)
   }
 
+  // Google 連携解除: identity (Supabase Auth) + user_integrations (Gmail/Calendar/Drive 用 token) の両方をクリア
+  const handleUnlinkGoogle = async () => {
+    if (!window.confirm('Google 連携を解除しますか?\n\n以下が解除されます:\n・Supabase 認証の Google identity\n・Gmail / Calendar / Drive アクセス権 (user_integrations)\n・Google 側の OAuth token (revoke 実施)\n\n再連携したい場合はログアウト後に「Google でログイン」を再度実行してください。')) return
+    try {
+      // 1) Supabase Auth の identity を解除 (これがあると同じ Google アカウントで再連携できないため必須)
+      const googleIdentity = user?.identities?.find(i => i.provider === 'google')
+      if (googleIdentity) {
+        const { error: e1 } = await supabase.auth.unlinkIdentity(googleIdentity)
+        if (e1) {
+          // identity が 1 つしかない場合 unlink できないことがある (Supabase 仕様)
+          if (/last identity|only identity/i.test(e1.message || '')) {
+            alert('Google identity は唯一の認証手段のため解除できません。先にメール+パスワードを設定するか、別の OAuth を追加してから再試行してください。')
+            return
+          }
+          alert('Google identity の解除に失敗: ' + e1.message)
+          return
+        }
+      }
+      // 2) Workspace 連携 (Gmail/Calendar/Drive 用の access/refresh token) も削除
+      const myName = members.find(m => m.email === user?.email)?.name
+      if (myName) {
+        const { authedFetch } = await import('../lib/authedFetch')
+        await authedFetch('/api/integrations/google/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ owner: myName, organization_id: currentOrg?.id }),
+        }).catch(() => { /* best-effort */ })
+      }
+      alert('Google 連携を解除しました。ログアウトします。')
+      try { await supabase.auth.signOut() } catch { /* noop */ }
+      window.location.href = '/signin'
+    } catch (e) {
+      alert('解除に失敗しました: ' + (e.message || e))
+    }
+  }
+
   const hasGoogle = user?.identities?.some(i => i.provider === 'google')
 
   const periods = [
@@ -1720,10 +1756,14 @@ export default function Dashboard({ user, onSignOut }) {
                 )}
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
-                {hasGoogle
-                  ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
-                  : <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
-                }
+                {hasGoogle ? (
+                  <>
+                    <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
+                    <button onClick={handleUnlinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.textSub, fontSize: 11, fontFamily: 'inherit' }}>Google連携を解除</button>
+                  </>
+                ) : (
+                  <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
+                )}
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/lp" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.text, fontSize: 12, textDecoration: 'none' }}>サービス紹介を見る</a>
                 <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="search" size={12} /> ツアーをもう一度見る</button>
