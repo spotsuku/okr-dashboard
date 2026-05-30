@@ -347,11 +347,17 @@ ${dateRefStr}
   const actions = []
   let finalText = ''
 
+  // 関数全体の wall-clock budget (Vercel 60s 制限。50s で打ち切り)
+  const REQ_START = Date.now()
+  const WALL_CLOCK_BUDGET_MS = 50_000
+  const remainingMs = () => WALL_CLOCK_BUDGET_MS - (Date.now() - REQ_START)
+
   // 529 (Overloaded) / 429 (Rate limit) は指数バックオフでリトライ
-  // 429 は分単位のレート制限なので retry-after ヘッダを尊重し長めに待つ
-  async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
+  // 残り時間予算を超える待機は実施せず即 break (Vercel タイムアウト回避)
+  async function callAnthropicWithRetry(requestBody, maxRetries = 3) {
     let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (remainingMs() < 5_000) break
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -367,11 +373,12 @@ ${dateRefStr}
       const retryAfterHeader = Number(res.headers.get('retry-after') || 0)
       if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(res.status) && attempt < maxRetries - 1) {
-        // 429 は分単位の枠なので長めに待つ。retry-after があればそれを優先
-        const delayMs = res.status === 429
-          ? (retryAfterHeader ? Math.min(60_000, retryAfterHeader * 1000) : (12_000 + attempt * 12_000))
+        const want = res.status === 429
+          ? (retryAfterHeader ? retryAfterHeader * 1000 : (12_000 + attempt * 12_000))
           : Math.min(8000, 1000 * Math.pow(2, attempt))
-        await new Promise(r => setTimeout(r, delayMs))
+        const budget = Math.max(0, remainingMs() - 8_000)
+        if (want > budget) break
+        await new Promise(r => setTimeout(r, want))
         continue
       }
       break
@@ -380,6 +387,10 @@ ${dateRefStr}
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
+    if (remainingMs() < 6_000) {
+      finalText = finalText || '⏱️ AI 応答が時間内に収まりませんでした。質問を絞り込んで再度お試しください。'
+      break
+    }
     const r = await callAnthropicWithRetry({
       model: MODEL,
       max_tokens: 2048,
