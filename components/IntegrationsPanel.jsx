@@ -151,7 +151,7 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
             <div style={{ ...TYPO.footnote, fontWeight: 500, color: T.textMuted, marginTop: 2, lineHeight: 1.5 }}>
               {IS_DEMO
                 ? 'デモ環境では外部サービスとの連携は無効化されています。Gmail / Calendar / Drive タブではサンプルデータが表示されます。'
-                : 'Google アカウントを連携すると、Gmail の重要メールと Google カレンダーの予定がダッシュボードに表示され、AI返信も使えるようになります。'}
+                : 'Google アカウントを連携すると、Gmail の重要メールと Google カレンダーの予定がダッシュボードに表示され、AI返信や共有ドライブの AI 検索も使えるようになります。'}
               {!IS_DEMO && !isViewingSelf && ' (自分を選択中のみ操作可能)'}
             </div>
           </div>
@@ -233,10 +233,10 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ ...TYPO.headline, color: T.text }}>
-                  Google (Gmail + カレンダー)
+                  Google (Gmail + カレンダー + ドライブ)
                 </div>
                 <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginTop: 1 }}>
-                  メール・予定をダッシュボードに集約 + AI返信
+                  メール・予定・資料をダッシュボードに集約 + AI返信 + ドライブAI検索
                 </div>
               </div>
               {isConnected && (() => {
@@ -270,6 +270,7 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
                 ['ダッシュボード', '直近8時間の予定 + To/Cc の重要メール5件'],
                 ['メールタブ', 'To/Cc/通知 を整理して表示'],
                 ['AI返信', '返信草稿を自動生成して Gmail の下書きに保存'],
+                ['ドライブAI', '共有ドライブを横断検索・Docs/Sheets/Slidesの本文をAIが要約'],
               ].map(([lbl, ds]) => (
                 <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
                   <span style={{ ...TYPO.footnote, fontWeight: 700, color: T.text, minWidth: 90 }}>{lbl}</span>
@@ -397,7 +398,7 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
             <div>
               <div style={{ ...TYPO.footnote, fontWeight: 700, color: T.accentText, marginBottom: 3 }}>ヒント</div>
               <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textSub, lineHeight: 1.6 }}>
-                同意画面で「メールメッセージの表示」「下書きの管理とメール送信」「予定の表示」すべてにチェックを入れて「許可」してください。
+                同意画面で「メールメッセージの表示」「下書きの管理とメール送信」「予定の表示」「ファイルの表示・ダウンロード」すべてにチェックを入れて「許可」してください。
                 1つでも外すと一部機能が動作しません。
               </div>
             </div>
