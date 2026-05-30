@@ -207,9 +207,15 @@ async function handlePost(request) {
   let finalText = ''
   let lastInterimText = ''  // ループ中の interim text (step 上限到達時のフォールバックで使用)
 
-  async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
+  // 関数全体の wall-clock budget (Vercel 60s 制限。50s で打ち切り)
+  const REQ_START = Date.now()
+  const WALL_CLOCK_BUDGET_MS = 50_000
+  const remainingMs = () => WALL_CLOCK_BUDGET_MS - (Date.now() - REQ_START)
+
+  async function callAnthropicWithRetry(requestBody, maxRetries = 3) {
     let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (remainingMs() < 5_000) break
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -222,15 +228,16 @@ async function handlePost(request) {
       if (r.ok) return { ok: true, data: await r.json() }
       lastStatus = r.status
       lastRaw = await r.text()
-      // 429 の retry-after ヘッダを尊重 (秒数)。Anthropic は 30〜60 秒を返すことが多い
       const retryAfterHeader = Number(r.headers.get('retry-after') || 0)
       if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(r.status) && attempt < maxRetries - 1) {
-        // 429 は分単位のレート制限なので、retry-after があればそれを使う。無ければ 12s, 24s, 36s と段階的に待つ
-        const delayMs = r.status === 429
-          ? (retryAfterHeader ? Math.min(60_000, retryAfterHeader * 1000) : (12_000 + attempt * 12_000))
+        // 429: retry-after 尊重。ただし残り時間予算を超える場合は諦める。
+        const want = r.status === 429
+          ? (retryAfterHeader ? retryAfterHeader * 1000 : (12_000 + attempt * 12_000))
           : Math.min(8000, 1000 * Math.pow(2, attempt))
-        await new Promise(res => setTimeout(res, delayMs))
+        const budget = Math.max(0, remainingMs() - 8_000)
+        if (want > budget) break
+        await new Promise(res => setTimeout(res, want))
         continue
       }
       break
@@ -239,6 +246,10 @@ async function handlePost(request) {
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
+    if (remainingMs() < 6_000) {
+      finalText = finalText || '⏱️ AI 応答が時間内に収まりませんでした。質問を絞り込んで再度お試しください。'
+      break
+    }
     const r = await callAnthropicWithRetry({
       model: MODEL,
       max_tokens: 2048,

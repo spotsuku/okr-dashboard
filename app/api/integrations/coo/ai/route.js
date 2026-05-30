@@ -804,13 +804,21 @@ ${dateRefStr}
   const actions = []
   let finalText = ''
 
+  // 関数全体の wall-clock budget (Vercel 60s 制限。実質 50s で打ち切り)。
+  // これを超えそうな wait は実施せず、即座にエラーを返してクライアント側で再試行させる。
+  const REQ_START = Date.now()
+  const WALL_CLOCK_BUDGET_MS = 50_000
+  const remainingMs = () => WALL_CLOCK_BUDGET_MS - (Date.now() - REQ_START)
+
   // リトライは時間予算 (maxDuration) を食い潰さない範囲に抑える。
   // 過負荷時 (529) はリトライで粘るより、友好的なエラーを早く返して
   // クライアント側の「Failed to fetch」(関数タイムアウト) を避ける方を優先する。
-  // 429 (レート制限) は分単位の枠なので、retry-after ヘッダを尊重し最大3回まで再試行。
-  async function callAnthropic(reqBody, maxRetries = 3) {
+  // 429 (レート制限) は分単位の枠なので、retry-after ヘッダを尊重し最大2回まで再試行。
+  async function callAnthropic(reqBody, maxRetries = 2) {
     let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // 残り時間が無いなら即座に break (リトライしない)
+      if (remainingMs() < 5_000) break
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -825,10 +833,13 @@ ${dateRefStr}
       const retryAfterHeader = Number(r.headers.get('retry-after') || 0)
       if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(r.status) && attempt < maxRetries - 1) {
-        // 429 はレート制限なので長めに待つ (retry-after があればそれを優先)
-        const delayMs = r.status === 429
-          ? (retryAfterHeader ? Math.min(60_000, retryAfterHeader * 1000) : (12_000 + attempt * 12_000))
+        // 429 でも残り時間内に収まる範囲しか待たない。超えるなら即 break。
+        const want = r.status === 429
+          ? (retryAfterHeader ? retryAfterHeader * 1000 : 12_000)
           : Math.min(2000, 800 * Math.pow(2, attempt))
+        const budget = Math.max(0, remainingMs() - 8_000) // 次の呼び出し用に 8s 確保
+        if (want > budget) break  // 待つと時間超過するので諦める
+        const delayMs = want
         await new Promise(res => setTimeout(res, delayMs))
         continue
       }
@@ -838,6 +849,11 @@ ${dateRefStr}
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
+    // 時間予算切れなら部分結果で打ち切り (タイムアウト前に応答返す)
+    if (remainingMs() < 6_000) {
+      finalText = finalText || '⏱️ AI 応答が時間内に収まりませんでした。質問を絞り込んで再度お試しください。'
+      break
+    }
     const r = await callAnthropic({
       model: MODEL,
       max_tokens: 2048,
