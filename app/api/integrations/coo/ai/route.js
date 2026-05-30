@@ -790,8 +790,12 @@ ${dateRefStr}
 
 ツールは最大 ${MAX_STEPS} ステップ連続実行できます。`
 
+  // 履歴は直近 6 ターンに制限 (1分あたり 30,000 input token のレート制限対策)
+  // 長い会話で過去全てを送ると毎リクエストが肥大化して 429 になりやすい
+  const MAX_HISTORY_TURNS = 6
+  const trimmedHistory = Array.isArray(history) ? history.slice(-MAX_HISTORY_TURNS) : []
   const messages = [
-    ...history.map(h => ({ role: h.role, content: h.content })),
+    ...trimmedHistory.map(h => ({ role: h.role, content: h.content })),
     { role: 'user', content: message },
   ]
 
@@ -801,8 +805,9 @@ ${dateRefStr}
   // リトライは時間予算 (maxDuration) を食い潰さない範囲に抑える。
   // 過負荷時 (529) はリトライで粘るより、友好的なエラーを早く返して
   // クライアント側の「Failed to fetch」(関数タイムアウト) を避ける方を優先する。
-  async function callAnthropic(reqBody, maxRetries = 2) {
-    let lastStatus = 0, lastRaw = ''
+  // 429 (レート制限) は分単位の枠なので、retry-after ヘッダを尊重し最大3回まで再試行。
+  async function callAnthropic(reqBody, maxRetries = 3) {
+    let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -815,13 +820,19 @@ ${dateRefStr}
       })
       if (r.ok) return { ok: true, data: await r.json() }
       lastStatus = r.status; lastRaw = await r.text()
+      const retryAfterHeader = Number(r.headers.get('retry-after') || 0)
+      if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(r.status) && attempt < maxRetries - 1) {
-        await new Promise(res => setTimeout(res, Math.min(2000, 800 * Math.pow(2, attempt))))
+        // 429 はレート制限なので長めに待つ (retry-after があればそれを優先)
+        const delayMs = r.status === 429
+          ? (retryAfterHeader ? Math.min(60_000, retryAfterHeader * 1000) : (12_000 + attempt * 12_000))
+          : Math.min(2000, 800 * Math.pow(2, attempt))
+        await new Promise(res => setTimeout(res, delayMs))
         continue
       }
       break
     }
-    return { ok: false, status: lastStatus, raw: lastRaw }
+    return { ok: false, status: lastStatus, raw: lastRaw, retryAfter: lastRetryAfter }
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
@@ -833,9 +844,15 @@ ${dateRefStr}
       messages,
     })
     if (!r.ok) {
-      const friendly = r.status === 529
-        ? 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
-        : `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      let friendly
+      if (r.status === 429) {
+        const waitSec = r.retryAfter || 60
+        friendly = `AI の利用上限に達しました (1分あたりの入力トークン制限)。約 ${waitSec} 秒後に再試行してください。会話履歴をクリアすると上限に達しにくくなります。`
+      } else if (r.status === 529) {
+        friendly = 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
+      } else {
+        friendly = `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      }
       return json({ error: friendly, actions }, { status: 503 })
     }
     const data = r.data
