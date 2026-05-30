@@ -1035,6 +1035,7 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin, 
       <div style={{
         fontWeight: 700, lineHeight: 1.2,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        paddingRight: ev.hangoutLink ? 20 : 0, // Meet ボタン分のスペース
       }}>
         {ev.title || '(無題)'}
       </div>
@@ -1043,6 +1044,28 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin, 
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {ev.memberName}
         </div>
+      )}
+      {/* Meet ワンクリック参加ボタン (hangoutLink がある場合のみ右上隅に表示) */}
+      {ev.hangoutLink && (
+        <a
+          href={ev.hangoutLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => { e.stopPropagation() }}
+          onMouseDown={(e) => { e.stopPropagation() }}
+          title="Google Meet に参加"
+          style={{
+            position: 'absolute', top: 2, right: 2,
+            width: 18, height: 14, borderRadius: 3,
+            background: '#00897b',
+            color: '#fff', textDecoration: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 9, fontWeight: 800, lineHeight: 1,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+            zIndex: 6,
+            cursor: 'pointer',
+          }}
+        >▶</a>
       )}
       {/* ホバー時の詳細ポップアップ */}
       {hover && (
