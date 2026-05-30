@@ -97,7 +97,7 @@ const TOOLS = [
         start_iso: { type: 'string' },
         end_iso:   { type: 'string' },
         duration_min: { type: 'number', description: '必要な連続空き時間 (分)' },
-        working_hours: { type: 'object', properties: { from: { type: 'number' }, to: { type: 'number' } }, description: '営業時間帯 (例: from:9, to:22) JST。省略時 9-22。' },
+        working_hours: { type: 'object', properties: { from: { type: 'number' }, to: { type: 'number' } }, description: '営業時間帯 (例: from:9, to:18) JST。省略時 9-18 (営業時間)。ユーザーが「夜遅くでもOK」「24時間」等と明示した場合のみ広い範囲を指定する。' },
       },
       required: ['members', 'start_iso', 'end_iso', 'duration_min'],
     },
@@ -216,7 +216,7 @@ function computeFreeSlots(memberEvents, startIso, endIso, durationMin, workingHo
   }
   if (cursor < end) free.push([cursor, end])
   const fromH = workingHours?.from ?? 9
-  const toH = workingHours?.to ?? 22
+  const toH = workingHours?.to ?? 18  // 9-18 = 営業時間。21:00-22:00 など深夜帯が選ばれないように。明示的に深夜OKと指定された場合のみ拡大
   const slots = []
   for (const [s, e] of free) {
     let t = new Date(s)
@@ -780,7 +780,9 @@ ${memberList}
 予定の確認・日程調整・作成/更新/削除も依頼に応じて行えます。
 - 日付・曜日参照表 (JST、確定値・必ずこの表から曜日を引くこと。自分で計算しない):
 ${dateRefStr}
+- **重要: 必ず「直近のユーザー発話 1 件」だけに対応する。** 履歴に過去の依頼が残っていても、それらは既に処理済み (またはユーザーが意図的に放棄) とみなし、再提案しない。例えば「来週2件押さえて」を以前依頼し、今回「明日1件押さえて」と言われたら、**今回は明日1件のみ提案する** (来週2件は混ぜない)。
 - 空き時間を探す時は必ず find_free_slots を使う (勘で答えない)
+- find_free_slots の working_hours は **省略すれば 9-18 (営業時間)** が既定。深夜・早朝の選択は避ける。ユーザーが「夜遅くでも」「終日」等と明示した場合のみ広範囲を指定する
 - 時刻は JST (+09:00) の ISO 8601 で指定する
 - 招待者は attendee_names にメンバー名を渡す (メール解決は裏で行う)
 - 繰り返しは recurrence に RRULE 配列で指定 (例: 毎週金曜10回は ['RRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=10'])
