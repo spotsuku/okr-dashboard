@@ -191,13 +191,32 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
       done: false,
       ...(parsed.date ? { due_date: fmtDate(parsed.date) } : {}),
     }
-    let { error } = await supabase.from('ka_tasks').insert({ ...base, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
-    // assignee_email 列が無い古い環境向けフォールバック (列なしで再挿入)
-    if (error && /assignee_email|column/i.test(error.message || '')) {
-      ;({ error } = await supabase.from('ka_tasks').insert(base))
+    // モバイル回線等で fetch が失敗 (TypeError: Load failed) するケースに備えて 1 回リトライ
+    async function tryInsert() {
+      try {
+        const res = await supabase.from('ka_tasks').insert({ ...base, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
+        if (res.error && /assignee_email|column/i.test(res.error.message || '')) {
+          return await supabase.from('ka_tasks').insert(base)
+        }
+        return res
+      } catch (e) {
+        return { error: { message: e.message || String(e), _network: true } }
+      }
     }
+    let result = await tryInsert()
+    if (result.error && (result.error._network || /TypeError|Load failed|Failed to fetch|NetworkError/i.test(result.error.message || ''))) {
+      await new Promise(r => setTimeout(r, 1500))
+      result = await tryInsert()
+    }
+    const { error } = result
     setSaving(false)
-    if (error) { alert('タスク追加に失敗しました: ' + error.message); return }
+    if (error) {
+      const isNetwork = error._network || /TypeError|Load failed|Failed to fetch|NetworkError/i.test(error.message || '')
+      alert(isNetwork
+        ? 'ネットワーク接続が不安定なためタスクを追加できませんでした。電波状況を確認して再度お試しください。'
+        : 'タスク追加に失敗しました: ' + error.message)
+      return
+    }
     window.dispatchEvent(new CustomEvent('okr:task-created', { detail: { count: 1 } }))
     if (keepOpen) { setDraft(''); setTimeout(() => inputRef.current?.focus(), 10) }
     else { setOpen(false); setDraft('') }
