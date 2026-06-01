@@ -1988,7 +1988,7 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
             「+タスクを追加 → モーダル」の従来 UI より体験が良く、ユーザーの
             「便利だ!」感覚を初日から醸成する。 */}
         <div style={{ marginBottom: 10 }}>
-          <QuickTaskPalette user={{ email: userEmail }} members={members} inline />
+          <QuickTaskPalette user={{ email: userEmail }} members={members} inline defaultDueDate={today} />
         </div>
         {/* 詳細入力したい場合のためのフォールバック (KA紐付け・複数日等) */}
         <button
