@@ -1013,7 +1013,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
 
         {/* 右：KR + KA詳細 */}
-        <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && mobilePanel !== 'detail' ? 'none' : 'block' }}>
+        <div style={{ flex:1, minWidth: 0, overflowY:'auto', overflowX:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && mobilePanel !== 'detail' ? 'none' : 'block' }}>
           {isMobile && mobilePanel === 'detail' && (
             <button onClick={() => setMobilePanel('list')} style={{ marginBottom: SPACING.sm, padding: `6px ${SPACING.md}px`, borderRadius: RADIUS.xs + 1, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, ...TYPO.subhead, fontWeight:500, cursor: 'pointer', fontFamily: 'inherit', display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="chevronL" size={13} /> Objective一覧に戻る</button>
           )}
