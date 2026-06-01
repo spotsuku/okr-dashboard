@@ -836,7 +836,12 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const handleKRUpdate = async (krId, fields) => {
     const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
     if (error) { console.error('KR update failed:', error); return false }
-    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    // archived_at がセットされた場合は一覧から除外 (再fetch せずに即座に非表示にする)
+    if (fields.archived_at) {
+      setKeyResults(p => p.filter(kr => kr.id !== krId))
+    } else {
+      setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    }
     return true
   }
   // 会議中の共同編集と同様、閲覧中が自分のときのみ編集可。

@@ -553,7 +553,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const handleKRUpdate = async (krId, fields) => {
     const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
     if (error) { console.error('KR update failed:', error); return false }
-    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    // archived_at セット時は一覧から除外 (即座に非表示)
+    if (fields.archived_at) {
+      setKeyResults(p => p.filter(kr => kr.id !== krId))
+    } else {
+      setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    }
     return true
   }
 
