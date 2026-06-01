@@ -459,7 +459,15 @@ export default function PortalPage({ user, onNavigate, themeKey = 'dark', member
       ({ error } = await supabase.from('custom_links').insert(payload))
     }
     setFormSaving(false)
-    if (error) { setFormError((editingId ? '保存' : '追加') + 'に失敗しました: ' + error.message); return }
+    if (error) {
+      // テーブル未マイグレーションの場合は分かりやすい案内
+      if (/Could not find the table|public\.custom_links|relation.*does not exist/i.test(error.message || '')) {
+        setFormError('カスタムリンク機能のセットアップが未完了です。管理者に「supabase_custom_links.sql」の実行を依頼してください。')
+      } else {
+        setFormError((editingId ? '保存' : '追加') + 'に失敗しました: ' + error.message)
+      }
+      return
+    }
     await fetchLinks()
     setShowAdd(false)
   }
