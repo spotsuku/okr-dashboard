@@ -823,7 +823,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const meetingColor = currentMeeting?.color || '#4d9fff'
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', flex:1, width:'100%', minWidth:0, background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
       {/* 会議コンテキストバー (forceMode='list' = OKRタブ「週次」埋め込み時のみ非表示)
           forceMode='facilitation' (週次MTG ナビ) では従来通り表示 */}
       {forceMode !== 'list' && (
