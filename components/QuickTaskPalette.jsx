@@ -121,7 +121,7 @@ function Kbd({ children }) {
   return <span style={{ display: 'inline-block', minWidth: 14, padding: '2px 6px', ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', fontFamily: 'ui-monospace, monospace', background: T.border, borderRadius: RADIUS.xs, color: T.textMuted }}>{children}</span>
 }
 
-export default function QuickTaskPalette({ user, members = [], inline = false }) {
+export default function QuickTaskPalette({ user, members = [], inline = false, defaultDueDate = null }) {
   const myName = React.useMemo(() => members.find(m => m.email === user?.email)?.name || '', [members, user])
   const [open, setOpen] = React.useState(false)
   const [draft, setDraft] = React.useState('')
@@ -184,19 +184,28 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
       members.find(m => m.name === resolvedAssignee)?.email ||
       (resolvedAssignee === myName ? user?.email : '') || ''
     ).toLowerCase()
+    // 日付: 自然文に日付指定があればそれ、無ければ defaultDueDate (始業モーダル等で渡される)、
+    // 両方無ければ未設定 (== いつでも)
+    const dueDate = parsed.date ? fmtDate(parsed.date) : (defaultDueDate || null)
     const base = {
       title: parsed.title,
       assignee: resolvedAssignee || '',
       status: 'not_started',
       done: false,
-      ...(parsed.date ? { due_date: fmtDate(parsed.date) } : {}),
+      ...(dueDate ? { due_date: dueDate } : {}),
     }
     // モバイル回線等で fetch が失敗 (TypeError: Load failed) するケースに備えて 1 回リトライ
+    // 列欠落 (assignee_email / status 等) のスキーマ差分も順次フォールバック
     async function tryInsert() {
       try {
-        const res = await supabase.from('ka_tasks').insert({ ...base, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
+        let res = await supabase.from('ka_tasks').insert({ ...base, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
         if (res.error && /assignee_email|column/i.test(res.error.message || '')) {
-          return await supabase.from('ka_tasks').insert(base)
+          res = await supabase.from('ka_tasks').insert(base)
+        }
+        // status 列が無い古い環境
+        if (res.error && /['"]?status['"]?|column.*status/i.test(res.error.message || '')) {
+          const { status: _drop, ...baseNoStatus } = base
+          res = await supabase.from('ka_tasks').insert(baseNoStatus)
         }
         return res
       } catch (e) {
