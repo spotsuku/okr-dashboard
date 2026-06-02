@@ -3665,7 +3665,8 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 9999, padding: 20,
+        zIndex: 9999, padding: 'max(env(safe-area-inset-top), 8px) 8px max(env(safe-area-inset-bottom), 8px) 8px',
+        overflowY: 'auto', WebkitOverflowScrolling: 'touch',
         animation: 'kptModalFadeIn 0.2s ease',
       }}
     >
@@ -3677,8 +3678,12 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
         onClick={e => e.stopPropagation()}
         style={{
           background: T.bgCard, borderRadius: RADIUS.xl,
-          padding: 24, width: '100%', maxWidth: 540, maxHeight: '90vh',
-          overflowY: 'auto',
+          padding: 20, width: '100%', maxWidth: 540,
+          // 100dvh = 動的viewport (iOS Safari の URL bar 変動に追従)。
+          // vh フォールバックを併用してブラウザ互換性も確保。
+          maxHeight: 'calc(100vh - 32px)',
+          maxHeight: 'calc(100dvh - 32px)',
+          overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain',
           boxShadow: SHADOWS.xl,
           animation: 'kptModalSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
         }}
