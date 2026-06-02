@@ -2214,10 +2214,18 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
   useEffect(() => { load() }, [load])
 
   async function save(patch) {
-    if (!viewingName) return
+    // viewingName を呼び出し時点でスナップショット。
+    // (メンバー切替直後の遅延 onBlur で『新しい owner に古い draft を書く』
+    //  データ漏洩を防ぐ。row もこの owner で取得したものでなければ書かない。)
+    const ownerSnapshot = viewingName
+    if (!ownerSnapshot) return
+    if (row && row.owner && row.owner !== ownerSnapshot) {
+      console.warn('[monthly_1on1] save aborted: row.owner mismatch', { rowOwner: row.owner, ownerSnapshot })
+      return
+    }
     setSaving(true)
     const payload = {
-      owner: viewingName, month,
+      owner: ownerSnapshot, month,
       supervisor: patch.supervisor !== undefined ? patch.supervisor : draft.supervisor,
       self_keep: patch.self_keep !== undefined ? patch.self_keep : draft.self_keep,
       self_problem: patch.self_problem !== undefined ? patch.self_problem : draft.self_problem,
@@ -4326,7 +4334,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
           </div>
         ) : subTab === 'oneonone' ? (
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <Monthly1on1Card T={T} viewingName={viewingName} myName={myName} members={members} />
+            <Monthly1on1Card key={viewingName || 'no-member'} T={T} viewingName={viewingName} myName={myName} members={members} />
           </div>
         ) : data.loading ? <Loading T={T} /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
