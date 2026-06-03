@@ -485,12 +485,17 @@ function ReplyForm({ T, confirmationId, myName, onCancel, onSaved }) {
           ...inputStyle({ T }), ...TYPO.subhead, fontWeight: 500,
           background: T.bg, borderRadius: RADIUS.xs, resize: 'vertical',
         }} />
-      <div style={{ display: 'flex', gap: SPACING.xs + 2, marginTop: SPACING.xs + 2, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: SPACING.xs + 2, marginTop: SPACING.xs + 2, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {!content.trim() && (
+          <span style={{ ...TYPO.caption, color: T.textMuted, marginRight: 'auto' }}>返信内容を入力してください</span>
+        )}
         <button onClick={onCancel} disabled={saving} style={btnSt(T)}>キャンセル</button>
         <button onClick={save} disabled={!content.trim() || saving} style={{
           ...btnPrimary({ T, size: 'sm' }),
-          background: content.trim() ? undefined : T.border,
-          cursor: content.trim() && !saving ? 'pointer' : 'not-allowed',
+          ...(content.trim() && !saving ? {} : {
+            background: T.textFaint, color: '#fff', boxShadow: 'none', opacity: 0.6,
+            cursor: 'not-allowed',
+          }),
         }}>{saving ? '送信中…' : '送信'}</button>
       </div>
     </div>
@@ -690,12 +695,21 @@ function ComposeModal({ T, myName, members, onClose, onSaved, presetTo = '', pre
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: SPACING.sm, justifyContent: 'flex-end', alignItems: 'center' }}>
+          {!canSave && !saving && (
+            <span style={{ ...TYPO.caption, color: T.textMuted, marginRight: 'auto' }}>
+              {!(toAll || toName) ? '宛先を選択してください'
+                : !content.trim() ? '内容を入力してください'
+                : '必須項目を入力してください'}
+            </span>
+          )}
           <button onClick={onClose} disabled={saving} style={btnSt(T)}>キャンセル</button>
           <button onClick={save} disabled={!canSave} style={{
             ...btnPrimary({ T, size: 'md' }),
-            background: canSave ? undefined : T.border,
-            cursor: canSave ? 'pointer' : 'not-allowed',
+            ...(canSave ? {} : {
+              background: T.textFaint, color: '#fff', boxShadow: 'none', opacity: 0.6,
+              cursor: 'not-allowed',
+            }),
           }}>{saving ? '送信中…' : '送信'}</button>
         </div>
       </div>
