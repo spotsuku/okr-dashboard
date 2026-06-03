@@ -1527,7 +1527,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   const isFirstTimeUser = typeof window !== 'undefined' && (() => {
     try { return localStorage.getItem('onboarding_v1_completed') !== '1' } catch { return false }
   })()
-  if (isViewingSelf && st === 'none' && !isFirstTimeUser) {
+  // 既存ユーザーが別ブラウザ/シークレット/キャッシュクリア等で localStorage を持たない
+  // ケースでは isFirstTimeUser=true と誤判定される。pendingYesterdayLog が見つかった
+  // (= 過去に始業した実績がある) 場合は明らかに既存ユーザーなのでゲートを必ず出す。
+  const hasUnclosedYesterday = pendingYesterdayLog && pendingYesterdayLog !== false
+  if (isViewingSelf && st === 'none' && (!isFirstTimeUser || hasUnclosedYesterday)) {
     // 昨日未終業(平日のみ): まず強制 KPT モーダル
     const showYesterdayKPT = isWeekday && pendingYesterdayLog && pendingYesterdayLog !== false
     return (
