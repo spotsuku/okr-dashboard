@@ -1111,10 +1111,18 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   // 朝の「今日やること」モーダル
   const [morningOpen, setMorningOpen] = useState(false)
   // 昨日未終業の log (null=未取得, false=なし, {}=あり)
+  // (互換性保持で名前は pendingYesterdayLog だが、実体は「最も古い未処理の振り返り対象日」)
+  //   - { type: 'unclosed', log, date, created_at } = 始業はしたが終業忘れ
+  //   - { type: 'missing',  log: null, date }       = 始業ボタン押し忘れ (work_log 自体無し)
   const [pendingYesterdayLog, setPendingYesterdayLog] = useState(null)
+  // 振り返り保存後に再判定を促すリフレッシュキー
+  const [reflRefreshKey, setReflRefreshKey] = useState(0)
 
-  // 昨日未終業の work_log を検出 (自分閲覧 & 平日 & 今日未始業 の時のみ)
-  // 月曜の場合は週末ログを飛ばして金曜分まで遡るため、最新N件取得して平日のみ抽出する
+  // 昨日 〜過去 7 平日 (公休除外) を遡って未処理の振り返り対象日を検出
+  //   - 終業済 work_log を見つけた日 = そこを境界として停止 (それより古い日は無視)
+  //   - 未終業 work_log → pending
+  //   - work_log 無し  → pending (始業押し忘れ)
+  // 最も古い pending を返し、保存ごとにループ ((reflRefreshKey で useEffect 再実行)
   useEffect(() => {
     if (!isViewingSelf || !myName || !isWeekday || st !== 'none') {
       setPendingYesterdayLog(false)
@@ -1123,61 +1131,98 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     let alive = true
     ;(async () => {
       const boundary = getTodayBoundaryISO()
+      // 過去 8 日分の work_log を取得 (週末含むので余裕を持って 8)
+      const eightDaysAgoMs = Date.now() - 8 * 24 * 3600 * 1000
+      const eightDaysAgoISO = new Date(eightDaysAgoMs).toISOString()
       const { data } = await supabase
         .from('coaching_logs')
         .select('*')
         .eq('owner', myName)
         .eq('log_type', 'work_log')
+        .gte('created_at', eightDaysAgoISO)
         .lt('created_at', boundary)
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(20)
       if (!alive) return
-      // 平日 (月〜金 JST) かつ祝日でない最新ログを採用 (土日 + 日本の祝日は始業ゲートで無視)
-      const weekdayRow = (data || []).find(row => {
+      // JST 日付 → work_log のマップを構築 (同じ日に複数あれば最新を採用)
+      const logsByDate = new Map()
+      ;(data || []).forEach(row => {
         const j = new Date(new Date(row.created_at).getTime() + 9 * 3600 * 1000)
         const dStr = `${j.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2,'0')}-${String(j.getUTCDate()).padStart(2,'0')}`
-        // isJpNonBusinessDay は土日 + 祝日両方を true で返す
-        return !isJpNonBusinessDay(dStr)
+        if (!logsByDate.has(dStr)) logsByDate.set(dStr, row)
       })
-      if (!weekdayRow) { setPendingYesterdayLog(false); return }
-      const c = parseLogContent(weekdayRow.content)
-      if (c.start_at && !c.end_at) {
-        setPendingYesterdayLog(weekdayRow)
-      } else {
-        setPendingYesterdayLog(false)
+      // 昨日 〜 7 日前まで遡って未処理日を集める (公休はスキップ、終業済で停止)
+      const pending = []
+      const nowJst = new Date(Date.now() + 9 * 3600 * 1000)
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date(Date.UTC(
+          nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate() - i, 0, 0, 0
+        ))
+        const dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`
+        if (isJpNonBusinessDay(dStr)) continue // 公休はスキップ
+        const log = logsByDate.get(dStr)
+        if (log) {
+          const c = parseLogContent(log.content)
+          if (c.end_at) break // 終業済 = ここを境界として古い日は見ない
+          if (c.start_at) pending.push({ type: 'unclosed', log, date: dStr, created_at: log.created_at })
+        } else {
+          pending.push({ type: 'missing', log: null, date: dStr })
+        }
       }
+      if (pending.length === 0) { setPendingYesterdayLog(false); return }
+      // 最も古い (= 最後に push された方) から処理
+      setPendingYesterdayLog(pending[pending.length - 1])
     })()
     return () => { alive = false }
-  }, [isViewingSelf, myName, isWeekday, st])
+  }, [isViewingSelf, myName, isWeekday, st, reflRefreshKey])
 
-  // 昨日ログ日付文字列
+  // 昨日ログ日付文字列 (KPTモーダル ヘッダ表示用)
   const yesterdayDateStr = (() => {
     if (!pendingYesterdayLog) return ''
-    const yj = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
-    return `${yj.getUTCMonth() + 1}/${yj.getUTCDate()}(${['日','月','火','水','木','金','土'][yj.getUTCDay()]})`
+    const [yr, mo, dy] = pendingYesterdayLog.date.split('-').map(Number)
+    const d = new Date(Date.UTC(yr, mo - 1, dy))
+    return `${mo}/${dy}(${['日','月','火','水','木','金','土'][d.getUTCDay()]})`
   })()
 
-  // 昨日ログを強制終業
+  // 振り返り対象日を強制終業 / 補完保存
   async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM, reflectionDate }) {
     if (!pendingYesterdayLog) return
     setBusy(true)
-    const createdJST = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
     const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
-    // 勤怠(出勤記録)は対象の未終業ログの日付で締める
-    const endUtc = new Date(Date.UTC(
-      createdJST.getUTCFullYear(), createdJST.getUTCMonth(), createdJST.getUTCDate(),
-      hh - 9, mm, 0
-    ))
-    const oldContent = parseLogContent(pendingYesterdayLog.content)
-    const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
-    const { error: e1 } = await supabase.from('coaching_logs')
-      .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.id)
-    if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
+    const targetDateStr = pendingYesterdayLog.date
+    const [tyr, tmo, tdy] = targetDateStr.split('-').map(Number)
+
+    if (pendingYesterdayLog.type === 'unclosed') {
+      // 既存の未終業 work_log を終業
+      const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
+      const oldContent = parseLogContent(pendingYesterdayLog.log.content)
+      const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
+      const { error: e1 } = await supabase.from('coaching_logs')
+        .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.log.id)
+      if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
+    } else {
+      // 始業押し忘れ: その日の 9:00〜指定時刻で work_log を補完作成
+      const startUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, 9 - 9, 0, 0))
+      const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
+      const { error: e1 } = await supabase.from('coaching_logs').insert({
+        owner: myName,
+        log_type: 'work_log',
+        organization_id: currentOrg?.id,
+        week_start: getMondayJSTStr(startUtc),
+        created_at: startUtc.toISOString(),
+        content: JSON.stringify({
+          start_at: startUtc.toISOString(),
+          end_at: endUtc.toISOString(),
+          force_closed: true,
+          backfilled: true,
+        }),
+      })
+      if (e1) { setBusy(false); alert('勤怠補完に失敗しました: ' + e1.message); return }
+    }
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
       // 振り返り(KPT)は本人が選んだ「対象日」で保存する (既定=未終業ログの勤務日)。
       // どの日の振り返りかを本人に選ばせ、朝会での認知齟齬(火曜に金曜が出る等)を防ぐ。
-      const baseISO = reflectionDate ||
-        `${createdJST.getUTCFullYear()}-${String(createdJST.getUTCMonth()+1).padStart(2,'0')}-${String(createdJST.getUTCDate()).padStart(2,'0')}`
+      const baseISO = reflectionDate || targetDateStr
       const [ry, rmo, rd] = baseISO.split('-').map(Number)
       const kptUtc = new Date(Date.UTC(ry, rmo - 1, rd, hh - 9, mm, 0))
       const { error: e2 } = await supabase.from('coaching_logs').insert({
@@ -1190,7 +1235,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
     }
     setBusy(false)
-    setPendingYesterdayLog(false)
+    // 次の未処理日があれば自動で次に進む (useEffect 再実行)
+    setReflRefreshKey(k => k + 1)
     await onWorkLogChange()
   }
 
@@ -1546,9 +1592,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           <KPTModal
             T={T} busy={busy} force
             yesterdayDateStr={yesterdayDateStr}
-            pendingDateISO={new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
+            pendingDateISO={pendingYesterdayLog.date}
             todayISO={new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
-            startedAt={parseLogContent(pendingYesterdayLog.content).start_at}
+            startedAt={pendingYesterdayLog.type === 'unclosed'
+              ? parseLogContent(pendingYesterdayLog.log.content).start_at
+              : null}
             onSave={forceCloseYesterday}
             onCancel={() => {}}
           />
@@ -3720,7 +3768,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
               background: T.warnBg, color: T.warn,
               fontSize: 12, borderRadius: 9, lineHeight: 1.5, fontWeight: 600,
             }}>
-              {yesterdayDateStr} の勤務が終業されていません。振り返りを入力すると今日を始業できます。<br />
+              {yesterdayDateStr} の振り返りが未入力です。記入すると今日を始業できます。<br />
               この振り返りは <strong>{selectedLabel}</strong> の分として保存されます。別の日なら下の「対象日」を選び直してください。
             </div>
           )}
