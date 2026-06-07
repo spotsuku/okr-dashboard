@@ -271,12 +271,15 @@ export default function QuickTaskPalette({ user, members = [], inline = false, d
             style={{ flex: 1, minWidth: 150, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, color: T.text, fontFamily: 'inherit', padding: '4px 0' }} />
           {parsed.dateLabel && pill(TONE.date, <><Icon name="calendar" size={11} /> {parsed.dateLabel}</>)}
           {parsed.goal && pill(TONE.goal, <><Icon name="target" size={11} /> {parsed.goal}</>)}
-          <button onClick={() => add(false)} disabled={!parsed.title || saving} style={{
+          <button onClick={() => {
+            if (!parsed.title) { inputRef.current?.focus(); return }
+            add(false)
+          }} disabled={saving} style={{
             ...btnBrand({ size: 'sm' }),
-            ...(parsed.title ? {} : { background: T.textFaint, boxShadow: 'none' }),
+            ...(parsed.title && !saving ? {} : { background: T.textFaint, boxShadow: 'none', opacity: 0.55 }),
             cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
             display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
-          }}>{saving ? '追加中…' : <>追加 <Icon name="arrowRight" size={13} /></>}</button>
+          }} title={parsed.title ? '' : '左の入力欄にタスクを入力してください'}>{saving ? '追加中…' : <>追加 <Icon name="arrowRight" size={13} /></>}</button>
         </div>
       </div>
     )
@@ -340,9 +343,12 @@ export default function QuickTaskPalette({ user, members = [], inline = false, d
           display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
           flexWrap: isMobile ? 'wrap' : 'nowrap',
         }}>
-          <button onClick={() => add(false)} disabled={!parsed.title || saving} style={{
+          <button onClick={() => {
+            if (!parsed.title) { inputRef.current?.focus(); return }
+            add(false)
+          }} disabled={saving} style={{
             ...btnBrand({ size: 'md' }),
-            ...(parsed.title ? {} : { background: T.textFaint, boxShadow: 'none' }),
+            ...(parsed.title && !saving ? {} : { background: T.textFaint, boxShadow: 'none', opacity: 0.55 }),
             cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
             ...(isMobile ? { flex: '1 1 100%' } : {}),
