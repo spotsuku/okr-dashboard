@@ -274,16 +274,23 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return levels.find(l => l.name === name) || null
   }
 
+  // 会議を key で取得 (DB 由来の org meetings を優先 / 旧固定 MEETINGS にフォールバック)
+  const lookupMeeting = (meetingKey) =>
+    (orgMeetings || []).find(m => m.key === meetingKey) || getMeeting(meetingKey)
+
   // 会議を選択 → フィルタを設定
   const selectMeeting = (meetingKey) => {
-    const m = getMeeting(meetingKey)
-    if (!m?.weeklyMTG) return
+    const m = lookupMeeting(meetingKey)
+    if (!m) return
+    // weeklyMTG が未設定の組織追加会議でも、最低限の空オブジェクトで会議画面に入れるようにする
+    // (モジュール未設定の場合は MeetingShell 側の案内が出る)
+    const w = m.weeklyMTG || {}
     setActiveMeetingKey(meetingKey)
     setActiveObjId(null)
-    if (m.weeklyMTG.levelName) {
-      const lvl = findLevelByName(m.weeklyMTG.levelName)
+    if (w.levelName) {
+      const lvl = findLevelByName(w.levelName)
       setActiveLevelId(lvl?.id || null)
-    } else if (m.weeklyMTG.levelSelect === 'department') {
+    } else if (w.levelSelect === 'department') {
       setActiveLevelId(null) // 事業部をユーザーに選ばせる
     } else {
       setActiveLevelId(null) // 全社
@@ -319,7 +326,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
+  const currentMeeting = activeMeetingKey ? lookupMeeting(activeMeetingKey) : null
   // マネージャー定例などで事業部を選んでいない状態
   const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
 
