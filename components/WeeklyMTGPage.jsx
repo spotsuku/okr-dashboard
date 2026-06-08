@@ -12,6 +12,7 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
+import MeetingShell from './meetings/MeetingShell'
 import Icon, { DataIcon } from './Icon'
 import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
 import KATableHeader from './okr/KATableHeader'
@@ -911,15 +912,30 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
       {/* ── ファシリモードならステップ式UI、一覧モードなら従来3ペイン ── */}
       {mtgMode === 'facilitation' ? (
-        <WeeklyMTGFacilitation
-          meeting={currentMeeting}
-          weekStart={activeWeek}
-          levels={levels}
-          members={members}
-          myName={myName}
-          themeKey={themeKey}
-          onSwitchToList={() => setMtgMode('list')}
-        />
+        // モジュールベースの新形式会議は MeetingShell で起動する
+        // (旧 weeklyMTG.flow は無く modules 配列で構成される会議。判定基準は
+        //  「modules が 1 件以上ある かつ weeklyMTG.flow が設定されてない」)
+        ((currentMeeting?.modules || []).length > 0 && !currentMeeting?.weeklyMTG?.flow)
+          ? (
+            <MeetingShell
+              meeting={currentMeeting}
+              weekStart={activeWeek}
+              T={wT()}
+              members={members}
+              levels={levels}
+              onExit={() => setMtgMode('list')}
+            />
+          ) : (
+            <WeeklyMTGFacilitation
+              meeting={currentMeeting}
+              weekStart={activeWeek}
+              levels={levels}
+              members={members}
+              myName={myName}
+              themeKey={themeKey}
+              onSwitchToList={() => setMtgMode('list')}
+            />
+          )
       ) : (
       <>
       {/* 週タブ：会議日を主表示 */}
