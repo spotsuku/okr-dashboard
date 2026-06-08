@@ -21,7 +21,7 @@ export default function KAReviewModule({ meeting, config, weekStart, T, members 
     setLoading(true)
     Promise.all([
       supabase.from('weekly_reports')
-        .select('id, ka_title, kr_title, owner, status, good, more, focus_output, objective_id, kr_id, level_id, ka_key')
+        .select('id, ka_title, kr_title, owner, status, good, more, focus_output, objective_id, kr_id, level_id')
         .eq('week_start', weekStart)
         .neq('status', 'done')   // 完了済 KA は会議ビューから除外
         .order('level_id', { ascending: true })
