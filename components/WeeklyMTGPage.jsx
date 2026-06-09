@@ -274,16 +274,36 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return levels.find(l => l.name === name) || null
   }
 
+  // 会議を key で取得 (DB 由来の組織会議 + 静的 MEETINGS をマージ)
+  //   - 両方に存在: DB の表示属性 (title/icon/color/modules) を優先、
+  //                weeklyMTG は static → DB の順でマージ (DB が指定した部分のみ上書き)
+  //                → DB に target_filter が無くても静的 flow/scope が補完される
+  //   - 片方だけ:   そちらをそのまま採用
+  const lookupMeeting = (meetingKey) => {
+    const dbMeeting = (orgMeetings || []).find(m => m.key === meetingKey)
+    const staticMeeting = getMeeting(meetingKey)
+    if (dbMeeting && staticMeeting) {
+      return {
+        ...staticMeeting,
+        ...dbMeeting,
+        weeklyMTG: { ...(staticMeeting.weeklyMTG || {}), ...(dbMeeting.weeklyMTG || {}) },
+      }
+    }
+    return dbMeeting || staticMeeting
+  }
+
   // 会議を選択 → フィルタを設定
   const selectMeeting = (meetingKey) => {
-    const m = getMeeting(meetingKey)
-    if (!m?.weeklyMTG) return
+    const m = lookupMeeting(meetingKey)
+    if (!m) return
+    // weeklyMTG が未設定でも空オブジェクトで進入を許す (= 全社スコープで開始)
+    const w = m.weeklyMTG || {}
     setActiveMeetingKey(meetingKey)
     setActiveObjId(null)
-    if (m.weeklyMTG.levelName) {
-      const lvl = findLevelByName(m.weeklyMTG.levelName)
+    if (w.levelName) {
+      const lvl = findLevelByName(w.levelName)
       setActiveLevelId(lvl?.id || null)
-    } else if (m.weeklyMTG.levelSelect === 'department') {
+    } else if (w.levelSelect === 'department') {
       setActiveLevelId(null) // 事業部をユーザーに選ばせる
     } else {
       setActiveLevelId(null) // 全社
@@ -319,7 +339,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
+  const currentMeeting = activeMeetingKey ? lookupMeeting(activeMeetingKey) : null
   // マネージャー定例などで事業部を選んでいない状態
   const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
 
