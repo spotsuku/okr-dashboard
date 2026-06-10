@@ -39,6 +39,39 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
     const list = meeting?.modules || []
     return [...list].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   })
+  // target_filter (= ファシリ画面の挙動を決める設定) を編集できるようにする。
+  // 既存の固定 MEETINGS と互換にするため、各フィールドを個別 state で管理し、
+  // 保存時に target_filter JSONB として組み立てる。
+  const tf = meeting?.target_filter || {}
+  const [scope, setScope]       = useState(tf.scope || '')               // '' | specific-team | teams-of | all-teams | all-departments | all-levels
+  const [teamName, setTeamName] = useState(tf.teamName || '')            // for specific-team
+  const [parentLevelName, setParentLevelName] = useState(tf.parentLevelName || '') // for teams-of
+  const [flow, setFlow]         = useState(tf.flow || 'ka')              // 'ka' | 'kr' | 'sales'
+  const [viewMode, setViewMode] = useState(tf.viewMode || 'ka')          // 'ka' | 'kr' | 'both'
+  const [withDiscussion, setWithDiscussion] = useState(!!tf.withDiscussion)
+  const [requiresProgram, setRequiresProgram] = useState(!!tf.requiresProgram)
+
+  // 組織内の levels (部署 + チーム) を取得 — scope dropdown 用
+  const [levels, setLevels] = useState([])
+  useEffect(() => {
+    if (!orgId) return
+    let alive = true
+    supabase.from('levels')
+      .select('id, name, parent_id, fiscal_year')
+      .eq('organization_id', orgId)
+      .order('parent_id', { nullsFirst: true })
+      .order('name')
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (!error) setLevels(data || [])
+      })
+    return () => { alive = false }
+  }, [orgId])
+
+  // 部署 (parent_id IS NULL の levels) / チーム (parent_id ありの levels)
+  const departments = levels.filter(l => !l.parent_id)
+  const teams       = levels.filter(l => l.parent_id)
+
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState(null)
   // drag & drop 用 state
@@ -107,6 +140,18 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
     setSaving(true)
     setErr(null)
 
+    // target_filter を組み立てる。scope が空なら null で保存 (=「全社」「未指定」)。
+    // 静的 MEETINGS で flow が必須項目だったため、ここでも flow は必ず含める。
+    const target_filter = scope ? {
+      scope,
+      ...(scope === 'specific-team' && teamName ? { teamName, levelName: teamName } : {}),
+      ...(scope === 'teams-of' && parentLevelName ? { parentLevelName, levelName: parentLevelName } : {}),
+      flow,
+      viewMode,
+      ...(withDiscussion ? { withDiscussion: true } : {}),
+      ...(requiresProgram ? { requiresProgram: true } : {}),
+    } : null
+
     const payload = {
       organization_id: orgId,
       key: key.trim(),
@@ -115,6 +160,7 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
       color,
       modules,
       day_of_week: dayOfWeek,
+      target_filter,
     }
 
     let result
@@ -235,6 +281,111 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
                 <option key={d.label} value={d.v ?? ''}>{d.label}</option>
               ))}
             </select>
+          </div>
+
+          {/* ── 会議の対象範囲 (scope) ────────────────────────────── */}
+          <div style={sectionSt}>
+            <label style={labelSt}>会議の対象範囲 <span style={{ color: T.textMuted, fontWeight: 500 }}>(どの KR/KA を扱う会議か)</span></label>
+            <select
+              value={scope}
+              onChange={e => {
+                setScope(e.target.value)
+                // scope を切り替えたら依存フィールドをリセット
+                if (e.target.value !== 'specific-team') setTeamName('')
+                if (e.target.value !== 'teams-of') setParentLevelName('')
+              }}
+              style={{ ...inputSt, cursor: 'pointer' }}
+            >
+              <option value="">— 未指定 (= 全社) —</option>
+              <option value="specific-team">特定チームのみ (例: 広報 / セールス)</option>
+              <option value="teams-of">部署配下の全チーム (例: パートナー事業部 → CS + セールス)</option>
+              <option value="all-teams">全チーム合同 (= マネージャー定例)</option>
+              <option value="all-departments">全部署合同 (= 役員会議)</option>
+              <option value="all-levels">全階層横断 (= プログラム別定例)</option>
+            </select>
+
+            {scope === 'specific-team' && (
+              <div style={{ marginTop: SPACING.xs + 1 }}>
+                <label style={{ ...labelSt, marginTop: SPACING.xs }}>対象チーム <span style={{ color: T.danger }}>*</span></label>
+                <select value={teamName} onChange={e => setTeamName(e.target.value)} style={{ ...inputSt, cursor: 'pointer' }}>
+                  <option value="">— チームを選択 —</option>
+                  {teams.map(t => (
+                    <option key={t.id} value={t.name}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {scope === 'teams-of' && (
+              <div style={{ marginTop: SPACING.xs + 1 }}>
+                <label style={{ ...labelSt, marginTop: SPACING.xs }}>対象部署 <span style={{ color: T.danger }}>*</span></label>
+                <select value={parentLevelName} onChange={e => setParentLevelName(e.target.value)} style={{ ...inputSt, cursor: 'pointer' }}>
+                  <option value="">— 部署を選択 —</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* ── 会議のフォーカス (flow) ──────────────────────────── */}
+          <div style={sectionSt}>
+            <label style={labelSt}>会議のフォーカス</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.xs }}>
+              {[
+                { v: 'ka', label: 'KA重点', desc: '今週の行動を順に確認' },
+                { v: 'kr', label: 'KR重点', desc: 'KR進捗を順に確認' },
+                { v: 'sales', label: '営業フォーカス', desc: '商談状況も確認' },
+              ].map(opt => (
+                <button key={opt.v} onClick={() => setFlow(opt.v)} style={{
+                  padding: SPACING.sm, borderRadius: RADIUS.sm, cursor: 'pointer',
+                  border: `1px solid ${flow === opt.v ? T.accent : T.border}`,
+                  background: flow === opt.v ? T.accentBg : T.bgCard,
+                  color: flow === opt.v ? T.accent : T.text,
+                  textAlign: 'left', fontFamily: 'inherit',
+                }}>
+                  <div style={{ ...TYPO.subhead, fontWeight: 700 }}>{opt.label}</div>
+                  <div style={{ ...TYPO.caption, fontWeight: 500, color: T.textMuted, letterSpacing: 'normal' }}>{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── 表示モード (viewMode) ────────────────────────────── */}
+          <div style={sectionSt}>
+            <label style={labelSt}>表示モード (KR/KA の見せ方)</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.xs }}>
+              {[
+                { v: 'ka', label: 'KA中心' },
+                { v: 'kr', label: 'KR中心' },
+                { v: 'both', label: 'KR・KA両方' },
+              ].map(opt => (
+                <button key={opt.v} onClick={() => setViewMode(opt.v)} style={{
+                  padding: SPACING.sm, borderRadius: RADIUS.sm, cursor: 'pointer',
+                  border: `1px solid ${viewMode === opt.v ? T.accent : T.border}`,
+                  background: viewMode === opt.v ? T.accentBg : T.bgCard,
+                  color: viewMode === opt.v ? T.accent : T.text,
+                  textAlign: 'center', fontFamily: 'inherit',
+                  ...TYPO.subhead, fontWeight: 700,
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── オプション ──────────────────────────────────────── */}
+          <div style={sectionSt}>
+            <label style={labelSt}>詳細オプション</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 1, cursor: 'pointer', ...TYPO.subhead, color: T.text }}>
+                <input type="checkbox" checked={withDiscussion} onChange={e => setWithDiscussion(e.target.checked)} />
+                チームサマリーセクションを挿入 <span style={{ color: T.textMuted, fontWeight: 500 }}>(マネージャー定例向け)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 1, cursor: 'pointer', ...TYPO.subhead, color: T.text }}>
+                <input type="checkbox" checked={requiresProgram} onChange={e => setRequiresProgram(e.target.checked)} />
+                開始前にプログラムタグ選択を必須にする <span style={{ color: T.textMuted, fontWeight: 500 }}>(プログラム別定例向け)</span>
+              </label>
+            </div>
           </div>
 
           {/* モジュール構成 */}

@@ -275,9 +275,23 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return levels.find(l => l.name === name) || null
   }
 
-  // 会議を key で取得 (DB 由来の org meetings を優先 / 旧固定 MEETINGS にフォールバック)
-  const lookupMeeting = (meetingKey) =>
-    (orgMeetings || []).find(m => m.key === meetingKey) || getMeeting(meetingKey)
+  // 会議を key で取得 (DB 由来の組織会議 + 静的 MEETINGS をマージ)
+  //   - 両方に存在: DB の表示属性 (title/icon/color/modules) を優先しつつ、
+  //                weeklyMTG は static → DB の順でマージ (DB が指定した部分のみ上書き)
+  //                → DB 行に target_filter が無くても静的 scope/flow が補完され、会議が開ける
+  //   - 片方だけ:   そちらをそのまま採用
+  const lookupMeeting = (meetingKey) => {
+    const dbMeeting = (orgMeetings || []).find(m => m.key === meetingKey)
+    const staticMeeting = getMeeting(meetingKey)
+    if (dbMeeting && staticMeeting) {
+      return {
+        ...staticMeeting,
+        ...dbMeeting,
+        weeklyMTG: { ...(staticMeeting.weeklyMTG || {}), ...(dbMeeting.weeklyMTG || {}) },
+      }
+    }
+    return dbMeeting || staticMeeting
+  }
 
   // 会議を選択 → フィルタを設定
   const selectMeeting = (meetingKey) => {
