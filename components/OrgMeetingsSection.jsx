@@ -1,30 +1,48 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { MODULE_META } from '../lib/meetings/moduleRegistry'
-import MeetingShell from './meetings/MeetingShell'
 import MeetingEditModal from './MeetingEditModal'
 import Icon, { DataIcon } from './Icon'
-import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { TYPO, SPACING, RADIUS } from '../lib/themeTokens'
 
 // ─────────────────────────────────────────────────────────────
-// 組織設定 → 会議設定セクション (Phase 5e)
+// 組織設定 → 会議設定セクション
 //
-// organization_meetings の一覧を表示し、各会議のモジュール構成をプレビュー。
-// 「プレビュー」ボタンで MeetingShell をフルスクリーンモーダルで起動。
-//
-// 編集 / 追加 / 削除 / drag&drop 並び替えは Phase 5e の本格実装で
-// (現状は read-only + プレビューのみ)。
+// organization_meetings の一覧を表示し、各会議の「対象範囲 / フォーカス」を要約表示。
+// 追加 / 編集 / 削除 (アーカイブ) が可能 (owner/admin)。
+// 会議の進行は週次MTG画面の WeeklyMTGFacilitation (旧ファシリUI) で行う。
 // ─────────────────────────────────────────────────────────────
+
+// target_filter から対象範囲ラベルを生成
+function scopeLabel(tf) {
+  if (!tf) return '全社'
+  switch (tf.scope) {
+    case 'specific-team':   return `${tf.teamName || 'チーム'}（特定チーム）`
+    case 'custom':          return `${(tf.levelNames || []).join(' / ') || '選択チーム/部署'}`
+    case 'teams-of':        return `${tf.parentLevelName || '部署'} 配下のチーム`
+    case 'all-teams':       return '全チーム合同'
+    case 'all-departments': return '全部署合同'
+    case 'all-levels':      return '全社・全階層'
+    default:                return '全社'
+  }
+}
+
+// target_filter.flow からフォーカスラベルを生成
+function flowLabel(tf) {
+  if (tf?.withDiscussion) return 'マネージャー'
+  switch (tf?.flow) {
+    case 'ka':    return 'KA重点'
+    case 'sales': return '営業フォーカス'
+    case 'kr':    return 'KR重点'
+    default:      return 'KR重点'
+  }
+}
 
 export default function OrgMeetingsSection({ T, orgId, canManage }) {
   const [meetings, setMeetings]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [err, setErr]             = useState(null)
-  const [previewMeeting, setPreviewMeeting] = useState(null)
   const [editMeeting, setEditMeeting]       = useState(null)  // { meeting } or { meeting: null } for new
-  const [members, setMembers]     = useState([])
-  const [levels, setLevels]       = useState([])
 
   // 会議一覧を取得 (= 再読込可)
   const reloadMeetings = useCallback(async () => {
@@ -38,33 +56,21 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
     setMeetings(data || [])
   }, [orgId])
 
-  // 初回ロード: 会議一覧 + members + levels
   useEffect(() => {
     if (!orgId) return
     let alive = true
     setLoading(true)
-
-    Promise.all([
-      supabase.from('organization_meetings')
-        .select('id, key, title, icon, color, modules, target_filter, day_of_week, sort_order')
-        .eq('organization_id', orgId)
-        .is('archived_at', null)
-        .order('sort_order'),
-      supabase.from('members')
-        .select('id, name, email, level_id')
-        .eq('organization_id', orgId),
-      supabase.from('levels')
-        .select('id, name, parent_id, icon')
-        .eq('organization_id', orgId),
-    ]).then(([mtgRes, memRes, lvlRes]) => {
-      if (!alive) return
-      if (mtgRes.error) setErr(mtgRes.error.message)
-      setMeetings(mtgRes.data || [])
-      setMembers(memRes.data || [])
-      setLevels(lvlRes.data || [])
-      setLoading(false)
-    })
-
+    supabase.from('organization_meetings')
+      .select('id, key, title, icon, color, modules, target_filter, day_of_week, sort_order')
+      .eq('organization_id', orgId)
+      .is('archived_at', null)
+      .order('sort_order')
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) setErr(error.message)
+        setMeetings(data || [])
+        setLoading(false)
+      })
     return () => { alive = false }
   }, [orgId])
 
@@ -75,6 +81,9 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
       .update({ archived_at: new Date().toISOString() })
       .eq('id', meeting.id)
     if (error) { alert('削除失敗: ' + error.message); return }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('org-meetings-updated'))
+    }
     reloadMeetings()
   }
 
@@ -94,12 +103,9 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm + 2 }}>
           <Icon name="calendar" size={16} style={{ color: T.text }} />
           <span style={{ ...TYPO.callout, color: T.text }}>会議設定</span>
-          <span style={{ ...TYPO.caption, color: T.textMuted, padding: '1px 6px', background: T.bgCard, borderRadius: RADIUS.pill }}>
-            Phase 5e (プレビュー)
-          </span>
         </div>
         <div style={{ ...TYPO.footnote, color: T.textMuted, marginBottom: SPACING.sm + 2 }}>
-          組織の会議体一覧。各会議は「個人報告 / KA確認 / KR確認 / 共有事項 / 確認事項 / ネクストアクション」のモジュールを組み合わせて構成されます。
+          組織の会議体一覧。各会議は「対象範囲」と「フォーカス」で構成され、進行ステップは自動生成されます。
           {!canManage && '（編集には owner/admin 権限が必要）'}
         </div>
 
@@ -119,7 +125,7 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
         {err && <div style={{ ...TYPO.footnote, color: T.danger }}>エラー: {err}</div>}
         {!loading && meetings.length === 0 && (
           <div style={{ ...TYPO.footnote, color: T.textFaint, padding: SPACING.sm + 2, textAlign: 'center' }}>
-            会議が登録されていません。supabase_organization_meetings.sql を実行してください。
+            会議が登録されていません。「+ 新規会議を追加」から作成してください。
           </div>
         )}
 
@@ -139,23 +145,14 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...TYPO.callout, color: T.text }}>{m.title}</div>
                 <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, display: 'flex', gap: SPACING.xs, flexWrap: 'wrap', marginTop: 2 }}>
-                  {(m.modules || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map((mod, i) => {
-                    const meta = MODULE_META[mod.type] || { icon: '?', label: mod.type }
-                    return (
-                      <span key={i} style={{
-                        padding: '1px 5px', background: T.sectionBg, borderRadius: RADIUS.xs - 2,
-                      }}><DataIcon value={meta.icon} size={11} /> {meta.label}</span>
-                    )
-                  })}
+                  <span style={{ padding: '1px 6px', background: T.sectionBg, borderRadius: RADIUS.xs - 2 }}>
+                    <Icon name="user" size={11} /> {scopeLabel(m.target_filter)}
+                  </span>
+                  <span style={{ padding: '1px 6px', background: T.sectionBg, borderRadius: RADIUS.xs - 2 }}>
+                    {flowLabel(m.target_filter)}
+                  </span>
                 </div>
               </div>
-              <button onClick={() => setPreviewMeeting(m)} title="プレビュー" style={{
-                padding: '4px 10px', borderRadius: RADIUS.xs,
-                border: `1px solid ${T.border}`,
-                background: T.bgCard, color: T.text,
-                ...TYPO.footnote, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center',
-              }}><Icon name="eye" size={13} /></button>
               {canManage && (
                 <>
                   <button onClick={() => setEditMeeting({ meeting: m })} title="編集" style={{
@@ -189,48 +186,6 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
           onSaved={() => { reloadMeetings(); setEditMeeting(null) }}
         />
       )}
-
-      {/* MeetingShell プレビューモーダル */}
-      {previewMeeting && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setPreviewMeeting(null) }}
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 1000, padding: SPACING.xl,
-          }}
-        >
-          <div style={{
-            width: '90vw', maxWidth: 1200,
-            height: '90vh',
-            background: T.bg,
-            borderRadius: RADIUS.xl - 2,
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: SHADOWS.xl,
-          }}>
-            <MeetingShell
-              meeting={previewMeeting}
-              weekStart={getThisMonday()}
-              T={T}
-              members={members}
-              levels={levels}
-              onExit={() => setPreviewMeeting(null)}
-            />
-          </div>
-        </div>
-      )}
     </>
   )
-}
-
-// JST 基準で今週月曜の YYYY-MM-DD を返す
-function getThisMonday() {
-  const now = new Date()
-  const jst = new Date(now.getTime() + 9 * 3600 * 1000)
-  const day = jst.getUTCDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const mon = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate() + diff))
-  return mon.toISOString().split('T')[0]
 }

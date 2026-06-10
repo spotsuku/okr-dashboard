@@ -91,6 +91,14 @@ function resolveScopeLevelIds(wkly, levels) {
     const team = levels.find(l => l?.name === wkly.teamName)
     return team ? [team.id] : []
   }
+  if (wkly?.scope === 'custom') {
+    // 組織図から選んだ複数チーム/部署 (会議エディタで指定)
+    const names = Array.isArray(wkly.levelNames) ? wkly.levelNames : []
+    return levels
+      .filter(l => names.includes(l?.name))
+      .sort((a, b) => (getDepth(a.id, levels) - getDepth(b.id, levels)) || (a.sort_order || 0) - (b.sort_order || 0))
+      .map(l => l.id)
+  }
   if (wkly?.scope === 'teams-of') {
     const parent = levels.find(l => l?.name === wkly.parentLevelName)
     if (!parent) return []
@@ -120,6 +128,18 @@ function resolveScopeLevelIds(wkly, levels) {
       .map(l => l.id)
   }
   return []
+}
+
+// KR が「完了」(達成率100%以上) かどうか。KRReadOnlyRow の進捗計算と同じ式。
+// target 未設定 (0) は判定不能として未完了扱い。lower_is_better は逆方向で達成率を算出。
+function isKRDone(kr) {
+  const target = Number(kr?.target ?? 0)
+  const current = Number(kr?.current ?? 0)
+  if (!(target > 0)) return false
+  const progress = kr?.lower_is_better
+    ? Math.max(0, ((target * 2 - current) / target) * 100)
+    : (current / target) * 100
+  return Math.round(progress) >= 100
 }
 
 // ─── アバター ─────────────────────────────────────────────────────────────
@@ -353,15 +373,16 @@ export default function WeeklyMTGFacilitation({
       let krsRaw = []
       if (allObjIdsAll.length > 0) {
         let res = await supabase.from('key_results')
-          .select('id, objective_id, title, owner, program_tags').in('objective_id', allObjIdsAll)
+          .select('id, objective_id, title, owner, target, current, lower_is_better, program_tags').in('objective_id', allObjIdsAll)
         if (res.error && /program_tags|column/i.test(res.error.message || '')) {
           res = await supabase.from('key_results')
-            .select('id, objective_id, title, owner').in('objective_id', allObjIdsAll)
+            .select('id, objective_id, title, owner, target, current, lower_is_better').in('objective_id', allObjIdsAll)
         }
         krsRaw = res.data || []
       }
       const filtered = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
-      const krs = filtered.krs
+      // 完了 (達成率100%以上) の KR は件数から除外
+      const krs = filtered.krs.filter(k => !isKRDone(k))
       // 親 annual obj の level_id でチーム集計 (Q 期 obj の level_id 不整合に対応)
       const objsByLevel = {}
       ;(filtered.objs || []).forEach(o => {
@@ -916,6 +937,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
     : wkly?.flow === 'sales' ? '営業フォーカス'
     : 'KR重点'
   const scopeLabel = wkly?.scope === 'specific-team' ? `${wkly.teamName} チーム`
+    : wkly?.scope === 'custom' ? `${(wkly.levelNames || []).join(' / ') || '選択チーム'}`
     : wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
     : wkly?.scope === 'all-teams' ? '全チーム合同'
     : wkly?.scope === 'all-departments' ? '全事業部合同'
@@ -1351,7 +1373,10 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           const lvl = levels.find(l => Number(l?.id) === Number(lvlId)) || { id: lvlId, name: '?', icon: '🏢' }
           const lvlObjs = (byLevel.get(lvlId) || []).sort((a, b) => a.id - b.id)
           for (const o of lvlObjs) {
-            const objKrs = krs.filter(k => Number(k.objective_id) === Number(o.id)).sort((a, b) => a.id - b.id)
+            const objKrs = krs
+              .filter(k => Number(k.objective_id) === Number(o.id))
+              .filter(k => !isKRDone(k)) // 完了 (達成率100%以上) の KR は会議に表示しない
+              .sort((a, b) => a.id - b.id)
             for (const kr of objKrs) {
               built.push({ level: lvl, objective: o, kr })
             }
@@ -1680,6 +1705,8 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
     if (!Array.isArray(allItems)) return allItems
     // KAの所属レベルは team または objective.level_id 経由
     return allItems.filter(it => {
+      // 完了 (done) の KA は表示しない (会議中に done にした場合も含めて徹底)
+      if (it.ka?.status === 'done') return false
       const lvlId = Number(it.team?.id ?? it.objective?.level_id ?? it.level?.id)
       return !excludedLevels.has(lvlId)
     })
@@ -1841,6 +1868,11 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'weekly_reports' }, payload => {
         const row = payload.new
         if (!row || !idSet.has(Number(row.id))) return
+        // 会議中に done にした KA は一覧から除外する (= 完了したら表示しない)。
+        if (row.status === 'done') {
+          setItems(prev => prev?.filter(it => Number(it.ka?.id) !== Number(row.id)) || prev)
+          return
+        }
         setItems(prev => prev?.map(it =>
           Number(it.ka?.id) === Number(row.id) ? { ...it, ka: { ...it.ka, ...row } } : it
         ) || prev)
