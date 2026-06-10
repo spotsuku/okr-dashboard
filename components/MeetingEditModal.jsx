@@ -41,6 +41,7 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   const [scope, setScope]       = useState(tf.scope || 'all-levels')     // specific-team | teams-of | all-teams | all-departments | all-levels
   const [teamName, setTeamName] = useState(tf.teamName || '')            // for specific-team
   const [parentLevelName, setParentLevelName] = useState(tf.parentLevelName || '') // for teams-of
+  const [customLevelNames, setCustomLevelNames] = useState(Array.isArray(tf.levelNames) ? tf.levelNames : []) // for scope='custom' (組織図から複数選択)
   const [flow, setFlow]         = useState(tf.flow || 'ka')              // 'ka' | 'kr' | 'sales'
   const [viewMode, setViewMode] = useState(tf.viewMode || 'ka')          // 'ka' | 'kr' | 'both'
   const [withDiscussion, setWithDiscussion] = useState(!!tf.withDiscussion)
@@ -67,6 +68,23 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   const departments = levels.filter(l => !l.parent_id)
   const teams       = levels.filter(l => l.parent_id)
 
+  // 組織図ツリー (scope='custom' のチェックボックス用)。
+  // 部署をグループ見出しにし、その配下チームをぶら下げる。名前でユニーク化。
+  const deptNameById = new Map(departments.map(d => [Number(d.id), d.name]))
+  const orgTree = (() => {
+    const groups = new Map() // deptName -> Set(teamName)
+    departments.forEach(d => { if (!groups.has(d.name)) groups.set(d.name, new Set()) })
+    teams.forEach(t => {
+      const deptName = deptNameById.get(Number(t.parent_id)) || 'その他'
+      if (!groups.has(deptName)) groups.set(deptName, new Set())
+      groups.get(deptName).add(t.name)
+    })
+    return Array.from(groups.entries()).map(([dept, teamSet]) => ({ dept, teams: Array.from(teamSet) }))
+  })()
+  const toggleCustom = (name) => setCustomLevelNames(prev =>
+    prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+  )
+
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState(null)
 
@@ -75,15 +93,17 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
     if (!key.trim()) { setErr('key は必須です (URL/識別子として使用)'); return }
     if (scope === 'specific-team' && !teamName) { setErr('対象チームを選択してください'); return }
     if (scope === 'teams-of' && !parentLevelName) { setErr('対象部署を選択してください'); return }
+    if (scope === 'custom' && customLevelNames.length === 0) { setErr('対象のチーム/部署を1つ以上選択してください'); return }
     setSaving(true)
     setErr(null)
 
-    // target_filter を組み立てる。scope が空なら null で保存 (=「全社」「未指定」)。
+    // target_filter を組み立てる。scope が空なら全社既定。
     // 会議のステップは flow から自動生成されるため、flow は必ず含める。
     const target_filter = scope ? {
       scope,
       ...(scope === 'specific-team' && teamName ? { teamName, levelName: teamName } : {}),
       ...(scope === 'teams-of' && parentLevelName ? { parentLevelName, levelName: parentLevelName } : {}),
+      ...(scope === 'custom' ? { levelNames: customLevelNames } : {}),
       flow,
       viewMode,
       ...(withDiscussion ? { withDiscussion: true } : {}),
@@ -237,11 +257,12 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
               }}
               style={{ ...inputSt, cursor: 'pointer' }}
             >
-              <option value="all-levels">全社・全階層 (部署/チーム横断・プログラム別定例)</option>
+              <option value="custom">組織図から選択（複数チーム/部署）</option>
               <option value="specific-team">特定チームのみ (例: 広報 / セールス)</option>
               <option value="teams-of">部署配下の全チーム (例: パートナー事業部 → CS + セールス)</option>
               <option value="all-teams">全チーム合同 (= マネージャー定例)</option>
               <option value="all-departments">全部署合同 (= 役員会議)</option>
+              <option value="all-levels">全社・全階層 (部署/チーム横断・プログラム別定例)</option>
             </select>
 
             {scope === 'specific-team' && (
@@ -265,6 +286,41 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
                     <option key={d.id} value={d.name}>{d.name}</option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {scope === 'custom' && (
+              <div style={{ marginTop: SPACING.xs + 1 }}>
+                <label style={{ ...labelSt, marginTop: SPACING.xs }}>
+                  対象にするチーム / 部署 <span style={{ color: T.danger }}>*</span>
+                  <span style={{ color: T.textMuted, fontWeight: 500 }}>（{customLevelNames.length} 件選択中）</span>
+                </label>
+                <div style={{
+                  maxHeight: 220, overflow: 'auto',
+                  border: `1px solid ${T.border}`, borderRadius: RADIUS.sm,
+                  padding: SPACING.sm, background: T.bg,
+                }}>
+                  {orgTree.length === 0 && (
+                    <div style={{ ...TYPO.footnote, color: T.textMuted }}>組織のチーム/部署が読み込めませんでした。</div>
+                  )}
+                  {orgTree.map(({ dept, teams: teamNames }) => (
+                    <div key={dept} style={{ marginBottom: SPACING.xs + 2 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 1, cursor: 'pointer', ...TYPO.subhead, fontWeight: 700, color: T.text }}>
+                        <input type="checkbox" checked={customLevelNames.includes(dept)} onChange={() => toggleCustom(dept)} />
+                        {dept} <span style={{ ...TYPO.caption, fontWeight: 500, color: T.textMuted, letterSpacing: 'normal' }}>(部署)</span>
+                      </label>
+                      {teamNames.map(tn => (
+                        <label key={tn} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 1, cursor: 'pointer', ...TYPO.subhead, color: T.textSub, paddingLeft: SPACING.lg, marginTop: 2 }}>
+                          <input type="checkbox" checked={customLevelNames.includes(tn)} onChange={() => toggleCustom(tn)} />
+                          {tn}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: T.textMuted, marginTop: SPACING.xs }}>
+                  チェックしたチーム/部署の KR/KA だけがこの会議のデフォルト対象になります。
+                </div>
               </div>
             )}
           </div>

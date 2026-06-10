@@ -91,6 +91,14 @@ function resolveScopeLevelIds(wkly, levels) {
     const team = levels.find(l => l?.name === wkly.teamName)
     return team ? [team.id] : []
   }
+  if (wkly?.scope === 'custom') {
+    // 組織図から選んだ複数チーム/部署 (会議エディタで指定)
+    const names = Array.isArray(wkly.levelNames) ? wkly.levelNames : []
+    return levels
+      .filter(l => names.includes(l?.name))
+      .sort((a, b) => (getDepth(a.id, levels) - getDepth(b.id, levels)) || (a.sort_order || 0) - (b.sort_order || 0))
+      .map(l => l.id)
+  }
   if (wkly?.scope === 'teams-of') {
     const parent = levels.find(l => l?.name === wkly.parentLevelName)
     if (!parent) return []
@@ -916,6 +924,7 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
     : wkly?.flow === 'sales' ? '営業フォーカス'
     : 'KR重点'
   const scopeLabel = wkly?.scope === 'specific-team' ? `${wkly.teamName} チーム`
+    : wkly?.scope === 'custom' ? `${(wkly.levelNames || []).join(' / ') || '選択チーム'}`
     : wkly?.scope === 'teams-of' ? `${wkly.parentLevelName} 配下のチーム`
     : wkly?.scope === 'all-teams' ? '全チーム合同'
     : wkly?.scope === 'all-departments' ? '全事業部合同'
