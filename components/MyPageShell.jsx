@@ -13,6 +13,7 @@ import QuickTaskPalette from './QuickTaskPalette'
 import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
 import CalendarTab from './CalendarTab'
+import { trackFeature } from '../lib/track'
 import DriveTab from './DriveTab'
 import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
@@ -179,6 +180,20 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   const [summaryMode, setSummaryMode] = useState(false)
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  // 利用分析: マイページ内のタブ切替を計測 (どのサブ機能が使われたかを把握)
+  useEffect(() => {
+    if (!activeTab) return
+    trackFeature('mycoach', `tab_${activeTab}`)
+  }, [activeTab])
+  // MyCOO チャット / ドライブ AI 等の「下部に送信ボタンを持つチャット型タブ」は
+  // MyCOO オーブと座標が重なるためオーブを非表示にする
+  useEffect(() => {
+    const HIDE_ORB_TABS = ['coo', 'drive']
+    const hide = HIDE_ORB_TABS.includes(activeTab)
+    window.dispatchEvent(new CustomEvent('mycoo:set-orb-visibility', { detail: { hide } }))
+    // タブ離脱時は確実に元に戻す
+    return () => window.dispatchEvent(new CustomEvent('mycoo:set-orb-visibility', { detail: { hide: false } }))
+  }, [activeTab])
 
   // オンボーディングツアーが「個人ダッシュボードを開く」要求を送ってきたら、
   // 全社サマリー → 自分の個人ダッシュボード (ダッシュボードタブ) へ切替える。
@@ -234,6 +249,19 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
       .subscribe()
     return () => { alive = false; supabase.removeChannel(ch) }
   }, [viewingName])
+  // 外部 (MyCOOオーブのナッジ等) からのタブ切替リクエスト
+  useEffect(() => {
+    const onSetTab = (e) => {
+      const t = e?.detail?.tab
+      if (!t) return
+      setActiveTab(t)
+      setSummaryMode(false)
+      setMobileSidebarOpen(false)
+    }
+    window.addEventListener('mycoach:set-tab', onSetTab)
+    return () => window.removeEventListener('mycoach:set-tab', onSetTab)
+  }, [])
+
   // ?tab=xxx クエリで初期タブを切替 (連携依頼 mailto などから飛んでくる)
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -554,6 +582,8 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
             }}>その他</div>
             {SIDEBAR_OTHER
               .filter(item => !item.requiresFlag || enabledModules?.[item.requiresFlag])
+              // モバイルでは下フッターと重複する項目をサイドから除外
+              .filter(item => !isMobile || !MOBILE_NAV.some(m => m.key === item.key))
               .map(item => {
               const isActive = !summaryMode && activeTab === item.key
               const showBadge = item.key === 'confirm' && unresolvedConfirmCount > 0
@@ -605,6 +635,45 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>{user.email}</div>
             )}
+            {/* ツアー再生 (スマホはここからアクセス、デスクトップは右上ユーザーメニュー) */}
+            <button
+              onClick={() => {
+                setMobileSidebarOpen(false)
+                window.dispatchEvent(new CustomEvent('okr:start-tour'))
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '9px 12px', borderRadius: 8, marginBottom: 8,
+                background: 'transparent', border: `1px solid ${T.border}`,
+                color: T.text, fontSize: 13, fontWeight: 600,
+                fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{ display: 'inline-flex', width: 16 }}><Icon name="sparkle" size={16} /></span>
+              <span>ツアーをもう一度見る</span>
+            </button>
+            {/* リリース前テスト: 初回ログイン体験を完全リセット */}
+            <button
+              onClick={() => {
+                if (!window.confirm('初回ログイン体験を完全リセットします。\n\n以下が全てリセットされます:\n・スポットライトツアー (再生)\n・ホームの7ステップ案内 (再表示)\n・始業ゲートのスキップ (本日中、再有効)\n\n続行しますか?')) return
+                try {
+                  localStorage.removeItem('onboarding_v1_completed')
+                  localStorage.removeItem(`home_onboarding_dismissed_${user?.email || 'guest'}`)
+                  localStorage.removeItem('home_onb_seen_okr')
+                } catch { /* noop */ }
+                window.location.href = '/?page=portal'
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '9px 12px', borderRadius: 8, marginBottom: 8,
+                background: 'transparent', border: `1px solid ${T.border}`,
+                color: T.text, fontSize: 13, fontWeight: 600,
+                fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{ display: 'inline-flex', width: 16 }}><Icon name="refresh" size={16} /></span>
+              <span>初回ログイン体験を完全リセット</span>
+            </button>
             <button
               onClick={async () => {
                 try { await supabase.auth.signOut() } catch {}
@@ -636,6 +705,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           }}>
             <button
               onClick={() => setMobileSidebarOpen(true)}
+              data-tour="mobile-sidebar-btn"
               style={{
                 padding: '6px 10px', borderRadius: 7,
                 background: 'transparent', border: `1px solid ${T.border}`,
@@ -995,6 +1065,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               return (
                 <button
                   key={item.key}
+                  data-tour={`mobile-nav-${item.key}`}
                   onClick={() => { setActiveTab(item.key); setSummaryMode(false) }}
                   style={{
                     flex: 1, background: 'transparent', border: 'none',
@@ -1040,10 +1111,18 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   // 朝の「今日やること」モーダル
   const [morningOpen, setMorningOpen] = useState(false)
   // 昨日未終業の log (null=未取得, false=なし, {}=あり)
+  // (互換性保持で名前は pendingYesterdayLog だが、実体は「最も古い未処理の振り返り対象日」)
+  //   - { type: 'unclosed', log, date, created_at } = 始業はしたが終業忘れ
+  //   - { type: 'missing',  log: null, date }       = 始業ボタン押し忘れ (work_log 自体無し)
   const [pendingYesterdayLog, setPendingYesterdayLog] = useState(null)
+  // 振り返り保存後に再判定を促すリフレッシュキー
+  const [reflRefreshKey, setReflRefreshKey] = useState(0)
 
-  // 昨日未終業の work_log を検出 (自分閲覧 & 平日 & 今日未始業 の時のみ)
-  // 月曜の場合は週末ログを飛ばして金曜分まで遡るため、最新N件取得して平日のみ抽出する
+  // 昨日 〜過去 7 平日 (公休除外) を遡って未処理の振り返り対象日を検出
+  //   - 終業済 work_log を見つけた日 = そこを境界として停止 (それより古い日は無視)
+  //   - 未終業 work_log → pending
+  //   - work_log 無し  → pending (始業押し忘れ)
+  // 最も古い pending を返し、保存ごとにループ ((reflRefreshKey で useEffect 再実行)
   useEffect(() => {
     if (!isViewingSelf || !myName || !isWeekday || st !== 'none') {
       setPendingYesterdayLog(false)
@@ -1052,61 +1131,98 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     let alive = true
     ;(async () => {
       const boundary = getTodayBoundaryISO()
+      // 過去 8 日分の work_log を取得 (週末含むので余裕を持って 8)
+      const eightDaysAgoMs = Date.now() - 8 * 24 * 3600 * 1000
+      const eightDaysAgoISO = new Date(eightDaysAgoMs).toISOString()
       const { data } = await supabase
         .from('coaching_logs')
         .select('*')
         .eq('owner', myName)
         .eq('log_type', 'work_log')
+        .gte('created_at', eightDaysAgoISO)
         .lt('created_at', boundary)
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(20)
       if (!alive) return
-      // 平日 (月〜金 JST) かつ祝日でない最新ログを採用 (土日 + 日本の祝日は始業ゲートで無視)
-      const weekdayRow = (data || []).find(row => {
+      // JST 日付 → work_log のマップを構築 (同じ日に複数あれば最新を採用)
+      const logsByDate = new Map()
+      ;(data || []).forEach(row => {
         const j = new Date(new Date(row.created_at).getTime() + 9 * 3600 * 1000)
         const dStr = `${j.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2,'0')}-${String(j.getUTCDate()).padStart(2,'0')}`
-        // isJpNonBusinessDay は土日 + 祝日両方を true で返す
-        return !isJpNonBusinessDay(dStr)
+        if (!logsByDate.has(dStr)) logsByDate.set(dStr, row)
       })
-      if (!weekdayRow) { setPendingYesterdayLog(false); return }
-      const c = parseLogContent(weekdayRow.content)
-      if (c.start_at && !c.end_at) {
-        setPendingYesterdayLog(weekdayRow)
-      } else {
-        setPendingYesterdayLog(false)
+      // 昨日 〜 7 日前まで遡って未処理日を集める (公休はスキップ、終業済で停止)
+      const pending = []
+      const nowJst = new Date(Date.now() + 9 * 3600 * 1000)
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date(Date.UTC(
+          nowJst.getUTCFullYear(), nowJst.getUTCMonth(), nowJst.getUTCDate() - i, 0, 0, 0
+        ))
+        const dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`
+        if (isJpNonBusinessDay(dStr)) continue // 公休はスキップ
+        const log = logsByDate.get(dStr)
+        if (log) {
+          const c = parseLogContent(log.content)
+          if (c.end_at) break // 終業済 = ここを境界として古い日は見ない
+          if (c.start_at) pending.push({ type: 'unclosed', log, date: dStr, created_at: log.created_at })
+        } else {
+          pending.push({ type: 'missing', log: null, date: dStr })
+        }
       }
+      if (pending.length === 0) { setPendingYesterdayLog(false); return }
+      // 最も古い (= 最後に push された方) から処理
+      setPendingYesterdayLog(pending[pending.length - 1])
     })()
     return () => { alive = false }
-  }, [isViewingSelf, myName, isWeekday, st])
+  }, [isViewingSelf, myName, isWeekday, st, reflRefreshKey])
 
-  // 昨日ログ日付文字列
+  // 昨日ログ日付文字列 (KPTモーダル ヘッダ表示用)
   const yesterdayDateStr = (() => {
     if (!pendingYesterdayLog) return ''
-    const yj = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
-    return `${yj.getUTCMonth() + 1}/${yj.getUTCDate()}(${['日','月','火','水','木','金','土'][yj.getUTCDay()]})`
+    const [yr, mo, dy] = pendingYesterdayLog.date.split('-').map(Number)
+    const d = new Date(Date.UTC(yr, mo - 1, dy))
+    return `${mo}/${dy}(${['日','月','火','水','木','金','土'][d.getUTCDay()]})`
   })()
 
-  // 昨日ログを強制終業
+  // 振り返り対象日を強制終業 / 補完保存
   async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM, reflectionDate }) {
     if (!pendingYesterdayLog) return
     setBusy(true)
-    const createdJST = new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000)
     const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
-    // 勤怠(出勤記録)は対象の未終業ログの日付で締める
-    const endUtc = new Date(Date.UTC(
-      createdJST.getUTCFullYear(), createdJST.getUTCMonth(), createdJST.getUTCDate(),
-      hh - 9, mm, 0
-    ))
-    const oldContent = parseLogContent(pendingYesterdayLog.content)
-    const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
-    const { error: e1 } = await supabase.from('coaching_logs')
-      .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.id)
-    if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
+    const targetDateStr = pendingYesterdayLog.date
+    const [tyr, tmo, tdy] = targetDateStr.split('-').map(Number)
+
+    if (pendingYesterdayLog.type === 'unclosed') {
+      // 既存の未終業 work_log を終業
+      const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
+      const oldContent = parseLogContent(pendingYesterdayLog.log.content)
+      const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
+      const { error: e1 } = await supabase.from('coaching_logs')
+        .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.log.id)
+      if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
+    } else {
+      // 始業押し忘れ: その日の 9:00〜指定時刻で work_log を補完作成
+      const startUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, 9 - 9, 0, 0))
+      const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
+      const { error: e1 } = await supabase.from('coaching_logs').insert({
+        owner: myName,
+        log_type: 'work_log',
+        organization_id: currentOrg?.id,
+        week_start: getMondayJSTStr(startUtc),
+        created_at: startUtc.toISOString(),
+        content: JSON.stringify({
+          start_at: startUtc.toISOString(),
+          end_at: endUtc.toISOString(),
+          force_closed: true,
+          backfilled: true,
+        }),
+      })
+      if (e1) { setBusy(false); alert('勤怠補完に失敗しました: ' + e1.message); return }
+    }
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
       // 振り返り(KPT)は本人が選んだ「対象日」で保存する (既定=未終業ログの勤務日)。
       // どの日の振り返りかを本人に選ばせ、朝会での認知齟齬(火曜に金曜が出る等)を防ぐ。
-      const baseISO = reflectionDate ||
-        `${createdJST.getUTCFullYear()}-${String(createdJST.getUTCMonth()+1).padStart(2,'0')}-${String(createdJST.getUTCDate()).padStart(2,'0')}`
+      const baseISO = reflectionDate || targetDateStr
       const [ry, rmo, rd] = baseISO.split('-').map(Number)
       const kptUtc = new Date(Date.UTC(ry, rmo - 1, rd, hh - 9, mm, 0))
       const { error: e2 } = await supabase.from('coaching_logs').insert({
@@ -1119,7 +1235,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
     }
     setBusy(false)
-    setPendingYesterdayLog(false)
+    // 次の未処理日があれば自動で次に進む (useEffect 再実行)
+    setReflRefreshKey(k => k + 1)
     await onWorkLogChange()
   }
 
@@ -1395,6 +1512,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   // 土日 → 直接 work_log insert
   async function handleStart() {
     if (busy || !myName) return
+    // 平日: 昨日未終業ログの判定がまだ終わっていない (DB クエリ進行中) → 早押しを防ぐ。
+    // この判定が終わる前に始業を許すと、ユーザーが先にタスク追加してしまい、
+    // 後から振り返り(KPT)モーダルが上に被ってきて手戻り/混乱の原因になる。
+    if (isWeekday && pendingYesterdayLog === null) return
     if (isWeekday) {
       setMorningOpen(true)
       return
@@ -1446,7 +1567,17 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   }
 
   // ─── A. 始業ゲーティング: 自分閲覧 & 未始業 → 始業画面のみ表示 ────
-  if (isViewingSelf && st === 'none') {
+  // 初回ログインユーザー (onboarding 未完了) は始業ゲートをスキップして自由探索させる。
+  // 強制感を避け、スポットライトツアーでクイックタスク追加を体験 → 機能の便利さを実感してから
+  // 翌日以降に通常の始業フローへ。これにより初日離脱を防ぐ。
+  const isFirstTimeUser = typeof window !== 'undefined' && (() => {
+    try { return localStorage.getItem('onboarding_v1_completed') !== '1' } catch { return false }
+  })()
+  // 既存ユーザーが別ブラウザ/シークレット/キャッシュクリア等で localStorage を持たない
+  // ケースでは isFirstTimeUser=true と誤判定される。pendingYesterdayLog が見つかった
+  // (= 過去に始業した実績がある) 場合は明らかに既存ユーザーなのでゲートを必ず出す。
+  const hasUnclosedYesterday = pendingYesterdayLog && pendingYesterdayLog !== false
+  if (isViewingSelf && st === 'none' && (!isFirstTimeUser || hasUnclosedYesterday)) {
     // 昨日未終業(平日のみ): まず強制 KPT モーダル
     const showYesterdayKPT = isWeekday && pendingYesterdayLog && pendingYesterdayLog !== false
     return (
@@ -1455,14 +1586,17 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           T={T} viewingMember={viewingMember} viewingName={viewingName}
           greet={greet} dateStr={dateStr} busy={busy} onStart={handleStart}
           weekday={isWeekday}
+          loading={isWeekday && pendingYesterdayLog === null}
         />
         {showYesterdayKPT && (
           <KPTModal
             T={T} busy={busy} force
             yesterdayDateStr={yesterdayDateStr}
-            pendingDateISO={new Date(new Date(pendingYesterdayLog.created_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
+            pendingDateISO={pendingYesterdayLog.date}
             todayISO={new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
-            startedAt={parseLogContent(pendingYesterdayLog.content).start_at}
+            startedAt={pendingYesterdayLog.type === 'unclosed'
+              ? parseLogContent(pendingYesterdayLog.log.content).start_at
+              : null}
             onSave={forceCloseYesterday}
             onCancel={() => {}}
           />
@@ -1476,6 +1610,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
             busy={busy}
             onStart={doStartWorkLog}
             fiscalYear={fiscalYear}
+            userEmail={viewingMember?.email}
           />
         )}
       </div>
@@ -1483,7 +1618,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   }
 
   // ─── 表示判定ヘルパー ────
-  const showW = (key) => prefs[key] !== false  // デフォルト未設定はtrue扱い
+  // デフォルト未設定は true 扱い。ただし opt-in (デフォルト非表示) のキーは defaultOff に含める。
+  // OKR を運用していない組織でも邪魔にならないよう、マイOKR は opt-in にする。
+  const DEFAULT_OFF_KEYS = new Set(['okr'])
+  const showW = (key) => DEFAULT_OFF_KEYS.has(key) ? prefs[key] === true : prefs[key] !== false
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflowX: 'hidden' }}>
@@ -1580,7 +1718,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       {/* クイック追加 (自分のページのみ) */}
       {/* スタートガイドの3ステップ導線は初回スポットライトツアーに集約したため、ここでは常設表示しない */}
       {isViewingSelf && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: isMobile ? '12px 14px 0' : '10px 10px 0', flexShrink: 0 }}>
+        <div data-tour="quick-task" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: isMobile ? '12px 14px 0' : '10px 10px 0', flexShrink: 0 }}>
           <QuickTaskPalette user={{ email: viewingMember?.email }} members={members} inline />
         </div>
       )}
@@ -1621,14 +1759,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               {taskBoard.loading ? <Loading T={T} /> :
                 taskBoard.today.length === 0
                   ? <EmptyRich T={T} icon="sparkle" title="今日のタスクはありません"
-                      desc={isViewingSelf ? '自然文でサッと登録できます。下のテンプレからどうぞ。' : undefined}
-                      mycooTip={isViewingSelf ? 'まずは今日やることを1件だけ決めてみましょう。' : undefined}>
-                      {isViewingSelf && ['1on1の議事録', '振り返りメモ', 'KR進捗を更新'].map(tpl => (
-                        <button key={tpl} onClick={() => window.dispatchEvent(new CustomEvent('okr:quickfill', { detail: { text: tpl } }))} style={emptyChipStyle(T)}>
-                          <Icon name="plus" size={9} stroke={2.4} /> {tpl}
-                        </button>
-                      ))}
-                    </EmptyRich>
+                      desc={isViewingSelf ? '上のクイックタスクから自然文でサッと登録できます。' : undefined}
+                      mycooTip={isViewingSelf ? 'まずは今日やることを1件だけ決めてみましょう。' : undefined}
+                    />
                   : <TaskList T={T} tasks={taskBoard.today} canEdit={isViewingSelf} onToggle={toggleTaskDone} showDue />}
             </Section>
           )}
@@ -1665,7 +1798,9 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           minWidth: 0,
           overflowY: isMobile ? 'visible' : 'auto',
         }}>
-          {/* マイOKR (= 旧「OKR・KA記入漏れ」を右カラムへ移動) */}
+          {/* マイOKR (= 旧「OKR・KA記入漏れ」を右カラムへ移動)
+              opt-in: OKR を運用していない組織でも邪魔にならないようデフォルト非表示 */}
+          {showW('okr') && (
           <Section dataTour="ws-okr" T={T} icon={<Icon name="target" size={14} />} accent={T.warn} title="マイOKR" flex={0} headerRight={
             <button onClick={loadReminders} title="再読み込み" style={{
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
@@ -1718,6 +1853,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
               )
             })()}
           </Section>
+          )}
 
           {/* バッジコレクション (月次達成度) */}
           <BadgeCollection T={T} viewingName={viewingName} isViewingSelf={isViewingSelf}
@@ -1737,7 +1873,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
 }
 
 // ─── 始業ゲート画面 ────────────────────────────────────────
-function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart, weekday = true }) {
+// loading=true の間は「確認中…」表示でボタン無効化。
+// 昨日未終業ログの判定が完了する前に始業されると、後から振り返りモーダルが
+// 被ってきて UX が壊れるため、判定完了まで始業を待つ。
+function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, onStart, weekday = true, loading = false }) {
+  const disabled = busy || loading
   return (
     <div style={{
       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1761,20 +1901,20 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
         </div>
         <button
           onClick={onStart}
-          disabled={busy}
+          disabled={disabled}
           style={{
             background: `linear-gradient(135deg, ${T.success} 0%, ${T.info} 100%)`,
             color: '#fff', border: 'none', borderRadius: RADIUS.lg,
             padding: '16px 48px', fontSize: 18, fontWeight: 800,
-            cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-            opacity: busy ? 0.6 : 1, letterSpacing: 1,
+            cursor: disabled ? 'wait' : 'pointer', fontFamily: 'inherit',
+            opacity: disabled ? 0.6 : 1, letterSpacing: 1,
             boxShadow: SHADOWS.hover(T.success),
             transition: 'transform 0.1s',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
           }}
-          onMouseEnter={e => !busy && (e.currentTarget.style.transform = 'translateY(-2px)')}
+          onMouseEnter={e => !disabled && (e.currentTarget.style.transform = 'translateY(-2px)')}
           onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
-        ><Icon name="sun" size={18} /> 始業する</button>
+        >{loading ? <><Icon name="sparkle" size={18} /> 確認中…</> : <><Icon name="sun" size={18} /> 始業する</>}</button>
         {weekday && (
           <div style={{
             marginTop: 20, padding: '8px 14px',
@@ -1796,7 +1936,7 @@ function StartWorkGate({ T, viewingMember, viewingName, greet, dateStr, busy, on
 // ─── 朝の「今日やること」モーダル (平日・閉じ不可・最低1件必須) ─────────────
 // 既存 TaskCreateModal を呼び出す薄いラッパー。
 // 今日期日&自分アサインのタスクを DB から取得して一覧表示し、1件以上あると始業可能。
-function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart, fiscalYear = '2026' }) {
+function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStart, fiscalYear = '2026', userEmail = null }) {
   const [todayTasks, setTodayTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -1817,13 +1957,12 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
 
   useEffect(() => { reload() }, [reload])
 
-  // タスク0件で開いた時は自動で追加モーダルを前面に
+  // クイックタスク追加でタスクが作成されたら一覧を再読み込み
   useEffect(() => {
-    if (!loading && todayTasks.length === 0 && !addOpen) {
-      setAddOpen(true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading])
+    function onCreated() { reload() }
+    window.addEventListener('okr:task-created', onCreated)
+    return () => window.removeEventListener('okr:task-created', onCreated)
+  }, [reload])
 
   const canStart = todayTasks.length >= 1
 
@@ -1897,15 +2036,22 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
           )}
         </div>
 
+        {/* クイックタスク追加: 自然文+日付+KR を一発で解析する強力な入力 UI。
+            「+タスクを追加 → モーダル」の従来 UI より体験が良く、ユーザーの
+            「便利だ!」感覚を初日から醸成する。 */}
+        <div style={{ marginBottom: 10 }}>
+          <QuickTaskPalette user={{ email: userEmail }} members={members} inline defaultDueDate={today} />
+        </div>
+        {/* 詳細入力したい場合のためのフォールバック (KA紐付け・複数日等) */}
         <button
           onClick={() => setAddOpen(true)}
           style={{
-            width: '100%', padding: '10px 14px', borderRadius: 8,
-            background: 'transparent', border: `1px dashed ${T.accent}`,
-            color: T.accent, fontSize: 13, fontWeight: 700,
+            width: '100%', padding: '6px 10px', borderRadius: 6,
+            background: 'transparent', border: 'none',
+            color: T.textMuted, fontSize: 11, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10,
           }}
-        >+ タスクを追加</button>
+        >詳細フォームで追加 (KA紐付け・複数日)</button>
 
         {/* 共有事項 / 確認事項を任意で追加 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -1995,6 +2141,10 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
       { key: 'team_summary',      icon: 'chart', label: '今週のチームサマリー' },
       { key: 'achievements',      icon: 'trophy', label: '今週の成果' },
     ]},
+    { title: 'OKR (目標管理)', items: [
+      // OKR を運用している組織はここを ON にする。デフォルト OFF。
+      { key: 'okr', icon: 'target', label: 'マイOKR (KR/KA 記入漏れ一覧)', defaultOff: true },
+    ]},
   ]
   // ※ リマインダーBox (OKR/タスク/Googleカレンダー/Gmail/Slack/LINE) は常時表示
   return (
@@ -2047,7 +2197,7 @@ function SettingsPopover({ T, prefs, togglePref, resetPrefs, onClose }) {
               >
                 <input
                   type="checkbox"
-                  checked={prefs[it.key] !== false}
+                  checked={it.defaultOff ? prefs[it.key] === true : prefs[it.key] !== false}
                   onChange={() => togglePref(it.key)}
                   style={{ cursor: 'pointer', accentColor: T.accent }}
                 />
@@ -2116,10 +2266,18 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
   useEffect(() => { load() }, [load])
 
   async function save(patch) {
-    if (!viewingName) return
+    // viewingName を呼び出し時点でスナップショット。
+    // (メンバー切替直後の遅延 onBlur で『新しい owner に古い draft を書く』
+    //  データ漏洩を防ぐ。row もこの owner で取得したものでなければ書かない。)
+    const ownerSnapshot = viewingName
+    if (!ownerSnapshot) return
+    if (row && row.owner && row.owner !== ownerSnapshot) {
+      console.warn('[monthly_1on1] save aborted: row.owner mismatch', { rowOwner: row.owner, ownerSnapshot })
+      return
+    }
     setSaving(true)
     const payload = {
-      owner: viewingName, month,
+      owner: ownerSnapshot, month,
       supervisor: patch.supervisor !== undefined ? patch.supervisor : draft.supervisor,
       self_keep: patch.self_keep !== undefined ? patch.self_keep : draft.self_keep,
       self_problem: patch.self_problem !== undefined ? patch.self_problem : draft.self_problem,
@@ -3559,7 +3717,8 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 9999, padding: 20,
+        zIndex: 9999, padding: 'max(env(safe-area-inset-top), 8px) 8px max(env(safe-area-inset-bottom), 8px) 8px',
+        overflowY: 'auto', WebkitOverflowScrolling: 'touch',
         animation: 'kptModalFadeIn 0.2s ease',
       }}
     >
@@ -3571,8 +3730,12 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
         onClick={e => e.stopPropagation()}
         style={{
           background: T.bgCard, borderRadius: RADIUS.xl,
-          padding: 24, width: '100%', maxWidth: 540, maxHeight: '90vh',
-          overflowY: 'auto',
+          padding: 20, width: '100%', maxWidth: 540,
+          // 100dvh = 動的viewport (iOS Safari の URL bar 変動に追従)。
+          // vh フォールバックを併用してブラウザ互換性も確保。
+          maxHeight: 'calc(100vh - 32px)',
+          maxHeight: 'calc(100dvh - 32px)',
+          overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain',
           boxShadow: SHADOWS.xl,
           animation: 'kptModalSlide 0.25s cubic-bezier(0.4,0,0.2,1)',
         }}
@@ -3605,7 +3768,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
               background: T.warnBg, color: T.warn,
               fontSize: 12, borderRadius: 9, lineHeight: 1.5, fontWeight: 600,
             }}>
-              {yesterdayDateStr} の勤務が終業されていません。振り返りを入力すると今日を始業できます。<br />
+              {yesterdayDateStr} の振り返りが未入力です。記入すると今日を始業できます。<br />
               この振り返りは <strong>{selectedLabel}</strong> の分として保存されます。別の日なら下の「対象日」を選び直してください。
             </div>
           )}
@@ -4228,7 +4391,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
           </div>
         ) : subTab === 'oneonone' ? (
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <Monthly1on1Card T={T} viewingName={viewingName} myName={myName} members={members} />
+            <Monthly1on1Card key={viewingName || 'no-member'} T={T} viewingName={viewingName} myName={myName} members={members} />
           </div>
         ) : data.loading ? <Loading T={T} /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
@@ -4275,21 +4438,54 @@ function StreakBanner({ T, viewingName }) {
         .gte('created_at', ninety)
       const writtenDays = new Set((logs || []).map(l => toJSTDateStr(new Date(l.created_at))))
 
-      // 連続記入日数 (今日 or 直近の記入から遡る)
+      // 連続記入日数 (平日のみ集計。土日は跨いでもストリーク途切れない)
+      //   - 土日は記入が無くても streak を切らない (cursor をそのまま遡る)
+      //   - 直近の平日に記入があれば streak を加算、無ければそこで止める
       const today = toJSTDateStr(new Date())
       let cur = 0
       const cursor = new Date(today + 'T00:00:00Z')
-      while (writtenDays.has(toJSTDateStr(cursor))) {
-        cur++
-        cursor.setUTCDate(cursor.getUTCDate() - 1)
+      while (true) {
+        const dow = cursor.getUTCDay()
+        if (dow === 0 || dow === 6) {
+          // 土日: 何もせず1日遡る
+          cursor.setUTCDate(cursor.getUTCDate() - 1)
+          continue
+        }
+        if (writtenDays.has(toJSTDateStr(cursor))) {
+          cur++
+          cursor.setUTCDate(cursor.getUTCDate() - 1)
+        } else {
+          break // 平日に記入無し → ストリーク切れ
+        }
+        if (cur > 365) break // 念のため上限
       }
-      // 自己ベスト
-      const sorted = Array.from(writtenDays).sort()
+
+      // 自己ベスト (平日記入のみで集計。土日を挟んでも連続扱い)
+      const sorted = Array.from(writtenDays)
+        .filter(d => {
+          const dow = new Date(d + 'T00:00:00Z').getUTCDay()
+          return dow !== 0 && dow !== 6 // 平日記入だけ対象
+        })
+        .sort()
+      // 2 つの日付の「間」に存在する平日の数 (両端排他)
+      const weekdaysBetween = (aISO, bISO) => {
+        const a = new Date(aISO + 'T00:00:00Z')
+        const b = new Date(bISO + 'T00:00:00Z')
+        let n = 0
+        const c = new Date(a.getTime())
+        c.setUTCDate(c.getUTCDate() + 1)
+        while (c.getTime() < b.getTime()) {
+          const dw = c.getUTCDay()
+          if (dw !== 0 && dw !== 6) n++
+          c.setUTCDate(c.getUTCDate() + 1)
+        }
+        return n
+      }
       let best = 0, streak = 0, prev = null
       sorted.forEach(d => {
         if (prev) {
-          const diff = (new Date(d).getTime() - new Date(prev).getTime()) / 86400000
-          if (diff <= 1.5) streak++; else streak = 1
+          // 前回記入日と今回の間に「飛んだ平日」が 0 なら連続
+          streak = weekdaysBetween(prev, d) === 0 ? streak + 1 : 1
         } else streak = 1
         if (streak > best) best = streak
         prev = d
@@ -5216,10 +5412,11 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
-        if (!r.ok) {
+        // 未連携は API 側で 200 + connected:false で返ってくる (コンソール 400 を出さないため)
+        if (!r.ok || j.connected === false || j.error) {
           setError(j.error || `HTTP ${r.status}`)
           setNeedsReauth(!!j.needsReauth)
-          setItems([])
+          setItems(j.items || [])
         } else {
           setItems(j.items || [])
         }
@@ -5274,11 +5471,16 @@ function CalendarBox({ T, viewingName, onGoToTab }) {
                 {ev.title}
               </span>
               {ev.hangoutLink && (
-                <a href={ev.hangoutLink} target="_blank" rel="noreferrer" style={{
-                  padding: '2px 8px', borderRadius: 10,
-                  background: T.accentBg, color: T.accent,
-                  fontSize: 10, fontWeight: 700, textDecoration: 'none',
-                }}>参加</a>
+                <a href={ev.hangoutLink} target="_blank" rel="noreferrer"
+                  title="Google Meet に参加"
+                  style={{
+                    padding: '2px 8px', borderRadius: 10,
+                    background: '#00897b', color: '#fff',
+                    fontSize: 10, fontWeight: 700, textDecoration: 'none',
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                  }}>
+                  <span style={{ fontSize: 8 }}>▶</span> Meet
+                </a>
               )}
             </div>
           ))}
@@ -5314,12 +5516,13 @@ function GmailBox({ T, viewingName, onGoToTab, onOpenAIReply, readMarks, onMarkR
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
-        if (!r.ok) {
+        // 未連携は API 側で 200 + connected:false で返ってくる (コンソール 400 を出さないため)
+        if (!r.ok || j.connected === false || j.error) {
           setError(j.error || `HTTP ${r.status}`)
           setNeedsReauth(!!j.needsReauth)
-          setRawItems([])
+          setRawItems(j.threads || j.items || [])
         } else {
-          setRawItems(j.items || [])
+          setRawItems(j.threads || j.items || [])
         }
       })
       .catch(e => { if (alive) setError(e.message || 'エラー') })
@@ -5619,10 +5822,11 @@ function MailTab({ T, viewingName, isViewingSelf, onGoToTab, onOpenAIReply, read
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (!alive) return
-        if (!r.ok) {
+        // 未連携は 200 + connected:false で返ってくる
+        if (!r.ok || j.connected === false || j.error) {
           setError(j.error || `HTTP ${r.status}`)
           setNeedsReauth(!!j.needsReauth)
-          setAllItems([])
+          setAllItems(j.allItems || j.threads || j.items || [])
         } else {
           setAllItems(j.allItems || j.items || [])
         }

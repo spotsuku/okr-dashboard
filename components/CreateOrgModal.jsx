@@ -10,8 +10,11 @@
 //   userEmail: string                  // 現在ログイン中の email (owner として登録)
 import { useState, useEffect } from 'react'
 import Icon from './Icon'
+import { COMMON_TOKENS, TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
+import { btnPrimary, btnSecondary, inputStyle, cardStyle } from '../lib/iosStyles'
 
 const SLUG_HINT_RE = /^[a-z0-9-]*$/
+const T = COMMON_TOKENS.light
 
 export default function CreateOrgModal({ open, onClose, onCreated, userEmail }) {
   const [name, setName] = useState('')
@@ -27,14 +30,21 @@ export default function CreateOrgModal({ open, onClose, onCreated, userEmail }) 
   }, [open])
 
   // 自動 slug 生成 (name → 英小文字+ハイフン)
-  const autoSlug = (n) => n.toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+  // 日本語等で ASCII 化できない場合は org-<5桁ランダム> を fallback として返す
+  // (ユーザーが手動で slug を入力しなくても submit 可能にするため)
+  const autoSlug = (n) => {
+    const ascii = n.toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^\w\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+    if (ascii.length >= 2) return ascii
+    if (n.trim()) return 'org-' + Math.random().toString(36).slice(2, 7)
+    return ''
+  }
 
   const handleName = (v) => {
     setName(v)
@@ -79,29 +89,34 @@ export default function CreateOrgModal({ open, onClose, onCreated, userEmail }) 
   if (!open) return null
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 200,
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(15,23,42,.4)',
+      backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+      zIndex: 200,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
     }}>
-      <div style={{
-        background: '#1c1c1e', borderRadius: 12, width: 'min(480px, 92vw)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif',
+      <div onClick={e => e.stopPropagation()} style={{
+        ...cardStyle({ T, padding: 0 }),
+        width: 'min(480px, 92vw)',
+        borderRadius: RADIUS.xl,
+        boxShadow: SHADOWS.xl,
+        overflow: 'hidden',
+        fontFamily: '"Inter", "Noto Sans JP", -apple-system, system-ui, sans-serif',
       }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>新しい組織を作成</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}`, background: T.sectionBg }}>
+          <div style={{ ...TYPO.headline, fontWeight: 800, color: T.text }}>新しい組織を作成</div>
+          <div style={{ ...TYPO.caption, color: T.textMuted, marginTop: 4 }}>
             作成すると自分が owner として登録されます
           </div>
         </div>
 
-        <div style={{ padding: 20, color: '#fff' }}>
+        <div style={{ padding: 20, color: T.text }}>
           <Field label="組織名" hint="例: NEO福岡、株式会社 ABC">
             <input
               type="text" value={name} onChange={e => handleName(e.target.value)}
               autoFocus disabled={submitting} placeholder="組織名を入力"
-              style={inputStyle}
+              style={inputStyle({ T })}
             />
           </Field>
 
@@ -109,27 +124,28 @@ export default function CreateOrgModal({ open, onClose, onCreated, userEmail }) 
             <input
               type="text" value={slug} onChange={e => handleSlug(e.target.value)}
               disabled={submitting} placeholder="your-slug"
-              style={{ ...inputStyle, fontFamily: 'monospace' }}
+              style={{ ...inputStyle({ T }), fontFamily: 'ui-monospace, monospace' }}
             />
           </Field>
 
           {error && (
             <div style={{
-              marginTop: 12, padding: 10, fontSize: 12, color: '#ff453a',
-              background: 'rgba(255,69,58,0.12)', borderRadius: 8,
+              marginTop: 12, padding: '10px 12px', ...TYPO.subhead, fontWeight: 600,
+              color: T.danger, background: T.dangerSoft,
+              borderRadius: RADIUS.sm,
               display: 'flex', alignItems: 'center', gap: 6,
             }}><Icon name="alert" size={13} /> {error}</div>
           )}
         </div>
 
         <div style={{
-          padding: 14, borderTop: '1px solid rgba(255,255,255,0.08)',
+          padding: 14, borderTop: `1px solid ${T.border}`, background: T.sectionBg,
           display: 'flex', gap: 8, justifyContent: 'flex-end',
         }}>
-          <button onClick={onClose} disabled={submitting} style={btnSecondary}>
+          <button onClick={onClose} disabled={submitting} style={btnSecondary({ T, size: 'md' })}>
             キャンセル
           </button>
-          <button onClick={submit} disabled={submitting || !name.trim() || !slug} style={btnPrimary}>
+          <button onClick={submit} disabled={submitting || !name.trim() || !slug} style={btnPrimary({ T, size: 'md' })}>
             {submitting ? '作成中...' : '作成して開く'}
           </button>
         </div>
@@ -141,29 +157,9 @@ export default function CreateOrgModal({ open, onClose, onCreated, userEmail }) 
 function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', marginBottom: 6 }}>{label}</div>
+      <div style={{ ...TYPO.caption, fontWeight: 700, color: T.textSub, marginBottom: 6 }}>{label}</div>
       {children}
-      {hint && <div style={{ fontSize: 10, color: '#666', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 10.5, color: T.textMuted, marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   )
-}
-
-const inputStyle = {
-  width: '100%', padding: '9px 12px', fontSize: 13,
-  background: 'rgba(255,255,255,0.06)', color: '#fff',
-  border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8,
-  outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-}
-
-const btnSecondary = {
-  padding: '8px 16px', borderRadius: 7,
-  background: 'transparent', color: '#9ca3af',
-  border: '1px solid rgba(255,255,255,0.15)',
-  fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-}
-
-const btnPrimary = {
-  padding: '8px 18px', borderRadius: 7,
-  background: '#4d9fff', color: '#fff', border: 'none',
-  fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
 }

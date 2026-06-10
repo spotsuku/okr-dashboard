@@ -97,7 +97,7 @@ const TOOLS = [
         start_iso: { type: 'string' },
         end_iso:   { type: 'string' },
         duration_min: { type: 'number', description: '必要な連続空き時間 (分)' },
-        working_hours: { type: 'object', properties: { from: { type: 'number' }, to: { type: 'number' } }, description: '営業時間帯 (例: from:9, to:22) JST。省略時 9-22。' },
+        working_hours: { type: 'object', properties: { from: { type: 'number' }, to: { type: 'number' } }, description: '営業時間帯 (例: from:9, to:18) JST。省略時 9-18 (営業時間)。ユーザーが「夜遅くでもOK」「24時間」等と明示した場合のみ広い範囲を指定する。' },
       },
       required: ['members', 'start_iso', 'end_iso', 'duration_min'],
     },
@@ -216,7 +216,7 @@ function computeFreeSlots(memberEvents, startIso, endIso, durationMin, workingHo
   }
   if (cursor < end) free.push([cursor, end])
   const fromH = workingHours?.from ?? 9
-  const toH = workingHours?.to ?? 22
+  const toH = workingHours?.to ?? 18  // 9-18 = 営業時間。21:00-22:00 など深夜帯が選ばれないように。明示的に深夜OKと指定された場合のみ拡大
   const slots = []
   for (const [s, e] of free) {
     let t = new Date(s)
@@ -780,7 +780,10 @@ ${memberList}
 予定の確認・日程調整・作成/更新/削除も依頼に応じて行えます。
 - 日付・曜日参照表 (JST、確定値・必ずこの表から曜日を引くこと。自分で計算しない):
 ${dateRefStr}
-- 空き時間を探す時は必ず find_free_slots を使う (勘で答えない)
+- **重要: 必ず「直近のユーザー発話 1 件」だけに対応する。** 履歴に過去の依頼が残っていても、それらは既に処理済み (またはユーザーが意図的に放棄) とみなし、再提案しない。例えば「来週2件押さえて」を以前依頼し、今回「明日1件押さえて」と言われたら、**今回は明日1件のみ提案する** (来週2件は混ぜない)。
+- **【最重要】予定の作成・更新・削除依頼には必ず対応する tool を呼ぶこと。** ユーザーが「入れて」「作って」「押さえて」「予約して」「変更して」「動かして」「削除して」等と言った場合、テキストで「作成します」「変更します」と返すだけは絶対にダメ。必ず create_event / update_event / delete_event の **tool を実際に呼び出してから** 最終返答テキストを書く (tool 呼び出しが proposal を返し、UI が承認カードを表示する仕組み)。tool を呼ばずに最終返答だけ書くと、ユーザー側に承認カードが出ず提案が消える。
+- 空き時間を探す時は必ず find_free_slots を使う (勘で答えない)。find_free_slots で候補を得たら、**そのまま続けて create_event を呼んで提案を成立させる** (find_free_slots だけで止めない)。
+- find_free_slots の working_hours は **省略すれば 9-18 (営業時間)** が既定。深夜・早朝の選択は避ける。ユーザーが「夜遅くでも」「終日」等と明示した場合のみ広範囲を指定する
 - 時刻は JST (+09:00) の ISO 8601 で指定する
 - 招待者は attendee_names にメンバー名を渡す (メール解決は裏で行う)
 - 繰り返しは recurrence に RRULE 配列で指定 (例: 毎週金曜10回は ['RRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=10'])
@@ -790,20 +793,33 @@ ${dateRefStr}
 
 ツールは最大 ${MAX_STEPS} ステップ連続実行できます。`
 
+  // 履歴は直近 6 ターンに制限 (1分あたり 30,000 input token のレート制限対策)
+  // 長い会話で過去全てを送ると毎リクエストが肥大化して 429 になりやすい
+  const MAX_HISTORY_TURNS = 6
+  const trimmedHistory = Array.isArray(history) ? history.slice(-MAX_HISTORY_TURNS) : []
   const messages = [
-    ...history.map(h => ({ role: h.role, content: h.content })),
+    ...trimmedHistory.map(h => ({ role: h.role, content: h.content })),
     { role: 'user', content: message },
   ]
 
   const actions = []
   let finalText = ''
 
+  // 関数全体の wall-clock budget (Vercel 60s 制限。実質 50s で打ち切り)。
+  // これを超えそうな wait は実施せず、即座にエラーを返してクライアント側で再試行させる。
+  const REQ_START = Date.now()
+  const WALL_CLOCK_BUDGET_MS = 50_000
+  const remainingMs = () => WALL_CLOCK_BUDGET_MS - (Date.now() - REQ_START)
+
   // リトライは時間予算 (maxDuration) を食い潰さない範囲に抑える。
   // 過負荷時 (529) はリトライで粘るより、友好的なエラーを早く返して
   // クライアント側の「Failed to fetch」(関数タイムアウト) を避ける方を優先する。
+  // 429 (レート制限) は分単位の枠なので、retry-after ヘッダを尊重し最大2回まで再試行。
   async function callAnthropic(reqBody, maxRetries = 2) {
-    let lastStatus = 0, lastRaw = ''
+    let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // 残り時間が無いなら即座に break (リトライしない)
+      if (remainingMs() < 5_000) break
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -815,16 +831,30 @@ ${dateRefStr}
       })
       if (r.ok) return { ok: true, data: await r.json() }
       lastStatus = r.status; lastRaw = await r.text()
+      const retryAfterHeader = Number(r.headers.get('retry-after') || 0)
+      if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(r.status) && attempt < maxRetries - 1) {
-        await new Promise(res => setTimeout(res, Math.min(2000, 800 * Math.pow(2, attempt))))
+        // 429 でも残り時間内に収まる範囲しか待たない。超えるなら即 break。
+        const want = r.status === 429
+          ? (retryAfterHeader ? retryAfterHeader * 1000 : 12_000)
+          : Math.min(2000, 800 * Math.pow(2, attempt))
+        const budget = Math.max(0, remainingMs() - 8_000) // 次の呼び出し用に 8s 確保
+        if (want > budget) break  // 待つと時間超過するので諦める
+        const delayMs = want
+        await new Promise(res => setTimeout(res, delayMs))
         continue
       }
       break
     }
-    return { ok: false, status: lastStatus, raw: lastRaw }
+    return { ok: false, status: lastStatus, raw: lastRaw, retryAfter: lastRetryAfter }
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
+    // 時間予算切れなら部分結果で打ち切り (タイムアウト前に応答返す)
+    if (remainingMs() < 6_000) {
+      finalText = finalText || '⏱️ AI 応答が時間内に収まりませんでした。質問を絞り込んで再度お試しください。'
+      break
+    }
     const r = await callAnthropic({
       model: MODEL,
       max_tokens: 2048,
@@ -833,9 +863,15 @@ ${dateRefStr}
       messages,
     })
     if (!r.ok) {
-      const friendly = r.status === 529
-        ? 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
-        : `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      let friendly
+      if (r.status === 429) {
+        const waitSec = r.retryAfter || 60
+        friendly = `AI の利用上限に達しました (1分あたりの入力トークン制限)。約 ${waitSec} 秒後に再試行してください。会話履歴をクリアすると上限に達しにくくなります。`
+      } else if (r.status === 529) {
+        friendly = 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
+      } else {
+        friendly = `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      }
       return json({ error: friendly, actions }, { status: 503 })
     }
     const data = r.data

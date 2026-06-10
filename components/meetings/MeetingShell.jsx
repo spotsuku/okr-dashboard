@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react'
 import { MODULE_COMPONENTS, MODULE_META } from '../../lib/meetings/moduleRegistry'
 import { TYPO, RADIUS, SPACING } from '../../lib/themeTokens'
+import { DataIcon } from '../Icon'
 
 // ─────────────────────────────────────────────────────────────
 // 会議シェル (Phase 5d 骨格)
@@ -66,9 +67,10 @@ export default function MeetingShell({ meeting, weekStart, T, members = [], leve
         <div style={{
           width: 28, height: 28, borderRadius: 8,
           background: `${meeting.color || T?.accent}15`,
+          color: meeting.color || T?.accent,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 15, flexShrink: 0,
-        }}>{meeting.icon || '📋'}</div>
+          flexShrink: 0,
+        }}><DataIcon value={meeting.icon} size={15} fallback="note" /></div>
         <div style={{ ...TYPO.headline, color: T?.text, flex: 1 }}>{meeting.title}</div>
         {onExit && (
           <button onClick={onExit} style={{

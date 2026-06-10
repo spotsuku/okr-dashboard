@@ -22,6 +22,10 @@ import MyCoachPage from './MyCoachPage'
 import MyPageShell from './MyPageShell'
 import PortalPage from './PortalPage'
 import MorningMeetingPage from './MorningMeetingPage'
+import AnalyticsPage from './AnalyticsPage'
+import SuperAnalyticsPage from './SuperAnalyticsPage'
+import { setTrackContext, track, trackLoginOnce } from '../lib/track'
+import { authedFetch } from '../lib/authedFetch'
 import { computeKAKey } from '../lib/kaKey'
 import KASection from './KASection'
 import Icon, { DataIcon } from './Icon'
@@ -186,7 +190,7 @@ function Modal({ title, onClose, children }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: getT().bgCard, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
+        background: getT().bgCard, border: `1px solid ${getT().border}`, borderRadius: 10,
         padding: 26, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -209,7 +213,7 @@ function FInput({ label, value, onChange, placeholder, type = 'text' }) {
       {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         style={{
-          width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+          width: '100%', background: getT().sectionBg, border: `1px solid ${getT().border}`,
           borderRadius: 8, padding: '9px 12px', color: getT().text, fontSize: 13, outline: 'none',
           fontFamily: 'inherit', boxSizing: 'border-box',
         }} />
@@ -222,7 +226,7 @@ function FSelect({ label, value, onChange, options }) {
     <div style={{ marginBottom: 13 }}>
       {label && <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>{label}</div>}
       <select value={value} onChange={e => onChange(e.target.value)} style={{
-        width: '100%', background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)',
+        width: '100%', background: getT().bgCard2, border: `1px solid ${getT().border}`,
         borderRadius: 8, padding: '9px 12px', color: getT().text, fontSize: 13, outline: 'none',
         fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
       }}>
@@ -379,7 +383,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         <div style={{ marginBottom: 13 }}>
           <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>紐付け通期OKR <span style={{ color: '#ff6b6b' }}>*</span></div>
           <select value={parentId || ''} onChange={e => setParentId(e.target.value ? parseInt(e.target.value) : null)} style={{
-            width: '100%', background: getT().bgCard2, border: `1px solid ${parentId ? 'rgba(255,255,255,0.1)' : 'rgba(255,107,107,0.4)'}`,
+            width: '100%', background: getT().bgCard2, border: `1px solid ${parentId ? getT().border : 'rgba(255,107,107,0.4)'}`,
             borderRadius: 8, padding: '9px 12px', color: parentId ? '#e8eaf0' : '#505878', fontSize: 13,
             outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
           }}>
@@ -395,8 +399,8 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
       <div style={{ marginBottom: 13 }}>
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5 }}>オーナー</div>
         <select value={owner} onChange={e => setOwner(e.target.value)} style={{
-          width: '100%', background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 8, padding: '9px 12px', color: owner ? '#e8eaf0' : '#505878', fontSize: 13,
+          width: '100%', background: getT().bgCard2, border: `1px solid ${getT().border}`,
+          borderRadius: 8, padding: '9px 12px', color: owner ? getT().text : getT().textFaint, fontSize: 13,
           outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', cursor: 'pointer',
         }}>
           <option value="">-- 未設定 --</option>
@@ -408,7 +412,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
         <div style={{ fontSize: 11, color: getT().textMuted, marginBottom: 5, display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
           <Icon name="flag" size={12} /> プログラムタグ <span style={{ color: getT().textFaint }}>(複数可・週次MTGの絞り込みに使用 / 新規は「組織ページ → プログラム管理」で追加)</span>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', padding: 6, background: getT().bgCard2, border: `1px solid ${getT().border}`, borderRadius: 8 }}>
           {programTags.map(t => {
             const isOrphan = !allTags.includes(t)
             return (
@@ -465,7 +469,7 @@ function ObjForm({ initial, onSave, onClose, levels, activeLevelId, activePeriod
           <div key={key} style={{ background: getT().bgCard, border: `1px solid ${getT().border}`, borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 11, color: getT().textMuted }}>KR {i + 1}</span>
-              {krs.length > 1 && <Btn small danger variant="ghost" onClick={() => removeKR(key)}>削除</Btn>}
+              <Btn small danger variant="ghost" onClick={() => removeKR(key)}>削除</Btn>
             </div>
             <FInput value={kr.title} onChange={v => updateKR(key, 'title', v)} placeholder="KR のタイトル" />
             <div style={{ display: 'flex', gap: 8 }}>
@@ -1053,6 +1057,31 @@ export default function Dashboard({ user, onSignOut }) {
     window.history.replaceState(null, '', newUrl)
   }, [activePage, fiscalYear])
 
+  // 利用分析: org / user 確定時に計測コンテキストを設定し、ログインを1回記録
+  useEffect(() => {
+    if (!currentOrg?.id || !user?.email) return
+    setTrackContext({ organizationId: currentOrg.id, userEmail: user.email })
+    trackLoginOnce()
+  }, [currentOrg?.id, user?.email])
+
+  // 利用分析: 画面遷移を page_view として記録
+  useEffect(() => {
+    if (!currentOrg?.id || !user?.email) return
+    track('page_view', activePage)
+  }, [activePage, currentOrg?.id, user?.email])
+
+  // 運営 (SUPER_ADMIN_EMAILS) かどうかをサーバーに問い合わせ、組織横断分析の導線を出すか決める
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  useEffect(() => {
+    if (!user?.email) { setIsSuperAdmin(false); return }
+    let cancelled = false
+    authedFetch('/api/analytics/super?mode=access')
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (!cancelled) setIsSuperAdmin(!!j?.isSuperAdmin) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [user?.email])
+
   useEffect(() => {
     // currentOrg が確定するまでは何もしない (空配列で初期化されたまま)。
     // currentOrg が切り替わったら organization_id で絞り直して再ロードする。
@@ -1442,7 +1471,56 @@ export default function Dashboard({ user, onSignOut }) {
     if (error) alert('紐づけに失敗しました: ' + error.message)
   }
 
-  const hasGoogle = user?.identities?.some(i => i.provider === 'google')
+  // Google 連携解除: identity (Supabase Auth) + user_integrations (Gmail/Calendar/Drive 用 token) を可能な限り解除
+  // Supabase の Manual Linking 設定が無効でも、Workspace 連携の解除とログアウトは確実に実施する best-effort 設計
+  const handleUnlinkGoogle = async () => {
+    if (!window.confirm('Google 連携を解除しますか?\n\n以下が解除されます:\n・Gmail / Calendar / Drive アクセス権 (user_integrations)\n・Google 側の OAuth token (revoke 実施)\n・Supabase 認証の Google identity (Manual Linking が有効な場合のみ)\n\n解除後は自動でログアウトします。再連携したい場合は「Google でログイン」を再度実行してください。')) return
+    const notes = []
+    try {
+      // 1) Workspace 連携 (Gmail/Calendar/Drive 用の access/refresh token) を確実に削除
+      const myName = members.find(m => m.email === user?.email)?.name
+      if (myName) {
+        const { authedFetch } = await import('../lib/authedFetch')
+        const r = await authedFetch('/api/integrations/google/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ owner: myName, organization_id: currentOrg?.id }),
+        }).catch(() => null)
+        if (r && r.ok) notes.push('Gmail/Calendar/Drive 連携を解除')
+      }
+      // 2) Supabase Auth の identity を解除 (best-effort)
+      //    "Manual linking is disabled" 等で失敗しても integrations 削除は維持して継続
+      const googleIdentity = user?.identities?.find(i => i.provider === 'google')
+      if (googleIdentity) {
+        const { error: e1 } = await supabase.auth.unlinkIdentity(googleIdentity)
+        if (e1) {
+          if (/manual linking is disabled/i.test(e1.message || '')) {
+            notes.push('※ Supabase 認証 identity は解除されず (Manual Linking 設定無効)。ログアウトのみ実施')
+          } else if (/last identity|only identity/i.test(e1.message || '')) {
+            notes.push('※ Google identity は唯一の認証手段のため解除不可')
+          } else {
+            notes.push(`※ identity 解除エラー: ${e1.message}`)
+          }
+        } else {
+          notes.push('Supabase identity を解除')
+        }
+      }
+      alert(`完了:\n${notes.join('\n')}\n\nログアウトします。`)
+      try { await supabase.auth.signOut() } catch { /* noop */ }
+      window.location.href = '/signin'
+    } catch (e) {
+      alert('解除中にエラー: ' + (e.message || e))
+    }
+  }
+
+  // Google 連携判定: user.identities が stale でも検出できるよう 3 か所を OR で確認
+  // (Supabase は identity を identities / app_metadata.provider / app_metadata.providers の
+  //  どこかに入れる。タイミングによって片方しか反映されないことがある)
+  const hasGoogle = !!(
+    user?.identities?.some(i => i.provider === 'google') ||
+    user?.app_metadata?.provider === 'google' ||
+    (user?.app_metadata?.providers || []).includes('google')
+  )
 
   const periods = [
     { key: 'q1', label: 'Q1' }, { key: 'q2', label: 'Q2' },
@@ -1679,15 +1757,41 @@ export default function Dashboard({ user, onSignOut }) {
                     <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                   </>
                 )}
+                {isRealAdmin && (
+                  <button onClick={() => setActivePage('analytics')} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'analytics' ? T.accentBg : 'transparent', color: activePage === 'analytics' ? T.accent : T.text, fontSize: 12, fontFamily: 'inherit', fontWeight: activePage === 'analytics' ? 700 : 400 }}>
+                    <Icon name="chart" size={13} /> 利用分析
+                  </button>
+                )}
+                {isSuperAdmin && (
+                  <button onClick={() => setActivePage('superanalytics')} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: activePage === 'superanalytics' ? T.accentBg : 'transparent', color: activePage === 'superanalytics' ? T.accent : T.text, fontSize: 12, fontFamily: 'inherit', fontWeight: activePage === 'superanalytics' ? 700 : 400 }}>
+                    <Icon name="chart" size={13} /> 全体分析（運営）
+                  </button>
+                )}
                 <button onClick={() => setActivePage('bulk')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>一括登録</button>
                 <button onClick={() => setActivePage('csv')} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>CSV登録</button>
-                {hasGoogle
-                  ? <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
-                  : <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
-                }
+                {/* Google 連携: 状態表示 + リンク追加/解除を常に併記
+                    user.identities が stale な場合があるため、解除ボタンは hasGoogle に関わらず常時表示 */}
+                {hasGoogle && (
+                  <div style={{ padding: '7px 12px', fontSize: 11, color: T.accent, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Google連携済み</div>
+                )}
+                {!hasGoogle && (
+                  <button onClick={handleLinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit' }}>Google連携</button>
+                )}
+                <button onClick={handleUnlinkGoogle} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.textSub, fontSize: 11, fontFamily: 'inherit' }}>Google連携を解除</button>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/lp" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.text, fontSize: 12, textDecoration: 'none' }}>サービス紹介を見る</a>
                 <button onClick={() => window.dispatchEvent(new CustomEvent('okr:start-tour'))} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="search" size={12} /> ツアーをもう一度見る</button>
+                {/* リリース前テスト: 初回ログイン体験を完全リセット (始業ゲート/ツアー/ホーム7ステップを全てクリア) */}
+                <button onClick={() => {
+                  if (!window.confirm('初回ログイン体験を完全リセットします。\n\n以下が全てリセットされ、新規ユーザーと同じ体験になります:\n・スポットライトツアー (再生)\n・ホームの7ステップ案内 (再表示)\n・始業ゲートのスキップ (本日中、再有効)\n\nアカウント作成不要で何度でも確認できます。続行しますか?')) return
+                  try {
+                    localStorage.removeItem('onboarding_v1_completed')
+                    localStorage.removeItem(`home_onboarding_dismissed_${user?.email || 'guest'}`)
+                    localStorage.removeItem('home_onb_seen_okr')
+                  } catch { /* noop */ }
+                  // ページリロードして「新規ユーザーと同じ初期状態」を再現
+                  window.location.href = '/?page=portal'
+                }} style={{ width: '100%', textAlign: 'left', padding: '7px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'transparent', color: T.text, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="refresh" size={12} /> 初回ログイン体験を完全リセット (テスト用)</button>
                 <div style={{ height: 1, background: T.border, margin: '4px 0' }} />
                 <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>プライバシーポリシー</a>
                 <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '7px 12px', borderRadius: 6, color: T.textSub, fontSize: 11, textDecoration: 'none' }}>利用規約</a>
@@ -1813,6 +1917,8 @@ export default function Dashboard({ user, onSignOut }) {
       {activePage === 'bulk' && <BulkRegisterPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} />}
       {activePage === 'weekly' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><WeeklyMTGPage levels={levels} themeKey={themeKey} fiscalYear={fiscalYear} user={user} initialPeriod={activePeriod} forceMode="facilitation" /></div>}
       {activePage === 'morning' && <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}><MorningMeetingPage user={user} members={members} themeKey={themeKey} /></div>}
+      {activePage === 'analytics' && isRealAdmin && <AnalyticsPage T={T} themeKey={themeKey} />}
+      {activePage === 'superanalytics' && isSuperAdmin && <SuperAnalyticsPage T={T} themeKey={themeKey} />}
       {activePage === 'csv' && <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}><CsvPage levels={levels} fiscalYear={fiscalYear} /></div>}
       {activePage === 'myokr' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyOKRPageNew user={user} levels={levels} members={members} themeKey={themeKey} fiscalYear={fiscalYear} onAIFeedback={(msg) => { setInitialAIMessage(msg); setShowAI(true) }} /></div>}
       {activePage === 'mytasks' && <div style={{ flex: 1, overflow: 'hidden', display:'flex' }}><MyTasksPage user={user} members={members} themeKey={themeKey} initialViewMode={taskViewMode} onViewModeChange={setTaskViewMode} /></div>}

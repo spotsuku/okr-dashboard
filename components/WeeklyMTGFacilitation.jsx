@@ -1760,15 +1760,25 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         }
         // フィルタ後の KA から、表示用の対象 obj を再構築 (KA に紐付くものだけ)
         const krsById = new Map(krs.map(k => [Number(k.id), k]))
+        // KA の「実効 Objective」を解決: KR があり、その KR の現在 obj が scope 内なら
+        // KR の obj を優先。それ以外は KA.objective_id (scope 内チェック付き)。
+        // 旧実装は matchObjIds と grouping で別ロジックを使っていたため、
+        // 「KA.objective_id と KR.objective_id が異なる」ケースで KA が消えていた。
+        const resolveEffectiveObjId = (ka) => {
+          if (ka.kr_id) {
+            const kr = krsById.get(Number(ka.kr_id))
+            if (kr && kr.objective_id != null && objsById.has(Number(kr.objective_id))) {
+              return Number(kr.objective_id)
+            }
+          }
+          const oid = Number(ka.objective_id)
+          return objsById.has(oid) ? oid : null
+        }
+        const kaEffectiveObjId = new Map(kas.map(k => [Number(k.id), resolveEffectiveObjId(k)]))
         const matchObjIds = new Set()
         for (const ka of kas) {
-          // KA.objective_id を採用。もし KR.objective_id と異なる場合、KR の現在の
-          // objective_id を優先 (KA に紐付く obj として認識される)
-          const kr = ka.kr_id ? krsById.get(Number(ka.kr_id)) : null
-          const targetObjId = kr?.objective_id ?? ka.objective_id
-          if (targetObjId != null && objsById.has(Number(targetObjId))) {
-            matchObjIds.add(Number(targetObjId))
-          }
+          const oid = kaEffectiveObjId.get(Number(ka.id))
+          if (oid != null) matchObjIds.add(oid)
         }
         const objs = (objsAll || []).filter(o => matchObjIds.has(Number(o.id)))
         const allObjIds = objs.map(o => o.id)
@@ -1791,7 +1801,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
           }).sort((a, b) => a.id - b.id)
           for (const o of teamObjs) {
             const objKas = kas
-              .filter(k => Number(k.objective_id) === Number(o.id))
+              .filter(k => kaEffectiveObjId.get(Number(k.id)) === Number(o.id))
               .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
             for (const ka of objKas) {
               const kr = krs.find(k => Number(k.id) === Number(ka.kr_id)) || null

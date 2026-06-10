@@ -836,7 +836,12 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
   const handleKRUpdate = async (krId, fields) => {
     const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
     if (error) { console.error('KR update failed:', error); return false }
-    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    // archived_at がセットされた場合は一覧から除外 (再fetch せずに即座に非表示にする)
+    if (fields.archived_at) {
+      setKeyResults(p => p.filter(kr => kr.id !== krId))
+    } else {
+      setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    }
     return true
   }
   // 会議中の共同編集と同様、閲覧中が自分のときのみ編集可。
@@ -997,7 +1002,10 @@ export default function MyOKRPage({ user, levels, members, themeKey = 'dark', fi
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? 8 : 10, background:wT().bg, display: isMobile && activeObjId ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ ...TYPO.caption, color:wT().textMuted, textTransform:'uppercase', marginBottom:SPACING.sm, display:'inline-flex', alignItems:'center', gap:5 }}><Icon name="target" size={11} /> マイObjective（{visibleObjs.length}件）</div>
           {visibleObjs.length === 0 && (
-            <div style={{ fontSize:TYPO.subhead.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px' }}>Objectiveがありません</div>
+            <div style={{ fontSize:TYPO.subhead.fontSize, color:wT().textFaintest, fontStyle:'italic', padding:'10px 4px', lineHeight: 1.6 }}>
+              Objective がありません<br />
+              <span style={{ fontSize: TYPO.caption.fontSize, color: wT().textMuted }}>PC 版で OKR を追加すると表示されます</span>
+            </div>
           )}
           {visibleObjs.map(obj => {
             const isActive = Number(activeObjId) === Number(obj.id)

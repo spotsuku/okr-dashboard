@@ -17,7 +17,9 @@ import { getIntegration, callGoogleApiWithRetry, json } from '../../_shared'
 
 const MODEL = 'claude-sonnet-4-5'
 const MAX_STEPS = 8
-const MAX_READ_CHARS = 20000  // AI に渡す最大本文文字数 (tokens 節約)
+const MAX_READ_CHARS = 12000  // AI に渡す最大本文文字数 (tokens 節約)
+const MAX_TOOL_RESULT_CHARS = 8000  // 個々の tool_result を切り詰める (tokens 節約)
+const MAX_HISTORY_TURNS = 6  // 直近 N ターンの履歴のみ送る (1分あたりレート制限対策)
 
 function getDriveId() { return process.env.NEO_FUKUOKA_DRIVE_ID || '' }
 function escapeQuery(q) { return q.replace(/\\/g, '\\\\').replace(/'/g, "\\'") }
@@ -193,8 +195,10 @@ async function handlePost(request) {
 
 ツールは最大 ${MAX_STEPS} ステップまで連続実行できます。無駄な検索を避け、最初に name_only=true で絞ると効率的です。`
 
+  // 履歴は直近 N ターンに制限 (Anthropic の 1分あたり入力トークン制限を超えないため)
+  const trimmedHistory = Array.isArray(history) ? history.slice(-MAX_HISTORY_TURNS) : []
   const messages = [
-    ...history.map(h => ({ role: h.role, content: h.content })),
+    ...trimmedHistory.map(h => ({ role: h.role, content: h.content })),
     { role: 'user', content: message },
   ]
 
@@ -203,9 +207,15 @@ async function handlePost(request) {
   let finalText = ''
   let lastInterimText = ''  // ループ中の interim text (step 上限到達時のフォールバックで使用)
 
-  async function callAnthropicWithRetry(requestBody, maxRetries = 4) {
-    let lastStatus = 0, lastRaw = ''
+  // 関数全体の wall-clock budget (Vercel 60s 制限。50s で打ち切り)
+  const REQ_START = Date.now()
+  const WALL_CLOCK_BUDGET_MS = 50_000
+  const remainingMs = () => WALL_CLOCK_BUDGET_MS - (Date.now() - REQ_START)
+
+  async function callAnthropicWithRetry(requestBody, maxRetries = 3) {
+    let lastStatus = 0, lastRaw = '', lastRetryAfter = 0
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (remainingMs() < 5_000) break
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -218,17 +228,28 @@ async function handlePost(request) {
       if (r.ok) return { ok: true, data: await r.json() }
       lastStatus = r.status
       lastRaw = await r.text()
+      const retryAfterHeader = Number(r.headers.get('retry-after') || 0)
+      if (retryAfterHeader) lastRetryAfter = retryAfterHeader
       if ([429, 500, 502, 503, 504, 529].includes(r.status) && attempt < maxRetries - 1) {
-        const delayMs = Math.min(8000, 1000 * Math.pow(2, attempt))
-        await new Promise(res => setTimeout(res, delayMs))
+        // 429: retry-after 尊重。ただし残り時間予算を超える場合は諦める。
+        const want = r.status === 429
+          ? (retryAfterHeader ? retryAfterHeader * 1000 : (12_000 + attempt * 12_000))
+          : Math.min(8000, 1000 * Math.pow(2, attempt))
+        const budget = Math.max(0, remainingMs() - 8_000)
+        if (want > budget) break
+        await new Promise(res => setTimeout(res, want))
         continue
       }
       break
     }
-    return { ok: false, status: lastStatus, raw: lastRaw }
+    return { ok: false, status: lastStatus, raw: lastRaw, retryAfter: lastRetryAfter }
   }
 
   for (let step = 0; step < MAX_STEPS; step++) {
+    if (remainingMs() < 6_000) {
+      finalText = finalText || '⏱️ AI 応答が時間内に収まりませんでした。質問を絞り込んで再度お試しください。'
+      break
+    }
     const r = await callAnthropicWithRetry({
       model: MODEL,
       max_tokens: 2048,
@@ -237,9 +258,15 @@ async function handlePost(request) {
       messages,
     })
     if (!r.ok) {
-      const friendly = r.status === 529
-        ? 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
-        : `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      let friendly
+      if (r.status === 429) {
+        const waitSec = r.retryAfter || 60
+        friendly = `AI の利用上限に達しました (1分あたりの入力トークン制限)。約 ${waitSec} 秒後に再試行してください。会話履歴をクリアすると上限に達しにくくなります。`
+      } else if (r.status === 529) {
+        friendly = 'Anthropic API が一時的に過負荷状態です (529)。数分後に再試行してください。'
+      } else {
+        friendly = `Anthropic API ${r.status}: ${r.raw.slice(0, 300)}`
+      }
       return json({ error: friendly, actions }, { status: 503 })
     }
     const data = r.data
@@ -279,7 +306,7 @@ async function handlePost(request) {
       toolResults.push({
         type: 'tool_result',
         tool_use_id: tu.id,
-        content: JSON.stringify(result).slice(0, 16000),
+        content: JSON.stringify(result).slice(0, MAX_TOOL_RESULT_CHARS),
         is_error: !result.ok,
       })
     }

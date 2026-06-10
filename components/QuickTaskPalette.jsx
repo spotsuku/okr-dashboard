@@ -121,7 +121,7 @@ function Kbd({ children }) {
   return <span style={{ display: 'inline-block', minWidth: 14, padding: '2px 6px', ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', fontFamily: 'ui-monospace, monospace', background: T.border, borderRadius: RADIUS.xs, color: T.textMuted }}>{children}</span>
 }
 
-export default function QuickTaskPalette({ user, members = [], inline = false }) {
+export default function QuickTaskPalette({ user, members = [], inline = false, defaultDueDate = null }) {
   const myName = React.useMemo(() => members.find(m => m.email === user?.email)?.name || '', [members, user])
   const [open, setOpen] = React.useState(false)
   const [draft, setDraft] = React.useState('')
@@ -184,20 +184,48 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
       members.find(m => m.name === resolvedAssignee)?.email ||
       (resolvedAssignee === myName ? user?.email : '') || ''
     ).toLowerCase()
+    // 日付: 自然文に日付指定があればそれ、無ければ defaultDueDate (始業モーダル等で渡される)、
+    // 両方無ければ未設定 (== いつでも)
+    const dueDate = parsed.date ? fmtDate(parsed.date) : (defaultDueDate || null)
     const base = {
       title: parsed.title,
       assignee: resolvedAssignee || '',
       status: 'not_started',
       done: false,
-      ...(parsed.date ? { due_date: fmtDate(parsed.date) } : {}),
+      ...(dueDate ? { due_date: dueDate } : {}),
     }
-    let { error } = await supabase.from('ka_tasks').insert({ ...base, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
-    // assignee_email 列が無い古い環境向けフォールバック (列なしで再挿入)
-    if (error && /assignee_email|column/i.test(error.message || '')) {
-      ;({ error } = await supabase.from('ka_tasks').insert(base))
+    // モバイル回線等で fetch が失敗 (TypeError: Load failed) するケースに備えて 1 回リトライ
+    // 列欠落 (assignee_email / status 等) のスキーマ差分も順次フォールバック
+    async function tryInsert() {
+      try {
+        let res = await supabase.from('ka_tasks').insert({ ...base, ...(assigneeEmail ? { assignee_email: assigneeEmail } : {}) })
+        if (res.error && /assignee_email|column/i.test(res.error.message || '')) {
+          res = await supabase.from('ka_tasks').insert(base)
+        }
+        // status 列が無い古い環境
+        if (res.error && /['"]?status['"]?|column.*status/i.test(res.error.message || '')) {
+          const { status: _drop, ...baseNoStatus } = base
+          res = await supabase.from('ka_tasks').insert(baseNoStatus)
+        }
+        return res
+      } catch (e) {
+        return { error: { message: e.message || String(e), _network: true } }
+      }
     }
+    let result = await tryInsert()
+    if (result.error && (result.error._network || /TypeError|Load failed|Failed to fetch|NetworkError/i.test(result.error.message || ''))) {
+      await new Promise(r => setTimeout(r, 1500))
+      result = await tryInsert()
+    }
+    const { error } = result
     setSaving(false)
-    if (error) { alert('タスク追加に失敗しました: ' + error.message); return }
+    if (error) {
+      const isNetwork = error._network || /TypeError|Load failed|Failed to fetch|NetworkError/i.test(error.message || '')
+      alert(isNetwork
+        ? 'ネットワーク接続が不安定なためタスクを追加できませんでした。電波状況を確認して再度お試しください。'
+        : 'タスク追加に失敗しました: ' + error.message)
+      return
+    }
     window.dispatchEvent(new CustomEvent('okr:task-created', { detail: { count: 1 } }))
     if (keepOpen) { setDraft(''); setTimeout(() => inputRef.current?.focus(), 10) }
     else { setOpen(false); setDraft('') }
@@ -226,7 +254,6 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
 
   // ─── インライン版 (マイページ常時表示用のコンパクトバー) ───
   if (inline) {
-    const TEMPLATES = ['1on1の議事録', '経費精算', '〇〇さんへ返信', '振り返りメモ', 'KR進捗を更新']
     return (
       <div style={{ ...cardStyle({ T, padding: 0 }), borderRadius: RADIUS.xl, border: `1px solid ${T.border}`, background: T.bgCard, fontFamily: '"Inter","Noto Sans JP",system-ui,sans-serif', color: T.text }}>
         <div style={{ padding: '12px 16px 2px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -244,21 +271,15 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
             style={{ flex: 1, minWidth: 150, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, color: T.text, fontFamily: 'inherit', padding: '4px 0' }} />
           {parsed.dateLabel && pill(TONE.date, <><Icon name="calendar" size={11} /> {parsed.dateLabel}</>)}
           {parsed.goal && pill(TONE.goal, <><Icon name="target" size={11} /> {parsed.goal}</>)}
-          <button onClick={() => add(false)} disabled={!parsed.title || saving} style={{
+          <button onClick={() => {
+            if (!parsed.title) { inputRef.current?.focus(); return }
+            add(false)
+          }} disabled={saving} style={{
             ...btnBrand({ size: 'sm' }),
-            ...(parsed.title ? {} : { background: T.textFaint, boxShadow: 'none' }),
+            ...(parsed.title && !saving ? {} : { background: T.textFaint, boxShadow: 'none', opacity: 0.55 }),
             cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
             display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
-          }}>{saving ? '追加中…' : <>追加 <Icon name="arrowRight" size={13} /></>}</button>
-        </div>
-        <div style={{ padding: '0 14px 12px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...TYPO.caption, color: T.textMuted }}>テンプレ:</span>
-          {TEMPLATES.map(t => (
-            <button key={t} onClick={() => { setDraft(t); setTimeout(() => inputRef.current?.focus(), 10) }} style={{
-              ...TYPO.caption, padding: '4px 10px', borderRadius: RADIUS.pill,
-              border: `1px solid ${T.border}`, background: 'transparent', color: T.textSub, cursor: 'pointer', fontFamily: 'inherit',
-            }}>{t}</button>
-          ))}
+          }} title={parsed.title ? '' : '左の入力欄にタスクを入力してください'}>{saving ? '追加中…' : <>追加 <Icon name="arrowRight" size={13} /></>}</button>
         </div>
       </div>
     )
@@ -322,9 +343,12 @@ export default function QuickTaskPalette({ user, members = [], inline = false })
           display: 'flex', alignItems: 'center', gap: SPACING.sm + 2,
           flexWrap: isMobile ? 'wrap' : 'nowrap',
         }}>
-          <button onClick={() => add(false)} disabled={!parsed.title || saving} style={{
+          <button onClick={() => {
+            if (!parsed.title) { inputRef.current?.focus(); return }
+            add(false)
+          }} disabled={saving} style={{
             ...btnBrand({ size: 'md' }),
-            ...(parsed.title ? {} : { background: T.textFaint, boxShadow: 'none' }),
+            ...(parsed.title && !saving ? {} : { background: T.textFaint, boxShadow: 'none', opacity: 0.55 }),
             cursor: parsed.title && !saving ? 'pointer' : 'not-allowed',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
             ...(isMobile ? { flex: '1 1 100%' } : {}),

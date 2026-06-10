@@ -17,6 +17,90 @@ import * as React from 'react'
 
 const STORAGE_KEY = 'onboarding_v1_completed'
 
+// モバイル判定 (viewport が 768 以下)。ツアー開始時に1回だけ判定する。
+function isMobileViewport() {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(max-width: 768px)').matches
+}
+
+// ─── モバイル用ステップ ─────────────────────────────────
+// スマホでは desktop ヘッダーが非表示で、Dashboard.activePage が 'mycoach' に固定される。
+// そのため MyPageShell 内の要素 (ボトムナビ / 左ドロワー / MyCOO オーブ / 主要ブロック) を案内する。
+const MOBILE_STEPS = [
+  {
+    target: null,
+    title: 'AI WorkSpace へようこそ 👋',
+    body: 'スマホ版では「ワークスペース」を中心に、タスク・メール・カレンダー・振り返りなど 1 日の仕事を 1 画面で行えます。主要ポイントを順に紹介します。',
+    placement: 'center',
+  },
+  {
+    target: '[data-tour="mobile-sidebar-btn"]',
+    title: 'メンバー一覧 / 各機能',
+    body: '左上のボタンから組織メンバーの一覧や、ダッシュボード・OKR・週次MTG など各機能へ移動できます。',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="mobile-nav-dashboard"]',
+    mycoachDashboard: true,
+    title: 'マイページ (ダッシュボード)',
+    body: '自分の今日のタスク・OKR・予定をまとめて確認できる起点画面です。',
+    placement: 'top',
+  },
+  {
+    target: '[data-tour="ws-today"]',
+    mycoachDashboard: true,
+    title: '今日やること',
+    body: '今日が期限・着手すべきタスクが集まります。チェックでそのまま完了にできます。',
+    placement: 'top',
+  },
+  {
+    target: '[data-tour="mobile-nav-wbs"]',
+    title: 'タスク',
+    body: 'ガントチャート風のタスク管理。期日・優先度・担当を整理し進捗を可視化できます。',
+    placement: 'top',
+  },
+  {
+    target: '[data-tour="mobile-nav-mail"]',
+    title: 'メール',
+    body: 'Gmail と連携して返信が必要なメールを抽出表示。「AI返信」でその場で下書きも作れます。',
+    placement: 'top',
+  },
+  {
+    target: '[data-tour="mobile-nav-calendar"]',
+    title: 'カレンダー',
+    body: 'Google カレンダーの直近の予定を確認できます。今日の空き時間を意識して動けます。',
+    placement: 'top',
+  },
+  {
+    target: '[data-tour="mobile-nav-retrospect"]',
+    title: '振り返り',
+    body: 'Keep / Problem / Try で 1 日や 1 週間の振り返りを記録できます。継続でバッジが付きます。',
+    placement: 'top',
+  },
+  {
+    target: '[data-tour="mycoo-orb"]',
+    title: 'MyCOO (AI コンパニオン)',
+    body: '右下のオーブはあなた専用の AI コーチです。タップしていつでも相談・タスク作成・要約などを依頼できます。',
+    placement: 'top',
+  },
+  {
+    // 体験ステップ: 実際にクイックタスク追加を試してもらう
+    // タスクが作成されたら自動で次のステップへ (okr:task-created を listen)
+    target: '[data-tour="quick-task"]',
+    mycoachDashboard: true,
+    interactive: 'create-task',
+    title: '実際に試してみましょう ✨',
+    body: '下の「クイックタスク追加」に、例えば「明日 14時 営業報告を作成」のように自然文で入力して「追加」を押してください。日付・KR を自動解析してタスク化します。完了すると自動で次に進みます。',
+    placement: 'top',
+  },
+  {
+    target: null,
+    title: '準備完了 🎉',
+    body: 'お疲れさまでした!作成したタスクは「今日やること」に並びます。途中で見直したい時はメニューからツアーを再生できます。',
+    placement: 'center',
+  },
+]
+
 const STEPS = [
   {
     target: '[data-tour="brand"]',
@@ -141,6 +225,16 @@ export default function OnboardingTour({ onNavigate }) {
   const [active, setActive] = React.useState(false)
   const [idx, setIdx] = React.useState(0)
   const [rect, setRect] = React.useState(null)
+  // モバイル判定 (再レンダー時にも追従させる)
+  const [mobile, setMobile] = React.useState(false)
+  React.useEffect(() => {
+    function update() { setMobile(isMobileViewport()) }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  // モバイルとデスクトップで別のステップセットを使う
+  const STEP_LIST = mobile ? MOBILE_STEPS : STEPS
 
   // 初期表示判定
   React.useEffect(() => {
@@ -164,7 +258,7 @@ export default function OnboardingTour({ onNavigate }) {
   // ステップに対応するタブへ実際に移動する
   React.useEffect(() => {
     if (!active) return
-    const step = STEPS[idx]
+    const step = STEP_LIST[idx]
     if (step.page && typeof onNavigate === 'function') onNavigate(step.page)
     // ワークスペース内ブロックのステップは、全社サマリーではなく
     // 個人ダッシュボードを開くよう MyPageShell に依頼する
@@ -174,11 +268,26 @@ export default function OnboardingTour({ onNavigate }) {
     }
   }, [active, idx, onNavigate])
 
+  // 体験ステップ (interactive='create-task') のとき、実際にタスクが作成されたら
+  // 自動で次のステップへ進める。これにより「説明だけで終わらない実体験ツアー」が成立する。
+  React.useEffect(() => {
+    if (!active) return
+    const step = STEP_LIST[idx]
+    if (step?.interactive !== 'create-task') return
+    function onTaskCreated() {
+      // 少し待ってから次へ (ユーザーがタスク追加の視覚フィードバックを見れるように)
+      setTimeout(() => next(), 600)
+    }
+    window.addEventListener('okr:task-created', onTaskCreated)
+    return () => window.removeEventListener('okr:task-created', onTaskCreated)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, idx])
+
   // ステップ対象を画面内へスクロール (モバイルの横スクロールナビ等で
   // 対象ボタンが画面外にあるとハイライトがずれるため)
   React.useEffect(() => {
     if (!active) return
-    const step = STEPS[idx]
+    const step = STEP_LIST[idx]
     if (!step.target) return
     const el = document.querySelector(step.target)
     if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' })
@@ -187,7 +296,7 @@ export default function OnboardingTour({ onNavigate }) {
   // 対象要素の位置を取得 (リサイズ / スクロール対応)
   React.useEffect(() => {
     if (!active) return
-    const step = STEPS[idx]
+    const step = STEP_LIST[idx]
     function compute() {
       if (!step.target) { setRect(null); return }
       const el = document.querySelector(step.target)
@@ -222,8 +331,8 @@ export default function OnboardingTour({ onNavigate }) {
 
   // 表示可能なステップだけを対象にする。対象要素が DOM に無い/非表示の
   // ステップ (フィーチャーフラグで隠れたタブ・モバイルで非表示の要素など) はスキップ。
-  const showable = STEPS.map((_, i) => i).filter(i => stepShowable(STEPS[i]))
-  const step = STEPS[idx]
+  const showable = STEP_LIST.map((_, i) => i).filter(i => stepShowable(STEP_LIST[i]))
+  const step = STEP_LIST[idx]
   const total = showable.length
   const pos = showable.indexOf(idx)
   const isLast = pos === -1 || pos === total - 1

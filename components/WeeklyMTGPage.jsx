@@ -12,6 +12,7 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
+import MeetingShell from './meetings/MeetingShell'
 import Icon, { DataIcon } from './Icon'
 import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
 import KATableHeader from './okr/KATableHeader'
@@ -274,16 +275,37 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return levels.find(l => l.name === name) || null
   }
 
+  // 会議を key で取得 (DB 由来の組織会議 + 静的 MEETINGS をマージ)
+  //   - 両方に存在: DB の表示属性 (title/icon/color/modules) を優先しつつ、
+  //                weeklyMTG は static → DB の順でマージ (DB が指定した部分のみ上書き)
+  //                → DB 行に target_filter が無くても静的 scope/flow が補完され、会議が開ける
+  //   - 片方だけ:   そちらをそのまま採用
+  const lookupMeeting = (meetingKey) => {
+    const dbMeeting = (orgMeetings || []).find(m => m.key === meetingKey)
+    const staticMeeting = getMeeting(meetingKey)
+    if (dbMeeting && staticMeeting) {
+      return {
+        ...staticMeeting,
+        ...dbMeeting,
+        weeklyMTG: { ...(staticMeeting.weeklyMTG || {}), ...(dbMeeting.weeklyMTG || {}) },
+      }
+    }
+    return dbMeeting || staticMeeting
+  }
+
   // 会議を選択 → フィルタを設定
   const selectMeeting = (meetingKey) => {
-    const m = getMeeting(meetingKey)
-    if (!m?.weeklyMTG) return
+    const m = lookupMeeting(meetingKey)
+    if (!m) return
+    // weeklyMTG が未設定の組織追加会議でも、最低限の空オブジェクトで会議画面に入れるようにする
+    // (モジュール未設定の場合は MeetingShell 側の案内が出る)
+    const w = m.weeklyMTG || {}
     setActiveMeetingKey(meetingKey)
     setActiveObjId(null)
-    if (m.weeklyMTG.levelName) {
-      const lvl = findLevelByName(m.weeklyMTG.levelName)
+    if (w.levelName) {
+      const lvl = findLevelByName(w.levelName)
       setActiveLevelId(lvl?.id || null)
-    } else if (m.weeklyMTG.levelSelect === 'department') {
+    } else if (w.levelSelect === 'department') {
       setActiveLevelId(null) // 事業部をユーザーに選ばせる
     } else {
       setActiveLevelId(null) // 全社
@@ -319,7 +341,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
+  const currentMeeting = activeMeetingKey ? lookupMeeting(activeMeetingKey) : null
   // マネージャー定例などで事業部を選んでいない状態
   const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
 
@@ -553,7 +575,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const handleKRUpdate = async (krId, fields) => {
     const { error } = await supabase.from('key_results').update(fields).eq('id', krId)
     if (error) { console.error('KR update failed:', error); return false }
-    setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    // archived_at セット時は一覧から除外 (即座に非表示)
+    if (fields.archived_at) {
+      setKeyResults(p => p.filter(kr => kr.id !== krId))
+    } else {
+      setKeyResults(p => p.map(kr => kr.id === krId ? { ...kr, ...fields } : kr))
+    }
     return true
   }
 
@@ -818,7 +845,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
   const meetingColor = currentMeeting?.color || '#4d9fff'
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', flex:1, width:'100%', minWidth:0, background:wT().bg, color:wT().text, fontFamily:'system-ui,sans-serif' }}>
       {/* 会議コンテキストバー (forceMode='list' = OKRタブ「週次」埋め込み時のみ非表示)
           forceMode='facilitation' (週次MTG ナビ) では従来通り表示 */}
       {forceMode !== 'list' && (
@@ -899,15 +926,30 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
       {/* ── ファシリモードならステップ式UI、一覧モードなら従来3ペイン ── */}
       {mtgMode === 'facilitation' ? (
-        <WeeklyMTGFacilitation
-          meeting={currentMeeting}
-          weekStart={activeWeek}
-          levels={levels}
-          members={members}
-          myName={myName}
-          themeKey={themeKey}
-          onSwitchToList={() => setMtgMode('list')}
-        />
+        // モジュールベースの新形式会議は MeetingShell で起動する
+        // (旧 weeklyMTG.flow は無く modules 配列で構成される会議。判定基準は
+        //  「modules が 1 件以上ある かつ weeklyMTG.flow が設定されてない」)
+        ((currentMeeting?.modules || []).length > 0 && !currentMeeting?.weeklyMTG?.flow)
+          ? (
+            <MeetingShell
+              meeting={currentMeeting}
+              weekStart={activeWeek}
+              T={wT()}
+              members={members}
+              levels={levels}
+              onExit={() => setMtgMode('list')}
+            />
+          ) : (
+            <WeeklyMTGFacilitation
+              meeting={currentMeeting}
+              weekStart={activeWeek}
+              levels={levels}
+              members={members}
+              myName={myName}
+              themeKey={themeKey}
+              onSwitchToList={() => setMtgMode('list')}
+            />
+          )
       ) : (
       <>
       {/* 週タブ：会議日を主表示 */}
@@ -950,7 +992,12 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         {/* Objective一覧 */}
         <div style={{ width: isMobile ? '100%' : isTablet ? 220 : 260, flexShrink: isMobile ? 1 : 0, borderRight: isMobile ? 'none' : `1px solid ${wT().border}`, overflowY:'auto', padding: isMobile ? SPACING.sm : SPACING.sm + 2, background:wT().bg, display: isMobile && mobilePanel !== 'list' ? 'none' : 'block', flex: isMobile ? 1 : 'none' }}>
           <div style={{ ...TYPO.caption, color:wT().accent, fontWeight:700, textTransform:'uppercase', marginBottom:SPACING.sm }}>Objective ({activeObjs.length}件)</div>
-          {visibleObjs.length===0 && <div style={{ ...TYPO.subhead, fontWeight:500, color:wT().textFaintest, fontStyle:'italic', padding:`${SPACING.sm + 2}px ${SPACING.xs}px` }}>Objectiveがありません</div>}
+          {visibleObjs.length===0 && (
+            <div style={{ ...TYPO.subhead, fontWeight:500, color:wT().textFaintest, fontStyle:'italic', padding:`${SPACING.sm + 2}px ${SPACING.xs}px`, lineHeight: 1.6 }}>
+              Objective がありません<br />
+              <span style={{ ...TYPO.caption, color: wT().textMuted, fontStyle: 'normal' }}>PC 版で OKR を追加すると表示されます</span>
+            </div>
+          )}
 
           {/* アクティブなObjective */}
           {activeObjs.map(obj => {
@@ -1003,7 +1050,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
         </div>
 
         {/* 右：KR + KA詳細 */}
-        <div style={{ flex:1, overflowY:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && mobilePanel !== 'detail' ? 'none' : 'block' }}>
+        <div style={{ flex:1, minWidth: 0, overflowY:'auto', overflowX:'auto', padding: isMobile ? '10px' : '14px 16px', background:wT().bgCard2, display: isMobile && mobilePanel !== 'detail' ? 'none' : 'block' }}>
           {isMobile && mobilePanel === 'detail' && (
             <button onClick={() => setMobilePanel('list')} style={{ marginBottom: SPACING.sm, padding: `6px ${SPACING.md}px`, borderRadius: RADIUS.xs + 1, border: `1px solid ${wT().border}`, background: 'transparent', color: wT().textSub, ...TYPO.subhead, fontWeight:500, cursor: 'pointer', fontFamily: 'inherit', display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="chevronL" size={13} /> Objective一覧に戻る</button>
           )}

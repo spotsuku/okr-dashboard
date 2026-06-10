@@ -130,6 +130,47 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
 
   // 空き枠タップ → 予定作成フォーム { ymd, startMin, endMin }
   const [createSlot, setCreateSlot] = useState(null)
+  // 編集対象イベント (クリック時に開く)
+  const [editingEvent, setEditingEvent] = useState(null)
+  // 削除中ステータス (ボタン無効化用)
+  const [deletingId, setDeletingId] = useState(null)
+
+  // イベントを移動 (ドラッグ後の PATCH 実行)。失敗時は元に戻すため throw する。
+  const patchEvent = useCallback(async ({ ownerName, eventId, start_iso, end_iso }) => {
+    const r = await fetch('/api/integrations/calendar/event', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner: ownerName,
+        event_id: eventId,
+        updates: { start_iso, end_iso },
+        organization_id: orgId,
+      }),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+    return j
+  }, [orgId])
+
+  // イベント削除
+  const deleteEvent = useCallback(async ({ ownerName, eventId }) => {
+    setDeletingId(eventId)
+    try {
+      const r = await fetch('/api/integrations/calendar/event', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner: ownerName, event_id: eventId, organization_id: orgId,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setEditingEvent(null)
+      return j
+    } finally {
+      setDeletingId(null)
+    }
+  }, [orgId])
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minWidth: 0 }}>
@@ -188,12 +229,17 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
               myName={myName}
               orgId={orgId}
               onSlotClick={(ymd, startMin) => setCreateSlot({ ymd, startMin, endMin: Math.min(startMin + 60, HOUR_TO * 60) })}
+              viewingName={viewingName || myName}
+              onRangeCreate={({ ymd, startMin, endMin }) => setCreateSlot({ ymd, startMin, endMin })}
+              patchEvent={patchEvent}
+              setEditingEvent={setEditingEvent}
+              fetchEvents={fetchEvents}
             />
           )
         })()}
       </div>
 
-      {/* 空き枠タップ → 予定作成フォーム (GCal風) */}
+      {/* 空き枠タップ / 範囲ドラッグ → 予定作成フォーム (GCal風) */}
       {createSlot && (
         <CreateEventModal
           T={T}
@@ -205,6 +251,30 @@ export default function CalendarTab({ T, myName, members, viewingName }) {
           orgId={orgId}
           onClose={() => setCreateSlot(null)}
           onCreated={async () => { setCreateSlot(null); await fetchEvents() }}
+        />
+      )}
+
+      {/* イベントクリック → 編集/削除ポップオーバー */}
+      {editingEvent && (
+        <EventEditModal
+          T={T}
+          ev={editingEvent}
+          members={members}
+          emailOf={emailOf}
+          orgPath={orgPath}
+          orgId={orgId}
+          deleting={deletingId === editingEvent.eventId}
+          onClose={() => setEditingEvent(null)}
+          onSaved={async () => { setEditingEvent(null); await fetchEvents() }}
+          onDelete={async () => {
+            if (!window.confirm(`「${editingEvent.title || '(無題)'}」を削除しますか?`)) return
+            try {
+              await deleteEvent({ ownerName: editingEvent.ownerName, eventId: editingEvent.eventId })
+              await fetchEvents()
+            } catch (e) {
+              alert('削除に失敗しました: ' + e.message)
+            }
+          }}
         />
       )}
     </div>
@@ -554,7 +624,42 @@ function miniBtn(T) {
 }
 
 // ─── 週グリッド (時間 × 日) ───────────────────────────────────────────
-function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots, onSlotClick, myName, orgId }) {
+function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots, onSlotClick, myName, orgId, viewingName, onRangeCreate, patchEvent, setEditingEvent, fetchEvents }) {
+  // 範囲ドラッグ状態 (空白部分でマウス押下 → 移動 → 離す)
+  // { ymd, startMin, currentMin, gridEl }
+  const [rangeSelect, setRangeSelect] = useState(null)
+  const rangeActiveRef = useRef(false)
+  useEffect(() => {
+    if (!rangeSelect) return
+    rangeActiveRef.current = true
+    const handleMove = (e) => {
+      setRangeSelect((rs) => {
+        if (!rs) return null
+        const rect = rs.gridEl.getBoundingClientRect()
+        const offsetY = Math.max(0, Math.min(rect.height, e.clientY - rect.top))
+        const absMin = HOUR_FROM * 60 + (offsetY / SLOT_PX) * SLOT_MIN
+        const snapped = Math.max(HOUR_FROM * 60, Math.min(Math.ceil(absMin / 15) * 15, HOUR_TO * 60))
+        return { ...rs, currentMin: snapped }
+      })
+    }
+    const handleUp = () => {
+      setRangeSelect((rs) => {
+        if (!rs) return null
+        const a = Math.min(rs.startMin, rs.currentMin ?? rs.startMin)
+        const b = Math.max(rs.startMin, rs.currentMin ?? rs.startMin)
+        if (b - a >= 15) onRangeCreate?.({ ymd: rs.ymd, startMin: a, endMin: b })
+        // クリックイベントが直後に発火しないように 0ms 後に flag を下ろす
+        setTimeout(() => { rangeActiveRef.current = false }, 0)
+        return null
+      })
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [rangeSelect?.ymd, onRangeCreate])
   const TIME_COL = 56
   // 0:00 JST 起点での当日経過分 → top px
   const minToPx = (mins) => ((mins - HOUR_FROM * 60) / SLOT_MIN) * SLOT_PX
@@ -628,10 +733,15 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
               const endMin = segEJ.getUTCHours() * 60 + segEJ.getUTCMinutes()
               dayEvents.push({
                 id: `${memberRow.name}-${ev.id}-${ymd}`,
+                eventId: ev.id,         // Google Calendar の event_id (PATCH/DELETE で必要)
+                ownerName: memberRow.name,  // 操作対象オーナー (PATCH/DELETE で必要)
                 title: ev.title,
                 memberName: memberRow.name,
                 color: colorOf(memberRow.name),
                 startMin, endMin,
+                ymd,                    // 当該日 (PATCH 時のベース日付)
+                startIso: ev.start,     // 元の ISO (編集モーダル初期値)
+                endIso: ev.end,
                 hangoutLink: ev.hangoutLink,
                 htmlLink: ev.htmlLink,
               })
@@ -669,11 +779,20 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
               }}>
                 {jstLabel(d)}
               </div>
-              {/* 時間グリッド本体 (空き枠タップで予定作成) */}
+              {/* 時間グリッド本体 (空き枠タップ or ドラッグで予定作成) */}
               <div
+                onMouseDown={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const offsetY = e.clientY - rect.top
+                  const absMin = HOUR_FROM * 60 + (offsetY / SLOT_PX) * SLOT_MIN
+                  const snapped = Math.max(HOUR_FROM * 60, Math.min(Math.floor(absMin / 15) * 15, HOUR_TO * 60 - SLOT_MIN))
+                  setRangeSelect({ ymd, startMin: snapped, currentMin: snapped, gridEl: e.currentTarget })
+                  e.preventDefault()
+                }}
                 onClick={(e) => {
-                  // 既存イベント等の子要素クリックは無視、背景の素クリックのみ作成
                   if (e.target !== e.currentTarget || !onSlotClick) return
+                  if (rangeActiveRef.current) return
                   const rect = e.currentTarget.getBoundingClientRect()
                   const offsetY = e.clientY - rect.top
                   const absMin = HOUR_FROM * 60 + (offsetY / SLOT_PX) * SLOT_MIN
@@ -684,6 +803,7 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
                 style={{
                   position: 'relative', height: TOTAL_HEIGHT,
                   background: T.bg, cursor: 'pointer',
+                  userSelect: rangeSelect?.ymd === ymd ? 'none' : 'auto',
                 }}>
                 {/* 時間境界線 (イベントの top と同じ y 座標で完全一致させる) */}
                 {Array.from({ length: HOURS_PER_DAY }, (_, i) => {
@@ -708,6 +828,20 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
                   background: 'rgba(0,0,0,0.15)', pointerEvents: 'none',
                 }} />
 
+                {/* 範囲ドラッグ中のハイライト (この日に対する選択のみ表示) */}
+                {rangeSelect?.ymd === ymd && rangeSelect.currentMin != null && (() => {
+                  const a = Math.min(rangeSelect.startMin, rangeSelect.currentMin)
+                  const b = Math.max(rangeSelect.startMin, rangeSelect.currentMin)
+                  return (
+                    <div style={{
+                      position: 'absolute', left: 2, right: 2,
+                      top: minToPx(a), height: Math.max(4, minToPx(b) - minToPx(a)),
+                      background: 'rgba(37,99,235,0.18)',
+                      border: '1.5px solid rgba(37,99,235,0.6)',
+                      borderRadius: RADIUS.xs, pointerEvents: 'none', zIndex: 4,
+                    }} />
+                  )
+                })()}
                 {/* 空きスロット (緑バー) */}
                 {dayFree.map((s, i) => {
                   const top = minToPx(s.startMin)
@@ -723,42 +857,101 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
                   )
                 })}
 
-                {/* イベント (重ね合わせは横に並べてレーン化) */}
+                {/* イベント (重ね合わせは Google Calendar 風レーン化) */}
                 {(() => {
-                  // ── レーン計算: 開始順にソートして、衝突しないレーンを順番に割り当て
-                  const sorted = [...dayEvents].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin)
-                  const columns = []
-                  for (const ev of sorted) {
+                  // ── Google Calendar 風アルゴリズム ──
+                  // 「6時間以上の長時間イベント」(出社・移動・私用など) は背景レーンとして100%幅で描画し、
+                  // 短いイベント (会議・打ち合わせ等) はそれらを「無視」して独自にレーン化する。
+                  // これにより、長時間イベント1件+短時間イベント複数 の典型ケースで、
+                  // 短時間イベントが横に並び、長時間イベントも視認できる Google Calendar 風表示になる。
+                  const LONG_THRESHOLD_MIN = 6 * 60
+                  const longEvents = dayEvents.filter(e => (e.endMin - e.startMin) >= LONG_THRESHOLD_MIN)
+                  const shortEvents = dayEvents.filter(e => (e.endMin - e.startMin) < LONG_THRESHOLD_MIN)
+
+                  // 長時間イベント: 互いに重なる場合は横並びレーン化、それ以外は 100% 幅
+                  const longSorted = [...longEvents].sort((a, b) => a.startMin - b.startMin)
+                  const longCols = []
+                  for (const ev of longSorted) {
                     let placed = false
-                    for (let i = 0; i < columns.length; i++) {
-                      const last = columns[i][columns[i].length - 1]
-                      if (last.endMin <= ev.startMin) {
-                        columns[i].push(ev); ev._col = i; placed = true; break
-                      }
+                    for (let i = 0; i < longCols.length; i++) {
+                      const last = longCols[i][longCols[i].length - 1]
+                      if (last.endMin <= ev.startMin) { longCols[i].push(ev); ev._col = i; placed = true; break }
                     }
-                    if (!placed) { columns.push([ev]); ev._col = columns.length - 1 }
+                    if (!placed) { longCols.push([ev]); ev._col = longCols.length - 1 }
                   }
-                  // 重なるイベントが使うレーン総数を各 ev に
-                  for (const ev of sorted) {
+                  for (const ev of longSorted) {
                     let maxCols = ev._col + 1
-                    for (const ev2 of sorted) {
-                      if (ev === ev2) continue
-                      if (ev2.startMin < ev.endMin && ev2.endMin > ev.startMin) {
+                    for (const ev2 of longSorted) {
+                      if (ev !== ev2 && ev2.startMin < ev.endMin && ev2.endMin > ev.startMin) {
                         maxCols = Math.max(maxCols, ev2._col + 1)
                       }
                     }
                     ev._cols = maxCols
+                    ev._isLong = true
                   }
-                  return sorted.map(ev => {
+
+                  // 短いイベント: 長時間イベントを無視して独自にレーン化
+                  const shortSorted = [...shortEvents].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin)
+                  const columns = []
+                  for (const ev of shortSorted) {
+                    let placed = false
+                    for (let i = 0; i < columns.length; i++) {
+                      const last = columns[i][columns[i].length - 1]
+                      if (last.endMin <= ev.startMin) { columns[i].push(ev); ev._col = i; placed = true; break }
+                    }
+                    if (!placed) { columns.push([ev]); ev._col = columns.length - 1 }
+                  }
+                  for (const ev of shortSorted) {
+                    let maxCols = ev._col + 1
+                    for (const ev2 of shortSorted) {
+                      if (ev !== ev2 && ev2.startMin < ev.endMin && ev2.endMin > ev.startMin) {
+                        maxCols = Math.max(maxCols, ev2._col + 1)
+                      }
+                    }
+                    ev._cols = maxCols
+                    ev._isLong = false
+                  }
+
+                  const all = [...longSorted, ...shortSorted]
+                  return all.map(ev => {
                     const top = minToPx(ev.startMin)
                     const h = Math.max(SLOT_PX - 3, ((ev.endMin - ev.startMin) / SLOT_MIN) * SLOT_PX - 2)
                     const widthPct = 100 / ev._cols
                     const leftPct = ev._col * widthPct
                     const isNarrow = ev._cols > 1
+                    // 自分のイベントのみ in-app 編集可
+                    const isMine = (viewingName || myName) && ev.ownerName === (viewingName || myName)
                     return (
                       <CalendarEvent key={ev.id} ev={ev} T={T} top={top} h={h}
                         leftPct={leftPct} widthPct={widthPct} isNarrow={isNarrow}
-                        formatMin={formatMin} />
+                        isBackground={ev._isLong}  // 長時間イベントは背景レイヤー (opacity 低・zIndex 0)
+                        formatMin={formatMin}
+                        onEdit={isMine ? (() => setEditingEvent(ev)) : null}
+                        onMove={isMine ? (async ({ deltaMin }) => {
+                          // ドラッグ完了 → PATCH 実行 (失敗時は元のイベント表示が残る)
+                          const sNew = new Date(new Date(ev.startIso).getTime() + deltaMin * 60_000).toISOString()
+                          const eNew = new Date(new Date(ev.endIso).getTime() + deltaMin * 60_000).toISOString()
+                          try {
+                            await patchEvent({ ownerName: ev.ownerName, eventId: ev.eventId, start_iso: sNew, end_iso: eNew })
+                            await fetchEvents()
+                          } catch (e) {
+                            alert('移動に失敗しました: ' + e.message)
+                          }
+                        }) : null}
+                        onResize={isMine ? (async ({ newEndMin }) => {
+                          // 下端ドラッグ完了 → endIso のみ変更
+                          const baseEnd = new Date(ev.endIso)
+                          const baseEndMin = baseEnd.getUTCHours() * 60 + baseEnd.getUTCMinutes() + 9 * 60
+                          const deltaMin = newEndMin - (baseEndMin % 1440)
+                          const eNew = new Date(baseEnd.getTime() + deltaMin * 60_000).toISOString()
+                          try {
+                            await patchEvent({ ownerName: ev.ownerName, eventId: ev.eventId, start_iso: ev.startIso, end_iso: eNew })
+                            await fetchEvents()
+                          } catch (e) {
+                            alert('時間変更に失敗しました: ' + e.message)
+                          }
+                        }) : null}
+                      />
                     )
                   })
                 })()}
@@ -781,35 +974,104 @@ function WeekGrid({ T, days, dataMembers, selected, colorOf, emailOf, freeSlots,
   )
 }
 
-// ─── 1イベントを描画 (ホバーで詳細ポップアップ) ──────────────────────────
-function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }) {
+// ─── 1イベントを描画 (ホバーで詳細・自分のイベントはドラッグで移動 / 下端でリサイズ / クリックで編集) ──
+function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, isBackground, formatMin, onEdit, onMove, onResize }) {
   const [hover, setHover] = useState(false)
-  // 細いとき (重なりレーン化された時) はタイトルを省略 / アイコンドットだけ
+  const [dragMode, setDragMode] = useState(null) // null | 'move' | 'resize'
+  const [dragOffset, setDragOffset] = useState(0) // 移動中のピクセル差分
+  const dragStateRef = useRef(null) // { startY, mode }
   const minimal = isNarrow && widthPct < 50
+
+  // ドラッグ開始
+  const onMouseDownBar = (e) => {
+    if (!onMove) return
+    // 下端 6px はリサイズ。それ以外はムーブ
+    const rect = e.currentTarget.getBoundingClientRect()
+    const isBottom = e.clientY > rect.bottom - 7
+    if (isBottom && !onResize) return
+    const mode = isBottom ? 'resize' : 'move'
+    e.stopPropagation()
+    dragStateRef.current = { startY: e.clientY, mode, moved: false }
+    setDragMode(mode); setDragOffset(0)
+  }
+  // ドラッグ中: mousemove で offset 更新、mouseup で確定
+  useEffect(() => {
+    if (!dragMode) return
+    const handleMove = (e) => {
+      const st = dragStateRef.current; if (!st) return
+      const dy = e.clientY - st.startY
+      st.moved = st.moved || Math.abs(dy) > 4
+      setDragOffset(dy)
+    }
+    const handleUp = (e) => {
+      const st = dragStateRef.current; if (!st) { setDragMode(null); return }
+      const dy = e.clientY - st.startY
+      const mode = st.mode
+      const moved = Math.abs(dy) > 4
+      dragStateRef.current = null
+      setDragMode(null); setDragOffset(0)
+      if (!moved) return
+      // 15 分スナップ
+      const deltaMin = Math.round((dy / SLOT_PX) * SLOT_MIN / 15) * 15
+      if (deltaMin === 0) return
+      if (mode === 'move' && onMove) onMove({ deltaMin })
+      else if (mode === 'resize' && onResize) {
+        const newEndMin = Math.max(ev.startMin + 15, ev.endMin + deltaMin)
+        onResize({ newEndMin })
+      }
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [dragMode, ev.startMin, ev.endMin, onMove, onResize])
+
+  const handleClick = (e) => {
+    // ドラッグで動いたらクリック扱いしない
+    if (dragStateRef.current?.moved) return
+    e.stopPropagation()
+    if (onEdit) onEdit()
+    else if (ev.htmlLink) window.open(ev.htmlLink, '_blank')
+  }
+
+  const previewDeltaMin = dragMode ? Math.round((dragOffset / SLOT_PX) * SLOT_MIN / 15) * 15 : 0
+
   return (
     <div
       style={{
         position: 'absolute',
         boxSizing: 'border-box',
-        left: `calc(${leftPct}% + 2px)`,
-        width: `calc(${widthPct}% - 4px)`,
-        top, height: h,
-        background: hover ? `${ev.color}88` : `${ev.color}55`,
+        // 背景レイヤー (長時間イベント) は 100% 幅で前景イベントの下に潜む
+        left: isBackground ? `calc(${leftPct}% + 2px)` : `calc(${leftPct}% + 2px)`,
+        width: isBackground ? `calc(${widthPct}% - 4px)` : `calc(${widthPct}% - 4px)`,
+        top: dragMode === 'move' ? top + dragOffset : top,
+        height: dragMode === 'resize' ? Math.max(SLOT_PX, h + dragOffset) : h,
+        // 背景レイヤーは半透明で前景イベントが透けて見えるように
+        background: isBackground
+          ? (hover ? `${ev.color}55` : `${ev.color}30`)
+          : (hover ? `${ev.color}88` : `${ev.color}55`),
         borderLeft: `3px solid ${ev.color}`,
         borderRadius: RADIUS.xs - 1, padding: minimal ? '2px 3px' : '3px 5px',
         fontSize: 10, color: T.text,
-        overflow: 'hidden', cursor: 'pointer',
-        boxShadow: hover ? `0 4px 12px ${ev.color}55, 0 0 0 1px ${ev.color}80` : 'none',
-        zIndex: hover ? 5 : 1,
-        transition: 'all 0.15s ease',
+        overflow: 'hidden', cursor: dragMode ? (dragMode === 'resize' ? 'ns-resize' : 'grabbing') : (onMove ? 'grab' : 'pointer'),
+        boxShadow: hover || dragMode ? `0 4px 12px ${ev.color}55, 0 0 0 1px ${ev.color}80` : 'none',
+        // 背景レイヤー (長時間イベント) は zIndex 0 で前景イベントの下に置く
+        zIndex: dragMode ? 50 : (hover ? 5 : (isBackground ? 0 : 2)),
+        transition: dragMode ? 'none' : 'all 0.15s ease',
+        opacity: dragMode ? 0.8 : 1,
+        userSelect: 'none',
       }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onClick={() => ev.htmlLink && window.open(ev.htmlLink, '_blank')}
+      onMouseDown={onMouseDownBar}
+      onClick={handleClick}
     >
       <div style={{
         fontWeight: 700, lineHeight: 1.2,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        paddingRight: ev.hangoutLink ? 20 : 0, // Meet ボタン分のスペース
       }}>
         {ev.title || '(無題)'}
       </div>
@@ -818,6 +1080,28 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {ev.memberName}
         </div>
+      )}
+      {/* Meet ワンクリック参加ボタン (hangoutLink がある場合のみ右上隅に表示) */}
+      {ev.hangoutLink && (
+        <a
+          href={ev.hangoutLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => { e.stopPropagation() }}
+          onMouseDown={(e) => { e.stopPropagation() }}
+          title="Google Meet に参加"
+          style={{
+            position: 'absolute', top: 2, right: 2,
+            width: 18, height: 14, borderRadius: 3,
+            background: '#00897b',
+            color: '#fff', textDecoration: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 9, fontWeight: 800, lineHeight: 1,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+            zIndex: 6,
+            cursor: 'pointer',
+          }}
+        >▶</a>
       )}
       {/* ホバー時の詳細ポップアップ */}
       {hover && (
@@ -845,6 +1129,110 @@ function CalendarEvent({ ev, T, top, h, leftPct, widthPct, isNarrow, formatMin }
           )}
         </div>
       )}
+      {/* リサイズハンドル (下端 6px) — 自分のイベントのみ */}
+      {onResize && (
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: 6,
+          cursor: 'ns-resize',
+          background: hover ? `${ev.color}aa` : 'transparent',
+          borderBottomLeftRadius: RADIUS.xs - 1, borderBottomRightRadius: RADIUS.xs - 1,
+        }} />
+      )}
+    </div>
+  )
+}
+
+// ─── 予定編集モーダル (クリックしたイベント) ───
+// CreateEventModal とほぼ同じだが PATCH (更新) / DELETE (削除) を扱う。
+function EventEditModal({ T, ev, members, emailOf, orgPath, orgId, deleting, onClose, onSaved, onDelete }) {
+  const pad = (n) => String(n).padStart(2, '0')
+  const minToTime = (m) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`
+  const [title, setTitle] = useState(ev.title || '')
+  const [date, setDate] = useState(ev.ymd)
+  const [startT, setStartT] = useState(minToTime(ev.startMin))
+  const [endT, setEndT] = useState(minToTime(ev.endMin))
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const submit = async () => {
+    if (!title.trim() || saving) return
+    const [sh, sm] = startT.split(':').map(Number)
+    const [eh, em] = endT.split(':').map(Number)
+    const start_iso = isoFromJST(date, sh, sm)
+    const end_iso = isoFromJST(date, eh, em)
+    if (new Date(end_iso) <= new Date(start_iso)) { setErr('終了は開始より後にしてください'); return }
+    setSaving(true); setErr('')
+    try {
+      const r = await fetch('/api/integrations/calendar/event', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner: ev.ownerName,
+          event_id: ev.eventId,
+          updates: { summary: title.trim(), start_iso, end_iso },
+          organization_id: orgId,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      await onSaved()
+    } catch (e) {
+      setErr(e.message || '更新に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const field = { ...inputStyle({ T }), padding: '9px 11px', borderRadius: RADIUS.sm, border: `1px solid ${T.borderMid}`, fontSize: 16 }
+  const lbl = { ...TYPO.footnote, fontWeight: 700, color: T.textMuted, marginBottom: SPACING.xs }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: SPACING.lg }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: 'min(420px, 100%)', maxHeight: '85vh', overflowY: 'auto',
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: RADIUS.xl,
+        boxShadow: SHADOWS.xl, padding: SPACING.lg + 2,
+        fontFamily: 'inherit', color: T.text,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.md + 2 }}>
+          <div style={{ ...TYPO.title3, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="calendar" size={16} /> 予定を編集</div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: T.textMuted, cursor: 'pointer', display: 'flex' }}><Icon name="cross" size={18} /></button>
+        </div>
+        <div style={{ marginBottom: SPACING.md }}>
+          <div style={lbl}>タイトル</div>
+          <input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="予定のタイトル" style={field} />
+        </div>
+        <div style={{ marginBottom: SPACING.md }}>
+          <div style={lbl}>日付</div>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={field} />
+        </div>
+        <div style={{ display: 'flex', gap: SPACING.sm + 2, marginBottom: SPACING.md }}>
+          <div style={{ flex: 1 }}>
+            <div style={lbl}>開始</div>
+            <input type="time" value={startT} onChange={e => setStartT(e.target.value)} step={1800} style={field} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={lbl}>終了</div>
+            <input type="time" value={endT} onChange={e => setEndT(e.target.value)} step={1800} style={field} />
+          </div>
+        </div>
+        {err && (
+          <div style={{ background: T.dangerBg, color: T.danger, ...TYPO.footnote, fontWeight: 600, padding: SPACING.sm, borderRadius: RADIUS.xs, marginBottom: SPACING.md }}>{err}</div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.md }}>
+          <button onClick={onDelete} disabled={saving || deleting} style={{
+            ...btnSecondary({ T, size: 'md' }),
+            color: T.danger, borderColor: `${T.danger}44`,
+            cursor: deleting ? 'wait' : 'pointer',
+          }}>{deleting ? '削除中…' : '削除'}</button>
+          <div style={{ display: 'flex', gap: SPACING.sm }}>
+            {ev.htmlLink && (
+              <button onClick={() => window.open(ev.htmlLink, '_blank')} style={btnSecondary({ T, size: 'md' })}>Google で開く</button>
+            )}
+            <button onClick={submit} disabled={saving || deleting || !title.trim()} style={btnPrimary({ T, size: 'md' })}>{saving ? '保存中…' : '保存'}</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
