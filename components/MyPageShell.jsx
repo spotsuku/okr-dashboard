@@ -78,6 +78,38 @@ function parseLogContent(content) {
   catch { return { raw: content } }
 }
 
+// Supabase 書き込みのネットワーク失敗 (iOS Safari "Load failed" / "Failed to fetch" 等) を
+// 自動リトライする。モバイル回線の一時的な切断で始業/終業/KPT 保存が落ちて入力が
+// 消える問題への対策。Postgres エラー (RLS/制約違反等) はリトライせず即返す。
+function isNetworkError(err) {
+  const msg = String(err?.message || err || '')
+  return /load failed|failed to fetch|network\s*error|networkerror|fetch failed/i.test(msg)
+}
+async function withNetworkRetry(fn, { tries = 3, baseDelay = 500 } = {}) {
+  let last
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fn()
+      if (!res?.error) return res
+      last = res
+      if (!isNetworkError(res.error)) return res // ネットワーク以外は即返す
+    } catch (e) {
+      last = { error: e }
+      if (!isNetworkError(e)) throw e
+    }
+    if (i < tries - 1) await new Promise(r => setTimeout(r, baseDelay * (i + 1)))
+  }
+  return last
+}
+// 保存失敗時の alert 文言。ネットワーク失敗は通信エラーとして案内し、入力が
+// 保持される旨を伝える (モーダルは閉じないので再試行できる)。
+function saveErrorMessage(label, err) {
+  if (isNetworkError(err)) {
+    return `${label}に失敗しました（通信エラー）。\n電波状況をご確認のうえ、もう一度お試しください。入力内容は保持されています。`
+  }
+  return `${label}に失敗しました: ${err?.message || err}`
+}
+
 // ─── Mobile breakpoint hook (LINE風 下メニュー用) ───────────────────────
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => {
@@ -1197,14 +1229,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
       const oldContent = parseLogContent(pendingYesterdayLog.log.content)
       const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
-      const { error: e1 } = await supabase.from('coaching_logs')
-        .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.log.id)
-      if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
+      const { error: e1 } = await withNetworkRetry(() => supabase.from('coaching_logs')
+        .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.log.id))
+      if (e1) { setBusy(false); alert(saveErrorMessage('終業記録', e1)); return }
     } else {
       // 始業押し忘れ: その日の 9:00〜指定時刻で work_log を補完作成
       const startUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, 9 - 9, 0, 0))
       const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
-      const { error: e1 } = await supabase.from('coaching_logs').insert({
+      const { error: e1 } = await withNetworkRetry(() => supabase.from('coaching_logs').insert({
         owner: myName,
         log_type: 'work_log',
         organization_id: currentOrg?.id,
@@ -1216,8 +1248,8 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           force_closed: true,
           backfilled: true,
         }),
-      })
-      if (e1) { setBusy(false); alert('勤怠補完に失敗しました: ' + e1.message); return }
+      }))
+      if (e1) { setBusy(false); alert(saveErrorMessage('勤怠補完', e1)); return }
     }
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
       // 振り返り(KPT)は本人が選んだ「対象日」で保存する (既定=未終業ログの勤務日)。
@@ -1225,14 +1257,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       const baseISO = reflectionDate || targetDateStr
       const [ry, rmo, rd] = baseISO.split('-').map(Number)
       const kptUtc = new Date(Date.UTC(ry, rmo - 1, rd, hh - 9, mm, 0))
-      const { error: e2 } = await supabase.from('coaching_logs').insert({
+      const { error: e2 } = await withNetworkRetry(() => supabase.from('coaching_logs').insert({
         owner: myName, log_type: 'kpt',
         organization_id: currentOrg?.id,
         week_start: getMondayJSTStr(kptUtc),
         created_at: kptUtc.toISOString(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
-      })
-      if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
+      }))
+      if (e2) { setBusy(false); alert(saveErrorMessage('振り返り(KPT)の保存', e2)); return }
     }
     setBusy(false)
     // 次の未処理日があれば自動で次に進む (useEffect 再実行)
@@ -1526,15 +1558,15 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   async function doStartWorkLog() {
     if (busy || !myName) return
     setBusy(true)
-    const { error } = await supabase.from('coaching_logs').insert({
+    const { error } = await withNetworkRetry(() => supabase.from('coaching_logs').insert({
       owner: myName,
       log_type: 'work_log',
       organization_id: currentOrg?.id,
       week_start: getMondayJSTStr(),
       content: JSON.stringify({ start_at: new Date().toISOString() }),
-    })
+    }))
     setBusy(false)
-    if (error) { alert('始業の記録に失敗しました: ' + error.message); return }
+    if (error) { alert(saveErrorMessage('始業の記録', error)); return }
     setMorningOpen(false)
     await onWorkLogChange()
   }
@@ -1545,21 +1577,21 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     // 1. work_log に end_at を追記
     const oldContent = parseLogContent(workLog.content)
     const newContent = { ...oldContent, end_at: new Date().toISOString() }
-    const { error: e1 } = await supabase
+    const { error: e1 } = await withNetworkRetry(() => supabase
       .from('coaching_logs')
       .update({ content: JSON.stringify(newContent) })
-      .eq('id', workLog.id)
-    if (e1) { setBusy(false); alert('終業記録に失敗しました: ' + e1.message); return }
+      .eq('id', workLog.id))
+    if (e1) { setBusy(false); alert(saveErrorMessage('終業記録', e1)); return }
     // 2. KPT を別ログとして保存（何か記入があれば）
     if ((keep || '').trim() || (problem || '').trim() || (tryNote || '').trim()) {
-      const { error: e2 } = await supabase.from('coaching_logs').insert({
+      const { error: e2 } = await withNetworkRetry(() => supabase.from('coaching_logs').insert({
         owner: myName,
         log_type: 'kpt',
         organization_id: currentOrg?.id,
         week_start: getMondayJSTStr(),
         content: JSON.stringify({ keep, problem, try: tryNote }),
-      })
-      if (e2) { setBusy(false); alert('振り返り(KPT)の保存に失敗しました: ' + e2.message); return }
+      }))
+      if (e2) { setBusy(false); alert(saveErrorMessage('振り返り(KPT)の保存', e2)); return }
     }
     setBusy(false)
     setKptOpen(false)
