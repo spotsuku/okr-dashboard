@@ -12,6 +12,7 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
+import MeetingShell from './meetings/MeetingShell'
 import Icon, { DataIcon } from './Icon'
 import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
 import KATableHeader from './okr/KATableHeader'
@@ -274,16 +275,23 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     return levels.find(l => l.name === name) || null
   }
 
+  // 会議を key で取得 (DB 由来の org meetings を優先 / 旧固定 MEETINGS にフォールバック)
+  const lookupMeeting = (meetingKey) =>
+    (orgMeetings || []).find(m => m.key === meetingKey) || getMeeting(meetingKey)
+
   // 会議を選択 → フィルタを設定
   const selectMeeting = (meetingKey) => {
-    const m = getMeeting(meetingKey)
-    if (!m?.weeklyMTG) return
+    const m = lookupMeeting(meetingKey)
+    if (!m) return
+    // weeklyMTG が未設定の組織追加会議でも、最低限の空オブジェクトで会議画面に入れるようにする
+    // (モジュール未設定の場合は MeetingShell 側の案内が出る)
+    const w = m.weeklyMTG || {}
     setActiveMeetingKey(meetingKey)
     setActiveObjId(null)
-    if (m.weeklyMTG.levelName) {
-      const lvl = findLevelByName(m.weeklyMTG.levelName)
+    if (w.levelName) {
+      const lvl = findLevelByName(w.levelName)
       setActiveLevelId(lvl?.id || null)
-    } else if (m.weeklyMTG.levelSelect === 'department') {
+    } else if (w.levelSelect === 'department') {
       setActiveLevelId(null) // 事業部をユーザーに選ばせる
     } else {
       setActiveLevelId(null) // 全社
@@ -319,7 +327,7 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const currentMeeting = activeMeetingKey ? getMeeting(activeMeetingKey) : null
+  const currentMeeting = activeMeetingKey ? lookupMeeting(activeMeetingKey) : null
   // マネージャー定例などで事業部を選んでいない状態
   const needsDeptSelect = currentMeeting?.weeklyMTG?.levelSelect === 'department' && activeLevelId == null
 
@@ -904,15 +912,30 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
       {/* ── ファシリモードならステップ式UI、一覧モードなら従来3ペイン ── */}
       {mtgMode === 'facilitation' ? (
-        <WeeklyMTGFacilitation
-          meeting={currentMeeting}
-          weekStart={activeWeek}
-          levels={levels}
-          members={members}
-          myName={myName}
-          themeKey={themeKey}
-          onSwitchToList={() => setMtgMode('list')}
-        />
+        // モジュールベースの新形式会議は MeetingShell で起動する
+        // (旧 weeklyMTG.flow は無く modules 配列で構成される会議。判定基準は
+        //  「modules が 1 件以上ある かつ weeklyMTG.flow が設定されてない」)
+        ((currentMeeting?.modules || []).length > 0 && !currentMeeting?.weeklyMTG?.flow)
+          ? (
+            <MeetingShell
+              meeting={currentMeeting}
+              weekStart={activeWeek}
+              T={wT()}
+              members={members}
+              levels={levels}
+              onExit={() => setMtgMode('list')}
+            />
+          ) : (
+            <WeeklyMTGFacilitation
+              meeting={currentMeeting}
+              weekStart={activeWeek}
+              levels={levels}
+              members={members}
+              myName={myName}
+              themeKey={themeKey}
+              onSwitchToList={() => setMtgMode('list')}
+            />
+          )
       ) : (
       <>
       {/* 週タブ：会議日を主表示 */}
