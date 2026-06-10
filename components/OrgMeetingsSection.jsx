@@ -18,6 +18,7 @@ function scopeLabel(tf) {
   if (!tf) return '全社'
   switch (tf.scope) {
     case 'specific-team':   return `${tf.teamName || 'チーム'}（特定チーム）`
+    case 'custom':          return `${(tf.levelNames || []).join(' / ') || '選択チーム/部署'}`
     case 'teams-of':        return `${tf.parentLevelName || '部署'} 配下のチーム`
     case 'all-teams':       return '全チーム合同'
     case 'all-departments': return '全部署合同'
@@ -80,6 +81,9 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
       .update({ archived_at: new Date().toISOString() })
       .eq('id', meeting.id)
     if (error) { alert('削除失敗: ' + error.message); return }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('org-meetings-updated'))
+    }
     reloadMeetings()
   }
 
