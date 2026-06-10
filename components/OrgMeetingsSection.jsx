@@ -80,6 +80,9 @@ export default function OrgMeetingsSection({ T, orgId, canManage }) {
       .update({ archived_at: new Date().toISOString() })
       .eq('id', meeting.id)
     if (error) { alert('削除失敗: ' + error.message); return }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('org-meetings-updated'))
+    }
     reloadMeetings()
   }
 

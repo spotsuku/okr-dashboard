@@ -116,6 +116,10 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
       setErr('保存失敗: ' + result.error.message)
       return
     }
+    // 週次MTG画面など、会議リストを使う他の画面に再取得を促す
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('org-meetings-updated'))
+    }
     onSaved && onSaved(result.data)
     onClose && onClose()
   }
