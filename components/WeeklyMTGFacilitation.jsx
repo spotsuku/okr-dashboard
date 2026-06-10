@@ -130,6 +130,18 @@ function resolveScopeLevelIds(wkly, levels) {
   return []
 }
 
+// KR が「完了」(達成率100%以上) かどうか。KRReadOnlyRow の進捗計算と同じ式。
+// target 未設定 (0) は判定不能として未完了扱い。lower_is_better は逆方向で達成率を算出。
+function isKRDone(kr) {
+  const target = Number(kr?.target ?? 0)
+  const current = Number(kr?.current ?? 0)
+  if (!(target > 0)) return false
+  const progress = kr?.lower_is_better
+    ? Math.max(0, ((target * 2 - current) / target) * 100)
+    : (current / target) * 100
+  return Math.round(progress) >= 100
+}
+
 // ─── アバター ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function Avatar({ name, avatarUrl, size = 22 }) {
@@ -361,15 +373,16 @@ export default function WeeklyMTGFacilitation({
       let krsRaw = []
       if (allObjIdsAll.length > 0) {
         let res = await supabase.from('key_results')
-          .select('id, objective_id, title, owner, program_tags').in('objective_id', allObjIdsAll)
+          .select('id, objective_id, title, owner, target, current, lower_is_better, program_tags').in('objective_id', allObjIdsAll)
         if (res.error && /program_tags|column/i.test(res.error.message || '')) {
           res = await supabase.from('key_results')
-            .select('id, objective_id, title, owner').in('objective_id', allObjIdsAll)
+            .select('id, objective_id, title, owner, target, current, lower_is_better').in('objective_id', allObjIdsAll)
         }
         krsRaw = res.data || []
       }
       const filtered = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
-      const krs = filtered.krs
+      // 完了 (達成率100%以上) の KR は件数から除外
+      const krs = filtered.krs.filter(k => !isKRDone(k))
       // 親 annual obj の level_id でチーム集計 (Q 期 obj の level_id 不整合に対応)
       const objsByLevel = {}
       ;(filtered.objs || []).forEach(o => {
@@ -1360,7 +1373,10 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           const lvl = levels.find(l => Number(l?.id) === Number(lvlId)) || { id: lvlId, name: '?', icon: '🏢' }
           const lvlObjs = (byLevel.get(lvlId) || []).sort((a, b) => a.id - b.id)
           for (const o of lvlObjs) {
-            const objKrs = krs.filter(k => Number(k.objective_id) === Number(o.id)).sort((a, b) => a.id - b.id)
+            const objKrs = krs
+              .filter(k => Number(k.objective_id) === Number(o.id))
+              .filter(k => !isKRDone(k)) // 完了 (達成率100%以上) の KR は会議に表示しない
+              .sort((a, b) => a.id - b.id)
             for (const kr of objKrs) {
               built.push({ level: lvl, objective: o, kr })
             }
