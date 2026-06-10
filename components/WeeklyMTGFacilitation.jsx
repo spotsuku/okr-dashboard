@@ -1705,6 +1705,8 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
     if (!Array.isArray(allItems)) return allItems
     // KAの所属レベルは team または objective.level_id 経由
     return allItems.filter(it => {
+      // 完了 (done) の KA は表示しない (会議中に done にした場合も含めて徹底)
+      if (it.ka?.status === 'done') return false
       const lvlId = Number(it.team?.id ?? it.objective?.level_id ?? it.level?.id)
       return !excludedLevels.has(lvlId)
     })
@@ -1866,6 +1868,11 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'weekly_reports' }, payload => {
         const row = payload.new
         if (!row || !idSet.has(Number(row.id))) return
+        // 会議中に done にした KA は一覧から除外する (= 完了したら表示しない)。
+        if (row.status === 'done') {
+          setItems(prev => prev?.filter(it => Number(it.ka?.id) !== Number(row.id)) || prev)
+          return
+        }
         setItems(prev => prev?.map(it =>
           Number(it.ka?.id) === Number(row.id) ? { ...it, ka: { ...it.ka, ...row } } : it
         ) || prev)
