@@ -1,8 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { AVAILABLE_MODULES, MODULE_META } from '../lib/meetings/moduleRegistry'
-import Icon, { DataIcon } from './Icon'
+import Icon from './Icon'
 import { TYPO, SPACING, RADIUS, SHADOWS } from '../lib/themeTokens'
 import { inputStyle, btnSecondary, btnBrand } from '../lib/iosStyles'
 
@@ -35,15 +34,11 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   const [icon, setIcon]         = useState(meeting?.icon || 'note')
   const [color, setColor]       = useState(meeting?.color || '#4d9fff')
   const [dayOfWeek, setDayOfWeek] = useState(meeting?.day_of_week ?? null)
-  const [modules, setModules]   = useState(() => {
-    const list = meeting?.modules || []
-    return [...list].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-  })
   // target_filter (= ファシリ画面の挙動を決める設定) を編集できるようにする。
   // 既存の固定 MEETINGS と互換にするため、各フィールドを個別 state で管理し、
   // 保存時に target_filter JSONB として組み立てる。
   const tf = meeting?.target_filter || {}
-  const [scope, setScope]       = useState(tf.scope || '')               // '' | specific-team | teams-of | all-teams | all-departments | all-levels
+  const [scope, setScope]       = useState(tf.scope || 'all-levels')     // specific-team | teams-of | all-teams | all-departments | all-levels
   const [teamName, setTeamName] = useState(tf.teamName || '')            // for specific-team
   const [parentLevelName, setParentLevelName] = useState(tf.parentLevelName || '') // for teams-of
   const [flow, setFlow]         = useState(tf.flow || 'ka')              // 'ka' | 'kr' | 'sales'
@@ -74,74 +69,17 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
 
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState(null)
-  // drag & drop 用 state
-  const [dragIndex, setDragIndex]     = useState(null)
-  const [dropHoverIdx, setDropHoverIdx] = useState(null)
-
-  const handleAddModule = (type) => {
-    if (modules.some(m => m.type === type)) {
-      setErr(`「${MODULE_META[type]?.label}」は既に追加されています`)
-      return
-    }
-    setModules(prev => [
-      ...prev,
-      { type, sort_order: prev.length + 1, config: {} },
-    ])
-    setErr(null)
-  }
-
-  const handleRemoveModule = (idx) => {
-    setModules(prev => prev.filter((_, i) => i !== idx).map((m, i) => ({ ...m, sort_order: i + 1 })))
-  }
-
-  const handleMoveModule = (idx, direction) => {
-    const newIdx = idx + direction
-    if (newIdx < 0 || newIdx >= modules.length) return
-    setModules(prev => {
-      const next = [...prev]
-      const tmp = next[idx]
-      next[idx] = next[newIdx]
-      next[newIdx] = tmp
-      return next.map((m, i) => ({ ...m, sort_order: i + 1 }))
-    })
-  }
-
-  // drag & drop でモジュールを並び替え
-  const handleDragStart = (idx) => (e) => {
-    setDragIndex(idx)
-    e.dataTransfer.effectAllowed = 'move'
-    // Firefox 互換: dataTransfer に何か入れないと drag が起動しない場合あり
-    try { e.dataTransfer.setData('text/plain', String(idx)) } catch {}
-  }
-  const handleDragOver = (idx) => (e) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    if (dropHoverIdx !== idx) setDropHoverIdx(idx)
-  }
-  const handleDragLeave = () => setDropHoverIdx(null)
-  const handleDrop = (idx) => (e) => {
-    e.preventDefault()
-    setDropHoverIdx(null)
-    if (dragIndex === null || dragIndex === idx) { setDragIndex(null); return }
-    setModules(prev => {
-      const next = [...prev]
-      const [moved] = next.splice(dragIndex, 1)
-      next.splice(idx, 0, moved)
-      return next.map((m, i) => ({ ...m, sort_order: i + 1 }))
-    })
-    setDragIndex(null)
-  }
-  const handleDragEnd = () => { setDragIndex(null); setDropHoverIdx(null) }
 
   const handleSave = async () => {
     if (!title.trim()) { setErr('タイトルは必須です'); return }
     if (!key.trim()) { setErr('key は必須です (URL/識別子として使用)'); return }
-    if (modules.length === 0) { setErr('モジュールを最低 1 つ追加してください'); return }
+    if (scope === 'specific-team' && !teamName) { setErr('対象チームを選択してください'); return }
+    if (scope === 'teams-of' && !parentLevelName) { setErr('対象部署を選択してください'); return }
     setSaving(true)
     setErr(null)
 
     // target_filter を組み立てる。scope が空なら null で保存 (=「全社」「未指定」)。
-    // 静的 MEETINGS で flow が必須項目だったため、ここでも flow は必ず含める。
+    // 会議のステップは flow から自動生成されるため、flow は必ず含める。
     const target_filter = scope ? {
       scope,
       ...(scope === 'specific-team' && teamName ? { teamName, levelName: teamName } : {}),
@@ -150,7 +88,7 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
       viewMode,
       ...(withDiscussion ? { withDiscussion: true } : {}),
       ...(requiresProgram ? { requiresProgram: true } : {}),
-    } : null
+    } : { flow, viewMode }
 
     const payload = {
       organization_id: orgId,
@@ -158,7 +96,9 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
       title: title.trim(),
       icon,
       color,
-      modules,
+      // modules は旧ファシリUIでは未使用 (ステップは flow から生成)。
+      // 既存値を保持しつつ新規は空配列 (DB NOT NULL 対策)。
+      modules: meeting?.modules || [],
       day_of_week: dayOfWeek,
       target_filter,
     }
@@ -183,9 +123,6 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   const inputSt = { ...inputStyle({ T }), ...TYPO.body, background: T.bg }
   const labelSt = { ...TYPO.footnote, color: T.textMuted, fontWeight: 700, marginBottom: SPACING.xs, display: 'block' }
   const sectionSt = { marginBottom: SPACING.lg - 2 }
-
-  // モジュール候補 (まだ追加されていないもの)
-  const availableToAdd = AVAILABLE_MODULES.filter(m => !modules.some(x => x.type === m.type))
 
   return (
     <div
@@ -296,12 +233,11 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
               }}
               style={{ ...inputSt, cursor: 'pointer' }}
             >
-              <option value="">— 未指定 (= 全社) —</option>
+              <option value="all-levels">全社・全階層 (部署/チーム横断・プログラム別定例)</option>
               <option value="specific-team">特定チームのみ (例: 広報 / セールス)</option>
               <option value="teams-of">部署配下の全チーム (例: パートナー事業部 → CS + セールス)</option>
               <option value="all-teams">全チーム合同 (= マネージャー定例)</option>
               <option value="all-departments">全部署合同 (= 役員会議)</option>
-              <option value="all-levels">全階層横断 (= プログラム別定例)</option>
             </select>
 
             {scope === 'specific-team' && (
@@ -388,74 +324,26 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
             </div>
           </div>
 
-          {/* モジュール構成 */}
+          {/* 会議の進行ステップ (flow から自動生成・プレビュー) */}
           <div style={sectionSt}>
-            <label style={labelSt}>モジュール構成 (= 会議のステップ順序) <span style={{ color: T.danger }}>*</span></label>
-            <div
-              style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs + 2, marginBottom: SPACING.sm }}
-              onDragLeave={handleDragLeave}
-            >
-              {modules.map((m, idx) => {
-                const meta = MODULE_META[m.type] || { icon: '?', label: m.type, desc: '' }
-                const isDragging  = dragIndex === idx
-                const isDropHover = dropHoverIdx === idx && dragIndex !== idx
-                return (
-                  <div
-                    key={`${m.type}-${idx}`}
-                    draggable
-                    onDragStart={handleDragStart(idx)}
-                    onDragOver={handleDragOver(idx)}
-                    onDrop={handleDrop(idx)}
-                    onDragEnd={handleDragEnd}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: SPACING.sm,
-                      padding: `${SPACING.sm}px ${SPACING.sm + 2}px`,
-                      background: T.bgCard,
-                      border: `1px solid ${isDropHover ? T.accent : T.border}`,
-                      borderTop: isDropHover ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
-                      borderRadius: RADIUS.sm,
-                      cursor: 'grab',
-                      opacity: isDragging ? 0.4 : 1,
-                      transition: 'border 0.1s, opacity 0.15s',
-                      userSelect: 'none',
-                    }}
-                  >
-                    <span style={{ color: T.textMuted, width: 14, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="ドラッグして並び替え"><Icon name="more" size={14} /></span>
-                    <span style={{ ...TYPO.footnote, color: T.textMuted, width: 18, textAlign: 'center' }}>{idx + 1}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', color: T.textSub }}><DataIcon value={meta.icon} size={18} /></span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.text }}>{meta.label}</div>
-                      <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted }}>{meta.desc}</div>
-                    </div>
-                    <button onClick={() => handleMoveModule(idx, -1)} disabled={idx === 0} title="上へ" style={iconBtnSt(T, idx === 0)}><Icon name="chevronU" size={13} /></button>
-                    <button onClick={() => handleMoveModule(idx, 1)} disabled={idx === modules.length - 1} title="下へ" style={iconBtnSt(T, idx === modules.length - 1)}><Icon name="chevronD" size={13} /></button>
-                    <button onClick={() => handleRemoveModule(idx)} title="削除" style={{ ...iconBtnSt(T, false), color: T.danger }}><Icon name="cross" size={13} /></button>
-                  </div>
-                )
-              })}
-              {modules.length === 0 && (
-                <div style={{ padding: SPACING.md, textAlign: 'center', ...TYPO.footnote, color: T.textFaint, background: T.bgCard, borderRadius: RADIUS.sm }}>
-                  下から追加してください
-                </div>
-              )}
+            <label style={labelSt}>会議の進行ステップ <span style={{ color: T.textMuted, fontWeight: 500 }}>(フォーカスから自動生成)</span></label>
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: SPACING.xs, alignItems: 'center',
+              padding: SPACING.sm, background: T.bgCard, borderRadius: RADIUS.sm, border: `1px solid ${T.border}`,
+            }}>
+              {stepPreview(flow, withDiscussion).map((label, i, arr) => (
+                <span key={label + i} style={{ display: 'inline-flex', alignItems: 'center', gap: SPACING.xs }}>
+                  <span style={{
+                    ...TYPO.caption, fontWeight: 700, letterSpacing: 'normal', color: T.textSub,
+                    padding: `2px ${SPACING.xs + 2}px`, borderRadius: RADIUS.pill, background: T.sectionBg || T.bg, border: `1px solid ${T.border}`,
+                  }}>{label}</span>
+                  {i < arr.length - 1 && <Icon name="chevronR" size={11} style={{ color: T.textMuted }} />}
+                </span>
+              ))}
             </div>
-
-            {availableToAdd.length > 0 && (
-              <>
-                <div style={{ ...TYPO.caption, fontWeight: 600, letterSpacing: 'normal', color: T.textMuted, marginBottom: SPACING.xs }}>追加可能なモジュール:</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs }}>
-                  {availableToAdd.map(m => (
-                    <button key={m.type} onClick={() => handleAddModule(m.type)} style={{
-                      padding: `${SPACING.xs}px ${SPACING.sm + 2}px`, borderRadius: RADIUS.xs,
-                      border: `1px dashed ${T.border}`,
-                      background: 'transparent', color: T.text,
-                      ...TYPO.footnote, cursor: 'pointer', fontFamily: 'inherit',
-                      display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
-                    }}>+ <DataIcon value={m.icon} size={14} /> {m.label}</button>
-                  ))}
-                </div>
-              </>
-            )}
+            <div style={{ ...TYPO.caption, fontWeight: 500, letterSpacing: 'normal', color: T.textMuted, marginTop: SPACING.xs }}>
+              ステップは「会議のフォーカス」と「オプション」に応じて自動で決まります。
+            </div>
           </div>
         </div>
 
@@ -479,15 +367,17 @@ export default function MeetingEditModal({ T, orgId, meeting, onClose, onSaved }
   )
 }
 
-function iconBtnSt(T, disabled) {
-  return {
-    width: 26, height: 26, borderRadius: RADIUS.xs,
-    border: `1px solid ${T.border}`,
-    background: 'transparent',
-    color: disabled ? T.textFaint : T.textSub,
-    ...TYPO.subhead, fontWeight: 700,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontFamily: 'inherit',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+// 会議の進行ステップを flow / withDiscussion から導出 (WeeklyMTGFacilitation.stepsForFlow と一致)
+function stepPreview(flow, withDiscussion) {
+  if (withDiscussion) {
+    return ['KR順送り', 'チームサマリー', '共有事項', '横断連携・確認事項', 'ネクストアクション', '終了']
   }
+  if (flow === 'sales') {
+    return ['セールス進捗', 'KA確認', '共有事項', '確認事項', 'ネクストアクション', '終了']
+  }
+  if (flow === 'ka') {
+    return ['KA順送り', '共有事項', '確認事項', 'ネクストアクション', '終了']
+  }
+  // kr (既定)
+  return ['KR順送り', '共有事項', '確認事項', 'ネクストアクション', '終了']
 }
