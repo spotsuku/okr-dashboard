@@ -12,7 +12,6 @@ import { computeKAKey } from '../lib/kaKey'
 import { WEEKLY_MTG_MEETINGS, getMeeting } from '../lib/meetings'
 import { useWeeklyMTGMeetings } from '../lib/orgMeetings'
 import WeeklyMTGFacilitation from './WeeklyMTGFacilitation'
-import MeetingShell from './meetings/MeetingShell'
 import Icon, { DataIcon } from './Icon'
 import { kaCellStyle, kaTextareaStyle } from '../lib/okrKaStyles'
 import KATableHeader from './okr/KATableHeader'
@@ -926,30 +925,18 @@ export default function WeeklyMTGPage({ levels, themeKey='dark', fiscalYear='202
 
       {/* ── ファシリモードならステップ式UI、一覧モードなら従来3ペイン ── */}
       {mtgMode === 'facilitation' ? (
-        // モジュールベースの新形式会議は MeetingShell で起動する
-        // (旧 weeklyMTG.flow は無く modules 配列で構成される会議。判定基準は
-        //  「modules が 1 件以上ある かつ weeklyMTG.flow が設定されてない」)
-        ((currentMeeting?.modules || []).length > 0 && !currentMeeting?.weeklyMTG?.flow)
-          ? (
-            <MeetingShell
-              meeting={currentMeeting}
-              weekStart={activeWeek}
-              T={wT()}
-              members={members}
-              levels={levels}
-              onExit={() => setMtgMode('list')}
-            />
-          ) : (
-            <WeeklyMTGFacilitation
-              meeting={currentMeeting}
-              weekStart={activeWeek}
-              levels={levels}
-              members={members}
-              myName={myName}
-              themeKey={themeKey}
-              onSwitchToList={() => setMtgMode('list')}
-            />
-          )
+        // 全ての会議を旧 WeeklyMTGFacilitation (作り込まれたファシリUI) で描画する。
+        // 会議の挙動は weeklyMTG (= target_filter) の scope/flow/viewMode 等で決まり、
+        // ステップは flow から自動生成される。MeetingShell (モジュール式・旧新形式) は廃止。
+        <WeeklyMTGFacilitation
+          meeting={currentMeeting}
+          weekStart={activeWeek}
+          levels={levels}
+          members={members}
+          myName={myName}
+          themeKey={themeKey}
+          onSwitchToList={() => setMtgMode('list')}
+        />
       ) : (
       <>
       {/* 週タブ：会議日を主表示 */}
