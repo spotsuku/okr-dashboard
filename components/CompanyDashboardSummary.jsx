@@ -394,8 +394,8 @@ export default function CompanyDashboardSummary({
           const badgeNames = [...validMembers].filter(n => !excludeNames.has(n))
           const rates = await fetchAllMembersBadgeRates(badgeNames) // 当月
           badgeMaster = rates
-            .filter(r => r.achieved > 0)
-            .sort((a, b) => b.achieved - a.achieved || a.name.localeCompare(b.name))
+            .filter(r => r.rate > 0)
+            .sort((a, b) => b.rate - a.rate || b.achieved - a.achieved || a.name.localeCompare(b.name))
             .slice(0, 3)
         } catch (be) {
           console.warn('badge ranking calc error:', be)
