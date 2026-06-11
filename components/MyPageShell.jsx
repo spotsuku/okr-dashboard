@@ -2722,6 +2722,10 @@ function BadgeCollectionDetail({ T, viewingName }) {
   const achievedCount = stats.items.filter(i => i.achieved).length
   const totalCount = stats.items.length
   const nearCount = stats.items.filter(i => !i.achieved && i.progress >= 60).length
+  // 「今月の達成」は獲得バッジ数ではなく、各バッジの進捗率(0-100)の平均
+  const avgProgress = totalCount > 0
+    ? Math.round(stats.items.reduce((s, i) => s + (i.progress || 0), 0) / totalCount)
+    : 0
   const isCurrentMonth = month === monthOptions[0].value
   const monthLabel = (() => {
     const [my, mm] = month.split('-').map(Number)
@@ -2780,15 +2784,15 @@ function BadgeCollectionDetail({ T, viewingName }) {
         )}
         <div style={{ minWidth: 200 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
-            <span>今月の達成</span>
+            <span>今月の達成（進捗率の平均）</span>
             <span style={{ color: T.text, fontWeight: 600 }}>
-              {totalCount > 0 ? Math.round(achievedCount / totalCount * 100) : 0}%
+              {avgProgress}%
             </span>
           </div>
           <div style={{ height: 5, borderRadius: 99, background: T.sectionBg, overflow: 'hidden' }}>
             <div style={{
               height: '100%',
-              width: `${totalCount > 0 ? Math.round(achievedCount / totalCount * 100) : 0}%`,
+              width: `${avgProgress}%`,
               background: T.success || '#16a34a', transition: 'width 300ms ease-out',
             }} />
           </div>
