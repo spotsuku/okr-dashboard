@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
 import { fetchAllMembersBadgeRates } from '../lib/badges'
+import { fetchRankingTrend, buildRankSeries } from '../lib/rankingTrend'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS, BRAND_GRADIENT, GLASS } from '../lib/themeTokens'
 import {
   cardStyle, pillStyle, btnPrimary, btnBrand, accentRingStyle,
@@ -81,6 +82,7 @@ export default function CompanyDashboardSummary({
   const [krPinch, setKrPinch] = useState([])
   const [submittedTeamCount, setSubmittedTeamCount] = useState({ total: 0, submitted: 0 })
   const [rankings, setRankings] = useState(null)
+  const [rankTrend, setRankTrend] = useState(null) // 順位推移 (過去N週)
   const [teamSummaryTableMissing, setTeamSummaryTableMissing] = useState(false)
   const [progressedKRs, setProgressedKRs] = useState([])
   const [companyAnnualKRs, setCompanyAnnualKRs] = useState([])
@@ -99,6 +101,20 @@ export default function CompanyDashboardSummary({
       label: `${lastMon.getUTCMonth() + 1}/${lastMon.getUTCDate()}〜${new Date(thisMon.getTime() - 86400000).getUTCMonth() + 1}/${new Date(thisMon.getTime() - 86400000).getUTCDate()}`,
     }
   }, [monday])
+
+  // 順位推移: 週間ランキングタブを開いた時に過去 6 週分を集計 (一度だけ)
+  useEffect(() => {
+    if (activeTab !== 'rankings' || rankTrend) return
+    if (!(members && members.length)) return
+    let alive = true
+    ;(async () => {
+      try {
+        const tr = await fetchRankingTrend({ memberNames: members.map(m => m.name), weeks: 6 })
+        if (alive) setRankTrend(tr)
+      } catch (e) { console.warn('rank trend error:', e) }
+    })()
+    return () => { alive = false }
+  }, [activeTab, members, rankTrend])
 
   // 一括取得 (各クエリは個別に成否を判定。1つ失敗しても他は処理する)
   useEffect(() => {
@@ -565,6 +581,28 @@ export default function CompanyDashboardSummary({
                   sub: `網羅 ${r.fullEntries}/${r.entries}件`,
                 }))} />
             </div>
+
+            {/* 順位推移 (過去6週・現Top3を追跡) */}
+            {rankTrend && (
+              <>
+                <SectionTitle T={T} icon="chart" iconColor={T.accent} title="ランキング推移"
+                  sub={`過去 ${rankTrend.weeks.length} 週の順位変化（現 Top3 を追跡）`} />
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                  gap: SPACING.md, marginBottom: SPACING.xl,
+                }}>
+                  <RankTrendChart T={T} title="有言実行王" weeks={rankTrend.weeks}
+                    series={buildRankSeries(rankTrend.categories.promise, rankings.promiseKeeper.map(r => r.name))} />
+                  <RankTrendChart T={T} title="タスク完了王" weeks={rankTrend.weeks}
+                    series={buildRankSeries(rankTrend.categories.task, rankings.taskMaster.map(r => r.name))} />
+                  <RankTrendChart T={T} title="振り返り王" weeks={rankTrend.weeks}
+                    series={buildRankSeries(rankTrend.categories.reflection, rankings.reflection.map(r => r.name))} />
+                  <RankTrendChart T={T} title="実践王" weeks={rankTrend.weeks}
+                    series={buildRankSeries(rankTrend.categories.practice, rankings.practiceMaster.map(r => r.name))} />
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -753,6 +791,71 @@ function MiniStat({ T, label, value, color }) {
 }
 
 // ─── ランキングカード ────────────────────────────────────────
+// 順位推移の折れ線チャート (現Top3を週ごとに追跡。y軸は1位が上)
+function RankTrendChart({ T, title, weeks, series }) {
+  const medalColor = ['#f59e0b', '#94a3b8', '#b45309']
+  const n = (weeks || []).length
+  let maxRank = 3
+  ;(series || []).forEach(s => s.ranks.forEach(r => { if (r != null && r > maxRank) maxRank = r }))
+  const hasData = (series || []).some(s => s.ranks.some(r => r != null))
+
+  const W = 280, H = 150
+  const padL = 24, padR = 12, padT = 16, padB = 30
+  const innerW = W - padL - padR, innerH = H - padT - padB
+  const x = (i) => (n <= 1 ? padL + innerW / 2 : padL + (i / (n - 1)) * innerW)
+  const y = (rank) => padT + (maxRank <= 1 ? 0 : ((rank - 1) / (maxRank - 1)) * innerH)
+
+  return (
+    <div style={cardStyle({ T, accent: T.accent, padding: SPACING.md })}>
+      <div style={{ ...TYPO.callout, color: T.text, marginBottom: SPACING.xs }}>{title}</div>
+      {!hasData ? (
+        <div style={{ ...TYPO.caption, color: T.textMuted, padding: `${SPACING.md}px 0` }}>表示できる推移データがありません</div>
+      ) : (
+        <>
+          <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+            {[1, maxRank].map(rk => (
+              <g key={rk}>
+                <line x1={padL} y1={y(rk)} x2={W - padR} y2={y(rk)} stroke={T.border} strokeWidth="1" strokeDasharray="2 3" />
+                <text x={padL - 5} y={y(rk) + 3} textAnchor="end" fontSize="9" fill={T.textMuted}>{rk}位</text>
+              </g>
+            ))}
+            {(weeks || []).map((w, i) => (
+              <text key={i} x={x(i)} y={H - 10} textAnchor="middle" fontSize="9" fill={T.textMuted}>{w.label}</text>
+            ))}
+            {(series || []).map((s, si) => {
+              const color = medalColor[si] || T.textMuted
+              const pts = s.ranks.map((r, i) => (r == null ? null : { x: x(i), y: y(r) }))
+              const segs = []; let cur = []
+              pts.forEach(p => { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = [] } })
+              if (cur.length) segs.push(cur)
+              return (
+                <g key={si}>
+                  {segs.map((seg, gi) => (
+                    <polyline key={gi} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+                      points={seg.map(p => `${p.x},${p.y}`).join(' ')} />
+                  ))}
+                  {pts.map((p, i) => (p ? <circle key={i} cx={p.x} cy={p.y} r="2.6" fill={color} /> : null))}
+                </g>
+              )
+            })}
+          </svg>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.sm, marginTop: SPACING.xs }}>
+            {(series || []).map((s, si) => {
+              const last = [...s.ranks].reverse().find(r => r != null)
+              return (
+                <span key={si} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, ...TYPO.caption, color: T.textSub }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: medalColor[si] || T.textMuted, display: 'inline-block' }} />
+                  {s.name}{last != null ? `（${last}位）` : ''}
+                </span>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function RankingCard({ T, title, emoji, accent, subtitle, entries }) {
   const acc = accent || T.accent
   const medalColor = ['#f59e0b', '#94a3b8', '#b45309']
