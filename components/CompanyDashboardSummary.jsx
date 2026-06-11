@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentOrg } from '../lib/orgContext'
+import { fetchAllMembersBadgeRates } from '../lib/badges'
 import { COMMON_TOKENS, RADIUS, SPACING, TYPO, SHADOWS, BRAND_GRADIENT, GLASS } from '../lib/themeTokens'
 import {
   cardStyle, pillStyle, btnPrimary, btnBrand, accentRingStyle,
@@ -387,8 +388,21 @@ export default function CompanyDashboardSummary({
           .sort((a, b) => b.totalChars - a.totalChars || b.fullEntries - a.fullEntries)
           .slice(0, 3)
 
+        // 5. 業務遂行王: 今月のバッジ達成率 (獲得バッジ数 / 7) ランキング
+        let badgeMaster = []
+        try {
+          const badgeNames = [...validMembers].filter(n => !excludeNames.has(n))
+          const rates = await fetchAllMembersBadgeRates(badgeNames) // 当月
+          badgeMaster = rates
+            .filter(r => r.achieved > 0)
+            .sort((a, b) => b.achieved - a.achieved || a.name.localeCompare(b.name))
+            .slice(0, 3)
+        } catch (be) {
+          console.warn('badge ranking calc error:', be)
+        }
+
         // KR 前進王 はランキングから外し、1段目右の「前進KR」カードに移管 (上で集計済)。
-        setRankings({ promiseKeeper, taskMaster, reflection, practiceMaster })
+        setRankings({ badgeMaster, promiseKeeper, taskMaster, reflection, practiceMaster })
       } catch (e) {
         console.warn('rankings calc error:', e)
         setRankings(null)
@@ -528,6 +542,10 @@ export default function CompanyDashboardSummary({
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
               gap: SPACING.md, marginBottom: SPACING.xl,
             }}>
+              <RankingCard T={T} title="業務遂行王" emoji="trophy" accent={T.warn} subtitle="今月のバッジ達成率"
+                entries={(rankings.badgeMaster || []).map(r => ({
+                  name: r.name, main: `${Math.round(r.rate * 100)}%`, sub: `${r.achieved}/${r.total}個`,
+                }))} />
               <RankingCard T={T} title="有言実行王" emoji="target" accent={T.success} subtitle="期限内完了率"
                 entries={rankings.promiseKeeper.map(r => ({
                   name: r.name, main: `${Math.round(r.score * 100)}%`, sub: `${r.overdue}/${r.total}件遅延`,
