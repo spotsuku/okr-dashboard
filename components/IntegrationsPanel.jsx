@@ -12,7 +12,6 @@ const REQUIRED_SCOPES = [
   { url: 'https://www.googleapis.com/auth/calendar.readonly', label: 'Calendar 読み取り'    },
   { url: 'https://www.googleapis.com/auth/gmail.readonly',    label: 'Gmail 読み取り'       },
   { url: 'https://www.googleapis.com/auth/gmail.compose',     label: 'Gmail 下書き作成'      },
-  { url: 'https://www.googleapis.com/auth/drive.readonly',    label: 'Drive 読み取り'        },
 ]
 
 function formatRelative(iso) {
@@ -233,10 +232,10 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ ...TYPO.headline, color: T.text }}>
-                  Google (Gmail + カレンダー + ドライブ)
+                  Google (Gmail + カレンダー)
                 </div>
                 <div style={{ ...TYPO.footnote, fontWeight: 600, color: T.textMuted, marginTop: 1 }}>
-                  メール・予定・資料をダッシュボードに集約 + AI返信 + ドライブAI検索
+                  メール・予定をダッシュボードに集約 + AI返信
                 </div>
               </div>
               {isConnected && (() => {
@@ -270,7 +269,6 @@ export default function IntegrationsPanel({ T, myName, isViewingSelf }) {
                 ['ダッシュボード', '直近8時間の予定 + To/Cc の重要メール5件'],
                 ['メールタブ', 'To/Cc/通知 を整理して表示'],
                 ['AI返信', '返信草稿を自動生成して Gmail の下書きに保存'],
-                ['ドライブAI', '共有ドライブを横断検索・Docs/Sheets/Slidesの本文をAIが要約'],
               ].map(([lbl, ds]) => (
                 <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs + 2 }}>
                   <span style={{ ...TYPO.footnote, fontWeight: 700, color: T.text, minWidth: 90 }}>{lbl}</span>

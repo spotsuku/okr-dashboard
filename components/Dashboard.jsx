@@ -1471,13 +1471,13 @@ export default function Dashboard({ user, onSignOut }) {
     if (error) alert('紐づけに失敗しました: ' + error.message)
   }
 
-  // Google 連携解除: identity (Supabase Auth) + user_integrations (Gmail/Calendar/Drive 用 token) を可能な限り解除
+  // Google 連携解除: identity (Supabase Auth) + user_integrations (Gmail/Calendar 用 token) を可能な限り解除
   // Supabase の Manual Linking 設定が無効でも、Workspace 連携の解除とログアウトは確実に実施する best-effort 設計
   const handleUnlinkGoogle = async () => {
-    if (!window.confirm('Google 連携を解除しますか?\n\n以下が解除されます:\n・Gmail / Calendar / Drive アクセス権 (user_integrations)\n・Google 側の OAuth token (revoke 実施)\n・Supabase 認証の Google identity (Manual Linking が有効な場合のみ)\n\n解除後は自動でログアウトします。再連携したい場合は「Google でログイン」を再度実行してください。')) return
+    if (!window.confirm('Google 連携を解除しますか?\n\n以下が解除されます:\n・Gmail / Calendar アクセス権 (user_integrations)\n・Google 側の OAuth token (revoke 実施)\n・Supabase 認証の Google identity (Manual Linking が有効な場合のみ)\n\n解除後は自動でログアウトします。再連携したい場合は「Google でログイン」を再度実行してください。')) return
     const notes = []
     try {
-      // 1) Workspace 連携 (Gmail/Calendar/Drive 用の access/refresh token) を確実に削除
+      // 1) Workspace 連携 (Gmail/Calendar 用の access/refresh token) を確実に削除
       const myName = members.find(m => m.email === user?.email)?.name
       if (myName) {
         const { authedFetch } = await import('../lib/authedFetch')
@@ -1486,7 +1486,7 @@ export default function Dashboard({ user, onSignOut }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ owner: myName, organization_id: currentOrg?.id }),
         }).catch(() => null)
-        if (r && r.ok) notes.push('Gmail/Calendar/Drive 連携を解除')
+        if (r && r.ok) notes.push('Gmail/Calendar 連携を解除')
       }
       // 2) Supabase Auth の identity を解除 (best-effort)
       //    "Manual linking is disabled" 等で失敗しても integrations 削除は維持して継続

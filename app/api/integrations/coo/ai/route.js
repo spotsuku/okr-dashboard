@@ -62,17 +62,6 @@ const TOOLS = [
     description: '全社サマリ (本日の達成率、各メンバーの稼働状況、停滞タスク総数)',
     input_schema: { type: 'object', properties: {} },
   },
-  {
-    name: 'search_drive',
-    description: 'ネオ福岡共有ドライブ内のファイルを検索する。資料の場所を探す時に使う。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string' },
-      },
-      required: ['query'],
-    },
-  },
   // ─── カレンダー操作 (旧カレンダーAIから集約) ───
   {
     name: 'list_events',
@@ -560,37 +549,6 @@ async function execTool(supabase, owner, name, input, ctx = {}) {
         total_tasks: arr.length, done_tasks: done,
         completion_pct: arr.length > 0 ? Math.round((done / arr.length) * 100) : 0,
         by_member: byMember,
-      }
-    }
-    if (name === 'search_drive') {
-      const driveId = process.env.NEO_FUKUOKA_DRIVE_ID
-      if (!driveId) return { ok: false, error: 'NEO_FUKUOKA_DRIVE_ID 未設定' }
-      const igRes = await getIntegration(owner, 'google', ctx.orgId)
-      if (igRes.error || !igRes.integration) return { ok: false, error: igRes.error || 'Google 未連携' }
-      if (igRes.expired) return { ok: false, error: 'Google トークン期限切れ' }
-      const integration = igRes.integration
-      const escaped = (input.query || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-      const q = `(name contains '${escaped}' or fullText contains '${escaped}') and trashed = false`
-      const url = new URL('https://www.googleapis.com/drive/v3/files')
-      url.searchParams.set('q', q)
-      url.searchParams.set('corpora', 'drive')
-      url.searchParams.set('driveId', driveId)
-      url.searchParams.set('includeItemsFromAllDrives', 'true')
-      url.searchParams.set('supportsAllDrives', 'true')
-      url.searchParams.set('orderBy', 'modifiedTime desc')
-      url.searchParams.set('pageSize', '8')
-      url.searchParams.set('fields', 'files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName))')
-      const { response: r } = await callGoogleApiWithRetry(integration, async (token) => {
-        return fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } })
-      })
-      if (!r.ok) return { ok: false, error: `Drive API ${r.status}` }
-      const data = await r.json()
-      return {
-        ok: true, files: (data.files || []).map(f => ({
-          id: f.id, name: f.name, mimeType: f.mimeType,
-          modifiedTime: f.modifiedTime, webViewLink: f.webViewLink,
-          owner: f.owners?.[0]?.displayName || '',
-        })),
       }
     }
     // ─── カレンダー操作 ───

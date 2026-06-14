@@ -15,7 +15,6 @@ import FocusFillModal from './FocusFillModal'
 import IntegrationsPanel from './IntegrationsPanel'
 import CalendarTab from './CalendarTab'
 import { trackFeature } from '../lib/track'
-import DriveTab from './DriveTab'
 import COOTab from './COOTab'
 import COOKnowledgePanel from './COOKnowledgePanel'
 import ConfirmationsTab, { ComposeModal } from './ConfirmationsTab'
@@ -221,7 +220,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
   // MyCOO チャット / ドライブ AI 等の「下部に送信ボタンを持つチャット型タブ」は
   // MyCOO オーブと座標が重なるためオーブを非表示にする
   useEffect(() => {
-    const HIDE_ORB_TABS = ['coo', 'drive']
+    const HIDE_ORB_TABS = ['coo']
     const hide = HIDE_ORB_TABS.includes(activeTab)
     window.dispatchEvent(new CustomEvent('mycoo:set-orb-visibility', { detail: { hide } }))
     // タブ離脱時は確実に元に戻す
@@ -252,7 +251,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
     const summaryOnly = ['strategy', 'milestone', 'team_summary']
     // 個人モードのみのタブ (全社サマリーでは非表示)。連携はタブから外したが
     // ?tab=integrations 等で開いた場合に全社モードへ切替えたら dashboard へ戻す。
-    const individualOnly = ['okr_edit', 'calendar', 'drive', 'coo', 'retrospect', 'integrations']
+    const individualOnly = ['okr_edit', 'calendar', 'coo', 'retrospect', 'integrations']
     if (summaryMode && individualOnly.includes(activeTab)) setActiveTab('dashboard')
     if (!summaryMode && summaryOnly.includes(activeTab)) setActiveTab('dashboard')
   }, [summaryMode, activeTab])
@@ -301,7 +300,7 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
     const t = new URL(window.location.href).searchParams.get('tab')
     // okr_view は廃止 (詳細はヘッダーのOKRへ) → 互換で okr_edit にマップ
     const normalized = t === 'okr_view' ? 'okr_edit' : t
-    if (normalized && ['dashboard', 'confirm', 'wbs', 'okr_edit', 'mail', 'calendar', 'drive', 'coo', 'retrospect', 'integrations'].includes(normalized)) {
+    if (normalized && ['dashboard', 'confirm', 'wbs', 'okr_edit', 'mail', 'calendar', 'coo', 'retrospect', 'integrations'].includes(normalized)) {
       setActiveTab(normalized)
     }
   }, [])
@@ -394,7 +393,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
     { key: 'okr_edit',     icon: 'target',   label: 'OKR' },
     { key: 'retrospect',   icon: 'refresh',  label: '振り返り' },
     { key: 'calendar',     icon: 'calendar', label: 'カレンダー', requiresFlag: 'google_integration' },
-    { key: 'drive',        icon: 'drive',    label: 'ドライブ',   requiresFlag: 'google_integration' },
     { key: 'coo',          icon: 'ai',       label: 'MyCOO',      requiresFlag: 'coo_knowledge' },
     { key: 'confirm',      icon: 'bell',     label: '共有・確認' },
     { key: 'integrations', icon: 'link',     label: '連携' },
@@ -798,7 +796,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               okr_edit:     { icon: 'target',   label: 'OKR' },
               retrospect:   { icon: 'msg',      label: '振り返り' },
               calendar:     { icon: 'calendar', label: 'カレンダー', requiresFlag: 'google_integration' },
-              drive:        { icon: 'drive',    label: 'ドライブ',   requiresFlag: 'google_integration' },
               coo:          { icon: 'ai',       label: 'MyCOO',     requiresFlag: 'coo_knowledge' },
             }
             const summaryOrder = [
@@ -817,7 +814,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
               { key: 'okr_edit',   group: 'main' },
               { key: 'retrospect', group: 'main' },
               { key: 'calendar',   group: 'main' },
-              { key: 'drive',      group: 'main' },
               { key: 'coo',        group: 'main' },
               { key: 'confirm',    group: 'team' },
             ]
@@ -1017,9 +1013,6 @@ export default function MyPageShell({ user, members, levels, themeKey = 'dark', 
           )}
           {activeTab === 'calendar' && (
             <CalendarTab T={T} myName={myName} members={members} viewingName={viewingName} />
-          )}
-          {activeTab === 'drive' && (
-            <DriveTab T={T} myName={myName} viewingName={viewingName} />
           )}
           {activeTab === 'coo' && (
             <COOTab T={T} myName={myName} viewingName={viewingName}
