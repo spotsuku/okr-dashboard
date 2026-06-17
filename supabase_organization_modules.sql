@@ -22,7 +22,7 @@ alter table organizations
 
 -- enabled_modules の構造 (アプリ側で参照するキー):
 --   {
---     "google_integration": true,   -- Gmail / Calendar / Drive
+--     "google_integration": true,   -- Gmail / Calendar
 --     "ai_chat": true,              -- AIPanel
 --     "meeting_integration": true,  -- Notion 議事録 / Slack 通知
 --     "okr_full": false,            -- 組織階層 / 親子 OKR / 全社サマリー / AI フィードバック
