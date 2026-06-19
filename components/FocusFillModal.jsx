@@ -466,6 +466,26 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     }
   }
 
+  // ─── KR アーカイブ ───
+  // KR を archived_at で非表示にし、キューから外して次のカードへ進む (KA done と同じ挙動)。
+  // アーカイブ済み KR は本モーダル含む各画面の一覧から除外され、アーカイブ画面から復元可能。
+  async function handleArchiveKR() {
+    if (!currentCard || currentCard.kind !== 'kr' || !canEdit) return
+    const kr = currentCard.kr
+    if (!window.confirm(`「${kr.title}」をアーカイブしますか？\n各画面の KR 一覧から非表示になります（アーカイブ画面から復元可能）`)) return
+    const { error } = await supabase.from('key_results')
+      .update({ archived_at: new Date().toISOString() }).eq('id', kr.id)
+    if (error) { alert('アーカイブ失敗: ' + error.message); return }
+    const curIdx = index.kr
+    const newQ = queue.kr.filter((_, i) => i !== curIdx)
+    setQueue(prev => ({ ...prev, kr: newQ }))
+    if (newQ.length === 0) {
+      setCompleted(c => ({ ...c, kr: true }))
+    } else if (curIdx >= newQ.length) {
+      setIndex(i => ({ ...i, kr: newQ.length - 1 }))
+    }
+  }
+
   // ─── D: スワイプジェスチャ ───
   const touchStartX = useMemo(() => ({ x: 0 }), [])
   const onTouchStart = (e) => {
@@ -703,6 +723,13 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
               display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
               opacity: index[mode] === 0 ? 0.4 : 1,
             }}><Icon name="chevronL" size={13} /> 戻る</button>
+            {mode === 'kr' && canEdit && (
+              <button onClick={handleArchiveKR} disabled={saving}
+                title="このKRをアーカイブ（各画面のKR一覧から非表示・アーカイブ画面から復元可能）" style={{
+                ...btnSecondary({ T, size: 'md' }), border: `1px solid ${T.borderMid}`, color: T.danger,
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}><Icon name="inbox" size={13} /> アーカイブ</button>
+            )}
             <div style={{ flex: 1, ...TYPO.caption, fontWeight: 700, color: T.textFaint, textAlign: 'center', display: 'none' }} className="swipe-hint">
               スワイプで戻る / 右スワイプで保存
             </div>

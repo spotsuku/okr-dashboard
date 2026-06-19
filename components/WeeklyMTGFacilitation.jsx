@@ -373,10 +373,10 @@ export default function WeeklyMTGFacilitation({
       let krsRaw = []
       if (allObjIdsAll.length > 0) {
         let res = await supabase.from('key_results')
-          .select('id, objective_id, title, owner, target, current, lower_is_better, program_tags').in('objective_id', allObjIdsAll)
+          .select('id, objective_id, title, owner, target, current, lower_is_better, program_tags').in('objective_id', allObjIdsAll).is('archived_at', null)
         if (res.error && /program_tags|column/i.test(res.error.message || '')) {
           res = await supabase.from('key_results')
-            .select('id, objective_id, title, owner, target, current, lower_is_better').in('objective_id', allObjIdsAll)
+            .select('id, objective_id, title, owner, target, current, lower_is_better').in('objective_id', allObjIdsAll).is('archived_at', null)
         }
         krsRaw = res.data || []
       }
@@ -1347,12 +1347,14 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           let krsRes = await supabase.from('key_results')
             .select('id, title, target, current, unit, owner, objective_id, lower_is_better, program_tags')
             .in('objective_id', objIds)
+            .is('archived_at', null)
             .range(0, 49999)
           // program_tags 列が無い古い環境のフォールバック
           if (krsRes.error && /program_tags|column/i.test(krsRes.error.message || '')) {
             krsRes = await supabase.from('key_results')
               .select('id, title, target, current, unit, owner, objective_id, lower_is_better')
               .in('objective_id', objIds)
+              .is('archived_at', null)
               .range(0, 49999)
           }
           if (krsRes.error) throw krsRes.error
@@ -2176,6 +2178,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
           const krsRes = await supabase.from('key_results')
             .select('id, title, objective_id, target, current, unit, lower_is_better, owner')
             .in('objective_id', objIds)
+            .is('archived_at', null)
             .range(0, 49999)
           krs = krsRes.data || []
           const krIds = krs.map(k => k.id)
