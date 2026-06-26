@@ -1616,6 +1616,10 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         />
         {showYesterdayKPT && (
           <KPTModal
+            // 対象日ごとに再マウントして state(対象日・KPT入力)をリセットする。
+            // key が無いと複数日まとめて補完する際、reflectionDate が初日(最古)の
+            // ままになり、火・水ぶんの振り返りまで月曜の created_at で保存されてしまう。
+            key={pendingYesterdayLog.date}
             T={T} busy={busy} force
             yesterdayDateStr={yesterdayDateStr}
             pendingDateISO={pendingYesterdayLog.date}
