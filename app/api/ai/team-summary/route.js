@@ -16,6 +16,18 @@ function getAdminClient() {
   )
 }
 
+// 達成率(%) はアプリ標準の calcPct と同式で算出する。
+// (components/MyOKRPage.jsx / KRBlock calcStars と一致)
+// これを揃えないと lower_is_better(小さいほど良い)KR で達成率が逆転し
+// (例: 目標10 / 現在50 → 素朴計算で 500%)、AI 要約がダッシュボードと食い違う。
+function calcPct(current, target, lowerIsBetter) {
+  if (!(Number(target) > 0)) return null
+  const cur = Number(current ?? 0)
+  const tgt = Number(target)
+  const r = lowerIsBetter ? tgt / Math.max(cur, 0.001) : cur / tgt
+  return Math.min(Math.round(r * 100), 150)
+}
+
 export async function POST(request) {
   try {
     const { level_id, week_start, organization_id } = await request.json()
@@ -44,7 +56,7 @@ export async function POST(request) {
     let krReviews = []
     if (objIds.length > 0) {
       const krsRes = await supabase.from('key_results')
-        .select('id, title, target, current, unit, owner, objective_id').in('objective_id', objIds).eq('organization_id', organization_id)
+        .select('id, title, target, current, unit, owner, objective_id, lower_is_better').in('objective_id', objIds).eq('organization_id', organization_id)
       krs = krsRes.data || []
       const krIds = krs.map(k => k.id)
       if (krIds.length > 0) {
@@ -69,7 +81,8 @@ export async function POST(request) {
       const r = reviewByKr.get(Number(k.id))
       const target = Number(k.target ?? 0)
       const current = Number(k.current ?? 0)
-      const progress = target > 0 ? Math.round((current / target) * 100) : null
+      // 達成率はアプリ標準 (calcPct) と同式。lower_is_better を考慮しないと数値が逆転する。
+      const progress = calcPct(k.current, k.target, k.lower_is_better)
       const lines = []
       lines.push(`【KR】${k.title}${k.owner ? ` (担当: ${k.owner})` : ''}${progress != null ? ` [${current}/${target}${k.unit || ''} = ${progress}%]` : ''}`)
       if (r?.good)  lines.push(`  ✅good: ${r.good.trim()}`)
@@ -112,7 +125,14 @@ export async function POST(request) {
 - focus は「来週このチームで注力すること」として書く。
 - 出力は **JSON のみ** で、形式: {"good": "...", "more": "...", "focus": "..."}
 - 各値は改行区切りの箇条書き文字列 ("- " で始める)。
-- 材料が少ない項目は空文字 "" にする。`
+- 材料が少ない項目は空文字 "" にする。
+
+**事実厳守 (最重要):**
+- 下記の素材に書かれていない事実・数字・固有名・成果を**絶対に創作しない**。
+- 達成率や数値は素材に記載された値だけを使う。計算で新しい数字を作らない。
+- 推測・一般論・「〜だろう」といった素材に根拠のない記述は禁止。
+- 抽象化する際も、元の記述の意味を変えない (誇張・控えめ化をしない)。
+- 該当する素材が無ければ、無理に項目を埋めず空文字にする。`
 
     const userPrompt = `チーム名: ${teamName}
 週: ${week_start} 開始
