@@ -458,6 +458,13 @@ function UserListTab({ members, currentUser, isAdmin }) {
           <div style={{ fontSize: 10, fontWeight: 700, color: T().textMuted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>サブ設定</div>
           <SlackSyncPanel />
           <ConfirmationsWebhookPanel currentUser={currentUser} />
+          <ConfirmationsWebhookPanel
+            currentUser={currentUser}
+            kind="daily_report"
+            title="終業報告(日報)の通知チャンネル"
+            desc={<>終業時に投稿される「本日の活動報告」(1時間ごとの作業 + KPT) を、ここに登録した Slack Incoming Webhook で投稿します。<br />未設定の場合は共有・確認事項 webhook → 部署 webhook → グローバル設定の順にフォールバックします。</>}
+            testLabel="終業報告チャンネル"
+          />
         </div>
       )}
       </div>{/* /2カラム */}
@@ -697,7 +704,13 @@ function SlackSyncPanel() {
 // 共有・確認事項 専用 Slack Webhook 設定 (admin 用・組織ごと)
 // organizations.slack_webhook_confirmations に保存
 // ══════════════════════════════════════════════════
-function ConfirmationsWebhookPanel({ currentUser }) {
+function ConfirmationsWebhookPanel({
+  currentUser,
+  kind = 'confirmations',
+  title = '共有・確認事項の通知チャンネル',
+  desc = <>ダッシュボードから投稿された 共有 / 確認 事項を、ここに登録した Slack Incoming Webhook で投稿します。<br />未設定の場合は部署 webhook → グローバル設定の順にフォールバックします。</>,
+  testLabel = '共有・確認事項チャンネル',
+}) {
   const { currentOrg } = useCurrentOrg()
   const [url, setUrl] = useState('')
   const [initialUrl, setInitialUrl] = useState('')
@@ -710,7 +723,7 @@ function ConfirmationsWebhookPanel({ currentUser }) {
     if (!currentOrg?.id) return
     let aborted = false
     setLoading(true); setMessage('')
-    fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}`)
+    fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}&kind=${kind}`)
       .then(async r => {
         const j = await r.json().catch(() => ({}))
         if (aborted) return
@@ -740,6 +753,7 @@ function ConfirmationsWebhookPanel({ currentUser }) {
           organization_id: currentOrg.id,
           url,
           email: currentUser?.email || '',
+          kind,
         }),
       })
       const j = await r.json().catch(() => ({}))
@@ -750,7 +764,7 @@ function ConfirmationsWebhookPanel({ currentUser }) {
       }
       // 二重確認: 即座に GET で再取得し、DB に確実に書き込まれたかを検証
       // (古いキャッシュバンドル / RLS の silent failure を検知するため)
-      const vr = await fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}&_t=${Date.now()}`, { cache: 'no-store' })
+      const vr = await fetch(`/api/integrations/slack/org-webhook?organization_id=${encodeURIComponent(currentOrg.id)}&kind=${kind}&_t=${Date.now()}`, { cache: 'no-store' })
       const vj = await vr.json().catch(() => ({}))
       setSaving(false)
       if (!vr.ok) {
@@ -779,7 +793,7 @@ function ConfirmationsWebhookPanel({ currentUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url,
-          text: `テスト通知: 共有・確認事項チャンネルへのSlack通知が正常に動作しています (${currentOrg?.name || ''})`,
+          text: `テスト通知: ${testLabel}へのSlack通知が正常に動作しています (${currentOrg?.name || ''})`,
         }),
       })
       const j = await r.json().catch(() => ({}))
@@ -801,11 +815,10 @@ function ConfirmationsWebhookPanel({ currentUser }) {
         <span style={{ fontSize: 18, color: T().accent, display: 'inline-flex' }}><Icon name="inbox" size={18} /></span>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T().text }}>
-            共有・確認事項の通知チャンネル
+            {title}
           </div>
           <div style={{ fontSize: 11, color: T().textMuted, lineHeight: 1.5 }}>
-            ダッシュボードから投稿された 共有 / 確認 事項を、ここに登録した Slack Incoming Webhook で投稿します。
-            <br />未設定の場合は部署 webhook → グローバル設定の順にフォールバックします。
+            {desc}
           </div>
         </div>
       </div>
