@@ -4183,7 +4183,7 @@ function Section({ T, icon, title, children, flex = 1, headerRight = null, accen
 function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false, members = [] }) {
   const isMobile = useIsMobile()
   const [subTab, setSubTab] = useState('retrospect') // 'retrospect' | 'badges'
-  const [range, setRange] = useState('week') // 'week' | 'month' | 'all'
+  const [range, setRange] = useState('week') // 'week' | 'month' | 'quarter' | 'all'
 
   // ─── アクセス権限ガード ──────────────────────────────────────────
   // 振り返りページの閲覧可能者:
@@ -4222,6 +4222,13 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
         const jst = new Date(now.getTime() + 9 * 3600 * 1000)
         const firstOfMonth = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), 1))
         return firstOfMonth.toISOString()
+      }
+      if (range === 'quarter') {
+        // 四半期 = 現在のカレンダー四半期 (1-3 / 4-6 / 7-9 / 10-12 月) の初日 (JST)
+        const jst = new Date(now.getTime() + 9 * 3600 * 1000)
+        const qStartMonth = Math.floor(jst.getUTCMonth() / 3) * 3
+        const firstOfQuarter = new Date(Date.UTC(jst.getUTCFullYear(), qStartMonth, 1))
+        return firstOfQuarter.toISOString()
       }
       // week
       const monday = new Date(getMondayJSTStr() + 'T00:00:00Z')
@@ -4344,9 +4351,10 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
         )}
         <SegmentedControl T={T} size="sm" value={range} onChange={setRange}
           items={[
-            { key: 'week',  label: '今週' },
-            { key: 'month', label: '今月' },
-            { key: 'all',   label: '全期間' },
+            { key: 'week',    label: '今週' },
+            { key: 'month',   label: '今月' },
+            { key: 'quarter', label: '四半期' },
+            { key: 'all',     label: '全期間' },
           ]} />
         <button onClick={load} title="再読み込み" style={{
           background: 'transparent', border: `1px solid ${T.border}`, color: T.textMuted,
@@ -4746,7 +4754,7 @@ function ThreeQuestions({ T, viewingName, canEdit, myName }) {
 }
 
 function RetrospectSummary({ T, stats, kpt, range }) {
-  const rangeLabel = range === 'week' ? '今週' : range === 'month' ? '今月' : '全期間'
+  const rangeLabel = range === 'week' ? '今週' : range === 'month' ? '今月' : range === 'quarter' ? '四半期' : '全期間'
   const total = stats.onTime + stats.overdue
   const completionPct = total > 0 ? Math.round((stats.onTime / total) * 100) : 0
 
