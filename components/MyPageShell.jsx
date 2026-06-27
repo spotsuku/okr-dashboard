@@ -1565,12 +1565,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     await onWorkLogChange()
   }
 
-  async function handleEnd({ keep, problem, tryNote }) {
+  async function handleEnd({ keep, problem, tryNote, hourly }) {
     if (busy || !workLog) return
     setBusy(true)
-    // 1. work_log に end_at を追記
+    // 1. work_log に end_at + 1時間ごとの作業記録 (任意) を追記
     const oldContent = parseLogContent(workLog.content)
-    const newContent = { ...oldContent, end_at: new Date().toISOString() }
+    const endAtIso = new Date().toISOString()
+    const newContent = { ...oldContent, end_at: endAtIso }
+    if (Array.isArray(hourly) && hourly.length > 0) newContent.hourly = hourly
     const { error: e1 } = await withNetworkRetry(() => supabase
       .from('coaching_logs')
       .update({ content: JSON.stringify(newContent) })
@@ -1587,6 +1589,22 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       }))
       if (e2) { setBusy(false); alert(saveErrorMessage('振り返り(KPT)の保存', e2)); return }
     }
+    // 3. Slack へ本日の活動報告を投稿 (非ブロッキング。失敗しても終業は完了扱い)
+    const worked = oldContent.start_at
+      ? (() => { const m = Math.floor((new Date(endAtIso) - new Date(oldContent.start_at)) / 60000); return `${Math.floor(m / 60)}時間${m % 60}分` })()
+      : ''
+    fetch('/api/integrations/slack/daily-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner: myName,
+        organization_id: currentOrg?.id,
+        date: toJSTDateStr(new Date()),
+        worked,
+        hourly: hourly || [],
+        keep, problem, try: tryNote,
+      }),
+    }).catch(e => console.warn('daily-report 投稿失敗:', e?.message))
     setBusy(false)
     setKptOpen(false)
     await onWorkLogChange()
@@ -3662,6 +3680,25 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
   const [endTimeHHMM, setEndTimeHHMM] = useState('18:00')
   // 振り返りの「対象日」。既定は未終業ログの勤務日。公欠/始業忘れ等は本人が選び直す。
   const [reflectionDate, setReflectionDate] = useState(pendingDateISO || todayISO || '')
+  // 1時間ごとの作業記録 (通常の終業時のみ・任意)。始業〜現在を1時間スロットに分割する。
+  const [hourly, setHourly] = useState({})
+  const hourSlots = useMemo(() => {
+    if (force || !startedAt) return []
+    const startMs = new Date(startedAt).getTime()
+    const nowMs = Date.now()
+    if (!(nowMs > startMs)) return []
+    // 始業時刻を JST の「時」の頭に丸めて起点にする
+    const jstStart = new Date(startMs + 9 * 3600 * 1000)
+    let cursor = Date.UTC(jstStart.getUTCFullYear(), jstStart.getUTCMonth(), jstStart.getUTCDate(), jstStart.getUTCHours()) - 9 * 3600 * 1000
+    const out = []
+    for (let i = 0; i < 20 && cursor < nowMs; i++) { // 上限20スロット (暴走防止)
+      const sH = new Date(cursor + 9 * 3600 * 1000).getUTCHours()
+      const eH = (sH + 1) % 24
+      out.push(`${String(sH).padStart(2, '0')}:00–${String(eH).padStart(2, '0')}:00`)
+      cursor += 3600 * 1000
+    }
+    return out
+  }, [force, startedAt])
   // 対象日の選択肢 (未終業日〜今日) に (今日)(昨日)(おととい)(N日前) の相対ラベルを自動付与
   const dayOptions = useMemo(() => {
     if (!force || !pendingDateISO || !todayISO) return []
@@ -3807,6 +3844,39 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
           </div>
         )}
 
+        {!force && hourSlots.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="clock" size={12} /> 1時間ごとの作業記録</label>
+            <div style={hintStyle}>各時間に何をしたかを記入（任意・空欄OK）。保存時に上司への報告にも反映されます。</div>
+            <div style={{
+              border: `1px solid ${T.border}`, borderRadius: 8, overflow: 'hidden',
+            }}>
+              {hourSlots.map((slot, i) => (
+                <div key={slot + i} style={{
+                  display: 'flex', alignItems: 'stretch',
+                  borderTop: i === 0 ? 'none' : `1px solid ${T.border}`,
+                }}>
+                  <div style={{
+                    flexShrink: 0, width: 96, padding: '8px 10px',
+                    background: T.sectionBg, color: T.textSub,
+                    fontSize: 11, fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    display: 'flex', alignItems: 'center',
+                  }}>{slot}</div>
+                  <input
+                    value={hourly[slot] || ''}
+                    onChange={e => setHourly(prev => ({ ...prev, [slot]: e.target.value }))}
+                    placeholder="例: ○○の提案書作成"
+                    style={{
+                      flex: 1, minWidth: 0, padding: '8px 10px', border: 'none', outline: 'none',
+                      background: T.bgCard, color: T.text, fontSize: 13, fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div style={{ marginBottom: 12 }}>
           <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: T.success, flexShrink: 0 }} /> Keep（良かったこと・続けたいこと）</label>
           <div style={hintStyle}>成果・学び・上手くいったこと</div>
@@ -3836,7 +3906,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
             >キャンセル</button>
           )}
           <button
-            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM, reflectionDate })}
+            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM, reflectionDate, hourly: hourSlots.map(slot => ({ slot, text: hourly[slot] || '' })).filter(h => h.text.trim()) })}
             disabled={busy || !canSave}
             style={{
               background: canSave ? T.info : T.border,
@@ -4863,12 +4933,13 @@ function RetrospectDay({ T, day }) {
   const isToday = day.date === todayStr
   const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`
 
-  const { start_at, end_at } = day.workLog || {}
+  const { start_at, end_at, hourly } = day.workLog || {}
   const worked = (start_at && end_at) ? (() => {
     const mins = Math.floor((new Date(end_at) - new Date(start_at)) / 60000)
     return `${Math.floor(mins / 60)}時間${mins % 60}分`
   })() : ''
   const hasKpt = day.kpts.length > 0
+  const hourlyRows = Array.isArray(hourly) ? hourly.filter(h => h && (h.text || '').trim()) : []
 
   return (
     <div style={{
@@ -4920,6 +4991,24 @@ function RetrospectDay({ T, day }) {
           </span>
         )}
       </div>
+
+      {/* 1時間ごとの作業記録 (終業時に記入) */}
+      {hourlyRows.length > 0 && (
+        <div style={{ padding: '12px 16px', borderBottom: hasKpt ? `1px solid ${T.border}` : 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <span style={{ color: T.textMuted, display: 'inline-flex' }}><Icon name="clock" size={11} /></span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: T.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>時間ごとの作業</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {hourlyRows.map((h, i) => (
+              <div key={(h.slot || '') + i} style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: T.textSub, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{h.slot}</span>
+                <span style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{h.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPT 本体: 3 列グリッド (ドット + ラベル + 本文) */}
       {hasKpt && (
