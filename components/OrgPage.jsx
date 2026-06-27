@@ -3821,6 +3821,180 @@ function OnboardingChecklist({ T, levels, members, tasks, jdRows, manuals, onTab
   )
 }
 
+// ══════════════════════════════════════════════════
+// 勤怠集計タブ (admin 用): 月次の就業時間を全メンバー一括出力 (給与計算用)
+// work_log (coaching_logs.log_type='work_log') の start_at〜end_at を月単位で集計し
+// メンバー別の 出勤日数 / 就業時間 を表示・CSV出力する。
+// ══════════════════════════════════════════════════
+function attParseContent(s) { try { return typeof s === 'string' ? JSON.parse(s) : (s || {}) } catch { return {} } }
+function attToJSTDate(iso) {
+  const j = new Date(new Date(iso).getTime() + 9 * 3600 * 1000)
+  return `${j.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2, '0')}-${String(j.getUTCDate()).padStart(2, '0')}`
+}
+function attCsvCell(v) {
+  const s = String(v ?? '')
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+function attMinToHHMM(min) { return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}` }
+
+function AttendanceExportTab({ members = [], levels = [], orgId }) {
+  const [month, setMonth] = useState(() => {
+    const j = new Date(Date.now() + 9 * 3600 * 1000)
+    return `${j.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2, '0')}`
+  })
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+
+  const monthOptions = useMemo(() => {
+    const out = []
+    const j = new Date(Date.now() + 9 * 3600 * 1000)
+    let y = j.getUTCFullYear(), m = j.getUTCMonth()
+    for (let i = 0; i < 12; i++) {
+      out.push(`${y}-${String(m + 1).padStart(2, '0')}`)
+      m--; if (m < 0) { m = 11; y-- }
+    }
+    return out
+  }, [])
+
+  const load = useCallback(async () => {
+    if (!orgId) return
+    setLoading(true); setErr('')
+    const [yy, mm] = month.split('-').map(Number)
+    // JST の月初〜翌月初を UTC に変換して created_at で絞る
+    const startUtc = new Date(Date.UTC(yy, mm - 1, 1, 0, 0, 0) - 9 * 3600 * 1000)
+    const endUtc = new Date(Date.UTC(yy, mm, 1, 0, 0, 0) - 9 * 3600 * 1000)
+    const { data, error } = await supabase.from('coaching_logs')
+      .select('owner, content, created_at')
+      .eq('organization_id', orgId)
+      .eq('log_type', 'work_log')
+      .gte('created_at', startUtc.toISOString())
+      .lt('created_at', endUtc.toISOString())
+      .range(0, 9999)
+    if (error) { setErr('取得失敗: ' + error.message); setLoading(false); return }
+    // owner ごとに集計
+    const agg = {}
+    for (const r of (data || [])) {
+      const c = attParseContent(r.content)
+      const name = r.owner
+      if (!agg[name]) agg[name] = { minutes: 0, days: new Set(), incomplete: 0 }
+      const dayStr = attToJSTDate(c.start_at || r.created_at)
+      if (c.start_at && c.end_at) {
+        agg[name].minutes += Math.max(0, Math.round((new Date(c.end_at) - new Date(c.start_at)) / 60000))
+        agg[name].days.add(dayStr)
+      } else if (c.start_at) {
+        agg[name].incomplete += 1
+        agg[name].days.add(dayStr)
+      }
+    }
+    const levelName = (id) => (levels.find(l => Number(l.id) === Number(id))?.name) || ''
+    const sorted = [...members].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999) || (a.name || '').localeCompare(b.name || ''))
+    setRows(sorted.map(mem => {
+      const a = agg[mem.name] || { minutes: 0, days: new Set(), incomplete: 0 }
+      return { name: mem.name, dept: levelName(mem.level_id), days: a.days.size, minutes: a.minutes, incomplete: a.incomplete }
+    }))
+    setLoading(false)
+  }, [orgId, month, members, levels])
+
+  useEffect(() => { load() }, [load])
+
+  const totals = useMemo(() => rows.reduce((t, r) => ({
+    days: t.days + r.days, minutes: t.minutes + r.minutes, incomplete: t.incomplete + r.incomplete,
+  }), { days: 0, minutes: 0, incomplete: 0 }), [rows])
+
+  const downloadCsv = () => {
+    const header = ['メンバー', '部署', '出勤日数', '就業時間(時:分)', '就業時間(時間)', '未終業日数']
+    const body = rows.map(r => [r.name, r.dept, r.days, attMinToHHMM(r.minutes), (r.minutes / 60).toFixed(2), r.incomplete])
+    const totalRow = ['合計', '', totals.days, attMinToHHMM(totals.minutes), (totals.minutes / 60).toFixed(2), totals.incomplete]
+    const csv = [header, ...body, totalRow].map(cols => cols.map(attCsvCell).join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `勤怠集計_${month}.csv`
+    document.body.appendChild(a); a.click(); a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const th = { padding: '8px 12px', fontSize: 11, fontWeight: 700, color: T().textMuted, textAlign: 'left', borderBottom: `1px solid ${T().border}`, whiteSpace: 'nowrap' }
+  const td = { padding: '8px 12px', fontSize: 12.5, color: T().text, borderBottom: `1px solid ${T().border}` }
+  const num = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', textAlign: 'right' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T().text }}>月次の就業時間（給与計算用）</div>
+          <div style={{ fontSize: 11, color: T().textMuted, lineHeight: 1.5 }}>
+            始業〜終業の記録から、メンバー別の出勤日数・就業時間を月単位で集計します。CSV出力して給与計算にご利用ください。
+          </div>
+        </div>
+        <select value={month} onChange={e => setMonth(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${T().border}`, background: T().inputBg, color: T().text, fontSize: 13, fontFamily: 'inherit', outline: 'none' }}>
+          {monthOptions.map(m => <option key={m} value={m}>{m.replace('-', '年') + '月'}</option>)}
+        </select>
+        <button onClick={load} disabled={loading}
+          style={{ padding: '8px 14px', borderRadius: 8, border: `1px solid ${T().border}`, background: 'transparent', color: T().textSub, fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: loading ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <Icon name="refresh" size={12} /> 再読み込み
+        </button>
+        <button onClick={downloadCsv} disabled={loading || rows.length === 0}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: (loading || rows.length === 0) ? T().border : T().accent, color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: (loading || rows.length === 0) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <Icon name="note" size={12} /> CSV出力
+        </button>
+      </div>
+
+      {err && <div style={{ marginBottom: 12, padding: 8, borderRadius: 6, background: T().dangerBg, border: `1px solid ${T().danger}`, fontSize: 11, color: T().danger }}>{err}</div>}
+
+      <div style={{ border: `1px solid ${T().border}`, borderRadius: 12, overflow: 'hidden', background: T().bgCard }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>メンバー</th>
+                <th style={th}>部署</th>
+                <th style={{ ...th, textAlign: 'right' }}>出勤日数</th>
+                <th style={{ ...th, textAlign: 'right' }}>就業時間 (時:分)</th>
+                <th style={{ ...th, textAlign: 'right' }}>就業時間 (時間)</th>
+                <th style={{ ...th, textAlign: 'right' }}>未終業</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td style={{ ...td, textAlign: 'center', color: T().textMuted }} colSpan={6}>読み込み中…</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td style={{ ...td, textAlign: 'center', color: T().textMuted }} colSpan={6}>この月の記録はありません</td></tr>
+              ) : rows.map(r => (
+                <tr key={r.name}>
+                  <td style={{ ...td, fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ ...td, color: T().textMuted }}>{r.dept || '—'}</td>
+                  <td style={{ ...td, ...num }}>{r.days}</td>
+                  <td style={{ ...td, ...num }}>{attMinToHHMM(r.minutes)}</td>
+                  <td style={{ ...td, ...num }}>{(r.minutes / 60).toFixed(2)}</td>
+                  <td style={{ ...td, ...num, color: r.incomplete > 0 ? T().warn : T().textMuted }}>{r.incomplete || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+            {rows.length > 0 && !loading && (
+              <tfoot>
+                <tr>
+                  <td style={{ ...td, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>合計</td>
+                  <td style={{ ...td, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }} />
+                  <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{totals.days}</td>
+                  <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{attMinToHHMM(totals.minutes)}</td>
+                  <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{(totals.minutes / 60).toFixed(2)}</td>
+                  <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{totals.incomplete || '—'}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 10.5, color: T().textMuted, lineHeight: 1.6 }}>
+        ※ 「就業時間」は各日の始業〜終業の差の合計です。「未終業」は終業記録が無い日数（給与計算前に各自で終業補完をご依頼ください）。
+      </div>
+    </div>
+  )
+}
+
 export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }) {
   // グローバルテーマを更新
   _T = THEMES[themeKey] || THEMES.dark
@@ -3914,6 +4088,8 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
     { id: 'taskflow', icon: 'refresh', label: '業務マニュアル' },
     { id: 'members',  icon: 'user', label: 'メンバーJD' },
     { id: 'users',    icon: 'org', label: 'ユーザー管理' },
+    // 勤怠集計 (給与計算用) は管理者のみ
+    ...(isAdmin ? [{ id: 'attendance', icon: 'clock', label: '勤怠集計' }] : []),
   ]
 
 
@@ -3991,6 +4167,7 @@ export default function OrgPage({ themeKey = 'dark', user, fiscalYear = '2026' }
           />
         )}
         {activeTab === 'users' && <UserListTab members={members} currentUser={user} isAdmin={isAdmin} />}
+        {activeTab === 'attendance' && isAdmin && <AttendanceExportTab members={members} levels={levels} orgId={orgId} />}
       </div>
 
       {showOrgManage && (
