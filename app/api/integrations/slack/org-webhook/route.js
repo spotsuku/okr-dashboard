@@ -1,6 +1,10 @@
-// 共有・確認事項 専用 Slack Webhook の組織別設定 CRUD (admin のみ)
-// GET  /api/integrations/slack/org-webhook?organization_id=X
-// POST /api/integrations/slack/org-webhook  Body: { organization_id, url, owner }
+// 組織別 Slack Webhook の CRUD (admin のみ)
+// GET  /api/integrations/slack/org-webhook?organization_id=X&kind=confirmations|daily_report
+// POST /api/integrations/slack/org-webhook  Body: { organization_id, url, owner, email, kind }
+//
+// kind により保存先カラムを切り替える (既定: confirmations = 従来挙動):
+//   - confirmations → organizations.slack_webhook_confirmations
+//   - daily_report  → organizations.slack_webhook_daily_report
 //
 // クライアントから直接 supabase で organizations を UPDATE すると、
 // RLS により無言で何も更新されないことがあるため、SERVICE_ROLE で実行する
@@ -9,6 +13,16 @@
 export const dynamic = 'force-dynamic'
 
 import { getAdminClient } from '../../_shared'
+
+// kind → (カラム名, マイグレーションSQLファイル名)
+const KIND_COLUMNS = {
+  confirmations: { col: 'slack_webhook_confirmations', sql: 'supabase_add_org_slack_settings.sql' },
+  daily_report:  { col: 'slack_webhook_daily_report',  sql: 'supabase_add_daily_report_webhook.sql' },
+}
+
+function resolveKind(kind) {
+  return KIND_COLUMNS[kind] || KIND_COLUMNS.confirmations
+}
 
 function json(body, init) {
   return new Response(JSON.stringify(body), {
@@ -36,22 +50,23 @@ export async function GET(request) {
     const u = new URL(request.url)
     const organization_id = u.searchParams.get('organization_id')
     if (!organization_id) return json({ error: 'organization_id が必要です' }, { status: 400 })
+    const { col, sql } = resolveKind(u.searchParams.get('kind'))
     const { data, error } = await supabase
       .from('organizations')
-      .select('slack_webhook_confirmations')
+      .select(col)
       .eq('id', organization_id)
       .maybeSingle()
     if (error) {
       const msg = error.message || ''
       if (/column .* does not exist|schema cache/i.test(msg)) {
         return json({
-          error: 'organizations.slack_webhook_confirmations カラムが未作成です。Supabase で supabase_add_org_slack_settings.sql を実行してください。',
+          error: `organizations.${col} カラムが未作成です。Supabase で ${sql} を実行してください。`,
           migrationMissing: true,
         }, { status: 500 })
       }
       return json({ error: msg }, { status: 500 })
     }
-    return json({ url: data?.slack_webhook_confirmations || '' })
+    return json({ url: data?.[col] || '' })
   } catch (e) {
     return json({ error: e?.message || String(e) }, { status: 500 })
   }
@@ -61,25 +76,26 @@ export async function POST(request) {
   try {
     const supabase = getAdminClient()
     const body = await request.json().catch(() => ({}))
-    const { organization_id, url, owner, email } = body || {}
+    const { organization_id, url, owner, email, kind } = body || {}
     if (!organization_id) return json({ error: 'organization_id が必要です' }, { status: 400 })
     if (!(await isAdmin(supabase, owner, email))) {
       return json({ error: 'admin 権限が必要です' }, { status: 403 })
     }
+    const { col, sql } = resolveKind(kind)
     const value = (url || '').trim()
     if (value && !/^https:\/\/hooks\.slack\.com\/services\//.test(value)) {
       return json({ error: 'Slack Incoming Webhook の URL ではありません' }, { status: 400 })
     }
     const { data, error } = await supabase
       .from('organizations')
-      .update({ slack_webhook_confirmations: value || null })
+      .update({ [col]: value || null })
       .eq('id', organization_id)
-      .select('id, slack_webhook_confirmations')
+      .select(`id, ${col}`)
     if (error) {
       const msg = error.message || ''
       if (/column .* does not exist|schema cache/i.test(msg)) {
         return json({
-          error: 'organizations.slack_webhook_confirmations カラムが未作成です。Supabase で supabase_add_org_slack_settings.sql を実行してください。',
+          error: `organizations.${col} カラムが未作成です。Supabase で ${sql} を実行してください。`,
           migrationMissing: true,
         }, { status: 500 })
       }
@@ -88,7 +104,7 @@ export async function POST(request) {
     if (!data || data.length === 0) {
       return json({ error: '対象組織が見つかりません (organization_id を確認してください)' }, { status: 404 })
     }
-    return json({ ok: true, url: data[0].slack_webhook_confirmations || '' })
+    return json({ ok: true, url: data[0][col] || '' })
   } catch (e) {
     return json({ error: e?.message || String(e) }, { status: 500 })
   }

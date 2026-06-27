@@ -62,11 +62,21 @@ export async function POST(request) {
 
     let notified = false
 
-    // 1. 組織の共有 webhook
+    // 1. 組織の「終業報告(日報)専用」webhook → 無ければ共有・確認事項 webhook にフォールバック
     if (organization_id) {
-      const { data: org } = await supabase.from('organizations')
-        .select('slack_webhook_confirmations').eq('id', organization_id).maybeSingle()
-      if (org?.slack_webhook_confirmations) notified = await postWebhook(org.slack_webhook_confirmations, text)
+      // slack_webhook_daily_report 列が未作成の環境でもエラーにせず確認事項列だけ読む
+      let org = null
+      const res = await supabase.from('organizations')
+        .select('slack_webhook_daily_report, slack_webhook_confirmations').eq('id', organization_id).maybeSingle()
+      if (res.error && /column .* does not exist|schema cache/i.test(res.error.message || '')) {
+        const fb = await supabase.from('organizations')
+          .select('slack_webhook_confirmations').eq('id', organization_id).maybeSingle()
+        org = fb.data
+      } else {
+        org = res.data
+      }
+      const target = org?.slack_webhook_daily_report || org?.slack_webhook_confirmations
+      if (target) notified = await postWebhook(target, text)
     }
     // 2. env 共有 webhook
     if (!notified && process.env.SLACK_WEBHOOK_URL_CONFIRMATIONS) {
