@@ -645,6 +645,15 @@ function KRBlock({ kr, reports, onAddKA, onSaveKA, onDeleteKA, members, wT, leve
           </div>
           <span style={{ display:'inline-flex', flexShrink:0, color:starCfg.color }}>{Array.from({length:5}).map((_,i)=><Icon key={i} name="star" size={13} style={{ opacity: i < stars ? 1 : 0.25 }} />)}</span>
           {!reviewOpen && weather > 0 && <span style={{ display:'inline-flex', color:WEATHER_CFG[weather]?.color }}><Icon name={WEATHER_CFG[weather]?.icon} size={18} /></span>}
+          {/* 完了 KR はカード見出しから直接アーカイブできる (展開不要・discoverability向上)。
+              展開時はパネル内の同ボタンを使うため見出しでは隠す。 */}
+          {!reviewOpen && krDone && (
+            <button onClick={e => { e.stopPropagation(); archiveKR() }}
+              title="完了した KR をアーカイブ (この一覧から非表示・アーカイブ画面から復元可能)"
+              style={{ ...TYPO.caption, flexShrink:0, padding:'2px 8px', borderRadius:RADIUS.xs - 1, border:`1px solid ${wT().borderMid}`, background:'transparent', color:wT().textSub, cursor:'pointer', fontFamily:'inherit', fontWeight:600, display:'inline-flex', alignItems:'center', gap:3 }}>
+              <Icon name="inbox" size={11} /> アーカイブ
+            </button>
+          )}
           <span style={{ color:wT().textFaint, transform:reviewOpen?'rotate(180deg)':'rotate(0)', transition:'transform 0.2s', flexShrink:0, display:'inline-flex' }}><Icon name="chevronD" size={13} /></span>
         </div>
         <ProgressBar T={wT()} pct={pct} height={4} track={wT().borderLight} />
