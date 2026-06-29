@@ -142,6 +142,11 @@ function isKRDone(kr) {
   return Math.round(progress) >= 100
 }
 
+// 会議ビューに表示しない KR か。完了 (達成率100%以上) または アーカイブ済み。
+function isKRHidden(kr) {
+  return isKRDone(kr) || !!kr?.archived_at
+}
+
 // ─── アバター ─────────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#4d9fff','#00d68f','#ff6b6b','#ffd166','#a855f7','#ff9f43','#54a0ff','#5f27cd']
 function Avatar({ name, avatarUrl, size = 22 }) {
@@ -373,16 +378,16 @@ export default function WeeklyMTGFacilitation({
       let krsRaw = []
       if (allObjIdsAll.length > 0) {
         let res = await supabase.from('key_results')
-          .select('id, objective_id, title, owner, target, current, lower_is_better, program_tags').in('objective_id', allObjIdsAll)
-        if (res.error && /program_tags|column/i.test(res.error.message || '')) {
+          .select('id, objective_id, title, owner, target, current, lower_is_better, archived_at, program_tags').in('objective_id', allObjIdsAll)
+        if (res.error && /program_tags|archived_at|column/i.test(res.error.message || '')) {
           res = await supabase.from('key_results')
             .select('id, objective_id, title, owner, target, current, lower_is_better').in('objective_id', allObjIdsAll)
         }
         krsRaw = res.data || []
       }
       const filtered = applyProgramTagFilterKRs(objsAll, krsRaw, programTag)
-      // 完了 (達成率100%以上) の KR は件数から除外
-      const krs = filtered.krs.filter(k => !isKRDone(k))
+      // 完了 (達成率100%以上) / アーカイブ済み の KR は件数から除外
+      const krs = filtered.krs.filter(k => !isKRHidden(k))
       // 親 annual obj の level_id でチーム集計 (Q 期 obj の level_id 不整合に対応)
       const objsByLevel = {}
       ;(filtered.objs || []).forEach(o => {
@@ -1345,7 +1350,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
         let krsAll = []
         if (objIds.length > 0) {
           let krsRes = await supabase.from('key_results')
-            .select('id, title, target, current, unit, owner, objective_id, lower_is_better, program_tags')
+            .select('id, title, target, current, unit, owner, objective_id, lower_is_better, archived_at, program_tags')
             .in('objective_id', objIds)
             .range(0, 49999)
           // program_tags 列が無い古い環境のフォールバック
@@ -1375,7 +1380,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           for (const o of lvlObjs) {
             const objKrs = krs
               .filter(k => Number(k.objective_id) === Number(o.id))
-              .filter(k => !isKRDone(k)) // 完了 (達成率100%以上) の KR は会議に表示しない
+              .filter(k => !isKRHidden(k)) // 完了 (達成率100%以上) / アーカイブ済み の KR は会議に表示しない
               .sort((a, b) => a.id - b.id)
             for (const kr of objKrs) {
               built.push({ level: lvl, objective: o, kr })
@@ -2173,10 +2178,16 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
         let krs = []
         let reviews = []
         if (objIds.length > 0) {
-          const krsRes = await supabase.from('key_results')
-            .select('id, title, objective_id, target, current, unit, lower_is_better, owner')
+          let krsRes = await supabase.from('key_results')
+            .select('id, title, objective_id, target, current, unit, lower_is_better, owner, archived_at')
             .in('objective_id', objIds)
             .range(0, 49999)
+          if (krsRes.error && /archived_at|column/i.test(krsRes.error.message || '')) {
+            krsRes = await supabase.from('key_results')
+              .select('id, title, objective_id, target, current, unit, lower_is_better, owner')
+              .in('objective_id', objIds)
+              .range(0, 49999)
+          }
           krs = krsRes.data || []
           const krIds = krs.map(k => k.id)
           if (krIds.length > 0) {
@@ -2191,6 +2202,7 @@ function DirectorSummaryList({ T, weekStart, levels, members }) {
         const reviewByKr = new Map(reviews.map(r => [Number(r.kr_id), r]))
         const krsByLevel = new Map(scopeLevelIds.map(id => [Number(id), []]))
         for (const kr of krs) {
+          if (kr.archived_at) continue // アーカイブ済み KR はチームサマリーに表示しない
           const lvlId = objToLevel.get(Number(kr.objective_id))
           if (!lvlId) continue
           const list = krsByLevel.get(Number(lvlId))
