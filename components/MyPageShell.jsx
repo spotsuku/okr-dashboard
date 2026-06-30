@@ -4481,6 +4481,9 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
             {/* サマリー: タスク統計 + KPT 集約 */}
             <RetrospectSummary T={T} stats={data.taskStats} kpt={data.kptSummary} range={range} />
 
+            {/* AI 時間分析: 1時間ごとの作業記録をカテゴリ別に分析 */}
+            <TimeAnalysisCard T={T} viewingName={viewingName} range={range} />
+
             {/* 日別ログ */}
             {data.days.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 40, color: T.textMuted, fontSize: 12 }}>
@@ -4819,6 +4822,103 @@ function ThreeQuestions({ T, viewingName, canEdit, myName }) {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── AI 時間分析: 1時間ごとの作業記録をカテゴリ別に集計・振り返り ──────────
+function TimeAnalysisCard({ T, viewingName, range }) {
+  const { currentOrg } = useCurrentOrg()
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [err, setErr] = useState('')
+  // 期間が変わったら結果をクリア (古い分析の混同を防ぐ)
+  useEffect(() => { setResult(null); setErr('') }, [range, viewingName])
+
+  const rangeLabel = range === 'week' ? '今週' : range === 'month' ? '今月' : range === 'quarter' ? '四半期' : '全期間'
+
+  const computeStart = () => {
+    if (range === 'all') return null
+    const jst = new Date(Date.now() + 9 * 3600 * 1000)
+    if (range === 'week') return new Date(getMondayJSTStr() + 'T00:00:00+09:00').toISOString()
+    if (range === 'month') return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), 1) - 9 * 3600 * 1000).toISOString()
+    const qm = Math.floor(jst.getUTCMonth() / 3) * 3 // 四半期 (暦)
+    return new Date(Date.UTC(jst.getUTCFullYear(), qm, 1) - 9 * 3600 * 1000).toISOString()
+  }
+
+  const analyze = async () => {
+    if (loading || !viewingName) return
+    setLoading(true); setErr(''); setResult(null)
+    try {
+      const res = await fetch('/api/ai/time-analysis', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner: viewingName, organization_id: currentOrg?.id, start: computeStart(), label: rangeLabel }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`)
+      setResult(j)
+    } catch (e) {
+      setErr(e.message || '分析に失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const PALETTE = ['#4d9fff', '#00d68f', '#ff9f43', '#a855f7', '#ff6b6b', '#54a0ff', '#ffd166', '#5f27cd', '#1dd1a1', '#8E8E93']
+
+  return (
+    <div style={{ padding: 16, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: result || loading ? 14 : 0, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="ai" size={14} /> AI 時間分析（{rangeLabel}）
+          </div>
+          <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5 }}>
+            終業時の「1時間ごとの作業記録」を、AIが資料作成・会議・外部商談・企画などのカテゴリ別に集計します。
+          </div>
+        </div>
+        <button onClick={analyze} disabled={loading}
+          style={{
+            padding: '8px 16px', borderRadius: 8, border: 'none',
+            background: loading ? T.border : T.accent, color: '#fff',
+            fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            cursor: loading ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+          }}>
+          <Icon name="sparkle" size={12} /> {loading ? '分析中…' : 'AIで分析'}
+        </button>
+      </div>
+
+      {err && <div style={{ padding: 8, borderRadius: 6, background: T.dangerBg, border: `1px solid ${T.danger}`, fontSize: 11, color: T.danger }}>{err}</div>}
+
+      {result?.message && <div style={{ fontSize: 12, color: T.textMuted, fontStyle: 'italic' }}>{result.message}</div>}
+
+      {result && result.categories?.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 11, color: T.textMuted }}>
+            合計 <strong style={{ color: T.text }}>{result.total_hours}</strong> 時間分の記録を分析
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {result.categories.map((c, i) => (
+              <div key={c.name}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, flex: 1 }}>{c.name}</span>
+                  <span style={{ fontSize: 12, color: T.textSub, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{c.hours}h ({c.ratio}%)</span>
+                </div>
+                <div style={{ height: 6, background: T.sectionBg, borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ width: `${c.ratio}%`, height: '100%', background: PALETTE[i % PALETTE.length], borderRadius: 99 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          {result.insight && (
+            <div style={{ padding: 12, background: T.sectionBg, borderRadius: 8, fontSize: 12.5, color: T.text, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>AI の振り返り</div>
+              {result.insight}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
