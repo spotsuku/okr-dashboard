@@ -1211,18 +1211,22 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   })()
 
   // 振り返り対象日を強制終業 / 補完保存
-  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM, reflectionDate }) {
+  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM, reflectionDate, hourly }) {
     if (!pendingYesterdayLog) return
     setBusy(true)
     const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
     const targetDateStr = pendingYesterdayLog.date
     const [tyr, tmo, tdy] = targetDateStr.split('-').map(Number)
+    const hasHourly = Array.isArray(hourly) && hourly.length > 0
+    let startIso = null, endIso = null // Slack日報の稼働時間表示用
 
     if (pendingYesterdayLog.type === 'unclosed') {
       // 既存の未終業 work_log を終業
       const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
       const oldContent = parseLogContent(pendingYesterdayLog.log.content)
       const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
+      if (hasHourly) newContent.hourly = hourly
+      startIso = oldContent.start_at || null; endIso = endUtc.toISOString()
       const { error: e1 } = await withNetworkRetry(() => supabase.from('coaching_logs')
         .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.log.id))
       if (e1) { setBusy(false); alert(saveErrorMessage('終業記録', e1)); return }
@@ -1230,6 +1234,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       // 始業押し忘れ: その日の 9:00〜指定時刻で work_log を補完作成
       const startUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, 9 - 9, 0, 0))
       const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
+      startIso = startUtc.toISOString(); endIso = endUtc.toISOString()
       const { error: e1 } = await withNetworkRetry(() => supabase.from('coaching_logs').insert({
         owner: myName,
         log_type: 'work_log',
@@ -1241,6 +1246,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           end_at: endUtc.toISOString(),
           force_closed: true,
           backfilled: true,
+          ...(hasHourly ? { hourly } : {}),
         }),
       }))
       if (e1) { setBusy(false); alert(saveErrorMessage('勤怠補完', e1)); return }
@@ -1259,6 +1265,24 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
         content: JSON.stringify({ keep, problem, try: tryNote }),
       }))
       if (e2) { setBusy(false); alert(saveErrorMessage('振り返り(KPT)の保存', e2)); return }
+    }
+    // Slack へ本日(対象日)の活動報告を投稿 (非ブロッキング)。時間記録か KPT があれば送る。
+    if (hasHourly || (keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
+      const worked = (startIso && endIso)
+        ? (() => { const m = Math.floor((new Date(endIso) - new Date(startIso)) / 60000); return `${Math.floor(m / 60)}時間${m % 60}分` })()
+        : ''
+      fetch('/api/integrations/slack/daily-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner: myName,
+          organization_id: currentOrg?.id,
+          date: reflectionDate || targetDateStr,
+          worked,
+          hourly: hourly || [],
+          keep, problem, try: tryNote,
+        }),
+      }).catch(e => console.warn('daily-report 投稿失敗:', e?.message))
     }
     setBusy(false)
     // 次の未処理日があれば自動で次に進む (useEffect 再実行)
@@ -3680,10 +3704,23 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
   const [endTimeHHMM, setEndTimeHHMM] = useState('18:00')
   // 振り返りの「対象日」。既定は未終業ログの勤務日。公欠/始業忘れ等は本人が選び直す。
   const [reflectionDate, setReflectionDate] = useState(pendingDateISO || todayISO || '')
-  // 1時間ごとの作業記録 (通常の終業時のみ・任意)。始業〜現在を1時間スロットに分割する。
+  // 1時間ごとの作業記録 (任意)。
+  //  - 通常終業: 始業〜現在を1時間スロットに分割
+  //  - 朝の補完(force): 始業(start_at か 9:00)〜選択した終業時刻(endTimeHHMM)で分割
   const [hourly, setHourly] = useState({})
   const hourSlots = useMemo(() => {
-    if (force || !startedAt) return []
+    const mkLabel = (h) => `${String(h).padStart(2, '0')}:00–${String((h + 1) % 24).padStart(2, '0')}:00`
+    if (force) {
+      // 朝の補完: 対象日の勤務時間帯を時刻ラベルだけで組み立てる
+      const startH = startedAt
+        ? new Date(new Date(startedAt).getTime() + 9 * 3600 * 1000).getUTCHours()
+        : 9
+      const endH = Number((endTimeHHMM || '18:00').split(':')[0])
+      const out = []
+      for (let h = startH; h < endH && out.length < 20; h++) out.push(mkLabel(h))
+      return out
+    }
+    if (!startedAt) return []
     const startMs = new Date(startedAt).getTime()
     const nowMs = Date.now()
     if (!(nowMs > startMs)) return []
@@ -3693,12 +3730,11 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
     const out = []
     for (let i = 0; i < 20 && cursor < nowMs; i++) { // 上限20スロット (暴走防止)
       const sH = new Date(cursor + 9 * 3600 * 1000).getUTCHours()
-      const eH = (sH + 1) % 24
-      out.push(`${String(sH).padStart(2, '0')}:00–${String(eH).padStart(2, '0')}:00`)
+      out.push(mkLabel(sH))
       cursor += 3600 * 1000
     }
     return out
-  }, [force, startedAt])
+  }, [force, startedAt, endTimeHHMM])
   // 対象日の選択肢 (未終業日〜今日) に (今日)(昨日)(おととい)(N日前) の相対ラベルを自動付与
   const dayOptions = useMemo(() => {
     if (!force || !pendingDateISO || !todayISO) return []
@@ -3844,10 +3880,10 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
           </div>
         )}
 
-        {!force && hourSlots.length > 0 && (
+        {hourSlots.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="clock" size={12} /> 1時間ごとの作業記録</label>
-            <div style={hintStyle}>各時間に何をしたかを記入（任意・空欄OK）。保存時に上司への報告にも反映されます。</div>
+            <div style={hintStyle}>{force ? '対象日の各時間に何をしたかを記入（任意・空欄OK）。終業時刻を変えると行数が変わります。' : '各時間に何をしたかを記入（任意・空欄OK）。保存時に上司への報告にも反映されます。'}</div>
             <div style={{
               border: `1px solid ${T.border}`, borderRadius: 8, overflow: 'hidden',
             }}>
