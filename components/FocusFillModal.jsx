@@ -449,6 +449,31 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
     }
   }
 
+  // KR アーカイブ (記入モードのカードから直接)。完了KAと同様にキューから外して次へ。
+  async function handleKrArchive() {
+    if (!currentCard || currentCard.kind !== 'kr' || !canEdit) return
+    const kr = currentCard.kr
+    if (!window.confirm(`「${kr.title}」をアーカイブしますか？\n各画面のカードから非表示になります（アーカイブ画面から復元可能）`)) return
+    const { error } = await supabase.from('key_results')
+      .update({ archived_at: new Date().toISOString() }).eq('id', kr.id)
+    if (error) {
+      if (/archived_at|column/i.test(error.message || '')) {
+        alert('アーカイブ列が未作成です。supabase_key_results_archive.sql を実行してください。')
+      } else {
+        alert('アーカイブ失敗: ' + error.message)
+      }
+      return
+    }
+    const curIdx = index.kr
+    const newQ = queue.kr.filter((_, i) => i !== curIdx)
+    setQueue(prev => ({ ...prev, kr: newQ }))
+    if (newQ.length === 0) {
+      setCompleted(c => ({ ...c, kr: true }))
+    } else if (curIdx >= newQ.length) {
+      setIndex(i => ({ ...i, kr: newQ.length - 1 }))
+    }
+  }
+
   function moveBack() {
     setIndex(i => ({ ...i, [mode]: Math.max(0, i[mode] - 1) }))
     setCompleted(c => ({ ...c, [mode]: false }))
@@ -682,7 +707,8 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
                   ? prevKrMap[String(current.kr?.id)]
                   : prevKaMap[current.ka?.ka_key || `${current.ka?.kr_id}|${(current.ka?.ka_title || '').trim()}`]
               }
-              onKaStatusChange={handleKaStatusChange} />
+              onKaStatusChange={handleKaStatusChange}
+              onKrArchive={handleKrArchive} />
           ) : null}
         </div>
 
@@ -731,7 +757,7 @@ export default function FocusFillModal({ open, onClose, T, viewingName, myName, 
 }
 
 // ─── カード表示 ────────────────────────────────────────
-function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart, meetingText, onKaStatusChange, prevRecord = null }) {
+function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf, weekStart, meetingText, onKaStatusChange, onKrArchive, prevRecord = null }) {
   const isKR = card.kind === 'kr'
   const kr = card.kr
   const ka = card.ka
@@ -810,6 +836,21 @@ function CardView({ T, card, draft, setDraft, cfg, readOnly = false, deptLabelOf
         {isKR && kr.target != null && kr.target !== '' && (
           <div style={{ ...TYPO.footnote, color: T.textMuted }}>
             目標 {kr.target}{kr.unit || ''} · 現在 {curVal}{kr.unit || ''} ({curPct}%)
+          </div>
+        )}
+        {/* KR アーカイブ (記入モードのカードから直接・アーカイブ画面から復元可能) */}
+        {isKR && !readOnly && onKrArchive && (
+          <div style={{ marginTop: SPACING.sm }}>
+            <button onClick={onKrArchive}
+              title="このKRをアーカイブ (各画面のカードから非表示・アーカイブ画面から復元可能)"
+              style={{
+                ...TYPO.caption, padding: `${SPACING.xs - 1}px ${SPACING.sm + 1}px`, borderRadius: RADIUS.pill,
+                background: 'transparent', color: T.textSub, border: `1px solid ${T.border}`,
+                fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+              }}>
+              <Icon name="inbox" size={11} /> アーカイブ
+            </button>
           </div>
         )}
         {!isKR && ka.kr_title && (
