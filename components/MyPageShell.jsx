@@ -4450,8 +4450,12 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
 
   const totalDays = data.days.length
   const totalMinutes = data.days.reduce((sum, d) => {
-    if (d.workLog?.start_at && d.workLog?.end_at) {
-      const gross = Math.floor((new Date(d.workLog.end_at) - new Date(d.workLog.start_at)) / 60000)
+    if (d.workLog?.start_at) {
+      // 終業押し忘れ(end_at 無し)は 18:00 として計上
+      let endMs
+      if (d.workLog.end_at) endMs = new Date(d.workLog.end_at).getTime()
+      else { const [y, mo, dd] = d.date.split('-').map(Number); endMs = Date.UTC(y, mo - 1, dd, 18 - 9, 0, 0) }
+      const gross = Math.floor((endMs - new Date(d.workLog.start_at).getTime()) / 60000)
       return sum + Math.max(0, gross - (Number(d.workLog.break_min) || 0)) // 休憩を差し引く
     }
     return sum
@@ -4581,7 +4585,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
                 </div>
               </div>
             ) : (
-              data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} canEdit={myName === viewingName} onSaved={load} owner={viewingName} />)
+              data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} canEdit={isAdmin} onSaved={load} owner={viewingName} />)
             )}
           </div>
         )}
@@ -5123,8 +5127,14 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
 
   const { start_at, end_at, hourly } = day.workLog || {}
   const breakMin = Number(day.workLog?.break_min) || 0
-  const worked = (start_at && end_at) ? (() => {
-    const mins = Math.max(0, Math.floor((new Date(end_at) - new Date(start_at)) / 60000) - breakMin)
+  // 終業の押し忘れ(end_at 無し)は 18:00 として扱う
+  const autoEnd = !!start_at && !end_at
+  const effEnd = end_at || (start_at ? (() => {
+    const [ey, emo, ed] = day.date.split('-').map(Number)
+    return new Date(Date.UTC(ey, emo - 1, ed, 18 - 9, 0, 0)).toISOString()
+  })() : null)
+  const worked = (start_at && effEnd) ? (() => {
+    const mins = Math.max(0, Math.floor((new Date(effEnd) - new Date(start_at)) / 60000) - breakMin)
     return `${Math.floor(mins / 60)}時間${mins % 60}分`
   })() : ''
   const hasKpt = day.kpts.length > 0
@@ -5237,7 +5247,7 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
           </div>
           {start_at && (
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-              {jstHHMM(start_at)}{end_at ? `〜${jstHHMM(end_at)}` : '〜'}{worked && ` · ${worked}`}{breakMin > 0 && `（休憩${breakMin}分）`}
+              {jstHHMM(start_at)}〜{effEnd ? jstHHMM(effEnd) : ''}{autoEnd && <span style={{ color: T.warn }}>（終業押し忘れ・18:00）</span>}{worked && ` · ${worked}`}{breakMin > 0 && `（休憩${breakMin}分）`}
             </div>
           )}
         </div>
