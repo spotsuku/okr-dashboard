@@ -1573,15 +1573,23 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     await doStartWorkLog()
   }
 
-  async function doStartWorkLog() {
+  // startHHMM (例 '09:30') が渡されればその時刻(本日JST・30分刻み想定)で始業を記録。
+  // 省略時は現在時刻。
+  async function doStartWorkLog(startHHMM) {
     if (busy || !myName) return
     setBusy(true)
+    let startIso = new Date().toISOString()
+    if (typeof startHHMM === 'string' && /^\d{2}:\d{2}$/.test(startHHMM)) {
+      const [hh, mm] = startHHMM.split(':').map(Number)
+      const j = new Date(Date.now() + 9 * 3600 * 1000) // 本日(JST)の年月日
+      startIso = new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate(), hh - 9, mm, 0)).toISOString()
+    }
     const { error } = await withNetworkRetry(() => supabase.from('coaching_logs').insert({
       owner: myName,
       log_type: 'work_log',
       organization_id: currentOrg?.id,
       week_start: getMondayJSTStr(),
-      content: JSON.stringify({ start_at: new Date().toISOString() }),
+      content: JSON.stringify({ start_at: startIso }),
     }))
     setBusy(false)
     if (error) { alert(saveErrorMessage('始業の記録', error)); return }
@@ -2014,6 +2022,20 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
   const [addOpen, setAddOpen] = useState(false)
   const [composeKind, setComposeKind] = useState(null) // null | 'share' | 'confirmation'
   const today = toJSTDateStr(new Date())
+  // 始業時刻 (30分刻み)。既定は現在時刻を直近の30分に丸めた値。
+  const round30Now = () => {
+    const j = new Date(Date.now() + 9 * 3600 * 1000)
+    const m = j.getUTCMinutes() < 30 ? 0 : 30
+    return `${String(j.getUTCHours()).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
+  const [startHHMM, setStartHHMM] = useState(round30Now())
+  const startOptions = useMemo(() => {
+    const out = []
+    for (let h = 5; h <= 23; h++) for (const m of [0, 30]) out.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+    // 既定値が範囲外(早朝/深夜)でも選べるよう含める
+    if (!out.includes(startHHMM)) out.unshift(startHHMM)
+    return out
+  }, [startHHMM])
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -2149,9 +2171,24 @@ function MorningTaskModal({ T, viewingMember, viewingName, members, busy, onStar
           >+ <Icon name="mail" size={13} /> 確認事項 (任意)</button>
         </div>
 
+        {/* 始業時刻 (30分刻み) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.textSub, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="clock" size={13} /> 始業時刻
+          </span>
+          <select value={startHHMM} onChange={e => setStartHHMM(e.target.value)}
+            style={{
+              padding: '7px 10px', borderRadius: 8, border: `1px solid ${T.borderMid}`,
+              background: T.bg, color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+            }}>
+            {startOptions.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <span style={{ fontSize: 10.5, color: T.textMuted }}>30分刻み（既定は現在時刻）</span>
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
-            onClick={onStart}
+            onClick={() => onStart(startHHMM)}
             disabled={busy || !canStart}
             style={{
               background: canStart ? `linear-gradient(135deg, ${T.success} 0%, ${T.info} 100%)` : T.border,
@@ -4530,7 +4567,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
                 </div>
               </div>
             ) : (
-              data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} />)
+              data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} canEdit={myName === viewingName} onSaved={load} />)
             )}
           </div>
         )}
@@ -5060,7 +5097,7 @@ function RetrospectSummary({ T, stats, kpt, range }) {
   )
 }
 
-function RetrospectDay({ T, day }) {
+function RetrospectDay({ T, day, canEdit = false, onSaved }) {
   const isMobile = useIsMobile()
   const dt = new Date(day.date + 'T00:00:00Z')
   const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
@@ -5076,6 +5113,43 @@ function RetrospectDay({ T, day }) {
   })() : ''
   const hasKpt = day.kpts.length > 0
   const hourlyRows = Array.isArray(hourly) ? hourly.filter(h => h && (h.text || '').trim()) : []
+
+  // 勤怠(始業/終業)の後日編集
+  const editable = canEdit && !!day.workLog?.id
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editStart, setEditStart] = useState('09:00')
+  const [editEnd, setEditEnd] = useState('18:00')
+  const timeOptions = useMemo(() => {
+    const out = []
+    for (let h = 0; h <= 23; h++) for (const m of [0, 30]) out.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+    return out
+  }, [])
+  const openEdit = () => {
+    setEditStart(start_at ? jstHHMM(start_at) : '09:00')
+    setEditEnd(end_at ? jstHHMM(end_at) : '')
+    setEditing(true)
+  }
+  const saveEdit = async () => {
+    if (!day.workLog?.id || saving) return
+    const [y, mo, d] = day.date.split('-').map(Number)
+    const toIso = (hhmm) => {
+      const [hh, mm] = hhmm.split(':').map(Number)
+      return new Date(Date.UTC(y, mo - 1, d, hh - 9, mm, 0)).toISOString()
+    }
+    if (editEnd && editEnd <= editStart) { alert('終業時刻は始業時刻より後にしてください'); return }
+    setSaving(true)
+    const newContent = { ...day.workLog }
+    delete newContent.id
+    newContent.start_at = toIso(editStart)
+    if (editEnd) newContent.end_at = toIso(editEnd); else delete newContent.end_at
+    newContent.edited_at = new Date().toISOString()
+    const { error } = await supabase.from('coaching_logs').update({ content: JSON.stringify(newContent) }).eq('id', day.workLog.id)
+    setSaving(false)
+    if (error) { alert('保存に失敗しました: ' + error.message); return }
+    setEditing(false)
+    onSaved && onSaved()
+  }
 
   return (
     <div style={{
@@ -5126,7 +5200,44 @@ function RetrospectDay({ T, day }) {
             休日 · 記入なし
           </span>
         )}
+        {editable && !editing && (
+          <button onClick={openEdit}
+            title="この日の始業・終業時刻を編集"
+            style={{
+              flexShrink: 0, padding: '4px 10px', borderRadius: 7,
+              background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub,
+              fontSize: 11, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}><Icon name="pencil" size={11} /> 編集</button>
+        )}
       </div>
+
+      {/* 勤怠編集 (始業/終業を30分刻みで修正) */}
+      {editing && (
+        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${T.border}`, background: T.sectionBg }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>始業</span>
+            <select value={editStart} onChange={e => setEditStart(e.target.value)}
+              style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}>
+              {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>終業</span>
+            <select value={editEnd} onChange={e => setEditEnd(e.target.value)}
+              style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}>
+              <option value="">（未終業）</option>
+              {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setEditing(false)} disabled={saving}
+              style={{ padding: '6px 12px', borderRadius: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>キャンセル</button>
+            <button onClick={saveEdit} disabled={saving}
+              style={{ padding: '6px 14px', borderRadius: 6, background: T.accent, color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: saving ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Icon name="check" size={12} /> {saving ? '保存中…' : '保存'}
+            </button>
+          </div>
+          <div style={{ marginTop: 6, fontSize: 10, color: T.textMuted }}>30分刻み。修正すると勤怠集計(給与計算)にも反映されます。</div>
+        </div>
+      )}
 
       {/* 1時間ごとの作業記録 (終業時に記入) */}
       {hourlyRows.length > 0 && (
