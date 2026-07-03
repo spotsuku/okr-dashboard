@@ -3877,10 +3877,13 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
     for (const r of (data || [])) {
       const c = attParseContent(r.content)
       const name = r.owner
-      if (!agg[name]) agg[name] = { minutes: 0, days: new Set(), incomplete: 0 }
+      if (!agg[name]) agg[name] = { minutes: 0, days: new Set(), incomplete: 0, breakMin: 0 }
       const dayStr = attToJSTDate(c.start_at || r.created_at)
       if (c.start_at && c.end_at) {
-        agg[name].minutes += Math.max(0, Math.round((new Date(c.end_at) - new Date(c.start_at)) / 60000))
+        const gross = Math.max(0, Math.round((new Date(c.end_at) - new Date(c.start_at)) / 60000))
+        const br = Math.max(0, Number(c.break_min) || 0) // 休憩は就業時間から除く
+        agg[name].minutes += Math.max(0, gross - br)
+        agg[name].breakMin += br
         agg[name].days.add(dayStr)
       } else if (c.start_at) {
         agg[name].incomplete += 1
@@ -3890,8 +3893,8 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
     const levelName = (id) => (levels.find(l => Number(l.id) === Number(id))?.name) || ''
     const sorted = [...members].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999) || (a.name || '').localeCompare(b.name || ''))
     setRows(sorted.map(mem => {
-      const a = agg[mem.name] || { minutes: 0, days: new Set(), incomplete: 0 }
-      return { name: mem.name, dept: levelName(mem.level_id), days: a.days.size, minutes: a.minutes, incomplete: a.incomplete }
+      const a = agg[mem.name] || { minutes: 0, days: new Set(), incomplete: 0, breakMin: 0 }
+      return { name: mem.name, dept: levelName(mem.level_id), days: a.days.size, minutes: a.minutes, incomplete: a.incomplete, breakMin: a.breakMin }
     }))
     setLoading(false)
   }, [orgId, month, members, levels])
@@ -3899,13 +3902,13 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
   useEffect(() => { load() }, [load])
 
   const totals = useMemo(() => rows.reduce((t, r) => ({
-    days: t.days + r.days, minutes: t.minutes + r.minutes, incomplete: t.incomplete + r.incomplete,
-  }), { days: 0, minutes: 0, incomplete: 0 }), [rows])
+    days: t.days + r.days, minutes: t.minutes + r.minutes, incomplete: t.incomplete + r.incomplete, breakMin: t.breakMin + (r.breakMin || 0),
+  }), { days: 0, minutes: 0, incomplete: 0, breakMin: 0 }), [rows])
 
   const downloadCsv = () => {
-    const header = ['メンバー', '部署', '出勤日数', '就業時間(時:分)', '就業時間(時間)', '未終業日数']
-    const body = rows.map(r => [r.name, r.dept, r.days, attMinToHHMM(r.minutes), (r.minutes / 60).toFixed(2), r.incomplete])
-    const totalRow = ['合計', '', totals.days, attMinToHHMM(totals.minutes), (totals.minutes / 60).toFixed(2), totals.incomplete]
+    const header = ['メンバー', '部署', '出勤日数', '就業時間(時:分)', '就業時間(時間)', '休憩合計(分)', '未終業日数']
+    const body = rows.map(r => [r.name, r.dept, r.days, attMinToHHMM(r.minutes), (r.minutes / 60).toFixed(2), r.breakMin || 0, r.incomplete])
+    const totalRow = ['合計', '', totals.days, attMinToHHMM(totals.minutes), (totals.minutes / 60).toFixed(2), totals.breakMin, totals.incomplete]
     const csv = [header, ...body, totalRow].map(cols => cols.map(attCsvCell).join(',')).join('\r\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -3954,14 +3957,15 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
                 <th style={{ ...th, textAlign: 'right' }}>出勤日数</th>
                 <th style={{ ...th, textAlign: 'right' }}>就業時間 (時:分)</th>
                 <th style={{ ...th, textAlign: 'right' }}>就業時間 (時間)</th>
+                <th style={{ ...th, textAlign: 'right' }}>休憩(分)</th>
                 <th style={{ ...th, textAlign: 'right' }}>未終業</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td style={{ ...td, textAlign: 'center', color: T().textMuted }} colSpan={6}>読み込み中…</td></tr>
+                <tr><td style={{ ...td, textAlign: 'center', color: T().textMuted }} colSpan={7}>読み込み中…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td style={{ ...td, textAlign: 'center', color: T().textMuted }} colSpan={6}>この月の記録はありません</td></tr>
+                <tr><td style={{ ...td, textAlign: 'center', color: T().textMuted }} colSpan={7}>この月の記録はありません</td></tr>
               ) : rows.map(r => (
                 <tr key={r.name}>
                   <td style={{ ...td, fontWeight: 600 }}>{r.name}</td>
@@ -3969,6 +3973,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
                   <td style={{ ...td, ...num }}>{r.days}</td>
                   <td style={{ ...td, ...num }}>{attMinToHHMM(r.minutes)}</td>
                   <td style={{ ...td, ...num }}>{(r.minutes / 60).toFixed(2)}</td>
+                  <td style={{ ...td, ...num, color: T().textMuted }}>{r.breakMin || '—'}</td>
                   <td style={{ ...td, ...num, color: r.incomplete > 0 ? T().warn : T().textMuted }}>{r.incomplete || '—'}</td>
                 </tr>
               ))}
@@ -3981,6 +3986,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
                   <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{totals.days}</td>
                   <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{attMinToHHMM(totals.minutes)}</td>
                   <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{(totals.minutes / 60).toFixed(2)}</td>
+                  <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{totals.breakMin || '—'}</td>
                   <td style={{ ...td, ...num, fontWeight: 800, borderTop: `2px solid ${T().border}`, borderBottom: 'none' }}>{totals.incomplete || '—'}</td>
                 </tr>
               </tfoot>
@@ -3989,7 +3995,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
         </div>
       </div>
       <div style={{ marginTop: 8, fontSize: 10.5, color: T().textMuted, lineHeight: 1.6 }}>
-        ※ 「就業時間」は各日の始業〜終業の差の合計です。「未終業」は終業記録が無い日数（給与計算前に各自で終業補完をご依頼ください）。
+        ※ 「就業時間」は各日の始業〜終業の差から休憩を差し引いた合計です。「未終業」は終業記録が無い日数（給与計算前に各自で終業補完をご依頼ください）。
       </div>
     </div>
   )

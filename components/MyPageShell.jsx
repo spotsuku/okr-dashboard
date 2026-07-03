@@ -1211,10 +1211,11 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
   })()
 
   // 振り返り対象日を強制終業 / 補完保存
-  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM, reflectionDate, hourly }) {
+  async function forceCloseYesterday({ keep, problem, tryNote, endTimeHHMM, reflectionDate, hourly, breakMin }) {
     if (!pendingYesterdayLog) return
     setBusy(true)
     const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
+    const brMin = Math.max(0, Number(breakMin) || 0)
     const targetDateStr = pendingYesterdayLog.date
     const [tyr, tmo, tdy] = targetDateStr.split('-').map(Number)
     const hasHourly = Array.isArray(hourly) && hourly.length > 0
@@ -1224,7 +1225,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       // 既存の未終業 work_log を終業
       const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
       const oldContent = parseLogContent(pendingYesterdayLog.log.content)
-      const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true }
+      const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true, break_min: brMin }
       if (hasHourly) newContent.hourly = hourly
       startIso = oldContent.start_at || null; endIso = endUtc.toISOString()
       const { error: e1 } = await withNetworkRetry(() => supabase.from('coaching_logs')
@@ -1246,6 +1247,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
           end_at: endUtc.toISOString(),
           force_closed: true,
           backfilled: true,
+          break_min: brMin,
           ...(hasHourly ? { hourly } : {}),
         }),
       }))
@@ -1597,13 +1599,13 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     await onWorkLogChange()
   }
 
-  async function handleEnd({ keep, problem, tryNote, hourly }) {
+  async function handleEnd({ keep, problem, tryNote, hourly, breakMin }) {
     if (busy || !workLog) return
     setBusy(true)
-    // 1. work_log に end_at + 1時間ごとの作業記録 (任意) を追記
+    // 1. work_log に end_at + 休憩 + 1時間ごとの作業記録 (任意) を追記
     const oldContent = parseLogContent(workLog.content)
     const endAtIso = new Date().toISOString()
-    const newContent = { ...oldContent, end_at: endAtIso }
+    const newContent = { ...oldContent, end_at: endAtIso, break_min: Math.max(0, Number(breakMin) || 0) }
     if (Array.isArray(hourly) && hourly.length > 0) newContent.hourly = hourly
     const { error: e1 } = await withNetworkRetry(() => supabase
       .from('coaching_logs')
@@ -3741,6 +3743,8 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
   const [endTimeHHMM, setEndTimeHHMM] = useState('18:00')
   // 振り返りの「対象日」。既定は未終業ログの勤務日。公欠/始業忘れ等は本人が選び直す。
   const [reflectionDate, setReflectionDate] = useState(pendingDateISO || todayISO || '')
+  // 休憩(分)。就業時間から差し引く。既定60分(昼休み想定)。
+  const [breakMin, setBreakMin] = useState(60)
   // 1時間ごとの作業記録 (任意)。
   //  - 通常終業: 始業〜現在を1時間スロットに分割
   //  - 朝の補完(force): 始業(start_at か 9:00)〜選択した終業時刻(endTimeHHMM)で分割
@@ -3917,6 +3921,15 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
           </div>
         )}
 
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <label style={{ ...labelStyle, margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="clock" size={12} /> 休憩</label>
+          <select value={breakMin} onChange={e => setBreakMin(Number(e.target.value))}
+            style={{ padding: '6px 10px', background: T.sectionBg, border: `1px solid ${T.borderMid}`, borderRadius: 6, color: T.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' }}>
+            {[0, 15, 30, 45, 60, 75, 90, 120].map(m => <option key={m} value={m}>{m}分</option>)}
+          </select>
+          <span style={{ ...hintStyle, margin: 0 }}>就業時間から差し引きます</span>
+        </div>
+
         {hourSlots.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="clock" size={12} /> 1時間ごとの作業記録</label>
@@ -3979,7 +3992,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
             >キャンセル</button>
           )}
           <button
-            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM, reflectionDate, hourly: hourSlots.map(slot => ({ slot, text: hourly[slot] || '' })).filter(h => h.text.trim()) })}
+            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM, reflectionDate, breakMin, hourly: hourSlots.map(slot => ({ slot, text: hourly[slot] || '' })).filter(h => h.text.trim()) })}
             disabled={busy || !canSave}
             style={{
               background: canSave ? T.info : T.border,
@@ -4438,7 +4451,8 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
   const totalDays = data.days.length
   const totalMinutes = data.days.reduce((sum, d) => {
     if (d.workLog?.start_at && d.workLog?.end_at) {
-      return sum + Math.floor((new Date(d.workLog.end_at) - new Date(d.workLog.start_at)) / 60000)
+      const gross = Math.floor((new Date(d.workLog.end_at) - new Date(d.workLog.start_at)) / 60000)
+      return sum + Math.max(0, gross - (Number(d.workLog.break_min) || 0)) // 休憩を差し引く
     }
     return sum
   }, 0)
@@ -4567,7 +4581,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
                 </div>
               </div>
             ) : (
-              data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} canEdit={myName === viewingName} onSaved={load} />)
+              data.days.map(d => <RetrospectDay key={d.date} T={T} day={d} canEdit={myName === viewingName} onSaved={load} owner={viewingName} />)
             )}
           </div>
         )}
@@ -5097,8 +5111,9 @@ function RetrospectSummary({ T, stats, kpt, range }) {
   )
 }
 
-function RetrospectDay({ T, day, canEdit = false, onSaved }) {
+function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
   const isMobile = useIsMobile()
+  const { currentOrg } = useCurrentOrg()
   const dt = new Date(day.date + 'T00:00:00Z')
   const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
   const isWeekend = dt.getUTCDay() === 0 || dt.getUTCDay() === 6
@@ -5107,27 +5122,47 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
   const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`
 
   const { start_at, end_at, hourly } = day.workLog || {}
+  const breakMin = Number(day.workLog?.break_min) || 0
   const worked = (start_at && end_at) ? (() => {
-    const mins = Math.floor((new Date(end_at) - new Date(start_at)) / 60000)
+    const mins = Math.max(0, Math.floor((new Date(end_at) - new Date(start_at)) / 60000) - breakMin)
     return `${Math.floor(mins / 60)}時間${mins % 60}分`
   })() : ''
   const hasKpt = day.kpts.length > 0
   const hourlyRows = Array.isArray(hourly) ? hourly.filter(h => h && (h.text || '').trim()) : []
 
-  // 勤怠(始業/終業)の後日編集
+  // 勤怠(始業/終業/休憩/時間ごと作業/KPT)の後日編集
   const editable = canEdit && !!day.workLog?.id
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editStart, setEditStart] = useState('09:00')
   const [editEnd, setEditEnd] = useState('18:00')
+  const [editBreak, setEditBreak] = useState(0)       // 休憩(分)
+  const [editHourly, setEditHourly] = useState({})    // slot -> text
+  const [editKeep, setEditKeep] = useState('')
+  const [editProblem, setEditProblem] = useState('')
+  const [editTry, setEditTry] = useState('')
+  const pad2 = (n) => String(n).padStart(2, '0')
   const timeOptions = useMemo(() => {
     const out = []
-    for (let h = 0; h <= 23; h++) for (const m of [0, 30]) out.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+    for (let h = 0; h <= 23; h++) for (const m of [0, 30]) out.push(`${pad2(h)}:${pad2(m)}`)
     return out
   }, [])
+  const editHourSlots = useMemo(() => {
+    const sH = parseInt((editStart || '09:00').split(':')[0], 10)
+    const eH = editEnd ? parseInt(editEnd.split(':')[0], 10) : sH
+    const out = []
+    for (let h = sH; h < eH && out.length < 24; h++) out.push(`${pad2(h)}:00–${pad2((h + 1) % 24)}:00`)
+    return out
+  }, [editStart, editEnd])
   const openEdit = () => {
     setEditStart(start_at ? jstHHMM(start_at) : '09:00')
     setEditEnd(end_at ? jstHHMM(end_at) : '')
+    setEditBreak(Number(day.workLog?.break_min) || 0)
+    const map = {}
+    ;(hourly || []).forEach(h => { if (h?.slot) map[h.slot] = h.text || '' })
+    setEditHourly(map)
+    const k = (day.kpts && day.kpts[0]) || {}
+    setEditKeep(k.keep || ''); setEditProblem(k.problem || ''); setEditTry(k.try || '')
     setEditing(true)
   }
   const saveEdit = async () => {
@@ -5139,14 +5174,33 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
     }
     if (editEnd && editEnd <= editStart) { alert('終業時刻は始業時刻より後にしてください'); return }
     setSaving(true)
+    // 1) work_log (始業/終業/休憩/時間ごと作業)
     const newContent = { ...day.workLog }
     delete newContent.id
     newContent.start_at = toIso(editStart)
     if (editEnd) newContent.end_at = toIso(editEnd); else delete newContent.end_at
+    newContent.break_min = Math.max(0, Number(editBreak) || 0)
+    const newHourly = editHourSlots.map(slot => ({ slot, text: (editHourly[slot] || '').trim() })).filter(h => h.text)
+    if (newHourly.length) newContent.hourly = newHourly; else delete newContent.hourly
     newContent.edited_at = new Date().toISOString()
-    const { error } = await supabase.from('coaching_logs').update({ content: JSON.stringify(newContent) }).eq('id', day.workLog.id)
+    const { error: e1 } = await supabase.from('coaching_logs').update({ content: JSON.stringify(newContent) }).eq('id', day.workLog.id)
+    if (e1) { setSaving(false); alert('勤怠の保存に失敗しました: ' + e1.message); return }
+    // 2) KPT (既存なら更新、無ければ記入があれば新規作成)
+    const kptContent = { keep: editKeep.trim(), problem: editProblem.trim(), try: editTry.trim() }
+    const primary = day.kpts && day.kpts[0]
+    if (primary?.id) {
+      const { error: e2 } = await supabase.from('coaching_logs').update({ content: JSON.stringify(kptContent) }).eq('id', primary.id)
+      if (e2) { setSaving(false); alert('振り返りの保存に失敗しました: ' + e2.message); return }
+    } else if ((kptContent.keep || kptContent.problem || kptContent.try) && owner) {
+      const createdAt = new Date(Date.UTC(y, mo - 1, d, 12 - 9, 0, 0)).toISOString()
+      const { error: e3 } = await supabase.from('coaching_logs').insert({
+        owner, log_type: 'kpt', organization_id: currentOrg?.id,
+        week_start: getMondayJSTStr(new Date(createdAt)), created_at: createdAt,
+        content: JSON.stringify(kptContent),
+      })
+      if (e3) { setSaving(false); alert('振り返りの保存に失敗しました: ' + e3.message); return }
+    }
     setSaving(false)
-    if (error) { alert('保存に失敗しました: ' + error.message); return }
     setEditing(false)
     onSaved && onSaved()
   }
@@ -5183,7 +5237,7 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
           </div>
           {start_at && (
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-              {jstHHMM(start_at)}{end_at ? `〜${jstHHMM(end_at)}` : '〜'}{worked && ` · ${worked}`}
+              {jstHHMM(start_at)}{end_at ? `〜${jstHHMM(end_at)}` : '〜'}{worked && ` · ${worked}`}{breakMin > 0 && `（休憩${breakMin}分）`}
             </div>
           )}
         </div>
@@ -5202,7 +5256,7 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
         )}
         {editable && !editing && (
           <button onClick={openEdit}
-            title="この日の始業・終業時刻を編集"
+            title="この日の勤怠（始業/終業/休憩）・時間ごとの作業・KPTを編集"
             style={{
               flexShrink: 0, padding: '4px 10px', borderRadius: 7,
               background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub,
@@ -5212,10 +5266,11 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
         )}
       </div>
 
-      {/* 勤怠編集 (始業/終業を30分刻みで修正) */}
+      {/* 勤怠・作業・KPT 編集 */}
       {editing && (
-        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${T.border}`, background: T.sectionBg }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${T.border}`, background: T.sectionBg, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* 始業 / 終業 / 休憩 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>始業</span>
             <select value={editStart} onChange={e => setEditStart(e.target.value)}
               style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}>
@@ -5227,7 +5282,51 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
               <option value="">（未終業）</option>
               {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>休憩</span>
+            <select value={editBreak} onChange={e => setEditBreak(Number(e.target.value))}
+              style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}>
+              {[0, 15, 30, 45, 60, 75, 90, 120].map(m => <option key={m} value={m}>{m}分</option>)}
+            </select>
+          </div>
+
+          {/* 時間ごとの作業 (編集・任意) */}
+          {editHourSlots.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>時間ごとの作業（任意）</div>
+              <div style={{ border: `1px solid ${T.border}`, borderRadius: 8, overflow: 'hidden' }}>
+                {editHourSlots.map((slot, i) => (
+                  <div key={slot} style={{ display: 'flex', alignItems: 'stretch', borderTop: i === 0 ? 'none' : `1px solid ${T.border}` }}>
+                    <div style={{ flexShrink: 0, width: 92, padding: '7px 8px', background: T.bgCard, color: T.textSub, fontSize: 11, fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', display: 'flex', alignItems: 'center' }}>{slot}</div>
+                    <input value={editHourly[slot] || ''} onChange={e => setEditHourly(p => ({ ...p, [slot]: e.target.value }))}
+                      placeholder="作業内容"
+                      style={{ flex: 1, minWidth: 0, padding: '7px 9px', border: 'none', outline: 'none', background: 'transparent', color: T.text, fontSize: 12.5, fontFamily: 'inherit' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* KPT (編集) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { key: 'keep', label: 'Keep', color: T.success, val: editKeep, set: setEditKeep, ph: '良かったこと・続けたいこと' },
+              { key: 'problem', label: 'Problem', color: T.warn, val: editProblem, set: setEditProblem, ph: '課題・改善したいこと' },
+              { key: 'try', label: 'Try', color: T.info || T.accent, val: editTry, set: setEditTry, ph: '次に試したいこと' },
+            ].map(f => (
+              <div key={f.key}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: f.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: T.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{f.label}</span>
+                </div>
+                <textarea value={f.val} onChange={e => f.set(e.target.value)} rows={2} placeholder={f.ph}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 9px', border: `1px solid ${T.border}`, borderRadius: 6, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.5 }} />
+              </div>
+            ))}
+          </div>
+
+          {/* 操作 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ flex: 1, minWidth: 160, fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>時刻は30分刻み。休憩は就業時間から差し引かれ、勤怠集計（給与計算）にも反映されます。</span>
             <button onClick={() => setEditing(false)} disabled={saving}
               style={{ padding: '6px 12px', borderRadius: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>キャンセル</button>
             <button onClick={saveEdit} disabled={saving}
@@ -5235,12 +5334,11 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
               <Icon name="check" size={12} /> {saving ? '保存中…' : '保存'}
             </button>
           </div>
-          <div style={{ marginTop: 6, fontSize: 10, color: T.textMuted }}>30分刻み。修正すると勤怠集計(給与計算)にも反映されます。</div>
         </div>
       )}
 
       {/* 1時間ごとの作業記録 (終業時に記入) */}
-      {hourlyRows.length > 0 && (
+      {!editing && hourlyRows.length > 0 && (
         <div style={{ padding: '12px 16px', borderBottom: hasKpt ? `1px solid ${T.border}` : 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <span style={{ color: T.textMuted, display: 'inline-flex' }}><Icon name="clock" size={11} /></span>
@@ -5258,7 +5356,7 @@ function RetrospectDay({ T, day, canEdit = false, onSaved }) {
       )}
 
       {/* KPT 本体: 3 列グリッド (ドット + ラベル + 本文) */}
-      {hasKpt && (
+      {!editing && hasKpt && (
         <div style={{
           display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
           gap: 1, background: T.border,
