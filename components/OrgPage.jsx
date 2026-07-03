@@ -3873,21 +3873,34 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
       .range(0, 9999)
     if (error) { setErr('取得失敗: ' + error.message); setLoading(false); return }
     // owner ごとに集計
+    const todayStr = attToJSTDate(new Date().toISOString()) // 今日(JST) — 未終業の18:00計上判定に使う
     const agg = {}
     for (const r of (data || [])) {
       const c = attParseContent(r.content)
       const name = r.owner
       if (!agg[name]) agg[name] = { minutes: 0, days: new Set(), incomplete: 0, breakMin: 0 }
       const dayStr = attToJSTDate(c.start_at || r.created_at)
-      if (c.start_at && c.end_at) {
-        const gross = Math.max(0, Math.round((new Date(c.end_at) - new Date(c.start_at)) / 60000))
-        const br = Math.max(0, Number(c.break_min) || 0) // 休憩は就業時間から除く
-        agg[name].minutes += Math.max(0, gross - br)
-        agg[name].breakMin += br
-        agg[name].days.add(dayStr)
-      } else if (c.start_at) {
-        agg[name].incomplete += 1
-        agg[name].days.add(dayStr)
+      if (c.start_at) {
+        const startMs = new Date(c.start_at).getTime()
+        if (c.end_at) {
+          const endMs = new Date(c.end_at).getTime()
+          const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
+          const br = Math.max(0, Number(c.break_min) || 0)
+          agg[name].minutes += Math.max(0, gross - br)
+          agg[name].breakMin += br
+          agg[name].days.add(dayStr)
+        } else if (dayStr < todayStr) {
+          // 終業押し忘れ(前日以前)は 18:00 として計上 (件数は incomplete で把握)。
+          // 今日の未終業は勤務中扱いで集計しない。
+          const [yy, mm2, dd] = dayStr.split('-').map(Number)
+          const endMs = Date.UTC(yy, mm2 - 1, dd, 18 - 9, 0, 0)
+          const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
+          const br = Math.max(0, Number(c.break_min) || 0)
+          agg[name].minutes += Math.max(0, gross - br)
+          agg[name].breakMin += br
+          agg[name].incomplete += 1
+          agg[name].days.add(dayStr)
+        }
       }
     }
     const levelName = (id) => (levels.find(l => Number(l.id) === Number(id))?.name) || ''
@@ -3906,7 +3919,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
   }), { days: 0, minutes: 0, incomplete: 0, breakMin: 0 }), [rows])
 
   const downloadCsv = () => {
-    const header = ['メンバー', '部署', '出勤日数', '就業時間(時:分)', '就業時間(時間)', '休憩合計(分)', '未終業日数']
+    const header = ['メンバー', '部署', '出勤日数', '就業時間(時:分)', '就業時間(時間)', '休憩合計(分)', '終業忘れ日数(18:00計上)']
     const body = rows.map(r => [r.name, r.dept, r.days, attMinToHHMM(r.minutes), (r.minutes / 60).toFixed(2), r.breakMin || 0, r.incomplete])
     const totalRow = ['合計', '', totals.days, attMinToHHMM(totals.minutes), (totals.minutes / 60).toFixed(2), totals.breakMin, totals.incomplete]
     const csv = [header, ...body, totalRow].map(cols => cols.map(attCsvCell).join(',')).join('\r\n')
@@ -3958,7 +3971,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
                 <th style={{ ...th, textAlign: 'right' }}>就業時間 (時:分)</th>
                 <th style={{ ...th, textAlign: 'right' }}>就業時間 (時間)</th>
                 <th style={{ ...th, textAlign: 'right' }}>休憩(分)</th>
-                <th style={{ ...th, textAlign: 'right' }}>未終業</th>
+                <th style={{ ...th, textAlign: 'right' }}>終業忘れ</th>
               </tr>
             </thead>
             <tbody>
@@ -3995,7 +4008,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
         </div>
       </div>
       <div style={{ marginTop: 8, fontSize: 10.5, color: T().textMuted, lineHeight: 1.6 }}>
-        ※ 「就業時間」は各日の始業〜終業の差から休憩を差し引いた合計です。「未終業」は終業記録が無い日数（給与計算前に各自で終業補完をご依頼ください）。
+        ※ 「就業時間」は各日の始業〜終業の差から休憩を差し引いた合計です。「終業忘れ」は終業記録が無く <strong>18:00で自動計上</strong>した日数（必要に応じ管理者が編集で補正してください）。
       </div>
     </div>
   )
