@@ -3873,6 +3873,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
       .range(0, 9999)
     if (error) { setErr('取得失敗: ' + error.message); setLoading(false); return }
     // owner ごとに集計
+    const todayStr = attToJSTDate(new Date().toISOString()) // 今日(JST) — 未終業の18:00計上判定に使う
     const agg = {}
     for (const r of (data || [])) {
       const c = attParseContent(r.content)
@@ -3881,20 +3882,25 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
       const dayStr = attToJSTDate(c.start_at || r.created_at)
       if (c.start_at) {
         const startMs = new Date(c.start_at).getTime()
-        let endMs
         if (c.end_at) {
-          endMs = new Date(c.end_at).getTime()
-        } else {
-          // 終業押し忘れは 18:00 として計上 (件数は incomplete で把握)
+          const endMs = new Date(c.end_at).getTime()
+          const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
+          const br = Math.max(0, Number(c.break_min) || 0)
+          agg[name].minutes += Math.max(0, gross - br)
+          agg[name].breakMin += br
+          agg[name].days.add(dayStr)
+        } else if (dayStr < todayStr) {
+          // 終業押し忘れ(前日以前)は 18:00 として計上 (件数は incomplete で把握)。
+          // 今日の未終業は勤務中扱いで集計しない。
           const [yy, mm2, dd] = dayStr.split('-').map(Number)
-          endMs = Date.UTC(yy, mm2 - 1, dd, 18 - 9, 0, 0)
+          const endMs = Date.UTC(yy, mm2 - 1, dd, 18 - 9, 0, 0)
+          const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
+          const br = Math.max(0, Number(c.break_min) || 0)
+          agg[name].minutes += Math.max(0, gross - br)
+          agg[name].breakMin += br
           agg[name].incomplete += 1
+          agg[name].days.add(dayStr)
         }
-        const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
-        const br = Math.max(0, Number(c.break_min) || 0) // 休憩は就業時間から除く
-        agg[name].minutes += Math.max(0, gross - br)
-        agg[name].breakMin += br
-        agg[name].days.add(dayStr)
       }
     }
     const levelName = (id) => (levels.find(l => Number(l.id) === Number(id))?.name) || ''

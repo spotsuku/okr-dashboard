@@ -3,8 +3,8 @@
 //   - start: 平日 8:30 JST に「始業を押してください」
 //   - end:   平日 17:30 JST に「終業を押してください」
 // 祝日・土日 (isJpNonBusinessDay) はスキップ。
-// 投稿先: 各組織の共有 webhook (organizations.slack_webhook_confirmations)。
-//         1件も無ければ env SLACK_WEBHOOK_URL にフォールバック。
+// 投稿先: 勤怠(終業報告/日報)と同じチャンネル = organizations.slack_webhook_daily_report。
+//         未設定なら共有 webhook (slack_webhook_confirmations) → env SLACK_WEBHOOK_URL の順。
 
 export const dynamic = 'force-dynamic'
 
@@ -57,16 +57,17 @@ export async function GET(req) {
 
   const supabase = admin()
   let notified = 0
-  // 各組織の共有 webhook へ
-  const { data: orgs, error } = await supabase
-    .from('organizations')
-    .select('id, slack_webhook_confirmations')
-  if (!error) {
-    for (const o of (orgs || [])) {
-      if (o?.slack_webhook_confirmations) {
-        if (await post(o.slack_webhook_confirmations, text)) notified++
-      }
-    }
+  // 勤怠(日報)と同じチャンネルへ。日報webhook優先、無ければ共有webhookにフォールバック。
+  // slack_webhook_daily_report 列が未作成の環境でもエラーにしない。
+  let orgs = []
+  let res = await supabase.from('organizations').select('id, slack_webhook_daily_report, slack_webhook_confirmations')
+  if (res.error && /column .* does not exist|schema cache/i.test(res.error.message || '')) {
+    res = await supabase.from('organizations').select('id, slack_webhook_confirmations')
+  }
+  if (!res.error) orgs = res.data || []
+  for (const o of orgs) {
+    const target = o?.slack_webhook_daily_report || o?.slack_webhook_confirmations
+    if (target) { if (await post(target, text)) notified++ }
   }
   // フォールバック: env のグローバル webhook
   if (notified === 0 && process.env.SLACK_WEBHOOK_URL) {

@@ -4449,12 +4449,14 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
   useEffect(() => { load() }, [load])
 
   const totalDays = data.days.length
+  const _todayStr = toJSTDateStr(new Date())
   const totalMinutes = data.days.reduce((sum, d) => {
     if (d.workLog?.start_at) {
-      // 終業押し忘れ(end_at 無し)は 18:00 として計上
+      // 終業押し忘れ(end_at 無し)は「前日以前」のみ 18:00 として計上 (今日は勤務中扱いで除外)
       let endMs
       if (d.workLog.end_at) endMs = new Date(d.workLog.end_at).getTime()
-      else { const [y, mo, dd] = d.date.split('-').map(Number); endMs = Date.UTC(y, mo - 1, dd, 18 - 9, 0, 0) }
+      else if (d.date < _todayStr) { const [y, mo, dd] = d.date.split('-').map(Number); endMs = Date.UTC(y, mo - 1, dd, 18 - 9, 0, 0) }
+      else return sum // 今日の未終業は集計しない
       const gross = Math.floor((endMs - new Date(d.workLog.start_at).getTime()) / 60000)
       return sum + Math.max(0, gross - (Number(d.workLog.break_min) || 0)) // 休憩を差し引く
     }
@@ -5127,9 +5129,11 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
 
   const { start_at, end_at, hourly } = day.workLog || {}
   const breakMin = Number(day.workLog?.break_min) || 0
-  // 終業の押し忘れ(end_at 無し)は 18:00 として扱う
-  const autoEnd = !!start_at && !end_at
-  const effEnd = end_at || (start_at ? (() => {
+  // 終業の押し忘れは「前日以前で end_at 無し」のときだけ 18:00 として扱う。
+  // 今日はまだ勤務中の可能性があるため 18:00 を適用しない (=勤務中扱い)。
+  const isPastDay = day.date < todayStr
+  const autoEnd = !!start_at && !end_at && isPastDay
+  const effEnd = end_at || (start_at && isPastDay ? (() => {
     const [ey, emo, ed] = day.date.split('-').map(Number)
     return new Date(Date.UTC(ey, emo - 1, ed, 18 - 9, 0, 0)).toISOString()
   })() : null)
