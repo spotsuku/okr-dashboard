@@ -3,6 +3,14 @@
     {
       "path": "/api/create-next-week",
       "schedule": "0 23 * * 4"
+    },
+    {
+      "path": "/api/cron/attendance-reminder?type=start",
+      "schedule": "30 23 * * *"
+    },
+    {
+      "path": "/api/cron/attendance-reminder?type=end",
+      "schedule": "30 8 * * *"
     }
   ]
 }
