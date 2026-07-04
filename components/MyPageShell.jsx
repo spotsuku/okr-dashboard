@@ -2360,11 +2360,32 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
       growth_theme: patch.growth_theme !== undefined ? patch.growth_theme : draft.growth_theme,
       updated_at: new Date().toISOString(),
     }
-    const { error } = await supabase.from('monthly_1on1')
+    // 保存後は再 fetch せず、upsert の返却値でローカル state を直接更新する。
+    // 旧実装は末尾で load() を呼んでいたため setLoading(true) が走り、カード全体が
+    // 一瞬 <Loading /> に切り替わって KPTRow が unmount → 「記入するたびリロード」
+    // に見える + 書きかけの他フィールドがリセットされる問題があった。
+    const { data: saved, error } = await supabase.from('monthly_1on1')
       .upsert(payload, { onConflict: 'owner,month' })
-    if (error) console.warn('[monthly_1on1] save error:', error.message)
+      .select().maybeSingle()
+    if (error) {
+      console.warn('[monthly_1on1] save error:', error.message)
+      setSaving(false)
+      return
+    }
+    if (saved) {
+      setRow(saved)
+      setDraft({
+        supervisor: saved.supervisor || '',
+        self_keep: saved.self_keep || '',
+        self_problem: saved.self_problem || '',
+        self_try: saved.self_try || '',
+        boss_keep: saved.boss_keep || '',
+        boss_problem: saved.boss_problem || '',
+        boss_try: saved.boss_try || '',
+        growth_theme: saved.growth_theme || '',
+      })
+    }
     setSaving(false)
-    load()
   }
 
   // 月候補: 当月から過去 6 ヶ月
@@ -2579,7 +2600,12 @@ function KPTRow({ T, title, subtitle, keep, problem, tryNote, readOnly, onSave, 
   const [draftK, setDraftK] = useState(keep || '')
   const [draftP, setDraftP] = useState(problem || '')
   const [draftT, setDraftT] = useState(tryNote || '')
-  useEffect(() => { setDraftK(keep || ''); setDraftP(problem || ''); setDraftT(tryNote || '') }, [keep, problem, tryNote])
+  // フィールド別に個別 useEffect にする。まとめた useEffect にすると、
+  // 例えば Keep を保存した瞬間 (keep prop だけが変わった) に Problem/Try の draft も
+  // 一緒にリセットされ、書きかけの他フィールドが消える (「Try が消える」の原因)。
+  useEffect(() => { setDraftK(keep || '') }, [keep])
+  useEffect(() => { setDraftP(problem || '') }, [problem])
+  useEffect(() => { setDraftT(tryNote || '') }, [tryNote])
 
   const allEmpty = !keep && !problem && !tryNote
   // 上司未記入で readOnly のとき、点線囲み + アクションボタン (リマインドを送る)
