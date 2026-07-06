@@ -3882,21 +3882,33 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
       const dayStr = attToJSTDate(c.start_at || r.created_at)
       if (c.start_at) {
         const startMs = new Date(c.start_at).getTime()
+        const br = Math.max(0, Number(c.break_min) || 0)
+        // 稼働時間の算出:
+        //  1時間ごとの作業記録 (content.hourly) に 1 枠でも記入があれば新方式で計算:
+        //    稼働 = 記入枠数 × 60分 - 休憩 (未記入枠は欠勤扱い)
+        //  無ければ従来通り 始業〜終業(または18:00) - 休憩。
+        const hourlyArr = Array.isArray(c.hourly) ? c.hourly : null
         if (c.end_at) {
-          const endMs = new Date(c.end_at).getTime()
-          const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
-          const br = Math.max(0, Number(c.break_min) || 0)
-          agg[name].minutes += Math.max(0, gross - br)
+          if (hourlyArr && hourlyArr.length > 0) {
+            agg[name].minutes += Math.max(0, hourlyArr.length * 60 - br)
+          } else {
+            const endMs = new Date(c.end_at).getTime()
+            const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
+            agg[name].minutes += Math.max(0, gross - br)
+          }
           agg[name].breakMin += br
           agg[name].days.add(dayStr)
         } else if (dayStr < todayStr) {
           // 終業押し忘れ(前日以前)は 18:00 として計上 (件数は incomplete で把握)。
           // 今日の未終業は勤務中扱いで集計しない。
-          const [yy, mm2, dd] = dayStr.split('-').map(Number)
-          const endMs = Date.UTC(yy, mm2 - 1, dd, 18 - 9, 0, 0)
-          const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
-          const br = Math.max(0, Number(c.break_min) || 0)
-          agg[name].minutes += Math.max(0, gross - br)
+          if (hourlyArr && hourlyArr.length > 0) {
+            agg[name].minutes += Math.max(0, hourlyArr.length * 60 - br)
+          } else {
+            const [yy, mm2, dd] = dayStr.split('-').map(Number)
+            const endMs = Date.UTC(yy, mm2 - 1, dd, 18 - 9, 0, 0)
+            const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
+            agg[name].minutes += Math.max(0, gross - br)
+          }
           agg[name].breakMin += br
           agg[name].incomplete += 1
           agg[name].days.add(dayStr)

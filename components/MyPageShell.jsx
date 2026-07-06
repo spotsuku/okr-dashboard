@@ -1599,13 +1599,14 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     await onWorkLogChange()
   }
 
-  async function handleEnd({ keep, problem, tryNote, hourly, breakMin }) {
+  async function handleEnd({ keep, problem, tryNote, hourly, breakMin, workedMinutes }) {
     if (busy || !workLog) return
     setBusy(true)
     // 1. work_log に end_at + 休憩 + 1時間ごとの作業記録 (任意) を追記
     const oldContent = parseLogContent(workLog.content)
     const endAtIso = new Date().toISOString()
-    const newContent = { ...oldContent, end_at: endAtIso, break_min: Math.max(0, Number(breakMin) || 0) }
+    const br = Math.max(0, Number(breakMin) || 0)
+    const newContent = { ...oldContent, end_at: endAtIso, break_min: br }
     if (Array.isArray(hourly) && hourly.length > 0) newContent.hourly = hourly
     const { error: e1 } = await withNetworkRetry(() => supabase
       .from('coaching_logs')
@@ -1624,8 +1625,18 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       if (e2) { setBusy(false); alert(saveErrorMessage('振り返り(KPT)の保存', e2)); return }
     }
     // 3. Slack へ本日の活動報告を投稿 (非ブロッキング。失敗しても終業は完了扱い)
-    const worked = oldContent.start_at
-      ? (() => { const m = Math.floor((new Date(endAtIso) - new Date(oldContent.start_at)) / 60000); return `${Math.floor(m / 60)}時間${m % 60}分` })()
+    // 稼働時間: 1時間ごとの作業記録が 1 枠でもあれば「記入枠 × 60分 - 休憩」で計算
+    // (未記入枠は欠勤扱い)。無ければ従来通り 始業〜終業 - 休憩 で計算。
+    const hourlyCount = Array.isArray(hourly) ? hourly.length : 0
+    const workedMin = hourlyCount > 0
+      ? Math.max(0, hourlyCount * 60 - br)
+      : (typeof workedMinutes === 'number'
+          ? workedMinutes
+          : (oldContent.start_at
+              ? Math.max(0, Math.floor((new Date(endAtIso) - new Date(oldContent.start_at)) / 60000) - br)
+              : 0))
+    const worked = oldContent.start_at || hourlyCount > 0
+      ? `${Math.floor(workedMin / 60)}時間${workedMin % 60}分`
       : ''
     fetch('/api/integrations/slack/daily-report', {
       method: 'POST',
@@ -3829,11 +3840,26 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
   const jst = new Date(now.getTime() + 9 * 3600 * 1000)
   const dateStr = yesterdayDateStr ||
     `${jst.getUTCMonth()+1}/${jst.getUTCDate()}(${['日','月','火','水','木','金','土'][jst.getUTCDay()]})`
-  const worked = !force && startedAt ? (() => {
-    const mins = Math.floor((now - new Date(startedAt)) / 60000)
-    const h = Math.floor(mins / 60), m = mins % 60
-    return `${h}時間${m}分`
-  })() : ''
+
+  // 稼働時間の算出:
+  //  1時間ごとの作業記録 (hourSlots) に 1 枠でも記入があれば、
+  //   記入枠 × 60分 - 休憩 = 稼働 (未記入枠は欠勤扱い) の新方式で計算。
+  //  1枠も記入されていなければ、従来通り 始業〜現在 - 休憩 で計算 (後方互換)。
+  const filledHourCount = useMemo(() => {
+    if (!Array.isArray(hourSlots) || hourSlots.length === 0) return 0
+    let n = 0
+    for (const s of hourSlots) if ((hourly[s] || '').trim()) n += 1
+    return n
+  }, [hourly, hourSlots])
+  const workedMinutes = useMemo(() => {
+    const br = Math.max(0, Number(breakMin) || 0)
+    if (filledHourCount > 0) return Math.max(0, filledHourCount * 60 - br)
+    if (force || !startedAt) return 0
+    return Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000) - br)
+  }, [filledHourCount, breakMin, startedAt, force])
+  const worked = !force && (startedAt || filledHourCount > 0)
+    ? `${Math.floor(workedMinutes / 60)}時間${workedMinutes % 60}分`
+    : ''
 
   const fieldStyle = {
     width: '100%', minHeight: 70, padding: 10,
@@ -3959,32 +3985,58 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
         {hourSlots.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: SPACING.xs }}><Icon name="clock" size={12} /> 1時間ごとの作業記録</label>
-            <div style={hintStyle}>{force ? '対象日の各時間に何をしたかを記入（任意・空欄OK）。終業時刻を変えると行数が変わります。' : '各時間に何をしたかを記入（任意・空欄OK）。保存時に上司への報告にも反映されます。'}</div>
+            <div style={hintStyle}>
+              記入した時間帯だけを稼働時間として集計します。<strong>未記入の時間帯は「欠勤」扱い</strong> (勤怠集計にも反映)。
+              {force && ' 終業時刻を変えると行数が変わります。'}
+            </div>
             <div style={{
               border: `1px solid ${T.border}`, borderRadius: 8, overflow: 'hidden',
             }}>
-              {hourSlots.map((slot, i) => (
-                <div key={slot + i} style={{
-                  display: 'flex', alignItems: 'stretch',
-                  borderTop: i === 0 ? 'none' : `1px solid ${T.border}`,
-                }}>
-                  <div style={{
-                    flexShrink: 0, width: 96, padding: '8px 10px',
-                    background: T.sectionBg, color: T.textSub,
-                    fontSize: 11, fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                    display: 'flex', alignItems: 'center',
-                  }}>{slot}</div>
-                  <input
-                    value={hourly[slot] || ''}
-                    onChange={e => setHourly(prev => ({ ...prev, [slot]: e.target.value }))}
-                    placeholder="例: ○○の提案書作成"
-                    style={{
-                      flex: 1, minWidth: 0, padding: '8px 10px', border: 'none', outline: 'none',
-                      background: T.bgCard, color: T.text, fontSize: 13, fontFamily: 'inherit',
-                    }}
-                  />
-                </div>
-              ))}
+              {hourSlots.map((slot, i) => {
+                const filled = !!(hourly[slot] || '').trim()
+                return (
+                  <div key={slot + i} style={{
+                    display: 'flex', alignItems: 'stretch',
+                    borderTop: i === 0 ? 'none' : `1px solid ${T.border}`,
+                    background: filled ? T.bgCard : T.sectionBg,
+                    opacity: filled ? 1 : 0.75,
+                  }}>
+                    <div style={{
+                      flexShrink: 0, width: 96, padding: '8px 10px',
+                      background: T.sectionBg, color: T.textSub,
+                      fontSize: 11, fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      display: 'flex', alignItems: 'center',
+                    }}>{slot}</div>
+                    <input
+                      value={hourly[slot] || ''}
+                      onChange={e => setHourly(prev => ({ ...prev, [slot]: e.target.value }))}
+                      placeholder="例: ○○の提案書作成"
+                      style={{
+                        flex: 1, minWidth: 0, padding: '8px 10px', border: 'none', outline: 'none',
+                        background: 'transparent', color: T.text, fontSize: 13, fontFamily: 'inherit',
+                      }}
+                    />
+                    {!filled && (
+                      <span style={{
+                        alignSelf: 'center', flexShrink: 0, marginRight: 10,
+                        fontSize: 10, fontWeight: 700, color: T.textMuted,
+                        padding: '2px 8px', borderRadius: 99,
+                        background: 'rgba(120,120,128,0.16)', letterSpacing: '0.04em',
+                      }}>欠勤</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{
+              marginTop: 6, padding: '6px 10px', fontSize: 11, color: T.textSub,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: T.sectionBg, borderRadius: 6,
+            }}>
+              <span>記入 <strong style={{ color: T.text }}>{filledHourCount}</strong> / 全 <strong style={{ color: T.text }}>{hourSlots.length}</strong> 枠</span>
+              <span>
+                <strong style={{ color: T.text }}>{filledHourCount}</strong> × 1h − 休憩 <strong style={{ color: T.text }}>{breakMin}</strong>分 = 稼働 <strong style={{ color: T.info || T.accent }}>{Math.floor(workedMinutes / 60)}時間{workedMinutes % 60}分</strong>
+              </span>
             </div>
           </div>
         )}
@@ -4018,7 +4070,7 @@ function KPTModal({ T, busy, onCancel, onSave, startedAt, force = false, yesterd
             >キャンセル</button>
           )}
           <button
-            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM, reflectionDate, breakMin, hourly: hourSlots.map(slot => ({ slot, text: hourly[slot] || '' })).filter(h => h.text.trim()) })}
+            onClick={() => onSave({ keep, problem, tryNote, endTimeHHMM, reflectionDate, breakMin, workedMinutes, hourly: hourSlots.map(slot => ({ slot, text: hourly[slot] || '' })).filter(h => h.text.trim()) })}
             disabled={busy || !canSave}
             style={{
               background: canSave ? T.info : T.border,
