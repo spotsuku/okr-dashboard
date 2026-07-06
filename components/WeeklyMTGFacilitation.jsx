@@ -1804,7 +1804,7 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
 }
 
 // ─── Step 1: KA順送り（Phase 4） ───────────────────────────────────────────
-function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep, selectedPeriod = 'q1' }) {
+function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep, selectedPeriod = 'q1', autoPeriod = 'q1', onChangePeriod }) {
   const programTagCtx = useProgramTag()
   const wkly = meeting?.weeklyMTG
   const [allItems, setAllItems] = useState(null) // 全候補
