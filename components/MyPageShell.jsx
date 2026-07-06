@@ -4657,17 +4657,83 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
 
   useEffect(() => { load() }, [load])
 
+  // 今月の残業時間 (1日8時間超が残業。原則なし・要事前許可)。
+  // range 選択と独立して常に「当月」を対象に別途フェッチする。
+  // 管理職 (is_admin) は労基41条相当で残業対象外の運用 → 表示は「参考値」扱い。
+  const [monthlyOvertimeMin, setMonthlyOvertimeMin] = useState(0)
+  const [monthlyOvertimeReady, setMonthlyOvertimeReady] = useState(false)
+  useEffect(() => {
+    if (!viewingName) { setMonthlyOvertimeMin(0); setMonthlyOvertimeReady(false); return }
+    let alive = true
+    ;(async () => {
+      const now = new Date()
+      const jstNow = new Date(now.getTime() + 9 * 3600 * 1000)
+      const y = jstNow.getUTCFullYear(), m = jstNow.getUTCMonth()
+      const startUtc = new Date(Date.UTC(y, m, 1) - 9 * 3600 * 1000).toISOString()
+      const endUtc = new Date(Date.UTC(y, m + 1, 1) - 9 * 3600 * 1000).toISOString()
+      const { data: rows, error } = await supabase.from('coaching_logs')
+        .select('content, created_at')
+        .eq('owner', viewingName)
+        .eq('log_type', 'work_log')
+        .gte('created_at', startUtc)
+        .lt('created_at', endUtc)
+        .range(0, 999)
+      if (!alive) return
+      if (error) { setMonthlyOvertimeMin(0); setMonthlyOvertimeReady(true); return }
+      const todayStr = toJSTDateStr(new Date())
+      let overtimeMin = 0
+      for (const row of (rows || [])) {
+        const c = parseLogContent(row.content)
+        const dateStr = toJSTDateStr(new Date(c.start_at || row.created_at))
+        const br = Number(c.break_min) || 0
+        let dailyMin = 0
+        const hourlyArr = Array.isArray(c.hourly) ? c.hourly : null
+        if (hourlyArr && hourlyArr.length > 0) {
+          const s = hourlyArr.reduce((acc, h) => acc + Math.max(0, typeof h?.minutes === 'number' ? h.minutes : 60), 0)
+          dailyMin = Math.max(0, s - br)
+        } else if (c.start_at) {
+          let endMs
+          if (c.end_at) endMs = new Date(c.end_at).getTime()
+          else if (dateStr < todayStr) { const [yy, mo2, dd] = dateStr.split('-').map(Number); endMs = Date.UTC(yy, mo2 - 1, dd, 18 - 9, 0, 0) }
+          else continue
+          const gross = Math.floor((endMs - new Date(c.start_at).getTime()) / 60000)
+          dailyMin = Math.max(0, gross - br)
+        }
+        overtimeMin += Math.max(0, dailyMin - 480) // 8時間 = 480分
+      }
+      setMonthlyOvertimeMin(overtimeMin)
+      setMonthlyOvertimeReady(true)
+    })()
+    return () => { alive = false }
+  }, [viewingName])
+  const viewingIsAdmin = !!viewingMember?.is_admin
+  const monthlyOvertimeHrs = Math.floor(monthlyOvertimeMin / 60), monthlyOvertimeMins = monthlyOvertimeMin % 60
+
   const totalDays = data.days.length
   const _todayStr = toJSTDateStr(new Date())
   const totalMinutes = data.days.reduce((sum, d) => {
-    if (d.workLog?.start_at) {
+    const wl = d.workLog
+    if (!wl) return sum
+    const br = Number(wl.break_min) || 0
+    const hourlyArr = Array.isArray(wl.hourly) ? wl.hourly : null
+    // 新方式: hourly[] があれば各枠の minutes 合計 (未指定は 60分)。今日の未終業でも
+    // 記入枠がある限り集計に反映する (途中経過が「今週」の合計に見えるように)。
+    if (hourlyArr && hourlyArr.length > 0) {
+      const hourlySum = hourlyArr.reduce((s, h) => {
+        const m = typeof h.minutes === 'number' ? h.minutes : 60
+        return s + Math.max(0, m)
+      }, 0)
+      return sum + Math.max(0, hourlySum - br)
+    }
+    // 旧方式 (hourly 無し): 始業〜終業 - 休憩
+    if (wl.start_at) {
       // 終業押し忘れ(end_at 無し)は「前日以前」のみ 18:00 として計上 (今日は勤務中扱いで除外)
       let endMs
-      if (d.workLog.end_at) endMs = new Date(d.workLog.end_at).getTime()
+      if (wl.end_at) endMs = new Date(wl.end_at).getTime()
       else if (d.date < _todayStr) { const [y, mo, dd] = d.date.split('-').map(Number); endMs = Date.UTC(y, mo - 1, dd, 18 - 9, 0, 0) }
-      else return sum // 今日の未終業は集計しない
-      const gross = Math.floor((endMs - new Date(d.workLog.start_at).getTime()) / 60000)
-      return sum + Math.max(0, gross - (Number(d.workLog.break_min) || 0)) // 休憩を差し引く
+      else return sum
+      const gross = Math.floor((endMs - new Date(wl.start_at).getTime()) / 60000)
+      return sum + Math.max(0, gross - br)
     }
     return sum
   }, 0)
@@ -4717,8 +4783,17 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
         </div>
         {!isMobile && <div style={{ flex: 1 }} />}
         {!isMobile && (
-          <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10 }}>
-            {totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分
+          <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>{totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分</span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span title="1日8時間超が残業。原則なし・要事前許可">
+              今月の残業
+              {viewingIsAdmin ? (
+                <> <strong style={{ color: T.textMuted }}>—</strong> <span style={{ opacity: 0.75 }}>(管理職のため対象外)</span></>
+              ) : monthlyOvertimeReady ? (
+                <> <strong style={{ color: monthlyOvertimeMin > 0 ? T.warn : T.text }}>{monthlyOvertimeHrs}時間{monthlyOvertimeMins}分</strong></>
+              ) : <> <span style={{ opacity: 0.5 }}>集計中…</span></>}
+            </span>
           </div>
         )}
         <SegmentedControl T={T} size="sm" value={range} onChange={setRange}
@@ -4733,8 +4808,14 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
           borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
         }}><Icon name="refresh" size={11} /></button>
         {isMobile && (
-          <div style={{ fontSize: 10, color: T.textMuted, width: '100%' }}>
-            {totalDays}日 · 合計 {totalHrs}時間{totalMins}分
+          <div style={{ fontSize: 10, color: T.textMuted, width: '100%', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <span>{totalDays}日 · 合計 {totalHrs}時間{totalMins}分</span>
+            <span title="1日8時間超が残業。原則なし・要事前許可">
+              残業(今月)
+              {viewingIsAdmin ? <> <strong>—</strong> (対象外)</>
+                : monthlyOvertimeReady ? <> <strong style={{ color: monthlyOvertimeMin > 0 ? T.warn : T.text }}>{monthlyOvertimeHrs}h{monthlyOvertimeMins}m</strong></>
+                : <> 集計中…</>}
+            </span>
           </div>
         )}
       </div>
@@ -5346,10 +5427,25 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
     const [ey, emo, ed] = day.date.split('-').map(Number)
     return new Date(Date.UTC(ey, emo - 1, ed, 18 - 9, 0, 0)).toISOString()
   })() : null)
-  const worked = (start_at && effEnd) ? (() => {
-    const mins = Math.max(0, Math.floor((new Date(effEnd) - new Date(start_at)) / 60000) - breakMin)
-    return `${Math.floor(mins / 60)}時間${mins % 60}分`
-  })() : ''
+  // 稼働時間の算出:
+  //   hourly[] があれば各枠 (minutes 未指定は 60分) を合計 - 休憩 = 稼働 (新方式)。
+  //   今日で end_at 無しでも hourly[] があれば途中経過を計上する。
+  //   hourly[] が無ければ従来通り 始業〜終業(または18:00) - 休憩 (後方互換)。
+  const worked = (() => {
+    if (Array.isArray(hourly) && hourly.length > 0) {
+      const sumMin = hourly.reduce((s, h) => {
+        const m = typeof h?.minutes === 'number' ? h.minutes : 60
+        return s + Math.max(0, m)
+      }, 0)
+      const mins = Math.max(0, sumMin - breakMin)
+      return `${Math.floor(mins / 60)}時間${mins % 60}分`
+    }
+    if (start_at && effEnd) {
+      const mins = Math.max(0, Math.floor((new Date(effEnd) - new Date(start_at)) / 60000) - breakMin)
+      return `${Math.floor(mins / 60)}時間${mins % 60}分`
+    }
+    return ''
+  })()
   const hasKpt = day.kpts.length > 0
   const hourlyRows = Array.isArray(hourly) ? hourly.filter(h => h && (h.text || '').trim()) : []
 
