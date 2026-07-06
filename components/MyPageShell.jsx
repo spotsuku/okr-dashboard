@@ -4847,6 +4847,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
       }}>
         {[
           { key: 'retrospect', icon: 'msg', label: '振り返り' },
+          { key: 'attendance', icon: 'clock', label: '勤怠' },
           { key: 'oneonone',   icon: 'user', label: '1on1' },
           { key: 'badges',     icon: 'medal', label: 'バッジコレクション' },
         ].map(t => {
@@ -4872,6 +4873,13 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
         ) : subTab === 'oneonone' ? (
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <Monthly1on1Card key={viewingName || 'no-member'} T={T} viewingName={viewingName} myName={myName} members={members} />
+          </div>
+        ) : subTab === 'attendance' ? (
+          <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+            <AttendanceHistoryTab
+              T={T} days={data.days} loading={data.loading} range={range}
+              viewingIsAdmin={viewingIsAdmin}
+            />
           </div>
         ) : data.loading ? <Loading T={T} /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
@@ -5427,6 +5435,227 @@ function RetrospectSummary({ T, stats, kpt, range }) {
   )
 }
 
+// ─── 勤怠タブ: viewingName の勤怠履歴 (期間内の各日の始業/終業/休憩/稼働/残業) ─────
+//   RetrospectTab の data.days をそのまま利用し、勤怠のみを表形式で表示。
+//   残業時間 = max(0, 稼働 - 480 分)。管理職 (viewingIsAdmin) は「対象外」表示。
+function AttendanceHistoryTab({ T, days, loading, range, viewingIsAdmin }) {
+  const isMobile = useIsMobile()
+  const rangeLabel = range === 'week' ? '今週'
+    : range === 'month' ? '今月'
+    : range === 'quarter' ? '四半期'
+    : '全期間'
+
+  const rows = useMemo(() => {
+    if (!Array.isArray(days)) return []
+    const todayStr = toWorkdayJSTStr(new Date())
+    const out = []
+    for (const d of days) {
+      const wl = d.workLog
+      if (!wl) continue
+      const br = Math.max(0, Number(wl.break_min) || 0)
+      const hourlyArr = Array.isArray(wl.hourly) ? wl.hourly : null
+      // 稼働時間の算出 (振り返り view と同じロジック)
+      let workedMin = 0
+      let usedFallback = false
+      if (hourlyArr && hourlyArr.length > 0) {
+        const s = hourlyArr.reduce((acc, h) => acc + Math.max(0, typeof h?.minutes === 'number' ? h.minutes : 60), 0)
+        workedMin = Math.max(0, s - br)
+      } else if (wl.start_at) {
+        let endMs
+        if (wl.end_at) endMs = new Date(wl.end_at).getTime()
+        else if (d.date < todayStr) {
+          const [y, mo, dd] = d.date.split('-').map(Number)
+          endMs = Date.UTC(y, mo - 1, dd, 18 - 9, 0, 0)
+          usedFallback = true
+        } else { continue }
+        const gross = Math.floor((endMs - new Date(wl.start_at).getTime()) / 60000)
+        workedMin = Math.max(0, gross - br)
+        usedFallback = usedFallback || false
+      } else { continue }
+      const overtimeMin = Math.max(0, workedMin - 480)
+      const dt = new Date(d.date + 'T00:00:00Z')
+      const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
+      out.push({
+        date: d.date, wd,
+        startHHMM: wl.start_at ? jstHHMM(wl.start_at) : '',
+        endHHMM: wl.end_at ? jstHHMM(wl.end_at) : '',
+        autoEnd: !wl.end_at && d.date < todayStr,
+        unclosed: !wl.end_at && d.date >= todayStr,
+        breakMin: br,
+        workedMin, overtimeMin,
+      })
+    }
+    // 新しい日付を上に
+    return out.sort((a, b) => b.date.localeCompare(a.date))
+  }, [days])
+
+  const totals = useMemo(() => {
+    return rows.reduce((acc, r) => ({
+      days: acc.days + 1,
+      workedMin: acc.workedMin + r.workedMin,
+      overtimeMin: acc.overtimeMin + r.overtimeMin,
+    }), { days: 0, workedMin: 0, overtimeMin: 0 })
+  }, [rows])
+  const fmt = (min) => `${Math.floor(min / 60)}時間${min % 60}分`
+  const fmtCompact = (min) => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`
+
+  if (loading) return <Loading T={T} />
+  if (rows.length === 0) {
+    return (
+      <div style={{
+        padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 12,
+        background: T.bgCard, border: `1px dashed ${T.border}`, borderRadius: 12,
+      }}>
+        <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center', color: T.textMuted }}>
+          <Icon name="clock" size={28} />
+        </div>
+        {rangeLabel} の勤怠記録がありません<br />
+        <span style={{ fontSize: 10 }}>始業〜終業を記録すると、ここに履歴が表示されます</span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* サマリー */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
+        gap: 10,
+      }}>
+        <SummaryStat T={T} label={`${rangeLabel} 出勤日数`} value={`${totals.days}日`} color={T.text} />
+        <SummaryStat T={T} label={`${rangeLabel} 就業時間`} value={fmt(totals.workedMin)} color={T.text} />
+        <SummaryStat T={T} label={`${rangeLabel} 残業合計`}
+          value={viewingIsAdmin ? '—' : fmt(totals.overtimeMin)}
+          hint={viewingIsAdmin ? '管理職のため対象外' : '1日8時間超が残業'}
+          color={viewingIsAdmin ? T.textMuted : (totals.overtimeMin > 0 ? T.warn : T.text)} />
+        <SummaryStat T={T} label="平均 (出勤日あたり)"
+          value={totals.days > 0 ? fmt(Math.round(totals.workedMin / totals.days)) : '—'}
+          color={T.text} />
+      </div>
+
+      {/* 履歴テーブル */}
+      <div style={{
+        background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden',
+      }}>
+        {/* ヘッダ */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '60px 1fr 1fr 60px' : '120px 90px 90px 70px 100px 100px',
+          padding: '8px 12px', background: T.sectionBg, fontSize: 10.5, fontWeight: 700, color: T.textMuted,
+          letterSpacing: '0.06em', textTransform: 'uppercase', gap: 4,
+        }}>
+          <span>日付</span>
+          {!isMobile && <span>始業</span>}
+          {!isMobile && <span>終業</span>}
+          {!isMobile && <span>休憩</span>}
+          <span style={{ textAlign: isMobile ? 'left' : 'right' }}>稼働</span>
+          <span style={{ textAlign: 'right' }}>残業</span>
+          {isMobile && <span></span>}
+        </div>
+
+        {/* 行 */}
+        {rows.map((r) => {
+          const isWeekend = r.wd === '土' || r.wd === '日'
+          return (
+            <div key={r.date} style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '60px 1fr 1fr 60px' : '120px 90px 90px 70px 100px 100px',
+              padding: '10px 12px',
+              borderTop: `1px solid ${T.border}`,
+              fontSize: 12.5, alignItems: 'center', gap: 4,
+              color: isWeekend ? T.textMuted : T.text,
+            }}>
+              <span style={{ fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                {r.date.slice(5)} ({r.wd})
+              </span>
+              {!isMobile && (
+                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  {r.startHHMM || '—'}
+                </span>
+              )}
+              {!isMobile && (
+                <span style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  color: r.autoEnd ? T.warn : r.unclosed ? T.textMuted : 'inherit',
+                }}>
+                  {r.endHHMM || (r.autoEnd ? '18:00*' : r.unclosed ? '未終業' : '—')}
+                </span>
+              )}
+              {!isMobile && <span>{r.breakMin}分</span>}
+              <span style={{
+                textAlign: isMobile ? 'left' : 'right', fontWeight: 700,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              }}>
+                {isMobile ? fmtCompact(r.workedMin) : fmt(r.workedMin)}
+              </span>
+              <span style={{
+                textAlign: 'right', fontWeight: 700,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                color: viewingIsAdmin ? T.textMuted : (r.overtimeMin > 0 ? T.warn : T.textMuted),
+              }}>
+                {viewingIsAdmin ? '—' : r.overtimeMin > 0 ? (isMobile ? fmtCompact(r.overtimeMin) : fmt(r.overtimeMin)) : '—'}
+              </span>
+              {isMobile && (
+                <span style={{ fontSize: 10, color: r.autoEnd ? T.warn : r.unclosed ? T.textMuted : T.textFaint }}>
+                  {r.startHHMM}〜{r.endHHMM || (r.autoEnd ? '18:00*' : '—')}
+                </span>
+              )}
+            </div>
+          )
+        })}
+
+        {/* 合計行 */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '60px 1fr 1fr 60px' : '120px 90px 90px 70px 100px 100px',
+          padding: '10px 12px', background: T.sectionBg,
+          borderTop: `1px solid ${T.border}`,
+          fontSize: 12.5, alignItems: 'center', gap: 4, fontWeight: 800,
+        }}>
+          <span>合計</span>
+          {!isMobile && <span></span>}
+          {!isMobile && <span></span>}
+          {!isMobile && <span></span>}
+          <span style={{
+            textAlign: isMobile ? 'left' : 'right',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          }}>
+            {isMobile ? fmtCompact(totals.workedMin) : fmt(totals.workedMin)}
+          </span>
+          <span style={{
+            textAlign: 'right',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            color: viewingIsAdmin ? T.textMuted : (totals.overtimeMin > 0 ? T.warn : T.text),
+          }}>
+            {viewingIsAdmin ? '—' : (isMobile ? fmtCompact(totals.overtimeMin) : fmt(totals.overtimeMin))}
+          </span>
+          {isMobile && <span></span>}
+        </div>
+      </div>
+
+      {/* 注釈 */}
+      <div style={{ fontSize: 10, color: T.textMuted, lineHeight: 1.6 }}>
+        <div>· 「稼働」は始業〜終業から休憩を引いた時間。1時間ごとの作業記録がある日はその合計 - 休憩で算出。</div>
+        <div>· 「残業」は 1 日 8 時間を超えた分。原則なし、必要な場合は事前に許可を取ってください。</div>
+        <div>· 終業を押し忘れた過去日は 18:00 として集計 (「*」印)。</div>
+      </div>
+    </div>
+  )
+}
+
+function SummaryStat({ T, label, value, hint, color }) {
+  return (
+    <div style={{
+      padding: '12px 14px', background: T.bgCard, border: `1px solid ${T.border}`,
+      borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 4,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: color || T.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{value}</div>
+      {hint && <div style={{ fontSize: 10, color: T.textFaint }}>{hint}</div>}
+    </div>
+  )
+}
+
 function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
   const isMobile = useIsMobile()
   const { currentOrg } = useCurrentOrg()
@@ -5611,16 +5840,17 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
           {/* 始業 / 終業 / 休憩 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>始業</span>
-            <select value={editStart} onChange={e => setEditStart(e.target.value)}
-              style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}>
-              {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <input type="time" step={60} value={editStart} onChange={e => setEditStart(e.target.value)}
+              style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none', minWidth: 96 }} />
             <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>終業</span>
-            <select value={editEnd} onChange={e => setEditEnd(e.target.value)}
-              style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}>
-              <option value="">（未終業）</option>
-              {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <input type="time" step={60} value={editEnd} onChange={e => setEditEnd(e.target.value)}
+              placeholder="未終業"
+              style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none', minWidth: 96 }} />
+            {!editEnd && <span style={{ fontSize: 10, color: T.textMuted, fontStyle: 'italic' }}>(未終業)</span>}
+            {editEnd && (
+              <button onClick={() => setEditEnd('')} title="終業をクリア (未終業に戻す)"
+                style={{ padding: '3px 8px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, fontSize: 10, fontFamily: 'inherit', cursor: 'pointer' }}>クリア</button>
+            )}
             <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted }}>休憩</span>
             <select value={editBreak} onChange={e => setEditBreak(Number(e.target.value))}
               style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${T.borderMid}`, background: T.bgCard, color: T.text, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}>
@@ -5665,7 +5895,7 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
 
           {/* 操作 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ flex: 1, minWidth: 160, fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>時刻は30分刻み。休憩は就業時間から差し引かれ、勤怠集計（給与計算）にも反映されます。</span>
+            <span style={{ flex: 1, minWidth: 160, fontSize: 10, color: T.textMuted, lineHeight: 1.5 }}>休憩は就業時間から差し引かれ、勤怠集計（給与計算）にも反映されます。</span>
             <button onClick={() => setEditing(false)} disabled={saving}
               style={{ padding: '6px 12px', borderRadius: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSub, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>キャンセル</button>
             <button onClick={saveEdit} disabled={saving}
