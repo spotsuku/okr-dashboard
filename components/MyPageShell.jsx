@@ -5680,21 +5680,22 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
   //   hourly[] があれば各枠 (minutes 未指定は 60分) を合計 - 休憩 = 稼働 (新方式)。
   //   今日で end_at 無しでも hourly[] があれば途中経過を計上する。
   //   hourly[] が無ければ従来通り 始業〜終業(または18:00) - 休憩 (後方互換)。
-  const worked = (() => {
+  const workedMin = (() => {
     if (Array.isArray(hourly) && hourly.length > 0) {
       const sumMin = hourly.reduce((s, h) => {
         const m = typeof h?.minutes === 'number' ? h.minutes : 60
         return s + Math.max(0, m)
       }, 0)
-      const mins = Math.max(0, sumMin - breakMin)
-      return `${Math.floor(mins / 60)}時間${mins % 60}分`
+      return Math.max(0, sumMin - breakMin)
     }
     if (start_at && effEnd) {
-      const mins = Math.max(0, Math.floor((new Date(effEnd) - new Date(start_at)) / 60000) - breakMin)
-      return `${Math.floor(mins / 60)}時間${mins % 60}分`
+      return Math.max(0, Math.floor((new Date(effEnd) - new Date(start_at)) / 60000) - breakMin)
     }
-    return ''
+    return null
   })()
+  const worked = workedMin != null ? `${Math.floor(workedMin / 60)}時間${workedMin % 60}分` : ''
+  // 残業時間 = max(0, 稼働 - 480分)。1日8時間超が残業。
+  const overtimeMin = workedMin != null ? Math.max(0, workedMin - 480) : 0
   const hasKpt = day.kpts.length > 0
   const hourlyRows = Array.isArray(hourly) ? hourly.filter(h => h && (h.text || '').trim()) : []
 
@@ -5809,6 +5810,14 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
             </div>
           )}
         </div>
+        {overtimeMin > 0 && (
+          <span title="1日8時間超が残業。原則なし・要事前許可" style={{
+            fontSize: 10, fontWeight: 700, color: T.warn,
+            padding: '2px 8px', borderRadius: 99,
+            background: `${T.warn}18`, border: `1px solid ${T.warn}45`,
+            display: 'inline-flex', alignItems: 'center', gap: SPACING.xs,
+          }}><Icon name="alert" size={10} /> 残業 {Math.floor(overtimeMin / 60)}時間{overtimeMin % 60}分</span>
+        )}
         {hasKpt && (
           <span style={{
             fontSize: 10, fontWeight: 600, color: T.success,
