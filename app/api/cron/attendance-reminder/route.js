@@ -26,7 +26,12 @@ function todayJST() {
 
 async function post(url, text) {
   try {
-    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+    // link_names: 1 で @user / <!channel> 等のメンション解決を有効化 (通知が飛ぶように)
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, link_names: 1 }),
+    })
     return true
   } catch (e) {
     console.warn('attendance-reminder webhook failed:', e?.message)
@@ -51,9 +56,10 @@ export async function GET(req) {
   }
 
   const url = process.env.NEXT_PUBLIC_APP_URL || 'https://aiworkspace.jp'
+  // <!channel> でチャンネル全員に通知 (Slack incoming webhook が link_names を解釈)
   const text = type === 'end'
-    ? `🌆 お疲れさまです！\n退社前に AI WorkSpace で『終業』を押して、今日の振り返り（1時間ごとの作業・KPT）を記録しましょう。\n👉 ${url}`
-    : `🌅 おはようございます！\n出社したら AI WorkSpace で『始業』を押してください。\n👉 ${url}`
+    ? `<!channel>\n🌆 お疲れさまです！\n退社前に AI WorkSpace で『終業』を押して、今日の振り返り（1時間ごとの作業・KPT）を記録しましょう。\n👉 ${url}`
+    : `<!channel>\n🌅 おはようございます！\n出社したら AI WorkSpace で『始業』を押してください。\n👉 ${url}`
 
   const supabase = admin()
   let notified = 0
