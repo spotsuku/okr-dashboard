@@ -1296,6 +1296,40 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
   const programTag = useProgramTag()
   const [allItems, setAllItems] = useState(null) // 全候補
   const [loadError, setLoadError] = useState(null)
+
+  // Q セレクタ (Q1 / Q2 / Q3 / Q4 / 通期)。
+  // 既定は「会議週の月」から自動判定 (4-6=Q1 / 7-9=Q2 / 10-12=Q3 / 1-3=Q4、4月始まり会計年度)。
+  // ユーザーが手動で選び直したら sessionStorage で保持し、同じ meeting+week で復元。
+  // 別会議 / 別週に切り替わったら自動 Q に戻す。
+  const autoPeriod = useMemo(() => {
+    if (!weekStart || weekStart.length < 7) return 'q1'
+    const month = Number(weekStart.slice(5, 7))
+    if (month >= 4 && month <= 6) return 'q1'
+    if (month >= 7 && month <= 9) return 'q2'
+    if (month >= 10 && month <= 12) return 'q3'
+    return 'q4'
+  }, [weekStart])
+  const periodStorageKey = meeting?.key && weekStart
+    ? `wm_facil_period_${meeting.key}_${weekStart}` : null
+  const [selectedPeriod, setSelectedPeriod] = useState(() => {
+    if (typeof window === 'undefined' || !periodStorageKey) return autoPeriod
+    try { return window.sessionStorage.getItem(periodStorageKey) || autoPeriod }
+    catch { return autoPeriod }
+  })
+  // 会議 or 週が切り替わったら自動 Q に戻す (sessionStorage も新キーで再読込)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !periodStorageKey) { setSelectedPeriod(autoPeriod); return }
+    try {
+      const saved = window.sessionStorage.getItem(periodStorageKey)
+      setSelectedPeriod(saved || autoPeriod)
+    } catch { setSelectedPeriod(autoPeriod) }
+  }, [periodStorageKey, autoPeriod])
+  const changePeriod = (p) => {
+    setSelectedPeriod(p)
+    if (typeof window !== 'undefined' && periodStorageKey) {
+      try { window.sessionStorage.setItem(periodStorageKey, p) } catch { /* noop */ }
+    }
+  }
   // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
   const excludedLevels = useMemo(() => {
     const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : []
@@ -1331,11 +1365,12 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
 
-        // 2) 当四半期の Objective を取得
+        // 2) 選択中の期間 (Q1〜Q4 / 通期) の Objective を取得。
+        //    プレフィックス無し ('q2') と年度付き ('2026_q2') の両フォーマットを許容する
+        //    (AnnualView.toPeriodKey が fy 2026 で prefix 省略、それ以外で付与の実装)。
         const fy = weekStart.slice(0, 4)
-        const month = Number(weekStart.slice(5, 7))
-        const q = month >= 4 && month <= 6 ? 'q1' : month >= 7 && month <= 9 ? 'q2' : month >= 10 && month <= 12 ? 'q3' : 'q4'
-        const periodKeys = [q, `${fy}_${q}`]
+        const p = selectedPeriod || 'q1'
+        const periodKeys = [p, `${fy}_${p}`]
 
         const objsRes = await supabase.from('objectives')
           .select('id, level_id, period, title, owner, parent_objective_id, archived_at, program_tags')
@@ -1395,7 +1430,7 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     }
     load()
     return () => { alive = false }
-  }, [wkly?.scope, weekStart, levels, programTag])
+  }, [wkly?.scope, weekStart, levels, programTag, selectedPeriod])
 
   // key_results の変更を items に反映 (KR編集後の再mountで値が消える問題対策)
   useEffect(() => {
@@ -1415,29 +1450,77 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     return () => { supabase.removeChannel(ch) }
   }, [items?.length, weekStart])
 
+  // Q セレクタ (Q1〜Q4 / 通期)。既定は会議週から自動判定、手動切替可。
+  const periodOptions = [
+    { key: 'q1',     label: 'Q1',  color: '#1d4ed8' },
+    { key: 'q2',     label: 'Q2',  color: '#0a8f5a' },
+    { key: 'q3',     label: 'Q3',  color: '#c2410c' },
+    { key: 'q4',     label: 'Q4',  color: '#7e22ce' },
+    { key: 'annual', label: '通期', color: '#5856d6' },
+  ]
+  const currentPeriodLabel = periodOptions.find(o => o.key === selectedPeriod)?.label || selectedPeriod
+  const qSelector = (
+    <div style={{
+      display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+      padding: '8px 12px', background: T.bgSection, border: `1px solid ${T.border}`,
+      borderRadius: 10, marginBottom: 12,
+    }}>
+      <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginRight: 4 }}>対象期間</span>
+      {periodOptions.map(o => {
+        const active = o.key === selectedPeriod
+        const isAuto = o.key === autoPeriod
+        return (
+          <button key={o.key} onClick={() => changePeriod(o.key)} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+            background: active ? o.color : 'transparent',
+            color: active ? '#fff' : T.textSub,
+            fontSize: 12, fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}>
+            {o.label}
+            {isAuto && !active && (
+              <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 500 }}>自動</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+
   if (items === null) {
-    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KR一覧を読み込み中...</div>
+    return (
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 20px' }}>
+        {qSelector}
+        <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KR一覧を読み込み中...</div>
+      </div>
+    )
   }
   if (loadError) {
     return (
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ background: `${T.danger}15`, border: `1px solid ${T.danger}40`, borderRadius: 10, padding: 16, color: T.danger, fontSize: 13 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>KR一覧の取得でエラー</div>
-          <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: 'pre-wrap' }}>{loadError}</div>
-        </div>
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 20px' }}>
+        {qSelector}
+        <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div style={{ background: `${T.danger}15`, border: `1px solid ${T.danger}40`, borderRadius: 10, padding: 16, color: T.danger, fontSize: 13 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>KR一覧の取得でエラー</div>
+            <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: 'pre-wrap' }}>{loadError}</div>
+          </div>
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+          </div>
         </div>
       </div>
     )
   }
   if (items.length === 0) {
     return (
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-        <div style={{ marginBottom: 12, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={36} /></div>
-        <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに今四半期のKRがありません</div>
-        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>「次へ」で確認事項ステップへ進めます</div>
-        <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 20px' }}>
+        {qSelector}
+        <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ marginBottom: 12, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={36} /></div>
+          <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに {currentPeriodLabel} の KR がありません</div>
+          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>上の「対象期間」から別の期間に切り替えるか、「次へ」で確認事項ステップへ進めます</div>
+          <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
+        </div>
       </div>
     )
   }
@@ -1505,6 +1588,9 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
           }}>↩ 会議準備に戻る</button>
         </div>
       )}
+
+      {/* Q セレクタ */}
+      {qSelector}
 
       {/* 進行ナビ */}
       <div style={{
