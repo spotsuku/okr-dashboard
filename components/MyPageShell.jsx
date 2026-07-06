@@ -57,6 +57,16 @@ function toJSTDateStr(d) {
   return jst.toISOString().split('T')[0]
 }
 // JST基準で「入力日時を含む週の月曜日」のYYYY-MM-DDを返す
+// 勤務日カットオフは 04:00 JST。00:00-03:59 JST は前日の勤務日として扱う。
+// (深夜〜早朝の作業を「翌日」ではなく「その日」に紐付けるための運用ルール)
+const WORKDAY_CUTOFF_MS = 4 * 3600 * 1000
+function toWorkdayJSTStr(d = new Date()) {
+  return toJSTDateStr(new Date(d.getTime() - WORKDAY_CUTOFF_MS))
+}
+function getMondayWorkdayJSTStr(d = new Date()) {
+  return getMondayJSTStr(new Date(d.getTime() - WORKDAY_CUTOFF_MS))
+}
+
 function getMondayJSTStr(d = new Date()) {
   const jst = new Date(d.getTime() + 9 * 3600 * 1000)
   const jstDay = jst.getUTCDay()
@@ -1613,13 +1623,17 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       .update({ content: JSON.stringify(newContent) })
       .eq('id', workLog.id))
     if (e1) { setBusy(false); alert(saveErrorMessage('終業記録', e1)); return }
-    // 2. KPT を別ログとして保存（何か記入があれば）
+    // 2. KPT を別ログとして保存（何か記入があれば）。
+    //    勤務日カットオフは 04:00 JST。深夜終業 (例: 7/6 開始 → 7/7 02:40 終業) は
+    //    end_at の workday 換算で 7/6 になり、勤怠と同じ日にバケットされる。
+    //    week_start も workday ベースで算出する。
     if ((keep || '').trim() || (problem || '').trim() || (tryNote || '').trim()) {
       const { error: e2 } = await withNetworkRetry(() => supabase.from('coaching_logs').insert({
         owner: myName,
         log_type: 'kpt',
         organization_id: currentOrg?.id,
-        week_start: getMondayJSTStr(),
+        week_start: getMondayWorkdayJSTStr(new Date(endAtIso)),
+        created_at: endAtIso,
         content: JSON.stringify({ keep, problem, try: tryNote }),
       }))
       if (e2) { setBusy(false); alert(saveErrorMessage('振り返り(KPT)の保存', e2)); return }
@@ -4583,21 +4597,21 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
     const today = toJSTDateStr(now)
     const rangeStart = (() => {
       if (range === 'all') return null
+      // 勤務日カットオフ 04:00 JST に合わせて範囲境界も 04:00 JST に。
+      // (旧実装は UTC 00:00 = JST 09:00 で、JST 朝 9 時前に始業した work_log が
+      //  範囲外になり「今週に表示されない」原因になっていた)
+      // workday ベースの「今日」を計算して、月/週の起点を求める。
+      const jstWorkday = new Date(now.getTime() - WORKDAY_CUTOFF_MS + 9 * 3600 * 1000)
       if (range === 'month') {
-        const jst = new Date(now.getTime() + 9 * 3600 * 1000)
-        const firstOfMonth = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), 1))
-        return firstOfMonth.toISOString()
+        // 当月 1日 04:00 JST = UTC は 5時間戻した時刻 (04:00 JST = UTC 前日 19:00)
+        return new Date(Date.UTC(jstWorkday.getUTCFullYear(), jstWorkday.getUTCMonth(), 1, 4 - 9, 0, 0)).toISOString()
       }
       if (range === 'quarter') {
-        // 四半期 = 現在のカレンダー四半期 (1-3 / 4-6 / 7-9 / 10-12 月) の初日 (JST)
-        const jst = new Date(now.getTime() + 9 * 3600 * 1000)
-        const qStartMonth = Math.floor(jst.getUTCMonth() / 3) * 3
-        const firstOfQuarter = new Date(Date.UTC(jst.getUTCFullYear(), qStartMonth, 1))
-        return firstOfQuarter.toISOString()
+        const qStartMonth = Math.floor(jstWorkday.getUTCMonth() / 3) * 3
+        return new Date(Date.UTC(jstWorkday.getUTCFullYear(), qStartMonth, 1, 4 - 9, 0, 0)).toISOString()
       }
-      // week
-      const monday = new Date(getMondayJSTStr() + 'T00:00:00Z')
-      return monday.toISOString()
+      // week: 今週月曜 04:00 JST
+      return new Date(getMondayWorkdayJSTStr() + 'T04:00:00+09:00').toISOString()
     })()
     const rangeStartDateOnly = rangeStart ? rangeStart.slice(0, 10) : null
 
@@ -4631,9 +4645,15 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
     // 日付ごとにまとめる (JST日付)
     const byDate = {}
     ;(rows || []).forEach(row => {
-      const dateKey = toJSTDateStr(new Date(row.created_at))
-      if (!byDate[dateKey]) byDate[dateKey] = { date: dateKey, workLog: null, kpts: [] }
+      // 勤務日カットオフは 04:00 JST。深夜終業 (例: 7/7 02:40) は前日 (7/6) の
+      // 勤務日にバケットする。work_log は content.start_at がその日の勤務日、
+      // KPT は created_at (終業時刻) を workday 換算して同じ日にバケットする。
       const content = parseLogContent(row.content)
+      const bucketFrom = (row.log_type === 'work_log' && content.start_at)
+        ? new Date(content.start_at)
+        : new Date(row.created_at)
+      const dateKey = toWorkdayJSTStr(bucketFrom)
+      if (!byDate[dateKey]) byDate[dateKey] = { date: dateKey, workLog: null, kpts: [] }
       if (row.log_type === 'work_log') {
         if (!byDate[dateKey].workLog) byDate[dateKey].workLog = { ...content, id: row.id }
       } else if (row.log_type === 'kpt') {
@@ -4710,7 +4730,7 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
   const monthlyOvertimeHrs = Math.floor(monthlyOvertimeMin / 60), monthlyOvertimeMins = monthlyOvertimeMin % 60
 
   const totalDays = data.days.length
-  const _todayStr = toJSTDateStr(new Date())
+  const _todayStr = toWorkdayJSTStr(new Date())
   const totalMinutes = data.days.reduce((sum, d) => {
     const wl = d.workLog
     if (!wl) return sum
@@ -5413,7 +5433,7 @@ function RetrospectDay({ T, day, canEdit = false, onSaved, owner }) {
   const dt = new Date(day.date + 'T00:00:00Z')
   const wd = ['日','月','火','水','木','金','土'][dt.getUTCDay()]
   const isWeekend = dt.getUTCDay() === 0 || dt.getUTCDay() === 6
-  const todayStr = toJSTDateStr(new Date())
+  const todayStr = toWorkdayJSTStr(new Date())
   const isToday = day.date === todayStr
   const dateLabel = `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`
 
