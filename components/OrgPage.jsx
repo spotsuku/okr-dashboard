@@ -3888,9 +3888,14 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
         //    稼働 = 記入枠数 × 60分 - 休憩 (未記入枠は欠勤扱い)
         //  無ければ従来通り 始業〜終業(または18:00) - 休憩。
         const hourlyArr = Array.isArray(c.hourly) ? c.hourly : null
+        // 新方式: 各枠の minutes を合計 (未指定は 60分 = 旧フォーマット)。旧方式: elapsed。
+        const sumHourlyMin = () => hourlyArr.reduce((s, h) => {
+          const m = typeof h.minutes === 'number' ? h.minutes : 60
+          return s + Math.max(0, m)
+        }, 0)
         if (c.end_at) {
           if (hourlyArr && hourlyArr.length > 0) {
-            agg[name].minutes += Math.max(0, hourlyArr.length * 60 - br)
+            agg[name].minutes += Math.max(0, sumHourlyMin() - br)
           } else {
             const endMs = new Date(c.end_at).getTime()
             const gross = Math.max(0, Math.round((endMs - startMs) / 60000))
@@ -3902,7 +3907,7 @@ function AttendanceExportTab({ members = [], levels = [], orgId }) {
           // 終業押し忘れ(前日以前)は 18:00 として計上 (件数は incomplete で把握)。
           // 今日の未終業は勤務中扱いで集計しない。
           if (hourlyArr && hourlyArr.length > 0) {
-            agg[name].minutes += Math.max(0, hourlyArr.length * 60 - br)
+            agg[name].minutes += Math.max(0, sumHourlyMin() - br)
           } else {
             const [yy, mm2, dd] = dayStr.split('-').map(Number)
             const endMs = Date.UTC(yy, mm2 - 1, dd, 18 - 9, 0, 0)
