@@ -224,6 +224,40 @@ export default function WeeklyMTGFacilitation({
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [scopePreview, setScopePreview] = useState(null) // { perLevel: [{level, count}], total }
+
+  // 会議で確認する対象期間 (Q1〜Q4 / 通期)。
+  // 会議準備画面と Step 1 (KR/KA/Sales) すべてで共有される。
+  // 既定は会議週の月から自動判定 (4-6=Q1 / 7-9=Q2 / 10-12=Q3 / 1-3=Q4、4月始まり会計年度)。
+  // ユーザーが手動で変更したら sessionStorage で保持し、同じ meeting+week で復元。
+  const autoPeriod = useMemo(() => {
+    if (!weekStart || weekStart.length < 7) return 'q1'
+    const month = Number(weekStart.slice(5, 7))
+    if (month >= 4 && month <= 6) return 'q1'
+    if (month >= 7 && month <= 9) return 'q2'
+    if (month >= 10 && month <= 12) return 'q3'
+    return 'q4'
+  }, [weekStart])
+  const periodStorageKey = meeting?.key && weekStart
+    ? `wm_facil_period_${meeting.key}_${weekStart}` : null
+  const [selectedPeriod, setSelectedPeriodState] = useState(() => {
+    if (typeof window === 'undefined' || !periodStorageKey) return autoPeriod
+    try { return window.sessionStorage.getItem(periodStorageKey) || autoPeriod }
+    catch { return autoPeriod }
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined' || !periodStorageKey) { setSelectedPeriodState(autoPeriod); return }
+    try {
+      const saved = window.sessionStorage.getItem(periodStorageKey)
+      setSelectedPeriodState(saved || autoPeriod)
+    } catch { setSelectedPeriodState(autoPeriod) }
+  }, [periodStorageKey, autoPeriod])
+  const setSelectedPeriod = useCallback((p) => {
+    setSelectedPeriodState(p)
+    if (typeof window !== 'undefined' && periodStorageKey) {
+      try { window.sessionStorage.setItem(periodStorageKey, p) } catch { /* noop */ }
+    }
+  }, [periodStorageKey])
+
   // プログラムタグでの絞り込み (null = 全件) + サジェスト用の既存タグ一覧
   const [programTag, setProgramTag] = useState(() => {
     if (typeof window === 'undefined') return null
@@ -364,10 +398,16 @@ export default function WeeklyMTGFacilitation({
     if (levelIds.length === 0) { setScopePreview({ perLevel: [], total: 0 }); return }
     const scopeLevels = levelIds.map(id => levels.find(l => Number(l.id) === Number(id))).filter(Boolean)
 
-    // タグフィルタは KR レベルで行うため、obj は archive のみ除外して全件取得
-    // parent_objective_id を含めて取得 (チーム集計時に親 annual の level_id を辿るため)
+    // タグフィルタは KR レベルで行うため、obj は archive のみ除外 & 選択期間で絞る。
+    // period はプレフィックス無し ('q2') / 年度付き ('2026_q2') 両フォーマットを許容
+    // (AnnualView.toPeriodKey が fy 2026 で prefix 省略、それ以外で付与する実装のため)。
+    const fyPrev = (weekStart || '').slice(0, 4)
+    const pPrev = selectedPeriod || 'q1'
+    const periodKeysPrev = [pPrev, `${fyPrev}_${pPrev}`]
     const { data: objsRaw } = await supabase.from('objectives')
-      .select('id, level_id, archived_at, program_tags, parent_objective_id').in('level_id', levelIds)
+      .select('id, level_id, period, archived_at, program_tags, parent_objective_id')
+      .in('level_id', levelIds)
+      .in('period', periodKeysPrev)
     const objsAll = (objsRaw || []).filter(o => !o.archived_at)
     const allObjIdsAll = objsAll.map(o => o.id)
     const objsById = new Map(objsAll.map(o => [Number(o.id), o]))
@@ -455,7 +495,7 @@ export default function WeeklyMTGFacilitation({
 
     const total = perLevel.reduce((s, x) => s + x.count, 0)
     setScopePreview({ perLevel, total, flow: wkly.flow })
-  }, [wkly, levels, weekStart, programTag])
+  }, [wkly, levels, weekStart, programTag, selectedPeriod])
 
   useEffect(() => { loadScopePreview() }, [loadScopePreview])
 
@@ -654,6 +694,9 @@ export default function WeeklyMTGFacilitation({
             levels={levels}
             scope={scopePreview} session={session}
             programTag={programTag}
+            selectedPeriod={selectedPeriod}
+            autoPeriod={autoPeriod}
+            onChangePeriod={setSelectedPeriod}
             onUpdateSession={async (patch) => {
               // 楽観的更新: 先に画面を反映
               setSession(prev => prev ? { ...prev, ...patch } : { meeting_key: meeting.key, week_start: weekStart, step: 0, ...patch })
@@ -706,6 +749,9 @@ export default function WeeklyMTGFacilitation({
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
+                selectedPeriod={selectedPeriod}
+                autoPeriod={autoPeriod}
+                onChangePeriod={setSelectedPeriod}
                 onUpdateSession={patchSession}
                 onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
                 onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
@@ -717,6 +763,9 @@ export default function WeeklyMTGFacilitation({
                 T={T} meeting={meeting} weekStart={weekStart}
                 levels={levels} members={members}
                 session={session}
+                selectedPeriod={selectedPeriod}
+                autoPeriod={autoPeriod}
+                onChangePeriod={setSelectedPeriod}
                 onUpdateSession={patchSession}
                 onAdvanceToStep2={() => nextStepN != null && goToStep(nextStepN)}
                 onPrev={() => prevStepN != null ? goToStep(prevStepN) : setViewingPrep(true)}
@@ -886,8 +935,49 @@ function MeetingTimerBanner({ T, startedAt, durationMinutes, tenMinAlertedRef, m
   )
 }
 
+// ─── PeriodSelector: Q1〜Q4 / 通期 のタブ形式セレクタ (会議準備・KR/KA loop 共通) ───
+// selectedPeriod: 現在選択中の期間 ('q1'|'q2'|'q3'|'q4'|'annual')
+// autoPeriod: 会議週から自動判定した期間 (「自動」ラベル表示用)
+// onChangePeriod: (period) => void
+function PeriodSelector({ T, selectedPeriod, autoPeriod, onChangePeriod }) {
+  const options = [
+    { key: 'q1',     label: 'Q1',  color: '#1d4ed8' },
+    { key: 'q2',     label: 'Q2',  color: '#0a8f5a' },
+    { key: 'q3',     label: 'Q3',  color: '#c2410c' },
+    { key: 'q4',     label: 'Q4',  color: '#7e22ce' },
+    { key: 'annual', label: '通期', color: '#5856d6' },
+  ]
+  return (
+    <div style={{
+      display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+      padding: '8px 12px', background: T.bgSection, border: `1px solid ${T.border}`,
+      borderRadius: 10, marginBottom: 12,
+    }}>
+      <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginRight: 4 }}>対象期間</span>
+      {options.map(o => {
+        const active = o.key === selectedPeriod
+        const isAuto = o.key === autoPeriod
+        return (
+          <button key={o.key} onClick={() => onChangePeriod && onChangePeriod(o.key)} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+            background: active ? o.color : 'transparent',
+            color: active ? '#fff' : T.textSub,
+            fontSize: 12, fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}>
+            {o.label}
+            {isAuto && !active && (
+              <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 500 }}>自動</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Step 0: 開始画面 ───────────────────────────────────────────────────────
-function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, onUpdateSession, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList, programTag }) {
+function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels = [], scope, session, onUpdateSession, facilitatorDraft, onFacilitatorChange, durationDraft = 30, onDurationChange, onStart, onResume, onReset, onSwitchToList, programTag, selectedPeriod, autoPeriod, onChangePeriod }) {
   const wkly = meeting?.weeklyMTG
   const requiresProgram = !!wkly?.requiresProgram
   const programReady = !requiresProgram || !!programTag
@@ -1074,6 +1164,9 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
             今回確認する {wkly?.flow === 'ka' ? 'KA' : wkly?.flow === 'sales' ? 'KA' : 'KR'}
           </div>
         </div>
+
+        {/* Q セレクタ: どの期間 (Q1〜Q4 / 通期) の OKR を対象にするかを選ぶ */}
+        <PeriodSelector T={T} selectedPeriod={selectedPeriod} autoPeriod={autoPeriod} onChangePeriod={onChangePeriod} />
         {!scope ? (
           <div style={{ fontSize: 12, color: T.textMuted }}>集計中...</div>
         ) : scope.perLevel.length === 0 ? (
@@ -1291,45 +1384,11 @@ function Step0Preparation({ T, meeting, weekStart, myName, members = [], levels 
 }
 
 // ─── Step 1: KR順送り（Phase 3-1: ナビ枠 + 現在KR表示） ─────────────────────
-function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
+function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep, selectedPeriod = 'q1', autoPeriod = 'q1', onChangePeriod }) {
   const wkly = meeting?.weeklyMTG
   const programTag = useProgramTag()
   const [allItems, setAllItems] = useState(null) // 全候補
   const [loadError, setLoadError] = useState(null)
-
-  // Q セレクタ (Q1 / Q2 / Q3 / Q4 / 通期)。
-  // 既定は「会議週の月」から自動判定 (4-6=Q1 / 7-9=Q2 / 10-12=Q3 / 1-3=Q4、4月始まり会計年度)。
-  // ユーザーが手動で選び直したら sessionStorage で保持し、同じ meeting+week で復元。
-  // 別会議 / 別週に切り替わったら自動 Q に戻す。
-  const autoPeriod = useMemo(() => {
-    if (!weekStart || weekStart.length < 7) return 'q1'
-    const month = Number(weekStart.slice(5, 7))
-    if (month >= 4 && month <= 6) return 'q1'
-    if (month >= 7 && month <= 9) return 'q2'
-    if (month >= 10 && month <= 12) return 'q3'
-    return 'q4'
-  }, [weekStart])
-  const periodStorageKey = meeting?.key && weekStart
-    ? `wm_facil_period_${meeting.key}_${weekStart}` : null
-  const [selectedPeriod, setSelectedPeriod] = useState(() => {
-    if (typeof window === 'undefined' || !periodStorageKey) return autoPeriod
-    try { return window.sessionStorage.getItem(periodStorageKey) || autoPeriod }
-    catch { return autoPeriod }
-  })
-  // 会議 or 週が切り替わったら自動 Q に戻す (sessionStorage も新キーで再読込)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !periodStorageKey) { setSelectedPeriod(autoPeriod); return }
-    try {
-      const saved = window.sessionStorage.getItem(periodStorageKey)
-      setSelectedPeriod(saved || autoPeriod)
-    } catch { setSelectedPeriod(autoPeriod) }
-  }, [periodStorageKey, autoPeriod])
-  const changePeriod = (p) => {
-    setSelectedPeriod(p)
-    if (typeof window !== 'undefined' && periodStorageKey) {
-      try { window.sessionStorage.setItem(periodStorageKey, p) } catch { /* noop */ }
-    }
-  }
   // 準備画面でチェックを外したチーム/部署を除外 (DB列 + localStorage の両方を見る)
   const excludedLevels = useMemo(() => {
     const fromSession = Array.isArray(session?.excluded_level_ids) ? session.excluded_level_ids.map(Number) : []
@@ -1450,41 +1509,11 @@ function Step1KRLoop({ T, meeting, weekStart, levels, members, session, onUpdate
     return () => { supabase.removeChannel(ch) }
   }, [items?.length, weekStart])
 
-  // Q セレクタ (Q1〜Q4 / 通期)。既定は会議週から自動判定、手動切替可。
-  const periodOptions = [
-    { key: 'q1',     label: 'Q1',  color: '#1d4ed8' },
-    { key: 'q2',     label: 'Q2',  color: '#0a8f5a' },
-    { key: 'q3',     label: 'Q3',  color: '#c2410c' },
-    { key: 'q4',     label: 'Q4',  color: '#7e22ce' },
-    { key: 'annual', label: '通期', color: '#5856d6' },
-  ]
-  const currentPeriodLabel = periodOptions.find(o => o.key === selectedPeriod)?.label || selectedPeriod
+  // Q セレクタ (親から渡される selectedPeriod / autoPeriod / onChangePeriod を反映)
+  const currentPeriodLabel =
+    selectedPeriod === 'annual' ? '通期' : (selectedPeriod || '').toUpperCase()
   const qSelector = (
-    <div style={{
-      display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
-      padding: '8px 12px', background: T.bgSection, border: `1px solid ${T.border}`,
-      borderRadius: 10, marginBottom: 12,
-    }}>
-      <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, marginRight: 4 }}>対象期間</span>
-      {periodOptions.map(o => {
-        const active = o.key === selectedPeriod
-        const isAuto = o.key === autoPeriod
-        return (
-          <button key={o.key} onClick={() => changePeriod(o.key)} style={{
-            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-            background: active ? o.color : 'transparent',
-            color: active ? '#fff' : T.textSub,
-            fontSize: 12, fontWeight: 700,
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-          }}>
-            {o.label}
-            {isAuto && !active && (
-              <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 500 }}>自動</span>
-            )}
-          </button>
-        )
-      })}
-    </div>
+    <PeriodSelector T={T} selectedPeriod={selectedPeriod} autoPeriod={autoPeriod} onChangePeriod={onChangePeriod} />
   )
 
   if (items === null) {
@@ -1775,7 +1804,7 @@ function Step1SalesProgress({ T, meeting, onPrev, onNext, onBackToPrep }) {
 }
 
 // ─── Step 1: KA順送り（Phase 4） ───────────────────────────────────────────
-function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep }) {
+function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdateSession, onAdvanceToStep2, onPrev, onBackToPrep, selectedPeriod = 'q1' }) {
   const programTagCtx = useProgramTag()
   const wkly = meeting?.weeklyMTG
   const [allItems, setAllItems] = useState(null) // 全候補
@@ -1819,14 +1848,17 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
         const scopeLevelIds = resolveScopeLevelIds(wkly, levels)
         if (scopeLevelIds.length === 0) { if (alive) setItems([]); return }
 
-        // Objective を取得 (タグフィルタは KR レベルで後段で行うため、obj は archived のみ除外)
-        // parent_objective_id を含めて取得 (チーム集計時に親 annual の level_id を辿るため)
-        // また、子 Q obj の level_id が親と違うケースに対応するため scope に親 annual の
-        // level も含む必要がある → 一旦 archived 除外で全 obj を取得 (scope=all-levels なら
-        // どのみち全件、teams-of 等は scope 内のみ取得)
+        // Objective を取得 (タグフィルタは KR レベルで後段で行うため、obj は archived のみ除外)。
+        // 選択期間 (Q1〜Q4 / 通期) で絞る。プレフィックス無し ('q2') と年度付き ('2026_q2') の
+        // 両フォーマットを許容 (AnnualView.toPeriodKey が fy 2026 で prefix 省略、それ以外で
+        // 付与する実装のため)。
+        const fyKa = (weekStart || '').slice(0, 4)
+        const pKa = selectedPeriod || 'q1'
+        const periodKeysKa = [pKa, `${fyKa}_${pKa}`]
         const objsRes = await supabase.from('objectives')
           .select('id, level_id, period, title, owner, archived_at, program_tags, parent_objective_id')
           .in('level_id', scopeLevelIds)
+          .in('period', periodKeysKa)
           .range(0, 49999)
         if (objsRes.error) throw objsRes.error
         const objsAll = (objsRes.data || []).filter(o => !o.archived_at)
@@ -1945,7 +1977,7 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
     }
     load()
     return () => { alive = false }
-  }, [wkly?.scope, wkly?.parentLevelName, weekStart, levels, programTagCtx])
+  }, [wkly?.scope, wkly?.parentLevelName, weekStart, levels, programTagCtx, selectedPeriod])
 
   // weekly_reports の変更を items に反映 (autoSave 後に items が古くなる問題を解決)
   // KAEditCard が key={ka.id} で unmount されるため、items に新しい値を入れておかないと
@@ -1972,29 +2004,47 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
     return () => { supabase.removeChannel(ch) }
   }, [items?.length, weekStart])
 
+  // Q セレクタ (KR loop と同一仕様。親からの selectedPeriod/onChangePeriod を反映)
+  const currentPeriodLabelKa =
+    selectedPeriod === 'annual' ? '通期' : (selectedPeriod || '').toUpperCase()
+  const qSelectorKa = (
+    <PeriodSelector T={T} selectedPeriod={selectedPeriod} autoPeriod={autoPeriod} onChangePeriod={onChangePeriod} />
+  )
+
   if (items === null) {
-    return <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KA一覧を読み込み中...</div>
+    return (
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 20px' }}>
+        {qSelectorKa}
+        <div style={{ padding: 40, textAlign: 'center', color: T.textMuted, fontSize: 13 }}>KA一覧を読み込み中...</div>
+      </div>
+    )
   }
   if (loadError) {
     return (
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ background: `${T.danger}15`, border: `1px solid ${T.danger}40`, borderRadius: 10, padding: 16, color: T.danger, fontSize: 13 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>KA一覧の取得でエラー</div>
-          <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: 'pre-wrap' }}>{loadError}</div>
-        </div>
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 20px' }}>
+        {qSelectorKa}
+        <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div style={{ background: `${T.danger}15`, border: `1px solid ${T.danger}40`, borderRadius: 10, padding: 16, color: T.danger, fontSize: 13 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>KA一覧の取得でエラー</div>
+            <div style={{ fontSize: 11, opacity: 0.85, whiteSpace: 'pre-wrap' }}>{loadError}</div>
+          </div>
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <button onClick={onPrev} style={secondaryBtn(T)}>← 会議準備に戻る</button>
+          </div>
         </div>
       </div>
     )
   }
   if (items.length === 0) {
     return (
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-        <div style={{ marginBottom: 12, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={36} /></div>
-        <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに今週のKAがありません</div>
-        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>「次へ」で確認事項ステップへ進めます</div>
-        <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 20px' }}>
+        {qSelectorKa}
+        <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ marginBottom: 12, color: T.textMuted, display: 'flex', justifyContent: 'center' }}><Icon name="search" size={36} /></div>
+          <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>このスコープに {currentPeriodLabelKa} の今週の KA がありません</div>
+          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 20 }}>上の「対象期間」から別の期間に切り替えるか、「次へ」で確認事項ステップへ進めます</div>
+          <button onClick={onAdvanceToStep2} style={primaryBtn(T)}>確認事項へ →</button>
+        </div>
       </div>
     )
   }
@@ -2054,6 +2104,9 @@ function Step1KALoop({ T, meeting, weekStart, levels, members, session, onUpdate
           }}>↩ 会議準備に戻る</button>
         </div>
       )}
+
+      {/* Q セレクタ */}
+      {qSelectorKa}
 
       {/* 進行ナビ */}
       <div style={{
