@@ -4806,12 +4806,14 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
           <div style={{ fontSize: 11, color: T.textMuted, marginRight: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
             <span>{totalDays}日の記録 · 合計 {totalHrs}時間{totalMins}分</span>
             <span style={{ opacity: 0.5 }}>·</span>
-            <span title="1日8時間超が残業。原則なし・要事前許可">
+            <span title={viewingIsAdmin
+              ? '管理職は残業手当対象外ですが、参考値として表示'
+              : '1日8時間超が残業。原則なし・要事前許可'}>
               今月の残業
-              {viewingIsAdmin ? (
-                <> <strong style={{ color: T.textMuted }}>—</strong> <span style={{ opacity: 0.75 }}>(管理職のため対象外)</span></>
-              ) : monthlyOvertimeReady ? (
-                <> <strong style={{ color: monthlyOvertimeMin > 0 ? T.warn : T.text }}>{monthlyOvertimeHrs}時間{monthlyOvertimeMins}分</strong></>
+              {monthlyOvertimeReady ? (
+                <> <strong style={{ color: monthlyOvertimeMin > 0 ? (viewingIsAdmin ? T.textSub : T.warn) : T.text }}>
+                  {monthlyOvertimeHrs}時間{monthlyOvertimeMins}分
+                </strong>{viewingIsAdmin && <span style={{ opacity: 0.75, marginLeft: 4 }}>(参考)</span>}</>
               ) : <> <span style={{ opacity: 0.5 }}>集計中…</span></>}
             </span>
           </div>
@@ -4830,11 +4832,15 @@ function RetrospectTab({ T, viewingName, viewingMember, myName, isAdmin = false,
         {isMobile && (
           <div style={{ fontSize: 10, color: T.textMuted, width: '100%', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <span>{totalDays}日 · 合計 {totalHrs}時間{totalMins}分</span>
-            <span title="1日8時間超が残業。原則なし・要事前許可">
+            <span title={viewingIsAdmin
+              ? '管理職は残業手当対象外ですが、参考値として表示'
+              : '1日8時間超が残業。原則なし・要事前許可'}>
               残業(今月)
-              {viewingIsAdmin ? <> <strong>—</strong> (対象外)</>
-                : monthlyOvertimeReady ? <> <strong style={{ color: monthlyOvertimeMin > 0 ? T.warn : T.text }}>{monthlyOvertimeHrs}h{monthlyOvertimeMins}m</strong></>
-                : <> 集計中…</>}
+              {monthlyOvertimeReady ? (
+                <> <strong style={{ color: monthlyOvertimeMin > 0 ? (viewingIsAdmin ? T.textSub : T.warn) : T.text }}>
+                  {monthlyOvertimeHrs}h{monthlyOvertimeMins}m
+                </strong>{viewingIsAdmin && ' (参考)'}</>
+              ) : <> 集計中…</>}
             </span>
           </div>
         )}
@@ -5525,9 +5531,13 @@ function AttendanceHistoryTab({ T, days, loading, range, viewingIsAdmin }) {
         <SummaryStat T={T} label={`${rangeLabel} 出勤日数`} value={`${totals.days}日`} color={T.text} />
         <SummaryStat T={T} label={`${rangeLabel} 就業時間`} value={fmt(totals.workedMin)} color={T.text} />
         <SummaryStat T={T} label={`${rangeLabel} 残業合計`}
-          value={viewingIsAdmin ? '—' : fmt(totals.overtimeMin)}
-          hint={viewingIsAdmin ? '管理職のため対象外' : '1日8時間超が残業'}
-          color={viewingIsAdmin ? T.textMuted : (totals.overtimeMin > 0 ? T.warn : T.text)} />
+          value={fmt(totals.overtimeMin)}
+          hint={viewingIsAdmin
+            ? '管理職のため参考値 (残業手当対象外)'
+            : '1日8時間超が残業 (原則なし・要事前許可)'}
+          color={totals.overtimeMin > 0
+            ? (viewingIsAdmin ? T.textSub : T.warn)
+            : T.text} />
         <SummaryStat T={T} label="平均 (出勤日あたり)"
           value={totals.days > 0 ? fmt(Math.round(totals.workedMin / totals.days)) : '—'}
           color={T.text} />
@@ -5591,9 +5601,13 @@ function AttendanceHistoryTab({ T, days, loading, range, viewingIsAdmin }) {
               <span style={{
                 textAlign: 'right', fontWeight: 700,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                color: viewingIsAdmin ? T.textMuted : (r.overtimeMin > 0 ? T.warn : T.textMuted),
+                color: r.overtimeMin > 0
+                  ? (viewingIsAdmin ? T.textSub : T.warn)
+                  : T.textMuted,
               }}>
-                {viewingIsAdmin ? '—' : r.overtimeMin > 0 ? (isMobile ? fmtCompact(r.overtimeMin) : fmt(r.overtimeMin)) : '—'}
+                {r.overtimeMin > 0
+                  ? (isMobile ? fmtCompact(r.overtimeMin) : fmt(r.overtimeMin))
+                  : '—'}
               </span>
               {isMobile && (
                 <span style={{ fontSize: 10, color: r.autoEnd ? T.warn : r.unclosed ? T.textMuted : T.textFaint }}>
@@ -5625,9 +5639,11 @@ function AttendanceHistoryTab({ T, days, loading, range, viewingIsAdmin }) {
           <span style={{
             textAlign: 'right',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            color: viewingIsAdmin ? T.textMuted : (totals.overtimeMin > 0 ? T.warn : T.text),
+            color: totals.overtimeMin > 0
+              ? (viewingIsAdmin ? T.textSub : T.warn)
+              : T.text,
           }}>
-            {viewingIsAdmin ? '—' : (isMobile ? fmtCompact(totals.overtimeMin) : fmt(totals.overtimeMin))}
+            {isMobile ? fmtCompact(totals.overtimeMin) : fmt(totals.overtimeMin)}
           </span>
           {isMobile && <span></span>}
         </div>
@@ -5638,6 +5654,9 @@ function AttendanceHistoryTab({ T, days, loading, range, viewingIsAdmin }) {
         <div>· 「稼働」は始業〜終業から休憩を引いた時間。1時間ごとの作業記録がある日はその合計 - 休憩で算出。</div>
         <div>· 「残業」は 1 日 8 時間を超えた分。原則なし、必要な場合は事前に許可を取ってください。</div>
         <div>· 終業を押し忘れた過去日は 18:00 として集計 (「*」印)。</div>
+        {viewingIsAdmin && (
+          <div>· 管理職 (労基41条の管理監督者相当) は残業手当支給の対象外ですが、健康管理のため参考値として表示しています。</div>
+        )}
       </div>
     </div>
   )
