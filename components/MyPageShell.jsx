@@ -2406,6 +2406,44 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
 
   useEffect(() => { load() }, [load])
 
+  // Realtime 購読: 相手 (上司 or 部下) が保存したら、自分が編集できないフィールドだけ
+  //   ローカル draft に反映する。自分が編集中のフィールドは書きかけを保護する。
+  useEffect(() => {
+    if (!viewingName || !month) return
+    const safe = `${viewingName}_${month}`.replace(/[^\w-]/g, '_')
+    const ch = supabase.channel(`monthly_1on1_${safe}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'monthly_1on1',
+        filter: `owner=eq.${viewingName}`,
+      }, (payload) => {
+        const newRow = payload.new
+        if (!newRow || newRow.month !== month) return
+        setRow(newRow)
+        setDraft(d => {
+          const isSubordinate = !!isMySelf // 部下本人 = self_* を編集
+          // 上司判定は現在の draft.supervisor を使う (Realtime 側から到着した supervisor
+          //  変更で自分が supervisor かどうかが変わるケースは初回ロード直後のみ発生し得るが、
+          //  その場合は次の save 時に自然に落ち着く)
+          const isSupervisor = !!(myName && d.supervisor && myName === d.supervisor)
+          return {
+            // 部下は supervisor を選ぶ側なので、部下視点では自分の値を優先
+            supervisor: isSubordinate ? d.supervisor : (newRow.supervisor || ''),
+            self_keep:    isSubordinate ? d.self_keep    : (newRow.self_keep    || ''),
+            self_problem: isSubordinate ? d.self_problem : (newRow.self_problem || ''),
+            self_try:     isSubordinate ? d.self_try     : (newRow.self_try     || ''),
+            boss_keep:    isSupervisor  ? d.boss_keep    : (newRow.boss_keep    || ''),
+            boss_problem: isSupervisor  ? d.boss_problem : (newRow.boss_problem || ''),
+            boss_try:     isSupervisor  ? d.boss_try     : (newRow.boss_try     || ''),
+            // 成長テーマは双方で編集する共有欄。書きかけを守るためローカル優先。
+            // (もう片方が更新した内容は次回リロードで見える)
+            growth_theme: d.growth_theme,
+          }
+        })
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [viewingName, month, isMySelf, myName])
+
   async function save(patch) {
     // viewingName を呼び出し時点でスナップショット。
     // (メンバー切替直後の遅延 onBlur で『新しい owner に古い draft を書く』
@@ -2416,26 +2454,36 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
       console.warn('[monthly_1on1] save aborted: row.owner mismatch', { rowOwner: row.owner, ownerSnapshot })
       return
     }
-    setSaving(true)
-    const payload = {
-      owner: ownerSnapshot, month,
-      supervisor: patch.supervisor !== undefined ? patch.supervisor : draft.supervisor,
-      self_keep: patch.self_keep !== undefined ? patch.self_keep : draft.self_keep,
-      self_problem: patch.self_problem !== undefined ? patch.self_problem : draft.self_problem,
-      self_try: patch.self_try !== undefined ? patch.self_try : draft.self_try,
-      boss_keep: patch.boss_keep !== undefined ? patch.boss_keep : draft.boss_keep,
-      boss_problem: patch.boss_problem !== undefined ? patch.boss_problem : draft.boss_problem,
-      boss_try: patch.boss_try !== undefined ? patch.boss_try : draft.boss_try,
-      growth_theme: patch.growth_theme !== undefined ? patch.growth_theme : draft.growth_theme,
-      updated_at: new Date().toISOString(),
+    // 変更したフィールドだけを payload に含める (patch-style)。
+    // 旧実装は draft.boss_* も含めた全項目を upsert していたため、部下が保存する
+    // たびに上司の書きかけを stale な draft.boss_* で上書きしていた (同時編集で
+    // 消える問題)。patch のみを DB に送れば同時編集でも互いに干渉しない。
+    const editableKeys = ['supervisor', 'self_keep', 'self_problem', 'self_try',
+                          'boss_keep', 'boss_problem', 'boss_try', 'growth_theme']
+    const patchClean = {}
+    for (const k of editableKeys) {
+      if (patch[k] !== undefined) patchClean[k] = patch[k]
     }
-    // 保存後は再 fetch せず、upsert の返却値でローカル state を直接更新する。
-    // 旧実装は末尾で load() を呼んでいたため setLoading(true) が走り、カード全体が
-    // 一瞬 <Loading /> に切り替わって KPTRow が unmount → 「記入するたびリロード」
-    // に見える + 書きかけの他フィールドがリセットされる問題があった。
-    const { data: saved, error } = await supabase.from('monthly_1on1')
-      .upsert(payload, { onConflict: 'owner,month' })
-      .select().maybeSingle()
+    if (Object.keys(patchClean).length === 0) return
+    patchClean.updated_at = new Date().toISOString()
+
+    setSaving(true)
+    let saved = null, error = null
+    if (row?.id) {
+      // 既存行は UPDATE で変更フィールドだけ書く (他フィールドは触らない)
+      const res = await supabase.from('monthly_1on1')
+        .update(patchClean).eq('id', row.id)
+        .select().maybeSingle()
+      saved = res.data; error = res.error
+    } else {
+      // 初回のみ INSERT (owner + month + 変更フィールド)。UNIQUE 制約 (owner, month) に
+      // 衝突した場合 (別セッションが先に作成) は upsert フォールバック。
+      const insertPayload = { owner: ownerSnapshot, month, ...patchClean }
+      const res = await supabase.from('monthly_1on1')
+        .upsert(insertPayload, { onConflict: 'owner,month' })
+        .select().maybeSingle()
+      saved = res.data; error = res.error
+    }
     if (error) {
       console.warn('[monthly_1on1] save error:', error.message)
       setSaving(false)
@@ -2443,15 +2491,14 @@ function Monthly1on1Card({ T, viewingName, myName, members = [] }) {
     }
     if (saved) {
       setRow(saved)
-      setDraft({
-        supervisor: saved.supervisor || '',
-        self_keep: saved.self_keep || '',
-        self_problem: saved.self_problem || '',
-        self_try: saved.self_try || '',
-        boss_keep: saved.boss_keep || '',
-        boss_problem: saved.boss_problem || '',
-        boss_try: saved.boss_try || '',
-        growth_theme: saved.growth_theme || '',
+      // 変更したフィールドだけをローカル draft に反映 (他フィールドは Realtime 経由で
+      // 反映されるので、ここでは触らず、ユーザーの書きかけを保護する)
+      setDraft(d => {
+        const next = { ...d }
+        for (const k of editableKeys) {
+          if (patchClean[k] !== undefined) next[k] = saved[k] ?? ''
+        }
+        return next
       })
     }
     setSaving(false)
