@@ -708,6 +708,7 @@ function SpeakerReport({ T, member }) {
   // kptList: { dateLabel, keep, problem, try }[]  (新しい順 = 直近が上)
   const [kptList, setKptList] = useState([])
   const [tasks, setTasks] = useState([])
+  const [doneRecentTasks, setDoneRecentTasks] = useState([])
   const [loading, setLoading] = useState(true)
 
   // 月曜は金曜まで遡って KPT を取得 (週末で前日が休みのケースに対応)
@@ -729,6 +730,23 @@ function SpeakerReport({ T, member }) {
       .select('id, title, due_date, done, status')
       .eq('assignee', member.name).lte('due_date', today)
       .order('due_date', { ascending: true })
+    // 前日 (= 前回の振り返り起点日) 以降に完了したタスク。
+    //   完了時刻は ka_tasks.completed_at (trigger で自動セット)。
+    //   yesterday 04:00 JST 〜 NOW の範囲。
+    //   completed_at 列が存在しない古い環境ではフォールバックで空配列。
+    let doneRecent = []
+    {
+      let res = await supabase.from('ka_tasks')
+        .select('id, title, due_date, done, status, completed_at')
+        .eq('assignee', member.name).eq('done', true)
+        .gte('completed_at', yesterday + 'T04:00:00+09:00')
+        .order('completed_at', { ascending: false })
+        .limit(30)
+      if (res.error && /completed_at|column|schema cache/i.test(res.error.message || '')) {
+        res = { data: [], error: null }
+      }
+      doneRecent = res.data || []
+    }
     // 日付ごとに最新1件だけ採用 (同じ日に複数KPTがあれば直近のみ)
     // 04:00 JST 境界: 深夜0〜4時に書かれた振り返りは「前日の振り返り」として扱う
     const byDate = new Map()
@@ -752,6 +770,12 @@ function SpeakerReport({ T, member }) {
       return t.due_date === today || !isDone
     })
     setTasks(filtered)
+    // 前日完了タスク: 今日の「今日のタスク」との重複を除いてセット (今日期限のものは
+    // 今日のタスク一覧に done として既に出るので、こちらは前日以前の期限だったが
+    // 前日〜今朝に完了した「片付けたタスク」を主に見せたい)
+    const todayTaskIds = new Set((filtered || []).map(t => Number(t.id)))
+    const dedupedDone = doneRecent.filter(t => !todayTaskIds.has(Number(t.id)))
+    setDoneRecentTasks(dedupedDone)
     setLoading(false)
   }, [member.name, yesterday, today])
 
@@ -847,6 +871,38 @@ function SpeakerReport({ T, member }) {
           </div>
 
           {/* 共有事項は朝会のステップ2「共有事項タイム」に統合されたため、ここでは非表示 */}
+
+          {/* 前日完了したタスク (前日 04:00 JST 以降に done になったタスク。今日のタスク欄と重複するものは除外) */}
+          {doneRecentTasks.length > 0 && (
+            <div style={{ marginBottom: SPACING.lg }}>
+              <div style={{ ...TYPO.subhead, fontWeight: 700, color: T.textSub, marginBottom: SPACING.sm, display: 'flex', alignItems: 'center', gap: SPACING.xs, flexWrap: 'wrap' }}>
+                <Icon name="check" size={13} /> 前日完了したタスク
+                <span style={{ marginLeft: SPACING.xs, padding: `1px ${SPACING.sm}px`, borderRadius: RADIUS.pill,
+                  background: `${T.success}18`, color: T.success,
+                  ...TYPO.caption, letterSpacing: 0, fontWeight: 700 }}>{doneRecentTasks.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+                {doneRecentTasks.map(t => {
+                  const dueLabel = t.due_date ? formatJSTMonthDay(t.due_date) : ''
+                  return (
+                    <div key={t.id} style={{
+                      display: 'flex', alignItems: 'center', gap: SPACING.sm,
+                      padding: `${SPACING.xs + 2}px ${SPACING.sm + 2}px`,
+                      background: T.successBg,
+                      borderRadius: RADIUS.sm, ...TYPO.subhead, fontWeight: 500,
+                      color: T.textMuted, textDecoration: 'line-through',
+                    }}>
+                      <span style={{ color: T.success, display: 'inline-flex' }}><Icon name="check" size={13} /></span>
+                      <span style={{ flex: 1 }}>{t.title || '(無題)'}</span>
+                      {dueLabel && (
+                        <span style={{ ...TYPO.caption, color: T.textFaint, fontWeight: 500, textDecoration: 'none' }}>期限 {dueLabel}</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 今日のタスク + 期限切れ */}
           <div>
