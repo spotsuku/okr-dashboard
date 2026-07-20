@@ -1226,23 +1226,66 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
     setBusy(true)
     const [hh, mm] = (endTimeHHMM || '18:00').split(':').map(Number)
     const brMin = Math.max(0, Number(breakMin) || 0)
-    const targetDateStr = pendingYesterdayLog.date
+    // 対象日はユーザーが選んだ reflectionDate を優先。無ければ最古の未終業日 (pendingYesterdayLog.date)。
+    // 旧実装は常に pendingYesterdayLog.date を使っており、ユーザーが「20日」を選んでも「14日」
+    // (=最古) の work_log を強制終業してしまい、意図と違う日が更新されるバグがあった。
+    const targetDateStr = reflectionDate || pendingYesterdayLog.date
     const [tyr, tmo, tdy] = targetDateStr.split('-').map(Number)
     const hasHourly = Array.isArray(hourly) && hourly.length > 0
     let startIso = null, endIso = null // Slack日報の稼働時間表示用
 
-    if (pendingYesterdayLog.type === 'unclosed') {
-      // 既存の未終業 work_log を終業
+    // 選択日の未終業 work_log を特定する:
+    //   ・reflectionDate が pending と同じ → pendingYesterdayLog を使う (既存挙動)
+    //   ・別日 → その日の work_log を DB から検索。
+    //     未終業なら update、無ければ 'missing' として補完作成、終業済なら work_log 操作をスキップ (KPT のみ保存)
+    let existingLog = null
+    let workLogPath = 'skip' // 'update' | 'insert' | 'skip'
+    if (reflectionDate && reflectionDate !== pendingYesterdayLog.date) {
+      // 別日: JST 04:00 境界 (workday cutoff) で work_log を検索
+      const startUtcSearch = new Date(Date.UTC(tyr, tmo - 1, tdy, 4 - 9, 0, 0)).toISOString()
+      const endUtcSearch = new Date(Date.UTC(tyr, tmo - 1, tdy + 1, 4 - 9, 0, 0)).toISOString()
+      const { data: rows } = await supabase.from('coaching_logs')
+        .select('id, content, created_at')
+        .eq('owner', myName)
+        .eq('log_type', 'work_log')
+        .gte('created_at', startUtcSearch)
+        .lt('created_at', endUtcSearch)
+        .order('created_at', { ascending: true })
+        .limit(1)
+      if (rows && rows.length > 0) {
+        const row = rows[0]
+        const c = parseLogContent(row.content)
+        if (c.end_at) {
+          workLogPath = 'skip' // 既に終業済み → KPT だけ保存
+        } else {
+          existingLog = row
+          workLogPath = 'update'
+        }
+      } else {
+        workLogPath = 'insert' // 選択日に work_log 無し → 補完作成
+      }
+    } else {
+      // 同じ日 (pendingYesterdayLog): 既存挙動
+      if (pendingYesterdayLog.type === 'unclosed') {
+        existingLog = pendingYesterdayLog.log
+        workLogPath = 'update'
+      } else {
+        workLogPath = 'insert'
+      }
+    }
+
+    if (workLogPath === 'update' && existingLog) {
+      // 未終業 work_log を終業
       const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
-      const oldContent = parseLogContent(pendingYesterdayLog.log.content)
+      const oldContent = parseLogContent(existingLog.content)
       const newContent = { ...oldContent, end_at: endUtc.toISOString(), force_closed: true, break_min: brMin }
       if (hasHourly) newContent.hourly = hourly
       startIso = oldContent.start_at || null; endIso = endUtc.toISOString()
       const { error: e1 } = await withNetworkRetry(() => supabase.from('coaching_logs')
-        .update({ content: JSON.stringify(newContent) }).eq('id', pendingYesterdayLog.log.id))
+        .update({ content: JSON.stringify(newContent) }).eq('id', existingLog.id))
       if (e1) { setBusy(false); alert(saveErrorMessage('終業記録', e1)); return }
-    } else {
-      // 始業押し忘れ: その日の 9:00〜指定時刻で work_log を補完作成
+    } else if (workLogPath === 'insert') {
+      // 始業押し忘れ or 選択日で work_log 無し: 9:00〜指定時刻で補完作成
       const startUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, 9 - 9, 0, 0))
       const endUtc = new Date(Date.UTC(tyr, tmo - 1, tdy, hh - 9, mm, 0))
       startIso = startUtc.toISOString(); endIso = endUtc.toISOString()
@@ -1263,6 +1306,7 @@ function DashboardTab({ T, viewingName, viewingMember, isViewingSelf, myName, me
       }))
       if (e1) { setBusy(false); alert(saveErrorMessage('勤怠補完', e1)); return }
     }
+    // workLogPath === 'skip' の場合は work_log 操作をスキップし、KPT のみ保存する
     if ((keep||'').trim() || (problem||'').trim() || (tryNote||'').trim()) {
       // 振り返り(KPT)は本人が選んだ「対象日」で保存する (既定=未終業ログの勤務日)。
       // どの日の振り返りかを本人に選ばせ、朝会での認知齟齬(火曜に金曜が出る等)を防ぐ。
